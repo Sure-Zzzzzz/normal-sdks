@@ -3,6 +3,7 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
         maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
     }
 }
 
@@ -10,6 +11,8 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
+        // 阿里云 Maven 中央仓库镜像（加速下载）
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
         maven {
             url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
             mavenContent { snapshotsOnly() }
@@ -27,6 +30,7 @@ include(
         ':sdk:sms:b2m:b2m-sms-client-starter',
         ':sdk:mail:mail-client-starter',
         ':sdk:prometheus:prometheus-client-starter',
+        ':sdk:prometheus:prometheus-core',
         ':sdk:lock:redis:simple-redis-lock-starter',
         ':sdk:limiter:redis:simple-redis-limiter-starter',
         ':sdk:curl:daydaymap:daydaymap-client-starter',

@@ -1,3 +1,7 @@
 # Maven Central
-ossrhUsername=xx
-ossrhPassword=xx
+mavenCentralUsername=xx
+mavenCentralPassword=xx
+
+signing.keyId=xxxx
+signing.password=xxxx
+signing.secretKeyRingFile=secring.gpg
