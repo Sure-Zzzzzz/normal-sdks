@@ -22,3 +22,26 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+*.hprof
+
+
+#idea
+out/
+build/
+.idea
+.gradle
+
+#private-key
+*-credentials.gradle
+
+# doc file
+*.pdf
+*.docx
+
+gradle.properties
+
+#draft dir
+draft/*
+
+#ignore change log
+changelog.md

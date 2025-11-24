@@ -1,0 +1,36 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven {
+            url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+            mavenContent { snapshotsOnly() }
+        }
+    }
+}
+
+rootProject.name = 'normal-sdks'
+
+include(
+        ':sdk:retry:redis-retry-starter',
+        ':sdk:retry:task-retry-starter',
+        ':sdk:oss:s3',
+        ':sdk:oss:s3-client-starter',
+        ':sdk:sms:b2m:b2m-sms-client-starter',
+        ':sdk:mail:mail-client-starter',
+        ':sdk:prometheus:prometheus-client-starter',
+        ':sdk:lock:redis:simple-redis-lock-starter',
+        ':sdk:limiter:redis:simple-redis-limiter-starter',
+        ':sdk:curl:daydaymap:daydaymap-client-starter',
+        ':sdk:curl:daydaymap:ipfusion:daydaymap-ipfusion-client-starter',
+        ':sdk:curl:opsalert:opsalert-client-starter',
+        ':sdk:log:truncate:log-truncate-starter'
+)
