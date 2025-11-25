@@ -75,9 +75,15 @@ subprojects {
     if (versionFile.exists()) {
         def props = new Properties()
         versionFile.withInputStream { props.load(it) }
-        version = props.getProperty('version')
+        def moduleVersion = props.getProperty('version')
+
+        // 使用 ext 确保版本不会被覆盖
+        project.ext.moduleVersion = moduleVersion
+        version = moduleVersion
+
+        logger.lifecycle("✓ 模块 ${project.path} 版本: ${version} (ext: ${project.ext.moduleVersion})")
     } else {
-        throw new GradleException("未找到模块 '${project.path}' 的版本文件。\n请在 ${projectDir}/version.properties 中添加：version=x.y.z")
+        throw new GradleException("未找到模块 '${project.path}' 的版本文件")
     }
 
     logger.lifecycle("配置模块 ${project.path} 版本: ${version}")

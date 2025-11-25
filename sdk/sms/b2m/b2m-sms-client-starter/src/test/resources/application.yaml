@@ -1,0 +1,12 @@
+logging:
+  level:
+    root: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        b2m:
+          sms:
+            app-id: ${SMS_APP_ID:xxx}
+            secret-key: ${SMS_SECRET_KEY:xxx}

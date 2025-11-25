@@ -14,7 +14,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.surezzzzzz:sdk-task-retry-starter:1.0.0"
+    implementation "io.github.surezzzzzz:task-retry-starter:1.0.0"
     
     // 必须显式引入以下依赖
     implementation "org.springframework.boot:spring-boot-autoconfigure"
@@ -27,7 +27,7 @@ dependencies {
 ```xml
 <dependency>
     <groupId>io.github.surezzzzzz</groupId>
-    <artifactId>sdk-task-retry-starter</artifactId>
+    <artifactId>task-retry-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
 
