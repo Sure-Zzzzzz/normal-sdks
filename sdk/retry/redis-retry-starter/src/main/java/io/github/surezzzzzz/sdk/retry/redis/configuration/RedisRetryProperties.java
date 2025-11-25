@@ -14,7 +14,7 @@ import javax.validation.constraints.Min;
  */
 @Data
 @Validated
-@ConfigurationProperties(prefix = "com.fri.schumann.retry.redis")
+@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.retry.redis")
 public class RedisRetryProperties {
 
     /**
