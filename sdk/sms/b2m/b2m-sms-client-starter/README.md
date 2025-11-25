@@ -75,7 +75,7 @@ io:
         b2m:
           sms:
             app-id: your-app-id
-            secret-key: your-secret-key  # 必须是16、24或32字节长度的AES密钥
+            secret-key: your-secret-key
 
 ```
 
