@@ -1,6 +1,7 @@
 dependencies {
     compileOnly "org.springframework:spring-web"
-    implementation "org.apache.httpcomponents:httpclient"  // 必须implementation，因为SmsConfiguration直接使用了HttpComponentsClientHttpRequestFactory
+`    implementation "org.apache.httpcomponents:httpclient:4.5.13"
+    // 必须implementation，因为SmsConfiguration直接使用了HttpComponentsClientHttpRequestFactory
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework:spring-context"

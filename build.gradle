@@ -8,7 +8,6 @@ buildscript {
 
 plugins {
     id 'idea'
-    // 使用支持 CENTRAL_PORTAL 的最新版本
     id 'com.vanniktech.maven.publish' version '0.30.0' apply false
 }
 
@@ -34,7 +33,6 @@ gradle.ext {
                     [group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.13'],
                     [group: 'org.apache.skywalking', name: 'apm-toolkit-log4j-2.x', version: '8.16.0'],
                     [group: 'org.apache.skywalking', name: 'apm-toolkit-trace', version: '8.16.0'],
-                    // Jackson 版本管理
                     [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.15.2'],
                     [group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.15.2'],
                     [group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.15.2'],
@@ -42,10 +40,7 @@ gradle.ext {
             ] as ArrayList<Properties>
     ]
 
-    // 项目组成员Maven组列表
-    memberMavenGroups = [
-            'io.github.sure-zzzzzz'
-    ]
+    memberMavenGroups = ['io.github.sure-zzzzzz']
 }
 
 idea {
@@ -66,50 +61,54 @@ subprojects {
     apply plugin: 'java-library'
     apply plugin: 'org.springframework.boot'
     apply plugin: 'io.spring.dependency-management'
-    // 应用新版 Maven Central 发布插件
     apply plugin: 'com.vanniktech.maven.publish'
 
     group = 'io.github.sure-zzzzzz'
-    // 读取子模块自己的 version.properties
+
+    // ========== 关键修改：使用独立的 ext 变量，避免污染全局 version ==========
     def versionFile = file("${projectDir}/version.properties")
-    if (versionFile.exists()) {
-        def props = new Properties()
-        versionFile.withInputStream { props.load(it) }
-        def moduleVersion = props.getProperty('version')
-
-        // 使用 ext 确保版本不会被覆盖
-        project.ext.moduleVersion = moduleVersion
-        version = moduleVersion
-
-        logger.lifecycle("✓ 模块 ${project.path} 版本: ${version} (ext: ${project.ext.moduleVersion})")
-    } else {
-        throw new GradleException("未找到模块 '${project.path}' 的版本文件")
+    if (!versionFile.exists()) {
+        throw new GradleException("未找到模块 '${project.path}' 的版本文件：${versionFile.absolutePath}")
     }
 
-    logger.lifecycle("配置模块 ${project.path} 版本: ${version}")
+    def props = new Properties()
+    versionFile.withInputStream { props.load(it) }
+    def moduleVersion = props.getProperty('version')
+
+    if (!moduleVersion) {
+        throw new GradleException("模块 '${project.path}' 的 version.properties 中缺少 version 属性")
+    }
+
+    // ✅ 保存到模块自己的 ext 中，完全隔离
+    project.ext.moduleVersion = moduleVersion
+
+    // ⚠️ 这个 version 可能被后续模块覆盖，但不影响发布（因为发布用 ext.moduleVersion）
+    version = moduleVersion
+
+    logger.lifecycle("✓ 模块 ${project.path} 版本: ${moduleVersion}")
+    // ========== 版本读取结束 ==========
 
     java {
-        // 编译目标：Java 8（保证向下兼容）
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(11)
+        }
     }
 
     configurations.all {
         exclude module: 'spring-boot-starter-logging'
-
-        // 动态依赖不缓存
         resolutionStrategy.cacheChangingModulesFor 0, TimeUnit.SECONDS
 
         resolutionStrategy {
             eachDependency { DependencyResolveDetails details ->
-                // 排除Spring Boot相关依赖，让使用者自由选择版本
                 def springBootGroups = ['org.springframework.boot', 'org.springframework', 'org.springframework.cloud']
                 def isSpringBootRelated = springBootGroups.any { group ->
                     details.requested.group.startsWith(group)
                 }
 
                 if (!isSpringBootRelated) {
-                    // 整体的组版本强制设置（仅非Spring Boot相关依赖）
                     for (Properties item : (gradle.ext.dependencies.groupConstraints as List<Properties>)) {
                         if (details.requested.group == item.group) {
                             details.useVersion item.version.toString()
@@ -119,7 +118,6 @@ subprojects {
                         }
                     }
 
-                    // 查看是否明确了强制使用的组件版本
                     for (Properties item : (gradle.ext.dependencies.artifactConstraints as List<Properties>)) {
                         if (details.requested.group == item.group && details.requested.name == item.name) {
                             details.useVersion item.version.toString()
@@ -131,30 +129,22 @@ subprojects {
                 }
             }
         }
-
     }
 
     dependencyManagement {
         dependencies {
-            // 只保留明确的构件约束
             gradle.ext.dependencies.artifactConstraints.each { constraint ->
                 dependency "${constraint.group}:${constraint.name}:${constraint.version}"
             }
         }
     }
 
-    /**
-     * 配置所有工程都必须具备的依赖项 - 最小化依赖，不影响使用者选择
-     */
     dependencies {
-        // 使用log4j2
         compileOnly group: "org.springframework.boot", name: "spring-boot-starter-log4j2"
-        // 仅保留必要的编译时依赖，不影响使用者的依赖选择
         compileOnly group: 'org.projectlombok', name: 'lombok'
         annotationProcessor group: 'org.projectlombok', name: 'lombok'
         annotationProcessor group: 'org.springframework.boot', name: 'spring-boot-configuration-processor'
 
-        // 测试依赖
         testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
         testImplementation group: 'org.projectlombok', name: 'lombok'
         testAnnotationProcessor group: 'org.projectlombok', name: 'lombok'
@@ -180,16 +170,75 @@ subprojects {
         useJUnitPlatform()
     }
 
-    // 配置新版 Maven Central Portal 发布
-    mavenPublishing {
-        // 发布到新版 Maven Central Portal
-        publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
+    // ========== 关键配置：确保发布时使用模块自己的版本 ==========
+    afterEvaluate {
+        // 1. 配置 Maven Publication 使用模块自己的版本
+        publishing {
+            publications {
+                withType(MavenPublication) { publication ->
+                    // ✅ 强制使用模块自己保存的版本
+                    publication.version = project.ext.moduleVersion
 
-        // 自动签名所有发布
+                    logger.lifecycle("Publication '${publication.name}' 配置版本: ${publication.version}")
+
+                    // 配置版本映射，解决依赖版本缺失问题
+                    versionMapping {
+                        usage('java-api') {
+                            fromResolutionOf('runtimeClasspath')
+                        }
+                        usage('java-runtime') {
+                            fromResolutionResult()
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. 配置发布任务，再次确认版本
+        tasks.withType(PublishToMavenRepository).configureEach { task ->
+            // 添加跳过 SNAPSHOT 的条件（可选）
+            onlyIf {
+                def v = project.ext.moduleVersion
+                if (v.endsWith('-SNAPSHOT')) {
+                    logger.warn("⚠️ 跳过 SNAPSHOT 版本的发布：${project.path}:${v}")
+                    return false
+                }
+                return true
+            }
+
+            // 发布前强制修正版本
+            task.doFirst {
+                def currentVersion = project.ext.moduleVersion
+
+                logger.lifecycle("=" * 70)
+                logger.lifecycle("📦 准备发布模块：${project.path}")
+                logger.lifecycle("📌 模块版本（ext.moduleVersion）：${currentVersion}")
+                logger.lifecycle("🔍 全局版本（project.version）：${project.version}")
+                logger.lifecycle("=" * 70)
+
+                // ✅ 强制使用模块自己的版本
+                project.version = currentVersion
+
+                // ✅ 再次强制修正 Publication 中的版本（防止被覆盖）
+                publishing.publications.withType(MavenPublication) { pub ->
+                    pub.version = currentVersion
+                    logger.lifecycle("✅ 强制 Publication '${pub.name}' 版本: ${pub.version}")
+                }
+
+                logger.lifecycle("✅ 确认发布版本：${currentVersion}")
+                logger.lifecycle("=" * 70)
+            }
+        }
+    }
+    // ========== 配置结束 ==========
+
+    // 配置 Maven Central Portal 发布
+    mavenPublishing {
+        publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
         signAllPublications()
 
-        // 明确指定坐标（可选但推荐）
-        coordinates(project.group.toString(), project.name, project.version.toString())
+        // ✅ 使用模块自己的版本
+        coordinates(project.group.toString(), project.name, project.ext.moduleVersion)
 
         pom {
             name = project.name

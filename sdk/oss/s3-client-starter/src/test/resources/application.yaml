@@ -1,0 +1,14 @@
+logging:
+  level:
+    root: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        s3:
+          access-key: ${OSS_ACCESS_KEY:xxx}
+          secret-key: ${OSS_SECRET_KEY:xxx}
+          endpoint: ${OSS_ENDPOINT:http://localhost:8060}
+          url-prefix: ${URL_PREFIX:http://localhost:8060}
+          role-arn: ${ROLE_ARN:arn:aws:iam::global:role/test}
