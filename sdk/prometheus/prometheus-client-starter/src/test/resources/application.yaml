@@ -8,6 +8,6 @@ io:
       sdk:
         prometheus:
           write:
-            host: ${PROMETHEUS_HOST:http://dev.prometheus.wfy.gov110.cn.local}
+            host: ${PROMETHEUS_HOST:http://localhost:9000}
           read:
-            host: ${PROMETHEUS_HOST:http://dev.prometheus.wfy.gov110.cn.local}
+            host: ${PROMETHEUS_HOST:http://localhost:9000}
