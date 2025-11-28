@@ -1,0 +1,13 @@
+logging:
+  level:
+    root: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        prometheus:
+          write:
+            host: ${PROMETHEUS_HOST:http://dev.prometheus.wfy.gov110.cn.local}
+          read:
+            host: ${PROMETHEUS_HOST:http://dev.prometheus.wfy.gov110.cn.local}

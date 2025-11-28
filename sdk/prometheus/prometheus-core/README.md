@@ -10,7 +10,7 @@ Prometheus 通用协议定义模块，基于 Protobuf 生成，提供读写远�
 ## 快速开始
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz.sdk:prometheus-core:1.0.0'
+    implementation 'io.github.surezzzzzz:prometheus-core:1.0.0'
 }
 ```
 
@@ -47,4 +47,3 @@ byte[] data = request.toByteArray();
 ## 注意事项
 - 本模块仅包含协议对象，**不包含**客户端、序列化或网络实现
 - 所有字段均使用 Protobuf 基本类型，无自定义枚举或业务常量
-- 建议与 `prometheus-client-starter` 或其他远程存储客户端搭配使用
