@@ -1,0 +1,43 @@
+# Log Truncate SDK 测试配置
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        log:
+          truncate:
+            # 最大总字节数 - 测试用较小值便于观察截断效果
+            max-total-bytes: 2048  # 2KB
+
+            # 单字段最大字符数
+            max-field-chars: 200
+
+            # 对象展开最大深度
+            max-depth: 5
+
+            # 截断后缀
+            ellipsis: "..."
+
+            # 截断标记模板
+            truncated-note-template: " [truncated {dropped}]"
+
+            # 超过深度占位符
+            depth-exceeded-placeholder: "__depth_exceeded__"
+
+      # Spring Boot 基础配置
+      spring:
+        application:
+          name: log-truncate-test
+
+        # 关闭不必要的自动配置（加快测试启动）
+        autoconfigure:
+          exclude:
+            - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+            - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+      # 日志配置
+      logging:
+        level:
+          root: INFO
+          com.fri.schumann.log.truncate: DEBUG
+        pattern:
+          console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
