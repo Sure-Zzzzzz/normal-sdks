@@ -229,41 +229,42 @@ subprojects {
                 logger.lifecycle("=" * 70)
             }
         }
-    }
-    // ========== 配置结束 ==========
 
-    // 配置 Maven Central Portal 发布
-    mavenPublishing {
-        publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
-        signAllPublications()
+        // 3. 🔑 关键修正：将 mavenPublishing 移到 afterEvaluate 中执行，以确保读取到模块正确的版本。
+        // 配置 Maven Central Portal 发布
+        mavenPublishing {
+            publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
+            signAllPublications()
 
-        // ✅ 使用模块自己的版本
-        coordinates(project.group.toString(), project.name, project.ext.moduleVersion)
+            // ✅ 使用模块自己的版本
+            coordinates(project.group.toString(), project.name, project.ext.moduleVersion)
 
-        pom {
-            name = project.name
-            description = "Part of normal-sdks: ${project.name}"
-            url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
-
-            licenses {
-                license {
-                    name = 'Apache License 2.0'
-                    url = 'https://www.apache.org/licenses/LICENSE-2.0'
-                }
-            }
-
-            developers {
-                developer {
-                    id = 'Sure-Zzzzzz'
-                    name = 'Sure'
-                }
-            }
-
-            scm {
+            pom {
+                name = project.name
+                description = "Part of normal-sdks: ${project.name}"
                 url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
-                connection = 'scm:git:git://github.com/Sure-Zzzzzz/normal-sdks.git'
-                developerConnection = 'scm:git:ssh://git@github.com/Sure-Zzzzzz/normal-sdks.git'
+
+                licenses {
+                    license {
+                        name = 'Apache License 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'Sure-Zzzzzz'
+                        name = 'Sure'
+                    }
+                }
+
+                scm {
+                    url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
+                    connection = 'scm:git:git://github.com/Sure-Zzzzzz/normal-sdks.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/Sure-Zzzzzz/normal-sdks.git'
+                }
             }
         }
     }
+    // ========== 配置结束 ==========
 }

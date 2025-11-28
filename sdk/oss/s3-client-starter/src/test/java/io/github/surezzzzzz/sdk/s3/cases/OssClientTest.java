@@ -46,7 +46,7 @@ public class OssClientTest {
     private OssProperties ossProperties;
 
     @Test
-//    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
+    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
     public void smokeTest() throws Exception {
         // 获取当前日期
         LocalDate currentDate = LocalDate.now();

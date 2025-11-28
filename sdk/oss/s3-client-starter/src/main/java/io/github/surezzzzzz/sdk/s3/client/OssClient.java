@@ -260,11 +260,7 @@ public class OssClient {
                 }
             }
         }
-        try {
-            log.debug("获取对象信息成功");
-        } catch (JsonProcessingException e) {
-            //什么都不干
-        }
+        log.debug("获取对象信息成功");
         return s3Object;
     }
 
