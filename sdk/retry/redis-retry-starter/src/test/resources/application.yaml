@@ -1,12 +1,10 @@
-com:
-  fri:
-    schumann:
-      retry:
-        redis:
-          max-retry-count: 3
-          base-delay-ms: 1000
-          max-delay-ms: 30000
-          retry-record-ttl-seconds: 3600
+io.github.surezzzzzz.sdk:
+  retry:
+    redis:
+      max-retry-count: 3
+      base-delay-ms: 1000
+      max-delay-ms: 30000
+      retry-record-ttl-seconds: 3600
 
 logging:
   level:

@@ -1,0 +1,4 @@
+logging:
+  level:
+    io.github.surezzzzzz.sdk.lock.redis: DEBUG
+    redis.embedded: WARN
