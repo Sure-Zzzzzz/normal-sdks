@@ -1,0 +1,10 @@
+dependencies {
+    compileOnly "org.springframework:spring-context-support"
+    compileOnly "org.springframework.boot:spring-boot-starter-validation"
+    compileOnly "org.springframework.boot:spring-boot-starter-mail"
+    compileOnly "com.fasterxml.jackson.core:jackson-databind"
+    api "org.apache.commons:commons-lang3:3.13.0"
+    compileOnly "com.sun.mail:jakarta.mail:1.6.7"
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}

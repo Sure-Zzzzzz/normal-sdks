@@ -1,0 +1,41 @@
+logging:
+  level:
+    root: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mail:
+          read:
+            properties:
+              mail:
+                store:
+                  protocol: imaps
+                imaps:
+                  host: imap.163.com
+                  port: 993
+                  ssl:
+                    enable: true
+  #                idle:
+  #                  enable: true
+  #                  clientid: myClientId
+            username: ${READ_MAIL_USERNAME:xxx}
+            password: ${READ_MAIL_PASSWORD:xxx}
+          send:
+            normal:
+              host: smtp.163.com
+              port: 465
+              username: ${SEND_MAIL_USERNAME:xxx}
+              password: ${SEND_MAIL_PASSWORD:xxx}
+              properties:
+                mail:
+                  smtp:
+                    auth: true
+                    starttls:
+                      enable: true
+              protocol: smtps
+              default-encoding: UTF-8
+
+
+
