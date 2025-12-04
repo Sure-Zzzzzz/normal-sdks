@@ -1,0 +1,16 @@
+logging:
+  level:
+    root: debug
+    redis.embedded: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        limiter:
+          redis:
+            enable: true
+            token:
+              size: 200000
+            set:
+              enable: false
