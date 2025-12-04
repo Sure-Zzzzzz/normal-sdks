@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.limiter.redis.configuration;
 
 
 import io.github.surezzzzzz.sdk.limiter.redis.RedisLimiterPackage;
+import io.github.surezzzzzz.sdk.limiter.redis.aspect.SimpleRedisRateLimiterAspect;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -31,4 +33,5 @@ public class SimpleRedisLimiterConfiguration {
         redisTemplate.setValueSerializer(new StringRedisSerializer());
         return redisTemplate;
     }
+
 }

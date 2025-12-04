@@ -1,5 +1,6 @@
 dependencies {
     compileOnly "org.springframework.boot:spring-boot-starter-data-redis"
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
     api "${group}:simple-redis-lock-starter:1.0.0"
     api "${group}:task-retry-starter:1.0.0"
 
@@ -8,4 +9,5 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'it.ozimov:embedded-redis:0.7.3'
     testImplementation "org.springframework.boot:spring-boot-starter-data-redis"
+    testImplementation "org.springframework.boot:spring-boot-starter-aop"
 }

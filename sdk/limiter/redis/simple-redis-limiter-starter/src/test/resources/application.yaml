@@ -13,4 +13,4 @@ io:
             token:
               size: 200000
             set:
-              enable: false
+              enable: true
