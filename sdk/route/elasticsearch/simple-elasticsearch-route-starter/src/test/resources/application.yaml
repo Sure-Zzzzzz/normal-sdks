@@ -1,0 +1,36 @@
+io.github.surezzzzzz.sdk.elasticsearch.route:
+  enable: true
+  default-source: primary
+
+  sources:
+    primary:
+      hosts: localhost:9200
+      connect-timeout: 5000
+      socket-timeout: 60000
+      keep-alive-strategy: 300
+      max-conn-total: 100
+      max-conn-per-route: 10
+      enable-connection-reuse: true
+
+    secondary:
+      hosts: localhost:9201
+      connect-timeout: 5000
+      socket-timeout: 60000
+      keep-alive-strategy: 300
+      max-conn-total: 100
+      max-conn-per-route: 10
+      enable-connection-reuse: true
+
+  rules:
+    - pattern: "test_index_b.secondary"
+      datasource: secondary
+      type: exact
+      priority: 10
+    - pattern: "*.secondary"
+      datasource: secondary
+      type: wildcard
+      priority: 20
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG
