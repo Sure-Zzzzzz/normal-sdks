@@ -19,7 +19,7 @@ public class SendSmsTest {
 
     @Test
     public void smokeTest() throws Exception {
-        smsClient.sendSingleSms("17710290654", "你好");
+        smsClient.sendSingleSms("13888888888", "你好");
         Thread.sleep(61000);
     }
 }
