@@ -10,7 +10,7 @@
 
 ```xml
 <dependency>
-    <groupId>io.github.surezzzzzz</groupId>
+    <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>s3-client-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
@@ -26,7 +26,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz:s3-client-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:s3-client-starter:1.0.0'
     
     // 必须添加Spring Boot依赖（本starter使用compileOnly配置）
     implementation 'org.springframework.boot:spring-boot-starter'
