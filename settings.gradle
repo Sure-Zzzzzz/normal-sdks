@@ -33,9 +33,10 @@ include(
         ':sdk:prometheus:prometheus-core',
         ':sdk:lock:redis:simple-redis-lock-starter',
         ':sdk:limiter:redis:simple-redis-limiter-starter',
-        ':sdk:curl:daydaymap:daydaymap-client-starter',
-        ':sdk:curl:daydaymap:ipfusion:daydaymap-ipfusion-client-starter',
-        ':sdk:curl:opsalert:opsalert-client-starter',
+        ':sdk:limiter:redis:smart-redis-limiter-starter',
+//        ':sdk:curl:daydaymap:daydaymap-client-starter',
+//        ':sdk:curl:daydaymap:ipfusion:daydaymap-ipfusion-client-starter',
+//        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter'
 )
