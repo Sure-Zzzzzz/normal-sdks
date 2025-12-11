@@ -60,6 +60,7 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
         String keyStrategy;
         List<SmartRedisLimiterProperties.SmartLimitRule> limitRules;
+        String fallbackStrategy;
 
         if (matchedRule != null) {
             log.debug("匹配到规则: {}", matchedRule);
@@ -69,10 +70,14 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
             limitRules = matchedRule.getLimits().isEmpty() ?
                     properties.getInterceptor().getDefaultLimits() :
                     matchedRule.getLimits();
+            // ✅ 新增：获取降级策略
+            fallbackStrategy = determineFallbackStrategy(matchedRule);
         } else {
             log.debug("使用默认规则, URI: {}", requestUri);
             keyStrategy = properties.getInterceptor().getDefaultKeyStrategy();
             limitRules = properties.getInterceptor().getDefaultLimits();
+            // ✅ 新增：使用默认降级策略
+            fallbackStrategy = determineFallbackStrategy(null);
         }
 
         if (limitRules == null || limitRules.isEmpty()) {
@@ -90,7 +95,8 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
         SmartRedisLimiterContext context = builder.build();
 
-        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy);
+        // ✅ 传递降级策略
+        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
 
         if (!passed) {
             long retryAfter = limitRules.stream()
@@ -104,6 +110,29 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         }
 
         return true;
+    }
+
+    /**
+     * ✅ 新增：确定降级策略
+     * 优先级：规则级别 > 拦截器默认 > 全局默认
+     */
+    private String determineFallbackStrategy(SmartRedisLimiterProperties.SmartInterceptorRule rule) {
+        // 1. 规则级别
+        if (rule != null && rule.getFallback() != null && !rule.getFallback().isEmpty()) {
+            log.debug("使用规则级别降级策略: {}", rule.getFallback());
+            return rule.getFallback();
+        }
+
+        // 2. 拦截器模式默认值
+        if (properties.getInterceptor().getDefaultFallback() != null &&
+                !properties.getInterceptor().getDefaultFallback().isEmpty()) {
+            log.debug("使用拦截器默认降级策略: {}", properties.getInterceptor().getDefaultFallback());
+            return properties.getInterceptor().getDefaultFallback();
+        }
+
+        // 3. 全局默认值
+        log.debug("使用全局降级策略: {}", properties.getFallback().getOnRedisError());
+        return properties.getFallback().getOnRedisError();
     }
 
     private boolean isInterceptorModeEnabled() {

@@ -80,6 +80,7 @@ public class SmartRedisLimiterProperties {
     public static class AnnotationConfig {
         private String defaultKeyStrategy = SmartRedisLimiterKeyStrategy.METHOD.getCode();
         private List<SmartLimitRule> defaultLimits = new ArrayList<>();
+        private String defaultFallback;  // 不设置则使用全局fallback
     }
 
     /**
@@ -93,6 +94,7 @@ public class SmartRedisLimiterProperties {
         private List<SmartLimitRule> defaultLimits = new ArrayList<>();
         private List<SmartInterceptorRule> rules = new ArrayList<>();
         private List<String> excludePatterns = new ArrayList<>();
+        private String defaultFallback;  // 不设置则使用全局fallback
     }
 
     /**
@@ -105,13 +107,15 @@ public class SmartRedisLimiterProperties {
         private String method;
         private String keyStrategy;
         private List<SmartLimitRule> limits = new ArrayList<>();
+        private String fallback;  // 不设置则使用defaultFallback
 
         @Override
         public String toString() {
-            return String.format("[%s %s -> %s]",
+            return String.format("[%s %s -> %s, fallback=%s]",
                     method != null ? method : "*",
                     pathPattern,
-                    limits);
+                    limits,
+                    fallback != null ? fallback : "default");
         }
     }
 

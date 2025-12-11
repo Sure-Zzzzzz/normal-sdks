@@ -25,6 +25,12 @@ public enum SmartRedisLimiterFallbackStrategy {
     private final String code;
     private final String desc;
 
+    /**
+     * ✅ 常量：用于注解，避免硬编码
+     */
+    public static final String ALLOW_CODE = "allow";
+    public static final String DENY_CODE = "deny";
+
     public static SmartRedisLimiterFallbackStrategy fromCode(String code) {
         if (code == null) {
             return ALLOW;

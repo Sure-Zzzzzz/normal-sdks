@@ -81,7 +81,6 @@ public class SmartRedisLimiterExecutor {
 
         isClusterMode = detectClusterMode();
 
-        // ✅ 单线程计时器
         timeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "SmartRedisLimiter-Timer");
             thread.setDaemon(true);
@@ -123,44 +122,57 @@ public class SmartRedisLimiterExecutor {
     }
 
     /**
-     * 执行限流检查（带超时控制）
+     * 执行限流检查（带超时控制）- 向后兼容版本
      */
     public boolean tryAcquire(SmartRedisLimiterContext context,
                               List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
                               String keyStrategy) {
+        return tryAcquire(context, limitRules, keyStrategy, null);
+    }
+
+    /**
+     * 执行限流检查（带超时控制和降级策略）
+     *
+     * @param context          限流上下文
+     * @param limitRules       限流规则列表
+     * @param keyStrategy      Key生成策略
+     * @param fallbackStrategy 降级策略（可选，为null时使用全局配置）
+     * @return true-允许通过，false-触发限流
+     */
+    public boolean tryAcquire(SmartRedisLimiterContext context,
+                              List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                              String keyStrategy,
+                              String fallbackStrategy) {
         long timeout = properties.getRedis().getCommandTimeout();
 
-        // ✅ 用FutureTask包装
         FutureTask<Boolean> task = new FutureTask<>(() ->
                 executeRedisLimit(context, limitRules, keyStrategy)
         );
 
-        // ✅ 提交给计时器执行
         timeoutScheduler.execute(task);
 
         try {
-            // ✅ 等待结果，超时抛异常
             return task.get(timeout, TimeUnit.MILLISECONDS);
 
         } catch (TimeoutException e) {
-            task.cancel(true);  // 取消任务
+            task.cancel(true);
             log.warn("SmartRedisLimiter Redis操作超时({}ms)，触发降级策略", timeout);
-            return handleFallback(e);
+            return handleFallback(e, fallbackStrategy);
 
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             log.error("SmartRedisLimiter 执行异常", cause != null ? cause : e);
-            return handleFallback(cause != null ? (Exception) cause : e);
+            return handleFallback(cause != null ? (Exception) cause : e, fallbackStrategy);
 
         } catch (InterruptedException e) {
             task.cancel(true);
             Thread.currentThread().interrupt();
             log.error("SmartRedisLimiter 执行被中断", e);
-            return handleFallback(e);
+            return handleFallback(e, fallbackStrategy);
 
         } catch (Exception e) {
             log.error("SmartRedisLimiter 执行异常", e);
-            return handleFallback(e);
+            return handleFallback(e, fallbackStrategy);
         }
     }
 
@@ -170,7 +182,6 @@ public class SmartRedisLimiterExecutor {
     private boolean executeRedisLimit(SmartRedisLimiterContext context,
                                       List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
                                       String keyStrategy) {
-        // 1. 生成Key
         SmartRedisLimiterKeyGenerator keyGenerator = getKeyGenerator(keyStrategy);
         String keyPart = keyGenerator.generate(context);
         String baseKey = SmartRedisLimiterRedisKeyConstant.KEY_PREFIX +
@@ -178,7 +189,6 @@ public class SmartRedisLimiterExecutor {
                 SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR +
                 keyPart;
 
-        // 2. 构建多个时间窗口的Key
         List<String> keys = new ArrayList<>();
         List<String> args = new ArrayList<>();
 
@@ -189,7 +199,6 @@ public class SmartRedisLimiterExecutor {
             args.add(String.valueOf(rule.getWindowSeconds()));
         }
 
-        // 3. 执行Lua脚本
         Long result = smartRedisLimiterRedisTemplate.execute(limiterScript, keys, args.toArray());
 
         boolean passed = result != null && result == 1L;
@@ -240,17 +249,28 @@ public class SmartRedisLimiterExecutor {
     }
 
     /**
-     * 降级处理
+     * 降级处理（支持传入策略）
+     *
+     * @param e                异常信息
+     * @param fallbackStrategy 降级策略（可选）
+     * @return true-放行，false-拒绝
      */
-    private boolean handleFallback(Exception e) {
-        SmartRedisLimiterFallbackStrategy strategy =
-                SmartRedisLimiterFallbackStrategy.fromCode(properties.getFallback().getOnRedisError());
+    private boolean handleFallback(Exception e, String fallbackStrategy) {
+        // 确定使用的降级策略
+        String strategy = fallbackStrategy;
 
-        if (strategy == SmartRedisLimiterFallbackStrategy.DENY) {
-            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 拒绝请求", strategy.getDesc());
+        if (strategy == null || strategy.isEmpty()) {
+            strategy = properties.getFallback().getOnRedisError();
+        }
+
+        SmartRedisLimiterFallbackStrategy fallback =
+                SmartRedisLimiterFallbackStrategy.fromCode(strategy);
+
+        if (fallback == SmartRedisLimiterFallbackStrategy.DENY) {
+            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 拒绝请求", fallback.getDesc());
             return false;
         } else {
-            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 放行请求", strategy.getDesc());
+            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 放行请求", fallback.getDesc());
             return true;
         }
     }

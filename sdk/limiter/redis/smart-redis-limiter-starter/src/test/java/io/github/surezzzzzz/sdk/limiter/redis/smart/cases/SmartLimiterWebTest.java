@@ -17,6 +17,7 @@ import redis.embedded.RedisServer;
 
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -128,12 +129,12 @@ public class SmartLimiterWebTest {
 
     /**
      * 测试1：路径级别限流（path策略 - 独立限流）
+     * 降级策略：fallback=allow
      */
     @Test
     public void testPathStrategyIndependentLimit() throws Exception {
-        log.info("=== 测试路径级别独立限流（5次/10秒） ===");
+        log.info("=== 测试路径级别独立限流（5次/10秒，降级策略：allow） ===");
 
-        // /api/public/test 前5次成功
         for (int i = 0; i < 5; i++) {
             mockMvc.perform(get("/api/public/test"))
                     .andDo(print())
@@ -141,7 +142,6 @@ public class SmartLimiterWebTest {
                     .andExpect(jsonPath("$.message").value("public endpoint"));
         }
 
-        // 第6次被限流
         mockMvc.perform(get("/api/public/test"))
                 .andDo(print())
                 .andExpect(status().isTooManyRequests())
@@ -152,30 +152,27 @@ public class SmartLimiterWebTest {
 
     /**
      * 测试2：不同用户ID独立限流（path策略）
+     * 降级策略：GET请求 fallback=allow
      */
     @Test
     public void testDifferentUserIdIndependentLimit() throws Exception {
-        log.info("=== 测试不同用户ID独立限流 ===");
+        log.info("=== 测试不同用户ID独立限流（降级策略：allow） ===");
 
-        // GET /api/user/123 限流15次
         for (int i = 0; i < 15; i++) {
             mockMvc.perform(get("/api/user/123"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(123));
         }
 
-        // GET /api/user/456 也有独立的10次限额
         for (int i = 0; i < 10; i++) {
             mockMvc.perform(get("/api/user/456"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.userId").value(456));
         }
 
-        // user/123 第16次被限流
         mockMvc.perform(get("/api/user/123"))
                 .andExpect(status().isTooManyRequests());
 
-        // user/456 第11次也被限流
         mockMvc.perform(get("/api/user/456"))
                 .andExpect(status().isTooManyRequests());
 
@@ -184,26 +181,24 @@ public class SmartLimiterWebTest {
 
     /**
      * 测试3：路径模式共享限流（path-pattern策略）
+     * 降级策略：POST请求 fallback=deny
      */
     @Test
     public void testPathPatternSharedLimit() throws Exception {
-        log.info("=== 测试路径模式共享限流（POST /api/user/** 共享5次） ===");
+        log.info("=== 测试路径模式共享限流（POST /api/user/** 共享5次，降级策略：deny） ===");
 
-        // POST /api/user/111
         for (int i = 0; i < 2; i++) {
             mockMvc.perform(post("/api/user/111"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.message").value("user created"));
         }
 
-        // POST /api/user/222
         for (int i = 0; i < 3; i++) {
             mockMvc.perform(post("/api/user/222"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.message").value("user created"));
         }
 
-        // 已经调用了5次（2 + 3），第6次任何POST /api/user/** 都会被限流
         mockMvc.perform(post("/api/user/333"))
                 .andDo(print())
                 .andExpect(status().isTooManyRequests())
@@ -214,23 +209,21 @@ public class SmartLimiterWebTest {
 
     /**
      * 测试4：精确路径优先级
+     * 降级策略：使用拦截器默认 fallback=allow
      */
     @Test
     public void testExactPathPriority() throws Exception {
-        log.info("=== 测试精确路径优先级 ===");
+        log.info("=== 测试精确路径优先级（降级策略：allow） ===");
 
-        // /api/user/123 有精确规则：15次/10秒
         for (int i = 0; i < 15; i++) {
             mockMvc.perform(get("/api/user/123"))
                     .andExpect(status().isOk());
         }
 
-        // 第16次被限流（精确规则只允许15次）
         mockMvc.perform(get("/api/user/123"))
                 .andDo(print())
                 .andExpect(status().isTooManyRequests());
 
-        // /api/user/456 走通配符规则：10次/10秒
         for (int i = 0; i < 10; i++) {
             mockMvc.perform(get("/api/user/456"))
                     .andExpect(status().isOk());
@@ -249,7 +242,6 @@ public class SmartLimiterWebTest {
     public void testExcludedPath() throws Exception {
         log.info("=== 测试排除路径不限流 ===");
 
-        // 健康检查接口默认排除，不限流
         for (int i = 0; i < 100; i++) {
             mockMvc.perform(get("/api/health"))
                     .andExpect(status().isOk())
@@ -266,29 +258,61 @@ public class SmartLimiterWebTest {
     public void testRedisKeyStructure() throws Exception {
         log.info("=== 测试Redis Key结构 ===");
 
-        // 触发限流
+        // 清空之前的key
+        Set<String> oldKeys = smartRedisLimiterRedisTemplate.keys(SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*");
+        if (oldKeys != null && !oldKeys.isEmpty()) {
+            smartRedisLimiterRedisTemplate.delete(oldKeys);
+            log.info("清空了{}个旧key", oldKeys.size());
+        }
+
+        // 1. 触发GET限流
+        log.info("触发GET /api/public/test...");
         mockMvc.perform(get("/api/public/test"))
                 .andExpect(status().isOk());
 
+        // 立即检查GET的key
+        Set<String> keysAfterGet = smartRedisLimiterRedisTemplate.keys(SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*");
+        log.info("GET请求后的keys: {}", keysAfterGet);
+
+        // 2. 触发POST限流
+        log.info("触发POST /api/user/123...");
         mockMvc.perform(post("/api/user/123"))
                 .andExpect(status().isOk());
 
-        // 检查Redis中的key
+        // 3. 检查所有Redis中的key
         Set<String> keys = smartRedisLimiterRedisTemplate.keys(SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*");
-        log.info("Redis Keys: {}", keys);
+        log.info("所有Redis Keys ({}个): {}", keys.size(), keys);
 
-        // 验证path策略的key
-        boolean hasPathKey = keys.stream()
-                .anyMatch(key -> key.contains("path:/api/public/test"));
-
-        // 验证path-pattern策略的key
-        boolean hasPatternKey = keys.stream()
-                .anyMatch(key -> key.contains("path-pattern:/api/user/**"));
-
-        if (!hasPathKey || !hasPatternKey) {
-            throw new AssertionError("Redis Key结构不正确，实际keys: " + keys);
+        // 打印每个key的详细信息
+        for (String key : keys) {
+            String value = smartRedisLimiterRedisTemplate.opsForValue().get(key);
+            Long ttl = smartRedisLimiterRedisTemplate.getExpire(key, java.util.concurrent.TimeUnit.SECONDS);
+            log.info("Key: {}, Value: {}, TTL: {}s", key, value, ttl);
         }
+
+        // 验证path策略的key (GET /api/public/test)
+        boolean hasPathKey = keys.stream()
+                .anyMatch(key -> key.contains("path:") && key.contains("/api/public/test"));
+
+        // 验证path-pattern策略的key (POST /api/user/**)
+        boolean hasPatternKey = keys.stream()
+                .anyMatch(key -> key.contains("path-pattern:") && key.contains("/api/user/**"));
+
+        // 更详细的断言信息
+        if (!hasPathKey) {
+            log.error("缺少path策略的key，期望包含: path:/api/public/test");
+            log.error("实际keys: {}", keys);
+        }
+
+        if (!hasPatternKey) {
+            log.error("缺少path-pattern策略的key，期望包含: path-pattern:/api/user/**");
+            log.error("实际keys: {}", keys);
+        }
+
+        assertTrue(hasPathKey, "应该有path策略的key (GET /api/public/test)");
+        assertTrue(hasPatternKey, "应该有path-pattern策略的key (POST /api/user/**)");
 
         log.info("=== Redis Key结构测试通过 ===");
     }
+
 }

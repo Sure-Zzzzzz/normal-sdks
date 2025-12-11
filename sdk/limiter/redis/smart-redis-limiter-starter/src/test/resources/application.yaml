@@ -19,6 +19,7 @@ io:
               # 注解模式配置（SmartLimiterTest使用）
               annotation:
                 default-key-strategy: method
+                default-fallback: allow  # ✅ 新增：注解模式默认降级策略
                 default-limits:
                   - count: 100
                     window: 1
@@ -27,6 +28,7 @@ io:
               # 拦截器模式配置（SmartLimiterWebTest使用）
               interceptor:
                 default-key-strategy: path
+                default-fallback: allow  # ✅ 新增：拦截器模式默认降级策略
                 default-limits:
                   - count: 50
                     window: 10
@@ -41,7 +43,8 @@ io:
                   # 规则1：/api/public/** GET请求，每个路径独立限流
                   - path-pattern: /api/public/**
                     method: GET
-                    key-strategy: path  # 独立：/api/public/test 和 /api/public/other 各限5次
+                    key-strategy: path
+                    fallback: allow  # ✅ 新增：查询接口Redis异常时放行
                     limits:
                       - count: 5
                         window: 10
@@ -50,7 +53,8 @@ io:
                   # 规则2：/api/user/** GET请求，每个用户ID独立限流
                   - path-pattern: /api/user/**
                     method: GET
-                    key-strategy: path  # 独立：/api/user/123 和 /api/user/456 各限10次
+                    key-strategy: path
+                    fallback: allow  # ✅ 新增：查询接口Redis异常时放行
                     limits:
                       - count: 10
                         window: 10
@@ -59,7 +63,8 @@ io:
                   # 规则3：/api/user/** POST请求，所有用户共享限流
                   - path-pattern: /api/user/**
                     method: POST
-                    key-strategy: path-pattern  # 共享：所有POST /api/user/** 共享5次
+                    key-strategy: path-pattern
+                    fallback: deny  # ✅ 新增：写操作Redis异常时拒绝
                     limits:
                       - count: 5
                         window: 10
@@ -69,6 +74,7 @@ io:
                   - path-pattern: /api/user/123
                     method: GET
                     key-strategy: path
+                    # ✅ 不设置fallback，使用拦截器默认降级策略（allow）
                     limits:
                       - count: 15
                         window: 10
@@ -76,7 +82,7 @@ io:
 
               # 降级策略
               fallback:
-                on-redis-error: deny  # Redis异常时拒绝请求
+                on-redis-error: deny  # 全局降级策略：Redis异常时拒绝请求
 
               # 异常处理
               management:

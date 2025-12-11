@@ -23,4 +23,9 @@ public @interface SmartRedisLimiter {
      * Key生成策略
      */
     String keyStrategy() default "";
+
+    /**
+     * 注解级别降级策略
+     */
+    String fallback() default "";  // 空字符串表示使用默认值
 }

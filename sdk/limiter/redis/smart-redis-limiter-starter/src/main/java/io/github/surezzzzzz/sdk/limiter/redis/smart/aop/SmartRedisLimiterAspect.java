@@ -39,25 +39,21 @@ public class SmartRedisLimiterAspect {
 
     @Around("@annotation(io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter)")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
-        // 检查是否启用注解模式
         if (!isAnnotationModeEnabled()) {
             log.debug("注解模式未启用，跳过限流");
             return joinPoint.proceed();
         }
 
-        // 获取方法和注解
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         SmartRedisLimiter limiter = method.getAnnotation(SmartRedisLimiter.class);
 
-        // 构建限流上下文（注解模式只需要方法信息）
         SmartRedisLimiterContext context = SmartRedisLimiterContext.builder()
                 .method(method)
                 .args(joinPoint.getArgs())
                 .target(joinPoint.getTarget())
                 .build();
 
-        // 获取限流配置
         String keyStrategy = limiter.keyStrategy();
         if (keyStrategy == null || keyStrategy.isEmpty()) {
             keyStrategy = properties.getAnnotation().getDefaultKeyStrategy();
@@ -68,14 +64,16 @@ public class SmartRedisLimiterAspect {
             limitRules = properties.getAnnotation().getDefaultLimits();
         }
 
-        // 如果没有限流规则，直接执行
         if (limitRules == null || limitRules.isEmpty()) {
             log.debug("无限流规则，直接执行方法: {}", method.getName());
             return joinPoint.proceed();
         }
 
-        // 执行限流检查
-        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy);
+        // ✅ 新增：获取降级策略
+        String fallbackStrategy = determineFallbackStrategy(limiter);
+
+        // ✅ 传递降级策略
+        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
 
         if (!passed) {
             long retryAfter = limitRules.stream()
@@ -92,8 +90,28 @@ public class SmartRedisLimiterAspect {
     }
 
     /**
-     * 检查注解模式是否启用
+     * ✅ 新增：确定降级策略
+     * 优先级：注解级别 > 注解模式默认 > 全局默认
      */
+    private String determineFallbackStrategy(SmartRedisLimiter limiter) {
+        // 1. 注解级别
+        if (limiter.fallback() != null && !limiter.fallback().isEmpty()) {
+            log.debug("使用注解级别降级策略: {}", limiter.fallback());
+            return limiter.fallback();
+        }
+
+        // 2. 注解模式默认值
+        if (properties.getAnnotation().getDefaultFallback() != null &&
+                !properties.getAnnotation().getDefaultFallback().isEmpty()) {
+            log.debug("使用注解模式默认降级策略: {}", properties.getAnnotation().getDefaultFallback());
+            return properties.getAnnotation().getDefaultFallback();
+        }
+
+        // 3. 全局默认值
+        log.debug("使用全局降级策略: {}", properties.getFallback().getOnRedisError());
+        return properties.getFallback().getOnRedisError();
+    }
+
     private boolean isAnnotationModeEnabled() {
         if (!properties.getEnable()) {
             return false;
@@ -103,9 +121,6 @@ public class SmartRedisLimiterAspect {
         return mode.isAnnotationEnabled();
     }
 
-    /**
-     * 解析注解中的限流规则
-     */
     private List<SmartRedisLimiterProperties.SmartLimitRule> parseLimitRules(SmartRedisLimiter limiter) {
         List<SmartRedisLimiterProperties.SmartLimitRule> rules = new ArrayList<>();
 
