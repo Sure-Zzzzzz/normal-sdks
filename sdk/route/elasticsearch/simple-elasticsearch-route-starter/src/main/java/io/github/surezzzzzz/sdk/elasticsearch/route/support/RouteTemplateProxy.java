@@ -16,6 +16,7 @@ import java.util.Map;
 
 /**
  * ElasticsearchRestTemplate 路由代理（使用 CGLIB）
+ * 支持 SpEL 表达式解析
  *
  * @author surezzzzzz
  */
@@ -92,14 +93,14 @@ public class RouteTemplateProxy implements MethodInterceptor {
                 continue;
             }
 
-            // IndexCoordinates 类型
+            // 优先从 IndexCoordinates 获取（已解析，最准确）
             if (arg instanceof IndexCoordinates) {
                 String indexName = ((IndexCoordinates) arg).getIndexName();
                 log.trace("Extracted index name [{}] from IndexCoordinates", indexName);
                 return indexName;
             }
 
-            // Class 类型 - 通过 @Document 注解获取
+            // 从 Class 类型的 @Document 注解获取
             if (arg instanceof Class) {
                 String indexName = extractIndexFromClass((Class<?>) arg);
                 if (indexName != null) {
@@ -115,11 +116,21 @@ public class RouteTemplateProxy implements MethodInterceptor {
 
     /**
      * 从 Class 的 @Document 注解中提取索引名称
+     * 支持 SpEL 表达式解析
      */
     private String extractIndexFromClass(Class<?> clazz) {
         Document doc = clazz.getAnnotation(Document.class);
         if (doc != null) {
-            return doc.indexName();
+            String indexName = doc.indexName();
+
+            // ========== 解析 SpEL 表达式 ==========
+            if (SpELResolver.isSpEL(indexName)) {
+                String resolved = SpELResolver.resolve(indexName);
+                log.trace("Resolved SpEL index name from [{}] to [{}]", indexName, resolved);
+                return resolved;
+            }
+
+            return indexName;
         }
         return null;
     }

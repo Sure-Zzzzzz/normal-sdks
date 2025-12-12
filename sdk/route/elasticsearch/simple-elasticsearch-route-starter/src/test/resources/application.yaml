@@ -26,6 +26,10 @@ io.github.surezzzzzz.sdk.elasticsearch.route:
       datasource: secondary
       type: exact
       priority: 10
+    - pattern: "test_index.history"
+      datasource: secondary
+      type: exact
+      priority: 10
     - pattern: "*.secondary"
       datasource: secondary
       type: wildcard
