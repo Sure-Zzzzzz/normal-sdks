@@ -10,9 +10,9 @@ import javax.servlet.http.HttpServletRequest;
  * @description Web上下文辅助类（纯工具类）
  * @Date: 2024/12/XX XX:XX
  */
-public class WebContextHelper {
+public class SmartRedisLimiterWebContextHelper {
 
-    private WebContextHelper() {
+    private SmartRedisLimiterWebContextHelper() {
         // 工具类，禁止实例化
     }
 

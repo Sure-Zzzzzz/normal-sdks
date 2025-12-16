@@ -65,7 +65,7 @@ subprojects {
 
     group = 'io.github.sure-zzzzzz'
 
-    // ========== 关键修改：使用独立的 ext 变量，避免污染全局 version ==========
+    // ========== 关键修改：读取并保存模块版本到独立的 ext 变量 ==========
     def versionFile = file("${projectDir}/version.properties")
     if (!versionFile.exists()) {
         throw new GradleException("未找到模块 '${project.path}' 的版本文件：${versionFile.absolutePath}")
@@ -79,12 +79,8 @@ subprojects {
         throw new GradleException("模块 '${project.path}' 的 version.properties 中缺少 version 属性")
     }
 
-    // ✅ 保存到模块自己的 ext 中，完全隔离
+    // ✅ 将版本保存到模块自己的 ext 中，完全隔离
     project.ext.moduleVersion = moduleVersion
-
-    // ⚠️ 这个 version 可能被后续模块覆盖，但不影响发布（因为发布用 ext.moduleVersion）
-    version = moduleVersion
-
     logger.lifecycle("✓ 模块 ${project.path} 版本: ${moduleVersion}")
     // ========== 版本读取结束 ==========
 
@@ -170,99 +166,38 @@ subprojects {
         useJUnitPlatform()
     }
 
-    // ========== 关键配置：确保发布时使用模块自己的版本 ==========
-    afterEvaluate {
-        // 1. 配置 Maven Publication 使用模块自己的版本
-        publishing {
-            publications {
-                withType(MavenPublication) { publication ->
-                    // ✅ 强制使用模块自己保存的版本
-                    publication.version = project.ext.moduleVersion
+    // ========== 关键配置：在配置阶段就锁定发布版本 ==========
+    mavenPublishing {
+        publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
+        signAllPublications()
 
-                    logger.lifecycle("Publication '${publication.name}' 配置版本: ${publication.version}")
+        // ✅ 核心：直接使用模块自己的 ext.moduleVersion，避免依赖动态的 project.version
+        // 这确保了每个模块的坐标在配置阶段就被正确设置，不会互相覆盖。
+        coordinates(group.toString(), project.name, project.ext.moduleVersion)
 
-                    // 配置版本映射，解决依赖版本缺失问题
-                    versionMapping {
-                        usage('java-api') {
-                            fromResolutionOf('runtimeClasspath')
-                        }
-                        usage('java-runtime') {
-                            fromResolutionResult()
-                        }
-                    }
+        pom {
+            name = project.name
+            description = "Part of normal-sdks: ${project.name}"
+            url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
+
+            licenses {
+                license {
+                    name = 'Apache License 2.0'
+                    url = 'https://www.apache.org/licenses/LICENSE-2.0'
                 }
             }
-        }
 
-        // 2. 配置发布任务，再次确认版本
-        tasks.withType(PublishToMavenRepository).configureEach { task ->
-            // 添加跳过 SNAPSHOT 的条件（可选）
-            onlyIf {
-                def v = project.ext.moduleVersion
-                if (v.endsWith('-SNAPSHOT')) {
-                    logger.warn("⚠️ 跳过 SNAPSHOT 版本的发布：${project.path}:${v}")
-                    return false
+            developers {
+                developer {
+                    id = 'Sure-Zzzzzz'
+                    name = 'Sure'
                 }
-                return true
             }
 
-            // 发布前强制修正版本
-            task.doFirst {
-                def currentVersion = project.ext.moduleVersion
-
-                logger.lifecycle("=" * 70)
-                logger.lifecycle("📦 准备发布模块：${project.path}")
-                logger.lifecycle("📌 模块版本（ext.moduleVersion）：${currentVersion}")
-                logger.lifecycle("🔍 全局版本（project.version）：${project.version}")
-                logger.lifecycle("=" * 70)
-
-                // ✅ 强制使用模块自己的版本
-                project.version = currentVersion
-
-                // ✅ 再次强制修正 Publication 中的版本（防止被覆盖）
-                publishing.publications.withType(MavenPublication) { pub ->
-                    pub.version = currentVersion
-                    logger.lifecycle("✅ 强制 Publication '${pub.name}' 版本: ${pub.version}")
-                }
-
-                logger.lifecycle("✅ 确认发布版本：${currentVersion}")
-                logger.lifecycle("=" * 70)
-            }
-        }
-
-        // 3. 🔑 关键修正：将 mavenPublishing 移到 afterEvaluate 中执行，以确保读取到模块正确的版本。
-        // 配置 Maven Central Portal 发布
-        mavenPublishing {
-            publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL, true)
-            signAllPublications()
-
-            // ✅ 使用模块自己的版本
-            coordinates(project.group.toString(), project.name, project.ext.moduleVersion)
-
-            pom {
-                name = project.name
-                description = "Part of normal-sdks: ${project.name}"
+            scm {
                 url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
-
-                licenses {
-                    license {
-                        name = 'Apache License 2.0'
-                        url = 'https://www.apache.org/licenses/LICENSE-2.0'
-                    }
-                }
-
-                developers {
-                    developer {
-                        id = 'Sure-Zzzzzz'
-                        name = 'Sure'
-                    }
-                }
-
-                scm {
-                    url = 'https://github.com/Sure-Zzzzzz/normal-sdks'
-                    connection = 'scm:git:git://github.com/Sure-Zzzzzz/normal-sdks.git'
-                    developerConnection = 'scm:git:ssh://git@github.com/Sure-Zzzzzz/normal-sdks.git'
-                }
+                connection = 'scm:git:git://github.com/Sure-Zzzzzz/normal-sdks.git'
+                developerConnection = 'scm:git:ssh://git@github.com/Sure-Zzzzzz/normal-sdks.git'
             }
         }
     }

@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.SmartRedisLimiterApplication
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -117,6 +118,17 @@ public class SmartLimiterWebTest {
 
     @Autowired
     private RedisTemplate<String, String> smartRedisLimiterRedisTemplate;
+
+    @BeforeEach
+    public void setup() throws Exception {
+        // 预热：发一个请求确保Redis连接建立，避免第一次请求超时
+        try {
+            mockMvc.perform(get("/api/health"));
+            log.debug("Redis连接预热完成");
+        } catch (Exception e) {
+            log.warn("Redis连接预热失败: {}", e.getMessage());
+        }
+    }
 
     @AfterEach
     public void cleanup() {
