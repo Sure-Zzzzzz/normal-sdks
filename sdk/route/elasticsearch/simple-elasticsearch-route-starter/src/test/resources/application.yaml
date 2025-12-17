@@ -4,7 +4,7 @@ io.github.surezzzzzz.sdk.elasticsearch.route:
 
   sources:
     primary:
-      hosts: localhost:9200
+      urls: http://localhost:9200
       connect-timeout: 5000
       socket-timeout: 60000
       keep-alive-strategy: 300
@@ -13,7 +13,7 @@ io.github.surezzzzzz.sdk.elasticsearch.route:
       enable-connection-reuse: true
 
     secondary:
-      hosts: localhost:9201
+      urls: http://localhost:9201
       connect-timeout: 5000
       socket-timeout: 60000
       keep-alive-strategy: 300

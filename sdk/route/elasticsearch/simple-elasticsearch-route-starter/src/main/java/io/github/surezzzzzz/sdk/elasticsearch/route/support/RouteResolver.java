@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.CollectionUtils;
 
+import javax.annotation.PostConstruct;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,29 @@ public class RouteResolver {
     private final Map<String, String> routingCache = new ConcurrentHashMap<>();
 
     /**
+     * 排序后的启用规则列表（缓存）
+     */
+    private List<SimpleElasticsearchRouteProperties.RouteRule> sortedEnabledRules;
+
+    @PostConstruct
+    public void init() {
+        // 缓存排序后的启用规则
+        List<SimpleElasticsearchRouteProperties.RouteRule> rules = properties.getRules();
+
+        if (CollectionUtils.isEmpty(rules)) {
+            this.sortedEnabledRules = List.of();
+            log.debug("No route rules configured");
+        } else {
+            this.sortedEnabledRules = rules.stream()
+                    .filter(SimpleElasticsearchRouteProperties.RouteRule::isEnable)
+                    .sorted(Comparator.comparingInt(SimpleElasticsearchRouteProperties.RouteRule::getPriority))
+                    .collect(Collectors.toList());
+
+            log.info("Cached {} enabled route rules (sorted by priority)", sortedEnabledRules.size());
+        }
+    }
+
+    /**
      * 解析索引对应的数据源
      *
      * @param indexName 索引名称
@@ -46,22 +70,14 @@ public class RouteResolver {
      * 执行路由解析
      */
     private String doResolve(String indexName) {
-        List<SimpleElasticsearchRouteProperties.RouteRule> rules = properties.getRules();
-
-        if (CollectionUtils.isEmpty(rules)) {
+        if (sortedEnabledRules.isEmpty()) {
             log.debug("No route rules configured, index [{}] using default datasource [{}]",
                     indexName, properties.getDefaultSource());
             return properties.getDefaultSource();
         }
 
-        // 获取启用的规则并按优先级排序
-        List<SimpleElasticsearchRouteProperties.RouteRule> enabledRules = rules.stream()
-                .filter(SimpleElasticsearchRouteProperties.RouteRule::isEnable)
-                .sorted(Comparator.comparingInt(SimpleElasticsearchRouteProperties.RouteRule::getPriority))
-                .collect(Collectors.toList());
-
         // 遍历规则进行匹配
-        for (SimpleElasticsearchRouteProperties.RouteRule rule : enabledRules) {
+        for (SimpleElasticsearchRouteProperties.RouteRule rule : sortedEnabledRules) {
             if (patternMatcher.matches(indexName, rule)) {
                 log.debug("Index [{}] matched rule [pattern={}, type={}, priority={}], routing to datasource [{}]",
                         indexName, rule.getPattern(), rule.getMatchType().getDescription(),

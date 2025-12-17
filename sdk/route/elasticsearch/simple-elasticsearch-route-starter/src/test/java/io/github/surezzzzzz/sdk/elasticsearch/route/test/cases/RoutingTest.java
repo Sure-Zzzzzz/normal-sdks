@@ -31,7 +31,7 @@ public class RoutingTest {
     private static final String HISTORY_FLAG_KEY =
             DocumentIndexHelper.class.getCanonicalName() + ".access.history";
     @Test
-    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
+//    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
     public void testRouteToTwoDifferentDataSources() throws Exception {
         // 测试连接索引A（primary数据源）
         log.info("========== 测试连接索引A (primary数据源) ==========");
@@ -75,7 +75,7 @@ public class RoutingTest {
      * 预期：路由到 history 数据源（索引名：test_index.history）
      */
     @Test
-    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
+//    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
     public void testRouteToHistory() throws Exception {
         log.info("========== 测试路由到 history 数据源 ==========");
 

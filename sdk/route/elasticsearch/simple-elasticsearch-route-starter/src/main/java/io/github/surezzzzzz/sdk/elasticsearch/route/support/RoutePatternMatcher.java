@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.PathMatcher;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -20,6 +22,7 @@ import java.util.regex.Pattern;
 public class RoutePatternMatcher {
 
     private final PathMatcher pathMatcher = new AntPathMatcher();
+    private final Map<String, Pattern> patternCache = new ConcurrentHashMap<>();
 
     /**
      * 判断索引名称是否匹配规则
@@ -51,7 +54,11 @@ public class RoutePatternMatcher {
                     return pathMatcher.match(pattern, indexName);
 
                 case REGEX:
-                    return Pattern.matches(pattern, indexName);
+                    Pattern compiledPattern = patternCache.computeIfAbsent(
+                            pattern,
+                            Pattern::compile
+                    );
+                    return compiledPattern.matcher(indexName).matches();
 
                 default:
                     log.warn("Unsupported route match type [{}], treating as exact match", matchType);
@@ -62,5 +69,20 @@ public class RoutePatternMatcher {
                     indexName, pattern, matchType, e);
             return false;
         }
+    }
+
+    /**
+     * 清除 Pattern 缓存
+     */
+    public void clearCache() {
+        patternCache.clear();
+        log.info("Pattern cache cleared");
+    }
+
+    /**
+     * 获取缓存大小
+     */
+    public int getCacheSize() {
+        return patternCache.size();
     }
 }

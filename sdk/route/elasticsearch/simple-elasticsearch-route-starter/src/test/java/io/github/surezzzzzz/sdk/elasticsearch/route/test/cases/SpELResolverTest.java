@@ -187,4 +187,92 @@ public class SpELResolverTest {
 
         log.info("✓ Invalid expression test passed");
     }
+
+    /**
+     * 测试：SpEL 缓存功能
+     */
+    @Test
+    public void testSpELCache() {
+        log.info("=== 测试 SpEL 缓存功能 ===");
+
+        // 清空缓存
+        SpELResolver.clearCache();
+        assertEquals(0, SpELResolver.getCacheSize());
+        log.info("缓存已清空");
+
+        // 首次解析
+        String expr1 = "#{'cached_value'}";
+        String result1 = SpELResolver.resolve(expr1);
+        assertEquals("cached_value", result1);
+        assertEquals(1, SpELResolver.getCacheSize());
+        log.info("首次解析后缓存大小: 1");
+
+        // 再次解析相同表达式（应该命中缓存）
+        String result2 = SpELResolver.resolve(expr1);
+        assertEquals("cached_value", result2);
+        assertEquals(1, SpELResolver.getCacheSize());
+        log.info("再次解析相同表达式，缓存大小仍为: 1");
+
+        // 解析不同表达式
+        String expr2 = "#{'another_value'}";
+        String result3 = SpELResolver.resolve(expr2);
+        assertEquals("another_value", result3);
+        assertEquals(2, SpELResolver.getCacheSize());
+        log.info("解析不同表达式后缓存大小: 2");
+
+        // 解析非 SpEL 表达式（不应进入缓存）
+        String plain = "plain_text";
+        String result4 = SpELResolver.resolve(plain);
+        assertEquals("plain_text", result4);
+        assertEquals(2, SpELResolver.getCacheSize());
+        log.info("解析非 SpEL 表达式后缓存大小仍为: 2");
+
+        // 清空缓存
+        SpELResolver.clearCache();
+        assertEquals(0, SpELResolver.getCacheSize());
+        log.info("再次清空缓存后大小: 0");
+
+        log.info("=== SpEL 缓存测试通过 ===");
+    }
+
+    /**
+     * 测试:SpEL 缓存多次访问相同表达式
+     * 注意:缓存的是编译后的 Expression 对象,而不是结果值
+     * 所以每次求值都会重新计算,但编译过程被缓存了
+     */
+    @Test
+    public void testSpELCachePerformance() {
+        log.info("=== 测试 SpEL 缓存性能 ===");
+
+        SpELResolver.clearCache();
+
+        String expr = "#{T(java.lang.System).currentTimeMillis()}";
+
+        // 第一次解析（会编译表达式并缓存）
+        long start1 = System.nanoTime();
+        String result1 = SpELResolver.resolve(expr);
+        long time1 = System.nanoTime() - start1;
+        log.info("首次解析耗时: {} ns, 结果: {}", time1, result1);
+
+        // 等待一小段时间，确保时间戳会不同
+        try {
+            Thread.sleep(5);
+        } catch (InterruptedException e) {
+            // ignore
+        }
+
+        // 第二次解析（从缓存获取编译后的 Expression，但会重新求值）
+        long start2 = System.nanoTime();
+        String result2 = SpELResolver.resolve(expr);
+        long time2 = System.nanoTime() - start2;
+        log.info("缓存命中耗时: {} ns, 结果: {}", time2, result2);
+
+        // 结果应该不同（因为是重新求值，currentTimeMillis 会返回不同的值）
+        assertNotEquals(result1, result2, "重新求值应该返回不同的时间戳");
+
+        // 缓存应该只有1个（缓存的是 Expression 对象）
+        assertEquals(1, SpELResolver.getCacheSize());
+
+        log.info("=== SpEL 缓存性能测试通过（缓存 Expression 对象，支持运行时上下文）===");
+    }
 }

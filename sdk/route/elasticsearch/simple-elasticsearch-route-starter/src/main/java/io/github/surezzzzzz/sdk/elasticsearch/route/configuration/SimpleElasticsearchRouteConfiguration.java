@@ -28,6 +28,7 @@ import org.springframework.util.StringUtils;
 import javax.annotation.PostConstruct;
 import javax.net.ssl.SSLContext;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -65,8 +66,9 @@ public class SimpleElasticsearchRouteConfiguration {
     private void createAllTemplates() {
         properties.getSources().forEach((key, config) -> {
             try {
-                // ========== 解析 Hosts ==========
-                HttpHost[] hosts = parseHosts(config.getHosts(), config.isUseSsl());
+                // ========== 解析 URLs ==========
+                List<String> urls = config.getResolvedUrls();
+                HttpHost[] hosts = parseUrls(urls);
 
                 // ========== 创建 RestClientBuilder ==========
                 RestClientBuilder restClientBuilder = RestClient.builder(hosts);
@@ -174,8 +176,8 @@ public class SimpleElasticsearchRouteConfiguration {
 
                 templatesMap.put(key, template);
 
-                log.info("✓ Elasticsearch datasource [{}] initialized successfully - hosts: {}",
-                        key, config.getHosts());
+                log.info("✓ Elasticsearch datasource [{}] initialized successfully - urls: {}",
+                        key, urls);
 
             } catch (Exception e) {
                 log.error("✗ Failed to create Elasticsearch client for datasource [{}]", key, e);
@@ -191,22 +193,28 @@ public class SimpleElasticsearchRouteConfiguration {
     }
 
     /**
-     * 解析 hosts 字符串为 HttpHost 数组
+     * 解析 URL 列表为 HttpHost 数组
      */
-    private HttpHost[] parseHosts(String hostsStr, boolean useSsl) {
-        String[] hostArray = hostsStr.split(",");
-        HttpHost[] httpHosts = new HttpHost[hostArray.length];
+    private HttpHost[] parseUrls(List<String> urls) {
+        HttpHost[] httpHosts = new HttpHost[urls.size()];
 
-        String scheme = useSsl ? "https" : "http";
+        for (int i = 0; i < urls.size(); i++) {
+            try {
+                java.net.URL url = new java.net.URL(urls.get(i));
+                String scheme = url.getProtocol();
+                String hostname = url.getHost();
+                int port = url.getPort();
 
-        for (int i = 0; i < hostArray.length; i++) {
-            String host = hostArray[i].trim();
-            String[] parts = host.split(":");
+                // 如果端口未指定，使用默认端口
+                if (port == -1) {
+                    port = "https".equals(scheme) ? 443 : 9200;
+                }
 
-            String hostname = parts[0];
-            int port = parts.length > 1 ? Integer.parseInt(parts[1]) : 9200;
+                httpHosts[i] = new HttpHost(hostname, port, scheme);
 
-            httpHosts[i] = new HttpHost(hostname, port, scheme);
+            } catch (java.net.MalformedURLException e) {
+                throw new RuntimeException("Invalid URL: " + urls.get(i), e);
+            }
         }
 
         return httpHosts;
