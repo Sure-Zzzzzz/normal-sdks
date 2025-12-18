@@ -1,0 +1,18 @@
+dependencies {
+    // 依赖 route-starter
+    api "${group}:simple-elasticsearch-route-starter:1.0.2"
+    // ES 依赖（route-starter 是 compileOnly，我们也需要声明 compileOnly）
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+    compileOnly "org.apache.httpcomponents:httpclient"
+    compileOnly "org.apache.httpcomponents:httpcore"
+    // Web 支持（API 需要）
+    compileOnly "org.springframework.boot:spring-boot-starter-web"
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+
+    // 测试
+    testImplementation "org.springframework.boot:spring-boot-starter-web"
+    testImplementation "org.springframework.boot:spring-boot-starter-test"
+    testImplementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}

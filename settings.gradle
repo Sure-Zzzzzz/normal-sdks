@@ -38,5 +38,6 @@ include(
 //        ':sdk:curl:daydaymap:ipfusion:daydaymap-ipfusion-client-starter',
 //        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
-        ':sdk:route:elasticsearch:simple-elasticsearch-route-starter'
+        ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
+        ':sdk:orm:elasticsearch:simple-elasticsearch-orm-starter',
 )

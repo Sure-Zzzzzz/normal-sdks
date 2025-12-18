@@ -1,0 +1,246 @@
+package io.github.surezzzzzz.sdk.elasticsearch.orm.constant;
+
+/**
+ * 通用常量
+ *
+ * @author surezzzzzz
+ */
+public class Constants {
+
+    // ========== 分页相关 ==========
+
+    /**
+     * 默认分页类型：offset
+     */
+    public static final String PAGINATION_TYPE_OFFSET = "offset";
+
+    /**
+     * 分页类型：search_after
+     */
+    public static final String PAGINATION_TYPE_SEARCH_AFTER = "search_after";
+
+    /**
+     * 排序方向：升序
+     */
+    public static final String SORT_ORDER_ASC = "asc";
+
+    /**
+     * 排序方向：降序
+     */
+    public static final String SORT_ORDER_DESC = "desc";
+
+    /**
+     * 聚合不返回文档（size=0）
+     */
+    public static final int AGG_NO_DOCS_SIZE = 0;
+
+    // ========== 逻辑操作符 ==========
+
+    /**
+     * 逻辑与
+     */
+    public static final String LOGIC_AND = "and";
+
+    /**
+     * 逻辑或
+     */
+    public static final String LOGIC_OR = "or";
+
+    /**
+     * OR 查询最少匹配数
+     */
+    public static final int OR_MINIMUM_SHOULD_MATCH = 1;
+
+    // ========== 通配符 ==========
+
+    /**
+     * 通配符：*
+     */
+    public static final String WILDCARD_STAR = "*";
+
+    /**
+     * 通配符：?
+     */
+    public static final String WILDCARD_QUESTION = "?";
+
+    // ========== ES 内部字段 ==========
+
+    /**
+     * 文档 ID 字段
+     */
+    public static final String ES_FIELD_ID = "_id";
+
+    /**
+     * 评分字段
+     */
+    public static final String ES_FIELD_SCORE = "_score";
+
+    // ========== 聚合结果字段名 ==========
+
+    /**
+     * 聚合结果字段：key
+     */
+    public static final String AGG_RESULT_KEY = "key";
+
+    /**
+     * 聚合结果字段：count
+     */
+    public static final String AGG_RESULT_COUNT = "count";
+
+    /**
+     * Stats 聚合结果字段：min
+     */
+    public static final String STATS_RESULT_MIN = "min";
+
+    /**
+     * Stats 聚合结果字段：max
+     */
+    public static final String STATS_RESULT_MAX = "max";
+
+    /**
+     * Stats 聚合结果字段：avg
+     */
+    public static final String STATS_RESULT_AVG = "avg";
+
+    /**
+     * Stats 聚合结果字段：sum
+     */
+    public static final String STATS_RESULT_SUM = "sum";
+
+    // ========== 敏感字段处理 ==========
+
+    /**
+     * 默认脱敏字符
+     */
+    public static final String DEFAULT_MASK_PATTERN = "****";
+
+    /**
+     * 默认脱敏起始位置
+     */
+    public static final int DEFAULT_MASK_START = 0;
+
+    /**
+     * 默认脱敏结束位置
+     */
+    public static final int DEFAULT_MASK_END = 0;
+
+    /**
+     * 敏感字段禁止原因
+     */
+    public static final String SENSITIVE_FIELD_REASON = "sensitive field";
+
+    // ========== 聚合默认值 ==========
+
+    /**
+     * Terms 聚合默认 size
+     */
+    public static final int DEFAULT_TERMS_SIZE = 10;
+
+    /**
+     * Histogram 聚合默认 interval
+     */
+    public static final double DEFAULT_HISTOGRAM_INTERVAL = 1.0;
+
+    // ========== 数组索引 ==========
+
+    /**
+     * BETWEEN 查询起始值索引
+     */
+    public static final int BETWEEN_FROM_INDEX = 0;
+
+    /**
+     * BETWEEN 查询结束值索引
+     */
+    public static final int BETWEEN_TO_INDEX = 1;
+
+    /**
+     * BETWEEN 查询所需参数数量
+     */
+    public static final int BETWEEN_REQUIRED_VALUES = 2;
+
+    // ========== 日期间隔 ==========
+
+    /**
+     * 日期间隔：秒
+     */
+    public static final String DATE_INTERVAL_SECOND = "second";
+
+    /**
+     * 日期间隔：秒（简写）
+     */
+    public static final String DATE_INTERVAL_S = "s";
+
+    /**
+     * 日期间隔：分钟
+     */
+    public static final String DATE_INTERVAL_MINUTE = "minute";
+
+    /**
+     * 日期间隔：分钟（简写）
+     */
+    public static final String DATE_INTERVAL_M = "m";
+
+    /**
+     * 日期间隔：小时
+     */
+    public static final String DATE_INTERVAL_HOUR = "hour";
+
+    /**
+     * 日期间隔：小时（简写）
+     */
+    public static final String DATE_INTERVAL_H = "h";
+
+    /**
+     * 日期间隔：天
+     */
+    public static final String DATE_INTERVAL_DAY = "day";
+
+    /**
+     * 日期间隔：天（简写）
+     */
+    public static final String DATE_INTERVAL_D = "d";
+
+    /**
+     * 日期间隔：周
+     */
+    public static final String DATE_INTERVAL_WEEK = "week";
+
+    /**
+     * 日期间隔：周（简写）
+     */
+    public static final String DATE_INTERVAL_W = "w";
+
+    /**
+     * 日期间隔：月
+     */
+    public static final String DATE_INTERVAL_MONTH = "month";
+
+    /**
+     * 日期间隔：月（简写）
+     */
+    public static final String DATE_INTERVAL_MONTH_ABBR = "M";
+
+    /**
+     * 日期间隔：季度
+     */
+    public static final String DATE_INTERVAL_QUARTER = "quarter";
+
+    /**
+     * 日期间隔：季度（简写）
+     */
+    public static final String DATE_INTERVAL_Q = "q";
+
+    /**
+     * 日期间隔：年
+     */
+    public static final String DATE_INTERVAL_YEAR = "year";
+
+    /**
+     * 日期间隔：年（简写）
+     */
+    public static final String DATE_INTERVAL_Y = "y";
+
+    private Constants() {
+        // 私有构造函数，防止实例化
+    }
+}

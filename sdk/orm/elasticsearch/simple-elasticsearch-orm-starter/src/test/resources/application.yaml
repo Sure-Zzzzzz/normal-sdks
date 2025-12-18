@@ -1,0 +1,73 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          # ORM 配置
+          orm:
+            enable: true
+
+            # 索引配置
+            indices:
+              # 普通索引（无标识符，直接使用索引名）
+              - name: "test_order_index"
+                lazy-load: true
+
+              # 通配符索引（无标识符，用于日期分割场景）
+              - name: "test_log_*"
+                date-split: true
+                date-pattern: "yyyy.MM.dd"
+                date-field: "createTime"
+                cache-mapping: true
+                lazy-load: true
+
+              # 带别名的索引（少数场景） - 带敏感字段
+              - name: "test_user_index"
+                alias: test_user
+                date-split: false
+                cache-mapping: true
+                lazy-load: true
+                sensitive-fields:
+                  - field: password
+                    strategy: FORBIDDEN
+                  - field: phone
+                    strategy: MASK
+                    mask-start: 3
+                    mask-end: 4
+                    mask-pattern: "****"
+
+            # Mapping 刷新配置
+            mapping-refresh:
+              enabled: false
+              interval-seconds: 300
+
+            # 查询限制配置
+            query-limits:
+              max-size: 10000
+              default-size: 20
+              max-offset: 10000
+
+            # API 配置
+            api:
+              enabled: true
+              base-path: /api
+              include-score: false
+
+          # Route 配置
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              primary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch.orm: DEBUG
+    io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG
