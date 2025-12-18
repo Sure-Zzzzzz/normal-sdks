@@ -1,39 +1,44 @@
-io.github.surezzzzzz.sdk.elasticsearch.route:
-  enable: true
-  default-source: primary
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            enable: true
+            default-source: primary
 
-  sources:
-    primary:
-      urls: http://localhost:9200
-      connect-timeout: 5000
-      socket-timeout: 60000
-      keep-alive-strategy: 300
-      max-conn-total: 100
-      max-conn-per-route: 10
-      enable-connection-reuse: true
+            sources:
+              primary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
 
-    secondary:
-      urls: http://localhost:9201
-      connect-timeout: 5000
-      socket-timeout: 60000
-      keep-alive-strategy: 300
-      max-conn-total: 100
-      max-conn-per-route: 10
-      enable-connection-reuse: true
+              secondary:
+                urls: http://localhost:9201
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
 
-  rules:
-    - pattern: "test_index_b.secondary"
-      datasource: secondary
-      type: exact
-      priority: 10
-    - pattern: "test_index.history"
-      datasource: secondary
-      type: exact
-      priority: 10
-    - pattern: "*.secondary"
-      datasource: secondary
-      type: wildcard
-      priority: 20
+            rules:
+              - pattern: "test_index_b.secondary"
+                datasource: secondary
+                type: exact
+                priority: 10
+              - pattern: "test_index.history"
+                datasource: secondary
+                type: exact
+                priority: 10
+              - pattern: "*.secondary"
+                datasource: secondary
+                type: wildcard
+                priority: 20
 
 logging:
   level:
