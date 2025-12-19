@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.processor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DateGranularity;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -43,28 +44,37 @@ public class IndexRouteProcessor {
         }
 
         // 3. 解析日期范围
-        String datePattern = metadata.getDatePattern();
-        if (datePattern == null) {
-            throw new IllegalStateException(
-                    String.format(ErrorMessages.DATE_PATTERN_REQUIRED, metadata.getAlias()));  //
-        }
-
         try {
+            String datePattern = metadata.getDatePattern();
+            if (datePattern == null) {
+                throw new IllegalStateException(
+                        String.format(ErrorMessages.DATE_PATTERN_REQUIRED, metadata.getAlias()));  //
+            }
+
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(datePattern);
 
             // 解析起止日期（只取日期部分，忽略时间）
             LocalDate fromDate = parseDate(dateRange.getFrom());
             LocalDate toDate = parseDate(dateRange.getTo());
 
-            // 4. 计算日期范围内的所有索引
+            // 4. 根据日期格式判断分割粒度
+            DateGranularity granularity = DateGranularity.detectFromPattern(datePattern);
+            log.debug("Detected date granularity: {} for pattern: {}", granularity, datePattern);
+
+            // 5. 计算日期范围内的所有索引
             List<String> indices = new ArrayList<>();
             String indexPrefix = extractIndexPrefix(metadata.getIndexName());
 
             LocalDate currentDate = fromDate;
             while (!currentDate.isAfter(toDate)) {
                 String indexName = indexPrefix + currentDate.format(formatter);
-                indices.add(indexName);
-                currentDate = currentDate.plusDays(1);
+                // 避免重复添加（例如按月分割时，同一个月的不同天会生成相同的索引名）
+                if (indices.isEmpty() || !indices.get(indices.size() - 1).equals(indexName)) {
+                    indices.add(indexName);
+                }
+
+                // 根据粒度递增日期
+                currentDate = granularity.increment(currentDate);
             }
 
             if (indices.isEmpty()) {

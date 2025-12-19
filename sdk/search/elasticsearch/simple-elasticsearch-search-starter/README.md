@@ -19,7 +19,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.1'
     
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -63,7 +63,7 @@ io:
               - name: "user_behavior_*"          # 索引名称或匹配模式
                 alias: user_behavior              # 索引别名（API 中使用）
                 date-split: true                  # 是否按日期分割
-                date-pattern: "yyyy.MM.dd"        # 日期格式
+                date-pattern: "yyyy.MM.dd"        # 日期格式（支持 yyyy, yyyy.MM, yyyy.MM.dd 等）
                 date-field: "createTime"          # 日期字段 可选，用于自动添加 DSL 时间过滤
                 lazy-load: false                  # 是否延迟加载 mapping
                 cache-mapping: true               # 是否缓存 mapping
@@ -268,6 +268,34 @@ POST /api/indices/user_behavior/refresh
 
 ### 日期分割索引查询
 
+框架支持按 **年、月、日** 三种粒度的日期分割索引：
+
+**支持的日期格式：**
+- `yyyy` - 按年分割（如 `log_2025`）
+- `yyyy.MM` 或 `yyyy-MM` - 按月分割（如 `log_2025.01`）
+- `yyyy.MM.dd` 或 `yyyy-MM-dd` - 按天分割（如 `log_2025.01.15`）
+
+**配置示例：**
+
+```yaml
+# 按月分割
+indices:
+  - name: "monthly_log_*"
+    alias: monthly_log
+    date-split: true
+    date-pattern: "yyyy.MM"        # 按月分割
+    date-field: "timestamp"
+
+# 按年分割
+  - name: "yearly_archive_*"
+    alias: yearly_archive
+    date-split: true
+    date-pattern: "yyyy"            # 按年分割
+    date-field: "created_at"
+```
+
+**查询示例：**
+
 对于按日期分割的索引（如 `user_behavior_2025.12.17`），可以使用 `dateRange` 参数进行精确查询：
 
 ```json
@@ -286,7 +314,10 @@ POST /api/indices/user_behavior/refresh
 ```
 
 说明：
-- `dateRange` 用于索引路由，自动计算查询哪些日期的索引
+- `dateRange` 用于索引路由，框架会根据 `date-pattern` 自动判断分割粒度
+- **按年分割**：查询 2023-2025 年数据，生成 `log_2023`, `log_2024`, `log_2025`
+- **按月分割**：查询 2025-01 到 2025-03，生成 `log_2025.01`, `log_2025.02`, `log_2025.03`
+- **按天分割**：查询 3 天数据，生成对应的 3 个索引
 - 如果配置了 `date-field`，框架会自动在 DSL 中添加时间范围过滤
 - 日期格式支持 ISO 格式（`2025-12-17T00:00:00`）和纯日期格式（`2025-12-17`）
 
