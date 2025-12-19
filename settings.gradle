@@ -39,5 +39,5 @@ include(
 //        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
-        ':sdk:orm:elasticsearch:simple-elasticsearch-orm-starter',
+        ':sdk:search:elasticsearch:simple-elasticsearch-search-starter',
 )
