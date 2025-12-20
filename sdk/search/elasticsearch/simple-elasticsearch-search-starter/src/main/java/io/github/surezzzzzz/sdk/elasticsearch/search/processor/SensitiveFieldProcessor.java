@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.processor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +68,7 @@ public class SensitiveFieldProcessor {
         String maskPattern = config.getMaskPattern();
 
         if (maskPattern == null) {
-            maskPattern = Constants.DEFAULT_MASK_PATTERN;
+            maskPattern = SimpleElasticsearchSearchConstant.DEFAULT_MASK_PATTERN;
         }
 
         int length = value.length();
@@ -79,8 +79,8 @@ public class SensitiveFieldProcessor {
         }
 
         // 保留前 N 位和后 M 位
-        int start = maskStart != null ? maskStart : Constants.DEFAULT_MASK_START;
-        int end = maskEnd != null ? maskEnd : Constants.DEFAULT_MASK_END;
+        int start = maskStart != null ? maskStart : SimpleElasticsearchSearchConstant.DEFAULT_MASK_START;
+        int end = maskEnd != null ? maskEnd : SimpleElasticsearchSearchConstant.DEFAULT_MASK_END;
 
         if (start + end >= length) {
             // 保留位数超过总长度，全部脱敏

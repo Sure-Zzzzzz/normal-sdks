@@ -2,7 +2,9 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.processor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DateGranularity;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -48,7 +50,7 @@ public class IndexRouteProcessor {
             String datePattern = metadata.getDatePattern();
             if (datePattern == null) {
                 throw new IllegalStateException(
-                        String.format(ErrorMessages.DATE_PATTERN_REQUIRED, metadata.getAlias()));  //
+                        String.format(ErrorMessage.DATE_PATTERN_REQUIRED, metadata.getAlias()));  //
             }
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern(datePattern);
@@ -78,7 +80,7 @@ public class IndexRouteProcessor {
             }
 
             if (indices.isEmpty()) {
-                throw new IllegalArgumentException(
+                throw new SimpleElasticsearchSearchException(ErrorCode.DATE_PATTERN_REQUIRED,
                         "No indices found for date range: " + dateRange.getFrom() + " ~ " + dateRange.getTo());
             }
 
@@ -90,7 +92,8 @@ public class IndexRouteProcessor {
 
         } catch (Exception e) {
             log.error("Index routing failed for [{}]", metadata.getAlias(), e);  //
-            throw new RuntimeException("Index routing failed: " + e.getMessage(), e);
+            throw new SimpleElasticsearchSearchException(ErrorCode.DATE_PATTERN_REQUIRED,
+                    "Index routing failed: " + e.getMessage(), e);
         }
     }
 
@@ -106,7 +109,8 @@ public class IndexRouteProcessor {
             // 尝试解析纯日期：2025-12-18
             return LocalDate.parse(dateStr);
         } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid date format: " + dateStr, e);
+            throw new SimpleElasticsearchSearchException(ErrorCode.DATE_PATTERN_REQUIRED,
+                    "Invalid date format: " + dateStr, e);
         }
     }
 

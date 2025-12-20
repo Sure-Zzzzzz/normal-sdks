@@ -1,10 +1,13 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.builder;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.FieldException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
@@ -67,7 +70,7 @@ public class QueryDslBuilder {
     private QueryBuilder buildLogicCondition(QueryCondition condition, IndexMetadata metadata) {
         String logic = condition.getLogic();
         if (logic == null) {
-            logic = Constants.LOGIC_AND; // 默认 AND
+            logic = SimpleElasticsearchSearchConstant.LOGIC_AND; // 默认 AND
         }
 
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
@@ -75,7 +78,7 @@ public class QueryDslBuilder {
         for (QueryCondition subCondition : condition.getConditions()) {
             QueryBuilder subQuery = buildCondition(subCondition, metadata);
 
-            if (Constants.LOGIC_OR.equalsIgnoreCase(logic)) {
+            if (SimpleElasticsearchSearchConstant.LOGIC_OR.equalsIgnoreCase(logic)) {
                 boolQuery.should(subQuery);
             } else {
                 // and
@@ -84,8 +87,8 @@ public class QueryDslBuilder {
         }
 
         // OR 查询至少匹配一个
-        if (Constants.LOGIC_OR.equalsIgnoreCase(logic)) {
-            boolQuery.minimumShouldMatch(Constants.OR_MINIMUM_SHOULD_MATCH);
+        if (SimpleElasticsearchSearchConstant.LOGIC_OR.equalsIgnoreCase(logic)) {
+            boolQuery.minimumShouldMatch(SimpleElasticsearchSearchConstant.OR_MINIMUM_SHOULD_MATCH);
         }
 
         return boolQuery;
@@ -101,12 +104,14 @@ public class QueryDslBuilder {
         // 获取字段元数据
         FieldMetadata fieldMetadata = metadata.getField(fieldName);
         if (fieldMetadata == null) {
-            throw new IllegalArgumentException(String.format(ErrorMessages.FIELD_NOT_FOUND, fieldName));
+            throw new FieldException(ErrorCode.FIELD_NOT_FOUND,
+                    String.format(ErrorMessage.FIELD_NOT_FOUND, fieldName));
         }
 
         // 检查是否可查询
         if (!fieldMetadata.isSearchable()) {
-            throw new IllegalArgumentException(String.format(ErrorMessages.FIELD_NOT_SEARCHABLE, fieldName, fieldMetadata.getReason()));
+            throw new FieldException(ErrorCode.FIELD_NOT_SEARCHABLE,
+                    String.format(ErrorMessage.FIELD_NOT_SEARCHABLE, fieldName, fieldMetadata.getReason()));
         }
 
         // 根据操作符构建查询
@@ -134,7 +139,7 @@ public class QueryDslBuilder {
             case PREFIX:
                 return QueryBuilders.prefixQuery(fieldName, condition.getValue().toString());
             case SUFFIX:
-                return QueryBuilders.wildcardQuery(fieldName, Constants.WILDCARD_STAR + condition.getValue());
+                return QueryBuilders.wildcardQuery(fieldName, SimpleElasticsearchSearchConstant.WILDCARD_STAR + condition.getValue());
             case EXISTS:
                 return QueryBuilders.existsQuery(fieldName);
             case NOT_EXISTS:
@@ -146,7 +151,8 @@ public class QueryDslBuilder {
             case REGEX:
                 return QueryBuilders.regexpQuery(fieldName, condition.getValue().toString());
             default:
-                throw new IllegalArgumentException(String.format(ErrorMessages.UNSUPPORTED_OPERATOR, operator));
+                throw new SimpleElasticsearchSearchException(ErrorCode.UNSUPPORTED_OPERATOR,
+                        String.format(ErrorMessage.UNSUPPORTED_OPERATOR, operator));
         }
     }
 
@@ -170,7 +176,7 @@ public class QueryDslBuilder {
      */
     private QueryBuilder buildInQuery(String fieldName, List<Object> values, FieldMetadata fieldMetadata) {
         if (values == null || values.isEmpty()) {
-            throw new IllegalArgumentException(ErrorMessages.IN_VALUES_REQUIRED);
+            throw new SimpleElasticsearchSearchException(ErrorCode.IN_VALUES_REQUIRED, ErrorMessage.IN_VALUES_REQUIRED);
         }
 
         FieldType fieldType = fieldMetadata.getType();
@@ -181,7 +187,7 @@ public class QueryDslBuilder {
             for (Object value : values) {
                 boolQuery.should(QueryBuilders.matchQuery(fieldName, value));
             }
-            boolQuery.minimumShouldMatch(Constants.OR_MINIMUM_SHOULD_MATCH);
+            boolQuery.minimumShouldMatch(SimpleElasticsearchSearchConstant.OR_MINIMUM_SHOULD_MATCH);
             return boolQuery;
         } else {
             // 其他类型：使用 terms 查询
@@ -193,12 +199,12 @@ public class QueryDslBuilder {
      * 构建 BETWEEN 查询
      */
     private QueryBuilder buildBetweenQuery(String fieldName, List<Object> values) {
-        if (values == null || values.size() != Constants.BETWEEN_REQUIRED_VALUES) {
-            throw new IllegalArgumentException(ErrorMessages.BETWEEN_VALUES_INVALID);
+        if (values == null || values.size() != SimpleElasticsearchSearchConstant.BETWEEN_REQUIRED_VALUES) {
+            throw new SimpleElasticsearchSearchException(ErrorCode.BETWEEN_VALUES_INVALID, ErrorMessage.BETWEEN_VALUES_INVALID);
         }
         return QueryBuilders.rangeQuery(fieldName)
-                .gte(values.get(Constants.BETWEEN_FROM_INDEX))
-                .lte(values.get(Constants.BETWEEN_TO_INDEX));
+                .gte(values.get(SimpleElasticsearchSearchConstant.BETWEEN_FROM_INDEX))
+                .lte(values.get(SimpleElasticsearchSearchConstant.BETWEEN_TO_INDEX));
     }
 
     /**
@@ -214,8 +220,8 @@ public class QueryDslBuilder {
         } else {
             // KEYWORD 类型：使用 wildcard 查询
             // 自动添加通配符
-            if (!valueStr.contains(Constants.WILDCARD_STAR) && !valueStr.contains(Constants.WILDCARD_QUESTION)) {
-                valueStr = Constants.WILDCARD_STAR + valueStr + Constants.WILDCARD_STAR;
+            if (!valueStr.contains(SimpleElasticsearchSearchConstant.WILDCARD_STAR) && !valueStr.contains(SimpleElasticsearchSearchConstant.WILDCARD_QUESTION)) {
+                valueStr = SimpleElasticsearchSearchConstant.WILDCARD_STAR + valueStr + SimpleElasticsearchSearchConstant.WILDCARD_STAR;
             }
             return QueryBuilders.wildcardQuery(fieldName, valueStr);
         }

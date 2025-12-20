@@ -5,9 +5,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexFieldsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexInfoResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.QueryExecutor;
@@ -56,7 +57,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             log.debug("Received query request: index={}", request.getIndex());
             QueryResponse response = queryExecutor.execute(request);
             return ResponseEntity.ok(ApiResponse.success(response));
-        } catch (IllegalArgumentException e) {
+        } catch (SimpleElasticsearchSearchException e) {
             log.warn("Query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -75,7 +76,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             log.debug("Received aggregation request: index={}", request.getIndex());
             AggResponse response = aggExecutor.execute(request);
             return ResponseEntity.ok(ApiResponse.success(response));
-        } catch (IllegalArgumentException e) {
+        } catch (SimpleElasticsearchSearchException e) {
             log.warn("Aggregation validation failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -119,7 +120,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             IndexMetadata metadata = mappingManager.getMetadata(alias, indexName);
             IndexFieldsResponse response = IndexFieldsResponse.from(metadata);
             return ResponseEntity.ok(ApiResponse.success(response));
-        } catch (IllegalArgumentException e) {
+        } catch (SimpleElasticsearchSearchException e) {
             log.warn("Get fields validation failed: alias={}, indexName={}, error={}", alias, indexName, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -136,7 +137,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<String>> refreshAll() {
         try {
             mappingManager.refreshAllMetadata();
-            return ResponseEntity.ok(ApiResponse.success(ApiMessages.ALL_INDEX_MAPPINGS_REFRESHED));
+            return ResponseEntity.ok(ApiResponse.success(ApiMessage.ALL_INDEX_MAPPINGS_REFRESHED));
         } catch (Exception e) {
             log.error("Refresh all mappings failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -151,8 +152,8 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<String>> refresh(@PathVariable String alias) {
         try {
             mappingManager.refreshMetadata(alias);
-            return ResponseEntity.ok(ApiResponse.success(ApiMessages.INDEX_MAPPING_REFRESHED));
-        } catch (IllegalArgumentException e) {
+            return ResponseEntity.ok(ApiResponse.success(ApiMessage.INDEX_MAPPING_REFRESHED));
+        } catch (SimpleElasticsearchSearchException e) {
             log.warn("Refresh mapping validation failed: alias={}, error={}", alias, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {

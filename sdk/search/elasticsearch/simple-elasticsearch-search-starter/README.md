@@ -21,7 +21,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.3'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -343,14 +343,14 @@ indices:
     alias: monthly_log
     date-split: true
     date-pattern: "yyyy.MM"        # 按月分割
-    date-field: "timestamp"
+    date-field: "timestamp"        # 可选，配置后自动添加 DSL 时间过滤
 
 # 按年分割
   - name: "yearly_archive_*"
     alias: yearly_archive
     date-split: true
     date-pattern: "yyyy"            # 按年分割
-    date-field: "created_at"
+    date-field: "created_at"       # 可选，配置后自动添加 DSL 时间过滤
 ```
 
 **查询示例：**

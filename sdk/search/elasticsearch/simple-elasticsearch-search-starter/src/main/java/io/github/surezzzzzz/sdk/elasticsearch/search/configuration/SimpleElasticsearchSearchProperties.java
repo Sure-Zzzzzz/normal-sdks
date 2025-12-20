@@ -1,8 +1,10 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.configuration;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ConfigurationException;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -75,7 +77,7 @@ public class SimpleElasticsearchSearchProperties {
         try {
             // 1. 校验索引配置不能为空
             if (CollectionUtils.isEmpty(indices)) {
-                throw new IllegalArgumentException(ErrorMessages.INDICES_CONFIG_REQUIRED);
+                throw new ConfigurationException(ErrorCode.INDICES_CONFIG_REQUIRED, ErrorMessage.INDICES_CONFIG_REQUIRED);
             }
 
             // 2. 校验每个索引配置
@@ -88,7 +90,8 @@ public class SimpleElasticsearchSearchProperties {
             for (IndexConfig indexConfig : indices) {
                 String identifier = isEmpty(indexConfig.getAlias()) ? indexConfig.getName() : indexConfig.getAlias();
                 if (identifiers.contains(identifier)) {
-                    throw new IllegalArgumentException(String.format(ErrorMessages.INDEX_ALIAS_DUPLICATE, identifier));
+                    throw new ConfigurationException(ErrorCode.INDEX_ALIAS_DUPLICATE,
+                            String.format(ErrorMessage.INDEX_ALIAS_DUPLICATE, identifier));
                 }
                 identifiers.add(identifier);
             }
@@ -96,7 +99,7 @@ public class SimpleElasticsearchSearchProperties {
             log.info("Configuration validation passed");
 
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(ErrorMessages.CONFIG_VALIDATION_FAILED, e);
+            throw new IllegalStateException(ErrorMessage.CONFIG_VALIDATION_FAILED, e);
         }
     }
 
@@ -106,34 +109,32 @@ public class SimpleElasticsearchSearchProperties {
     private void validateIndexConfig(IndexConfig config) {
         // 1. name 不能为空
         if (isEmpty(config.getName())) {
-            throw new IllegalArgumentException(ErrorMessages.INDEX_NAME_REQUIRED);
+            throw new ConfigurationException(ErrorCode.INDEX_NAME_REQUIRED, ErrorMessage.INDEX_NAME_REQUIRED);
         }
 
         // 2. 获取标识符（有alias用alias，没有用name）
         String identifier = isEmpty(config.getAlias()) ? config.getName() : config.getAlias();
 
-        // 3. 如果启用日期分割，必须配置 date-pattern 和 date-field
+        // 3. 如果启用日期分割，必须配置 date-pattern（date-field 可选，用于添加 DSL 时间过滤）
         if (config.isDateSplit()) {
             if (isEmpty(config.getDatePattern())) {
-                throw new IllegalArgumentException(
-                        String.format(ErrorMessages.DATE_PATTERN_REQUIRED, identifier));
+                throw new ConfigurationException(ErrorCode.DATE_PATTERN_REQUIRED,
+                        String.format(ErrorMessage.DATE_PATTERN_REQUIRED, identifier));
             }
-            if (isEmpty(config.getDateField())) {
-                throw new IllegalArgumentException(
-                        String.format(ErrorMessages.DATE_FIELD_REQUIRED, identifier));
-            }
+            // date-field 是可选的，如果配置了，会在查询时自动添加日期范围过滤
+            // 如果未配置，仅影响索引路由，不影响 DSL 查询条件
         }
 
         // 4. 校验敏感字段配置
         if (!CollectionUtils.isEmpty(config.getSensitiveFields())) {
             for (SensitiveFieldConfig sensitiveField : config.getSensitiveFields()) {
                 if (isEmpty(sensitiveField.getField())) {
-                    throw new IllegalArgumentException(
-                            String.format(ErrorMessages.SENSITIVE_FIELD_NAME_REQUIRED, identifier));
+                    throw new ConfigurationException(ErrorCode.SENSITIVE_FIELD_NAME_REQUIRED,
+                            String.format(ErrorMessage.SENSITIVE_FIELD_NAME_REQUIRED, identifier));
                 }
                 if (isEmpty(sensitiveField.getStrategy())) {
-                    throw new IllegalArgumentException(
-                            String.format(ErrorMessages.SENSITIVE_FIELD_STRATEGY_REQUIRED,
+                    throw new ConfigurationException(ErrorCode.SENSITIVE_FIELD_STRATEGY_REQUIRED,
+                            String.format(ErrorMessage.SENSITIVE_FIELD_STRATEGY_REQUIRED,
                                     identifier, sensitiveField.getField()));
                 }
 
@@ -141,8 +142,8 @@ public class SimpleElasticsearchSearchProperties {
                 String strategy = sensitiveField.getStrategy().toLowerCase();
                 if (!SensitiveStrategy.FORBIDDEN.getStrategy().equals(strategy) &&
                         !SensitiveStrategy.MASK.getStrategy().equals(strategy)) {
-                    throw new IllegalArgumentException(
-                            String.format(ErrorMessages.SENSITIVE_FIELD_STRATEGY_INVALID,
+                    throw new ConfigurationException(ErrorCode.SENSITIVE_FIELD_STRATEGY_INVALID,
+                            String.format(ErrorMessage.SENSITIVE_FIELD_STRATEGY_INVALID,
                                     identifier, sensitiveField.getField(), sensitiveField.getStrategy()));
                 }
             }

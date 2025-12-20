@@ -4,8 +4,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteProcessor;
@@ -108,7 +110,7 @@ public class QueryExecutorImpl implements QueryExecutor {
 
         } catch (IOException e) {
             log.error("Query execution failed: index={}", request.getIndex(), e);
-            throw new RuntimeException(ErrorMessages.QUERY_EXECUTION_FAILED, e);
+            throw new QueryException(ErrorCode.QUERY_EXECUTION_FAILED, ErrorMessage.QUERY_EXECUTION_FAILED, e);
         }
     }
 
@@ -117,7 +119,7 @@ public class QueryExecutorImpl implements QueryExecutor {
      */
     private void validateRequest(QueryRequest request) {
         if (request.getIndex() == null || request.getIndex().trim().isEmpty()) {
-            throw new IllegalArgumentException(ErrorMessages.INDEX_ALIAS_REQUIRED);
+            throw new QueryException(ErrorCode.INDEX_ALIAS_REQUIRED, ErrorMessage.INDEX_ALIAS_REQUIRED);
         }
 
         // 验证分页参数
@@ -125,7 +127,7 @@ public class QueryExecutorImpl implements QueryExecutor {
         if (pagination == null) {
             // 使用默认分页
             pagination = PaginationInfo.builder()
-                    .type(Constants.PAGINATION_TYPE_OFFSET)
+                    .type(SimpleElasticsearchSearchConstant.PAGINATION_TYPE_OFFSET)
                     .page(1)
                     .size(properties.getQueryLimits().getDefaultSize())
                     .build();
@@ -137,8 +139,8 @@ public class QueryExecutorImpl implements QueryExecutor {
             pagination.setSize(properties.getQueryLimits().getDefaultSize());
         }
         if (pagination.getSize() > properties.getQueryLimits().getMaxSize()) {
-            throw new IllegalArgumentException(
-                    String.format(ErrorMessages.QUERY_SIZE_EXCEEDED, properties.getQueryLimits().getMaxSize()));
+            throw new QueryException(ErrorCode.QUERY_SIZE_EXCEEDED,
+                    String.format(ErrorMessage.QUERY_SIZE_EXCEEDED, properties.getQueryLimits().getMaxSize()));
         }
 
         // 验证 offset 分页深度
@@ -148,15 +150,15 @@ public class QueryExecutorImpl implements QueryExecutor {
             }
             int from = (pagination.getPage() - 1) * pagination.getSize();
             if (from + pagination.getSize() > properties.getQueryLimits().getMaxOffset()) {
-                throw new IllegalArgumentException(
-                        String.format(ErrorMessages.OFFSET_PAGINATION_EXCEEDED, properties.getQueryLimits().getMaxOffset()));
+                throw new QueryException(ErrorCode.OFFSET_PAGINATION_EXCEEDED,
+                        String.format(ErrorMessage.OFFSET_PAGINATION_EXCEEDED, properties.getQueryLimits().getMaxOffset()));
             }
         }
 
         // search_after 必须有排序
         if (pagination.isSearchAfterPagination()) {
             if (pagination.getSort() == null || pagination.getSort().isEmpty()) {
-                throw new IllegalArgumentException(ErrorMessages.SEARCH_AFTER_SORT_REQUIRED);
+                throw new QueryException(ErrorCode.SEARCH_AFTER_SORT_REQUIRED, ErrorMessage.SEARCH_AFTER_SORT_REQUIRED);
             }
         }
     }
@@ -198,7 +200,7 @@ public class QueryExecutorImpl implements QueryExecutor {
         // 5. 排序
         if (pagination.getSort() != null && !pagination.getSort().isEmpty()) {
             for (PaginationInfo.SortField sortField : pagination.getSort()) {
-                SortOrder order = Constants.SORT_ORDER_DESC.equalsIgnoreCase(sortField.getOrder()) ?
+                SortOrder order = SimpleElasticsearchSearchConstant.SORT_ORDER_DESC.equalsIgnoreCase(sortField.getOrder()) ?
                         SortOrder.DESC : SortOrder.ASC;
                 sourceBuilder.sort(sortField.getField(), order);
             }
@@ -290,11 +292,11 @@ public class QueryExecutorImpl implements QueryExecutor {
             sensitiveFieldProcessor.process(request.getIndex(), source);
 
             // 添加 _id（可选）
-            source.put(Constants.ES_FIELD_ID, hit.getId());
+            source.put(SimpleElasticsearchSearchConstant.ES_FIELD_ID, hit.getId());
 
             // 添加 _score（如果需要）
             if (properties.getApi().isIncludeScore()) {
-                source.put(Constants.ES_FIELD_SCORE, hit.getScore());
+                source.put(SimpleElasticsearchSearchConstant.ES_FIELD_SCORE, hit.getScore());
             }
 
             items.add(source);

@@ -7,9 +7,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteProcessor;
@@ -115,7 +117,7 @@ public class AggExecutorImpl implements AggExecutor {
 
         } catch (IOException e) {
             log.error("Aggregation execution failed: index={}", request.getIndex(), e);
-            throw new RuntimeException(ErrorMessages.AGG_EXECUTION_FAILED, e);
+            throw new AggregationException(ErrorCode.AGG_EXECUTION_FAILED, ErrorMessage.AGG_EXECUTION_FAILED, e);
         }
     }
 
@@ -124,11 +126,11 @@ public class AggExecutorImpl implements AggExecutor {
      */
     private void validateRequest(AggRequest request) {
         if (request.getIndex() == null || request.getIndex().trim().isEmpty()) {
-            throw new IllegalArgumentException(ErrorMessages.INDEX_ALIAS_REQUIRED);
+            throw new AggregationException(ErrorCode.INDEX_ALIAS_REQUIRED, ErrorMessage.INDEX_ALIAS_REQUIRED);
         }
 
         if (request.getAggs() == null || request.getAggs().isEmpty()) {
-            throw new IllegalArgumentException(ErrorMessages.AGG_DEFINITION_REQUIRED);
+            throw new AggregationException(ErrorCode.AGG_DEFINITION_REQUIRED, ErrorMessage.AGG_DEFINITION_REQUIRED);
         }
     }
 
@@ -160,7 +162,7 @@ public class AggExecutorImpl implements AggExecutor {
         }
 
         // 4. 不返回文档，只返回聚合结果
-        sourceBuilder.size(Constants.AGG_NO_DOCS_SIZE);
+        sourceBuilder.size(SimpleElasticsearchSearchConstant.AGG_NO_DOCS_SIZE);
 
         searchRequest.source(sourceBuilder);
 
@@ -248,11 +250,11 @@ public class AggExecutorImpl implements AggExecutor {
         if (aggregation instanceof Stats) {
             Stats stats = (Stats) aggregation;
             Map<String, Object> statsMap = new HashMap<>();
-            statsMap.put(Constants.AGG_RESULT_COUNT, stats.getCount());
-            statsMap.put(Constants.STATS_RESULT_MIN, stats.getMin());
-            statsMap.put(Constants.STATS_RESULT_MAX, stats.getMax());
-            statsMap.put(Constants.STATS_RESULT_AVG, stats.getAvg());
-            statsMap.put(Constants.STATS_RESULT_SUM, stats.getSum());
+            statsMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, stats.getCount());
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN, stats.getMin());
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX, stats.getMax());
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, stats.getAvg());
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, stats.getSum());
             return statsMap;
         }
 
@@ -275,8 +277,8 @@ public class AggExecutorImpl implements AggExecutor {
             Map<String, Object> bucketMap = new HashMap<>();
 
             // Bucket key
-            bucketMap.put(Constants.AGG_RESULT_KEY, bucket.getKeyAsString());
-            bucketMap.put(Constants.AGG_RESULT_COUNT, bucket.getDocCount());
+            bucketMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY, bucket.getKeyAsString());
+            bucketMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, bucket.getDocCount());
 
             // 嵌套聚合
             Aggregations subAggs = bucket.getAggregations();

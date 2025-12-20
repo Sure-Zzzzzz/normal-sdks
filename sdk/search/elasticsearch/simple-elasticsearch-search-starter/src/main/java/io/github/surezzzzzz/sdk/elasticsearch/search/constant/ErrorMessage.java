@@ -5,7 +5,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.constant;
  *
  * @author surezzzzzz
  */
-public class ErrorMessages {
+public class ErrorMessage {
 
     // ========== 查询相关 ==========
 
@@ -103,19 +103,9 @@ public class ErrorMessages {
     public static final String INDEX_NAME_REQUIRED = "索引配置中的 'name' 不能为空";
 
     /**
-     * 索引别名配置为空
-     */
-    public static final String INDEX_ALIAS_CONFIG_REQUIRED = "索引 [%s] 的 'alias' 不能为空";
-
-    /**
      * 日期分割配置缺少 date-pattern
      */
     public static final String DATE_PATTERN_REQUIRED = "索引 [%s] 启用了 date-split，必须配置 'date-pattern'";
-
-    /**
-     * 日期分割配置缺少 date-field
-     */
-    public static final String DATE_FIELD_REQUIRED = "索引 [%s] 启用了 date-split，必须配置 'date-field'";
 
     /**
      * 敏感字段名为空
@@ -150,19 +140,19 @@ public class ErrorMessages {
     /**
      * 加载 mapping 失败
      */
-    public static final String LOAD_MAPPING_FAILED = "Failed to load mapping for index: %s";
+    public static final String LOAD_MAPPING_FAILED = "索引 [%s] 的 mapping 加载失败";
 
     /**
      * 刷新 mapping 失败
      */
-    public static final String REFRESH_MAPPING_FAILED = "Failed to refresh mapping for index: %s";
+    public static final String REFRESH_MAPPING_FAILED = "索引 [%s] 的 mapping 刷新失败";
 
     /**
      * 配置验证失败
      */
     public static final String CONFIG_VALIDATION_FAILED = "Simple Elasticsearch Search 配置验证失败，请检查配置文件";
 
-    private ErrorMessages() {
+    private ErrorMessage() {
         // 私有构造函数，防止实例化
     }
 }

@@ -5,7 +5,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.constant;
  *
  * @author surezzzzzz
  */
-public class Constants {
+public class SimpleElasticsearchSearchConstant {
 
     // ========== 分页相关 ==========
 
@@ -240,7 +240,7 @@ public class Constants {
      */
     public static final String DATE_INTERVAL_Y = "y";
 
-    private Constants() {
+    private SimpleElasticsearchSearchConstant() {
         // 私有构造函数，防止实例化
     }
 }

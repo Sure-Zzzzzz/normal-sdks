@@ -5,7 +5,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.constant;
  *
  * @author surezzzzzz
  */
-public class ApiMessages {
+public class ApiMessage {
 
     /**
      * 索引 mapping 刷新成功
@@ -17,7 +17,7 @@ public class ApiMessages {
      */
     public static final String ALL_INDEX_MAPPINGS_REFRESHED = "All index mappings refreshed successfully";
 
-    private ApiMessages() {
+    private ApiMessage() {
         // 私有构造函数，防止实例化
     }
 }

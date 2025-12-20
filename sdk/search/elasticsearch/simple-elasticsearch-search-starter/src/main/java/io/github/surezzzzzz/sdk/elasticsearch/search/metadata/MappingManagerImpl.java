@@ -6,10 +6,12 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import lombok.extern.slf4j.Slf4j;
@@ -114,7 +116,8 @@ public class MappingManagerImpl implements MappingManager {
         // 2. 查找配置
         SimpleElasticsearchSearchProperties.IndexConfig indexConfig = findIndexConfig(indexAlias);
         if (indexConfig == null) {
-            throw new IllegalArgumentException(String.format(ErrorMessages.INDEX_NOT_CONFIGURED, indexAlias));
+            throw new MappingException(ErrorCode.INDEX_NOT_CONFIGURED,
+                    String.format(ErrorMessage.INDEX_NOT_CONFIGURED, indexAlias));
         }
 
         // 3. 加载 mapping
@@ -122,7 +125,8 @@ public class MappingManagerImpl implements MappingManager {
             IndexMetadata metadata = loadMetadata(indexConfig, specificIndexName);
             return metadata;
         } catch (Exception e) {
-            throw new RuntimeException(String.format(ErrorMessages.LOAD_MAPPING_FAILED, indexAlias), e);
+            throw new MappingException(ErrorCode.LOAD_MAPPING_FAILED,
+                    String.format(ErrorMessage.LOAD_MAPPING_FAILED, indexAlias), e);
         }
     }
 
@@ -130,7 +134,8 @@ public class MappingManagerImpl implements MappingManager {
     public void refreshMetadata(String indexAlias) {
         SimpleElasticsearchSearchProperties.IndexConfig indexConfig = findIndexConfig(indexAlias);
         if (indexConfig == null) {
-            throw new IllegalArgumentException(String.format(ErrorMessages.INDEX_NOT_CONFIGURED, indexAlias));
+            throw new MappingException(ErrorCode.INDEX_NOT_CONFIGURED,
+                    String.format(ErrorMessage.INDEX_NOT_CONFIGURED, indexAlias));
         }
 
         try {
@@ -138,7 +143,8 @@ public class MappingManagerImpl implements MappingManager {
             log.info("✓ Refreshed mapping for index: {}", indexAlias);
         } catch (Exception e) {
             log.error("Failed to refresh mapping for index: {}", indexAlias, e);
-            throw new RuntimeException(String.format(ErrorMessages.REFRESH_MAPPING_FAILED, indexAlias), e);
+            throw new MappingException(ErrorCode.REFRESH_MAPPING_FAILED,
+                    String.format(ErrorMessage.REFRESH_MAPPING_FAILED, indexAlias), e);
         }
     }
 
@@ -246,7 +252,7 @@ public class MappingManagerImpl implements MappingManager {
         });
 
         if (mappings.isEmpty()) {
-            throw new IllegalStateException(String.format(ErrorMessages.INDEX_MAPPING_NOT_FOUND, indexName));
+            throw new IllegalStateException(String.format(ErrorMessage.INDEX_MAPPING_NOT_FOUND, indexName));
         }
 
         // 6. 构建 IndexMetadata
@@ -268,8 +274,8 @@ public class MappingManagerImpl implements MappingManager {
         if (specificIndexName != null && !specificIndexName.isEmpty()) {
             // 用户指定了具体索引
             if (!mappings.containsKey(specificIndexName)) {
-                throw new IllegalArgumentException(
-                        String.format(ErrorMessages.SPECIFIC_INDEX_NOT_FOUND, specificIndexName, actualIndices));
+                throw new MappingException(ErrorCode.SPECIFIC_INDEX_NOT_FOUND,
+                        String.format(ErrorMessage.SPECIFIC_INDEX_NOT_FOUND, specificIndexName, String.join(",", actualIndices)));
             }
             targetIndex = specificIndexName;
             log.debug("Using specified index: {}", targetIndex);
@@ -371,7 +377,7 @@ public class MappingManagerImpl implements MappingManager {
                     .sensitive(isSensitive)
                     .masked(isMasked)
                     .format(fieldType == FieldType.DATE ? (String) fieldDef.get("format") : null)
-                    .reason(isForbidden ? Constants.SENSITIVE_FIELD_REASON : null)
+                    .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
                     .build();
 
             fields.add(fieldMetadata);

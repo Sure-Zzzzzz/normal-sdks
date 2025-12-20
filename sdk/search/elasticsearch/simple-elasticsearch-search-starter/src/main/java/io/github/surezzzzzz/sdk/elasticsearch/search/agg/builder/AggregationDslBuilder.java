@@ -3,8 +3,11 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessages;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.FieldException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
@@ -64,10 +67,12 @@ public class AggregationDslBuilder {
         if (field != null) {
             FieldMetadata fieldMetadata = metadata.getField(field);
             if (fieldMetadata == null) {
-                throw new IllegalArgumentException(String.format(ErrorMessages.FIELD_NOT_FOUND, field));
+                throw new FieldException(ErrorCode.FIELD_NOT_FOUND,
+                        String.format(ErrorMessage.FIELD_NOT_FOUND, field));
             }
             if (!fieldMetadata.isAggregatable()) {
-                throw new IllegalArgumentException(String.format(ErrorMessages.FIELD_NOT_AGGREGATABLE, field));
+                throw new FieldException(ErrorCode.FIELD_NOT_AGGREGATABLE,
+                        String.format(ErrorMessage.FIELD_NOT_AGGREGATABLE, field));
             }
         }
 
@@ -113,7 +118,7 @@ public class AggregationDslBuilder {
 
             // Bucket 聚合
             case TERMS:
-                int termsSize = definition.getSize() != null ? definition.getSize() : Constants.DEFAULT_TERMS_SIZE;
+                int termsSize = definition.getSize() != null ? definition.getSize() : SimpleElasticsearchSearchConstant.DEFAULT_TERMS_SIZE;
                 return AggregationBuilders.terms(name).field(field).size(termsSize);
 
             case DATE_HISTOGRAM:
@@ -123,7 +128,7 @@ public class AggregationDslBuilder {
                         .dateHistogramInterval(interval);
 
             case HISTOGRAM:
-                double histInterval = definition.getSize() != null ? definition.getSize() : Constants.DEFAULT_HISTOGRAM_INTERVAL;
+                double histInterval = definition.getSize() != null ? definition.getSize() : SimpleElasticsearchSearchConstant.DEFAULT_HISTOGRAM_INTERVAL;
                 return AggregationBuilders.histogram(name)
                         .field(field)
                         .interval(histInterval);
@@ -132,7 +137,8 @@ public class AggregationDslBuilder {
                 return buildRangeAggregation(definition);
 
             default:
-                throw new IllegalArgumentException(String.format(ErrorMessages.UNSUPPORTED_AGG_TYPE, aggType));
+                throw new SimpleElasticsearchSearchException(ErrorCode.UNSUPPORTED_AGG_TYPE,
+                        String.format(ErrorMessage.UNSUPPORTED_AGG_TYPE, aggType));
         }
     }
 
@@ -171,29 +177,29 @@ public class AggregationDslBuilder {
         }
 
         switch (interval.toLowerCase()) {
-            case Constants.DATE_INTERVAL_SECOND:
-            case Constants.DATE_INTERVAL_S:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_SECOND:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_S:
                 return DateHistogramInterval.SECOND;
-            case Constants.DATE_INTERVAL_MINUTE:
-            case Constants.DATE_INTERVAL_M:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_MINUTE:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_M:
                 return DateHistogramInterval.MINUTE;
-            case Constants.DATE_INTERVAL_HOUR:
-            case Constants.DATE_INTERVAL_H:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_HOUR:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_H:
                 return DateHistogramInterval.HOUR;
-            case Constants.DATE_INTERVAL_DAY:
-            case Constants.DATE_INTERVAL_D:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_DAY:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_D:
                 return DateHistogramInterval.DAY;
-            case Constants.DATE_INTERVAL_WEEK:
-            case Constants.DATE_INTERVAL_W:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_WEEK:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_W:
                 return DateHistogramInterval.WEEK;
-            case Constants.DATE_INTERVAL_MONTH:
-            case Constants.DATE_INTERVAL_MONTH_ABBR:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_MONTH:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_MONTH_ABBR:
                 return DateHistogramInterval.MONTH;
-            case Constants.DATE_INTERVAL_QUARTER:
-            case Constants.DATE_INTERVAL_Q:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_QUARTER:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_Q:
                 return DateHistogramInterval.QUARTER;
-            case Constants.DATE_INTERVAL_YEAR:
-            case Constants.DATE_INTERVAL_Y:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_YEAR:
+            case SimpleElasticsearchSearchConstant.DATE_INTERVAL_Y:
                 return DateHistogramInterval.YEAR;
             default:
                 // 自定义间隔
