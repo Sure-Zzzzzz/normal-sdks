@@ -6,11 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
@@ -230,7 +226,8 @@ public class MappingManagerImpl implements MappingManager {
             } catch (org.elasticsearch.ElasticsearchStatusException e) {
                 // 如果是 ES 6.x 参数不兼容错误，fallback 到低级 API
                 if (versionUnknown && e.getMessage() != null &&
-                        (e.getMessage().contains("include_type_name") || e.getMessage().contains("master_timeout"))) {
+                        (e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_INCLUDE_TYPE_NAME) ||
+                                e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_MASTER_TIMEOUT))) {
                     log.warn("High-level API failed with ES 6.x compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
                     response = getMappingViaLowLevelApi(client, indexName);
                 } else {
@@ -290,9 +287,9 @@ public class MappingManagerImpl implements MappingManager {
         Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
 
         List<FieldMetadata> fields = new ArrayList<>();
-        if (sourceAsMap.containsKey("properties")) {
+        if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
             @SuppressWarnings("unchecked")
-            Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get("properties");
+            Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
             parseFields(propertiesMap, "", fields, indexConfig);
         }
 
@@ -314,6 +311,7 @@ public class MappingManagerImpl implements MappingManager {
     /**
      * 使用 RestClient 低级 API 获取 mapping（ES 6.x 兼容）
      * 绕过高级 API 自动添加的 include_type_name 和 master_timeout 参数
+     * 同时避免使用版本相关的 XContent API（兼容 Spring Boot 2.4.x）
      */
     private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient, String indexName) throws IOException {
         org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
@@ -328,17 +326,9 @@ public class MappingManagerImpl implements MappingManager {
         // 执行请求
         org.elasticsearch.client.Response response = lowLevelClient.performRequest(request);
 
-        // 解析响应体为 GetMappingsResponse
-        // 使用 XContentFactory 创建解析器（使用 try-with-resources 确保资源正确关闭）
-        try (org.elasticsearch.xcontent.XContentParser parser = org.elasticsearch.xcontent.XContentFactory.xContent(
-                org.elasticsearch.xcontent.XContentType.JSON
-        ).createParser(
-                org.elasticsearch.xcontent.NamedXContentRegistry.EMPTY,
-                org.elasticsearch.xcontent.DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
-                response.getEntity().getContent()
-        )) {
-            return GetMappingsResponse.fromXContent(parser);
-        }
+        // 解析响应体为 GetMappingsResponse（使用工具类，自动检测当前环境的 XContent 包路径）
+        return io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper.parseResponse(
+                response, GetMappingsResponse.class);
     }
 
     /**
@@ -353,7 +343,7 @@ public class MappingManagerImpl implements MappingManager {
             Map<String, Object> fieldDef = (Map<String, Object>) entry.getValue();
 
             // 获取字段类型
-            String typeStr = (String) fieldDef.get("type");
+            String typeStr = (String) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_TYPE);
             FieldType fieldType = FieldType.fromString(typeStr);
 
             // 检查是否为敏感字段
@@ -376,15 +366,15 @@ public class MappingManagerImpl implements MappingManager {
                     .aggregatable(!isForbidden && fieldType.isAggregatable())
                     .sensitive(isSensitive)
                     .masked(isMasked)
-                    .format(fieldType == FieldType.DATE ? (String) fieldDef.get("format") : null)
+                    .format(fieldType == FieldType.DATE ? (String) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_FORMAT) : null)
                     .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
                     .build();
 
             fields.add(fieldMetadata);
 
             // 递归处理嵌套字段
-            if (fieldDef.containsKey("properties")) {
-                Map<String, Object> nestedProperties = (Map<String, Object>) fieldDef.get("properties");
+            if (fieldDef.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
+                Map<String, Object> nestedProperties = (Map<String, Object>) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
                 parseFields(nestedProperties, fieldName, fields, indexConfig);
             }
         }

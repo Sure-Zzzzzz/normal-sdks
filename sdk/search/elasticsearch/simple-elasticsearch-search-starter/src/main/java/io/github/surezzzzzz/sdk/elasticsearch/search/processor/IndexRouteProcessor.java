@@ -3,8 +3,9 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.processor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DateGranularity;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -119,7 +120,7 @@ public class IndexRouteProcessor {
      * 例如：test_log_* → test_log_
      */
     private String extractIndexPrefix(String indexPattern) {
-        if (indexPattern.endsWith("*")) {
+        if (indexPattern.endsWith(SimpleElasticsearchSearchConstant.WILDCARD_STAR)) {
             return indexPattern.substring(0, indexPattern.length() - 1);
         }
         return indexPattern;

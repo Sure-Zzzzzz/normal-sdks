@@ -16,10 +16,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuild
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
@@ -40,6 +41,7 @@ import java.util.Map;
  *   <li>使用 simple-elasticsearch-route-starter 提供的 SimpleElasticsearchRouteRegistry</li>
  *   <li>根据索引名称通过 RouteResolver 路由到对应数据源</li>
  *   <li>获取该数据源版本自适应的 RestHighLevelClient，避免版本兼容性问题</li>
+ *   <li>对于 ES 6.x，自动使用低级 API 绕过参数兼容性问题（如 ignore_throttled）</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -94,7 +96,9 @@ public class QueryExecutorImpl implements QueryExecutor {
             log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+            // 检测 ES 版本，决定使用高级 API 还是低级 API（使用工具类）
+            SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
+                    client, datasourceKey, searchRequest, registry);
 
             // 5. 处理结果
             QueryResponse response = processResponse(request, searchResponse);
@@ -170,6 +174,12 @@ public class QueryExecutorImpl implements QueryExecutor {
         // ✅ 1. 计算需要查询的索引列表（索引路由）
         String[] indices = indexRouteProcessor.route(metadata, request.getDateRange());
         SearchRequest searchRequest = new SearchRequest(indices);
+
+        // ✅ 允许查询不存在的索引（date-split 场景下部分索引可能不存在）
+        if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
+            searchRequest.indicesOptions(IndicesOptions.lenientExpandOpen());
+            log.trace("Enabled ignoreUnavailableIndices for indices: {}", (Object) indices);
+        }
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 

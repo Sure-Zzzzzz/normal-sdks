@@ -1116,6 +1116,82 @@ class SearchEndToEndTest {
                 });
     }
 
+    @Test
+    @Order(56)
+    @DisplayName("6.7 日期分割索引 - 忽略不存在的索引（ignore-unavailable-indices）")
+    void testDateSplitIndexIgnoreUnavailable() throws Exception {
+        log.info("========== 测试：跨大范围日期查询（部分索引不存在）==========");
+
+        LocalDateTime today = LocalDateTime.now();
+        LocalDateTime thirtyDaysAgo = today.minusDays(30);
+
+        // 查询最近30天的数据，但实际只有最近3天的索引存在
+        // 由于配置了 ignore-unavailable-indices: true，应该成功返回已存在索引的数据
+        QueryRequest request = QueryRequest.builder()
+                .index("test_log_*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from(thirtyDaysAgo.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "T00:00:00")
+                        .to(today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "T23:59:59")
+                        .build())
+                .query(QueryCondition.builder()
+                        .field("action")
+                        .op("EQ")
+                        .value("login")
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))  // 3天 × 1条login记录
+                .andExpect(jsonPath("$.data.items[0].action").value("login"))
+                .andDo(result -> {
+                    log.info("✓ 跨大范围日期查询成功（忽略不存在的索引）");
+                    log.info("✓ 查询30天范围，实际只有3天数据，成功返回3条记录");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 同样测试聚合场景
+        log.info("测试聚合查询 - 忽略不存在的索引");
+        AggRequest aggRequest = AggRequest.builder()
+                .index("test_log_*")
+                .query(QueryCondition.builder()
+                        .field("createTime")
+                        .op("BETWEEN")
+                        .values(Arrays.asList(
+                                thirtyDaysAgo.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "T00:00:00",
+                                today.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "T23:59:59"
+                        ))
+                        .build())
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("action_count")
+                                .type("TERMS")
+                                .field("action")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(aggRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.action_count").isArray())
+                .andExpect(jsonPath("$.data.aggregations.action_count.length()").value(3))  // login, logout, create
+                .andDo(result -> {
+                    log.info("✓ 聚合查询成功（忽略不存在的索引）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
     // ==================== 7. 多数据源路由测试 ====================
 
     @Test

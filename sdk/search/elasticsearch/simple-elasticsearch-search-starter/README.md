@@ -7,6 +7,8 @@
 - **零代码侵入**：完全配置驱动，无需编写任何业务代码
 - **多数据源路由**：支持多个 Elasticsearch 集群，自动路由到对应数据源
 - **版本兼容性**：支持 ES 6.x 和 7.x+ 版本，自动适配 API 差异
+  - **ES 6.x 聚合兼容**：自动检测并使用低级 API + 手动 JSON 解析，完美支持 ES 6.x 聚合查询
+  - **可选 rawResponse**：提供原始 ES 聚合响应，支持零侵入迁移（从 RestTemplate/TransportClient 迁移）
 - **动态 Mapping**：自动获取并缓存索引的字段元数据
 - **灵活查询**：支持多种查询操作符和复杂的逻辑组合
 - **聚合分析**：支持指标聚合和桶聚合，支持嵌套聚合
@@ -21,7 +23,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.4'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.5'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -100,12 +102,14 @@ io:
               max-size: 10000                    # 单次查询最大返回数量
               default-size: 20                   # 默认分页大小
               max-offset: 10000                  # from + size 的最大值（超过此值强制使用 search_after）
+              ignore-unavailable-indices: false  # 是否忽略不存在的索引（日期分割索引推荐开启）
 
             # API 配置
             api:
               enabled: true                       # 启用 REST API
               base-path: "/api"                   # API 基础路径
               include-score: false                # 是否返回 _score（评分）
+              include-raw-response: false         # 是否返回原始聚合响应（仅 ES 6.x 聚合场景）
 ```
 
 #### 多数据源配置（支持版本兼容）
@@ -328,6 +332,86 @@ POST /api/indices/user_behavior/refresh
 ```
 
 ## 高级特性
+
+### ES 6.x 聚合兼容性
+
+**背景**：
+在使用 Spring Boot 2.4.x（ES 6.x 客户端）查询 ES 6.x 集群时，由于 ES 7.x 客户端的 `NamedXContentRegistry` 无法正确解析 ES 6.x 的聚合响应格式，会导致聚合查询失败。
+
+**解决方案**：
+SDK 自动检测 ES 6.x 聚合响应，使用低级 API + 手动 JSON 解析，完美支持 ES 6.x 聚合查询。
+
+**特性**：
+- **自动检测**：无需配置，SDK 自动识别 ES 6.x 聚合响应
+- **手动解析**：使用 Jackson 手动解析聚合数据，避免 NamedXContentRegistry 问题
+- **格式统一**：自动提取嵌套值（如 `{"value": 123.0}` → `123.0`），保持与 ES 7.x+ 的响应格式一致
+- **零侵入**：业务代码无需任何修改
+
+### rawResponse 支持（零侵入迁移）
+
+**背景**：
+从 Spring Boot 2.4.x + RestTemplate/TransportClient 迁移到 SDK 时，现有业务代码可能直接解析 ES 原始响应格式（如 `{"avg_price": {"value": 6439.0}}`）。
+
+**解决方案**：
+SDK 提供可选的 `rawResponse` 字段，包含未经解析的原始聚合数据，让用户可以：
+1. **零侵入迁移**：业务代码无需修改，直接使用 `rawResponse`
+2. **数据对比**：对比 `aggregations`（解析后）和 `rawResponse`（原始），验证数据正确性
+3. **自主选择**：根据需要选择使用解析后的统一格式或原始 ES 格式
+
+**配置示例**：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          search:
+            api:
+              include-raw-response: true  # 启用原始响应（默认 false）
+```
+
+**响应格式对比**：
+
+**未启用**（默认）：
+```json
+{
+  "data": {
+    "aggregations": {
+      "avg_price": 6439.0,
+      "total_stock": 550.0
+    },
+    "took": 15
+  }
+}
+```
+
+**已启用**：
+```json
+{
+  "data": {
+    "aggregations": {
+      "avg_price": 6439.0,
+      "total_stock": 550.0
+    },
+    "rawResponse": {
+      "avg_price": {"value": 6439.0},
+      "total_stock": {"value": 550.0}
+    },
+    "took": 15
+  }
+}
+```
+
+**使用场景**：
+- ✅ 从旧版 ES 客户端迁移，需要兼容现有 JSON 解析逻辑
+- ✅ 需要对比验证 SDK 解析结果的正确性
+- ❌ 新项目，推荐直接使用解析后的统一格式（`aggregations`）
+
+**注意事项**：
+- `rawResponse` 仅在 **ES 6.x 聚合场景**下有值
+- ES 7.x+ 聚合查询，`rawResponse` 为 `null`（不会序列化）
+- 非聚合查询（普通 query），`rawResponse` 为 `null`
 
 ### 日期分割索引查询
 

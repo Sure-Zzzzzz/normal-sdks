@@ -1,10 +1,14 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.endpoint;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 
 /**
  * 统一 API 响应类（不可变对象）
+ *
+ * <p>支持 Jackson 序列化和反序列化（客户端可直接使用）
  *
  * @author surezzzzzz
  */
@@ -22,7 +26,13 @@ public class ApiResponse<T> {
      */
     private final String error;
 
-    private ApiResponse(T data, String error) {
+    /**
+     * Jackson 反序列化构造函数
+     */
+    @JsonCreator
+    private ApiResponse(
+            @JsonProperty("data") T data,
+            @JsonProperty("error") String error) {
         this.data = data;
         this.error = error;
     }

@@ -2,8 +2,8 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.processor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +27,7 @@ public class SensitiveFieldProcessor {
      * 处理敏感字段
      *
      * @param indexAlias 索引别名
-     * @param document        文档
+     * @param document   文档
      */
     public void process(String indexAlias, Map<String, Object> document) {
         // 获取索引配置

@@ -158,6 +158,190 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final int BETWEEN_REQUIRED_VALUES = 2;
 
+    // ========== ES 原始 JSON 字段名（ES 响应解析） ==========
+
+    /**
+     * ES 响应聚合根字段
+     */
+    public static final String ES_JSON_AGGREGATIONS = "aggregations";
+
+    /**
+     * ES 聚合值字段（Metrics 聚合）
+     */
+    public static final String ES_JSON_VALUE = "value";
+
+    /**
+     * ES 聚合 buckets 字段（Bucket 聚合）
+     */
+    public static final String ES_JSON_BUCKETS = "buckets";
+
+    /**
+     * ES bucket key 字段
+     */
+    public static final String ES_JSON_KEY = "key";
+
+    /**
+     * ES bucket key_as_string 字段
+     */
+    public static final String ES_JSON_KEY_AS_STRING = "key_as_string";
+
+    /**
+     * ES bucket doc_count 字段
+     */
+    public static final String ES_JSON_DOC_COUNT = "doc_count";
+
+    /**
+     * ES stats count 字段
+     */
+    public static final String ES_JSON_COUNT = "count";
+
+    /**
+     * ES stats min 字段
+     */
+    public static final String ES_JSON_MIN = "min";
+
+    /**
+     * ES stats max 字段
+     */
+    public static final String ES_JSON_MAX = "max";
+
+    /**
+     * ES stats avg 字段
+     */
+    public static final String ES_JSON_AVG = "avg";
+
+    /**
+     * ES stats sum 字段
+     */
+    public static final String ES_JSON_SUM = "sum";
+
+    // ========== ES Mapping 字段名 ==========
+
+    /**
+     * ES mapping properties 字段
+     */
+    public static final String ES_MAPPING_PROPERTIES = "properties";
+
+    /**
+     * ES mapping type 字段
+     */
+    public static final String ES_MAPPING_TYPE = "type";
+
+    /**
+     * ES mapping format 字段
+     */
+    public static final String ES_MAPPING_FORMAT = "format";
+
+    /**
+     * ES 默认文档类型（ES 7.x+）
+     */
+    public static final String ES_DEFAULT_DOC_TYPE = "_doc";
+
+    // ========== ES API 参数名 ==========
+
+    /**
+     * ES 6.x 不支持的参数：include_type_name
+     */
+    public static final String ES_PARAM_INCLUDE_TYPE_NAME = "include_type_name";
+
+    /**
+     * ES 6.x 不支持的参数：master_timeout
+     */
+    public static final String ES_PARAM_MASTER_TIMEOUT = "master_timeout";
+
+    /**
+     * ES 6.x 错误信息：unrecognized parameter
+     */
+    public static final String ES_ERROR_UNRECOGNIZED_PARAMETER = "unrecognized parameter";
+
+    // ========== Java 反射相关常量（XContent API 包路径） ==========
+
+    /**
+     * ES 7.x+ XContent API 包路径
+     */
+    public static final String XCONTENT_PACKAGE_ES7 = "org.elasticsearch.xcontent";
+
+    /**
+     * ES 6.x XContent API 包路径
+     */
+    public static final String XCONTENT_PACKAGE_ES6 = "org.elasticsearch.common.xcontent";
+
+    /**
+     * XContentType 类名后缀
+     */
+    public static final String XCONTENT_CLASS_TYPE = ".XContentType";
+
+    /**
+     * XContentFactory 类名后缀
+     */
+    public static final String XCONTENT_CLASS_FACTORY = ".XContentFactory";
+
+    /**
+     * XContentParser 类名后缀
+     */
+    public static final String XCONTENT_CLASS_PARSER = ".XContentParser";
+
+    /**
+     * NamedXContentRegistry 类名后缀
+     */
+    public static final String XCONTENT_CLASS_REGISTRY = ".NamedXContentRegistry";
+
+    /**
+     * DeprecationHandler 类名后缀
+     */
+    public static final String XCONTENT_CLASS_DEPRECATION_HANDLER = ".DeprecationHandler";
+
+    // ========== Java 反射相关常量（ES 内部类） ==========
+
+    /**
+     * SearchModule 类全名
+     */
+    public static final String ES_CLASS_SEARCH_MODULE = "org.elasticsearch.search.SearchModule";
+
+    /**
+     * Settings 类全名
+     */
+    public static final String ES_CLASS_SETTINGS = "org.elasticsearch.common.settings.Settings";
+
+    // ========== Java 反射相关常量（字段名） ==========
+
+    /**
+     * EMPTY 字段名
+     */
+    public static final String FIELD_EMPTY = "EMPTY";
+
+    /**
+     * JSON 字段名
+     */
+    public static final String FIELD_JSON = "JSON";
+
+    /**
+     * THROW_UNSUPPORTED_OPERATION 字段名
+     */
+    public static final String FIELD_THROW_UNSUPPORTED_OPERATION = "THROW_UNSUPPORTED_OPERATION";
+
+    // ========== Java 反射相关常量（方法名） ==========
+
+    /**
+     * getNamedXContents 方法名
+     */
+    public static final String METHOD_GET_NAMED_XCONTENTS = "getNamedXContents";
+
+    /**
+     * xContent 方法名
+     */
+    public static final String METHOD_XCONTENT = "xContent";
+
+    /**
+     * createParser 方法名
+     */
+    public static final String METHOD_CREATE_PARSER = "createParser";
+
+    /**
+     * fromXContent 方法名
+     */
+    public static final String METHOD_FROM_XCONTENT = "fromXContent";
+
     // ========== 日期间隔 ==========
 
     /**

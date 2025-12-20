@@ -52,12 +52,14 @@ io:
               max-size: 10000
               default-size: 20
               max-offset: 10000
+              ignore-unavailable-indices: true  # 测试环境开启，避免日期分割索引查询404
 
             # API 配置
             api:
               enabled: true
               base-path: /api
               include-score: false
+              include-raw-response: true
 
           # Route 配置
           route:

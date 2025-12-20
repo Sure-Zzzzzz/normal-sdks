@@ -280,6 +280,15 @@ public class SimpleElasticsearchSearchProperties {
          * from + size 的最大值（超过此值强制使用 search_after）
          */
         private int maxOffset = 10000;
+
+        /**
+         * 是否忽略不存在的索引（适用于日期分割索引场景）
+         * <p>
+         * true: 查询不存在的索引时不报错，返回已存在索引的数据
+         * false: 查询不存在的索引时抛出 index_not_found_exception（默认）
+         * </p>
+         */
+        private boolean ignoreUnavailableIndices = false;
     }
 
     /**
@@ -303,5 +312,14 @@ public class SimpleElasticsearchSearchProperties {
          * 是否返回 _score（评分）
          */
         private boolean includeScore = false;
+
+        /**
+         * 是否返回原始响应（仅 ES 6.x 聚合场景）
+         * <p>
+         * true: 在响应中包含 ES 原始 JSON，让用户自主选择使用解析后的数据或原始数据
+         * false: 仅返回解析后的统一格式数据（默认）
+         * </p>
+         */
+        private boolean includeRawResponse = false;
     }
 }

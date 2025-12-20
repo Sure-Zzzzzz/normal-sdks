@@ -18,10 +18,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteProcess
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -48,6 +49,7 @@ import java.util.Map;
  *   <li>使用 simple-elasticsearch-route-starter 提供的 SimpleElasticsearchRouteRegistry</li>
  *   <li>根据索引名称通过 RouteResolver 路由到对应数据源</li>
  *   <li>获取该数据源版本自适应的 RestHighLevelClient，避免版本兼容性问题</li>
+ *   <li>对于 ES 6.x，自动使用低级 API 绕过参数兼容性问题（如 ignore_throttled）</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -102,7 +104,9 @@ public class AggExecutorImpl implements AggExecutor {
             log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+            // 检测 ES 版本，决定使用高级 API 还是低级 API（使用工具类）
+            SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
+                    client, datasourceKey, searchRequest, registry);
 
             // 5. 处理结果
             AggResponse response = processResponse(searchResponse);
@@ -115,10 +119,137 @@ public class AggExecutorImpl implements AggExecutor {
 
             return response;
 
+        } catch (ElasticsearchCompatibilityHelper.Es6xAggregationResponseException e) {
+            // ES 6.x 聚合响应解析异常，手动解析 JSON
+            log.debug("ES 6.x aggregation response detected, using manual JSON parsing for index [{}]", request.getIndex());
+            try {
+                AggResponse response = parseEs6xAggregationResponse(e.getResponseJson());
+                long took = System.currentTimeMillis() - startTime;
+                response.setTook(took);
+                log.debug("ES 6.x aggregation executed with manual parsing: index={}, took={}ms",
+                        request.getIndex(), took);
+                return response;
+            } catch (Exception parseException) {
+                log.error("Failed to manually parse ES 6.x aggregation response", parseException);
+                throw new AggregationException(ErrorCode.AGG_EXECUTION_FAILED,
+                        "Failed to parse ES 6.x aggregation response: " + parseException.getMessage(),
+                        parseException);
+            }
         } catch (IOException e) {
             log.error("Aggregation execution failed: index={}", request.getIndex(), e);
             throw new AggregationException(ErrorCode.AGG_EXECUTION_FAILED, ErrorMessage.AGG_EXECUTION_FAILED, e);
         }
+    }
+
+    /**
+     * 手动解析 ES 6.x 聚合响应 JSON
+     * 保持与 processResponse() 相同的数据结构
+     */
+    private AggResponse parseEs6xAggregationResponse(String responseJson) throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> responseMap = objectMapper.readValue(responseJson,
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+
+        // 提取聚合结果
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rawAggregations = (Map<String, Object>) responseMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AGGREGATIONS);
+
+        if (rawAggregations == null) {
+            return AggResponse.builder()
+                    .aggregations(new HashMap<>())
+                    .build();
+        }
+
+        // 手动解析聚合结果，提取实际值（和 processResponse 保持一致）
+        Map<String, Object> parsedAggregations = new HashMap<>();
+        for (Map.Entry<String, Object> entry : rawAggregations.entrySet()) {
+            String aggName = entry.getKey();
+            Object aggValue = entry.getValue();
+
+            Object parsedValue = parseAggregationValue(aggValue);
+            parsedAggregations.put(aggName, parsedValue);
+        }
+
+        // ✅ 构建响应，根据配置决定是否包含原始聚合数据
+        AggResponse.AggResponseBuilder builder = AggResponse.builder()
+                .aggregations(parsedAggregations);
+
+        // 如果配置启用了 include-raw-response，添加原始聚合数据（未解析的）
+        if (properties.getApi().isIncludeRawResponse()) {
+            builder.rawResponse(rawAggregations);
+            log.debug("Included raw ES 6.x aggregations in AggResponse (config enabled)");
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * 解析聚合值（支持多种聚合类型）
+     */
+    @SuppressWarnings("unchecked")
+    private Object parseAggregationValue(Object aggValue) {
+        if (!(aggValue instanceof Map)) {
+            return aggValue;
+        }
+
+        Map<String, Object> aggMap = (Map<String, Object>) aggValue;
+
+        // Metrics 聚合：{ "value": 123.0 }
+        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_VALUE) && aggMap.size() == 1) {
+            return aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUE);
+        }
+
+        // Stats 聚合：{ "count": 5, "min": 10, "max": 100, "avg": 50, "sum": 250 }
+        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_COUNT)
+                && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MIN)
+                && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MAX)) {
+            Map<String, Object> statsMap = new HashMap<>();
+            statsMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_COUNT));
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN, aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MIN));
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX, aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MAX));
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AVG));
+            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_SUM));
+            return statsMap;
+        }
+
+        // Bucket 聚合：{ "buckets": [...] }
+        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS)) {
+            Object bucketsValue = aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS);
+            if (bucketsValue instanceof List) {
+                List<Map<String, Object>> buckets = new ArrayList<>();
+                for (Object bucketObj : (List<?>) bucketsValue) {
+                    if (bucketObj instanceof Map) {
+                        Map<String, Object> bucket = (Map<String, Object>) bucketObj;
+                        Map<String, Object> parsedBucket = new HashMap<>();
+
+                        // Bucket key 和 doc_count
+                        parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY, bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_KEY_AS_STRING));
+                        if (parsedBucket.get(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY) == null) {
+                            parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY, bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_KEY));
+                        }
+                        parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT));
+
+                        // 递归处理嵌套聚合
+                        for (Map.Entry<String, Object> entry : bucket.entrySet()) {
+                            String key = entry.getKey();
+                            if (!key.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY)
+                                    && !key.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY_AS_STRING)
+                                    && !key.equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
+                                parsedBucket.put(key, parseAggregationValue(entry.getValue()));
+                            }
+                        }
+
+                        buckets.add(parsedBucket);
+                    }
+                }
+                return buckets;
+            }
+        }
+
+        // 其他未知类型，返回原始值
+        return aggValue;
     }
 
     /**
@@ -143,6 +274,12 @@ public class AggExecutorImpl implements AggExecutor {
         QueryRequest.DateRange dateRange = extractDateRangeFromQuery(request.getQuery(), metadata);
         String[] indices = indexRouteProcessor.route(metadata, dateRange);
         SearchRequest searchRequest = new SearchRequest(indices);
+
+        // ✅ 允许查询不存在的索引（date-split 场景下部分索引可能不存在）
+        if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
+            searchRequest.indicesOptions(IndicesOptions.lenientExpandOpen());
+            log.trace("Enabled ignoreUnavailableIndices for aggregation on indices: {}", (Object) indices);
+        }
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
 
