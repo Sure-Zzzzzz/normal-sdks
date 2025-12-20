@@ -21,7 +21,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.4'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -36,6 +36,10 @@ dependencies {
 - 从 1.0.2 版本开始，search-starter 完全依赖 `simple-elasticsearch-route-starter` 进行多数据源管理
 - route-starter 会自动被依赖引入（版本 1.0.3+），无需手动添加
 - 部分依赖使用 compileOnly，需要用户自行引入上述依赖
+- **Spring Boot 版本兼容性**（1.0.4+）：
+  - 推荐使用 Spring Boot 2.7.x 或 3.x
+  - Spring Boot 2.4.x 单数据源可正常使用（自动降级）
+  - Spring Boot 2.4.x 多数据源需升级到 2.7.x+（详见 CHANGELOG.1.0.4.md）
 
 ### 2. 配置
 
