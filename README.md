@@ -1,2 +1,125 @@
-# normal-sdks
-一些通用sdk
+# Normal SDKs
+
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Java](https://img.shields.io/badge/Java-8%2B-orange.svg)](https://www.oracle.com/java/technologies/javase-downloads.html)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.4%20%7C%202.7-brightgreen.svg)](https://spring.io/projects/spring-boot)
+
+> 企业级通用 Spring Boot Starter 集合，提供开箱即用的基础设施组件，助力快速开发。
+
+## 📦 SDK 目录
+
+### 🔍 Elasticsearch
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.3 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.0.5 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+
+**核心特性**：
+- 多数据源路由和自动切换
+- ES 6.x 和 7.x+ 版本兼容
+- 零代码配置驱动的查询和聚合
+- 支持日期分割索引
+- RESTful API 自动生成
+
+### 🔒 Redis
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-redis-lock-starter](sdk/lock/redis/simple-redis-lock-starter) | - | Redis 分布式锁 | [README](sdk/lock/redis/simple-redis-lock-starter/README.md) |
+| [simple-redis-limiter-starter](sdk/limiter/redis/simple-redis-limiter-starter) | - | Redis 限流器（简单版） | [README](sdk/limiter/redis/simple-redis-limiter-starter/README.md) |
+| [smart-redis-limiter-starter](sdk/limiter/redis/smart-redis-limiter-starter) | 1.0.2 | Redis 限流器（智能版） | [README](sdk/limiter/redis/smart-redis-limiter-starter/README.md) |
+
+**核心特性**：
+- 分布式锁（支持可重入、自动续期）
+- 多种限流算法（令牌桶、滑动窗口）
+- 注解驱动和配置驱动，零侵入
+
+### 🔄 重试
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [task-retry-starter](sdk/retry/task-retry-starter) | - | 任务重试框架 | [README](sdk/retry/task-retry-starter/README.md) |
+| [redis-retry-starter](sdk/retry/redis-retry-starter) | - | Redis 持久化重试 | [README](sdk/retry/redis-retry-starter/README.md) |
+
+**核心特性**：
+- 灵活的重试策略（指数退避、固定延迟）
+- 支持持久化和跨实例重试
+
+### 📧 通信
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [mail-client-starter](sdk/mail/mail-client-starter) | - | 邮件发送客户端 | [README](sdk/mail/mail-client-starter/README.md) |
+| [b2m-sms-client-starter](sdk/sms/b2m/b2m-sms-client-starter) | - | B2M 短信客户端 | [README](sdk/sms/b2m/b2m-sms-client-starter/README.md) |
+
+**核心特性**：
+- 支持 HTML/纯文本邮件
+- 短信模板管理
+- 异步发送和重试
+
+### ☁️ 对象存储
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [s3-client-starter](sdk/oss/s3-client-starter) | - | AWS S3 兼容存储客户端 | [README](sdk/oss/s3-client-starter/README.md) |
+
+**核心特性**：
+- 支持 AWS S3、MinIO、阿里云 OSS 等
+- 文件上传下载、预签名 URL
+- 自动分片上传
+
+### 📊 监控
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [prometheus-core](sdk/prometheus/prometheus-core) | - | Prometheus 核心库 | [README](sdk/prometheus/prometheus-core/README.md) |
+| [prometheus-client-starter](sdk/prometheus/prometheus-client-starter) | - | Prometheus 客户端 | [README](sdk/prometheus/prometheus-client-starter/README.md) |
+
+**核心特性**：
+- 自定义指标采集
+- 自动暴露 Prometheus 端点
+- 与 Spring Actuator 集成
+- 支持Remote Write
+
+### 🌐 HTTP 客户端
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [daydaymap-client-starter](sdk/curl/daydaymap/daydaymap-client-starter) | - | DayDayMap API 客户端 | - |
+| [opsalert-client-starter](sdk/curl/opsalert/opsalert-client-starter) | - | OpsAlert API 客户端 | - |
+
+**核心特性**：
+- 声明式 HTTP 客户端
+- 自动重试和熔断
+- 请求/响应日志拦截
+
+### 📝 日志
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [log-truncate-starter](sdk/log/truncate/log-truncate-starter) | - | 日志截断工具 | [README](sdk/log/truncate/log-truncate-starter/README.md) |
+
+**核心特性**：
+- 自动截断超长日志
+- 敏感信息脱敏
+- 性能优化
+
+## 📄 许可证
+
+本项目采用 [Apache License 2.0](LICENSE) 许可证。
+
+## 🔗 相关链接
+
+- [GitHub Issues](https://github.com/Sure-Zzzzzz/normal-sdks/issues)
+- [Maven Central](https://central.sonatype.com/search?q=io.github.sure-zzzzzz)
+
+## 📮 联系方式
+
+如有问题或建议，请通过以下方式联系：
+
+- 提交 GitHub Issue
+
+---
+
+**Made with ❤️ by Sure-Zzzzzz**
