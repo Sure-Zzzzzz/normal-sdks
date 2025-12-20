@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.DocumentIndexHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.document.TestDocument;
@@ -7,7 +9,6 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.test.document.TestDocumentA;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.document.TestDocumentB;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
@@ -20,6 +21,14 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 /**
  * 路由测试 - 验证能连接到不同的ES集群
  *
+ * <p><b>版本兼容性说明：</b>
+ * <ul>
+ *   <li>本测试使用 ElasticsearchRestTemplate 进行路由测试</li>
+ *   <li>仅使用版本兼容的 API（exists, create）</li>
+ *   <li>避免使用版本不兼容的 API（如 getSettings），因为某些 Spring Data API 在特定 ES 版本下会失败</li>
+ *   <li>如需版本敏感的操作，建议使用 SimpleElasticsearchRouteRegistry.getHighLevelClient() 获取原生客户端</li>
+ * </ul>
+ *
  * @author surezzzzzz
  */
 @Slf4j
@@ -28,8 +37,16 @@ public class RoutingTest {
 
     @Autowired
     private ElasticsearchRestTemplate elasticsearchRestTemplate;
+
+    @Autowired
+    private SimpleElasticsearchRouteRegistry registry;
+
+    @Autowired
+    private RouteResolver routeResolver;
+
     private static final String HISTORY_FLAG_KEY =
             DocumentIndexHelper.class.getCanonicalName() + ".access.history";
+
     @Test
 //    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
     public void testRouteToTwoDifferentDataSources() throws Exception {
@@ -45,7 +62,8 @@ public class RoutingTest {
             log.info("索引 test_index_a 创建成功");
         }
 
-        log.info("索引A信息: {}", indexOpsA.getSettings());
+        // 注意：不调用 indexOps.getSettings()，因为该 API 在某些 ES 版本下不兼容
+        // 如需获取 settings，建议使用: registry.getHighLevelClient("primary") + 原生 ES API
 
         // 测试连接索引B（secondary数据源）
         log.info("========== 测试连接索引B (secondary数据源) ==========");
@@ -59,7 +77,7 @@ public class RoutingTest {
             log.info("索引 test_index_b.secondary 创建成功");
         }
 
-        log.info("索引B信息: {}", indexOpsB.getSettings());
+        // 注意：不调用 indexOps.getSettings()，因为该 API 在某些 ES 版本下不兼容
 
         log.info("========== 测试完成 ==========");
         log.info("✓ 成功连接到两个不同的 ES 集群");
@@ -96,7 +114,7 @@ public class RoutingTest {
                 log.info("✓ 索引 [test_index.history] 创建成功 (history 数据源)");
             }
 
-            log.info("索引信息: {}", indexOps.getSettings());
+            // 注意：不调用 indexOps.getSettings()，因为该 API 在某些 ES 版本下不兼容
 
             Thread.sleep(1000);
 

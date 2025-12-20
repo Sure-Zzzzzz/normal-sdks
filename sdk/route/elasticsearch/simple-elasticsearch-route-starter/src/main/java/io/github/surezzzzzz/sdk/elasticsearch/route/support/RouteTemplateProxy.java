@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.support;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RestHighLevelClient;
@@ -18,6 +21,15 @@ import java.util.Map;
  * ElasticsearchRestTemplate 路由代理（使用 CGLIB）
  * 支持 SpEL 表达式解析
  *
+ * <p><b>版本兼容性说明：</b></p>
+ * <ul>
+ *   <li>本代理仅负责根据索引名称将请求路由到不同的 Elasticsearch 数据源</li>
+ *   <li>不负责屏蔽 Spring Data Elasticsearch 与不同 ES 版本之间的 API 兼容性问题</li>
+ *   <li>某些 Spring Data API（如 IndexOperations.getSettings()）可能在特定 ES 版本下不兼容</li>
+ *   <li>建议：对于版本敏感的操作，使用 {@link io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry#getHighLevelClient(String)}
+ *       获取原生 RestHighLevelClient 进行操作</li>
+ * </ul>
+ *
  * @author surezzzzzz
  */
 @Slf4j
@@ -35,13 +47,22 @@ public class RouteTemplateProxy implements MethodInterceptor {
             Map<String, ElasticsearchRestTemplate> templates,
             ElasticsearchRestTemplate defaultTemplate,
             RouteResolver routeResolver) {
+        RestHighLevelClient client = extractClient(defaultTemplate);
+        return createProxy(templates, defaultTemplate, routeResolver, client);
+    }
+
+    /**
+     * 创建代理实例（显式指定 client，避免反射提取）
+     */
+    public static ElasticsearchRestTemplate createProxy(
+            Map<String, ElasticsearchRestTemplate> templates,
+            ElasticsearchRestTemplate defaultTemplate,
+            RouteResolver routeResolver,
+            RestHighLevelClient client) {
 
         Enhancer enhancer = new Enhancer();
         enhancer.setSuperclass(ElasticsearchRestTemplate.class);
         enhancer.setCallback(new RouteTemplateProxy(templates, defaultTemplate, routeResolver));
-
-        // 通过反射获取 defaultTemplate 的 client
-        RestHighLevelClient client = extractClient(defaultTemplate);
 
         return (ElasticsearchRestTemplate) enhancer.create(
                 new Class<?>[]{RestHighLevelClient.class},
@@ -58,7 +79,8 @@ public class RouteTemplateProxy implements MethodInterceptor {
             clientField.setAccessible(true);
             return (RestHighLevelClient) clientField.get(template);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to extract RestHighLevelClient from ElasticsearchRestTemplate", e);
+            throw new ConfigurationException(ErrorCode.OTHER_CLIENT_EXTRACT_FAILED,
+                    ErrorMessage.OTHER_CLIENT_EXTRACT_FAILED, e);
         }
     }
 
@@ -74,10 +96,50 @@ public class RouteTemplateProxy implements MethodInterceptor {
         try {
             return method.invoke(template, args);
         } catch (Exception e) {
-            log.error("Error invoking method [{}] on template for index [{}]",
-                    method.getName(), indexName, e);
+            // 检测是否是 Elasticsearch 版本兼容性问题
+            if (isVersionCompatibilityIssue(e)) {
+                log.warn("检测到 Elasticsearch 版本兼容性问题: method=[{}], index=[{}]. " +
+                                "这不是 simple-elasticsearch-route-starter 的问题，而是 Spring Data Elasticsearch API 与特定 ES 版本不兼容导致的. " +
+                                "建议使用 SimpleElasticsearchRouteRegistry.getHighLevelClient() 获取原生客户端进行版本敏感的操作. " +
+                                "原始错误: {}",
+                        method.getName(), indexName, getRootCauseMessage(e));
+            } else {
+                log.error("Error invoking method [{}] on template for index [{}]",
+                        method.getName(), indexName, e);
+            }
             throw e;
         }
+    }
+
+    /**
+     * 判断异常是否是 Elasticsearch 版本兼容性问题
+     */
+    private boolean isVersionCompatibilityIssue(Exception e) {
+        String message = getRootCauseMessage(e);
+        if (message == null) {
+            return false;
+        }
+
+        // 常见的版本兼容性错误特征
+        return message.contains("unrecognized parameter") ||
+                message.contains("master_timeout") ||
+                message.contains("no such parameter") ||
+                message.contains("unknown setting") ||
+                message.contains("unknown query") ||
+                message.contains("no handler found for uri") ||
+                (message.contains("illegal_argument_exception") &&
+                        (message.contains("parameter") || message.contains("setting")));
+    }
+
+    /**
+     * 获取异常的根本原因消息
+     */
+    private String getRootCauseMessage(Exception e) {
+        Throwable cause = e;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause.getMessage();
     }
 
     /**
@@ -148,7 +210,7 @@ public class RouteTemplateProxy implements MethodInterceptor {
             return defaultTemplate;
         }
 
-        log.debug("Routing index [{}] to datasource [{}]", indexName, dataSourceKey);
+        log.trace("Routing index [{}] to datasource [{}]", indexName, dataSourceKey);
         return template;
     }
 }

@@ -1,7 +1,12 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.configuration;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ConfigConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.RouteMatchType;
+import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ServerVersion;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -38,7 +43,7 @@ public class SimpleElasticsearchRouteProperties {
     /**
      * 默认数据源key
      */
-    private String defaultSource = "primary";
+    private String defaultSource = ConfigConstant.DEFAULT_DATASOURCE_KEY;
 
     /**
      * 数据源配置
@@ -50,12 +55,19 @@ public class SimpleElasticsearchRouteProperties {
      */
     private List<RouteRule> rules = new ArrayList<>();
 
+    /**
+     * ES 服务端版本探测配置
+     */
+    private VersionDetectConfig versionDetect = new VersionDetectConfig();
+
     @PostConstruct
     public void init() {
         log.info("Simple Elasticsearch Route enabled: {}", enable);
         log.info("Default datasource: {}", defaultSource);
         log.info("Configured datasources: {}", sources.keySet());
         log.info("Configured route rules: {}", rules.size());
+        log.info("Version detect enabled: {}, fail-fast-on-detect-error: {}",
+                versionDetect.isEnabled(), versionDetect.isFailFastOnDetectError());
 
         // 校验配置
         validate();
@@ -72,17 +84,21 @@ public class SimpleElasticsearchRouteProperties {
         try {
             // 1. 校验数据源不能为空
             if (CollectionUtils.isEmpty(sources)) {
-                throw new IllegalArgumentException("配置项 'sources' 不能为空，至少需要配置一个数据源");
+                throw new ConfigurationException(ErrorCode.CONFIG_SOURCES_EMPTY,
+                        ErrorMessage.CONFIG_SOURCES_EMPTY);
             }
 
             // 2. 校验默认数据源必须存在
             if (!sources.containsKey(defaultSource)) {
-                throw new IllegalArgumentException(
-                        "默认数据源 [" + defaultSource + "] 不存在，已配置的数据源: " + sources.keySet());
+                throw new ConfigurationException(ErrorCode.CONFIG_DEFAULT_SOURCE_NOT_FOUND,
+                        String.format(ErrorMessage.CONFIG_DEFAULT_SOURCE_NOT_FOUND,
+                                defaultSource, sources.keySet()));
             }
 
             // 3. 校验每个数据源配置
             sources.forEach((key, config) -> validateDataSourceConfig(key, config));
+
+            validateVersionDetectConfig(versionDetect);
 
             // 4. 校验路由规则
             if (!CollectionUtils.isEmpty(rules)) {
@@ -91,8 +107,9 @@ public class SimpleElasticsearchRouteProperties {
 
             log.info("Configuration validation passed");
 
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException("Simple Elasticsearch Route 配置验证失败，请检查配置文件", e);
+        } catch (ConfigurationException e) {
+            throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    ErrorMessage.CONFIG_VALIDATION_FAILED, e);
         }
     }
 
@@ -104,45 +121,64 @@ public class SimpleElasticsearchRouteProperties {
 
         // 1. hosts/urls 至少有一个
         if (isEmpty(config.getHosts()) && isEmpty(config.getUrls())) {
-            throw new IllegalArgumentException(prefix + "必须配置 hosts 或 urls");
+            throw new ConfigurationException(ErrorCode.CONFIG_HOSTS_AND_URLS_EMPTY,
+                    prefix + ErrorMessage.CONFIG_HOSTS_AND_URLS_EMPTY);
         }
 
         // 2. 超时时间验证
         if (config.getConnectTimeout() == null || config.getConnectTimeout() <= 0) {
-            throw new IllegalArgumentException(prefix + "connectTimeout 必须 > 0");
+            throw new ConfigurationException(ErrorCode.CONFIG_CONNECT_TIMEOUT_INVALID,
+                    prefix + ErrorMessage.CONFIG_CONNECT_TIMEOUT_INVALID);
         }
         if (config.getSocketTimeout() == null || config.getSocketTimeout() <= 0) {
-            throw new IllegalArgumentException(prefix + "socketTimeout 必须 > 0");
+            throw new ConfigurationException(ErrorCode.CONFIG_SOCKET_TIMEOUT_INVALID,
+                    prefix + ErrorMessage.CONFIG_SOCKET_TIMEOUT_INVALID);
+        }
+
+        // 2.1 ES 服务端版本（server-version，可选）
+        if (!isEmpty(config.getServerVersion())) {
+            try {
+                ServerVersion.parse(config.getServerVersion());
+            } catch (Exception e) {
+                throw new ConfigurationException(ErrorCode.CONFIG_SERVER_VERSION_INVALID,
+                        prefix + String.format(ErrorMessage.CONFIG_SERVER_VERSION_INVALID,
+                                config.getServerVersion()), e);
+            }
         }
 
         // 3. 连接池配置
         if (config.getMaxConnTotal() == null || config.getMaxConnTotal() <= 0) {
-            throw new IllegalArgumentException(prefix + "maxConnTotal 必须 > 0");
+            throw new ConfigurationException(ErrorCode.CONFIG_MAX_CONN_TOTAL_INVALID,
+                    prefix + ErrorMessage.CONFIG_MAX_CONN_TOTAL_INVALID);
         }
         if (config.getMaxConnPerRoute() == null || config.getMaxConnPerRoute() <= 0) {
-            throw new IllegalArgumentException(prefix + "maxConnPerRoute 必须 > 0");
+            throw new ConfigurationException(ErrorCode.CONFIG_MAX_CONN_PER_ROUTE_INVALID,
+                    prefix + ErrorMessage.CONFIG_MAX_CONN_PER_ROUTE_INVALID);
         }
         if (config.getMaxConnPerRoute() > config.getMaxConnTotal()) {
-            throw new IllegalArgumentException(
-                    prefix + "maxConnPerRoute (" + config.getMaxConnPerRoute()
-                            + ") 不能大于 maxConnTotal (" + config.getMaxConnTotal() + ")");
+            throw new ConfigurationException(ErrorCode.CONFIG_MAX_CONN_MISMATCH,
+                    prefix + String.format(ErrorMessage.CONFIG_MAX_CONN_MISMATCH,
+                            config.getMaxConnPerRoute(), config.getMaxConnTotal()));
         }
 
         // 4. 代理配置
         if (config.getProxyPort() != null && isEmpty(config.getProxyHost())) {
-            throw new IllegalArgumentException(prefix + "设置了 proxyPort 必须同时设置 proxyHost");
+            throw new ConfigurationException(ErrorCode.CONFIG_PROXY_HOST_MISSING,
+                    prefix + ErrorMessage.CONFIG_PROXY_HOST_MISSING);
         }
 
         // 5. keepAliveStrategy
         if (config.getKeepAliveStrategy() == null || config.getKeepAliveStrategy() <= 0) {
-            throw new IllegalArgumentException(prefix + "keepAliveStrategy 必须 > 0");
+            throw new ConfigurationException(ErrorCode.CONFIG_KEEP_ALIVE_INVALID,
+                    prefix + ErrorMessage.CONFIG_KEEP_ALIVE_INVALID);
         }
 
         // 6. 验证 URL 格式（调用 getResolvedUrls 触发验证）
         try {
             config.getResolvedUrls();
         } catch (Exception e) {
-            throw new IllegalArgumentException(prefix + "URL 格式验证失败: " + e.getMessage(), e);
+            throw new ConfigurationException(ErrorCode.CONFIG_URL_FORMAT_INVALID,
+                    prefix + String.format(ErrorMessage.CONFIG_URL_FORMAT_INVALID, e.getMessage()), e);
         }
     }
 
@@ -159,28 +195,30 @@ public class SimpleElasticsearchRouteProperties {
 
             // 1. pattern 不能为空
             if (isEmpty(rule.getPattern())) {
-                throw new IllegalArgumentException(rulePrefix + "pattern 不能为空");
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_PATTERN_EMPTY,
+                        rulePrefix + ErrorMessage.CONFIG_ROUTE_PATTERN_EMPTY);
             }
 
             // 2. 数据源必须存在
             if (!sources.containsKey(rule.getDatasource())) {
-                throw new IllegalArgumentException(
-                        rulePrefix + "[" + rule.getPattern() + "] 引用的数据源 ["
-                                + rule.getDatasource() + "] 不存在，已配置的数据源: " + sources.keySet());
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_DATASOURCE_NOT_FOUND,
+                        rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_DATASOURCE_NOT_FOUND,
+                                rule.getPattern(), rule.getDatasource(), sources.keySet()));
             }
 
             // 3. 匹配类型有效性
             if (!RouteMatchType.isValid(rule.getType())) {
-                throw new IllegalArgumentException(
-                        rulePrefix + "[" + rule.getPattern() + "] 匹配类型 [" + rule.getType()
-                                + "] 无效，有效值: exact, prefix, suffix, wildcard, regex");
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_TYPE_INVALID,
+                        rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_TYPE_INVALID,
+                                rule.getPattern(), rule.getType()));
             }
 
             // 4. priority 范围
-            if (rule.getPriority() < 1 || rule.getPriority() > 10000) {
-                throw new IllegalArgumentException(
-                        rulePrefix + "[" + rule.getPattern() + "] priority 必须在 [1, 10000] 范围内，当前值: "
-                                + rule.getPriority());
+            if (rule.getPriority() < ConfigConstant.PRIORITY_MIN
+                    || rule.getPriority() > ConfigConstant.PRIORITY_MAX) {
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_PRIORITY_INVALID,
+                        rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_PRIORITY_INVALID,
+                                rule.getPattern(), rule.getPriority()));
             }
 
             // 5. regex 类型预编译验证
@@ -188,8 +226,9 @@ public class SimpleElasticsearchRouteProperties {
                 try {
                     java.util.regex.Pattern.compile(rule.getPattern());
                 } catch (java.util.regex.PatternSyntaxException e) {
-                    throw new IllegalArgumentException(
-                            rulePrefix + "[" + rule.getPattern() + "] 正则表达式语法错误: " + e.getMessage(), e);
+                    throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_REGEX_INVALID,
+                            rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_REGEX_INVALID,
+                                    rule.getPattern(), e.getMessage()), e);
                 }
             }
 
@@ -203,8 +242,8 @@ public class SimpleElasticsearchRouteProperties {
         // 6. 检查重复的 exact 规则
         exactPatterns.forEach((pattern, count) -> {
             if (count > 1) {
-                throw new IllegalArgumentException(
-                        "存在 " + count + " 个 exact 类型的重复规则，pattern: " + pattern);
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_EXACT_DUPLICATE,
+                        String.format(ErrorMessage.CONFIG_ROUTE_EXACT_DUPLICATE, count, pattern));
             }
         });
 
@@ -221,6 +260,39 @@ public class SimpleElasticsearchRouteProperties {
      */
     private boolean isEmpty(String str) {
         return str == null || str.trim().isEmpty();
+    }
+
+    private void validateVersionDetectConfig(VersionDetectConfig config) {
+        if (config == null) {
+            return;
+        }
+        if (config.getTimeoutMs() != null && config.getTimeoutMs() <= 0) {
+            throw new ConfigurationException(ErrorCode.CONFIG_VERSION_DETECT_TIMEOUT_INVALID,
+                    ErrorMessage.CONFIG_VERSION_DETECT_TIMEOUT_INVALID);
+        }
+    }
+
+    /**
+     * ES 服务端版本探测配置
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class VersionDetectConfig {
+        /**
+         * 是否启用版本探测（GET /）
+         */
+        private boolean enabled = true;
+
+        /**
+         * 当未配置 datasource.server-version 且探测失败时，是否快速失败（默认：false）
+         */
+        private boolean failFastOnDetectError = false;
+
+        /**
+         * 探测超时时间（毫秒），默认 1500
+         */
+        private Integer timeoutMs = ConfigConstant.DEFAULT_VERSION_DETECT_TIMEOUT_MS;
     }
 
     /**
@@ -245,6 +317,11 @@ public class SimpleElasticsearchRouteProperties {
         private String urls;
 
         /**
+         * ES 服务端版本（可选，如：6.2.2），配置后作为有效版本使用
+         */
+        private String serverVersion;
+
+        /**
          * 用户名（可选）
          */
         private String username;
@@ -257,12 +334,12 @@ public class SimpleElasticsearchRouteProperties {
         /**
          * 连接超时时间（毫秒）
          */
-        private Integer connectTimeout = 5000;
+        private Integer connectTimeout = ConfigConstant.DEFAULT_CONNECT_TIMEOUT;
 
         /**
          * Socket超时时间（毫秒）
          */
-        private Integer socketTimeout = 60000;
+        private Integer socketTimeout = ConfigConstant.DEFAULT_SOCKET_TIMEOUT;
 
         /**
          * 是否使用 SSL/TLS（仅在使用 hosts 且未指定协议时生效）
@@ -294,25 +371,25 @@ public class SimpleElasticsearchRouteProperties {
          * Keep-Alive 保持时间（秒）
          * 默认：300 秒（5分钟）
          */
-        private Integer keepAliveStrategy = 300;
+        private Integer keepAliveStrategy = ConfigConstant.DEFAULT_KEEP_ALIVE_SECONDS;
 
         /**
          * 最大连接数（连接池配置）
          * 默认：100
          */
-        private Integer maxConnTotal = 100;
+        private Integer maxConnTotal = ConfigConstant.DEFAULT_MAX_CONN_TOTAL;
 
         /**
          * 每个路由的最大连接数
          * 默认：10
          */
-        private Integer maxConnPerRoute = 10;
+        private Integer maxConnPerRoute = ConfigConstant.DEFAULT_MAX_CONN_PER_ROUTE;
 
         /**
          * 是否启用连接重用
          * 默认：true
          */
-        private boolean enableConnectionReuse = true;
+        private boolean enableConnectionReuse = ConfigConstant.DEFAULT_ENABLE_CONNECTION_REUSE;
 
         /**
          * 获取解析后的 URL 列表（标准化为 http://xxx 或 https://xxx）
@@ -321,7 +398,8 @@ public class SimpleElasticsearchRouteProperties {
             String source = urls != null ? urls : hosts;
 
             if (source == null || source.trim().isEmpty()) {
-                throw new IllegalStateException("hosts 和 urls 都为空");
+                throw new ConfigurationException(ErrorCode.CONFIG_HOSTS_AND_URLS_EMPTY,
+                        ErrorMessage.OTHER_URL_EMPTY);
             }
 
             List<String> result = new ArrayList<>();
@@ -339,7 +417,7 @@ public class SimpleElasticsearchRouteProperties {
                     result.add(uri);
                 } else {
                     // 旧格式 host:port，根据 useSsl 拼接
-                    String protocol = useSsl ? "https" : "http";
+                    String protocol = useSsl ? ConfigConstant.PROTOCOL_HTTPS : ConfigConstant.PROTOCOL_HTTP;
                     String fullUrl = protocol + "://" + uri;
                     validateUrl(fullUrl);
                     result.add(fullUrl);
@@ -356,7 +434,8 @@ public class SimpleElasticsearchRouteProperties {
             try {
                 new java.net.URL(url);
             } catch (java.net.MalformedURLException e) {
-                throw new IllegalArgumentException("无效的 URL 格式: " + url, e);
+                throw new ConfigurationException(ErrorCode.CONFIG_URL_FORMAT_INVALID,
+                        String.format(ErrorMessage.OTHER_URL_INVALID, url), e);
             }
         }
     }
@@ -387,7 +466,7 @@ public class SimpleElasticsearchRouteProperties {
         /**
          * 优先级（数字越小优先级越高）
          */
-        private int priority = 100;
+        private int priority = ConfigConstant.PRIORITY_DEFAULT;
 
         /**
          * 是否启用

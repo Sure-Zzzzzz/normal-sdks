@@ -1,8 +1,11 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
+import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since 1.0.2
  */
 @Slf4j
+@SpringBootTest(classes = SimpleElasticsearchRouteTestApplication.class)
 public class ConfigValidationTest {
 
     /**
@@ -46,10 +50,11 @@ public class ConfigValidationTest {
         properties.setEnable(true);
         properties.setSources(new HashMap<>());
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -69,10 +74,11 @@ public class ConfigValidationTest {
         SimpleElasticsearchRouteProperties properties = createValidProperties();
         properties.setDefaultSource("nonexistent");
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -96,10 +102,11 @@ public class ConfigValidationTest {
                 new SimpleElasticsearchRouteProperties.DataSourceConfig();
         properties.getSources().put("test", config);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -119,10 +126,11 @@ public class ConfigValidationTest {
         SimpleElasticsearchRouteProperties properties = createValidProperties();
         properties.getSources().get("primary").setConnectTimeout(0);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -142,10 +150,11 @@ public class ConfigValidationTest {
         SimpleElasticsearchRouteProperties properties = createValidProperties();
         properties.getSources().get("primary").setSocketTimeout(-1);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -166,10 +175,11 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setMaxConnTotal(10);
         properties.getSources().get("primary").setMaxConnPerRoute(20);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -190,10 +200,11 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setProxyPort(8080);
         properties.getSources().get("primary").setProxyHost(null);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -213,10 +224,11 @@ public class ConfigValidationTest {
         SimpleElasticsearchRouteProperties properties = createValidProperties();
         properties.getSources().get("primary").setKeepAliveStrategy(0);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -237,10 +249,11 @@ public class ConfigValidationTest {
         // 使用包含非法字符的 URL（空格是非法的）
         properties.getSources().get("primary").setUrls("http1111://invalid url with spaces");
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -267,10 +280,11 @@ public class ConfigValidationTest {
 
         properties.getRules().add(rule);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -297,10 +311,11 @@ public class ConfigValidationTest {
 
         properties.getRules().add(rule);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -327,10 +342,11 @@ public class ConfigValidationTest {
 
         properties.getRules().add(rule);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -358,10 +374,11 @@ public class ConfigValidationTest {
 
         properties.getRules().add(rule);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -389,10 +406,11 @@ public class ConfigValidationTest {
 
         properties.getRules().add(rule);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();
@@ -428,10 +446,11 @@ public class ConfigValidationTest {
         properties.getRules().add(rule1);
         properties.getRules().add(rule2);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
             properties.init();
         });
 
+        // 检查异常的cause消息
         Throwable cause = exception.getCause();
         assertNotNull(cause);
         String message = cause.getMessage();

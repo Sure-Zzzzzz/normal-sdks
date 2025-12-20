@@ -59,7 +59,7 @@ public class RouteResolver {
      */
     public String resolveDataSource(String indexName) {
         if (indexName == null) {
-            log.debug("Index name is null, using default datasource [{}]", properties.getDefaultSource());
+            log.trace("Index name is null, using default datasource [{}]", properties.getDefaultSource());
             return properties.getDefaultSource();
         }
 

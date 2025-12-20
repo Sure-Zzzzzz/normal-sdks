@@ -2,9 +2,11 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.route.support.RoutePatternMatcher;
+import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -16,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since 1.0.2
  */
 @Slf4j
+@SpringBootTest(classes = SimpleElasticsearchRouteTestApplication.class)
 public class RoutePatternMatcherTest {
 
     private RoutePatternMatcher matcher;
