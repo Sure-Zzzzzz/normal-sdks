@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
@@ -40,7 +41,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 4. 聚合查询（metrics、bucket、嵌套聚合）
  * 5. 敏感字段处理（脱敏、禁止访问）
  * 6. 日期分割索引
- * 7. 错误处理
+ * 7. 多数据源路由与版本兼容性
+ * 8. 错误处理
+ *
+ * <p><b>版本兼容性说明：</b>
+ * 使用 simple-elasticsearch-route-starter 提供的 SimpleElasticsearchRouteRegistry 获取版本自适应的客户端，
+ * 支持多数据源路由，确保不同版本的 ES 集群都能正常工作（例如 ES 6.2.2 与 ES 7.x）
  *
  * @author surezzzzzz
  */
@@ -54,7 +60,7 @@ class SearchEndToEndTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private RestHighLevelClient restHighLevelClient;
+    private SimpleElasticsearchRouteRegistry registry;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -62,6 +68,9 @@ class SearchEndToEndTest {
     private static final String USER_INDEX = "test_user_index";
     private static final String ORDER_INDEX = "test_order_index";
     private static final String LOG_INDEX_PREFIX = "test_log_";
+    private static final String SECONDARY_INDEX = "test_index_b.secondary";  // 路由到 secondary 数据源的索引
+    private static final String DEFAULT_DATASOURCE = "primary";  // 从配置文件中获取的默认数据源
+    private static final String SECONDARY_DATASOURCE = "secondary";  // 第二个数据源
 
     /**
      * 将对象转换为JSON字符串
@@ -71,17 +80,23 @@ class SearchEndToEndTest {
     }
 
     @BeforeAll
-    static void setupAll(@Autowired RestHighLevelClient client) throws Exception {
+    static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备测试数据 ==========");
 
-        // 1. 创建 order 索引
-        createOrderIndex(client);
+        // 获取默认数据源的客户端
+        RestHighLevelClient primaryClient = registry.getHighLevelClient(DEFAULT_DATASOURCE);
 
-        // 2. 创建 user 索引
-        createUserIndex(client);
+        // 1. 创建 order 索引（primary 数据源）
+        createOrderIndex(primaryClient);
 
-        // 3. 创建多天的 log 索引（模拟日期分割）
-        createMultipleDateLogIndices(client);
+        // 2. 创建 user 索引（primary 数据源）
+        createUserIndex(primaryClient);
+
+        // 3. 创建多天的 log 索引（模拟日期分割，primary 数据源）
+        createMultipleDateLogIndices(primaryClient);
+
+        // 4. 创建 secondary 索引（secondary 数据源）- 测试多数据源路由
+        createSecondaryIndex(registry);
 
         log.info("========== 测试数据准备完成 ==========");
     }
@@ -156,21 +171,27 @@ class SearchEndToEndTest {
 
 
     @AfterAll
-    static void cleanupAll(@Autowired RestHighLevelClient client) throws Exception {
+    static void cleanupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始清理测试数据 ==========");
 
         try {
-            // 删除 order 和 user 索引
-            deleteIndexIfExists(client, ORDER_INDEX);
-            deleteIndexIfExists(client, USER_INDEX);
+            // 清理 primary 数据源的索引
+            RestHighLevelClient primaryClient = registry.getHighLevelClient(DEFAULT_DATASOURCE);
+            deleteIndexIfExists(primaryClient, ORDER_INDEX);
+            deleteIndexIfExists(primaryClient, USER_INDEX);
 
             // 删除所有 test_log_* 索引
             LocalDateTime baseDate = LocalDateTime.now();
             for (int i = 0; i < 3; i++) {
                 LocalDateTime date = baseDate.minusDays(i);
                 String indexName = LOG_INDEX_PREFIX + date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-                deleteIndexIfExists(client, indexName);
+                deleteIndexIfExists(primaryClient, indexName);
             }
+
+            // 清理 secondary 数据源的索引
+            RestHighLevelClient secondaryClient = registry.getHighLevelClient(SECONDARY_DATASOURCE);
+            deleteIndexIfExists(secondaryClient, SECONDARY_INDEX);
+
         } catch (Exception e) {
             log.warn("清理索引失败", e);
         }
@@ -196,7 +217,7 @@ class SearchEndToEndTest {
         mockMvc.perform(get("/api/indices"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(3))
+                .andExpect(jsonPath("$.data.length()").value(4))
                 .andExpect(jsonPath("$.error").doesNotExist())
                 .andDo(result -> {
                     log.info("✓ 获取索引列表成功");
@@ -728,11 +749,11 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 5. 错误处理测试 ====================
+    // ==================== 8. 错误处理测试 ====================
 
     @Test
     @Order(40)
-    @DisplayName("5.1 错误处理 - 索引不存在")
+    @DisplayName("8.1 错误处理 - 索引不存在")
     void testErrorIndexNotFound() throws Exception {
         log.info("========== 测试：索引不存在错误 ==========");
 
@@ -755,7 +776,7 @@ class SearchEndToEndTest {
 
     @Test
     @Order(41)
-    @DisplayName("5.2 错误处理 - 字段不存在")
+    @DisplayName("8.2 错误处理 - 字段不存在")
     void testErrorFieldNotFound() throws Exception {
         log.info("========== 测试：字段不存在错误 ==========");
 
@@ -1095,6 +1116,156 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 7. 多数据源路由测试 ====================
+
+    @Test
+    @Order(60)
+    @DisplayName("7.1 多数据源路由 - 查询 secondary 数据源索引")
+    void testMultiDatasourceQuerySecondary() throws Exception {
+        log.info("========== 测试：查询路由到 secondary 数据源的索引 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .query(QueryCondition.builder()
+                        .field("category")
+                        .op("EQ")
+                        .value("Electronics")
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(5))
+                .andExpect(jsonPath("$.data.items[0].category").value("Electronics"))
+                .andDo(result -> {
+                    log.info("✓ Secondary 数据源查询成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(61)
+    @DisplayName("7.2 多数据源路由 - secondary 索引范围查询")
+    void testMultiDatasourceQueryRange() throws Exception {
+        log.info("========== 测试：Secondary 数据源范围查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .query(QueryCondition.builder()
+                        .field("price")
+                        .op("BETWEEN")
+                        .values(Arrays.asList(6000, 9000))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))  // iPhone 15 Pro, MacBook Air, iPad Pro, Apple Watch Ultra
+                .andExpect(jsonPath("$.data.items[*].price").value(org.hamcrest.Matchers.everyItem(
+                        org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.greaterThanOrEqualTo(6000.0),
+                                org.hamcrest.Matchers.lessThanOrEqualTo(9000.0)
+                        ))))
+                .andDo(result -> {
+                    log.info("✓ Secondary 数据源范围查询成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(62)
+    @DisplayName("7.3 多数据源路由 - secondary 索引聚合")
+    void testMultiDatasourceAggregation() throws Exception {
+        log.info("========== 测试：Secondary 数据源聚合 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(SECONDARY_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("avg_price")
+                                .type("AVG")
+                                .field("price")
+                                .build(),
+                        AggDefinition.builder()
+                                .name("total_stock")
+                                .type("SUM")
+                                .field("stock")
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.avg_price").exists())
+                .andExpect(jsonPath("$.data.aggregations.total_stock").exists())
+                .andExpect(jsonPath("$.data.aggregations.total_stock").value(550.0))  // 100+50+200+80+120
+                .andDo(result -> {
+                    log.info("✓ Secondary 数据源聚合成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(63)
+    @DisplayName("7.4 多数据源路由 - 获取 secondary 索引字段信息")
+    void testMultiDatasourceGetFields() throws Exception {
+        log.info("========== 测试：获取 Secondary 数据源索引字段信息 ==========");
+
+        mockMvc.perform(get("/api/indices/" + SECONDARY_INDEX + "/fields"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.index").value(SECONDARY_INDEX))
+                .andExpect(jsonPath("$.data.fields").isArray())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='product_id')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='product_name')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='price')]").exists())
+                .andDo(result -> {
+                    log.info("✓ Secondary 数据源字段信息获取成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(64)
+    @DisplayName("7.5 版本兼容性 - 验证 GetMappings 请求正常工作")
+    void testVersionCompatibilityGetMappings() throws Exception {
+        log.info("========== 测试：验证版本自适应客户端兼容性 ==========");
+
+        // 测试 secondary 数据源（可能是 ES 6.2.2）的 mapping 获取
+        // 如果版本适配正确，不会出现 include_type_name 和 master_timeout 参数错误
+        mockMvc.perform(get("/api/indices/" + SECONDARY_INDEX + "/fields"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fields").isArray())
+                .andDo(result -> {
+                    log.info("✓ 版本自适应客户端工作正常，未出现参数兼容性错误");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 测试 primary 数据源的 mapping 获取
+        mockMvc.perform(get("/api/indices/test_user/fields"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fields").isArray())
+                .andDo(result -> {
+                    log.info("✓ Primary 数据源版本自适应工作正常");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    // ==================== 辅助方法 ====================
+
     private static String createLogIndex(RestHighLevelClient client) throws Exception {
         String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
         String indexName = LOG_INDEX_PREFIX + today;
@@ -1169,5 +1340,65 @@ class SearchEndToEndTest {
         log.put("message", message);
         log.put("createTime", new Date());
         return log;
+    }
+
+    /**
+     * 创建 secondary 索引（secondary 数据源）
+     * 用于测试多数据源路由和版本兼容性
+     */
+    private static void createSecondaryIndex(SimpleElasticsearchRouteRegistry registry) throws Exception {
+        // 获取 secondary 数据源的客户端
+        RestHighLevelClient client = registry.getHighLevelClient(SECONDARY_DATASOURCE);
+
+        // 删除旧索引
+        if (client.indices().exists(new GetIndexRequest(SECONDARY_INDEX), RequestOptions.DEFAULT)) {
+            client.indices().delete(new DeleteIndexRequest(SECONDARY_INDEX), RequestOptions.DEFAULT);
+        }
+
+        // 使用 TestIndexHelper 创建索引（版本自适应，支持 ES 6.x 和 7.x）
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("product_id", Map.of("type", "keyword"));
+        properties.put("product_name", Map.of("type", "keyword"));
+        properties.put("category", Map.of("type", "keyword"));
+        properties.put("price", Map.of("type", "double"));
+        properties.put("stock", Map.of("type", "integer"));
+        properties.put("created_at", Map.of("type", "date"));
+
+        io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.TestIndexHelper.createIndex(
+                registry,
+                SECONDARY_DATASOURCE,
+                SECONDARY_INDEX,
+                properties
+        );
+
+        // 插入测试数据
+        List<Map<String, Object>> products = Arrays.asList(
+                createProduct("P001", "iPhone 15 Pro", "Electronics", 8999.0, 100),
+                createProduct("P002", "MacBook Air", "Electronics", 7999.0, 50),
+                createProduct("P003", "AirPods Pro 2", "Electronics", 1899.0, 200),
+                createProduct("P004", "iPad Pro", "Electronics", 6999.0, 80),
+                createProduct("P005", "Apple Watch Ultra", "Electronics", 6299.0, 120)
+        );
+
+        for (int i = 0; i < products.size(); i++) {
+            IndexRequest indexRequest = new IndexRequest(SECONDARY_INDEX)
+                    .id(String.valueOf(i + 1))
+                    .source(products.get(i));
+            client.index(indexRequest, RequestOptions.DEFAULT);
+        }
+
+        Thread.sleep(2000);
+        log.info("✓ 已插入 {} 条测试数据到 {} (secondary 数据源)", products.size(), SECONDARY_INDEX);
+    }
+
+    private static Map<String, Object> createProduct(String productId, String productName, String category, double price, int stock) {
+        Map<String, Object> product = new HashMap<>();
+        product.put("product_id", productId);
+        product.put("product_name", productName);
+        product.put("category", category);
+        product.put("price", price);
+        product.put("stock", stock);
+        product.put("created_at", new Date());
+        return product;
     }
 }

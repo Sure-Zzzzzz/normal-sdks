@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 route-starter
-    api "${group}:simple-elasticsearch-route-starter:1.0.2"
+    api "${group}:simple-elasticsearch-route-starter:1.0.3"
     // ES 依赖（route-starter 是 compileOnly，我们也需要声明 compileOnly）
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework.boot:spring-boot-starter-data-elasticsearch"

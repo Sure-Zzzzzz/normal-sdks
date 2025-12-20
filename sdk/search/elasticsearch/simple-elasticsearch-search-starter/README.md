@@ -5,6 +5,8 @@
 ## 特性
 
 - **零代码侵入**：完全配置驱动，无需编写任何业务代码
+- **多数据源路由**：支持多个 Elasticsearch 集群，自动路由到对应数据源
+- **版本兼容性**：支持 ES 6.x 和 7.x+ 版本，自动适配 API 差异
 - **动态 Mapping**：自动获取并缓存索引的字段元数据
 - **灵活查询**：支持多种查询操作符和复杂的逻辑组合
 - **聚合分析**：支持指标聚合和桶聚合，支持嵌套聚合
@@ -19,8 +21,8 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.1'
-    
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.2'
+
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
@@ -30,9 +32,14 @@ dependencies {
 }
 ```
 
-**注意**：由于starter中部分依赖使用compileOnly，需要用户自行引入上述依赖。
+**注意**：
+- 从 1.0.2 版本开始，search-starter 完全依赖 `simple-elasticsearch-route-starter` 进行多数据源管理
+- route-starter 会自动被依赖引入（版本 1.0.3+），无需手动添加
+- 部分依赖使用 compileOnly，需要用户自行引入上述依赖
 
 ### 2. 配置
+
+#### 基础配置（单数据源）
 
 ```yaml
 io:
@@ -96,6 +103,58 @@ io:
               base-path: "/api"                   # API 基础路径
               include-score: false                # 是否返回 _score（评分）
 ```
+
+#### 多数据源配置（支持版本兼容）
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          # route-starter 配置（多数据源）
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              # 主数据源（ES 7.x）
+              primary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+
+              # 次数据源（ES 6.2.2）
+              legacy:
+                urls: http://legacy-es:9200
+                server-version: 6.2.2           # 指定服务端版本（推荐配置）
+                connect-timeout: 5000
+                socket-timeout: 60000
+
+            # 路由规则
+            rules:
+              - pattern: "old_*"                 # 匹配 old_ 开头的索引
+                datasource: legacy
+                type: prefix
+                priority: 10
+
+          # search-starter 配置
+          search:
+            enable: true
+            indices:
+              - name: "user_behavior_*"
+                alias: user_behavior
+                # 默认路由到 primary 数据源
+
+              - name: "old_logs_*"
+                alias: old_logs
+                # 通过路由规则自动路由到 legacy 数据源
+```
+
+**版本兼容性说明**：
+- 配置 `server-version` 后，框架会针对不同 ES 版本自动适配 API 差异
+- ES 6.x：使用低级 RestClient API 绕过参数兼容性问题
+- ES 7.x+：使用标准的高级 API
+- 未配置版本时，框架会异步检测并自动适配
 
 ### 3. 使用 API
 

@@ -1,5 +1,9 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.metadata;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.Constants;
@@ -27,6 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Mapping 管理器实现
  *
+ * <p><b>版本兼容性说明：</b>
+ * <ul>
+ *   <li>使用 simple-elasticsearch-route-starter 提供的 SimpleElasticsearchRouteRegistry</li>
+ *   <li>根据索引名称通过 RouteResolver 路由到对应数据源</li>
+ *   <li>获取该数据源版本自适应的 RestHighLevelClient，避免版本兼容性问题</li>
+ * </ul>
+ *
  * @author surezzzzzz
  */
 @Slf4j
@@ -37,7 +48,10 @@ public class MappingManagerImpl implements MappingManager {
     private SimpleElasticsearchSearchProperties properties;
 
     @Autowired
-    private RestHighLevelClient restHighLevelClient;
+    private SimpleElasticsearchRouteRegistry registry;
+
+    @Autowired
+    private RouteResolver routeResolver;
 
     /**
      * 缓存：alias -> IndexMetadata
@@ -172,11 +186,54 @@ public class MappingManagerImpl implements MappingManager {
 
         log.debug("Loading mapping for index: {} ({})", cacheKey, indexName);
 
-        // 1. 调用 ES API 获取 mapping
-        GetMappingsRequest request = new GetMappingsRequest().indices(indexName);
-        GetMappingsResponse response = restHighLevelClient.indices().getMapping(request, RequestOptions.DEFAULT);
+        // 1. 根据索引名称路由到对应数据源
+        String datasourceKey = routeResolver.resolveDataSource(indexName);
+        log.debug("Index [{}] routed to datasource [{}]", indexName, datasourceKey);
 
-        // 2. 解析 mapping（ImmutableOpenMap<String, ImmutableOpenMap<String, MappingMetadata>> -> Map）
+        // 2. 获取该数据源的版本自适应 RestHighLevelClient
+        RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+
+        // 3. 获取集群信息，检查版本
+        ClusterInfo clusterInfo = registry.getClusterInfo(datasourceKey);
+        boolean isEs6x = false;
+        boolean versionUnknown = false;
+
+        if (clusterInfo != null && clusterInfo.getEffectiveVersion() != null) {
+            int majorVersion = clusterInfo.getEffectiveVersion().getMajor();
+            isEs6x = (majorVersion == 6);
+            log.debug("Detected ES major version: {} for datasource [{}]", majorVersion, datasourceKey);
+        } else {
+            versionUnknown = true;
+            log.warn("Datasource [{}] version not yet detected, will try high-level API first. " +
+                            "Recommend configuring 'sources.{}.server-version' to avoid compatibility issues.",
+                    datasourceKey, datasourceKey);
+        }
+
+        // 4. 调用 ES API 获取 mapping（版本兼容）
+        GetMappingsRequest request = new GetMappingsRequest().indices(indexName);
+        GetMappingsResponse response;
+
+        if (isEs6x) {
+            // ES 6.x：使用 RestClient 低级 API，避免 include_type_name 和 master_timeout 参数
+            log.debug("Using low-level API for ES 6.x compatibility");
+            response = getMappingViaLowLevelApi(client, indexName);
+        } else {
+            // ES 7.x+ 或版本未知：尝试使用高级 API
+            try {
+                response = client.indices().getMapping(request, RequestOptions.DEFAULT);
+            } catch (org.elasticsearch.ElasticsearchStatusException e) {
+                // 如果是 ES 6.x 参数不兼容错误，fallback 到低级 API
+                if (versionUnknown && e.getMessage() != null &&
+                        (e.getMessage().contains("include_type_name") || e.getMessage().contains("master_timeout"))) {
+                    log.warn("High-level API failed with ES 6.x compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
+                    response = getMappingViaLowLevelApi(client, indexName);
+                } else {
+                    throw e;
+                }
+            }
+        }
+
+        // 5. 解析 mapping（ImmutableOpenMap<String, ImmutableOpenMap<String, MappingMetadata>> -> Map）
         Map<String, MappingMetadata> mappings = new ConcurrentHashMap<>();
         response.mappings().forEach(indexEntry -> {
             // indexEntry.key 是索引名
@@ -192,7 +249,7 @@ public class MappingManagerImpl implements MappingManager {
             throw new IllegalStateException(String.format(ErrorMessages.INDEX_MAPPING_NOT_FOUND, indexName));
         }
 
-        // 3. 构建 IndexMetadata
+        // 6. 构建 IndexMetadata
         IndexMetadata.IndexMetadataBuilder builder = IndexMetadata.builder()
                 .alias(alias)
                 .indexName(indexName)
@@ -202,11 +259,11 @@ public class MappingManagerImpl implements MappingManager {
                 .cachedAt(System.currentTimeMillis());
 
 
-        // 4. 收集实际索引列表
+        // 7. 收集实际索引列表
         List<String> actualIndices = new ArrayList<>(mappings.keySet());
         builder.actualIndices(actualIndices);
 
-        // 5. 确定使用哪个索引的 mapping
+        // 8. 确定使用哪个索引的 mapping
         String targetIndex;
         if (specificIndexName != null && !specificIndexName.isEmpty()) {
             // 用户指定了具体索引
@@ -222,7 +279,7 @@ public class MappingManagerImpl implements MappingManager {
             log.debug("Loading field metadata from index: {}", targetIndex);
         }
 
-        // 6. 解析字段
+        // 9. 解析字段
         MappingMetadata mappingMetadata = mappings.get(targetIndex);
         Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
 
@@ -235,7 +292,7 @@ public class MappingManagerImpl implements MappingManager {
 
         builder.fields(fields);
 
-        // 7. 缓存（仅当未指定具体索引时）
+        // 10. 缓存（仅当未指定具体索引时）
         IndexMetadata metadata = builder.build();
         metadata.buildFieldMap();
 
@@ -246,6 +303,36 @@ public class MappingManagerImpl implements MappingManager {
         log.debug("✓ Loaded {} fields for index: {} (from {})", fields.size(), cacheKey, targetIndex);
 
         return metadata;
+    }
+
+    /**
+     * 使用 RestClient 低级 API 获取 mapping（ES 6.x 兼容）
+     * 绕过高级 API 自动添加的 include_type_name 和 master_timeout 参数
+     */
+    private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient, String indexName) throws IOException {
+        org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
+
+        // 构造请求：GET /<index>/_mapping
+        String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + indexName + ElasticsearchApiConstant.ENDPOINT_MAPPING;
+        org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
+                ElasticsearchApiConstant.HTTP_METHOD_GET,
+                endpoint
+        );
+
+        // 执行请求
+        org.elasticsearch.client.Response response = lowLevelClient.performRequest(request);
+
+        // 解析响应体为 GetMappingsResponse
+        // 使用 XContentFactory 创建解析器（使用 try-with-resources 确保资源正确关闭）
+        try (org.elasticsearch.xcontent.XContentParser parser = org.elasticsearch.xcontent.XContentFactory.xContent(
+                org.elasticsearch.xcontent.XContentType.JSON
+        ).createParser(
+                org.elasticsearch.xcontent.NamedXContentRegistry.EMPTY,
+                org.elasticsearch.xcontent.DeprecationHandler.THROW_UNSUPPORTED_OPERATION,
+                response.getEntity().getContent()
+        )) {
+            return GetMappingsResponse.fromXContent(parser);
+        }
     }
 
     /**

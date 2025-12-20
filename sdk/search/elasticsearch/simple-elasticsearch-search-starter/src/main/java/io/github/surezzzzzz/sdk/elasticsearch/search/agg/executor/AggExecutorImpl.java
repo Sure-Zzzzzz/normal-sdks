@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.executor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.AggregationDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
@@ -39,6 +41,13 @@ import java.util.Map;
 /**
  * 聚合执行器实现
  *
+ * <p><b>版本兼容性说明：</b>
+ * <ul>
+ *   <li>使用 simple-elasticsearch-route-starter 提供的 SimpleElasticsearchRouteRegistry</li>
+ *   <li>根据索引名称通过 RouteResolver 路由到对应数据源</li>
+ *   <li>获取该数据源版本自适应的 RestHighLevelClient，避免版本兼容性问题</li>
+ * </ul>
+ *
  * @author surezzzzzz
  */
 @Slf4j
@@ -61,7 +70,10 @@ public class AggExecutorImpl implements AggExecutor {
     private IndexRouteProcessor indexRouteProcessor;  // ✅ 新增：索引路由处理器
 
     @Autowired
-    private RestHighLevelClient restHighLevelClient;
+    private SimpleElasticsearchRouteRegistry registry;
+
+    @Autowired
+    private RouteResolver routeResolver;
 
     @Override
     public AggResponse execute(AggRequest request) {
@@ -79,12 +91,16 @@ public class AggExecutorImpl implements AggExecutor {
 
             // 4. 执行查询
 
-                log.debug("Executing aggregation: indices={}, dsl={}",
-                        String.join(",", searchRequest.indices()),
-                        searchRequest.source().toString());
+            log.debug("Executing aggregation: indices={}, dsl={}",
+                    String.join(",", searchRequest.indices()),
+                    searchRequest.source().toString());
 
+            // 根据索引名称路由到对应数据源，获取版本自适应的 RestHighLevelClient
+            String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+            log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
+            RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-            SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
 
             // 5. 处理结果
             AggResponse response = processResponse(searchResponse);

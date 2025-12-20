@@ -35,6 +35,12 @@ io:
                     mask-start: 3
                     mask-end: 4
                     mask-pattern: "****"
+              # Secondary 数据源索引（测试多数据源路由）
+              - name: "test_index_b.secondary"
+                date-split: false
+                cache-mapping: true
+                lazy-load: true
+
 
             # Mapping 刷新配置
             mapping-refresh:
@@ -66,6 +72,20 @@ io:
                 max-conn-total: 100
                 max-conn-per-route: 10
                 enable-connection-reuse: true
+              secondary:
+                urls: http://192.168.1.83:9200
+                server-version: 6.2.2
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+            rules:
+              - pattern: "test_index_b.secondary"
+                datasource: secondary
+                type: exact
+                priority: 10
 
 logging:
   level:
