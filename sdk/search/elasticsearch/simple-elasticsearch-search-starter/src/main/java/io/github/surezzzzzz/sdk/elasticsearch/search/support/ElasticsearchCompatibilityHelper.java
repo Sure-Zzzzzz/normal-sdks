@@ -258,10 +258,15 @@ public class ElasticsearchCompatibilityHelper {
         // 执行请求
         org.elasticsearch.client.Response response = lowLevelClient.performRequest(request);
 
-        // **关键**：先读取响应体到字节数组，因为 InputStream 只能读一次
         byte[] responseBytes;
-        try (java.io.InputStream inputStream = response.getEntity().getContent()) {
-            responseBytes = inputStream.readAllBytes();
+        try (java.io.InputStream inputStream = response.getEntity().getContent();
+             java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream()) {
+            byte[] data = new byte[8192];
+            int nRead;
+            while ((nRead = inputStream.read(data)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+            responseBytes = buffer.toByteArray();
         }
 
         // DEBUG: 输出原始响应，帮助诊断解析问题
