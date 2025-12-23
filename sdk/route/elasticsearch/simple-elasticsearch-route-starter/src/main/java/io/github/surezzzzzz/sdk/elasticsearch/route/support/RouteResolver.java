@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +40,7 @@ public class RouteResolver {
         List<SimpleElasticsearchRouteProperties.RouteRule> rules = properties.getRules();
 
         if (CollectionUtils.isEmpty(rules)) {
-            this.sortedEnabledRules = List.of();
+            this.sortedEnabledRules = new ArrayList<>();
             log.debug("No route rules configured");
         } else {
             this.sortedEnabledRules = rules.stream()
