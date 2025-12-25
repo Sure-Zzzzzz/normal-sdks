@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.support;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.VersionCompatibilityErrorPattern;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
 
@@ -86,49 +88,60 @@ public class RouteTemplateProxy implements MethodInterceptor {
 
     @Override
     public Object intercept(Object obj, Method method, Object[] args, MethodProxy proxy) throws Throwable {
-        // 提取索引名称
         String indexName = extractIndexName(method, args);
-
-        // 根据索引名称选择对应的 template
         ElasticsearchRestTemplate template = determineTemplate(indexName);
 
-        // 调用真实方法
         try {
             return method.invoke(template, args);
-        } catch (Exception e) {
-            // 检测是否是 Elasticsearch 版本兼容性问题
-            if (isVersionCompatibilityIssue(e)) {
-                log.warn("检测到 Elasticsearch 版本兼容性问题: method=[{}], index=[{}]. " +
-                                "这不是 simple-elasticsearch-route-starter 的问题，而是 Spring Data Elasticsearch API 与特定 ES 版本不兼容导致的. " +
-                                "建议使用 SimpleElasticsearchRouteRegistry.getHighLevelClient() 获取原生客户端进行版本敏感的操作. " +
+        } catch (InvocationTargetException e) {
+            Throwable targetException = e.getTargetException();
+
+            // 检测版本兼容性问题并记录详细信息
+            if (isVersionCompatibilityIssue(targetException)) {
+                VersionCompatibilityErrorPattern pattern =
+                        VersionCompatibilityErrorPattern.findMatch(getRootCauseMessage(targetException));
+
+                log.warn("检测到 Elasticsearch 版本兼容性问题: " +
+                                "method=[{}], index=[{}], pattern=[{}]. " +
+                                "这不是 simple-elasticsearch-route-starter 的问题，" +
+                                "而是 Spring Data Elasticsearch API 与特定 ES 版本不兼容导致的. " +
+                                "建议使用 SimpleElasticsearchRouteRegistry.getHighLevelClient() " +
+                                "获取原生客户端进行版本敏感的操作. " +
                                 "原始错误: {}",
-                        method.getName(), indexName, getRootCauseMessage(e));
+                        method.getName(),
+                        indexName,
+                        pattern != null ? pattern.getDescription() : "unknown",
+                        getRootCauseMessage(targetException));
             } else {
                 log.error("Error invoking method [{}] on template for index [{}]",
-                        method.getName(), indexName, e);
+                        method.getName(), indexName, targetException);
             }
-            throw e;
+
+            throw targetException;
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+            log.error("Reflection error invoking method [{}] on template for index [{}]",
+                    method.getName(), indexName, e);
+            throw new RuntimeException("Failed to invoke method via reflection", e);
         }
     }
 
     /**
      * 判断异常是否是 Elasticsearch 版本兼容性问题
      */
-    private boolean isVersionCompatibilityIssue(Exception e) {
+    private boolean isVersionCompatibilityIssue(Throwable e) {
         String message = getRootCauseMessage(e);
-        if (message == null) {
-            return false;
-        }
+        return VersionCompatibilityErrorPattern.isAnyMatch(message);
+    }
 
-        // 常见的版本兼容性错误特征
-        return message.contains("unrecognized parameter") ||
-                message.contains("master_timeout") ||
-                message.contains("no such parameter") ||
-                message.contains("unknown setting") ||
-                message.contains("unknown query") ||
-                message.contains("no handler found for uri") ||
-                (message.contains("illegal_argument_exception") &&
-                        (message.contains("parameter") || message.contains("setting")));
+    /**
+     * 获取异常的根本原因消息
+     */
+    private String getRootCauseMessage(Throwable e) {
+        Throwable cause = e;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause.getMessage();
     }
 
     /**
