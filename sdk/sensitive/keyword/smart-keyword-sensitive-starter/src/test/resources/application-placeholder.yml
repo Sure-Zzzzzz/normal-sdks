@@ -1,0 +1,23 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        sensitive:
+          keyword:
+            enable: true
+            default-strategy:
+              keep-region: false
+              keep-industry: true
+              keep-brand: false
+              keep-org-type: true
+              keep-bracket: false
+              mask-type: placeholder
+              placeholder: "[机构_001]"
+            nlp:
+              enabled: true
+              provider: BUILT_IN
+              fallback-to-rule: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.sensitive: DEBUG

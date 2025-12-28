@@ -1,0 +1,29 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        sensitive:
+          keyword:
+            enable: true
+            default-strategy:
+              keep-region: true
+              keep-industry: true
+              keep-brand: false
+              keep-org-type: true
+              keep-bracket: false
+            nlp:
+              enabled: true
+              provider: BUILT_IN
+              fallback-to-rule: true
+            keywords:
+              - keyword: "东方大国邮政储蓄银行"
+                strategy:
+                  keep-region: false
+                  keep-industry: false
+                  keep-brand: false
+                  keep-org-type: true
+                  mask-type: hash
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.sensitive: DEBUG

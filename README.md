@@ -94,6 +94,19 @@
 - 自动重试和熔断
 - 请求/响应日志拦截
 
+### 🔒 数据安全
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [smart-keyword-sensitive-starter](sdk/sensitive/keyword/smart-keyword-sensitive-starter) | 1.0.0 | 关键词敏感信息脱敏 | [README](sdk/sensitive/keyword/smart-keyword-sensitive-starter/README.md) |
+
+**核心特性**：
+- 自动识别组织机构（NLP + 规则引擎）
+- 智能元信息提取（地域/行业/品牌/组织类型）
+- 三级智能降级机制（针对金融/政府/教育机构）
+- 范围退避Fallback（确保所有文本都被脱敏）
+- 多种脱敏策略（星号/占位符/哈希）
+
 ### 📝 日志
 
 | SDK | 版本 | 说明 | 文档 |

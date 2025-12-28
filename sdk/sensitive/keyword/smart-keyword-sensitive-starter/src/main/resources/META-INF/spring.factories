@@ -1,0 +1,2 @@
+# Auto Configuration
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.github.surezzzzzz.sdk.sensitive.keyword.configuration.SmartKeywordSensitiveConfiguration

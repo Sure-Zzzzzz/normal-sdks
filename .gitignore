@@ -37,6 +37,7 @@ build/
 # doc file
 *.pdf
 *.docx
+*.xlsx
 
 gradle.properties
 
