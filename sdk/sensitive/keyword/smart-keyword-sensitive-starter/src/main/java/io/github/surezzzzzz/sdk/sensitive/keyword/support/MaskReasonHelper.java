@@ -595,6 +595,39 @@ public class MaskReasonHelper {
                 sb.append(strategy.getFixedMaskLengthOrDefault());
                 sb.append(FIXED_LENGTH);
             }
+
+            // 说明括号内容脱敏规则（如果存在括号）
+            if (meta != null && meta.getBracketContent() != null) {
+                sb.append(SmartKeywordSensitiveConstant.NARRATIVE_PERIOD);
+                sb.append(SmartKeywordSensitiveConstant.NARRATIVE_BRACKET_RULE_TITLE);
+                if (Boolean.TRUE.equals(strategy.getKeepBracket())) {
+                    sb.append(SmartKeywordSensitiveConstant.NARRATIVE_KEEP_FULL_BRACKET);
+                } else {
+                    sb.append(SmartKeywordSensitiveConstant.NARRATIVE_SMART_MASK_BRACKET);
+                    // 说明括号内保留什么
+                    StringBuilder bracketKept = new StringBuilder();
+                    if (Boolean.TRUE.equals(strategy.getKeepRegion())) {
+                        bracketKept.append(SmartKeywordSensitiveConstant.FIELD_NAME_REGION);
+                    }
+                    if (Boolean.TRUE.equals(strategy.getKeepOrgType())) {
+                        if (bracketKept.length() > 0) bracketKept.append(SmartKeywordSensitiveConstant.NARRATIVE_COMMA);
+                        bracketKept.append(SmartKeywordSensitiveConstant.FIELD_NAME_ORG_TYPE);
+                    }
+
+                    if (bracketKept.length() > 0) {
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_LEFT_PAREN);
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_KEEP);
+                        sb.append(bracketKept.toString());
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_NOT_KEEP_BRACKET_DETAIL);
+                        sb.append(SmartKeywordSensitiveConstant.FIELD_NAME_INDUSTRY);
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_AND);
+                        sb.append(SmartKeywordSensitiveConstant.FIELD_NAME_BRAND);
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_RIGHT_PAREN);
+                    } else {
+                        sb.append(SmartKeywordSensitiveConstant.NARRATIVE_MASK_ALL);
+                    }
+                }
+            }
         }
 
         /**

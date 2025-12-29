@@ -19,7 +19,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.surezzzzzz:smart-keyword-sensitive-starter:1.0.0'
+implementation 'io.github.surezzzzzz:smart-keyword-sensitive-starter:1.0.3'
 ```
 
 ### 2. 最简配置

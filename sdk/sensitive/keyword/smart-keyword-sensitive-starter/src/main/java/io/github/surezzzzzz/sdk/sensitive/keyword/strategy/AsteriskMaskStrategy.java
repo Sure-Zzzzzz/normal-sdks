@@ -245,8 +245,11 @@ public class AsteriskMaskStrategy implements MaskStrategy {
 
         String result = String.join("", parts);
 
-        // 检查主体部分是否全部脱敏（不检查括号部分）
-        if (isAllMasked(mainPart.toString())) {
+        // 检查主体部分是否全部脱敏（只有在没有括号内容时才触发Fallback）
+        // 如果有括号内容，即使主体全部脱敏也是合理的（例如：品牌全部脱敏，只保留括号信息）
+        boolean hasBracketContent = meta != null && meta.getBracketContent() != null;
+        if (isAllMasked(mainPart.toString()) && !hasBracketContent) {
+            log.debug("Main part is all masked and no bracket content, using fallback masking");
             return maskWithFallbackAsterisk(keyword, adjustedConfig);
         }
 
@@ -305,14 +308,16 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         }
 
         // 3. 提取行业（中间部分）
-        String industryPart = "";
-        if (Boolean.TRUE.equals(config.getKeepIndustry()) && bracketMeta.getIndustry() != null) {
-            String industryKeyword = bracketMeta.getIndustry();
-            if (remaining.contains(industryKeyword)) {
-                industryPart = industryKeyword;
-                remaining = remaining.replace(industryKeyword, "");
-            }
-        }
+        // 注意：括号内容不保留行业信息（即使主体配置keep-industry=true）
+        // 原因：括号通常是分支机构或补充信息，行业字段不重要且可能泄露敏感信息
+        // String industryPart = "";
+        // if (Boolean.TRUE.equals(config.getKeepIndustry()) && bracketMeta.getIndustry() != null) {
+        //     String industryKeyword = bracketMeta.getIndustry();
+        //     if (remaining.contains(industryKeyword)) {
+        //         industryPart = industryKeyword;
+        //         remaining = remaining.replace(industryKeyword, "");
+        //     }
+        // }
 
         // 4. 中间部分用星号
         if (remaining.length() > 0) {
@@ -325,12 +330,7 @@ public class AsteriskMaskStrategy implements MaskStrategy {
             }
         }
 
-        // 5. 添加行业
-        if (!industryPart.isEmpty()) {
-            parts.add(industryPart);
-        }
-
-        // 6. 添加组织类型
+        // 5. 添加组织类型
         if (!orgTypePart.isEmpty()) {
             parts.add(orgTypePart);
         }
@@ -489,7 +489,7 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         }
 
         // 识别敏感机构类型并获取对应的保留率阈值（优先从配置读取，否则使用枚举默认值）
-        SensitiveOrgType orgType = MaskStrategyHelper.detectSensitiveOrgType(keyword, properties.getKeywordSets());
+        SensitiveOrgType orgType = MaskStrategyHelper.detectSensitiveOrgType(keyword, meta, properties.getKeywordSets());
         double retentionThreshold = getRetentionThresholdForOrgType(orgType);
         if (orgType != SensitiveOrgType.NONE) {
             log.debug("Detected sensitive org type: {} for keyword: {}, retention threshold: {}%",

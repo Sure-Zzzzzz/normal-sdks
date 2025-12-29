@@ -37,15 +37,6 @@ public class KeywordSensitiveMaskHelper {
     private final CompositeEntityRecognizer organizationRecognizer;
     private final SmartKeywordSensitiveProperties properties;
 
-    /**
-     * 构造函数 - 使用构造器注入（统一注入风格）
-     *
-     * @param keywordRegistry        关键词注册表（必须）
-     * @param metaInfoExtractor      元信息提取器（必须）
-     * @param maskStrategyFactory    脱敏策略工厂（必须）
-     * @param organizationRecognizer 组织识别器（必须）
-     * @param properties             配置属性（必须）
-     */
     @Autowired
     public KeywordSensitiveMaskHelper(KeywordRegistry keywordRegistry,
                                       MetaInfoExtractor metaInfoExtractor,
@@ -63,9 +54,6 @@ public class KeywordSensitiveMaskHelper {
 
     /**
      * 脱敏处理（自动识别 + 配置的关键词）
-     *
-     * @param text 原始文本
-     * @return 脱敏后的文本
      */
     public String mask(String text) {
         if (!StringUtils.hasText(text)) {
@@ -75,22 +63,18 @@ public class KeywordSensitiveMaskHelper {
         text = text.trim();
 
         try {
-            // 1. 识别和匹配
             List<RecognizeResult> recognizeResults = organizationRecognizer.recognize(text);
             List<MatchResult> configMatches = matchConfiguredKeywords(text);
 
-            // 2. 合并并排序任务
-            List<MaskTask> tasks = mergeTasks(recognizeResults, configMatches);
+            List<MaskTask> tasks = prepareMaskTasks(recognizeResults, configMatches);
 
             if (tasks.isEmpty()) {
                 log.debug("No organizations or keywords found in text, applying fallback masking");
                 return applyFallbackMasking(text);
             }
 
-            // 3. 执行脱敏
             String maskedResult = executeMasking(text, tasks);
 
-            // 4. 检查是否需要fallback
             if (maskedResult.equals(text)) {
                 log.debug("Masked result equals original text, applying fallback masking");
                 maskedResult = applyFallbackMasking(text);
@@ -100,16 +84,12 @@ public class KeywordSensitiveMaskHelper {
 
         } catch (Exception e) {
             log.error("Failed to mask text", e);
-            throw new MaskException(ErrorCode.MASK_PROCESS_FAILED,
-                    ErrorMessage.MASK_PROCESS_FAILED, e);
+            throw new MaskException(ErrorCode.MASK_PROCESS_FAILED, ErrorMessage.MASK_PROCESS_FAILED, e);
         }
     }
 
     /**
      * 批量脱敏
-     *
-     * @param texts 原始文本列表
-     * @return 脱敏后的文本列表
      */
     public List<String> batchMask(List<String> texts) {
         if (texts == null || texts.isEmpty()) {
@@ -123,181 +103,60 @@ public class KeywordSensitiveMaskHelper {
 
     /**
      * 脱敏并返回详细信息（包含脱敏原因）
-     *
-     * @param text 原始文本
-     * @return 脱敏结果详情
      */
     public MaskResultDetail maskWithDetail(String text) {
         if (!StringUtils.hasText(text)) {
-            return new MaskResultDetail(text, text, Collections.emptyList(), Collections.emptyList(),
-                    PHASE_INPUT + SmartKeywordSensitiveConstant.MESSAGE_EMPTY_TEXT);
+            return createEmptyResultDetail(text);
         }
 
         String originalText = text.trim();
         StringBuilder reasonBuilder = new StringBuilder();
 
         try {
-            // 1. 识别和匹配
+            // 识别和匹配
             List<RecognizeResult> recognizeResults = organizationRecognizer.recognize(originalText);
             List<MatchResult> configMatches = matchConfiguredKeywords(originalText);
 
-            reasonBuilder.append(String.format(PHASE_RECOGNIZE + SmartKeywordSensitiveConstant.TEMPLATE_RECOGNIZE_STATS,
-                    recognizeResults.size(),
-                    recognizeResults.isEmpty() ? "" : SmartKeywordSensitiveConstant.SEPARATOR_COLON_SPACE + recognizeResults.stream()
-                            .map(r -> String.format(SmartKeywordSensitiveConstant.TEMPLATE_ENTITY_SOURCE, r.getEntity(), r.getSource()))
-                            .collect(Collectors.joining(SmartKeywordSensitiveConstant.SEPARATOR_COMMA_SPACE)),
-                    configMatches.size(),
-                    configMatches.isEmpty() ? "" : SmartKeywordSensitiveConstant.SEPARATOR_COLON_SPACE + configMatches.stream()
-                            .map(MatchResult::getKeyword)
-                            .distinct()
-                            .collect(Collectors.joining(SmartKeywordSensitiveConstant.SEPARATOR_COMMA_SPACE))));
+            appendRecognizePhase(reasonBuilder, recognizeResults, configMatches);
 
-            // 2. 合并并排序
-            List<MaskTask> tasks = mergeTasks(recognizeResults, configMatches);
+            // 准备脱敏任务
+            List<MaskTask> tasks = prepareMaskTasks(recognizeResults, configMatches);
 
             if (tasks.isEmpty()) {
-                reasonBuilder.append(SmartKeywordSensitiveConstant.SEPARATOR_PIPE).append(PHASE_FALLBACK).append(SmartKeywordSensitiveConstant.MESSAGE_NO_MATCH_FALLBACK);
-                String maskedText = applyFallbackMasking(originalText);
-                return new MaskResultDetail(originalText, maskedText, recognizeResults, configMatches, reasonBuilder.toString());
+                return handleNoMatchCase(originalText, recognizeResults, configMatches, reasonBuilder);
             }
 
-            // 3. 执行脱敏并记录详情
-            reasonBuilder.append(String.format(SmartKeywordSensitiveConstant.SEPARATOR_PIPE + PHASE_MASK + SmartKeywordSensitiveConstant.TEMPLATE_PROCESS_TASKS, tasks.size()));
+            // 执行脱敏
             String maskedResult = executeMaskingWithDetails(originalText, tasks, reasonBuilder);
 
-            // 4. 检查是否需要fallback
+            // 检查是否需要fallback
             if (maskedResult.equals(originalText)) {
-                reasonBuilder.append(SmartKeywordSensitiveConstant.SEPARATOR_PIPE).append(PHASE_EXCEPTION).append(SmartKeywordSensitiveConstant.MESSAGE_RESULT_SAME_FALLBACK);
-                maskedResult = applyFallbackMasking(originalText);
-            } else {
-                reasonBuilder.append(String.format(SmartKeywordSensitiveConstant.SEPARATOR_PIPE + PHASE_RESULT + SmartKeywordSensitiveConstant.TEMPLATE_MASK_SUCCESS,
-                        originalText.length(), maskedResult.length()));
+                return handleSameResultCase(originalText, recognizeResults, configMatches, reasonBuilder);
             }
+
+            appendResultPhase(reasonBuilder, originalText, maskedResult);
 
             return new MaskResultDetail(originalText, maskedResult, recognizeResults, configMatches, reasonBuilder.toString());
 
         } catch (Exception e) {
             reasonBuilder.append(SmartKeywordSensitiveConstant.SEPARATOR_PIPE).append(PHASE_ERROR).append(e.getMessage());
             log.error("Failed to mask text with details", e);
-            throw new MaskException(ErrorCode.MASK_PROCESS_FAILED,
-                    ErrorMessage.MASK_PROCESS_FAILED, e);
+            throw new MaskException(ErrorCode.MASK_PROCESS_FAILED, ErrorMessage.MASK_PROCESS_FAILED, e);
         }
-    }
-
-    /**
-     * 执行脱敏并记录详情
-     *
-     * @param text          原始文本
-     * @param tasks         脱敏任务列表
-     * @param reasonBuilder 原因构建器
-     * @return 脱敏后的文本
-     */
-    private String executeMaskingWithDetails(String text, List<MaskTask> tasks, StringBuilder reasonBuilder) {
-        StringBuilder result = new StringBuilder(text);
-        List<String> maskDetails = new ArrayList<>(tasks.size());
-
-        for (MaskTask task : tasks) {
-            SmartKeywordSensitiveProperties.RuntimeStrategy strategy = getStrategy(task.keyword, task.isConfigured);
-            MaskStrategy maskStrategy = maskStrategyFactory.getStrategy(strategy.getMaskType());
-
-            // 根据策略声明决定是否需要完整元信息提取
-            MetaInfo meta = maskStrategy.requiresFullMetaExtraction()
-                    ? getMetaInfo(task.keyword)
-                    : null;
-
-            // 根据策略声明决定是否需要保留率计算
-            RetentionRateAdjustment adjustment = null;
-            SmartKeywordSensitiveProperties.RuntimeStrategy actualStrategy = strategy;
-            MaskReasonHelper.RetentionAdjustment reasonAdjustment = null;
-
-            if (maskStrategy.requiresRetentionCalculation() && meta != null) {
-                adjustment = calculateRetentionRateAdjustment(task.keyword, meta, strategy);
-                actualStrategy = adjustment.getAdjustedConfig();
-                reasonAdjustment = convertToReasonAdjustment(adjustment);
-            }
-
-            String masked = maskStrategy.mask(task.keyword, meta, actualStrategy);
-            result.replace(task.startIndex, task.endIndex, masked);
-
-            // 让策略自己构建reason
-            String detail = maskStrategy.buildMaskReason(
-                    task.keyword, task.source, meta, strategy, actualStrategy, reasonAdjustment, masked
-            );
-            maskDetails.add(detail);
-        }
-
-        reasonBuilder.append(String.join(" | ", maskDetails));
-        return result.toString();
-    }
-
-    /**
-     * 构建脱敏原因字符串（用于测试或自定义场景）
-     *
-     * @param keyword      待脱敏关键词
-     * @param meta         元信息
-     * @param config       策略配置
-     * @param maskedResult 脱敏后的结果
-     * @return 脱敏原因字符串
-     */
-    public String buildDetailReason(String keyword, MetaInfo meta, SmartKeywordSensitiveProperties.RuntimeStrategy config, String maskedResult) {
-        // 计算保留率调整
-        RetentionRateAdjustment adjustment = calculateRetentionRateAdjustment(keyword, meta, config);
-        SmartKeywordSensitiveProperties.RuntimeStrategy actualStrategy = adjustment.getAdjustedConfig();
-
-        // 转换为MaskReasonHelper.RetentionAdjustment
-        MaskReasonHelper.RetentionAdjustment reasonAdjustment = convertToReasonAdjustment(adjustment);
-
-        // 使用MaskReasonHelper构建详情
-        return MaskReasonHelper.buildSingleTaskReason(keyword, null, meta, config, actualStrategy, reasonAdjustment, maskedResult);
-    }
-
-    /**
-     * 转换RetentionRateAdjustment为MaskReasonHelper.RetentionAdjustment
-     *
-     * @param adjustment 内部RetentionRateAdjustment对象
-     * @return MaskReasonHelper.RetentionAdjustment对象
-     */
-    private MaskReasonHelper.RetentionAdjustment convertToReasonAdjustment(RetentionRateAdjustment adjustment) {
-        return new MaskReasonHelper.RetentionAdjustment(
-                adjustment.getMainLength(),
-                adjustment.getRegionLength(),
-                adjustment.getIndustryLength(),
-                adjustment.getBrandLength(),
-                adjustment.getOrgTypeLength(),
-                adjustment.getRetainedChars(),
-                adjustment.getFinalRetainedChars(),
-                adjustment.getRetentionRate(),
-                adjustment.getFinalRetentionRate(),
-                adjustment.getOrgType(),
-                adjustment.getThreshold(),
-                adjustment.getDowngradeReason()
-        );
     }
 
     /**
      * 检测文本中的敏感内容（不脱敏）
-     *
-     * @param text 原始文本
-     * @return 检测到的组织机构和关键词列表
      */
     public DetectResult detect(String text) {
         if (!StringUtils.hasText(text)) {
             return new DetectResult(Collections.emptyList(), Collections.emptyList());
         }
 
-        // Trim input to remove leading and trailing whitespaces
         text = text.trim();
 
         List<RecognizeResult> organizations = organizationRecognizer.recognize(text);
-
-        KeywordMatcher configMatcher = keywordRegistry.getMatcher();
-        List<String> keywords = new ArrayList<>();
-        if (configMatcher != null && !configMatcher.isEmpty()) {
-            keywords = configMatcher.match(text).stream()
-                    .map(MatchResult::getKeyword)
-                    .distinct()
-                    .collect(Collectors.toList());
-        }
+        List<String> keywords = extractConfiguredKeywords(text);
 
         return new DetectResult(
                 organizations.stream().map(RecognizeResult::getEntity).collect(Collectors.toList()),
@@ -307,38 +166,36 @@ public class KeywordSensitiveMaskHelper {
 
     /**
      * 判断文本是否包含敏感内容
-     *
-     * @param text 原始文本
-     * @return true表示包含敏感内容
      */
     public boolean contains(String text) {
         if (!StringUtils.hasText(text)) {
             return false;
         }
 
-        // Trim input to remove leading and trailing whitespaces
         text = text.trim();
 
-        // 检查自动识别的组织
-        List<RecognizeResult> organizations = organizationRecognizer.recognize(text);
-        if (!organizations.isEmpty()) {
+        if (!organizationRecognizer.recognize(text).isEmpty()) {
             return true;
         }
 
-        // 检查配置的关键词
         KeywordMatcher configMatcher = keywordRegistry.getMatcher();
-        if (configMatcher != null && !configMatcher.isEmpty()) {
-            return configMatcher.contains(text);
-        }
+        return configMatcher != null && !configMatcher.isEmpty() && configMatcher.contains(text);
+    }
 
-        return false;
+    // ==================== 私有辅助方法 ====================
+
+    /**
+     * 准备脱敏任务（合并、去重、排序）
+     */
+    private List<MaskTask> prepareMaskTasks(List<RecognizeResult> recognizeResults, List<MatchResult> configMatches) {
+        List<MaskTask> tasks = mergeRecognizeAndConfigResults(recognizeResults, configMatches);
+        tasks = removeOverlappingTasks(tasks);
+        tasks.sort(Comparator.comparingInt((MaskTask t) -> t.endIndex).reversed());
+        return tasks;
     }
 
     /**
      * 匹配配置的关键词
-     *
-     * @param text 文本
-     * @return 配置匹配结果列表
      */
     private List<MatchResult> matchConfiguredKeywords(String text) {
         KeywordMatcher configMatcher = keywordRegistry.getMatcher();
@@ -349,51 +206,83 @@ public class KeywordSensitiveMaskHelper {
     }
 
     /**
-     * 合并识别结果和配置匹配结果，并按位置排序
-     *
-     * @param recognizeResults 识别结果
-     * @param configMatches    配置匹配结果
-     * @return 排序后的脱敏任务列表
+     * 提取配置的关键词（用于detect）
      */
-    private List<MaskTask> mergeTasks(List<RecognizeResult> recognizeResults, List<MatchResult> configMatches) {
-        List<MaskTask> tasks = mergeResults(recognizeResults, configMatches);
-        // 去除重叠的匹配，保留最长的
-        tasks = removeOverlappingTasks(tasks);
-        // 从后往前排序，避免替换时的位置偏移
-        tasks.sort(Comparator.comparingInt((MaskTask t) -> t.endIndex).reversed());
-        return tasks;
+    private List<String> extractConfiguredKeywords(String text) {
+        KeywordMatcher configMatcher = keywordRegistry.getMatcher();
+        if (configMatcher == null || configMatcher.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return configMatcher.match(text).stream()
+                .map(MatchResult::getKeyword)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 合并识别结果和配置匹配结果
+     */
+    private List<MaskTask> mergeRecognizeAndConfigResults(List<RecognizeResult> recognizeResults, List<MatchResult> configMatches) {
+        Map<String, MaskTask> taskMap = new LinkedHashMap<>();
+
+        // 添加自动识别的组织
+        for (RecognizeResult result : recognizeResults) {
+            String key = createPositionKey(result.getStartIndex(), result.getEndIndex());
+            taskMap.put(key, new MaskTask(
+                    result.getEntity(),
+                    result.getStartIndex(),
+                    result.getEndIndex(),
+                    false,
+                    result.getSource()
+            ));
+        }
+
+        // 添加配置的关键词（优先级更高，覆盖自动识别的）
+        for (MatchResult match : configMatches) {
+            String key = createPositionKey(match.getStartIndex(), match.getEndIndex());
+            taskMap.put(key, new MaskTask(
+                    match.getKeyword(),
+                    match.getStartIndex(),
+                    match.getEndIndex(),
+                    true,
+                    SmartKeywordSensitiveConstant.SOURCE_TYPE_CONFIG
+            ));
+        }
+
+        return new ArrayList<>(taskMap.values());
+    }
+
+    /**
+     * 创建位置键
+     */
+    private String createPositionKey(int startIndex, int endIndex) {
+        return startIndex + "-" + endIndex;
     }
 
     /**
      * 去除重叠的匹配，保留最长的匹配
-     *
-     * @param tasks 原始任务列表
-     * @return 去重后的任务列表
      */
     private List<MaskTask> removeOverlappingTasks(List<MaskTask> tasks) {
         if (tasks.isEmpty()) {
             return tasks;
         }
 
-        // 按startIndex排序,如果startIndex相同则按长度倒序
+        // 按startIndex排序，如果startIndex相同则按长度倒序
         List<MaskTask> sorted = new ArrayList<>(tasks);
         sorted.sort((t1, t2) -> {
             int cmp = Integer.compare(t1.startIndex, t2.startIndex);
             if (cmp != 0) return cmp;
-            // startIndex相同时,优先保留更长的匹配
-            return Integer.compare(t2.endIndex - t2.startIndex, t1.endIndex - t1.startIndex);
+            return Integer.compare(t2.getLength(), t1.getLength());
         });
 
         List<MaskTask> result = new ArrayList<>();
         int lastEnd = -1;
 
         for (MaskTask task : sorted) {
-            // 如果当前任务的startIndex >= lastEnd,说明不重叠
             if (task.startIndex >= lastEnd) {
                 result.add(task);
                 lastEnd = task.endIndex;
             }
-            // 否则跳过(重叠),保留前面更长的匹配
         }
 
         return result;
@@ -401,64 +290,82 @@ public class KeywordSensitiveMaskHelper {
 
     /**
      * 执行脱敏处理
-     *
-     * @param text  原始文本
-     * @param tasks 脱敏任务列表（已排序）
-     * @return 脱敏后的文本
      */
     private String executeMasking(String text, List<MaskTask> tasks) {
         StringBuilder result = new StringBuilder(text);
 
         for (MaskTask task : tasks) {
-            MetaInfo meta = getMetaInfo(task.keyword);
-            SmartKeywordSensitiveProperties.RuntimeStrategy strategy = getStrategy(task.keyword, task.isConfigured);
-
-            // 根据策略的MaskType选择对应的策略实现
-            MaskStrategy maskStrategy = maskStrategyFactory.getStrategy(strategy.getMaskType());
-            String masked = maskStrategy.mask(task.keyword, meta, strategy);
-
+            String masked = maskSingleTask(task);
             result.replace(task.startIndex, task.endIndex, masked);
 
             log.debug("Masked {} ({}): {} -> {}, position: [{}, {})",
                     task.isConfigured ? "keyword" : "entity",
-                    task.source,
-                    task.keyword, masked, task.startIndex, task.endIndex);
+                    task.source, task.keyword, masked, task.startIndex, task.endIndex);
         }
 
         return result.toString();
     }
 
     /**
-     * 合并识别结果和配置匹配结果
+     * 执行脱敏并记录详情
      */
-    private List<MaskTask> mergeResults(List<RecognizeResult> recognizeResults, List<MatchResult> configMatches) {
-        Map<String, MaskTask> taskMap = new LinkedHashMap<>();
+    private String executeMaskingWithDetails(String text, List<MaskTask> tasks, StringBuilder reasonBuilder) {
+        StringBuilder result = new StringBuilder(text);
+        List<String> maskDetails = new ArrayList<>(tasks.size());
 
-        // 1. 添加自动识别的组织
-        for (RecognizeResult result : recognizeResults) {
-            String key = result.getStartIndex() + "-" + result.getEndIndex();
-            taskMap.put(key, new MaskTask(
-                    result.getEntity(),
-                    result.getStartIndex(),
-                    result.getEndIndex(),
-                    false,  // 不是配置的
-                    result.getSource()
-            ));
+        reasonBuilder.append(String.format(SmartKeywordSensitiveConstant.SEPARATOR_PIPE + PHASE_MASK +
+                SmartKeywordSensitiveConstant.TEMPLATE_PROCESS_TASKS, tasks.size()));
+
+        for (MaskTask task : tasks) {
+            MaskTaskResult taskResult = maskTaskWithDetail(task);
+            result.replace(task.startIndex, task.endIndex, taskResult.masked);
+            maskDetails.add(taskResult.reason);
         }
 
-        // 2. 添加配置的关键词（优先级更高，覆盖自动识别的）
-        for (MatchResult match : configMatches) {
-            String key = match.getStartIndex() + "-" + match.getEndIndex();
-            taskMap.put(key, new MaskTask(
-                    match.getKeyword(),
-                    match.getStartIndex(),
-                    match.getEndIndex(),
-                    true,  // 是配置的
-                    SmartKeywordSensitiveConstant.SOURCE_TYPE_CONFIG
-            ));
+        reasonBuilder.append(String.join(" | ", maskDetails));
+        return result.toString();
+    }
+
+    /**
+     * 脱敏单个任务
+     */
+    private String maskSingleTask(MaskTask task) {
+        MetaInfo meta = getMetaInfo(task.keyword);
+        SmartKeywordSensitiveProperties.RuntimeStrategy strategy = getStrategy(task.keyword, task.isConfigured);
+        MaskStrategy maskStrategy = maskStrategyFactory.getStrategy(strategy.getMaskType());
+
+        return maskStrategy.mask(task.keyword, meta, strategy);
+    }
+
+    /**
+     * 脱敏单个任务并返回详情
+     */
+    private MaskTaskResult maskTaskWithDetail(MaskTask task) {
+        SmartKeywordSensitiveProperties.RuntimeStrategy strategy = getStrategy(task.keyword, task.isConfigured);
+        MaskStrategy maskStrategy = maskStrategyFactory.getStrategy(strategy.getMaskType());
+
+        // 根据策略声明决定是否需要完整元信息提取
+        MetaInfo meta = maskStrategy.requiresFullMetaExtraction()
+                ? getMetaInfo(task.keyword)
+                : null;
+
+        // 根据策略声明决定是否需要保留率计算
+        RetentionRateAdjustment adjustment = null;
+        SmartKeywordSensitiveProperties.RuntimeStrategy actualStrategy = strategy;
+        MaskReasonHelper.RetentionAdjustment reasonAdjustment = null;
+
+        if (maskStrategy.requiresRetentionCalculation() && meta != null) {
+            adjustment = calculateRetentionRateAdjustment(task.keyword, meta, strategy);
+            actualStrategy = adjustment.getAdjustedConfig();
+            reasonAdjustment = adjustment.toReasonAdjustment();
         }
 
-        return new ArrayList<>(taskMap.values());
+        String masked = maskStrategy.mask(task.keyword, meta, actualStrategy);
+        String reason = maskStrategy.buildMaskReason(
+                task.keyword, task.source, meta, strategy, actualStrategy, reasonAdjustment, masked
+        );
+
+        return new MaskTaskResult(masked, reason);
     }
 
     /**
@@ -476,37 +383,345 @@ public class KeywordSensitiveMaskHelper {
      */
     private String applyFallbackMasking(String text) {
         SmartKeywordSensitiveProperties.RuntimeStrategy fallbackStrategy = keywordRegistry.getFallbackStrategy();
-
-        // 根据fallbackStrategy的MaskType选择对应的策略并调用其maskWithFallback方法
         MaskStrategy strategy = maskStrategyFactory.getStrategy(fallbackStrategy.getMaskType());
         return strategy.maskWithFallback(text, fallbackStrategy);
     }
 
     /**
-     * 获取元信息（优先级：用户配置 > MetaInfoExtractor自动提取（含NLP增强））
+     * 获取元信息（优先级：用户配置 > MetaInfoExtractor自动提取）
      */
     private MetaInfo getMetaInfo(String keyword) {
-        // 1. 优先使用用户预定义的元信息
         MetaInfo userMeta = keywordRegistry.getMetaInfo(keyword);
         if (userMeta != null && userMeta.hasValidInfo()) {
             log.debug("Using user-defined meta info for keyword: {}", keyword);
             return userMeta;
         }
 
-        // 2. 使用MetaInfoExtractor自动提取（包含规则引擎 + NLP增强）
         return metaInfoExtractor.extract(keyword);
     }
 
+    /**
+     * 提取主体关键词（去除括号）
+     */
+    private String extractMainKeyword(String keyword, MetaInfo meta) {
+        if (meta.getBracketContent() == null) {
+            return keyword;
+        }
+
+        String bracketStr = buildBracketString(meta);
+        if (bracketStr != null && keyword.contains(bracketStr)) {
+            return keyword.replace(bracketStr, "");
+        }
+
+        return keyword;
+    }
+
+    /**
+     * 构建括号字符串
+     */
+    private String buildBracketString(MetaInfo meta) {
+        if (meta.getLeftBracketType() == null) {
+            return null;
+        }
+
+        String leftBracket = BracketType.CHINESE.name().equals(meta.getLeftBracketType())
+                ? BracketType.CHINESE.getLeftBracket()
+                : BracketType.ENGLISH.getLeftBracket();
+
+        String rightBracket = BracketType.CHINESE.name().equals(meta.getRightBracketType())
+                ? BracketType.CHINESE.getRightBracket()
+                : BracketType.ENGLISH.getRightBracket();
+
+        return leftBracket + meta.getBracketContent() + rightBracket;
+    }
+
+    /**
+     * 计算保留率调整
+     */
+    private RetentionRateAdjustment calculateRetentionRateAdjustment(String keyword, MetaInfo meta,
+                                                                     SmartKeywordSensitiveProperties.RuntimeStrategy config) {
+        if (meta == null || !meta.hasValidInfo()) {
+            return RetentionRateAdjustment.noAdjustment(config);
+        }
+
+        // 识别敏感机构类型
+        SensitiveOrgType orgType = MaskStrategyHelper.detectSensitiveOrgType(keyword, meta, properties.getKeywordSets());
+        double retentionThreshold = orgType.getRetentionThreshold();
+
+        // 计算主体部分
+        String mainKeyword = extractMainKeyword(keyword, meta);
+        int totalLength = mainKeyword.length();
+
+        // 计算初始保留率
+        RetentionCalculator calculator = new RetentionCalculator(mainKeyword, meta, config);
+        int retainedChars = calculator.calculateRetainedCharacters();
+        double retentionRate = totalLength > 0 ? (double) retainedChars / totalLength : 0.0;
+
+        // 如果保留率低于阈值，不需要调整
+        if (retentionRate < retentionThreshold) {
+            return RetentionRateAdjustment.belowThreshold(
+                    config, totalLength, calculator.getComponentLengths(),
+                    retainedChars, retentionRate, orgType, retentionThreshold
+            );
+        }
+
+        // 需要降级
+        RetentionRateAdjustment adjustment = performDowngrade(
+                config, mainKeyword, meta, totalLength, calculator.getComponentLengths(),
+                retainedChars, retentionRate, orgType, retentionThreshold
+        );
+
+        log.debug("Config adjusted for '{}' ({}): {:.1f}% → {:.1f}% (threshold={:.0f}%)",
+                keyword, orgType, retentionRate * 100,
+                adjustment.getFinalRetentionRate() * 100, retentionThreshold * 100);
+
+        return adjustment;
+    }
+
+    /**
+     * 执行降级策略（移除日志）
+     */
+    private RetentionRateAdjustment performDowngrade(SmartKeywordSensitiveProperties.RuntimeStrategy config,
+                                                     String mainKeyword, MetaInfo meta, int totalLength,
+                                                     ComponentLengths originalLengths, int retainedChars,
+                                                     double retentionRate, SensitiveOrgType orgType,
+                                                     double retentionThreshold) {
+        SmartKeywordSensitiveProperties.RuntimeStrategy adjustedConfig = config.copy();
+        StringBuilder downgradeReason = new StringBuilder();
+
+        // 第一级降级：关闭地域
+        adjustedConfig.setKeepRegion(false);
+        RetentionCalculator calculator = new RetentionCalculator(mainKeyword, meta, adjustedConfig);
+        int newRetainedChars = calculator.calculateRetainedCharacters();
+        double newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
+
+        downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_FIRST_DOWNGRADE,
+                retentionRate * 100, newRetentionRate * 100));
+
+        // 第二级降级：关闭行业
+        if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+            adjustedConfig.setKeepIndustry(false);
+            calculator = new RetentionCalculator(mainKeyword, meta, adjustedConfig);
+            newRetainedChars = calculator.calculateRetainedCharacters();
+            double afterSecondDowngrade = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
+
+            downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_SECOND_DOWNGRADE,
+                    newRetentionRate * 100, afterSecondDowngrade * 100));
+            newRetentionRate = afterSecondDowngrade;
+
+            // 第三级降级：关闭组织类型
+            if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+                adjustedConfig.setKeepOrgType(false);
+                calculator = new RetentionCalculator(mainKeyword, meta, adjustedConfig);
+                newRetainedChars = calculator.calculateRetainedCharacters();
+                double afterThirdDowngrade = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
+
+                downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_THIRD_DOWNGRADE,
+                        newRetentionRate * 100, afterThirdDowngrade * 100));
+                newRetentionRate = afterThirdDowngrade;
+            }
+        }
+
+        return new RetentionRateAdjustment(adjustedConfig, totalLength, originalLengths,
+                retainedChars, newRetainedChars, retentionRate, newRetentionRate,
+                orgType, retentionThreshold, downgradeReason.toString());
+    }
+
+    // ==================== Detail相关辅助方法 ====================
+
+    private MaskResultDetail createEmptyResultDetail(String text) {
+        return new MaskResultDetail(text, text, Collections.emptyList(), Collections.emptyList(),
+                PHASE_INPUT + SmartKeywordSensitiveConstant.MESSAGE_EMPTY_TEXT);
+    }
+
+    private void appendRecognizePhase(StringBuilder reasonBuilder, List<RecognizeResult> recognizeResults,
+                                      List<MatchResult> configMatches) {
+        reasonBuilder.append(String.format(PHASE_RECOGNIZE + SmartKeywordSensitiveConstant.TEMPLATE_RECOGNIZE_STATS,
+                recognizeResults.size(),
+                formatRecognizeResults(recognizeResults),
+                configMatches.size(),
+                formatConfigMatches(configMatches)));
+    }
+
+    private String formatRecognizeResults(List<RecognizeResult> results) {
+        if (results.isEmpty()) {
+            return "";
+        }
+        return SmartKeywordSensitiveConstant.SEPARATOR_COLON_SPACE + results.stream()
+                .map(r -> String.format(SmartKeywordSensitiveConstant.TEMPLATE_ENTITY_SOURCE, r.getEntity(), r.getSource()))
+                .collect(Collectors.joining(SmartKeywordSensitiveConstant.SEPARATOR_COMMA_SPACE));
+    }
+
+    private String formatConfigMatches(List<MatchResult> matches) {
+        if (matches.isEmpty()) {
+            return "";
+        }
+        return SmartKeywordSensitiveConstant.SEPARATOR_COLON_SPACE + matches.stream()
+                .map(MatchResult::getKeyword)
+                .distinct()
+                .collect(Collectors.joining(SmartKeywordSensitiveConstant.SEPARATOR_COMMA_SPACE));
+    }
+
+    private MaskResultDetail handleNoMatchCase(String originalText, List<RecognizeResult> recognizeResults,
+                                               List<MatchResult> configMatches, StringBuilder reasonBuilder) {
+        reasonBuilder.append(SmartKeywordSensitiveConstant.SEPARATOR_PIPE)
+                .append(PHASE_FALLBACK)
+                .append(SmartKeywordSensitiveConstant.MESSAGE_NO_MATCH_FALLBACK);
+
+        String maskedText = applyFallbackMasking(originalText);
+        return new MaskResultDetail(originalText, maskedText, recognizeResults, configMatches, reasonBuilder.toString());
+    }
+
+    private MaskResultDetail handleSameResultCase(String originalText, List<RecognizeResult> recognizeResults,
+                                                  List<MatchResult> configMatches, StringBuilder reasonBuilder) {
+        reasonBuilder.append(SmartKeywordSensitiveConstant.SEPARATOR_PIPE)
+                .append(PHASE_EXCEPTION)
+                .append(SmartKeywordSensitiveConstant.MESSAGE_RESULT_SAME_FALLBACK);
+
+        String maskedResult = applyFallbackMasking(originalText);
+        return new MaskResultDetail(originalText, maskedResult, recognizeResults, configMatches, reasonBuilder.toString());
+    }
+
+    private void appendResultPhase(StringBuilder reasonBuilder, String originalText, String maskedText) {
+        reasonBuilder.append(String.format(SmartKeywordSensitiveConstant.SEPARATOR_PIPE + PHASE_RESULT +
+                        SmartKeywordSensitiveConstant.TEMPLATE_MASK_SUCCESS,
+                originalText.length(), maskedText.length()));
+    }
+
+    // ==================== 内部类 ====================
+
+    /**
+     * 保留率计算器
+     */
+    private static class RetentionCalculator {
+        private final String mainKeyword;
+        private final MetaInfo meta;
+        private final SmartKeywordSensitiveProperties.RuntimeStrategy config;
+        private final ComponentLengths componentLengths;
+
+        public RetentionCalculator(String mainKeyword, MetaInfo meta,
+                                   SmartKeywordSensitiveProperties.RuntimeStrategy config) {
+            this.mainKeyword = mainKeyword;
+            this.meta = meta;
+            this.config = config;
+            this.componentLengths = new ComponentLengths();
+        }
+
+        public int calculateRetainedCharacters() {
+            if (mainKeyword == null || mainKeyword.isEmpty()) {
+                return 0;
+            }
+
+            boolean[] keepMask = new boolean[mainKeyword.length()];
+
+            markRegion(keepMask);
+            markIndustry(keepMask);
+            markBrand(keepMask);
+            markOrgType(keepMask);
+
+            return countMarkedCharacters(keepMask);
+        }
+
+        private void markRegion(boolean[] keepMask) {
+            if (!Boolean.TRUE.equals(config.getKeepRegion()) || meta.getRegion() == null) {
+                return;
+            }
+
+            String region = meta.getRegionForCalculation();
+            if (region != null) {
+                int index = mainKeyword.indexOf(region);
+                if (index >= 0) {
+                    componentLengths.regionLength = region.length();
+                    markRange(keepMask, index, region.length());
+                }
+            }
+        }
+
+        private void markIndustry(boolean[] keepMask) {
+            if (!Boolean.TRUE.equals(config.getKeepIndustry()) || meta.getIndustry() == null) {
+                return;
+            }
+
+            String industry = meta.getIndustryForCalculation();
+            if (industry != null) {
+                int index = mainKeyword.indexOf(industry);
+                if (index >= 0) {
+                    componentLengths.industryLength = industry.length();
+                    markRange(keepMask, index, industry.length());
+                }
+            }
+        }
+
+        private void markBrand(boolean[] keepMask) {
+            if (!Boolean.TRUE.equals(config.getKeepBrand()) || meta.getBrand() == null) {
+                return;
+            }
+
+            String brand = meta.getBrandForCalculation();
+            if (brand != null) {
+                int index = mainKeyword.indexOf(brand);
+                if (index >= 0) {
+                    componentLengths.brandLength = brand.length();
+                    markRange(keepMask, index, brand.length());
+                }
+            }
+        }
+
+        private void markOrgType(boolean[] keepMask) {
+            if (!Boolean.TRUE.equals(config.getKeepOrgType()) || meta.getOrgType() == null) {
+                return;
+            }
+
+            String orgType = meta.getOrgTypeForCalculation();
+            if (orgType != null) {
+                int index = mainKeyword.lastIndexOf(orgType);
+                if (index >= 0) {
+                    componentLengths.orgTypeLength = orgType.length();
+                    markRange(keepMask, index, orgType.length());
+                }
+            }
+        }
+
+        private void markRange(boolean[] keepMask, int start, int length) {
+            for (int i = start; i < start + length && i < keepMask.length; i++) {
+                keepMask[i] = true;
+            }
+        }
+
+        private int countMarkedCharacters(boolean[] keepMask) {
+            int count = 0;
+            for (boolean keep : keepMask) {
+                if (keep) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public ComponentLengths getComponentLengths() {
+            return componentLengths;
+        }
+    }
+
+    /**
+     * 组件长度信息
+     */
+    private static class ComponentLengths {
+        int regionLength = 0;
+        int industryLength = 0;
+        int brandLength = 0;
+        int orgTypeLength = 0;
+    }
 
     /**
      * 脱敏任务
      */
     private static class MaskTask {
-        String keyword;
-        int startIndex;
-        int endIndex;
-        boolean isConfigured;  // 是否来自配置文件
-        String source;  // RULE / NLP / CONFIG
+        final String keyword;
+        final int startIndex;
+        final int endIndex;
+        final boolean isConfigured;
+        final String source;
 
         MaskTask(String keyword, int startIndex, int endIndex, boolean isConfigured, String source) {
             this.keyword = keyword;
@@ -515,290 +730,23 @@ public class KeywordSensitiveMaskHelper {
             this.isConfigured = isConfigured;
             this.source = source;
         }
+
+        int getLength() {
+            return endIndex - startIndex;
+        }
     }
 
     /**
-     * 脱敏结果详情
+     * 脱敏任务结果
      */
-    public static class MaskResultDetail {
-        private final String originalText;
-        private final String maskedText;
-        private final List<RecognizeResult> recognizedOrganizations;
-        private final List<MatchResult> configuredKeywords;
-        private final String reason;
+    private static class MaskTaskResult {
+        final String masked;
+        final String reason;
 
-        public MaskResultDetail(String originalText, String maskedText,
-                                List<RecognizeResult> recognizedOrganizations, List<MatchResult> configuredKeywords,
-                                String reason) {
-            this.originalText = originalText;
-            this.maskedText = maskedText;
-            this.recognizedOrganizations = recognizedOrganizations;
-            this.configuredKeywords = configuredKeywords;
+        MaskTaskResult(String masked, String reason) {
+            this.masked = masked;
             this.reason = reason;
         }
-
-        public String getOriginalText() {
-            return originalText;
-        }
-
-        public String getMaskedText() {
-            return maskedText;
-        }
-
-        public List<RecognizeResult> getRecognizedOrganizations() {
-            return recognizedOrganizations;
-        }
-
-        public List<MatchResult> getConfiguredKeywords() {
-            return configuredKeywords;
-        }
-
-        public String getReason() {
-            return reason;
-        }
-
-        public int getTotalMatchCount() {
-            return recognizedOrganizations.size() + configuredKeywords.size();
-        }
-
-        @Override
-        public String toString() {
-            return "MaskResultDetail{" +
-                    "originalText='" + originalText + '\'' +
-                    ", maskedText='" + maskedText + '\'' +
-                    ", recognizedOrgs=" + recognizedOrganizations.size() +
-                    ", configuredKeywords=" + configuredKeywords.size() +
-                    ", reason='" + reason + '\'' +
-                    '}';
-        }
-    }
-
-    /**
-     * 根据保留率调整配置，防止100%保留导致脱敏失效
-     * 此方法与DefaultMaskStrategy中的逻辑保持一致
-     *
-     * @param keyword 待脱敏关键词
-     * @param meta    元信息
-     * @param config  原始策略配置
-     * @return 保留率调整详情
-     */
-    private RetentionRateAdjustment calculateRetentionRateAdjustment(String keyword, MetaInfo meta, SmartKeywordSensitiveProperties.RuntimeStrategy config) {
-        // 如果没有有效元信息，不需要调整
-        if (meta == null || !meta.hasValidInfo()) {
-            return new RetentionRateAdjustment(config, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, SensitiveOrgType.NONE, 0.0, SmartKeywordSensitiveConstant.MESSAGE_NO_ADJUSTMENT);
-        }
-
-        // 识别敏感机构类型并获取对应的保留率阈值
-        SensitiveOrgType orgType = MaskStrategyHelper.detectSensitiveOrgType(keyword, properties.getKeywordSets());
-        double retentionThreshold = orgType.getRetentionThreshold();
-
-        // 计算主体部分的保留率（不考虑括号内容）
-        String mainKeyword = keyword;
-        int totalLength = keyword.length();
-
-        // 如果有括号，去除括号部分计算主体长度
-        if (meta.getBracketContent() != null) {
-            String bracketStr = null;
-            if (meta.getLeftBracketType() != null) {
-                String leftBracket = BracketType.CHINESE.name().equals(meta.getLeftBracketType()) ? BracketType.CHINESE.getLeftBracket() : BracketType.ENGLISH.getLeftBracket();
-                String rightBracket = BracketType.CHINESE.name().equals(meta.getRightBracketType()) ? BracketType.CHINESE.getRightBracket() : BracketType.ENGLISH.getRightBracket();
-                bracketStr = leftBracket + meta.getBracketContent() + rightBracket;
-            }
-            if (bracketStr != null && keyword.contains(bracketStr)) {
-                mainKeyword = keyword.replace(bracketStr, "");
-                totalLength = mainKeyword.length();
-            }
-        }
-
-        // 计算各元信息在主体中的字符数（使用boolean数组避免重复计算重叠部分）
-        boolean[] keepMask = new boolean[totalLength];
-        int regionLength = 0;
-        int industryLength = 0;
-        int brandLength = 0;
-        int orgTypeLength = 0;
-
-        if (Boolean.TRUE.equals(config.getKeepRegion()) && meta.getRegion() != null) {
-            // 使用ForCalculation方法获取实际在文本中存在的关键词
-            String region = meta.getRegionForCalculation();
-            if (region != null) {
-                int index = mainKeyword.indexOf(region);
-                if (index >= 0) {
-                    regionLength = region.length();
-                    for (int i = index; i < index + region.length() && i < totalLength; i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        if (Boolean.TRUE.equals(config.getKeepIndustry()) && meta.getIndustry() != null) {
-            // 使用ForCalculation方法获取实际在文本中存在的关键词
-            String industry = meta.getIndustryForCalculation();
-            if (industry != null) {
-                int index = mainKeyword.indexOf(industry);
-                if (index >= 0) {
-                    industryLength = industry.length();
-                    for (int i = index; i < index + industry.length() && i < totalLength; i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        if (Boolean.TRUE.equals(config.getKeepBrand()) && meta.getBrand() != null) {
-            // 使用ForCalculation方法获取实际在文本中存在的关键词
-            String brand = meta.getBrandForCalculation();
-            if (brand != null) {
-                int index = mainKeyword.indexOf(brand);
-                if (index >= 0) {
-                    brandLength = brand.length();
-                    for (int i = index; i < index + brand.length() && i < totalLength; i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        if (Boolean.TRUE.equals(config.getKeepOrgType()) && meta.getOrgType() != null) {
-            // 使用ForCalculation方法获取实际在文本中存在的关键词
-            String orgTypeStr = meta.getOrgTypeForCalculation();
-            if (orgTypeStr != null) {
-                int index = mainKeyword.lastIndexOf(orgTypeStr);  // 使用lastIndexOf避免匹配到中间的
-                if (index >= 0) {
-                    orgTypeLength = orgTypeStr.length();
-                    for (int i = index; i < index + orgTypeStr.length() && i < totalLength; i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        // 统计实际保留的字符数（去除重叠）
-        int retainedChars = 0;
-        for (boolean keep : keepMask) {
-            if (keep) {
-                retainedChars++;
-            }
-        }
-
-        // 计算保留率
-        double retentionRate = totalLength > 0 ? (double) retainedChars / totalLength : 0.0;
-
-        // 如果保留率低于阈值，不需要调整
-        if (retentionRate < retentionThreshold) {
-            return new RetentionRateAdjustment(config, totalLength, regionLength, industryLength, brandLength, orgTypeLength, retainedChars, retainedChars, retentionRate, retentionRate, orgType, retentionThreshold, SmartKeywordSensitiveConstant.MESSAGE_RETENTION_BELOW_THRESHOLD);
-        }
-
-        // 需要降级，创建新的配置对象
-        SmartKeywordSensitiveProperties.RuntimeStrategy adjustedConfig = config.copy();
-        StringBuilder downgradeReason = new StringBuilder();
-
-        // 第一级降级：关闭地域保留，重新计算保留字符数
-        adjustedConfig.setKeepRegion(false);
-        int newRetainedChars = calculateRetainedChars(mainKeyword, meta, adjustedConfig);
-        double newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
-
-        downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_FIRST_DOWNGRADE, retentionRate * 100, newRetentionRate * 100));
-
-        // 如果降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，继续降级
-        if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
-            adjustedConfig.setKeepIndustry(false);
-            newRetainedChars = calculateRetainedChars(mainKeyword, meta, adjustedConfig);
-            double afterSecondDowngrade = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
-            downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_SECOND_DOWNGRADE, newRetentionRate * 100, afterSecondDowngrade * 100));
-            newRetentionRate = afterSecondDowngrade;
-
-            // 如果第二级降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，第三级降级关闭组织类型保留
-            if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
-                adjustedConfig.setKeepOrgType(false);
-                newRetainedChars = calculateRetainedChars(mainKeyword, meta, adjustedConfig);
-                double afterThirdDowngrade = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
-                downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_THIRD_DOWNGRADE, newRetentionRate * 100, afterThirdDowngrade * 100));
-                newRetentionRate = afterThirdDowngrade;
-            }
-        }
-
-        log.debug("Config adjusted for '{}' ({}): {:.1f}% → {:.1f}% (threshold={:.0f}%)",
-                keyword, orgType, retentionRate * 100, newRetentionRate * 100, retentionThreshold * 100);
-
-        return new RetentionRateAdjustment(adjustedConfig, totalLength, regionLength, industryLength, brandLength, orgTypeLength, retainedChars, newRetainedChars, retentionRate, newRetentionRate, orgType, retentionThreshold, downgradeReason.toString());
-    }
-
-    /**
-     * 计算根据配置实际会保留的字符数（使用boolean数组避免重复计算重叠部分）
-     *
-     * @param mainKeyword 主体关键词（不含括号）
-     * @param meta        元信息
-     * @param config      策略配置
-     * @return 实际保留的字符数
-     */
-    private int calculateRetainedChars(String mainKeyword, MetaInfo meta, SmartKeywordSensitiveProperties.RuntimeStrategy config) {
-        if (mainKeyword == null || mainKeyword.isEmpty()) {
-            return 0;
-        }
-
-        boolean[] keepMask = new boolean[mainKeyword.length()];
-
-        // 地域 - 使用ForCalculation方法获取实际在文本中存在的关键词
-        if (Boolean.TRUE.equals(config.getKeepRegion()) && meta.getRegion() != null) {
-            String region = meta.getRegionForCalculation();
-            if (region != null) {
-                int index = mainKeyword.indexOf(region);
-                if (index >= 0) {
-                    for (int i = index; i < index + region.length() && i < mainKeyword.length(); i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        // 行业 - 使用ForCalculation方法获取实际在文本中存在的关键词
-        if (Boolean.TRUE.equals(config.getKeepIndustry()) && meta.getIndustry() != null) {
-            String industry = meta.getIndustryForCalculation();
-            if (industry != null) {
-                int index = mainKeyword.indexOf(industry);
-                if (index >= 0) {
-                    for (int i = index; i < index + industry.length() && i < mainKeyword.length(); i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        // 品牌 - 使用ForCalculation方法获取实际在文本中存在的关键词
-        if (Boolean.TRUE.equals(config.getKeepBrand()) && meta.getBrand() != null) {
-            String brand = meta.getBrandForCalculation();
-            if (brand != null) {
-                int index = mainKeyword.indexOf(brand);
-                if (index >= 0) {
-                    for (int i = index; i < index + brand.length() && i < mainKeyword.length(); i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        // 组织类型 - 使用ForCalculation方法获取实际在文本中存在的关键词
-        if (Boolean.TRUE.equals(config.getKeepOrgType()) && meta.getOrgType() != null) {
-            String orgType = meta.getOrgTypeForCalculation();
-            if (orgType != null) {
-                int index = mainKeyword.lastIndexOf(orgType);
-                if (index >= 0) {
-                    for (int i = index; i < index + orgType.length() && i < mainKeyword.length(); i++) {
-                        keepMask[i] = true;
-                    }
-                }
-            }
-        }
-
-        // 统计保留字符数
-        int count = 0;
-        for (boolean keep : keepMask) {
-            if (keep) {
-                count++;
-            }
-        }
-        return count;
     }
 
     /**
@@ -819,13 +767,17 @@ public class KeywordSensitiveMaskHelper {
         private final double threshold;
         private final String downgradeReason;
 
-        public RetentionRateAdjustment(SmartKeywordSensitiveProperties.RuntimeStrategy adjustedConfig, int mainLength, int regionLength, int industryLength, int brandLength, int orgTypeLength, int retainedChars, int finalRetainedChars, double retentionRate, double finalRetentionRate, SensitiveOrgType orgType, double threshold, String downgradeReason) {
+        public RetentionRateAdjustment(SmartKeywordSensitiveProperties.RuntimeStrategy adjustedConfig,
+                                       int mainLength, ComponentLengths lengths,
+                                       int retainedChars, int finalRetainedChars,
+                                       double retentionRate, double finalRetentionRate,
+                                       SensitiveOrgType orgType, double threshold, String downgradeReason) {
             this.adjustedConfig = adjustedConfig;
             this.mainLength = mainLength;
-            this.regionLength = regionLength;
-            this.industryLength = industryLength;
-            this.brandLength = brandLength;
-            this.orgTypeLength = orgTypeLength;
+            this.regionLength = lengths.regionLength;
+            this.industryLength = lengths.industryLength;
+            this.brandLength = lengths.brandLength;
+            this.orgTypeLength = lengths.orgTypeLength;
             this.retainedChars = retainedChars;
             this.finalRetainedChars = finalRetainedChars;
             this.retentionRate = retentionRate;
@@ -833,6 +785,38 @@ public class KeywordSensitiveMaskHelper {
             this.orgType = orgType;
             this.threshold = threshold;
             this.downgradeReason = downgradeReason;
+        }
+
+        /**
+         * 创建无需调整的结果
+         */
+        public static RetentionRateAdjustment noAdjustment(SmartKeywordSensitiveProperties.RuntimeStrategy config) {
+            return new RetentionRateAdjustment(config, 0, new ComponentLengths(),
+                    0, 0, 0.0, 0.0, SensitiveOrgType.NONE, 0.0,
+                    SmartKeywordSensitiveConstant.MESSAGE_NO_ADJUSTMENT);
+        }
+
+        /**
+         * 创建低于阈值的结果
+         */
+        public static RetentionRateAdjustment belowThreshold(SmartKeywordSensitiveProperties.RuntimeStrategy config,
+                                                             int mainLength, ComponentLengths lengths,
+                                                             int retainedChars, double retentionRate,
+                                                             SensitiveOrgType orgType, double threshold) {
+            return new RetentionRateAdjustment(config, mainLength, lengths,
+                    retainedChars, retainedChars, retentionRate, retentionRate,
+                    orgType, threshold, SmartKeywordSensitiveConstant.MESSAGE_RETENTION_BELOW_THRESHOLD);
+        }
+
+        /**
+         * 转换为MaskReasonHelper的RetentionAdjustment
+         */
+        public MaskReasonHelper.RetentionAdjustment toReasonAdjustment() {
+            return new MaskReasonHelper.RetentionAdjustment(
+                    mainLength, regionLength, industryLength, brandLength, orgTypeLength,
+                    retainedChars, finalRetainedChars, retentionRate, finalRetentionRate,
+                    orgType.toString(), threshold, downgradeReason
+            );
         }
 
         public SmartKeywordSensitiveProperties.RuntimeStrategy getAdjustedConfig() {
@@ -889,6 +873,63 @@ public class KeywordSensitiveMaskHelper {
     }
 
     /**
+     * 脱敏结果详情
+     */
+    public static class MaskResultDetail {
+        private final String originalText;
+        private final String maskedText;
+        private final List<RecognizeResult> recognizedOrganizations;
+        private final List<MatchResult> configuredKeywords;
+        private final String reason;
+
+        public MaskResultDetail(String originalText, String maskedText,
+                                List<RecognizeResult> recognizedOrganizations,
+                                List<MatchResult> configuredKeywords,
+                                String reason) {
+            this.originalText = originalText;
+            this.maskedText = maskedText;
+            this.recognizedOrganizations = recognizedOrganizations;
+            this.configuredKeywords = configuredKeywords;
+            this.reason = reason;
+        }
+
+        public String getOriginalText() {
+            return originalText;
+        }
+
+        public String getMaskedText() {
+            return maskedText;
+        }
+
+        public List<RecognizeResult> getRecognizedOrganizations() {
+            return recognizedOrganizations;
+        }
+
+        public List<MatchResult> getConfiguredKeywords() {
+            return configuredKeywords;
+        }
+
+        public String getReason() {
+            return reason;
+        }
+
+        public int getTotalMatchCount() {
+            return recognizedOrganizations.size() + configuredKeywords.size();
+        }
+
+        @Override
+        public String toString() {
+            return "MaskResultDetail{" +
+                    "originalText='" + originalText + '\'' +
+                    ", maskedText='" + maskedText + '\'' +
+                    ", recognizedOrgs=" + recognizedOrganizations.size() +
+                    ", configuredKeywords=" + configuredKeywords.size() +
+                    ", reason='" + reason + '\'' +
+                    '}';
+        }
+    }
+
+    /**
      * 检测结果
      */
     public static class DetectResult {
@@ -926,4 +967,31 @@ public class KeywordSensitiveMaskHelper {
                     '}';
         }
     }
+
+// ==================== 公共API方法 ====================
+
+    /**
+     * 构建脱敏原因字符串（用于测试或自定义场景）
+     *
+     * @param keyword      待脱敏关键词
+     * @param meta         元信息
+     * @param config       策略配置
+     * @param maskedResult 脱敏后的结果
+     * @return 脱敏原因字符串
+     */
+    public String buildDetailReason(String keyword, MetaInfo meta,
+                                    SmartKeywordSensitiveProperties.RuntimeStrategy config,
+                                    String maskedResult) {
+        // 计算保留率调整
+        RetentionRateAdjustment adjustment = calculateRetentionRateAdjustment(keyword, meta, config);
+        SmartKeywordSensitiveProperties.RuntimeStrategy actualStrategy = adjustment.getAdjustedConfig();
+
+        // 转换为MaskReasonHelper.RetentionAdjustment（使用新的toReasonAdjustment方法）
+        MaskReasonHelper.RetentionAdjustment reasonAdjustment = adjustment.toReasonAdjustment();
+
+        // 使用MaskReasonHelper构建详情
+        return MaskReasonHelper.buildSingleTaskReason(keyword, null, meta, config,
+                actualStrategy, reasonAdjustment, maskedResult);
+    }
+
 }

@@ -579,6 +579,41 @@ public final class SmartKeywordSensitiveConstant {
     public static final String NARRATIVE_ARROW = " → ";
 
     /**
+     * 叙述：括号内容脱敏规则标题
+     */
+    public static final String NARRATIVE_BRACKET_RULE_TITLE = "括号内容脱敏规则：";
+
+    /**
+     * 叙述：完整保留括号内容
+     */
+    public static final String NARRATIVE_KEEP_FULL_BRACKET = "完整保留括号内容（keep-bracket=true）";
+
+    /**
+     * 叙述：智能脱敏括号内容
+     */
+    public static final String NARRATIVE_SMART_MASK_BRACKET = "智能脱敏括号内容";
+
+    /**
+     * 叙述：全部脱敏
+     */
+    public static final String NARRATIVE_MASK_ALL = "（全部脱敏）";
+
+    /**
+     * 叙述：不保留XX（用于括号内容说明）
+     */
+    public static final String NARRATIVE_NOT_KEEP_BRACKET_DETAIL = "，不保留";
+
+    /**
+     * 叙述：和（连接词）
+     */
+    public static final String NARRATIVE_AND = "和";
+
+    /**
+     * 叙述：左括号
+     */
+    public static final String NARRATIVE_LEFT_PAREN = "（";
+
+    /**
      * 叙述：分隔线（用于分隔自然语言和结构化数据）
      */
     public static final String NARRATIVE_SEPARATOR = "\n\n========== 详细数据 ==========";
