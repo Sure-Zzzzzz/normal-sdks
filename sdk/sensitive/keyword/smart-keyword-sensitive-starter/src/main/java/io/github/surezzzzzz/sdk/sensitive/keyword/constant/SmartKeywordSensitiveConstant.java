@@ -158,6 +158,16 @@ public final class SmartKeywordSensitiveConstant {
     public static final String DEFAULT_MASK_TYPE = MaskType.ASTERISK.getCode();
 
     /**
+     * 固定星号数量（keep-length=false时使用）
+     */
+    public static final int DEFAULT_FIXED_MASK_LENGTH = 3;
+
+    /**
+     * 括号内容固定星号数量（未配置时继承自fixed-mask-length）
+     */
+    public static final Integer DEFAULT_FIXED_BRACKET_MASK_LENGTH = null;  // null表示继承fixedMaskLength
+
+    /**
      * NLP超时时间（毫秒）
      */
     public static final int DEFAULT_NLP_TIMEOUT_MS = 1000;

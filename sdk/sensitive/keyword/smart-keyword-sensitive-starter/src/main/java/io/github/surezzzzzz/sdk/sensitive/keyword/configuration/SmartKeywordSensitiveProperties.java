@@ -210,15 +210,7 @@ public class SmartKeywordSensitiveProperties {
                             String.join(", ", MaskType.getAllCodes())));
         }
 
-        // 校验占位符
-        if (StringUtils.hasText(strategy.getMaskType())) {
-            MaskType maskType = MaskType.fromCode(strategy.getMaskType());
-            if (maskType == MaskType.PLACEHOLDER
-                    && !StringUtils.hasText(strategy.getPlaceholder())) {
-                throw new ConfigurationException(ErrorCode.CONFIG_PLACEHOLDER_INVALID,
-                        prefix + String.format(ErrorMessage.CONFIG_PLACEHOLDER_INVALID, ""));
-            }
-        }
+        // 不再校验占位符是否为空，因为toRuntimeStrategy()会自动填充默认值
     }
 
     /**
@@ -267,6 +259,16 @@ public class SmartKeywordSensitiveProperties {
          * 是否保留原始长度信息（星号数量等于原文长度）
          */
         private Boolean keepLength;
+
+        /**
+         * 固定星号数量（keepLength=false时使用）
+         */
+        private Integer fixedMaskLength;
+
+        /**
+         * 括号内容固定星号数量（未配置时继承自fixedMaskLength）
+         */
+        private Integer fixedBracketMaskLength;
 
         /**
          * Fallback脱敏短文本长度阈值
@@ -323,6 +325,8 @@ public class SmartKeywordSensitiveProperties {
             merged.maskType = this.maskType != null ? this.maskType : defaultConfig.maskType;
             merged.placeholder = this.placeholder != null ? this.placeholder : defaultConfig.placeholder;
             merged.keepLength = this.keepLength != null ? this.keepLength : defaultConfig.keepLength;
+            merged.fixedMaskLength = this.fixedMaskLength != null ? this.fixedMaskLength : defaultConfig.fixedMaskLength;
+            merged.fixedBracketMaskLength = this.fixedBracketMaskLength != null ? this.fixedBracketMaskLength : defaultConfig.fixedBracketMaskLength;
             merged.fallbackLengthThresholdShort = this.fallbackLengthThresholdShort != null ? this.fallbackLengthThresholdShort : defaultConfig.fallbackLengthThresholdShort;
             merged.fallbackLengthThresholdMedium = this.fallbackLengthThresholdMedium != null ? this.fallbackLengthThresholdMedium : defaultConfig.fallbackLengthThresholdMedium;
             merged.fallbackLengthThresholdLong = this.fallbackLengthThresholdLong != null ? this.fallbackLengthThresholdLong : defaultConfig.fallbackLengthThresholdLong;
@@ -371,6 +375,8 @@ public class SmartKeywordSensitiveProperties {
             copied.maskType = this.maskType;
             copied.placeholder = this.placeholder;
             copied.keepLength = this.keepLength;
+            copied.fixedMaskLength = this.fixedMaskLength;
+            copied.fixedBracketMaskLength = this.fixedBracketMaskLength;
             copied.fallbackLengthThresholdShort = this.fallbackLengthThresholdShort;
             copied.fallbackLengthThresholdMedium = this.fallbackLengthThresholdMedium;
             copied.fallbackLengthThresholdLong = this.fallbackLengthThresholdLong;
@@ -429,6 +435,24 @@ public class SmartKeywordSensitiveProperties {
         public int getFallbackKeepCharsExtraLongOrDefault() {
             return fallbackKeepCharsExtraLong != null ? fallbackKeepCharsExtraLong : SmartKeywordSensitiveConstant.FALLBACK_KEEP_CHARS_EXTRA_LONG;
         }
+
+        /**
+         * 获取固定星号数量（带默认值）
+         */
+        public int getFixedMaskLengthOrDefault() {
+            return fixedMaskLength != null ? fixedMaskLength : SmartKeywordSensitiveConstant.DEFAULT_FIXED_MASK_LENGTH;
+        }
+
+        /**
+         * 获取括号内容固定星号数量（带默认值，未配置时继承自fixedMaskLength）
+         */
+        public int getFixedBracketMaskLengthOrDefault() {
+            if (fixedBracketMaskLength != null) {
+                return fixedBracketMaskLength;
+            }
+            // 未配置时继承自fixedMaskLength
+            return getFixedMaskLengthOrDefault();
+        }
     }
 
     /**
@@ -472,6 +496,16 @@ public class SmartKeywordSensitiveProperties {
         private Boolean keepLength = true;
 
         /**
+         * 固定星号数量（keepLength=false时使用，默认3）
+         */
+        private Integer fixedMaskLength = SmartKeywordSensitiveConstant.DEFAULT_FIXED_MASK_LENGTH;
+
+        /**
+         * 括号内容固定星号数量（未配置时继承自fixedMaskLength）
+         */
+        private Integer fixedBracketMaskLength = SmartKeywordSensitiveConstant.DEFAULT_FIXED_BRACKET_MASK_LENGTH;
+
+        /**
          * Fallback脱敏策略配置
          */
         private FallbackStrategy fallback = new FallbackStrategy();
@@ -489,6 +523,8 @@ public class SmartKeywordSensitiveProperties {
             config.setMaskType(MaskType.fromCode(this.maskType));
             config.setPlaceholder(this.placeholder);
             config.setKeepLength(this.keepLength);
+            config.setFixedMaskLength(this.fixedMaskLength);
+            config.setFixedBracketMaskLength(this.fixedBracketMaskLength);
             config.setFallbackLengthThresholdShort(this.fallback.getLengthThresholdShort());
             config.setFallbackLengthThresholdMedium(this.fallback.getLengthThresholdMedium());
             config.setFallbackLengthThresholdLong(this.fallback.getLengthThresholdLong());
@@ -509,6 +545,8 @@ public class SmartKeywordSensitiveProperties {
             config.setMaskType(MaskType.fromCode(this.fallback.getMaskType()));
             config.setPlaceholder(null);
             config.setKeepLength(this.fallback.getKeepLength());
+            config.setFixedMaskLength(this.fallback.getFixedMaskLength());
+            config.setFixedBracketMaskLength(this.fallback.getFixedBracketMaskLength());
             config.setFallbackLengthThresholdShort(this.fallback.getLengthThresholdShort());
             config.setFallbackLengthThresholdMedium(this.fallback.getLengthThresholdMedium());
             config.setFallbackLengthThresholdLong(this.fallback.getLengthThresholdLong());
@@ -539,6 +577,15 @@ public class SmartKeywordSensitiveProperties {
          * 是否保留长度信息
          */
         private Boolean keepLength = true;
+        /**
+         * 固定星号数量（keepLength=false时使用）
+         */
+        private Integer fixedMaskLength = SmartKeywordSensitiveConstant.DEFAULT_FIXED_MASK_LENGTH;
+
+        /**
+         * 括号内容固定星号数量（未配置时继承自fixedMaskLength）
+         */
+        private Integer fixedBracketMaskLength = SmartKeywordSensitiveConstant.DEFAULT_FIXED_BRACKET_MASK_LENGTH;
 
         /**
          * 短文本长度阈值（文本长度≤此值时，保留首字符）
@@ -708,6 +755,16 @@ public class SmartKeywordSensitiveProperties {
          */
         private Boolean keepLength = true;
 
+        /**
+         * 固定星号数量（keepLength=false时使用）
+         */
+        private Integer fixedMaskLength;
+
+        /**
+         * 括号内容固定星号数量（未配置时继承自fixedMaskLength）
+         */
+        private Integer fixedBracketMaskLength;
+
         private Fallback fallback;
 
         /**
@@ -723,8 +780,18 @@ public class SmartKeywordSensitiveProperties {
             if (StringUtils.hasText(this.maskType)) {
                 config.setMaskType(MaskType.fromCode(this.maskType));
             }
-            config.setPlaceholder(this.placeholder);
+            // 如果是placeholder模式但未配置placeholder，使用默认值
+            if (MaskType.PLACEHOLDER.getCode().equals(this.maskType)
+                    && !StringUtils.hasText(this.placeholder)) {
+                config.setPlaceholder(SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_PREFIX
+                        + SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_INDEX
+                        + SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_SUFFIX);
+            } else {
+                config.setPlaceholder(this.placeholder);
+            }
             config.setKeepLength(this.keepLength);
+            config.setFixedMaskLength(this.fixedMaskLength);
+            config.setFixedBracketMaskLength(this.fixedBracketMaskLength);
             if (this.fallback != null) {
                 config.setFallbackLengthThresholdShort(this.fallback.getLengthThresholdShort());
                 config.setFallbackLengthThresholdMedium(this.fallback.getLengthThresholdMedium());

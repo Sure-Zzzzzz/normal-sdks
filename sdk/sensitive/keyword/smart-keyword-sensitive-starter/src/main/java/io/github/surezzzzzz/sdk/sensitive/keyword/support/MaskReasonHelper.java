@@ -61,6 +61,9 @@ public class MaskReasonHelper {
     private static final String KEEP_ORG_TYPE_LABEL = " 保留组织类型=";
     private static final String KEEP_BRACKET_LABEL = " 保留括号=";
     private static final String KEEP_LENGTH_LABEL = " 保留长度=";
+    private static final String FIXED_MASK_LENGTH_LABEL = " 固定星号数量=";
+    private static final String FIXED_USE = "使用固定";
+    private static final String FIXED_LENGTH = "个星号";
 
     // 通用值
     private static final String YES = "是";
@@ -582,6 +585,16 @@ public class MaskReasonHelper {
                 sb.append(SmartKeywordSensitiveConstant.NARRATIVE_NOT_KEEP);
                 sb.append(notKept.toString());
             }
+
+            // 当 keep-length=false 时，说明使用固定星号数量
+            if (!Boolean.TRUE.equals(strategy.getKeepLength())) {
+                if (kept.length() > 0 || notKept.length() > 0) {
+                    sb.append(SmartKeywordSensitiveConstant.NARRATIVE_CHINESE_COMMA);
+                }
+                sb.append(FIXED_USE);
+                sb.append(strategy.getFixedMaskLengthOrDefault());
+                sb.append(FIXED_LENGTH);
+            }
         }
 
         /**
@@ -708,6 +721,10 @@ public class MaskReasonHelper {
             sb.append(KEEP_ORG_TYPE_LABEL).append(strategy.getKeepOrgType() ? YES : NO);
             sb.append(KEEP_BRACKET_LABEL).append(strategy.getKeepBracket() ? YES : NO);
             sb.append(KEEP_LENGTH_LABEL).append(strategy.getKeepLength() ? YES : NO);
+            // 当 keep-length=false 时，显示固定星号数量
+            if (!Boolean.TRUE.equals(strategy.getKeepLength())) {
+                sb.append(FIXED_MASK_LENGTH_LABEL).append(strategy.getFixedMaskLengthOrDefault());
+            }
         }
 
         private void appendFallbackInfo(boolean hasValidMeta) {

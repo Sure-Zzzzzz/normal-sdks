@@ -83,56 +83,14 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         // 使用标记数组记录哪些字符需要保留
         boolean[] keepMask = new boolean[keyword.length()];
 
-        // 2. 标记需要保留的地域
-        if (Boolean.TRUE.equals(adjustedConfig.getKeepRegion()) && meta != null && meta.getRegion() != null) {
-            String region = meta.getRegion();
-            int index = keyword.indexOf(region);
-            if (index >= 0) {
-                for (int i = index; i < index + region.length(); i++) {
-                    keepMask[i] = true;
-                }
-            }
-        }
-
-        // 3. 标记需要保留的行业
-        if (Boolean.TRUE.equals(adjustedConfig.getKeepIndustry()) && meta != null && meta.getIndustry() != null) {
-            String industry = meta.getIndustry();
-            int index = keyword.indexOf(industry);
-            if (index >= 0) {
-                for (int i = index; i < index + industry.length(); i++) {
-                    keepMask[i] = true;
-                }
-            }
-        }
-
-        // 3.5. 标记需要保留的品牌
-        if (Boolean.TRUE.equals(adjustedConfig.getKeepBrand()) && meta != null && meta.getBrand() != null) {
-            String brand = meta.getBrand();
-            int index = keyword.indexOf(brand);
-            if (index >= 0) {
-                for (int i = index; i < index + brand.length(); i++) {
-                    keepMask[i] = true;
-                }
-            }
-        }
-
-        // 4. 标记需要保留的组织类型
-        if (Boolean.TRUE.equals(adjustedConfig.getKeepOrgType()) && meta != null && meta.getOrgType() != null) {
-            String orgType = meta.getOrgType();
-            int index = keyword.lastIndexOf(orgType);  // 使用lastIndexOf避免匹配到中间的
-            if (index >= 0) {
-                for (int i = index; i < index + orgType.length(); i++) {
-                    keepMask[i] = true;
-                }
-            }
-        }
-
-        // 5. 处理括号内容（暂时从remaining中移除，稍后单独处理）
+        // 1.5. 先确定括号位置，以便后续只在主体部分查找元信息字段
         String bracketContent = null;
         String leftBracket = null;
         String rightBracket = null;
         int bracketStart = -1;
         int bracketEnd = -1;
+        String mainBody = keyword;  // 主体部分（不含括号）
+
         if (meta != null && meta.getBracketContent() != null) {
             bracketContent = meta.getBracketContent();
             leftBracket = BracketType.CHINESE.name().equals(meta.getLeftBracketType()) ? BracketType.CHINESE.getLeftBracket() : BracketType.ENGLISH.getLeftBracket();
@@ -141,26 +99,133 @@ public class AsteriskMaskStrategy implements MaskStrategy {
             bracketStart = keyword.indexOf(bracketStr);
             if (bracketStart >= 0) {
                 bracketEnd = bracketStart + bracketStr.length();
-                // 括号部分不参与主体脱敏
-                for (int i = bracketStart; i < bracketEnd; i++) {
-                    keepMask[i] = false;  // 先清除标记，稍后单独处理
+                // 提取主体部分（去除括号）
+                mainBody = keyword.substring(0, bracketStart) + keyword.substring(bracketEnd);
+            }
+        }
+
+        // 2. 标记需要保留的地域（只在主体部分查找）
+        if (Boolean.TRUE.equals(adjustedConfig.getKeepRegion()) && meta != null && meta.getRegion() != null) {
+            String region = meta.getRegion();
+            int index = mainBody.indexOf(region);
+            if (index >= 0) {
+                // 转换为完整关键词中的位置
+                int actualIndex = (bracketStart >= 0 && index >= bracketStart) ? index + (bracketEnd - bracketStart) : index;
+                for (int i = actualIndex; i < actualIndex + region.length() && i < keyword.length(); i++) {
+                    keepMask[i] = true;
                 }
+            }
+        }
+
+        // 3. 标记需要保留的行业（只在主体部分查找）
+        if (Boolean.TRUE.equals(adjustedConfig.getKeepIndustry()) && meta != null && meta.getIndustry() != null) {
+            String industry = meta.getIndustry();
+            int index = mainBody.indexOf(industry);
+            if (index >= 0) {
+                // 转换为完整关键词中的位置
+                int actualIndex = (bracketStart >= 0 && index >= bracketStart) ? index + (bracketEnd - bracketStart) : index;
+                for (int i = actualIndex; i < actualIndex + industry.length() && i < keyword.length(); i++) {
+                    keepMask[i] = true;
+                }
+            }
+        }
+
+        // 3.5. 标记需要保留的品牌（只在主体部分查找）
+        if (Boolean.TRUE.equals(adjustedConfig.getKeepBrand()) && meta != null && meta.getBrand() != null) {
+            String brand = meta.getBrand();
+            int index = mainBody.indexOf(brand);
+            if (index >= 0) {
+                // 转换为完整关键词中的位置
+                int actualIndex = (bracketStart >= 0 && index >= bracketStart) ? index + (bracketEnd - bracketStart) : index;
+                for (int i = actualIndex; i < actualIndex + brand.length() && i < keyword.length(); i++) {
+                    keepMask[i] = true;
+                }
+            }
+        }
+
+        // 4. 标记需要保留的组织类型（只在主体部分查找，使用lastIndexOf避免匹配到中间的）
+        if (Boolean.TRUE.equals(adjustedConfig.getKeepOrgType()) && meta != null && meta.getOrgType() != null) {
+            String orgType = meta.getOrgType();
+            int index = mainBody.lastIndexOf(orgType);
+            if (index >= 0) {
+                // 转换为完整关键词中的位置
+                int actualIndex = (bracketStart >= 0 && index >= bracketStart) ? index + (bracketEnd - bracketStart) : index;
+                for (int i = actualIndex; i < actualIndex + orgType.length() && i < keyword.length(); i++) {
+                    keepMask[i] = true;
+                }
+            }
+        }
+
+        // 5. 清除括号部分的标记（括号部分稍后单独处理）
+        if (bracketStart >= 0 && bracketEnd > bracketStart) {
+            for (int i = bracketStart; i < bracketEnd; i++) {
+                keepMask[i] = false;
             }
         }
 
         // 5. 根据标记数组构建脱敏后的主体部分
         StringBuilder mainPart = new StringBuilder();
-        for (int i = 0; i < keyword.length(); i++) {
-            // 跳过括号部分
-            if (bracketStart >= 0 && i >= bracketStart && i < bracketEnd) {
-                continue;
+
+        // keep-length=true: 每个字符一个星号 (保留长度信息)
+        // keep-length=false: 固定数量星号 (隐藏长度信息)
+        if (Boolean.TRUE.equals(adjustedConfig.getKeepLength())) {
+            // 保留长度模式：逐字符处理
+            for (int i = 0; i < keyword.length(); i++) {
+                // 跳过括号部分
+                if (bracketStart >= 0 && i >= bracketStart && i < bracketEnd) {
+                    continue;
+                }
+
+                if (keepMask[i]) {
+                    mainPart.append(keyword.charAt(i));
+                } else {
+                    mainPart.append(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR);
+                }
+            }
+        } else {
+            // 固定长度模式：先统计脱敏字符数，再用固定星号替换
+            List<String> parts = new ArrayList<>();
+            int maskedCount = 0;
+            StringBuilder currentPart = new StringBuilder();
+            boolean inMaskedSection = false;
+            int fixedMaskLength = adjustedConfig.getFixedMaskLengthOrDefault();
+
+            for (int i = 0; i < keyword.length(); i++) {
+                // 跳过括号部分
+                if (bracketStart >= 0 && i >= bracketStart && i < bracketEnd) {
+                    continue;
+                }
+
+                if (keepMask[i]) {
+                    // 保留字符
+                    if (inMaskedSection && maskedCount > 0) {
+                        // 结束上一个脱敏段，添加固定数量星号
+                        parts.add(MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength));
+                        maskedCount = 0;
+                        inMaskedSection = false;
+                    }
+                    currentPart.append(keyword.charAt(i));
+                } else {
+                    // 脱敏字符
+                    if (currentPart.length() > 0) {
+                        // 保存之前的保留字符
+                        parts.add(currentPart.toString());
+                        currentPart = new StringBuilder();
+                    }
+                    maskedCount++;
+                    inMaskedSection = true;
+                }
             }
 
-            if (keepMask[i]) {
-                mainPart.append(keyword.charAt(i));
-            } else {
-                mainPart.append(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR);
+            // 处理最后的部分
+            if (maskedCount > 0) {
+                parts.add(MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength));
             }
+            if (currentPart.length() > 0) {
+                parts.add(currentPart.toString());
+            }
+
+            mainPart.append(String.join("", parts));
         }
 
         List<String> parts = new ArrayList<>();
@@ -210,6 +275,11 @@ public class AsteriskMaskStrategy implements MaskStrategy {
 
         // 如果没有元信息，使用全星号脱敏
         if (bracketMeta == null || !bracketMeta.hasValidInfo()) {
+            // keep-length=false 时使用固定数量星号
+            if (!Boolean.TRUE.equals(config.getKeepLength())) {
+                int fixedLength = config.getFixedBracketMaskLengthOrDefault();
+                return MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedLength);
+            }
             return MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, bracketContent.length());
         }
 
@@ -246,7 +316,13 @@ public class AsteriskMaskStrategy implements MaskStrategy {
 
         // 4. 中间部分用星号
         if (remaining.length() > 0) {
-            parts.add(MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, remaining.length()));
+            // keep-length=false 时使用固定数量星号
+            if (!Boolean.TRUE.equals(config.getKeepLength())) {
+                int fixedLength = config.getFixedBracketMaskLengthOrDefault();
+                parts.add(MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedLength));
+            } else {
+                parts.add(MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, remaining.length()));
+            }
         }
 
         // 5. 添加行业
@@ -328,32 +404,44 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         int keepCharsLong = config.getFallbackKeepCharsLongOrDefault();
         int keepCharsExtraLong = config.getFallbackKeepCharsExtraLongOrDefault();
 
+        // keep-length=false 时使用固定数量星号
+        boolean useFixedLength = !Boolean.TRUE.equals(config.getKeepLength());
+        int fixedMaskLength = config.getFixedMaskLengthOrDefault();
+
         if (length <= thresholdShort) {
             // ≤3字符：保留keepCharsShort字符
             String firstChar = text.substring(0, keepCharsShort);
             int maskedLength = length - keepCharsShort;
-            String maskedPart = MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
+            String maskedPart = useFixedLength && maskedLength > 0
+                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
+                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
             return firstChar + maskedPart;
         } else if (length <= thresholdMedium) {
             // 4-7字符：保留首尾各keepCharsMedium个字符
             String prefix = text.substring(0, keepCharsMedium);
             String suffix = text.substring(length - keepCharsMedium);
             int maskedLength = length - keepCharsMedium * 2;
-            String maskedPart = MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
+            String maskedPart = useFixedLength && maskedLength > 0
+                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
+                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
             return prefix + maskedPart + suffix;
         } else if (length <= thresholdLong) {
             // 8-11字符：保留首尾各keepCharsLong个字符
             String prefix = text.substring(0, keepCharsLong);
             String suffix = text.substring(length - keepCharsLong);
             int maskedLength = length - keepCharsLong * 2;
-            String maskedPart = MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
+            String maskedPart = useFixedLength && maskedLength > 0
+                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
+                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
             return prefix + maskedPart + suffix;
         } else {
             // ≥12字符：保留首尾各keepCharsExtraLong个字符
             String prefix = text.substring(0, keepCharsExtraLong);
             String suffix = text.substring(length - keepCharsExtraLong);
             int maskedLength = length - keepCharsExtraLong * 2;
-            String maskedPart = MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
+            String maskedPart = useFixedLength && maskedLength > 0
+                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
+                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
             return prefix + maskedPart + suffix;
         }
     }
@@ -481,6 +569,11 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         double retentionRate = totalLength > 0 ? (double) retainedChars / totalLength : 0.0;
         log.debug("Retention rate calculation: keyword={}, mainKeyword={}, totalLength={}, retainedChars={}, retentionRate={}%, threshold={}%",
                 keyword, mainKeyword, totalLength, retainedChars, String.format("%.1f", retentionRate * 100), String.format("%.0f", retentionThreshold * 100));
+        log.debug("Retention details: region={} ({}), industry={} ({}), brand={} ({}), orgType={} ({})",
+                meta.getRegion(), Boolean.TRUE.equals(config.getKeepRegion()) ? "kept" : "masked",
+                meta.getIndustry(), Boolean.TRUE.equals(config.getKeepIndustry()) ? "kept" : "masked",
+                meta.getBrand(), Boolean.TRUE.equals(config.getKeepBrand()) ? "kept" : "masked",
+                meta.getOrgType(), Boolean.TRUE.equals(config.getKeepOrgType()) ? "kept" : "masked");
 
         // 如果保留率低于阈值，不需要调整
         if (retentionRate < retentionThreshold) {

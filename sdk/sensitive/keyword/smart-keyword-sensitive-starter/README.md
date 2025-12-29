@@ -355,7 +355,9 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
 | `default-strategy.keep-bracket` | Boolean | false | 是否保留括号内容 | **true**: 完整保留括号内容如"（海淀分公司）"<br>**false**: 对括号内容进行智能脱敏（推荐） |
 | `default-strategy.keep-brand` | Boolean | false | 是否保留品牌信息 | **true**: 保留"华为"、"阿里巴巴"等品牌名称，可能泄露敏感信息<br>**false**: 品牌脱敏为星号，更安全（推荐） |
 | `default-strategy.mask-type` | String | asterisk | 掩码类型 | **asterisk**: 星号掩码如"**科技有限公司"，兼顾安全和可读性（推荐）<br>**placeholder**: 占位符如"[企业_有限公司]"，适合数据分析<br>**hash**: MD5哈希如"a1b2c3d4..."，最高安全性，不可逆 |
-| `default-strategy.keep-length` | Boolean | true | 是否保留长度信息 | **true**: 星号数量等于原文长度，保留一定信息<br>**false**: 固定长度星号，完全隐藏长度信息 |
+| `default-strategy.keep-length` | Boolean | true | 是否保留长度信息 | **true**: 星号数量等于原文长度，保留一定信息<br>**false**: 使用固定数量星号，完全隐藏长度信息 |
+| `default-strategy.fixed-mask-length` | Integer | 3 | 固定星号数量 (v1.0.2+) | 当`keep-length=false`时生效，使用固定数量星号替代原文长度<br>**示例**: `fixed-mask-length=3`时 "上海联合产权交易所" → "***交易所"<br>`fixed-mask-length=5`时 "上海联合产权交易所" → "*****交易所" |
+| `default-strategy.fixed-bracket-mask-length` | Integer | null | 括号内容固定星号数量 (v1.0.2+) | 当`keep-length=false`时生效，括号内容使用配置的固定星号数量<br>**默认**: `null`（未配置时继承自`fixed-mask-length`）<br>**示例**: `fixed-bracket-mask-length=2`时 "北京科技有限公司（海淀分公司）" 括号内使用2个星号<br>**应用场景**: 为括号内容（通常是分支机构信息）单独配置脱敏长度 |
 
 ### 高级配置
 
