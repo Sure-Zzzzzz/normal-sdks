@@ -646,6 +646,10 @@ public class SmartKeywordSensitiveProperties {
          */
         private String orgType;
         /**
+         * 品牌信息
+         */
+        private String brand;
+        /**
          * 括号内容
          */
         private String bracketContent;
@@ -658,6 +662,7 @@ public class SmartKeywordSensitiveProperties {
             meta.setRegion(this.region);
             meta.setIndustry(this.industry);
             meta.setOrgType(this.orgType);
+            meta.setBrand(this.brand);
             meta.setBracketContent(this.bracketContent);
             return meta;
         }

@@ -404,8 +404,8 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         SensitiveOrgType orgType = MaskStrategyHelper.detectSensitiveOrgType(keyword, properties.getKeywordSets());
         double retentionThreshold = getRetentionThresholdForOrgType(orgType);
         if (orgType != SensitiveOrgType.NONE) {
-            log.debug("Detected sensitive org type: {} for keyword: {}, retention threshold: {:.0f}%",
-                    orgType, keyword, retentionThreshold * 100);
+            log.debug("Detected sensitive org type: {} for keyword: {}, retention threshold: {}%",
+                    orgType, keyword, String.format("%.0f", retentionThreshold * 100));
         }
 
         // 不考虑括号内容，只计算主体部分的保留率
@@ -479,8 +479,8 @@ public class AsteriskMaskStrategy implements MaskStrategy {
 
         // 计算保留率
         double retentionRate = totalLength > 0 ? (double) retainedChars / totalLength : 0.0;
-        log.debug("Retention rate calculation: keyword={}, mainKeyword={}, totalLength={}, retainedChars={}, retentionRate={:.1f}%, threshold={:.0f}%",
-                keyword, mainKeyword, totalLength, retainedChars, retentionRate * 100, retentionThreshold * 100);
+        log.debug("Retention rate calculation: keyword={}, mainKeyword={}, totalLength={}, retainedChars={}, retentionRate={}%, threshold={}%",
+                keyword, mainKeyword, totalLength, retainedChars, String.format("%.1f", retentionRate * 100), String.format("%.0f", retentionThreshold * 100));
 
         // 如果保留率低于阈值，不需要调整
         if (retentionRate < retentionThreshold) {
@@ -495,26 +495,26 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         int newRetainedChars = calculateRetainedCharsForAdjustment(mainKeyword, meta, adjustedConfig);
         double newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
 
-        log.debug("First-level downgrade: keep-region=false, newRetentionRate={:.1f}%", newRetentionRate * 100);
+        log.debug("First-level downgrade: keep-region=false, newRetentionRate={}%", String.format("%.1f", newRetentionRate * 100));
 
         // 如果降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，继续降级
         if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
             adjustedConfig.setKeepIndustry(false);
             newRetainedChars = calculateRetainedCharsForAdjustment(mainKeyword, meta, adjustedConfig);
             newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
-            log.debug("Second-level downgrade: keep-industry=false, newRetentionRate={:.1f}%", newRetentionRate * 100);
+            log.debug("Second-level downgrade: keep-industry=false, newRetentionRate={}%", String.format("%.1f", newRetentionRate * 100));
 
             // 如果第二级降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，第三级降级关闭组织类型保留
             if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
                 adjustedConfig.setKeepOrgType(false);
                 newRetainedChars = calculateRetainedCharsForAdjustment(mainKeyword, meta, adjustedConfig);
                 newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
-                log.debug("Third-level downgrade: keep-org-type=false, newRetentionRate={:.1f}%", newRetentionRate * 100);
+                log.debug("Third-level downgrade: keep-org-type=false, newRetentionRate={}%", String.format("%.1f", newRetentionRate * 100));
             }
         }
 
-        log.warn("High retention rate detected for {} '{}': {:.1f}% → {:.1f}% after adjustment (threshold={:.0f}%). Adjusted config: keep-region={}, keep-industry={}, keep-org-type={}",
-                orgType, keyword, retentionRate * 100, newRetentionRate * 100, retentionThreshold * 100,
+        log.warn("High retention rate detected for {} '{}': {}% → {}% after adjustment (threshold={}%). Adjusted config: keep-region={}, keep-industry={}, keep-org-type={}",
+                orgType, keyword, String.format("%.1f", retentionRate * 100), String.format("%.1f", newRetentionRate * 100), String.format("%.0f", retentionThreshold * 100),
                 adjustedConfig.getKeepRegion(), adjustedConfig.getKeepIndustry(), adjustedConfig.getKeepOrgType());
 
         return adjustedConfig;

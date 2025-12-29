@@ -233,7 +233,7 @@ System.out.println("详细原因: " + detail.getReason());
 #### 1. 为什么行业识别优先使用NLP？
 
 规则引擎基于关键词匹配，容易误匹配部门名称。例如：
-- 输入：`"中国邮政集团有限公司河南省信息技术中心"`
+- 输入：`"东方大国邮政集团有限公司河东省信息技术中心"`
 - 规则引擎：识别到"信息技术"（误匹配部门名称）
 - NLP引擎：识别到"邮政"（正确的主营业务）
 - **最终结果**：使用NLP的"邮政"
@@ -241,7 +241,7 @@ System.out.println("详细原因: " + detail.getReason());
 #### 2. 为什么组织类型优先使用规则？
 
 NLP可能识别出更长的组织类型，导致保留率虚高：
-- 输入：`"上海证券交易所"`
+- 输入：`东方大国证券交易所"`
 - 规则引擎：识别后缀"交易所"（3字符）
 - NLP引擎：识别"证券交易所"（5字符）
 - **最终结果**：使用规则的"交易所"（避免保留率过高触发不必要的降级）
@@ -273,11 +273,6 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
     mask-type: asterisk       # 星号掩码
     keep-length: true         # 保留长度信息
 ```
-
-**效果示例**：
-- `北京科技有限公司` → `**科技有限公司`
-- `上海金融控股有限公司` → `**金融有限公司`（金融机构可能触发降级后变为`******有限公司`）
-- `深圳华为技术有限公司` → `**技术有限公司`（品牌"华为"被脱敏）
 
 ### 方案2：高安全性脱敏
 
@@ -315,10 +310,6 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
     keep-brand: true          # 保留品牌信息
     mask-type: asterisk
 ```
-
-**效果示例**：
-- `深圳华为技术有限公司` → `**华为技术有限公司`
-- `北京阿里巴巴科技有限公司` → `**阿里巴巴科技有限公司`
 
 **注意**：保留品牌可能泄露敏感信息，请根据业务需求谨慎使用。
 
@@ -448,6 +439,11 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
 | 配置项 | 类型 | 说明 | 影响 |
 |--------|------|------|------|
 | `keywords[].keyword` | String | 关键词 | 匹配到此关键词时应用独立策略 |
+| `keywords[].patterns` | List<String> | 别名/简称列表 | 配置多种写法，共享主keyword的meta和strategy |
+| `keywords[].meta.region` | String | 预定义地域 | 跳过自动提取，使用预定义的地域信息 |
+| `keywords[].meta.industry` | String | 预定义行业 | 跳过自动提取，使用预定义的行业信息 |
+| `keywords[].meta.org-type` | String | 预定义组织类型 | 跳过自动提取，使用预定义的组织类型 |
+| `keywords[].meta.brand` | String | 预定义品牌 | 跳过自动提取，使用预定义的品牌信息 |
 | `keywords[].strategy.keep-region` | Boolean | 是否保留地域 | 覆盖默认策略的keep-region |
 | `keywords[].strategy.keep-industry` | Boolean | 是否保留行业 | 覆盖默认策略的keep-industry |
 | `keywords[].strategy.keep-org-type` | Boolean | 是否保留组织类型 | 覆盖默认策略的keep-org-type |
@@ -455,7 +451,7 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
 | `keywords[].strategy.keep-brand` | Boolean | 是否保留品牌 | 覆盖默认策略的keep-brand |
 | `keywords[].strategy.mask-type` | String | 掩码类型 | 覆盖默认策略的mask-type |
 
-**自定义关键词示例**：
+**基础自定义关键词示例**：
 ```yaml
 io.github.surezzzzzz.sdk.sensitive.keyword:
   keywords:
@@ -467,6 +463,26 @@ io.github.surezzzzzz.sdk.sensitive.keyword:
         keep-brand: false
         mask-type: hash         # 使用哈希
 ```
+
+#### 6. Patterns 别名映射 (v1.0.1+)
+
+**核心价值**: 解决组织机构的多种写法问题，统一脱敏策略。
+
+**关键机制**：
+1. Patterns通过AC自动机高效匹配
+2. 匹配到pattern后,映射到主keyword
+3. 使用主keyword的strategy和meta进行脱敏
+4. 所有变体脱敏规则统一管理
+
+#### 7. 预定义Meta信息 (v1.0.1+)
+
+**核心价值**: 为缩写/简称提供准确的元信息，避免自动提取失败。
+
+**Meta工作原理**：
+
+1. **优先级**: 预定义meta > 自动提取meta
+2. **跳过提取**: 配置meta后，跳过规则引擎和NLP的自动提取，直接使用预定义值
+3. **性能优化**: 跳过NLP调用，脱敏速度更快
 
 ---
 

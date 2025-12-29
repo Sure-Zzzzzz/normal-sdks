@@ -110,10 +110,16 @@ public class KeywordRegistry {
                 keywordMetaMap.put(keyword, meta);
             }
 
-            // 3. 保存模式映射
+            // 3. 保存模式映射(patterns共享主keyword的meta和strategy)
             if (!CollectionUtils.isEmpty(config.getPatterns())) {
                 for (String pattern : config.getPatterns()) {
                     patternToKeywordMap.put(pattern, keyword);
+                    // 为pattern也存储strategy和meta,确保pattern匹配时使用主keyword的配置
+                    keywordStrategyMap.put(pattern, strategy);
+                    if (config.getMeta() != null) {
+                        MetaInfo meta = config.getMeta().toMetaInfo(keyword);
+                        keywordMetaMap.put(pattern, meta);
+                    }
                 }
             }
 

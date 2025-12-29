@@ -357,9 +357,46 @@ public class KeywordSensitiveMaskHelper {
      */
     private List<MaskTask> mergeTasks(List<RecognizeResult> recognizeResults, List<MatchResult> configMatches) {
         List<MaskTask> tasks = mergeResults(recognizeResults, configMatches);
+        // 去除重叠的匹配，保留最长的
+        tasks = removeOverlappingTasks(tasks);
         // 从后往前排序，避免替换时的位置偏移
         tasks.sort(Comparator.comparingInt((MaskTask t) -> t.endIndex).reversed());
         return tasks;
+    }
+
+    /**
+     * 去除重叠的匹配，保留最长的匹配
+     *
+     * @param tasks 原始任务列表
+     * @return 去重后的任务列表
+     */
+    private List<MaskTask> removeOverlappingTasks(List<MaskTask> tasks) {
+        if (tasks.isEmpty()) {
+            return tasks;
+        }
+
+        // 按startIndex排序,如果startIndex相同则按长度倒序
+        List<MaskTask> sorted = new ArrayList<>(tasks);
+        sorted.sort((t1, t2) -> {
+            int cmp = Integer.compare(t1.startIndex, t2.startIndex);
+            if (cmp != 0) return cmp;
+            // startIndex相同时,优先保留更长的匹配
+            return Integer.compare(t2.endIndex - t2.startIndex, t1.endIndex - t1.startIndex);
+        });
+
+        List<MaskTask> result = new ArrayList<>();
+        int lastEnd = -1;
+
+        for (MaskTask task : sorted) {
+            // 如果当前任务的startIndex >= lastEnd,说明不重叠
+            if (task.startIndex >= lastEnd) {
+                result.add(task);
+                lastEnd = task.endIndex;
+            }
+            // 否则跳过(重叠),保留前面更长的匹配
+        }
+
+        return result;
     }
 
     /**
