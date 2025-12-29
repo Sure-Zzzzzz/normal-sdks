@@ -231,7 +231,13 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         List<String> parts = new ArrayList<>();
         parts.add(mainPart.toString());
 
-        // 8. 添加括号内容
+        // 8. 检查主体部分是否全部脱敏，如果是则对主体执行兜底脱敏
+        if (isAllMasked(mainPart.toString())) {
+            log.debug("Main part is all masked, using fallback masking for main part");
+            parts.set(0, maskWithFallbackAsterisk(mainBody, adjustedConfig));
+        }
+
+        // 9. 添加括号内容
         if (meta != null && meta.getBracketContent() != null) {
             if (Boolean.TRUE.equals(adjustedConfig.getKeepBracket())) {
                 // keepBracket=true 时完整保留括号内容，不脱敏
@@ -244,14 +250,6 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         }
 
         String result = String.join("", parts);
-
-        // 检查主体部分是否全部脱敏（只有在没有括号内容时才触发Fallback）
-        // 如果有括号内容，即使主体全部脱敏也是合理的（例如：品牌全部脱敏，只保留括号信息）
-        boolean hasBracketContent = meta != null && meta.getBracketContent() != null;
-        if (isAllMasked(mainPart.toString()) && !hasBracketContent) {
-            log.debug("Main part is all masked and no bracket content, using fallback masking");
-            return maskWithFallbackAsterisk(keyword, adjustedConfig);
-        }
 
         // 检查输出是否与输入完全相同（未脱敏）
         if (result.equals(keyword)) {
@@ -307,17 +305,9 @@ public class AsteriskMaskStrategy implements MaskStrategy {
             }
         }
 
-        // 3. 提取行业（中间部分）
-        // 注意：括号内容不保留行业信息（即使主体配置keep-industry=true）
-        // 原因：括号通常是分支机构或补充信息，行业字段不重要且可能泄露敏感信息
-        // String industryPart = "";
-        // if (Boolean.TRUE.equals(config.getKeepIndustry()) && bracketMeta.getIndustry() != null) {
-        //     String industryKeyword = bracketMeta.getIndustry();
-        //     if (remaining.contains(industryKeyword)) {
-        //         industryPart = industryKeyword;
-        //         remaining = remaining.replace(industryKeyword, "");
-        //     }
-        // }
+        // 3. 不保留行业信息（括号内容智能脱敏策略）
+        // 注意：括号通常是分支机构或补充信息，即使主体配置keep-industry=true，括号内也不保留行业
+        // 原因：避免泄露分支机构的行业敏感信息
 
         // 4. 中间部分用星号
         if (remaining.length() > 0) {
@@ -399,50 +389,45 @@ public class AsteriskMaskStrategy implements MaskStrategy {
         int thresholdShort = config.getFallbackThresholdShortOrDefault();
         int thresholdMedium = config.getFallbackThresholdMediumOrDefault();
         int thresholdLong = config.getFallbackThresholdLongOrDefault();
-        int keepCharsShort = config.getFallbackKeepCharsShortOrDefault();
-        int keepCharsMedium = config.getFallbackKeepCharsMediumOrDefault();
-        int keepCharsLong = config.getFallbackKeepCharsLongOrDefault();
-        int keepCharsExtraLong = config.getFallbackKeepCharsExtraLongOrDefault();
 
         // keep-length=false 时使用固定数量星号
         boolean useFixedLength = !Boolean.TRUE.equals(config.getKeepLength());
         int fixedMaskLength = config.getFixedMaskLengthOrDefault();
 
+        // 根据长度确定保留字符数
+        int keepChars;
+        boolean keepBothEnds; // 是否保留首尾
+
         if (length <= thresholdShort) {
-            // ≤3字符：保留keepCharsShort字符
-            String firstChar = text.substring(0, keepCharsShort);
-            int maskedLength = length - keepCharsShort;
-            String maskedPart = useFixedLength && maskedLength > 0
-                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
-                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
-            return firstChar + maskedPart;
+            keepChars = config.getFallbackKeepCharsShortOrDefault();
+            keepBothEnds = false; // 只保留开头
         } else if (length <= thresholdMedium) {
-            // 4-7字符：保留首尾各keepCharsMedium个字符
-            String prefix = text.substring(0, keepCharsMedium);
-            String suffix = text.substring(length - keepCharsMedium);
-            int maskedLength = length - keepCharsMedium * 2;
-            String maskedPart = useFixedLength && maskedLength > 0
-                    ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
-                    : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
-            return prefix + maskedPart + suffix;
+            keepChars = config.getFallbackKeepCharsMediumOrDefault();
+            keepBothEnds = true; // 保留首尾各keepChars个
         } else if (length <= thresholdLong) {
-            // 8-11字符：保留首尾各keepCharsLong个字符
-            String prefix = text.substring(0, keepCharsLong);
-            String suffix = text.substring(length - keepCharsLong);
-            int maskedLength = length - keepCharsLong * 2;
+            keepChars = config.getFallbackKeepCharsLongOrDefault();
+            keepBothEnds = true;
+        } else {
+            keepChars = config.getFallbackKeepCharsExtraLongOrDefault();
+            keepBothEnds = true;
+        }
+
+        // 构建脱敏结果
+        if (keepBothEnds) {
+            String prefix = text.substring(0, keepChars);
+            String suffix = text.substring(length - keepChars);
+            int maskedLength = length - keepChars * 2;
             String maskedPart = useFixedLength && maskedLength > 0
                     ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
                     : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
             return prefix + maskedPart + suffix;
         } else {
-            // ≥12字符：保留首尾各keepCharsExtraLong个字符
-            String prefix = text.substring(0, keepCharsExtraLong);
-            String suffix = text.substring(length - keepCharsExtraLong);
-            int maskedLength = length - keepCharsExtraLong * 2;
+            String firstChar = text.substring(0, keepChars);
+            int maskedLength = length - keepChars;
             String maskedPart = useFixedLength && maskedLength > 0
                     ? MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, fixedMaskLength)
                     : MaskStrategyHelper.repeat(SmartKeywordSensitiveConstant.DEFAULT_MASK_CHAR, maskedLength);
-            return prefix + maskedPart + suffix;
+            return firstChar + maskedPart;
         }
     }
 
@@ -575,8 +560,8 @@ public class AsteriskMaskStrategy implements MaskStrategy {
                 meta.getBrand(), Boolean.TRUE.equals(config.getKeepBrand()) ? "kept" : "masked",
                 meta.getOrgType(), Boolean.TRUE.equals(config.getKeepOrgType()) ? "kept" : "masked");
 
-        // 如果保留率低于阈值，不需要调整
-        if (retentionRate < retentionThreshold) {
+        // 如果保留率 <= 阈值，不需要调整
+        if (retentionRate <= retentionThreshold) {
             return config;
         }
 
@@ -590,15 +575,13 @@ public class AsteriskMaskStrategy implements MaskStrategy {
 
         log.debug("First-level downgrade: keep-region=false, newRetentionRate={}%", String.format("%.1f", newRetentionRate * 100));
 
-        // 如果降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，继续降级
-        if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+        if (newRetentionRate > retentionThreshold) {
             adjustedConfig.setKeepIndustry(false);
             newRetainedChars = calculateRetainedCharsForAdjustment(mainKeyword, meta, adjustedConfig);
             newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;
             log.debug("Second-level downgrade: keep-industry=false, newRetentionRate={}%", String.format("%.1f", newRetentionRate * 100));
 
-            // 如果第二级降级后保留率仍 >= SECOND_DOWNGRADE_THRESHOLD，第三级降级关闭组织类型保留
-            if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+            if (newRetentionRate > retentionThreshold) {
                 adjustedConfig.setKeepOrgType(false);
                 newRetainedChars = calculateRetainedCharsForAdjustment(mainKeyword, meta, adjustedConfig);
                 newRetentionRate = totalLength > 0 ? (double) newRetainedChars / totalLength : 0.0;

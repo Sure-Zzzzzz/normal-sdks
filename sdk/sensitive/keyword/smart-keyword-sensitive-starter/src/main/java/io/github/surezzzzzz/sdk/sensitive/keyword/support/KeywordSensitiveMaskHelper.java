@@ -457,8 +457,8 @@ public class KeywordSensitiveMaskHelper {
         int retainedChars = calculator.calculateRetainedCharacters();
         double retentionRate = totalLength > 0 ? (double) retainedChars / totalLength : 0.0;
 
-        // 如果保留率低于阈值，不需要调整
-        if (retentionRate < retentionThreshold) {
+        // 如果保留率 <= 阈值，不需要调整
+        if (retentionRate <= retentionThreshold) {
             return RetentionRateAdjustment.belowThreshold(
                     config, totalLength, calculator.getComponentLengths(),
                     retainedChars, retentionRate, orgType, retentionThreshold
@@ -498,8 +498,7 @@ public class KeywordSensitiveMaskHelper {
         downgradeReason.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_FIRST_DOWNGRADE,
                 retentionRate * 100, newRetentionRate * 100));
 
-        // 第二级降级：关闭行业
-        if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+        if (newRetentionRate > retentionThreshold) {
             adjustedConfig.setKeepIndustry(false);
             calculator = new RetentionCalculator(mainKeyword, meta, adjustedConfig);
             newRetainedChars = calculator.calculateRetainedCharacters();
@@ -509,8 +508,7 @@ public class KeywordSensitiveMaskHelper {
                     newRetentionRate * 100, afterSecondDowngrade * 100));
             newRetentionRate = afterSecondDowngrade;
 
-            // 第三级降级：关闭组织类型
-            if (newRetentionRate >= SmartKeywordSensitiveConstant.SECOND_DOWNGRADE_THRESHOLD) {
+            if (newRetentionRate > retentionThreshold) {
                 adjustedConfig.setKeepOrgType(false);
                 calculator = new RetentionCalculator(mainKeyword, meta, adjustedConfig);
                 newRetainedChars = calculator.calculateRetainedCharacters();

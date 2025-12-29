@@ -651,10 +651,10 @@ public final class SmartKeywordSensitiveConstant {
     public static final String TEMPLATE_FINAL_RETENTION = "，最终保留%d字符，保留率%.1f%%";
 
     /**
-     * 模板：保留率未达到阈值 " 保留率{0}%未达到阈值"
-     * 参数: {0} = finalRetentionRate
+     * 模板：保留率低于阈值 " 保留率{0}%低于阈值{1}%，无需降级"
+     * 参数: {0} = finalRetentionRate, {1} = threshold
      */
-    public static final String TEMPLATE_RATE_NOT_REACH = " 保留率%.1f%%未达到阈值";
+    public static final String TEMPLATE_RATE_BELOW_THRESHOLD = " 保留率%.1f%%低于阈值%.0f%%，无需降级";
 
     /**
      * 模板：保留率已达到阈值 " 保留率{0}%已达到阈值"

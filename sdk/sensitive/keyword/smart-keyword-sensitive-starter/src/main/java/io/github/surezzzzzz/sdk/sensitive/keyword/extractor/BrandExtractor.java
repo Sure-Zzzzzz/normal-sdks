@@ -58,15 +58,7 @@ public class BrandExtractor {
             return null;
         }
 
-        for (Map.Entry<String, String> entry : brandMap.entrySet()) {
-            String brand = entry.getKey();
-            if (text.startsWith(brand)) {
-                log.debug("Extracted brand: {} from text: {}", brand, text);
-                return brand;
-            }
-        }
-
-        return null;
+        return findMatchingBrand(text, true);
     }
 
     /**
@@ -80,15 +72,30 @@ public class BrandExtractor {
             return null;
         }
 
+        return findMatchingBrand(text, false);
+    }
+
+    /**
+     * 查找匹配的品牌或行业
+     *
+     * @param text        文本
+     * @param returnBrand true返回品牌名称，false返回行业名称
+     * @return 品牌或行业名称，未找到返回null
+     */
+    private String findMatchingBrand(String text, boolean returnBrand) {
         for (Map.Entry<String, String> entry : brandMap.entrySet()) {
             String brand = entry.getKey();
-            String industry = entry.getValue();
             if (text.startsWith(brand)) {
-                log.debug("Extracted brand: {} with industry: {} from text: {}", brand, industry, text);
-                return industry;
+                String industry = entry.getValue();
+                if (returnBrand) {
+                    log.debug("Extracted brand: {} from text: {}", brand, text);
+                    return brand;
+                } else {
+                    log.debug("Extracted brand: {} with industry: {} from text: {}", brand, industry, text);
+                    return industry;
+                }
             }
         }
-
         return null;
     }
 

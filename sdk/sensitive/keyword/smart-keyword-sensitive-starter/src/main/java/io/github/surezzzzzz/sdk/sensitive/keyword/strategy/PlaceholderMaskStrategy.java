@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Placeholder Mask Strategy Implementation
  * 占位符脱敏策略实现
@@ -23,6 +26,17 @@ import org.springframework.util.StringUtils;
 public class PlaceholderMaskStrategy implements MaskStrategy {
 
     private final SmartKeywordSensitiveProperties properties;
+
+    // 分类到前缀的映射表，避免长if-else链
+    private static final Map<String, String> CATEGORY_PREFIX_MAP = new HashMap<>();
+
+    static {
+        CATEGORY_PREFIX_MAP.put(SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_COMPANY, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_COMPANY);
+        CATEGORY_PREFIX_MAP.put(SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_GOVERNMENT, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_ORGANIZATION);
+        CATEGORY_PREFIX_MAP.put(SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_SCHOOL, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_SCHOOL);
+        CATEGORY_PREFIX_MAP.put(SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_MEDICAL, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_MEDICAL);
+        CATEGORY_PREFIX_MAP.put(SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_FINANCE, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_FINANCE);
+    }
 
     @Autowired
     public PlaceholderMaskStrategy(SmartKeywordSensitiveProperties properties) {
@@ -65,18 +79,8 @@ public class PlaceholderMaskStrategy implements MaskStrategy {
             }
         }
 
-        // 如果元信息没有，使用配置的placeholder
-        String placeholder = config.getPlaceholder();
-        if (StringUtils.hasText(placeholder)) {
-            // 如果配置中已经包含了方括号，直接使用
-            if (placeholder.startsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET) && placeholder.endsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET)) {
-                return placeholder;
-            }
-            return SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET + placeholder + SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET;
-        }
-
-        // 默认
-        return SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_FALLBACK;
+        // 如果元信息没有，使用配置的placeholder或默认占位符
+        return wrapPlaceholder(config.getPlaceholder());
     }
 
     /**
@@ -114,24 +118,26 @@ public class PlaceholderMaskStrategy implements MaskStrategy {
      * @return 前缀字符串
      */
     private String getCategoryPrefix(String category) {
-        if (category == null) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_DEFAULT;
-        }
+        return CATEGORY_PREFIX_MAP.getOrDefault(category, SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_DEFAULT);
+    }
 
-        // 使用中文常量，与org-types.txt中的分类标签对应
-        if (SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_COMPANY.equals(category)) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_COMPANY;
-        } else if (SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_GOVERNMENT.equals(category)) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_ORGANIZATION;
-        } else if (SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_SCHOOL.equals(category)) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_SCHOOL;
-        } else if (SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_MEDICAL.equals(category)) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_MEDICAL;
-        } else if (SmartKeywordSensitiveConstant.ORG_TYPE_CATEGORY_FINANCE.equals(category)) {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_FINANCE;
-        } else {
-            return SmartKeywordSensitiveConstant.ORG_TYPE_PREFIX_DEFAULT;
+    /**
+     * 包装占位符文本，自动添加方括号（如需要）
+     *
+     * @param placeholder 占位符文本
+     * @return 包装后的占位符
+     */
+    private String wrapPlaceholder(String placeholder) {
+        if (StringUtils.hasText(placeholder)) {
+            // 如果配置中已经包含了方括号，直接使用
+            if (placeholder.startsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET)
+                    && placeholder.endsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET)) {
+                return placeholder;
+            }
+            return SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET + placeholder + SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET;
         }
+        // 默认占位符
+        return SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_FALLBACK;
     }
 
     /**
@@ -149,17 +155,7 @@ public class PlaceholderMaskStrategy implements MaskStrategy {
             return text;
         }
 
-        // 如果配置中有placeholder，使用配置的
-        String placeholder = config.getPlaceholder();
-        if (StringUtils.hasText(placeholder)) {
-            if (placeholder.startsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET) && placeholder.endsWith(SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET)) {
-                return placeholder;
-            }
-            return SmartKeywordSensitiveConstant.PLACEHOLDER_LEFT_BRACKET + placeholder + SmartKeywordSensitiveConstant.PLACEHOLDER_RIGHT_BRACKET;
-        }
-
-        // 否则使用默认的fallback占位符
-        return SmartKeywordSensitiveConstant.DEFAULT_PLACEHOLDER_FALLBACK;
+        return wrapPlaceholder(config.getPlaceholder());
     }
 
     /**

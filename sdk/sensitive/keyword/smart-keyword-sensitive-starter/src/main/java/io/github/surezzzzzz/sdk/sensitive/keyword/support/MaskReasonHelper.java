@@ -503,11 +503,10 @@ public class MaskReasonHelper {
                         adjustment.finalRetentionRate * 100));
                 sb.append(SmartKeywordSensitiveConstant.NARRATIVE_PERIOD);
             } else if (adjustment.finalRetentionRate < adjustment.threshold) {
-                // 无降级但未达到阈值 - 使用模板
-                sb.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_RATE_NOT_REACH,
-                        adjustment.finalRetentionRate * 100));
-                sb.append(SmartKeywordSensitiveConstant.NARRATIVE_NO_DOWNGRADE_OPTION);
-                sb.append(SmartKeywordSensitiveConstant.NARRATIVE_KEEP_ORIGINAL);
+                // 保留率低于阈值，无需降级
+                sb.append(String.format(SmartKeywordSensitiveConstant.TEMPLATE_RATE_BELOW_THRESHOLD,
+                        adjustment.finalRetentionRate * 100,
+                        adjustment.threshold * 100));
                 sb.append(SmartKeywordSensitiveConstant.NARRATIVE_PERIOD);
             } else {
                 // 达到阈值，未触发降级 - 使用模板
