@@ -213,12 +213,19 @@ public class MappingManagerImpl implements MappingManager {
 
         // 4. 调用 ES API 获取 mapping（版本兼容）
         GetMappingsRequest request = new GetMappingsRequest().indices(indexName);
+
+        // 设置 IndicesOptions（如果配置了 ignore-unavailable-indices）
+        if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
+            request.indicesOptions(org.elasticsearch.action.support.IndicesOptions.lenientExpandOpen());
+            log.trace("Enabled ignoreUnavailableIndices for GetMapping request on index: {}", indexName);
+        }
+
         GetMappingsResponse response;
 
         if (isEs6x) {
             // ES 6.x：使用 RestClient 低级 API，避免 include_type_name 和 master_timeout 参数
             log.debug("Using low-level API for ES 6.x compatibility");
-            response = getMappingViaLowLevelApi(client, indexName);
+            response = getMappingViaLowLevelApi(client, indexName, properties.getQueryLimits().isIgnoreUnavailableIndices());
         } else {
             // ES 7.x+ 或版本未知：尝试使用高级 API
             try {
@@ -229,7 +236,7 @@ public class MappingManagerImpl implements MappingManager {
                         (e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_INCLUDE_TYPE_NAME) ||
                                 e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_MASTER_TIMEOUT))) {
                     log.warn("High-level API failed with ES 6.x compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
-                    response = getMappingViaLowLevelApi(client, indexName);
+                    response = getMappingViaLowLevelApi(client, indexName, properties.getQueryLimits().isIgnoreUnavailableIndices());
                 } else {
                     throw e;
                 }
@@ -248,11 +255,29 @@ public class MappingManagerImpl implements MappingManager {
             });
         });
 
+        // 6. 检查 mappings 是否为空
         if (mappings.isEmpty()) {
-            throw new IllegalStateException(String.format(ErrorMessage.INDEX_MAPPING_NOT_FOUND, indexName));
+            // 如果配置了 ignore-unavailable-indices，返回空的 metadata
+            if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
+                log.debug("No mappings found for index [{}], returning empty metadata (ignore-unavailable-indices enabled)", indexName);
+                return IndexMetadata.builder()
+                        .alias(alias)
+                        .indexName(indexName)
+                        .dateSplit(indexConfig.isDateSplit())
+                        .datePattern(indexConfig.getDatePattern())
+                        .dateField(indexConfig.getDateField())
+                        .actualIndices(new ArrayList<>())
+                        .fields(new ArrayList<>())
+                        .cachedAt(System.currentTimeMillis())
+                        .build();
+            } else {
+                // 否则抛出异常
+                throw new MappingException(ErrorCode.INDEX_MAPPING_NOT_FOUND,
+                        String.format(ErrorMessage.INDEX_MAPPING_NOT_FOUND, indexName));
+            }
         }
 
-        // 6. 构建 IndexMetadata
+        // 7. 构建 IndexMetadata
         IndexMetadata.IndexMetadataBuilder builder = IndexMetadata.builder()
                 .alias(alias)
                 .indexName(indexName)
@@ -262,11 +287,11 @@ public class MappingManagerImpl implements MappingManager {
                 .cachedAt(System.currentTimeMillis());
 
 
-        // 7. 收集实际索引列表
+        // 8. 收集实际索引列表
         List<String> actualIndices = new ArrayList<>(mappings.keySet());
         builder.actualIndices(actualIndices);
 
-        // 8. 确定使用哪个索引的 mapping
+        // 9. 确定使用哪个索引的 mapping
         String targetIndex;
         if (specificIndexName != null && !specificIndexName.isEmpty()) {
             // 用户指定了具体索引
@@ -312,16 +337,27 @@ public class MappingManagerImpl implements MappingManager {
      * 使用 RestClient 低级 API 获取 mapping（ES 6.x 兼容）
      * 绕过高级 API 自动添加的 include_type_name 和 master_timeout 参数
      * 同时避免使用版本相关的 XContent API（兼容 Spring Boot 2.4.x）
+     *
+     * @param ignoreUnavailable 是否忽略不存在的索引
      */
-    private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient, String indexName) throws IOException {
+    private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient, String indexName, boolean ignoreUnavailable) throws IOException {
         org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
 
-        // 构造请求：GET /<index>/_mapping
+        // 构造请求：GET /<index>/_mapping?ignore_unavailable=true
         String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + indexName + ElasticsearchApiConstant.ENDPOINT_MAPPING;
         org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
                 ElasticsearchApiConstant.HTTP_METHOD_GET,
                 endpoint
         );
+
+        // 设置查询参数（如果需要）
+        if (ignoreUnavailable) {
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_IGNORE_UNAVAILABLE,
+                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_ALLOW_NO_INDICES,
+                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
+            log.trace("Enabled ignore_unavailable for low-level API GetMapping request on index: {}", indexName);
+        }
 
         // 执行请求
         org.elasticsearch.client.Response response = lowLevelClient.performRequest(request);
@@ -332,7 +368,7 @@ public class MappingManagerImpl implements MappingManager {
     }
 
     /**
-     * 解析字段（递归处理嵌套字段）
+     * 解析字段（递归处理嵌套字段和 multi-fields）
      */
     @SuppressWarnings("unchecked")
     private void parseFields(Map<String, Object> propertiesMap, String prefix,
@@ -356,6 +392,36 @@ public class MappingManagerImpl implements MappingManager {
             boolean isMasked = isSensitive &&
                     SensitiveStrategy.MASK.getStrategy().equalsIgnoreCase(sensitiveConfig.getStrategy());
 
+            // 解析 multi-fields（如 text 字段的 keyword 子字段）
+            Map<String, FieldMetadata> subFields = null;
+            if (fieldDef.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_FIELDS)) {
+                Map<String, Object> fieldsMap = (Map<String, Object>) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_FIELDS);
+                subFields = new java.util.HashMap<>();
+                for (Map.Entry<String, Object> subFieldEntry : fieldsMap.entrySet()) {
+                    String subFieldName = subFieldEntry.getKey();
+                    Map<String, Object> subFieldDef = (Map<String, Object>) subFieldEntry.getValue();
+                    String subFieldTypeStr = (String) subFieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_TYPE);
+                    FieldType subFieldType = FieldType.fromString(subFieldTypeStr);
+
+                    // 子字段的完整路径（用于查询）
+                    String fullSubFieldName = fieldName + "." + subFieldName;
+
+                    FieldMetadata subFieldMetadata = FieldMetadata.builder()
+                            .name(fullSubFieldName)
+                            .type(subFieldType)
+                            .array(false)
+                            .searchable(!isForbidden)
+                            .sortable(!isForbidden && subFieldType.isSortable())
+                            .aggregatable(!isForbidden && subFieldType.isAggregatable())
+                            .sensitive(isSensitive)
+                            .masked(isMasked)
+                            .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
+                            .build();
+
+                    subFields.put(subFieldName, subFieldMetadata);
+                }
+            }
+
             // 构建字段元数据
             FieldMetadata fieldMetadata = FieldMetadata.builder()
                     .name(fieldName)
@@ -368,11 +434,12 @@ public class MappingManagerImpl implements MappingManager {
                     .masked(isMasked)
                     .format(fieldType == FieldType.DATE ? (String) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_FORMAT) : null)
                     .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
+                    .subFields(subFields)
                     .build();
 
             fields.add(fieldMetadata);
 
-            // 递归处理嵌套字段
+            // 递归处理嵌套字段（properties）
             if (fieldDef.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
                 Map<String, Object> nestedProperties = (Map<String, Object>) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
                 parseFields(nestedProperties, fieldName, fields, indexConfig);

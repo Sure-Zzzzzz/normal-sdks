@@ -77,7 +77,7 @@ public class IndexMetadata {
     }
 
     /**
-     * 构建字段映射
+     * 构建字段映射（递归处理 multi-fields）
      */
     public void buildFieldMap() {
         if (fieldMap == null) {
@@ -86,6 +86,13 @@ public class IndexMetadata {
         if (fields != null) {
             for (FieldMetadata field : fields) {
                 fieldMap.put(field.getName(), field);
+
+                // 添加 multi-fields（子字段）到 map
+                if (field.getSubFields() != null) {
+                    for (FieldMetadata subField : field.getSubFields().values()) {
+                        fieldMap.put(subField.getName(), subField);
+                    }
+                }
             }
         }
     }

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 /**
  * 字段元数据
  *
@@ -66,4 +68,11 @@ public class FieldMetadata {
      * 不可访问原因（仅当 searchable=false 时）
      */
     private String reason;
+
+    /**
+     * 子字段（multi-fields，如 text 字段的 keyword 子字段）
+     * key: 子字段名（如 "keyword"）
+     * value: 子字段元数据
+     */
+    private Map<String, FieldMetadata> subFields;
 }

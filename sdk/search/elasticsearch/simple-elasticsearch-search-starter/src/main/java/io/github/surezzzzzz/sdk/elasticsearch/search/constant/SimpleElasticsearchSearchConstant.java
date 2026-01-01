@@ -233,6 +233,11 @@ public class SimpleElasticsearchSearchConstant {
     public static final String ES_MAPPING_FORMAT = "format";
 
     /**
+     * ES mapping fields 字段（multi-fields，如 text 的 keyword 子字段）
+     */
+    public static final String ES_MAPPING_FIELDS = "fields";
+
+    /**
      * ES 默认文档类型（ES 7.x+）
      */
     public static final String ES_DEFAULT_DOC_TYPE = "_doc";
@@ -248,6 +253,21 @@ public class SimpleElasticsearchSearchConstant {
      * ES 6.x 不支持的参数：master_timeout
      */
     public static final String ES_PARAM_MASTER_TIMEOUT = "master_timeout";
+
+    /**
+     * ES API 参数：ignore_unavailable（忽略不存在的索引）
+     */
+    public static final String ES_PARAM_IGNORE_UNAVAILABLE = "ignore_unavailable";
+
+    /**
+     * ES API 参数：allow_no_indices（允许没有匹配的索引）
+     */
+    public static final String ES_PARAM_ALLOW_NO_INDICES = "allow_no_indices";
+
+    /**
+     * ES API 参数值：true
+     */
+    public static final String ES_PARAM_VALUE_TRUE = "true";
 
     /**
      * ES 6.x 错误信息：unrecognized parameter

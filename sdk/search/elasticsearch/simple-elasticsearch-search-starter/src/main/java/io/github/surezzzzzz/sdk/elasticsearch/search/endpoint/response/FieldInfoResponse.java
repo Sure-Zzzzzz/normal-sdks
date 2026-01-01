@@ -7,6 +7,9 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * 字段信息响应
  *
@@ -70,6 +73,11 @@ public class FieldInfoResponse {
     private String reason;
 
     /**
+     * 子字段（multi-fields，如 text 字段的 keyword 子字段）
+     */
+    private Map<String, FieldInfoResponse> subFields;
+
+    /**
      * 从元数据创建
      */
     public static FieldInfoResponse from(FieldMetadata field) {
@@ -92,6 +100,16 @@ public class FieldInfoResponse {
 
         if (field.getReason() != null) {
             builder.reason(field.getReason());
+        }
+
+        // 递归处理子字段
+        if (field.getSubFields() != null && !field.getSubFields().isEmpty()) {
+            Map<String, FieldInfoResponse> subFieldsResponse = field.getSubFields().entrySet().stream()
+                    .collect(Collectors.toMap(
+                            Map.Entry::getKey,
+                            e -> FieldInfoResponse.from(e.getValue())
+                    ));
+            builder.subFields(subFieldsResponse);
         }
 
         return builder.build();

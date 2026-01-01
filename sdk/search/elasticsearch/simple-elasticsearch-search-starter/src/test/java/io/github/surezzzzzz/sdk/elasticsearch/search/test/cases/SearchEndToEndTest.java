@@ -865,6 +865,14 @@ class SearchEndToEndTest {
         request.mapping(
                 "{" +
                         "  \"properties\": {" +
+                        "    \"username\": {" +
+                        "      \"type\": \"text\"," +
+                        "      \"fields\": {" +
+                        "        \"keyword\": {" +
+                        "          \"type\": \"keyword\"" +
+                        "        }" +
+                        "      }" +
+                        "    }," +
                         "    \"name\": {\"type\": \"keyword\"}," +
                         "    \"age\": {\"type\": \"integer\"}," +
                         "    \"city\": {\"type\": \"keyword\"}," +
@@ -880,11 +888,11 @@ class SearchEndToEndTest {
 
         // 插入测试数据
         List<Map<String, Object>> users = Arrays.asList(
-                createUser("张三", 25, "北京", "13800138000", "password123"),
-                createUser("李四", 30, "上海", "13900139000", "password456"),
-                createUser("王五", 28, "北京", "13700137000", "password789"),
-                createUser("赵六", 22, "深圳", "13600136000", "password000"),
-                createUser("钱七", 35, "上海", "13500135000", "password111")
+                createUser("alice", "张三", 25, "北京", "13800138000", "password123"),
+                createUser("bob", "李四", 30, "上海", "13900139000", "password456"),
+                createUser("charlie", "王五", 28, "北京", "13700137000", "password789"),
+                createUser("david", "赵六", 22, "深圳", "13600136000", "password000"),
+                createUser("eve", "钱七", 35, "上海", "13500135000", "password111")
         );
 
         for (int i = 0; i < users.size(); i++) {
@@ -1340,6 +1348,140 @@ class SearchEndToEndTest {
                 });
     }
 
+    @Test
+    @Order(65)
+    @DisplayName("8. Multi-fields（keyword 子字段）功能测试")
+    void testMultiFieldsSupport() throws Exception {
+        log.info("========== 测试：Multi-fields（keyword 子字段）功能 ==========");
+
+        // 8.1 验证 fields API 返回 keyword 子字段
+        log.info("测试 1: 验证 /fields API 返回 keyword 子字段");
+        mockMvc.perform(get("/api/indices/test_user/fields"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fields").isArray())
+                .andDo(result -> {
+                    String responseBody = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                    log.debug("Fields API Response: {}", responseBody);
+
+                    // 验证响应中包含 subFields
+                    org.assertj.core.api.Assertions.assertThat(responseBody)
+                            .contains("subFields")
+                            .contains("keyword");
+
+                    log.info("✓ Fields API 正确返回了 keyword 子字段");
+                });
+
+        // 8.2 使用 text 主字段进行查询（模糊匹配）
+        log.info("测试 2: 使用 text 主字段进行模糊查询");
+        QueryRequest textQueryRequest = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("username")  // text 字段
+                        .op(io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator.LIKE.getOperator())
+                        .value("alice")
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(textQueryRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> {
+                    log.info("✓ Text 字段模糊查询成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 8.3 使用 keyword 子字段进行精确查询
+        log.info("测试 3: 使用 keyword 子字段进行精确查询");
+        QueryRequest keywordQueryRequest = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("username.keyword")  // keyword 子字段
+                        .op(io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator.EQ.getOperator())
+                        .value("alice")
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(keywordQueryRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].username").value("alice"))
+                .andDo(result -> {
+                    log.info("✓ Keyword 子字段精确查询成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 8.4 使用 keyword 子字段进行聚合
+        log.info("测试 4: 使用 keyword 子字段进行聚合");
+        AggRequest aggRequest = AggRequest.builder()
+                .index("test_user")
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("username_terms")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("username.keyword")  // keyword 子字段用于聚合
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(aggRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.username_terms").exists())
+                .andDo(result -> {
+                    log.info("✓ Keyword 子字段聚合成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 8.5 使用 keyword 子字段进行排序
+        log.info("测试 5: 使用 keyword 子字段进行排序");
+        QueryRequest sortRequest = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("username")
+                        .op(io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator.EXISTS.getOperator())
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .sort(Arrays.asList(
+                                PaginationInfo.SortField.builder()
+                                        .field("username.keyword")
+                                        .order("ASC")
+                                        .build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(sortRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> {
+                    log.info("✓ Keyword 子字段排序成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        log.info("========== Multi-fields 功能测试完成 ==========");
+    }
+
     // ==================== 辅助方法 ====================
 
     private static String createLogIndex(RestHighLevelClient client) throws Exception {
@@ -1398,8 +1540,9 @@ class SearchEndToEndTest {
         return order;
     }
 
-    private static Map<String, Object> createUser(String name, int age, String city, String phone, String password) {
+    private static Map<String, Object> createUser(String username, String name, int age, String city, String phone, String password) {
         Map<String, Object> user = new HashMap<>();
+        user.put("username", username);
         user.put("name", name);
         user.put("age", age);
         user.put("city", city);
@@ -1433,12 +1576,21 @@ class SearchEndToEndTest {
 
         // 使用 TestIndexHelper 创建索引（版本自适应，支持 ES 6.x 和 7.x）
         Map<String, Object> properties = new HashMap<>();
-        properties.put("product_id", Map.of("type", "keyword"));
-        properties.put("product_name", Map.of("type", "keyword"));
-        properties.put("category", Map.of("type", "keyword"));
-        properties.put("price", Map.of("type", "double"));
-        properties.put("stock", Map.of("type", "integer"));
-        properties.put("created_at", Map.of("type", "date"));
+        Map<String, Object> keywordType = new HashMap<>();
+        keywordType.put("type", "keyword");
+        Map<String, Object> doubleType = new HashMap<>();
+        doubleType.put("type", "double");
+        Map<String, Object> integerType = new HashMap<>();
+        integerType.put("type", "integer");
+        Map<String, Object> dateType = new HashMap<>();
+        dateType.put("type", "date");
+
+        properties.put("product_id", keywordType);
+        properties.put("product_name", new HashMap<>(keywordType));
+        properties.put("category", new HashMap<>(keywordType));
+        properties.put("price", doubleType);
+        properties.put("stock", integerType);
+        properties.put("created_at", dateType);
 
         io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.TestIndexHelper.createIndex(
                 registry,
