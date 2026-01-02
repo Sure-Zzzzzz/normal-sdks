@@ -4,9 +4,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
@@ -18,6 +20,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.IndicesOptions;
@@ -82,40 +85,115 @@ public class QueryExecutorImpl implements QueryExecutor {
             // 2. 获取索引元数据
             IndexMetadata metadata = mappingManager.getMetadata(request.getIndex());
 
-            // 3. 构建 ES 查询
-            SearchRequest searchRequest = buildSearchRequest(request, metadata);
-
-            // 4. 执行查询
-
-            log.debug("Executing query: indices={}, dsl={}",
-                    String.join(",", searchRequest.indices()),
-                    searchRequest.source().toString());
-
-            // 根据索引名称路由到对应数据源，获取版本自适应的 RestHighLevelClient
-            String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
-            log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
-            RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
-
-            // 检测 ES 版本，决定使用高级 API 还是低级 API（使用工具类）
-            SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
-                    client, datasourceKey, searchRequest, registry);
-
-            // 5. 处理结果
-            QueryResponse response = processResponse(request, searchResponse);
-
-            // 6. 计算耗时
-            long took = System.currentTimeMillis() - startTime;
-            response.setTook(took);
-
-            log.debug("Query executed: index={}, took={}ms, hits={}",
-                    request.getIndex(), took, response.getTotal());
-
-            return response;
+            // 3. 执行查询（带降级重试）
+            if (properties.getDowngrade().isEnabled() && metadata.isDateSplit() && request.getDateRange() != null) {
+                return executeWithDowngradeRetry(request, metadata, startTime);
+            } else {
+                return executeOnce(request, metadata, startTime, DowngradeLevel.LEVEL_0);
+            }
 
         } catch (IOException e) {
             log.error("Query execution failed: index={}", request.getIndex(), e);
             throw new QueryException(ErrorCode.QUERY_EXECUTION_FAILED, ErrorMessage.QUERY_EXECUTION_FAILED, e);
         }
+    }
+
+    /**
+     * 执行查询（带降级重试）
+     */
+    private QueryResponse executeWithDowngradeRetry(QueryRequest request, IndexMetadata metadata, long startTime) throws IOException {
+        // ✅ 先进行降级预估，如果需要降级，直接从预估的级别开始
+        DowngradeLevel currentLevel = DowngradeLevel.LEVEL_0;
+
+        // 如果启用了预估，尝试预估降级级别
+        if (properties.getDowngrade().isEnableEstimate()) {
+            String[] estimatedIndices = indexRouteProcessor.route(metadata, request.getDateRange());
+            // 从索引数组中检测降级级别
+            currentLevel = indexRouteProcessor.detectDowngradeLevelFromIndices(estimatedIndices);
+            if (currentLevel != DowngradeLevel.LEVEL_0) {
+                log.info("Pre-estimated downgrade to {} for index [{}]", currentLevel, request.getIndex());
+            }
+        }
+
+        while (true) {
+            try {
+                return executeOnce(request, metadata, startTime, currentLevel);
+
+            } catch (ElasticsearchException | IOException e) {
+                // 检查是否是 too_long_frame_exception
+                if (!isTooLongFrameException(e)) {
+                    throw e;
+                }
+
+                // 检查是否可以继续降级
+                if (!currentLevel.hasNext() || currentLevel.getValue() >= properties.getDowngrade().getMaxLevel()) {
+                    log.error("Query failed at max downgrade level {}: index={}", currentLevel, request.getIndex(), e);
+                    throw new DowngradeFailedException(
+                            ErrorCode.DOWNGRADE_FAILED,
+                            String.format(ErrorMessage.DOWNGRADE_FAILED),
+                            currentLevel,
+                            e
+                    );
+                }
+
+                // 降级到下一级别
+                DowngradeLevel nextLevel = currentLevel.next();
+                log.warn("Query failed with too_long_frame_exception at level {}, downgrading to {}: index={}",
+                        currentLevel, nextLevel, request.getIndex());
+                currentLevel = nextLevel;
+            }
+        }
+    }
+
+    /**
+     * 执行一次查询
+     */
+    private QueryResponse executeOnce(QueryRequest request, IndexMetadata metadata, long startTime, DowngradeLevel downgradeLevel) throws IOException {
+        // 1. 构建 ES 查询
+        SearchRequest searchRequest = buildSearchRequest(request, metadata, downgradeLevel);
+
+        // 2. 执行查询
+        log.debug("Executing query: indices={}, dsl={}",
+                String.join(",", searchRequest.indices()),
+                searchRequest.source().toString());
+
+        // 根据索引名称路由到对应数据源，获取版本自适应的 RestHighLevelClient
+        String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+        log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
+        RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+
+        // 检测 ES 版本，决定使用高级 API 还是低级 API（使用工具类）
+        SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
+                client, datasourceKey, searchRequest, registry);
+
+        // 3. 处理结果
+        QueryResponse response = processResponse(request, searchResponse);
+
+        // 4. 计算耗时
+        long took = System.currentTimeMillis() - startTime;
+        response.setTook(took);
+
+        log.debug("Query executed: index={}, downgradeLevel={}, took={}ms, hits={}",
+                request.getIndex(), downgradeLevel, took, response.getTotal());
+
+        return response;
+    }
+
+    /**
+     * 判断异常是否为 too_long_frame_exception
+     */
+    private boolean isTooLongFrameException(Throwable e) {
+        if (e == null) {
+            return false;
+        }
+
+        String message = e.getMessage();
+        if (message != null && message.contains("too_long_frame_exception")) {
+            return true;
+        }
+
+        // 递归检查 cause
+        return isTooLongFrameException(e.getCause());
     }
 
     /**
@@ -170,9 +248,9 @@ public class QueryExecutorImpl implements QueryExecutor {
     /**
      * 构建 ES 搜索请求
      */
-    private SearchRequest buildSearchRequest(QueryRequest request, IndexMetadata metadata) {
-        // ✅ 1. 计算需要查询的索引列表（索引路由）
-        String[] indices = indexRouteProcessor.route(metadata, request.getDateRange());
+    private SearchRequest buildSearchRequest(QueryRequest request, IndexMetadata metadata, DowngradeLevel downgradeLevel) {
+        // ✅ 1. 计算需要查询的索引列表（索引路由，带降级支持）
+        String[] indices = indexRouteProcessor.routeWithDowngrade(metadata, request.getDateRange(), downgradeLevel);
         SearchRequest searchRequest = new SearchRequest(indices);
 
         // ✅ 允许查询不存在的索引（date-split 场景下部分索引可能不存在）

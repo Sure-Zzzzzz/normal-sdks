@@ -15,6 +15,7 @@
 - **敏感字段保护**：支持字段禁止访问和脱敏
 - **深分页支持**：自动切换 offset 和 search_after 分页策略
 - **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
+- **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -23,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.5'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.10'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -96,6 +97,14 @@ io:
             mapping-refresh:
               enabled: true                       # 启用定时刷新
               interval-seconds: 300              # 刷新间隔（秒），默认300秒
+
+            # 索引路由降级配置（v1.0.10+）
+            downgrade:
+              enabled: true                       # 启用降级功能（默认：true）
+              max-http-line-length: 4096         # HTTP 请求行最大长度（字节，默认：4096）
+              max-level: 3                       # 最大降级级别（0-3，默认：3）
+              enable-estimate: true              # 是否启用预估触发（默认：true）
+              auto-downgrade-index-count-threshold: 200  # 索引数量阈值（默认：200）
 
             # 查询限制配置
             query-limits:
@@ -467,6 +476,71 @@ indices:
 - **按天分割**：查询 3 天数据，生成对应的 3 个索引
 - 如果配置了 `date-field`，框架会自动在 DSL 中添加时间范围过滤
 - 日期格式支持 ISO 格式（`2025-12-17T00:00:00`）和纯日期格式（`2025-12-17`）
+
+### 索引路由智能降级（v1.0.10+）
+
+**背景问题：**
+查询大范围日期分割索引时（如查询一年365天的日志），索引名过多会导致 HTTP 请求行超过 Elasticsearch 默认的 4096 字节限制，触发 `too_long_frame_exception` 异常。
+
+**解决方案：**
+框架采用多级智能降级策略，自动将具体索引名转换为通配符模式，减少 HTTP 请求行长度。
+
+**降级策略：**
+
+| 降级级别 | 日粒度索引示例 | 月粒度索引示例 | 年粒度索引示例 |
+|---------|-------------|-------------|-------------|
+| LEVEL_0 | `log_2025.01.01` | `log_2025.01` | `log_2025` |
+| LEVEL_1 | `log_2025.01.*` | `log_2025.*` | `log_*` |
+| LEVEL_2 | `log_2025.*` | `log_*` | `log_*` |
+| LEVEL_3 | `log_*` | `log_*` | `log_*` |
+
+**触发方式：**
+1. **预估触发**（默认启用）：查询前预估索引数量和请求行长度，如果超过阈值，自动使用合适的降级级别
+2. **异常触发**（兜底）：捕获 `too_long_frame_exception` 异常，自动降级重试
+
+**配置示例：**
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          search:
+            downgrade:
+              enabled: true                       # 启用降级（默认 true）
+              max-http-line-length: 4096         # HTTP 请求行限制（默认 4096）
+              max-level: 3                       # 最大降级级别（默认 3）
+              enable-estimate: true              # 启用预估触发（默认 true）
+              auto-downgrade-index-count-threshold: 200  # 索引数量阈值（默认 200）
+```
+
+**使用示例：**
+
+```json
+{
+  "index": "daily_log",
+  "dateRange": {
+    "from": "2025-01-01",
+    "to": "2025-12-31"
+  },
+  "query": {
+    "field": "level",
+    "operator": "eq",
+    "value": "ERROR"
+  }
+}
+```
+
+**执行流程：**
+1. 初始生成 365 个具体索引（超过阈值200，且HTTP请求行 > 4096字节）
+2. 自动降级到 LEVEL_1：生成 12 个月级通配符（`log_2025.01.*`, ..., `log_2025.12.*`）
+3. 查询成功
+
+**注意事项：**
+- 降级级别越高，查询精度越低，可能查询到范围外的索引
+- 建议在查询条件中添加时间过滤以保证精度
+- 通过日志可以监控降级触发情况
 
 ### 复杂查询条件
 

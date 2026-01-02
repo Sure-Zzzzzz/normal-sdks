@@ -152,6 +152,23 @@ public class ErrorMessage {
      */
     public static final String CONFIG_VALIDATION_FAILED = "Simple Elasticsearch Search 配置验证失败，请检查配置文件";
 
+    // ========== 降级相关 ==========
+
+    /**
+     * 降级失败
+     */
+    public static final String DOWNGRADE_FAILED = "查询降级失败，已达到最大降级级别但仍然失败";
+
+    /**
+     * 索引路由失败
+     */
+    public static final String INDEX_ROUTE_FAILED = "索引 [%s] 路由失败";
+
+    /**
+     * 不支持的降级级别
+     */
+    public static final String UNSUPPORTED_DOWNGRADE_LEVEL = "降级级别 [%s] 不适用于日期粒度 [%s]";
+
     private ErrorMessage() {
         // 私有构造函数，防止实例化
     }

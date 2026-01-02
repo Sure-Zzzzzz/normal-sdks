@@ -152,6 +152,30 @@ public class ErrorCode {
      */
     public static final String FIELD_NOT_AGGREGATABLE = "SEARCH_FIELD_003";
 
+    // ========== 降级相关错误码 ==========
+
+    /**
+     * 降级失败（所有降级级别都失败）
+     */
+    public static final String DOWNGRADE_FAILED = "SEARCH_DOWNGRADE_001";
+
+    /**
+     * 索引路由失败
+     */
+    public static final String INDEX_ROUTE_FAILED = "SEARCH_DOWNGRADE_002";
+
+    /**
+     * 不支持的降级级别
+     */
+    public static final String UNSUPPORTED_DOWNGRADE_LEVEL = "SEARCH_DOWNGRADE_003";
+
+    // ========== 通用错误码 ==========
+
+    /**
+     * 无效参数
+     */
+    public static final String INVALID_PARAMETER = "SEARCH_COMMON_001";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }

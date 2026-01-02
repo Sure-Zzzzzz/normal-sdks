@@ -57,6 +57,11 @@ public class SimpleElasticsearchSearchProperties {
      */
     private ApiConfig api = new ApiConfig();
 
+    /**
+     * 降级配置
+     */
+    private DowngradeConfig downgrade = new DowngradeConfig();
+
     @PostConstruct
     public void init() {
         log.info("Simple Elasticsearch Search enabled: {}", enable);
@@ -95,6 +100,9 @@ public class SimpleElasticsearchSearchProperties {
                 }
                 identifiers.add(identifier);
             }
+
+            // 4. 校验降级配置
+            validateDowngradeConfig();
 
             log.info("Configuration validation passed");
 
@@ -148,6 +156,37 @@ public class SimpleElasticsearchSearchProperties {
                 }
             }
         }
+    }
+
+    /**
+     * 校验降级配置
+     */
+    private void validateDowngradeConfig() {
+        if (!downgrade.isEnabled()) {
+            return;
+        }
+
+        // 1. 校验 maxLevel 范围 [0, 3]
+        if (downgrade.getMaxLevel() < 0 || downgrade.getMaxLevel() > 3) {
+            throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    String.format("downgrade.max-level must be between 0 and 3, got: %d", downgrade.getMaxLevel()));
+        }
+
+        // 2. 校验 maxHttpLineLength 必须为正数
+        if (downgrade.getMaxHttpLineLength() <= 0) {
+            throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    String.format("downgrade.max-http-line-length must be positive, got: %d", downgrade.getMaxHttpLineLength()));
+        }
+
+        // 3. 校验 autoDowngradeIndexCountThreshold 必须为正数
+        if (downgrade.getAutoDowngradeIndexCountThreshold() <= 0) {
+            throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    String.format("downgrade.auto-downgrade-index-count-threshold must be positive, got: %d",
+                            downgrade.getAutoDowngradeIndexCountThreshold()));
+        }
+
+        log.debug("Downgrade configuration validation passed: maxLevel={}, maxHttpLineLength={}, threshold={}",
+                downgrade.getMaxLevel(), downgrade.getMaxHttpLineLength(), downgrade.getAutoDowngradeIndexCountThreshold());
     }
 
     /**
@@ -321,5 +360,46 @@ public class SimpleElasticsearchSearchProperties {
          * </p>
          */
         private boolean includeRawResponse = false;
+    }
+
+    /**
+     * 降级配置
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class DowngradeConfig {
+        /**
+         * 是否启用降级功能
+         */
+        private boolean enabled = true;
+
+        /**
+         * HTTP 请求行最大长度（字节）
+         * Elasticsearch 默认限制为 4096 字节
+         */
+        private int maxHttpLineLength = 4096;
+
+        /**
+         * 最大降级级别（0-3）
+         * 0: 不降级，使用具体索引名
+         * 1: 一级降级（如月级通配符）
+         * 2: 二级降级（如年级通配符）
+         * 3: 三级降级（全通配符）
+         */
+        private int maxLevel = 3;
+
+        /**
+         * 是否启用预估触发
+         * true: 在发起查询前预估 HTTP 请求行长度，超限则直接降级
+         * false: 等失败后再降级（不推荐）
+         */
+        private boolean enableEstimate = true;
+
+        /**
+         * 索引数量阈值（用于快速预估）
+         * 当索引数量超过此值时，自动触发降级
+         */
+        private int autoDowngradeIndexCountThreshold = 200;
     }
 }

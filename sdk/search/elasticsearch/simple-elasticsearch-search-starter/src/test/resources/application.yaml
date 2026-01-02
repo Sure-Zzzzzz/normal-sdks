@@ -21,6 +21,14 @@ io:
                 cache-mapping: true
                 lazy-load: true
 
+              # 降级测试索引（用于端到端降级测试）
+              - name: "test_downgrade_log--*"
+                date-split: true
+                date-pattern: "yyyy.MM.dd"
+                date-field: "timestamp"
+                cache-mapping: true
+                lazy-load: true
+
               # 带别名的索引（少数场景） - 带敏感字段
               - name: "test_user_index"
                 alias: test_user
@@ -60,6 +68,14 @@ io:
               base-path: /api
               include-score: false
               include-raw-response: true
+
+            # 降级配置（索引路由智能降级）
+            downgrade:
+              enabled: true
+              max-http-line-length: 4096
+              max-level: 3
+              enable-estimate: true
+              auto-downgrade-index-count-threshold: 200
 
           # Route 配置
           route:

@@ -217,7 +217,7 @@ class SearchEndToEndTest {
         mockMvc.perform(get("/api/indices"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(4))
+                .andExpect(jsonPath("$.data.length()").value(5))
                 .andExpect(jsonPath("$.error").doesNotExist())
                 .andDo(result -> {
                     log.info("✓ 获取索引列表成功");
