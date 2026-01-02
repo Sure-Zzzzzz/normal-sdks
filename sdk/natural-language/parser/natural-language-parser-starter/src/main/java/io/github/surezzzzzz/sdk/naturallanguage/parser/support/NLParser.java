@@ -169,11 +169,11 @@ public class NLParser {
      * @param tokens token列表
      */
     private void logTokenizationResult(List<Token> tokens) {
-        if (!log.isInfoEnabled()) {
+        if (!log.isDebugEnabled()) {
             return;
         }
 
-        log.info("\n【Token化结果】共{}个token:", tokens.size());
+        log.debug("\n【Token化结果】共{}个token:", tokens.size());
         for (int i = 0; i < tokens.size(); i++) {
             Token token = tokens.get(i);
             StringBuilder tokenInfo = new StringBuilder();
@@ -200,8 +200,8 @@ public class NLParser {
                     // 其他类型不打印额外信息
                     break;
             }
-            log.info(tokenInfo.toString());
+            log.debug(tokenInfo.toString());
         }
-        log.info("");
+        log.debug("");
     }
 }

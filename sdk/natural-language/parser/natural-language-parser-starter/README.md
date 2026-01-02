@@ -23,7 +23,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.1'
 }
 ```
 
@@ -741,6 +741,14 @@ boolean isPossibleTypo = OperatorSuggester.isPossibleTypo("大雨");
 - HanLP portable 1.8.6
 
 ## 📝 版本历史
+
+### v1.0.1 (2026-01-02)
+
+**🐛 Bug修复**
+
+- 🔧 **日志等级优化** - 将 Token 化结果日志从 `INFO` 改为 `DEBUG`，减少生产环境日志输出
+  - 修改 `NLParser.logTokenizationResult()` 中的所有日志调用
+  - 默认不打印调试信息，需要时可通过配置启用 DEBUG 级别
 
 ### v1.0.0 (2026-01-01)
 
