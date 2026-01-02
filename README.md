@@ -12,8 +12,8 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.3 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.0.5 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.5 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.0.10 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 
 **核心特性**：
 - 多数据源路由和自动切换
@@ -26,8 +26,8 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-redis-lock-starter](sdk/lock/redis/simple-redis-lock-starter) | - | Redis 分布式锁 | [README](sdk/lock/redis/simple-redis-lock-starter/README.md) |
-| [simple-redis-limiter-starter](sdk/limiter/redis/simple-redis-limiter-starter) | - | Redis 限流器（简单版） | [README](sdk/limiter/redis/simple-redis-limiter-starter/README.md) |
+| [simple-redis-lock-starter](sdk/lock/redis/simple-redis-lock-starter) | 1.0.0 | Redis 分布式锁 | [README](sdk/lock/redis/simple-redis-lock-starter/README.md) |
+| [simple-redis-limiter-starter](sdk/limiter/redis/simple-redis-limiter-starter) | 1.0.1 | Redis 限流器（简单版） | [README](sdk/limiter/redis/simple-redis-limiter-starter/README.md) |
 | [smart-redis-limiter-starter](sdk/limiter/redis/smart-redis-limiter-starter) | 1.0.2 | Redis 限流器（智能版） | [README](sdk/limiter/redis/smart-redis-limiter-starter/README.md) |
 
 **核心特性**：
@@ -39,8 +39,8 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [task-retry-starter](sdk/retry/task-retry-starter) | - | 任务重试框架 | [README](sdk/retry/task-retry-starter/README.md) |
-| [redis-retry-starter](sdk/retry/redis-retry-starter) | - | Redis 持久化重试 | [README](sdk/retry/redis-retry-starter/README.md) |
+| [task-retry-starter](sdk/retry/task-retry-starter) | 1.0.0 | 任务重试框架 | [README](sdk/retry/task-retry-starter/README.md) |
+| [redis-retry-starter](sdk/retry/redis-retry-starter) | 1.0.0 | Redis 持久化重试 | [README](sdk/retry/redis-retry-starter/README.md) |
 
 **核心特性**：
 - 灵活的重试策略（指数退避、固定延迟）
@@ -50,8 +50,8 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [mail-client-starter](sdk/mail/mail-client-starter) | - | 邮件发送客户端 | [README](sdk/mail/mail-client-starter/README.md) |
-| [b2m-sms-client-starter](sdk/sms/b2m/b2m-sms-client-starter) | - | B2M 短信客户端 | [README](sdk/sms/b2m/b2m-sms-client-starter/README.md) |
+| [mail-client-starter](sdk/mail/mail-client-starter) | 1.0.0 | 邮件发送客户端 | [README](sdk/mail/mail-client-starter/README.md) |
+| [b2m-sms-client-starter](sdk/sms/b2m/b2m-sms-client-starter) | 1.0.0 | B2M 短信客户端 | [README](sdk/sms/b2m/b2m-sms-client-starter/README.md) |
 
 **核心特性**：
 - 支持 HTML/纯文本邮件
@@ -60,9 +60,9 @@
 
 ### ☁️ 对象存储
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
-| [s3-client-starter](sdk/oss/s3-client-starter) | - | AWS S3 兼容存储客户端 | [README](sdk/oss/s3-client-starter/README.md) |
+| SDK | 版本    | 说明 | 文档 |
+|-----|-------|------|------|
+| [s3-client-starter](sdk/oss/s3-client-starter) | 1.0.0 | AWS S3 兼容存储客户端 | [README](sdk/oss/s3-client-starter/README.md) |
 
 **核心特性**：
 - 支持 AWS S3、MinIO、阿里云 OSS 等
@@ -73,8 +73,8 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [prometheus-core](sdk/prometheus/prometheus-core) | - | Prometheus 核心库 | [README](sdk/prometheus/prometheus-core/README.md) |
-| [prometheus-client-starter](sdk/prometheus/prometheus-client-starter) | - | Prometheus 客户端 | [README](sdk/prometheus/prometheus-client-starter/README.md) |
+| [prometheus-core](sdk/prometheus/prometheus-core) | 1.0.0 | Prometheus 核心库 | [README](sdk/prometheus/prometheus-core/README.md) |
+| [prometheus-client-starter](sdk/prometheus/prometheus-client-starter) | 1.0.0 | Prometheus 客户端 | [README](sdk/prometheus/prometheus-client-starter/README.md) |
 
 **核心特性**：
 - 自定义指标采集
@@ -84,10 +84,10 @@
 
 ### 🌐 HTTP 客户端
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
-| [daydaymap-client-starter](sdk/curl/daydaymap/daydaymap-client-starter) | - | DayDayMap API 客户端 | - |
-| [opsalert-client-starter](sdk/curl/opsalert/opsalert-client-starter) | - | OpsAlert API 客户端 | - |
+| SDK | 版本             | 说明 | 文档 |
+|-----|----------------|------|------|
+| [daydaymap-client-starter](sdk/curl/daydaymap/daydaymap-client-starter) | 1.0.0-SNAPSHOT | DayDayMap API 客户端 | - |
+| [opsalert-client-starter](sdk/curl/opsalert/opsalert-client-starter) | 1.0.0-SNAPSHOT    | OpsAlert API 客户端 | - |
 
 **核心特性**：
 - 声明式 HTTP 客户端
@@ -98,7 +98,7 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [smart-keyword-sensitive-starter](sdk/sensitive/keyword/smart-keyword-sensitive-starter) | 1.0.0 | 关键词敏感信息脱敏 | [README](sdk/sensitive/keyword/smart-keyword-sensitive-starter/README.md) |
+| [smart-keyword-sensitive-starter](sdk/sensitive/keyword/smart-keyword-sensitive-starter) | 1.0.5 | 关键词敏感信息脱敏 | [README](sdk/sensitive/keyword/smart-keyword-sensitive-starter/README.md) |
 
 **核心特性**：
 - 自动识别组织机构（NLP + 规则引擎）
@@ -107,11 +107,24 @@
 - 范围退避Fallback（确保所有文本都被脱敏）
 - 多种脱敏策略（星号/占位符/哈希）
 
+### 🧠 自然语言处理
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.0.0 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
+
+**核心特性**：
+- 🎯 智能解析中英文查询，支持 15+ 种操作符
+- 🚀 AND/OR 逻辑组合，聚合查询，排序分页
+- 🌐 多分隔符智能识别，逗号歧义自动处理
+- ⚠️ 详细错误提示和智能拼写建议（Levenshtein 算法）
+- 🏗️ 策略模式 + 状态机设计，易扩展、高性能
+
 ### 📝 日志
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [log-truncate-starter](sdk/log/truncate/log-truncate-starter) | - | 日志截断工具 | [README](sdk/log/truncate/log-truncate-starter/README.md) |
+| [log-truncate-starter](sdk/log/truncate/log-truncate-starter) | 1.0.0 | 日志截断工具 | [README](sdk/log/truncate/log-truncate-starter/README.md) |
 
 **核心特性**：
 - 自动截断超长日志

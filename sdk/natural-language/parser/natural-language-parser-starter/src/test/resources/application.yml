@@ -1,0 +1,9 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        naturallanguage:
+          parser:
+            enabled: true
+            custom-stop-words:
+              - "测试停用词"
