@@ -23,7 +23,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz:natural-language-parser-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.0'
 }
 ```
 

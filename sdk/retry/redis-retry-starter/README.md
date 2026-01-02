@@ -14,7 +14,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.surezzzzzz:redis-retry-starter:1.0.0"
+    implementation "io.github.sure-zzzzzz:redis-retry-starter:1.0.0"
     
     // 必须显式引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-redis"
@@ -29,7 +29,7 @@ dependencies {
 
 ```xml
 <dependency>
-    <groupId>io.github.surezzzzzz</groupId>
+    <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>redis-retry-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
