@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +19,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class AggRequest {
 
     /**

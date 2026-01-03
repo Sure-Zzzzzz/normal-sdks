@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +20,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class AggDefinition {
 
     /**
@@ -59,6 +62,7 @@ public class AggDefinition {
     /**
      * 获取聚合类型枚举
      */
+    @JsonIgnore
     public AggType getTypeEnum() {
         return AggType.fromString(type);
     }

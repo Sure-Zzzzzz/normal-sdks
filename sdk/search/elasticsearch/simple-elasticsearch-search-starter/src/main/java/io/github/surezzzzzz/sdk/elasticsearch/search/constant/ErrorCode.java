@@ -176,6 +176,13 @@ public class ErrorCode {
      */
     public static final String INVALID_PARAMETER = "SEARCH_COMMON_001";
 
+    // ========== 自然语言转换错误码 ==========
+
+    /**
+     * NL转DSL翻译失败
+     */
+    public static final String NL_TRANSLATION_FAILED = "SEARCH_NL_001";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }

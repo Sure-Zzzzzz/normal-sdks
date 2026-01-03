@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
 import lombok.AllArgsConstructor;
@@ -19,6 +21,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class QueryCondition {
 
     /**
@@ -55,6 +58,7 @@ public class QueryCondition {
     /**
      * 获取操作符枚举
      */
+    @JsonIgnore
     public QueryOperator getOperatorEnum() {
         return QueryOperator.fromString(op);
     }
@@ -62,6 +66,7 @@ public class QueryCondition {
     /**
      * 是否为逻辑组合条件
      */
+    @JsonIgnore
     public boolean isLogicCondition() {
         return conditions != null && !conditions.isEmpty();
     }

@@ -16,6 +16,7 @@
 - **深分页支持**：自动切换 offset 和 search_after 分页策略
 - **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
 - **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
+- **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -24,7 +25,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.0.10'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.0'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -270,6 +271,113 @@ POST /api/indices/refresh
 # 刷新指定索引
 POST /api/indices/user_behavior/refresh
 ```
+
+#### 自然语言转 DSL（v1.1.0+）
+
+将中文自然语言查询转换为标准的 QueryRequest 或 AggRequest 对象：
+
+**查询示例：**
+
+```bash
+GET /api/nl/dsl?text=查询user_behavior索引，age大于等于18并且city在Beijing、Shanghai，按createTime降序，取50条
+```
+
+响应（直接返回 DSL 对象，无包装）：
+
+```json
+{
+  "index": "user_behavior",
+  "query": {
+    "logic": "and",
+    "conditions": [
+      {
+        "field": "age",
+        "op": "gte",
+        "value": 18
+      },
+      {
+        "field": "city",
+        "op": "in",
+        "values": ["Beijing", "Shanghai"]
+      }
+    ]
+  },
+  "pagination": {
+    "type": "offset",
+    "page": 1,
+    "size": 50,
+    "sort": [
+      {
+        "field": "createTime",
+        "order": "desc"
+      }
+    ]
+  }
+}
+```
+
+**聚合示例：**
+
+```bash
+GET /api/nl/dsl?text=查询user_behavior索引，status等于active，按city分组前10名计算age平均值，按createTime每天统计
+```
+
+响应：
+
+```json
+{
+  "index": "user_behavior",
+  "query": {
+    "field": "status",
+    "op": "eq",
+    "value": "active"
+  },
+  "aggs": [
+    {
+      "name": "city_distribution",
+      "type": "terms",
+      "field": "city",
+      "size": 10,
+      "aggs": [
+        {
+          "name": "avg_age",
+          "type": "avg",
+          "field": "age"
+        }
+      ]
+    },
+    {
+      "name": "daily_stats",
+      "type": "date_histogram",
+      "field": "createTime",
+      "interval": "1d"
+    }
+  ]
+}
+```
+
+**与其他 API 配合使用：**
+
+生成的 DSL 对象可以直接传递给 `/api/query` 或 `/api/agg` 执行查询：
+
+```javascript
+// 步骤 1：生成 DSL
+const dsl = await fetch('/api/nl/dsl?text=查询订单，状态为已完成，按时间降序，取20条')
+  .then(res => res.json());
+
+// 步骤 2：执行查询
+const result = await fetch('/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(dsl)
+}).then(res => res.json());
+```
+
+**注意事项：**
+- 自然语言中的字段名需要与索引中的实际字段名一致
+- 必须通过自然语言或 `index` 参数指定索引名
+- 未指定分页时自动应用 `query-limits.default-size`（默认 20 条）
+- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)
 
 ## 查询操作符
 

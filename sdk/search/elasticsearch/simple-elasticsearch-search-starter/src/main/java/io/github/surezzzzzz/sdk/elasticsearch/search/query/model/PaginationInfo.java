@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.PaginationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +19,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class PaginationInfo {
 
     /**
@@ -47,6 +50,7 @@ public class PaginationInfo {
     /**
      * 获取分页类型枚举
      */
+    @JsonIgnore
     public PaginationType getTypeEnum() {
         return PaginationType.fromString(type);
     }
@@ -54,6 +58,7 @@ public class PaginationInfo {
     /**
      * 是否为 offset 分页
      */
+    @JsonIgnore
     public boolean isOffsetPagination() {
         return PaginationType.OFFSET == getTypeEnum();
     }
@@ -61,6 +66,7 @@ public class PaginationInfo {
     /**
      * 是否为 search_after 分页
      */
+    @JsonIgnore
     public boolean isSearchAfterPagination() {
         return PaginationType.SEARCH_AFTER == getTypeEnum();
     }

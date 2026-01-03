@@ -10,10 +10,10 @@
 
 ### 🔍 Elasticsearch
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
+| SDK | 版本    | 说明 | 文档 |
+|-----|-------|------|------|
 | [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.5 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.0.10 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.0 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 
 **核心特性**：
 - 多数据源路由和自动切换
@@ -109,9 +109,9 @@
 
 ### 🧠 自然语言处理
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
-| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.0.0 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
+| SDK | 版本    | 说明 | 文档 |
+|-----|-------|------|------|
+| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.0.4 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
 
 **核心特性**：
 - 🎯 智能解析中英文查询，支持 15+ 种操作符
