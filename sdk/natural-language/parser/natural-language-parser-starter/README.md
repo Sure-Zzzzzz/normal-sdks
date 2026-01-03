@@ -24,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.4'
 }
 ```
 
@@ -767,6 +767,29 @@ boolean isPossibleTypo = OperatorSuggester.isPossibleTypo("大雨");
 - HanLP portable 1.8.6
 
 ## 📝 版本历史
+
+### v1.0.4 (2026-01-03)
+
+**🐛 Bug修复（紧急）**
+
+v1.0.3 发布后用户立即反馈了3个关键缺陷，本版本进行了紧急修复。
+
+- 🔧 **聚合分段失败** - 修复了逗号分隔的并行聚合无法解析的问题
+  - 添加逗号（`,` 和 `，`）到聚合分隔符列表
+  - 修复场景：`按city分组前10名计算age平均值，按createTime每天统计`
+  - 详见：[CHANGELOG.1.0.4.md](CHANGELOG.1.0.4.md#bug-1-聚合分段失败---逗号分隔符支持-)
+
+- 🔧 **分页解析失败** - 修复了"取N条"分页表达无法识别的问题
+  - 添加"取"关键词到分页关键词列表
+  - 修复场景：`取50条`、`跳过20条，取10条`
+  - 详见：[CHANGELOG.1.0.4.md](CHANGELOG.1.0.4.md#bug-2-分页解析失败---取关键词缺失-)
+
+- 🔧 **字段识别失败** - 修复了嵌套聚合中字段识别失败的问题
+  - 实现字段双向查找（向前+向后）
+  - 修复场景：`按城市分组前10名计算年龄平均值`
+  - 详见：[CHANGELOG.1.0.4.md](CHANGELOG.1.0.4.md#bug-3-字段识别失败---字段双向查找-)
+
+**⚠️ 强烈推荐所有 v1.0.3 用户升级到 v1.0.4**
 
 ### v1.0.3 (2026-01-03)
 

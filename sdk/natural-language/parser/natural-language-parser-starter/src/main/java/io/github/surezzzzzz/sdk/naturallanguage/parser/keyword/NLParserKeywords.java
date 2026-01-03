@@ -56,7 +56,8 @@ public class NLParserKeywords {
             "限制",
             "最多",
             "前",
-            "返回"
+            "返回",
+            "取"    // 取N条
     ));
 
     /**

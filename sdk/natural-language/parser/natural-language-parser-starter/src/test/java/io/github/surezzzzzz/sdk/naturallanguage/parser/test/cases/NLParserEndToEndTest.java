@@ -238,7 +238,7 @@ class NLParserEndToEndTest {
                 "名字包含张或李或王，" +
                 "积分介于100,1000，" +
                 "按创建时间降序，按年龄升序，" +
-                "跳过50条，返回20条";
+                "跳过50条，取20条";
         log.info("查询: {}", query15);
         QueryIntent q15 = asQueryIntent(nlParser.parse(query15));
         log.info("解析结果: {}", q15);

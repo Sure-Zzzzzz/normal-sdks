@@ -307,12 +307,28 @@ public class AggregationParser {
                     MetricAggInfo info = new MetricAggInfo();
                     info.type = aggType;
                     info.tokenIndex = i;
-                    info.field = findFieldAfterToken(segment, i, MAX_FIELD_LOOKAHEAD_DISTANCE);
+                    info.field = findMetricField(segment, i);
                     return info;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * 查找指标聚合的字段（双向查找）
+     * 优先向后查找（标准模式："统计平均年龄"）
+     * 如果未找到，向前查找（变体模式："计算年龄平均值"）
+     */
+    private String findMetricField(AggSegment segment, int aggTokenIndex) {
+        // 优先向后查找
+        String forwardField = findFieldAfterToken(segment, aggTokenIndex, MAX_FIELD_LOOKAHEAD_DISTANCE);
+        if (forwardField != null) {
+            return forwardField;
+        }
+
+        // 向前查找
+        return findFieldBeforeToken(segment, aggTokenIndex);
     }
 
     // ==================== 字段查找逻辑 ====================

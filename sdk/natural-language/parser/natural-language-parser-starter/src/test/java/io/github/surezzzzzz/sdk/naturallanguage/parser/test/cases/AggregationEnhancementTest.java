@@ -55,7 +55,7 @@ class AggregationEnhancementTest {
         //   ]
         // }
 
-        String query = "查询user_behavior索引，status等于active，按城市分组前10个统计平均年龄，同时按创建时间每天统计";
+        String query = "查询user_behavior索引，status等于active，按城市分组前10名计算年龄平均值，按创建时间每天统计";
         log.info("查询: {}", query);
 
         Intent intent = nlParser.parse(query);

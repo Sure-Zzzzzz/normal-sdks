@@ -128,6 +128,8 @@ public class AggKeywords {
         AGG_SEPARATORS.add("再");
         AGG_SEPARATORS.add("且");
         AGG_SEPARATORS.add("及");
+        AGG_SEPARATORS.add(",");    // 逗号也可以作为聚合分隔符
+        AGG_SEPARATORS.add("，");   // 中文逗号
 
         // ========== 嵌套指示词 ==========
         NESTED_INDICATORS.add("统计");
