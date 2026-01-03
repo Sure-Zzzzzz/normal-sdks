@@ -23,7 +23,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.2'
 }
 ```
 
@@ -741,6 +741,15 @@ boolean isPossibleTypo = OperatorSuggester.isPossibleTypo("大雨");
 - HanLP portable 1.8.6
 
 ## 📝 版本历史
+
+### v1.0.2 (2026-01-03)
+
+**🐛 Bug修复**
+
+- 🔧 **索引名提取bug修复** - 修复了包含逻辑关键词的索引名无法提取的问题
+  - 修复场景：`user_behavior` 中的 "or" 被HanLP识别为LOGIC类型，导致索引名提取失败
+  - 修改 `IndexExtractor` 接受 LOGIC、OPERATOR 类型的 token 作为索引名的一部分
+  - 支持更多复杂的索引命名场景（包含 or、and、in 等关键词的索引名）
 
 ### v1.0.1 (2026-01-02)
 
