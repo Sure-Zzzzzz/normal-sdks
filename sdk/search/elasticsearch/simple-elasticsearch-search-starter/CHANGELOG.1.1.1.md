@@ -65,16 +65,16 @@ GET /api/nl/dsl?text=查询订单索引，status等于completed，时间范围20
 **示例 2：时间范围 + 复杂条件 + 排序**
 
 ```bash
-GET /api/nl/dsl?text=查询k01_attack_trajectory_log-*索引，目标IP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按时间戳降序，返回500条
+GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，返回500条
 ```
 
 响应：
 
 ```json
 {
-  "index": "k01_attack_trajectory_log-*",
+  "index": "app_access_log-*",
   "query": {
-    "field": "目标IP",
+    "field": "clientIP",
     "op": "eq",
     "value": "192.168.1.1"
   },
@@ -88,7 +88,7 @@ GET /api/nl/dsl?text=查询k01_attack_trajectory_log-*索引，目标IP等于192
     "size": 500,
     "sort": [
       {
-        "field": "时间戳",
+        "field": "timestamp",
         "order": "desc"
       }
     ]

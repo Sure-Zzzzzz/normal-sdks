@@ -18,6 +18,7 @@
 - **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
 - **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
   - **时间范围支持**：支持从自然语言中解析时间范围条件（v1.1.1+）
+  - **search_after 深度分页**：支持从自然语言中解析 search_after 游标值（v1.1.2+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -26,7 +27,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.2'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -391,6 +392,40 @@ GET /api/nl/dsl?text=查询user_behavior索引，status等于active，时间范�
 }
 ```
 
+**search_after 深度分页示例（v1.1.2+）：**
+
+```bash
+GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条
+```
+
+响应：
+
+```json
+{
+  "index": "app_access_log-*",
+  "query": {
+    "field": "clientIP",
+    "op": "eq",
+    "value": "192.168.1.1"
+  },
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2026-01-01T00:00:00"
+  },
+  "pagination": {
+    "type": "search_after",
+    "searchAfter": [1704110400000, "user_123", "doc_456"],
+    "size": 500,
+    "sort": [
+      {
+        "field": "timestamp",
+        "order": "desc"
+      }
+    ]
+  }
+}
+```
+
 **与其他 API 配合使用：**
 
 生成的 DSL 对象可以直接传递给 `/api/query` 或 `/api/agg` 执行查询：
@@ -413,7 +448,143 @@ const result = await fetch('/api/query', {
 - 必须通过自然语言或 `index` 参数指定索引名
 - 未指定分页时自动应用 `query-limits.default-size`（默认 20 条）
 - **时间范围支持（v1.1.1+）**：支持"时间范围2025-01-01到2025-12-31"等语法
-- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md) 和 [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)
+- **search_after 深度分页（v1.1.2+）**：支持"接着[value1,value2]继续查询"等语法
+- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)、[CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md) 和 [CHANGELOG.1.1.2.md](CHANGELOG.1.1.2.md)
+
+## DSL 最佳实践
+
+以下示例展示了如何使用自然语言查询 + search_after 深度分页处理复杂的日志查询场景，涵盖了条件查询、时间范围过滤、排序和深度分页等核心功能。
+
+### 场景：大规模日志深度分页查询
+
+**需求**：查询某个客户端的访问日志，时间范围为一整年，按时间戳降序，使用 search_after 进行深度分页，每次返回 500 条。
+
+**步骤 1：生成第一页查询 DSL**
+
+```bash
+GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，返回500条
+```
+
+响应（自动生成的 DSL）：
+
+```json
+{
+  "index": "app_access_log-*",
+  "query": {
+    "field": "clientIP",
+    "op": "eq",
+    "value": "192.168.1.1"
+  },
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2026-01-01T00:00:00"
+  },
+  "pagination": {
+    "type": "offset",
+    "page": 1,
+    "size": 500,
+    "sort": [
+      {
+        "field": "timestamp",
+        "order": "desc"
+      }
+    ]
+  }
+}
+```
+
+**步骤 2：执行第一页查询**
+
+将生成的 DSL 发送给 `/api/query` 执行：
+
+```javascript
+const dsl = await fetch('/api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，返回500条')
+  .then(res => res.json());
+
+const result = await fetch('/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(dsl)
+}).then(res => res.json());
+
+// 响应数据中包含 search_after 值
+const lastHit = result.data.hits[result.data.hits.length - 1];
+const searchAfterValue = lastHit.sort; // 例如：[1704110400000, "user_123", "doc_456"]
+```
+
+**步骤 3：生成第二页查询 DSL（使用 search_after）**
+
+使用上一页的最后一条记录的 `sort` 值作为 searchAfter 参数：
+
+```bash
+GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条
+```
+
+响应（DSL 自动切换到 search_after 分页）：
+
+```json
+{
+  "index": "app_access_log-*",
+  "query": {
+    "field": "clientIP",
+    "op": "eq",
+    "value": "192.168.1.1"
+  },
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2026-01-01T00:00:00"
+  },
+  "pagination": {
+    "type": "search_after",
+    "searchAfter": [1704110400000, "user_123", "doc_456"],
+    "size": 500,
+    "sort": [
+      {
+        "field": "timestamp",
+        "order": "desc"
+      }
+    ]
+  }
+}
+```
+
+**步骤 4：执行第二页查询**
+
+```javascript
+const nextPageDsl = await fetch('/api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条')
+  .then(res => res.json());
+
+const nextResult = await fetch('/api/query', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(nextPageDsl)
+}).then(res => res.json());
+
+// 继续获取下一页的 search_after 值...
+```
+
+### 关键特性说明
+
+1. **条件查询**：`clientIP等于192.168.1.1` → 精确匹配过滤
+2. **时间范围过滤**：`时间范围2025-01-01到2026-01-01` → 自动转换为 `dateRange` 字段
+3. **日期分割索引路由**：`app_access_log-*` → 框架根据 `dateRange` 自动计算需要查询的具体索引
+4. **排序**：`按timestamp降序` → 确保结果按时间倒序排列
+5. **深度分页**：`接着[value1,value2,value3]继续查询` → 使用 search_after 避免 Elasticsearch 10000 条的 `max_result_window` 限制
+6. **多值 searchAfter**：支持多个排序字段的游标值（timestamp、user_id、doc_id 等）
+
+### 适用场景
+
+- ✅ 日志导出（需要遍历大量数据）
+- ✅ 数据迁移（跨集群同步）
+- ✅ 安全审计（长时间跨度的用户行为分析）
+- ✅ 实时数据流（持续获取新增数据）
+
+### 性能优化建议
+
+- 使用 `search_after` 替代 `offset` 进行深度分页（offset > 10000 时强制切换）
+- 排序字段建议包含唯一标识字段（如 `_id`）以保证结果稳定性
+- 大范围时间查询时，框架自动启用索引路由降级策略（v1.0.10+）
+- 配置 `date-field` 后，框架自动在 DSL 中添加时间过滤以提高查询精度
 
 ## 查询操作符
 
