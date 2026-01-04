@@ -107,5 +107,6 @@ io:
 
 logging:
   level:
+    root: debug
     io.github.surezzzzzz.sdk.elasticsearch.search: DEBUG
     io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG

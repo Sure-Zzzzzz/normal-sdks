@@ -17,6 +17,7 @@
 - **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
 - **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
 - **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
+  - **时间范围支持**：支持从自然语言中解析时间范围条件（v1.1.1+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -25,7 +26,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.1'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -356,6 +357,40 @@ GET /api/nl/dsl?text=查询user_behavior索引，status等于active，按city分
 }
 ```
 
+**时间范围查询示例（v1.1.1+）：**
+
+```bash
+GET /api/nl/dsl?text=查询user_behavior索引，status等于active，时间范围2025-01-01到2025-12-31，按createTime降序
+```
+
+响应：
+
+```json
+{
+  "index": "user_behavior",
+  "query": {
+    "field": "status",
+    "op": "eq",
+    "value": "active"
+  },
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2025-12-31T00:00:00"
+  },
+  "pagination": {
+    "type": "offset",
+    "page": 1,
+    "size": 20,
+    "sort": [
+      {
+        "field": "createTime",
+        "order": "desc"
+      }
+    ]
+  }
+}
+```
+
 **与其他 API 配合使用：**
 
 生成的 DSL 对象可以直接传递给 `/api/query` 或 `/api/agg` 执行查询：
@@ -377,7 +412,8 @@ const result = await fetch('/api/query', {
 - 自然语言中的字段名需要与索引中的实际字段名一致
 - 必须通过自然语言或 `index` 参数指定索引名
 - 未指定分页时自动应用 `query-limits.default-size`（默认 20 条）
-- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)
+- **时间范围支持（v1.1.1+）**：支持"时间范围2025-01-01到2025-12-31"等语法
+- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md) 和 [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)
 
 ## 查询操作符
 

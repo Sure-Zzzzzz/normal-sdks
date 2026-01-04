@@ -67,6 +67,11 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
             builder.query(translateCondition(queryIntent.getCondition()));
         }
 
+        // 转换日期范围
+        if (queryIntent.hasDateRange()) {
+            builder.dateRange(translateDateRange(queryIntent.getDateRange()));
+        }
+
         // 转换分页信息（总是添加，即使Intent没有pagination，也会生成默认值）
         builder.pagination(translatePagination(queryIntent.getPagination(), queryIntent.getSorts()));
 
@@ -246,6 +251,20 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
         return PaginationInfo.SortField.builder()
                 .field(sortIntent.getFieldHint())
                 .order(sortIntent.getOrder().name().toLowerCase())
+                .build();
+    }
+
+    /**
+     * 转换DateRangeIntent为DateRange
+     */
+    private QueryRequest.DateRange translateDateRange(DateRangeIntent dateRangeIntent) {
+        if (dateRangeIntent == null) {
+            return null;
+        }
+
+        return QueryRequest.DateRange.builder()
+                .from(dateRangeIntent.getFrom())
+                .to(dateRangeIntent.getTo())
                 .build();
     }
 }
