@@ -25,7 +25,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.5'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.0.6'
 }
 ```
 
@@ -169,6 +169,24 @@ nlParser.parse("时间范围2025-01-01到2026-01-01，年龄大于18，返回100
 | 关键词           | 示例             |
 |---------------|----------------|
 | 限制、最多、前、limit | `限制10条`、`前20条` |
+| 跳过、offset | `跳过20条` |
+| 继续查询、接着 | `继续查询，返回100条` |
+
+**search_after 深度分页：**
+
+支持 Elasticsearch search_after 游标值解析：
+
+```java
+// 方式1：只标识续查
+nlParser.parse("继续查询，返回100条");
+// → continueSearch=true, limit=100
+
+// 方式2：指定游标值（推荐）
+nlParser.parse("接着[1704110400000,user_123]继续查询，返回100条");
+// → continueSearch=true, searchAfter=[1704110400000L, "user_123"], limit=100
+```
+
+**游标值格式：** `[value1,value2,value3]`，自动识别类型（Long/Double/String）
 
 ## 💡 高级特性
 

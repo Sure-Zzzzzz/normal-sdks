@@ -5,7 +5,11 @@ import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.NLParserKeywords;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.PaginationIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 分页解析器
@@ -16,6 +20,7 @@ import java.util.List;
  * 4. "从第21条开始，返回10条" → offset=20, limit=10
  * 5. "返回第21到30条" → offset=20, limit=10
  * 6. "继续查询，返回10条" → continueSearch=true, limit=10（用于ES search_after）
+ * 7. "接着[value1,value2]继续查询" → continueSearch=true, searchAfter=[value1,value2]
  * <p>
  * 线程安全：无状态，线程安全
  *
@@ -42,6 +47,12 @@ public class PaginationParser {
     private static final String KEYWORD_RETURN_EN = "return"; // return
 
     /**
+     * search_after 游标值模式：接着[value1,value2]继续查询
+     * 匹配方括号内的逗号分隔值
+     */
+    private static final Pattern SEARCH_AFTER_PATTERN = Pattern.compile("\\[([^\\]]+)\\]");
+
+    /**
      * 解析分页表达式
      *
      * @param tokens token列表
@@ -52,6 +63,9 @@ public class PaginationParser {
             return null;
         }
 
+        // 重构原始文本用于 search_after 模式匹配
+        String fullText = reconstructText(tokens);
+
         Integer limit = null;
         Integer offset = null;
         Integer page = null;
@@ -59,6 +73,9 @@ public class PaginationParser {
         Integer rangeStart = null;
         Integer rangeEnd = null;
         Boolean continueSearch = null;
+
+        // 提取 search_after 游标值（如果有）
+        List<Object> searchAfter = extractSearchAfter(fullText);
 
         for (int i = 0; i < tokens.size(); i++) {
             Token token = tokens.get(i);
@@ -170,13 +187,14 @@ public class PaginationParser {
         }
 
         // 至少有一个分页参数才返回
-        if (limit != null || offset != null || page != null || size != null || continueSearch != null) {
+        if (limit != null || offset != null || page != null || size != null || continueSearch != null || searchAfter != null) {
             return PaginationIntent.builder()
                     .limit(limit)
                     .offset(offset)
                     .page(page)
                     .size(size)
                     .continueSearch(continueSearch)
+                    .searchAfter(searchAfter)
                     .build();
         }
 
@@ -238,5 +256,65 @@ public class PaginationParser {
             }
         }
         return -1;
+    }
+
+    /**
+     * 重构原始文本
+     * 将 token 列表拼接回文本，用于模式匹配
+     */
+    private String reconstructText(List<Token> tokens) {
+        return tokens.stream()
+                .map(Token::getText)
+                .collect(Collectors.joining());
+    }
+
+    /**
+     * 提取 search_after 游标值
+     * 支持格式：接着[value1,value2]继续查询
+     *
+     * @param text 原始文本
+     * @return search_after 值列表，如果没有则返回null
+     */
+    private List<Object> extractSearchAfter(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+
+        Matcher matcher = SEARCH_AFTER_PATTERN.matcher(text);
+        if (matcher.find()) {
+            String bracketContent = matcher.group(1); // 方括号内的内容
+            if (bracketContent != null && !bracketContent.trim().isEmpty()) {
+                // 按逗号分割
+                String[] values = bracketContent.split(",");
+                List<Object> result = new ArrayList<>();
+                for (String value : values) {
+                    String trimmed = value.trim();
+                    if (!trimmed.isEmpty()) {
+                        result.add(parseValue(trimmed));
+                    }
+                }
+                return result.isEmpty() ? null : result;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 智能解析值类型
+     * 尝试解析为数字（Long/Double），失败则保持字符串
+     *
+     * @param value 待解析的值
+     * @return 解析后的对象（Long/Double/String）
+     */
+    private Object parseValue(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e1) {
+            try {
+                return Double.parseDouble(value);
+            } catch (NumberFormatException e2) {
+                return value;
+            }
+        }
     }
 }
