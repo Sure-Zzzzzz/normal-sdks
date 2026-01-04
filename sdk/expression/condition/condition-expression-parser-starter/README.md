@@ -25,7 +25,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.0-SNAPSHOT'
+    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.0'
 }
 ```
 

@@ -111,7 +111,7 @@
 
 | SDK | 版本    | 说明 | 文档 |
 |-----|-------|------|------|
-| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.0.4 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
+| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.0.6 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
 
 **核心特性**：
 - 🎯 智能解析中英文查询，支持 15+ 种操作符
@@ -119,6 +119,21 @@
 - 🌐 多分隔符智能识别，逗号歧义自动处理
 - ⚠️ 详细错误提示和智能拼写建议（Levenshtein 算法）
 - 🏗️ 策略模式 + 状态机设计，易扩展、高性能
+
+### 🎯 表达式解析
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [condition-expression-parser-starter](sdk/expression/condition/condition-expression-parser-starter) | 1.0.0 | 条件表达式解析器 | [README](sdk/expression/condition/condition-expression-parser-starter/README.md) |
+
+**核心特性**：
+- 🎯 **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
+- 🚀 **功能完善** - 6大类运算符：比较、集合、模糊匹配、空值检查、逻辑运算、括号优先级
+- 📊 **多值类型** - 字符串、整数、浮点数、布尔值、时间范围枚举（30+ 种预定义）
+- 🔧 **Visitor 模式** - AST 输出，业务层自由转换为 SQL、ES DSL、MongoDB Query 等
+- 📦 **策略模式** - 值解析采用策略模式，优先级可配置，易扩展
+- 🌐 **中英文支持** - 关键字支持中英文，大小写不敏感
+- ⚠️ **友好错误** - 自定义异常，详细错误信息、位置提示、友好消息
 
 ### 📝 日志
 
