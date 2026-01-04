@@ -1,0 +1,12 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        expression:
+          condition:
+            parser:
+              enabled: true
+
+logging:
+  level:
+    root: info

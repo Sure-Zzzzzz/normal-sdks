@@ -1,0 +1,55 @@
+// ========== ANTLR 插件配置 ==========
+// 在子模块单独应用 ANTLR 插件，用于自动生成词法/语法分析器代码
+apply plugin: 'antlr'
+
+dependencies {
+    // ANTLR 工具（用于从 .g4 文件生成 Java 代码）
+    antlr 'org.antlr:antlr4:4.10.1'
+
+    // ANTLR 运行时（生成的代码依赖此库）- 4.10.1 支持 Java 8
+    implementation 'org.antlr:antlr4-runtime:4.10.1'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // JSON 处理
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
+    // 测试
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
+
+// ========== ANTLR 代码生成配置 ==========
+generateGrammarSource {
+    // 生成访问者模式接口（我们需要用来实现 AST 转换）
+    arguments += ['-visitor']
+
+    // 不生成监听器（我们不需要）
+    arguments += ['-no-listener']
+
+    // 指定生成代码的包名（ANTLR 会自动创建对应的包目录结构）
+    arguments += ['-package', 'io.github.surezzzzzz.sdk.expression.condition.parser.antlr']
+
+    // 输出目录：只指定基础目录，ANTLR 会根据 -package 参数自动创建包路径
+    outputDirectory = file("${project.buildDir}/generated-src/antlr/main")
+}
+
+// ========== 将生成的代码加入编译路径（但不加入 allSource，避免被 sourcesJar 打包）==========
+// 方法：直接在 compileJava 任务中添加源码，而不是修改 sourceSet
+compileJava {
+    source "${project.buildDir}/generated-src/antlr/main"
+}
+
+// ========== 确保编译前先生成 ANTLR 代码 ==========
+compileJava.dependsOn generateGrammarSource
+
+// ========== 配置 sourcesJar 与 ANTLR 生成任务的依赖关系 ==========
+// maven-publish 插件会自动收集源码，包括生成的代码目录
+// 声明依赖关系以消除 Gradle 警告
+afterEvaluate {
+    tasks.findByName('sourcesJar')?.dependsOn(generateGrammarSource)
+}
