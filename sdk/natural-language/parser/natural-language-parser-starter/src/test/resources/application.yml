@@ -7,3 +7,7 @@ io:
             enabled: true
             custom-stop-words:
               - "测试停用词"
+
+logging:
+  level:
+    root: info

@@ -189,6 +189,9 @@ public class IndexExtractor {
      * - UNKNOWN：正常识别的索引名
      * - LOGIC：容错，因为像"user_behavior"中的"or"可能被识别为逻辑词
      * - OPERATOR：容错，因为下划线等符号可能被识别为操作符
+     * - NUMBER：支持数字前缀，如"db01_user_log"中的"01"
+     * - FIELD_CANDIDATE：支持字段候选类型的索引名部分
+     * - VALUE：支持值类型的索引名部分
      */
     private boolean isValidIndexNameToken(Token token) {
         if (token == null) {
@@ -198,7 +201,10 @@ public class IndexExtractor {
         TokenType type = token.getType();
         return type == TokenType.UNKNOWN ||
                 type == TokenType.LOGIC ||
-                type == TokenType.OPERATOR;
+                type == TokenType.OPERATOR ||
+                type == TokenType.NUMBER ||
+                type == TokenType.FIELD_CANDIDATE ||
+                type == TokenType.VALUE;
     }
 
     /**

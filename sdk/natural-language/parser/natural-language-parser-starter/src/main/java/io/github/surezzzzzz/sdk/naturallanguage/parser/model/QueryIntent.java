@@ -1,7 +1,10 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.IntentType;
-import lombok.*;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +37,11 @@ public class QueryIntent extends Intent {
     private PaginationIntent pagination;
 
     /**
+     * 时间范围过滤
+     */
+    private DateRangeIntent dateRange;
+
+    /**
      * 字段投影（只返回指定字段）
      */
     @Builder.Default
@@ -61,6 +69,13 @@ public class QueryIntent extends Intent {
     }
 
     /**
+     * 是否包含时间范围过滤
+     */
+    public boolean hasDateRange() {
+        return dateRange != null && dateRange.isValid();
+    }
+
+    /**
      * 初始化
      */
     public QueryIntent() {
@@ -78,6 +93,21 @@ public class QueryIntent extends Intent {
         this.condition = condition;
         this.sorts = sorts != null ? sorts : new ArrayList<>();
         this.pagination = pagination;
+        this.dateRange = null;
+        this.fieldHints = fieldHints != null ? fieldHints : new ArrayList<>();
+    }
+
+    /**
+     * 完整构造函数（包含dateRange）
+     */
+    public QueryIntent(ConditionIntent condition, List<SortIntent> sorts,
+                       PaginationIntent pagination, DateRangeIntent dateRange,
+                       List<String> fieldHints) {
+        super(IntentType.QUERY);
+        this.condition = condition;
+        this.sorts = sorts != null ? sorts : new ArrayList<>();
+        this.pagination = pagination;
+        this.dateRange = dateRange;
         this.fieldHints = fieldHints != null ? fieldHints : new ArrayList<>();
     }
 }

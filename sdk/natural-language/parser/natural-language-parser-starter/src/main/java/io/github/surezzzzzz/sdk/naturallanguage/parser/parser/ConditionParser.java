@@ -7,7 +7,6 @@ import io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseExceptio
 import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.AggKeywords;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.NLParserKeywords;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.ConditionIntent;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.support.OperatorSuggester;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 
 import java.util.ArrayList;
@@ -74,7 +73,22 @@ public class ConditionParser {
             switch (state) {
                 case EXPECT_FIELD:
                     if (token.getType() == TokenType.UNKNOWN || token.getType() == TokenType.FIELD_CANDIDATE) {
-                        currentField = token.getText();
+                        // 合并连续的字段tokens（如"目标IP"会被分成"目标"和"IP"两个tokens）
+                        StringBuilder fieldBuilder = new StringBuilder(token.getText());
+                        int lookAhead = i + 1;
+                        while (lookAhead < tokens.size()) {
+                            Token nextToken = tokens.get(lookAhead);
+                            if (nextToken.getType() == TokenType.UNKNOWN ||
+                                    nextToken.getType() == TokenType.FIELD_CANDIDATE) {
+                                fieldBuilder.append(nextToken.getText());
+                                lookAhead++;
+                            } else {
+                                break;
+                            }
+                        }
+                        currentField = fieldBuilder.toString();
+                        // 跳过已经合并的tokens
+                        i = lookAhead - 1;
                         state = ParseState.EXPECT_OPERATOR;
                     }
                     break;

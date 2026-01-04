@@ -69,6 +69,11 @@ public class NLParser {
     private final PaginationParser paginationParser;
 
     /**
+     * 时间范围解析器
+     */
+    private final DateRangeParser dateRangeParser;
+
+    /**
      * 构造函数
      *
      * @param tokenizer 分词器实例（必须非null）
@@ -86,6 +91,7 @@ public class NLParser {
         this.aggregationParser = new AggregationParser();
         this.sortParser = new SortParser();
         this.paginationParser = new PaginationParser();
+        this.dateRangeParser = new DateRangeParser();
     }
 
     /**
@@ -111,7 +117,10 @@ public class NLParser {
             // 2. 提取索引/表名（会修改tokens列表，移除已识别的索引相关token）
             String indexHint = indexExtractor.extractAndRemove(tokens);
 
-            // 3. 解析各个组件（顺序无关，各parser独立工作）
+            // 3. 解析时间范围（必须在ConditionParser之前，避免重复解析）
+            DateRangeIntent dateRange = dateRangeParser.parse(tokens);
+
+            // 4. 解析其他组件
             List<AggregationIntent> aggregations = aggregationParser.parse(tokens);
             ConditionIntent condition = conditionParser.parse(tokens);
             List<SortIntent> sorts = sortParser.parse(tokens);
@@ -131,6 +140,7 @@ public class NLParser {
                         .condition(condition)
                         .sorts(sorts)
                         .pagination(pagination)
+                        .dateRange(dateRange)
                         .build();
             }
 
