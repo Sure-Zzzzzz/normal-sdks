@@ -122,9 +122,9 @@
 
 ### 🎯 表达式解析
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
-| [condition-expression-parser-starter](sdk/expression/condition/condition-expression-parser-starter) | 1.0.0 | 条件表达式解析器 | [README](sdk/expression/condition/condition-expression-parser-starter/README.md) |
+| SDK | 版本    | 说明 | 文档 |
+|-----|-------|------|------|
+| [condition-expression-parser-starter](sdk/expression/condition/condition-expression-parser-starter) | 1.0.1 | 条件表达式解析器 | [README](sdk/expression/condition/condition-expression-parser-starter/README.md) |
 
 **核心特性**：
 - 🎯 **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
