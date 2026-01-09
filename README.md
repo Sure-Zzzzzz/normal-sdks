@@ -13,7 +13,7 @@
 | SDK | 版本    | 说明 | 文档 |
 |-----|-------|------|------|
 | [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.5 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.0 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.2 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 
 **核心特性**：
 - 多数据源路由和自动切换
@@ -99,13 +99,11 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [smart-keyword-sensitive-starter](sdk/sensitive/keyword/smart-keyword-sensitive-starter) | 1.0.5 | 关键词敏感信息脱敏 | [README](sdk/sensitive/keyword/smart-keyword-sensitive-starter/README.md) |
+| [simple-ip-sensitive-starter](sdk/sensitive/ip/simple-ip-sensitive-starter) | 1.0.0 | IP 地址脱敏 | [README](sdk/sensitive/ip/simple-ip-sensitive-starter/README.md) |
 
 **核心特性**：
-- 自动识别组织机构（NLP + 规则引擎）
-- 智能元信息提取（地域/行业/品牌/组织类型）
-- 三级智能降级机制（针对金融/政府/教育机构）
-- 范围退避Fallback（确保所有文本都被脱敏）
-- 多种脱敏策略（星号/占位符/哈希）
+- **关键词脱敏**：自动识别组织机构（NLP + 规则引擎），智能元信息提取，三级智能降级机制
+- **IP 脱敏**：支持 IPv4/IPv6 地址和 CIDR 格式脱敏，自动识别 IP 类型，Jackson 注解支持
 
 ### 🧠 自然语言处理
 

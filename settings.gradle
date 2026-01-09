@@ -43,4 +43,5 @@ include(
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
         ':sdk:search:elasticsearch:simple-elasticsearch-search-starter',
         ':sdk:sensitive:keyword:smart-keyword-sensitive-starter',
+        ':sdk:sensitive:ip:simple-ip-sensitive-starter',
 )

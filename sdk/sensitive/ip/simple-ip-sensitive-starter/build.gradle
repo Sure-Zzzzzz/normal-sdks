@@ -1,0 +1,15 @@
+dependencies {
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // Jackson (用于序列化器)
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
+    // 测试
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
+

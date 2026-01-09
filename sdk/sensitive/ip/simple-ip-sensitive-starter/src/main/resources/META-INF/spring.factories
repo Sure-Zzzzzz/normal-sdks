@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+io.github.surezzzzzz.sdk.sensitive.ip.configuration.SimpleIpSensitiveConfiguration
