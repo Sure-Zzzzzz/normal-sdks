@@ -47,6 +47,12 @@ public class QueryRequest {
     private List<String> fields;
 
     /**
+     * 字段折叠（去重）
+     * 按指定字段折叠，每个唯一值只返回一条文档
+     */
+    private CollapseField collapse;
+
+    /**
      * 日期范围
      */
     @Data
@@ -63,6 +69,25 @@ public class QueryRequest {
          * 结束日期
          */
         private String to;
+    }
+
+    /**
+     * 字段折叠（去重）
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CollapseField {
+        /**
+         * 折叠字段名
+         */
+        private String field;
+
+        /**
+         * 每个折叠组返回的最大内部命中数（可选，用于查看折叠的其他文档）
+         */
+        private Integer maxConcurrentGroupSearches;
     }
 
     /**

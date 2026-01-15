@@ -243,6 +243,13 @@ public class QueryExecutorImpl implements QueryExecutor {
                 throw new QueryException(ErrorCode.SEARCH_AFTER_SORT_REQUIRED, ErrorMessage.SEARCH_AFTER_SORT_REQUIRED);
             }
         }
+
+        // collapse 必须有排序（深度分页需要）
+        if (request.getCollapse() != null && request.getCollapse().getField() != null) {
+            if (pagination.getSort() == null || pagination.getSort().isEmpty()) {
+                throw new QueryException(ErrorCode.COLLAPSE_SORT_REQUIRED, "使用字段折叠（collapse）时必须指定排序字段");
+            }
+        }
     }
 
     /**
@@ -302,7 +309,19 @@ public class QueryExecutorImpl implements QueryExecutor {
             );
         }
 
-        // 7. 是否返回 _score
+        // 7. 字段折叠（去重）
+        if (request.getCollapse() != null && request.getCollapse().getField() != null) {
+            org.elasticsearch.search.collapse.CollapseBuilder collapseBuilder =
+                    new org.elasticsearch.search.collapse.CollapseBuilder(request.getCollapse().getField());
+
+            if (request.getCollapse().getMaxConcurrentGroupSearches() != null) {
+                collapseBuilder.setMaxConcurrentGroupRequests(request.getCollapse().getMaxConcurrentGroupSearches());
+            }
+
+            sourceBuilder.collapse(collapseBuilder);
+        }
+
+        // 8. 是否返回 _score
         if (!properties.getApi().isIncludeScore()) {
             sourceBuilder.trackScores(false);
         }

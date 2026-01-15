@@ -82,19 +82,24 @@ public class ErrorCode {
     public static final String SEARCH_AFTER_SORT_REQUIRED = "SEARCH_QUERY_005";
 
     /**
+     * collapse 字段折叠必须指定排序
+     */
+    public static final String COLLAPSE_SORT_REQUIRED = "SEARCH_QUERY_006";
+
+    /**
      * 不支持的操作符
      */
-    public static final String UNSUPPORTED_OPERATOR = "SEARCH_QUERY_006";
+    public static final String UNSUPPORTED_OPERATOR = "SEARCH_QUERY_007";
 
     /**
      * IN 查询值列表为空
      */
-    public static final String IN_VALUES_REQUIRED = "SEARCH_QUERY_007";
+    public static final String IN_VALUES_REQUIRED = "SEARCH_QUERY_008";
 
     /**
      * BETWEEN 查询值数量错误
      */
-    public static final String BETWEEN_VALUES_INVALID = "SEARCH_QUERY_008";
+    public static final String BETWEEN_VALUES_INVALID = "SEARCH_QUERY_009";
 
     // ========== 聚合相关错误码 ==========
 

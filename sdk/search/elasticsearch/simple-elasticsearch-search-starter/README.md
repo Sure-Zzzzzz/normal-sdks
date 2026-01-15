@@ -19,6 +19,7 @@
 - **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
   - **时间范围支持**：支持从自然语言中解析时间范围条件（v1.1.1+）
   - **search_after 深度分页**：支持从自然语言中解析 search_after 游标值（v1.1.2+）
+- **字段折叠（去重）**：支持按字段去重查询，可与深度分页组合使用（v1.1.3+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -27,7 +28,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.2'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.3'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -214,6 +215,43 @@ Content-Type: application/json
   }
 }
 ```
+
+#### 字段折叠（去重）查询（v1.1.3+）
+
+按指定字段去重，每个唯一值只返回一条文档：
+
+```bash
+POST /api/query
+Content-Type: application/json
+
+{
+  "index": "logs",
+  "fields": ["源IP", "@timestamp"],
+  "collapse": {
+    "field": "源IP"
+  },
+  "pagination": {
+    "type": "search_after",
+    "size": 100,
+    "sort": [
+      {
+        "field": "源IP",
+        "order": "asc"
+      }
+    ]
+  }
+}
+```
+
+**说明：**
+- `collapse.field`: 按哪个字段去重
+- 使用 collapse 时**必须指定排序字段**
+- 支持 offset 和 search_after 两种分页方式
+- 仅支持单字段去重（ES 原生限制）
+
+**对比 TERMS 聚合：**
+- TERMS 聚合：不支持翻页，最多返回 65535 条
+- Collapse：支持深度分页，无数量限制
 
 #### 聚合查询
 
