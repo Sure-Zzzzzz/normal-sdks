@@ -9,43 +9,51 @@
   - [1.2 类名规范](#12-类名规范)
   - [1.3 常量命名](#13-常量命名)
   - [1.4 工具类命名](#14-工具类命名)
-- [2. 模块结构规范](#2-模块结构规范)
-  - [2.1 Package Marker（必需）](#21-package-marker必需)
-  - [2.2 自定义组件注解（必需）](#22-自定义组件注解必需)
-  - [2.3 标准目录结构](#23-标准目录结构)
-- [3. 配置类规范](#3-配置类规范)
-  - [3.1 全局 Properties 类（单一）](#31-全局-properties-类单一)
-  - [3.2 AutoConfiguration 类](#32-autoconfiguration-类)
-- [4. 常量规范](#4-常量规范)
-  - [4.1 常量类结构](#41-常量类结构)
-  - [4.2 ErrorCode 常量](#42-errorcode-常量)
-  - [4.3 ErrorMessage 常量](#43-errormessage-常量)
-  - [4.4 枚举规范](#44-枚举规范)
-- [5. 自定义异常规范](#5-自定义异常规范)
-  - [5.1 基础异常类](#51-基础异常类)
-  - [5.2 具体异常类](#52-具体异常类)
-  - [5.3 异常使用示例](#53-异常使用示例)
-- [6. Gradle 构建规范](#6-gradle-构建规范)
-  - [6.1 主 Gradle（根目录 build.gradle）](#61-主-gradle根目录-buildgradle)
-  - [6.2 子模块 Gradle](#62-子模块-gradle)
-  - [6.3 版本文件](#63-版本文件)
-- [7. 硬编码零容忍规范](#7-硬编码零容忍规范)
-  - [7.1 禁止事项](#71-禁止事项)
-  - [7.2 例外情况](#72-例外情况)
-- [8. 代码注释规范](#8-代码注释规范)
-  - [8.1 类注释](#81-类注释)
-  - [8.2 方法注释（公共方法必须）](#82-方法注释公共方法必须)
-  - [8.3 字段注释](#83-字段注释)
-- [9. 配置文件示例](#9-配置文件示例)
-- [10. 测试规范](#10-测试规范)
-  - [10.1 测试目录结构](#101-测试目录结构)
-  - [10.2 TestApplication 规范](#102-testapplication-规范)
-  - [10.3 测试类规范](#103-测试类规范)
-  - [10.4 测试数据和配置规范](#104-测试数据和配置规范)
-  - [10.5 日志和断言规范](#105-日志和断言规范)
-  - [10.6 Gradle 依赖配置](#106-gradle-依赖配置)
-  - [10.7 测试覆盖要求](#107-测试覆盖要求)
-- [11. 总结](#11-总结)
+- [2. Lombok 使用规范](#2-lombok-使用规范)
+  - [2.1 强制使用 Lombok](#21-强制使用-lombok)
+  - [2.2 Properties 类](#22-properties-类)
+  - [2.3 枚举类](#23-枚举类)
+  - [2.4 异常类](#24-异常类)
+  - [2.5 测试类](#25-测试类)
+  - [2.6 其他常用注解](#26-其他常用注解)
+- [3. 模块结构规范](#3-模块结构规范)
+  - [3.1 Package Marker（必需）](#31-package-marker必需)
+  - [3.2 自定义组件注解（必需）](#32-自定义组件注解必需)
+  - [3.3 标准目录结构](#33-标准目录结构)
+- [4. 配置类规范](#4-配置类规范)
+  - [4.1 全局 Properties 类（单一）](#41-全局-properties-类单一)
+  - [4.2 AutoConfiguration 类](#42-autoconfiguration-类)
+- [5. 常量规范](#5-常量规范)
+  - [5.1 常量类结构](#51-常量类结构)
+  - [5.2 ErrorCode 常量](#52-errorcode-常量)
+  - [5.3 ErrorMessage 常量](#53-errormessage-常量)
+  - [5.4 枚举规范](#54-枚举规范)
+- [6. 自定义异常规范](#6-自定义异常规范)
+  - [6.1 基础异常类](#61-基础异常类)
+  - [6.2 具体异常类](#62-具体异常类)
+  - [6.3 异常使用示例](#63-异常使用示例)
+- [7. Gradle 构建规范](#7-gradle-构建规范)
+  - [7.1 主 Gradle（根目录 build.gradle）](#71-主-gradle根目录-buildgradle)
+  - [7.2 子模块 Gradle](#72-子模块-gradle)
+  - [7.3 版本文件](#73-版本文件)
+- [8. 硬编码零容忍规范](#8-硬编码零容忍规范)
+  - [8.1 禁止事项](#81-禁止事项)
+  - [8.2 例外情况](#82-例外情况)
+- [9. 代码注释规范](#9-代码注释规范)
+  - [9.1 类注释](#91-类注释)
+  - [9.2 方法注释（公共方法必须）](#92-方法注释公共方法必须)
+  - [9.3 字段注释](#93-字段注释)
+- [10. 配置文件示例](#10-配置文件示例)
+- [11. 测试规范](#11-测试规范)
+  - [11.1 测试目录结构](#111-测试目录结构)
+  - [11.2 TestApplication 规范](#112-testapplication-规范)
+  - [11.3 测试类规范](#113-测试类规范)
+  - [11.4 测试数据和配置规范](#114-测试数据和配置规范)
+  - [11.5 日志和断言规范](#115-日志和断言规范)
+  - [11.6 Gradle 依赖配置](#116-gradle-依赖配置)
+  - [11.7 测试覆盖要求](#117-测试覆盖要求)
+  - [11.8 数据库测试规范](#118-数据库测试规范)
+- [12. 总结](#12-总结)
   - [核心原则](#核心原则-1)
   - [检查清单](#检查清单)
 
@@ -99,9 +107,200 @@
 
 ---
 
-## 2. 模块结构规范
+## 2. Lombok 使用规范
 
-### 2.1 Package Marker（必需）
+### 2.1 强制使用 Lombok
+
+**核心原则**：
+- ✅ **强制使用 Lombok 注解**，禁止手动编写 getter/setter/toString/equals/hashCode 等方法
+- ✅ **统一代码风格**，减少样板代码，提高可维护性
+- ❌ **禁止手动编写**任何 Lombok 可以自动生成的方法
+
+**Gradle 依赖**：
+```gradle
+dependencies {
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // 测试依赖
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+}
+```
+
+---
+
+### 2.2 Properties 类
+
+**必需注解**：`@Data`
+
+**说明**：
+- `@Data` 自动生成 getter/setter/toString/equals/hashCode
+- Properties 类通常需要完整的 POJO 功能
+
+**示例**：
+```java
+@Data
+@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.auth.aksk")
+public class SimpleAkskProperties {
+    /**
+     * 是否启用
+     */
+    private boolean enabled = true;
+
+    /**
+     * Token 过期时间（秒）
+     */
+    private long tokenExpiry = 3600;
+}
+```
+
+---
+
+### 2.3 枚举类
+
+**必需注解**：`@Getter`
+
+**说明**：
+- 枚举类只需要 getter，不需要 setter
+- 使用 `@Getter` 为枚举字段自动生成 getter 方法
+
+**示例**：
+```java
+@Getter
+public enum ClientType {
+    /**
+     * 平台客户端
+     */
+    PLATFORM("platform", "平台客户端"),
+
+    /**
+     * 第三方客户端
+     */
+    THIRD_PARTY("third_party", "第三方客户端");
+
+    private final String code;
+    private final String description;
+
+    ClientType(String code, String description) {
+        this.code = code;
+        this.description = description;
+    }
+
+    // fromCode 和 isValid 方法需要手动编写
+    public static ClientType fromCode(String code) {
+        // ...
+    }
+}
+```
+
+---
+
+### 2.4 异常类
+
+**必需注解**：`@Getter`
+
+**说明**：
+- 异常类通常只需要 getter，不需要 setter
+- 异常字段在构造时设置，之后不应修改
+
+**示例**：
+```java
+@Getter
+public class SimpleAkskException extends RuntimeException {
+    private final String errorCode;
+
+    public SimpleAkskException(String errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+
+    public SimpleAkskException(String errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+}
+```
+
+---
+
+### 2.5 测试类
+
+**必需注解**：`@Slf4j`
+
+**说明**：
+- 测试类必须使用 `@Slf4j` 进行日志输出
+- 禁止使用 `System.out.println()`
+
+**示例**：
+```java
+@Slf4j
+@SpringBootTest(classes = SimpleAkskTestApplication.class)
+class ClientManagementServiceTest {
+
+    @Test
+    @DisplayName("测试客户端注册")
+    void testRegisterClient() {
+        log.info("开始测试客户端注册");
+        // 测试逻辑
+        log.info("客户端注册成功: {}", client);
+    }
+}
+```
+
+---
+
+### 2.6 其他常用注解
+
+**@Builder**：
+- 用于需要构建器模式的类
+- 适用于参数较多的不可变对象
+
+```java
+@Builder
+@Getter
+public class ClientRegistrationRequest {
+    private final String clientId;
+    private final String clientSecret;
+    private final ClientType clientType;
+}
+```
+
+**@NoArgsConstructor / @AllArgsConstructor**：
+- `@NoArgsConstructor`：生成无参构造函数
+- `@AllArgsConstructor`：生成全参构造函数
+- 通常与 `@Data` 或 `@Builder` 配合使用
+
+```java
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class ClientInfo {
+    private String clientId;
+    private String clientName;
+    private ClientType clientType;
+}
+```
+
+**@RequiredArgsConstructor**：
+- 为 `final` 字段生成构造函数
+- 适用于依赖注入场景
+
+```java
+@Service
+@SimpleAkskComponent
+@RequiredArgsConstructor
+public class ClientManagementService {
+    private final ClientRepository clientRepository;
+    private final TokenGenerator tokenGenerator;
+}
+```
+
+---
+
+## 3. 模块结构规范
+
+### 3.1 Package Marker（必需）
 
 **位置**：模块根包下
 
@@ -136,7 +335,7 @@ public interface SimpleAkskPackage {
 
 ---
 
-### 2.2 自定义组件注解（必需）
+### 3.2 自定义组件注解（必需）
 
 **位置**：`annotation/{模块名}Component.java`
 
@@ -174,7 +373,7 @@ public class ClientManagementService {
 
 ---
 
-### 2.3 标准目录结构
+### 3.3 标准目录结构
 
 ```
 {模块名}-starter/
@@ -247,9 +446,9 @@ smart-keyword-sensitive-starter/
 
 ---
 
-## 3. 配置类规范
+## 4. 配置类规范
 
-### 3.1 全局 Properties 类（单一）
+### 4.1 全局 Properties 类（单一）
 
 **命名规则**：`{模块名}Properties`
 
@@ -304,7 +503,7 @@ public class {模块名}Properties {
 
 ---
 
-### 3.2 AutoConfiguration 类
+### 4.2 AutoConfiguration 类
 
 **命名规则**：`{模块名}Configuration`
 
@@ -364,9 +563,9 @@ io.github.surezzzzzz.sdk.{domain}.{module}.configuration.{模块名}Configuratio
 
 ---
 
-## 4. 常量规范
+## 5. 常量规范
 
-### 4.1 常量类结构
+### 5.1 常量类结构
 
 **命名规则**：`{模块名}Constant`
 
@@ -435,7 +634,7 @@ public static final int MIN_KEYWORD_LENGTH = 1;
 
 ---
 
-### 4.2 ErrorCode 常量
+### 5.2 ErrorCode 常量
 
 **要求**：
 - Final class，private 构造函数
@@ -474,7 +673,7 @@ public final class ErrorCode {
 
 ---
 
-### 4.3 ErrorMessage 常量
+### 5.3 ErrorMessage 常量
 
 **要求**：
 - 错误信息可包含格式占位符
@@ -506,7 +705,7 @@ public final class ErrorMessage {
 
 ---
 
-### 4.4 枚举规范
+### 5.4 枚举规范
 
 **要求**：
 - 统一提供 `code` 和 `description` 字段
@@ -610,9 +809,9 @@ public enum ClientType {
 
 ---
 
-## 5. 自定义异常规范
+## 6. 自定义异常规范
 
-### 5.1 基础异常类
+### 6.1 基础异常类
 
 **命名规则**：`{模块名}Exception`
 
@@ -649,7 +848,7 @@ public class {模块名}Exception extends RuntimeException {
 
 ---
 
-### 5.2 具体异常类
+### 6.2 具体异常类
 
 **位置**：`exception/{具体异常名}Exception.java`
 
@@ -680,7 +879,7 @@ public class {具体异常}Exception extends {模块名}Exception {
 
 ---
 
-### 5.3 异常使用示例
+### 6.3 异常使用示例
 
 ```java
 import io.github.surezzzzzz.sdk.{domain}.{module}.constant.ErrorCode;
@@ -702,9 +901,9 @@ public class SomeService {
 
 ---
 
-## 6. Gradle 构建规范
+## 7. Gradle 构建规范
 
-### 6.1 主 Gradle（根目录 build.gradle）
+### 7.1 主 Gradle（根目录 build.gradle）
 
 **职责**：
 - 全局版本控制
@@ -746,7 +945,7 @@ subprojects {
 
 ---
 
-### 6.2 子模块 Gradle
+### 7.2 子模块 Gradle
 
 **职责**：**仅写依赖**，其他配置均由主 Gradle 统一管理。
 
@@ -798,7 +997,7 @@ dependencies {
 
 ---
 
-### 6.3 版本文件
+### 7.3 版本文件
 
 **位置**：`{模块名}-starter/version.properties`
 
@@ -813,9 +1012,9 @@ version=1.0.0
 
 ---
 
-## 7. 硬编码零容忍规范
+## 8. 硬编码零容忍规范
 
-### 7.1 禁止事项
+### 8.1 禁止事项
 
 **绝对不能出现硬编码**，包括但不限于：
 
@@ -864,7 +1063,7 @@ String errorMsg = String.format(ErrorMessage.SOME_ERROR, message);
 
 ---
 
-### 7.2 例外情况
+### 8.2 例外情况
 
 **仅以下情况可以不提取常量**：
 
@@ -892,9 +1091,9 @@ String errorMsg = String.format(ErrorMessage.SOME_ERROR, message);
 
 ---
 
-## 8. 代码注释规范
+## 9. 代码注释规范
 
-### 8.1 类注释
+### 9.1 类注释
 
 ```java
 /**
@@ -907,7 +1106,7 @@ public class SomeClass {
 }
 ```
 
-### 8.2 方法注释（公共方法必须）
+### 9.2 方法注释（公共方法必须）
 
 ```java
 /**
@@ -923,7 +1122,7 @@ public String someMethod(String param1, int param2) {
 }
 ```
 
-### 8.3 字段注释
+### 9.3 字段注释
 
 ```java
 /**
@@ -939,7 +1138,7 @@ private int value = SomeConstant.DEFAULT_VALUE;
 
 ---
 
-## 9. 配置文件示例
+## 10. 配置文件示例
 
 **application.yml 结构**：
 
@@ -982,9 +1181,9 @@ io:
               keep-region: true
 ```
 
-## 10. 测试规范
+## 11. 测试规范
 
-### 10.1 测试目录结构
+### 11.1 测试目录结构
 
 > **包名规范**：测试代码的包名规范遵循 [1.1 包名规范](#11-包名规范)
 
@@ -1017,7 +1216,7 @@ smart-keyword-sensitive-starter/
 
 ---
 
-### 10.2 TestApplication 规范
+### 11.2 TestApplication 规范
 
 **位置**：`src/test/java/io/github/surezzzzzz/sdk/{domain}/{module}/test/{模块名}TestApplication.java`
 
@@ -1058,14 +1257,21 @@ public class SmartKeywordSensitiveTestApplication {
 
 ---
 
-### 10.3 测试类规范
+### 11.3 测试类规范
 
 **位置**：`src/test/java/io/github/surezzzzzz/sdk/{domain}/{module}/test/cases/{测试类名}.java`
 
-**命名规则**：
+**类命名规则**：
 - 根据实际测试内容灵活命名
 - 常见命名：`{功能名}Test`, `{Helper名}Test`, `{场景名}Test`
 - 示例：`KeywordSensitiveMaskHelperTest`, `HashMaskTest`, `Ipv4SensitiveHelperTest`
+
+**方法命名规则**：
+- ✅ **使用驼峰命名法（camelCase）**
+- ❌ **禁止使用下划线分隔**
+- 示例：
+  - ✅ `testSomeFeature()`, `shouldReturnTrueWhenValid()`
+  - ❌ `test_some_feature()`, `should_return_true_when_valid()`
 
 **必需注解**：
 - `@Slf4j`：用于日志输出
@@ -1106,7 +1312,7 @@ class SomeFeatureTest {
 
 ---
 
-### 10.4 测试数据和配置规范
+### 11.4 测试数据和配置规范
 
 **配置文件（application.yml）**：
 
@@ -1140,9 +1346,67 @@ logging:
     io.github.surezzzzzz.sdk: DEBUG
 ```
 
+**敏感配置管理**：
+
+对于包含敏感信息（如数据库密码、API密钥等）的测试配置，必须使用以下方式管理：
+
+1. **application.yml**（提交到 git）：
+   - 包含公共配置和配置结构
+   - 敏感字段留空或注释掉
+   - 作为配置模板供团队参考
+
+2. **application-local.yml**（不提交到 git）：
+   - 包含本地真实的敏感配置
+   - 每个开发者本地维护
+   - 添加到 `.gitignore` 忽略列表
+
+3. **application-local.yml.example**（提交到 git）：
+   - 配置模板文件
+   - 提供配置示例和说明
+   - 帮助新开发者快速配置本地环境
+
+**示例**：
+
+```yaml
+# application.yml（提交到git）
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8
+    username: root
+    # password: 请在 application-local.yml 中配置
+
+# application-local.yml（不提交到git）
+spring:
+  datasource:
+    password: your_real_password
+
+# application-local.yml.example（提交到git）
+spring:
+  datasource:
+    password: your_password_here  # 请修改为实际密码
+```
+
+**.gitignore 配置**：
+
+在项目根目录的 `.gitignore` 中添加：
+```
+# 敏感配置文件
+**/application-local.yml
+
+# 证书和密钥文件
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+```
+
 ---
 
-### 10.5 日志和断言规范
+### 11.5 日志和断言规范
 
 **日志规范**：
 
@@ -1179,7 +1443,7 @@ void testMask() {
 
 ---
 
-### 10.6 Gradle 依赖配置
+### 11.6 Gradle 依赖配置
 
 在 `build.gradle` 的 `dependencies` 块中添加测试依赖：
 
@@ -1201,7 +1465,7 @@ dependencies {
 
 ---
 
-### 10.7 测试覆盖要求
+### 11.7 测试覆盖要求
 
 **核心要求**：
 
@@ -1218,7 +1482,149 @@ dependencies {
 
 ---
 
-## 11. 总结
+### 11.8 数据库测试规范
+
+> **适用范围**：本节规范仅适用于需要连接数据库（如 MySQL）的 SDK 模块
+
+#### SQL 文件组织结构
+
+**位置**：放在模块的 `docs/` 目录下
+
+**文件命名**：使用序号前缀标识执行顺序
+
+**文件分类**：
+```
+{模块名}-starter/
+├── docs/
+│   ├── README.md                    ← 执行说明文档
+│   ├── 00_database.sql              ← 数据库创建脚本
+│   ├── 01_schema.sql                ← 表结构定义
+│   ├── 02_init_data.sql             ← 必要的初始数据
+│   └── 03_test_data.sql             ← 可选的测试数据
+```
+
+**README.md 内容**：
+- SQL 文件执行顺序说明
+- 数据库配置要求
+- 测试数据说明
+
+---
+
+#### SQL 文件编写规范
+
+**字符集要求**：
+- 统一使用 `utf8mb4` 字符集
+- 确保支持完整的 Unicode 字符（包括 emoji）
+
+**建表规范**：
+
+✅ **必须要求**：
+- 使用 `DROP TABLE IF EXISTS` 避免重复创建错误
+- **所有字段必须添加 COMMENT 注释**
+- 主键、索引必须明确定义
+- 使用 `ENGINE=InnoDB` 存储引擎
+
+**完整示例**：
+
+```sql
+-- 使用 DROP TABLE IF EXISTS 避免重复创建错误
+DROP TABLE IF EXISTS `oauth2_registered_client`;
+
+CREATE TABLE `oauth2_registered_client` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `client_id` VARCHAR(100) NOT NULL COMMENT '客户端ID',
+    `client_secret` VARCHAR(200) NOT NULL COMMENT '客户端密钥',
+    `client_name` VARCHAR(200) NOT NULL COMMENT '客户端名称',
+    `client_type` VARCHAR(50) NOT NULL COMMENT '客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端',
+    `grant_types` VARCHAR(500) NOT NULL COMMENT '授权类型，多个用逗号分隔',
+    `redirect_uris` TEXT COMMENT '重定向URI，多个用逗号分隔',
+    `scopes` VARCHAR(500) COMMENT '授权范围，多个用逗号分隔',
+    `token_expiry` INT NOT NULL DEFAULT 3600 COMMENT 'Token过期时间（秒）',
+    `refresh_token_expiry` INT NOT NULL DEFAULT 86400 COMMENT 'Refresh Token过期时间（秒）',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用：0-禁用，1-启用',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_client_id` (`client_id`),
+    KEY `idx_client_type` (`client_type`),
+    KEY `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OAuth2客户端注册表';
+```
+
+**字段注释规范**：
+- 主键字段：说明用途（如"主键ID"）
+- 业务字段：说明字段含义和业务用途
+- 枚举字段：列出所有可能的值及其含义（如"客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端"）
+- 时间字段：说明时间含义（如"创建时间"、"更新时间"）
+- 布尔字段：说明0和1的含义（如"是否启用：0-禁用，1-启用"）
+
+**查询规范**：
+- 注释掉需要特殊权限的查询（如 `information_schema` 查询）
+- 避免使用可能导致权限问题的系统表查询
+
+**密码处理**：
+- 生产数据：使用 `{bcrypt}` 前缀 + BCrypt 加密密码
+- 测试数据：使用 `{noop}` 前缀 + 明文密码（仅用于测试）
+- ❌ **禁止使用弱密码**：即使是测试数据，也不能使用弱密码（如 `123456`、`password`、`test123`、`admin123` 等）
+- ✅ **建议使用相对复杂的测试密码**：包含字母、数字、特殊字符的组合
+
+```sql
+-- 生产数据示例
+INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
+VALUES ('admin', '{bcrypt}$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 1);
+
+-- 测试数据示例（使用相对复杂的密码）
+INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
+VALUES ('test_user', '{noop}Test@2024#User', 1);
+
+-- ❌ 错误示例：不要使用弱密码
+-- VALUES ('test_user', '{noop}123456', 1);
+-- VALUES ('test_user', '{noop}test123', 1);
+```
+
+---
+
+#### 数据库配置规范
+
+**使用真实数据库**：
+- ✅ 使用真实的 MySQL 数据库进行测试
+- ❌ 不使用 H2 内存数据库（避免方言差异导致的问题）
+
+**JDBC URL 配置**：
+
+必须包含完整的连接参数：
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    # password: 请在 application-local.yml 中配置
+```
+
+**参数说明**：
+- `useUnicode=true&characterEncoding=UTF-8`：确保字符编码正确
+- `useSSL=false`：测试环境禁用 SSL（生产环境应启用）
+- `serverTimezone=Asia/Shanghai`：设置时区
+- `allowPublicKeyRetrieval=true`：允许客户端从服务器获取公钥
+
+**JPA 配置**（如果使用 JPA）：
+```yaml
+spring:
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: create-drop  # 测试时自动创建和删除表
+    show-sql: true           # 显示 SQL 语句（便于调试）
+```
+
+**注意事项**：
+- `ddl-auto: create-drop` 仅用于测试环境
+- 生产环境必须使用 `ddl-auto: none` 或 `validate`
+- 敏感配置（如密码）必须使用 `application-local.yml` 管理（见 [11.4 测试数据和配置规范](#114-测试数据和配置规范)）
+
+---
+
+## 12. 总结
 
 ### 核心原则
 
@@ -1234,6 +1640,8 @@ dependencies {
 10. ✅ **测试可视化**：必须打log展示关键输入输出，断言前先打log让错误可视化
 11. ✅ **测试配置分离**：中间件配置、SDK配置、log配置放yml，测试数据放代码里
 12. ✅ **测试简单直接**：不使用 @ActiveProfiles，只维护一个 application.yml
+13. ✅ **敏感配置分离**：敏感信息使用application-local.yml管理，不提交到git，证书密钥文件加入.gitignore
+14. ✅ **数据库规范化**（仅数据库SDK）：SQL字段必须有COMMENT注释，使用utf8mb4字符集，禁止弱密码
 
 ### 检查清单
 
@@ -1274,6 +1682,22 @@ dependencies {
 - [ ] 覆盖所有正常场景
 - [ ] 覆盖所有异常场景
 - [ ] 覆盖所有边界场景
+- [ ] 敏感配置使用application-local.yml管理（如数据库密码）
+- [ ] .gitignore已添加敏感文件忽略规则（application-local.yml、证书密钥文件）
+
+**数据库相关**（仅数据库SDK）：
+
+- [ ] SQL文件放在docs/目录下
+- [ ] SQL文件使用序号前缀命名（00_、01_、02_等）
+- [ ] 所有表字段都有COMMENT注释
+- [ ] 表也有COMMENT注释
+- [ ] 使用utf8mb4字符集
+- [ ] 使用DROP TABLE IF EXISTS避免重复创建错误
+- [ ] 生产数据密码使用{bcrypt}前缀
+- [ ] 测试数据密码使用{noop}前缀
+- [ ] 禁止使用弱密码（即使是测试数据）
+- [ ] JDBC URL包含完整参数
+- [ ] 使用真实MySQL数据库测试（不用H2）
 
 ---
 

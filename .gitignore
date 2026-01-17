@@ -46,3 +46,18 @@ draft/*
 
 #ignore change log
 changelog.md
+
+# Local configuration files (contains sensitive information)
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+
+# 证书和密钥文件
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
