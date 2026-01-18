@@ -44,16 +44,20 @@
   - [9.2 方法注释（公共方法必须）](#92-方法注释公共方法必须)
   - [9.3 字段注释](#93-字段注释)
 - [10. 配置文件示例](#10-配置文件示例)
-- [11. 测试规范](#11-测试规范)
-  - [11.1 测试目录结构](#111-测试目录结构)
-  - [11.2 TestApplication 规范](#112-testapplication-规范)
-  - [11.3 测试类规范](#113-测试类规范)
-  - [11.4 测试数据和配置规范](#114-测试数据和配置规范)
-  - [11.5 日志和断言规范](#115-日志和断言规范)
-  - [11.6 Gradle 依赖配置](#116-gradle-依赖配置)
-  - [11.7 测试覆盖要求](#117-测试覆盖要求)
-  - [11.8 数据库测试规范](#118-数据库测试规范)
-- [12. 总结](#12-总结)
+  - [10.1 敏感配置管理](#101-敏感配置管理)
+- [11. 中间件相关规范](#11-中间件相关规范)
+  - [11.1 Redis规范](#111-redis规范)
+  - [11.2 MySQL规范](#112-mysql规范)
+- [12. 测试规范](#12-测试规范)
+  - [12.1 测试目录结构](#121-测试目录结构)
+  - [12.2 TestApplication 规范](#122-testapplication-规范)
+  - [12.3 测试类规范](#123-测试类规范)
+  - [12.4 测试数据和配置规范](#124-测试数据和配置规范)
+  - [12.5 日志和断言规范](#125-日志和断言规范)
+  - [12.6 Gradle 依赖配置](#126-gradle-依赖配置)
+  - [12.7 测试覆盖要求](#127-测试覆盖要求)
+  - [12.8 数据库测试规范](#128-数据库测试规范)
+- [13. 总结](#13-总结)
   - [核心原则](#核心原则-1)
   - [检查清单](#检查清单)
 
@@ -1181,9 +1185,407 @@ io:
               keep-region: true
 ```
 
-## 11. 测试规范
+---
 
-### 11.1 测试目录结构
+### 10.1 敏感配置管理
+
+对于包含敏感信息(如数据库密码、API密钥等)的配置,必须使用以下方式管理:
+
+**1. application.yml(提交到 git)**:
+- 包含公共配置和配置结构
+- 敏感字段留空或注释掉
+- 作为配置模板供团队参考
+
+**2. application-local.yml(不提交到 git)**:
+- 包含本地真实的敏感配置
+- 每个开发者本地维护
+- 添加到 `.gitignore` 忽略列表
+
+**3. application-local.yml.example(提交到 git)**:
+- 配置模板文件
+- 提供配置示例和说明
+- 帮助新开发者快速配置本地环境
+
+**示例**:
+
+```yaml
+# application.yml(提交到git)
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8
+    username: root
+    # password: 请在 application-local.yml 中配置
+
+# application-local.yml(不提交到git)
+spring:
+  datasource:
+    password: your_real_password
+
+# application-local.yml.example(提交到git)
+spring:
+  datasource:
+    password: your_password_here  # 请修改为实际密码
+```
+
+**.gitignore 配置**:
+
+在项目根目录的 `.gitignore` 中添加:
+```
+# 敏感配置文件
+**/application-local.yml
+
+# 证书和密钥文件
+*.pem
+*.crt
+*.cer
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+```
+
+---
+
+## 11. 中间件相关规范
+
+> **适用范围**：本章规范适用于使用中间件（如 Redis、MySQL 等）的 SDK 模块
+
+### 11.1 Redis规范
+
+> **适用范围**：使用 Redis 进行缓存的 SDK
+
+#### 11.1.1 标准Key结构
+
+Redis Key必须遵循以下结构，以支持多实例部署和Redis Cluster：
+
+```
+{sdk-prefix}:{business-type}:{me}::{data-id}
+```
+
+**示例**:
+```
+sure-auth-aksk:oauth2:authorization:test-app::{abc-123}
+sure-cache:user:prod-server::{user-456}
+```
+
+#### 11.1.2 各部分说明
+
+| 组成部分 | 说明 | 示例 | 要求 |
+|---------|------|------|------|
+| sdk-prefix | SDK标识前缀，标识哪个SDK | `sure-auth-aksk`、`sure-cache` | 业务驱动，保持描述性，不强制缩短 |
+| business-type | 业务类型，标识数据类型 | `oauth2:authorization`、`cache:user` | 清晰描述业务含义 |
+| me | 应用实例标识 | `test-app`、`prod-server` | 可配置，用于区分多实例 |
+| data-id | 数据唯一标识 | `{abc-123}`、`{user-456}` | 使用`{}`包裹以支持Redis Cluster |
+
+#### 11.1.3 配置结构
+
+`me`参数应该配置在`RedisConfig`级别，而不是嵌套在具体的缓存类型配置中：
+
+```java
+@Data
+@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.xxx")
+public class XxxProperties {
+
+    private RedisConfig redis = new RedisConfig();
+
+    @Data
+    public static class RedisConfig {
+        /**
+         * 是否启用Redis缓存
+         */
+        private Boolean enabled = false;
+
+        /**
+         * 应用实例标识，用于区分多个应用实例共用Redis的场景
+         * 默认值: "default"
+         */
+        private String me = "default";
+
+        //其他Redis相关配置...
+    }
+}
+```
+
+**配置示例** (`application.yml`):
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        xxx:
+          redis:
+            enabled: true
+            me: my-app-instance  # 应用实例标识
+```
+
+#### 11.1.4 实现示例
+
+**1. 定义常量**:
+
+```java
+public final class XxxConstant {
+    /**
+     * Redis Key前缀模板
+     * 参数: application name (me)
+     */
+    public static final String REDIS_KEY_PREFIX_TEMPLATE = "sure-xxx:%s:";
+
+    /**
+     * 缓存名称（业务类型）
+     */
+    public static final String CACHE_USER = "cache:user";
+    public static final String CACHE_SESSION = "cache:session";
+}
+```
+
+**2. 配置Redis CacheManager**:
+
+```java
+@Configuration
+@EnableCaching
+@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.xxx.redis",
+                       name = "enabled", havingValue = "true")
+public class RedisConfiguration {
+
+    private final XxxProperties properties;
+
+    @Bean
+    public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        // 获取应用标识
+        String me = properties.getRedis().getMe();
+
+        // 获取TTL配置
+        Integer ttlSeconds = properties.getTtl();
+
+        // 配置key前缀: sure-xxx:{me}:
+        String keyPrefix = String.format(XxxConstant.REDIS_KEY_PREFIX_TEMPLATE, me);
+
+        // 配置缓存
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(Duration.ofSeconds(ttlSeconds))
+                .computePrefixWith(cacheName -> keyPrefix + cacheName + "::")
+                .disableCachingNullValues();
+
+        return RedisCacheManager.builder(connectionFactory)
+                .cacheDefaults(config)
+                .transactionAware()
+                .build();
+    }
+}
+```
+
+**3. 使用Spring Cache注解**:
+
+```java
+@Service
+@RequiredArgsConstructor
+public class CachedUserService {
+
+    private final UserService delegate;
+
+    /**
+     * 查询用户，优先从缓存读取
+     * Redis Key: sure-xxx:cache:user:{me}::{userId}
+     */
+    @Cacheable(value = XxxConstant.CACHE_USER,
+               key = "'{' + #userId + '}'",
+               unless = "#result == null")
+    public User findById(String userId) {
+        return delegate.findById(userId);
+    }
+
+    /**
+     * 更新用户，同时更新缓存
+     */
+    @CachePut(value = XxxConstant.CACHE_USER, key = "'{' + #user.id + '}'")
+    public User update(User user) {
+        return delegate.update(user);
+    }
+
+    /**
+     * 删除用户，同时清除缓存
+     */
+    @CacheEvict(value = XxxConstant.CACHE_USER,
+                key = "'{' + #userId + '}'")
+    public void delete(String userId) {
+        delegate.delete(userId);
+    }
+}
+```
+
+#### 11.1.5 Redis Cluster支持
+
+**Hash Tag机制**:
+
+Redis Cluster使用Hash Tag来决定key分配到哪个slot。Hash Tag是key中第一个`{}`包裹的部分。
+
+```java
+//✅ 正确：使用 {id} 作为Hash Tag
+@Cacheable(value = CACHE_USER, key = "'{' + #userId + '}'")
+//生成的key: sure-xxx:cache:user:my-app::{user-123}
+// Hash Tag: {user-123}
+
+// ❌ 错误：没有使用 {}
+@Cacheable(value = CACHE_USER, key = "#userId")
+// 生成的key: sure-xxx:cache:user:my-app::user-123
+// 整个key都参与hash计算，无法保证相关key在同一slot
+```
+
+**为什么需要Hash Tag**:
+- 确保相关的key分配到同一个slot
+- 支持Redis Cluster的multi-key操作（如MGET、事务）
+- 提高缓存命中率和性能
+
+#### 11.1.6 最佳实践
+
+1. **SDK前缀命名**: 使用清晰的业务描述，不强制缩短（如`sure-auth-aksk`而不是`aksk`）
+2. **业务类型命名**: 使用冒号分隔的层级结构（如`oauth2:authorization:token`）
+3. **me参数配置**: 在RedisConfig级别配置，适用于所有缓存类型
+4. **Hash Tag使用**: 始终使用`'{' + #id + '}'`格式确保Redis Cluster支持
+5. **TTL配置**: 根据业务需求配置合理的过期时间
+6. **空值处理**: 使用`unless = "#result == null"`避免缓存空值
+
+---
+
+### 11.2 MySQL规范
+
+> **适用范围**：需要连接数据库（如 MySQL）的 SDK 模块
+
+#### 11.2.1 SQL文件组织结构
+
+**位置**: 放在模块的 `docs/` 目录下
+
+**文件命名**: 使用序号前缀标识执行顺序
+
+**文件分类**:
+```
+{模块名}-starter/
+├── docs/
+│   ├── README.md                    ← 执行说明文档
+│   ├── 00_database.sql              ← 数据库创建脚本
+│   ├── 01_schema.sql                ← 表结构定义
+│   ├── 02_init_data.sql             ← 必要的初始数据
+│   └── 03_test_data.sql             ← 可选的测试数据
+```
+
+**README.md 内容**:
+- SQL 文件执行顺序说明
+- 数据库配置要求
+- 测试数据说明
+
+#### 11.2.2 SQL文件编写规范
+
+**字符集要求**:
+- 统一使用 `utf8mb4` 字符集
+- 确保支持完整的 Unicode 字符（包括 emoji）
+
+**建表规范**:
+
+✅ **必须要求**:
+- 使用 `DROP TABLE IF EXISTS` 避免重复创建错误
+- **所有字段必须添加 COMMENT 注释**
+- **表也必须添加 COMMENT 注释**
+- 主键、索引必须明确定义
+- 使用 `ENGINE=InnoDB` 存储引擎
+
+**完整示例**:
+
+```sql
+-- 使用 DROP TABLE IF EXISTS 避免重复创建错误
+DROP TABLE IF EXISTS `oauth2_registered_client`;
+
+CREATE TABLE `oauth2_registered_client` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `client_id` VARCHAR(100) NOT NULL COMMENT '客户端ID',
+    `client_secret` VARCHAR(200) NOT NULL COMMENT '客户端密钥',
+    `client_name` VARCHAR(200) NOT NULL COMMENT '客户端名称',
+    `client_type` VARCHAR(50) NOT NULL COMMENT '客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端',
+    `grant_types` VARCHAR(500) NOT NULL COMMENT '授权类型，多个用逗号分隔',
+    `redirect_uris` TEXT COMMENT '重定向URI，多个用逗号分隔',
+    `scopes` VARCHAR(500) COMMENT '授权范围，多个用逗号分隔',
+    `token_expiry` INT NOT NULL DEFAULT 3600 COMMENT 'Token过期时间（秒）',
+    `refresh_token_expiry` INT NOT NULL DEFAULT 86400 COMMENT 'Refresh Token过期时间（秒）',
+    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用：0-禁用，1-启用',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_client_id` (`client_id`),
+    KEY `idx_client_type` (`client_type`),
+    KEY `idx_enabled` (`enabled`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OAuth2客户端注册表';
+```
+
+**字段注释规范**:
+- 主键字段：说明用途（如"主键ID"）
+- 业务字段：说明字段含义和业务用途
+- 枚举字段：列出所有可能的值及其含义（如"客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端"）
+- 时间字段：说明时间含义（如"创建时间"、"更新时间"）
+- 布尔字段：说明0和1的含义（如"是否启用：0-禁用，1-启用"）
+
+**密码处理**:
+- 生产数据：使用 `{bcrypt}` 前缀 + BCrypt 加密密码
+- 测试数据：使用 `{noop}` 前缀 + 明文密码（仅用于测试）
+- ❌ **禁止使用弱密码**：即使是测试数据，也不能使用弱密码（如 `123456`、`password`、`test123`、`admin123` 等）
+- ✅ **建议使用相对复杂的测试密码**：包含字母、数字、特殊字符的组合
+
+```sql
+-- 生产数据示例
+INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
+VALUES ('admin', '{bcrypt}$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 1);
+
+-- 测试数据示例（使用相对复杂的密码）
+INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
+VALUES ('test_user', '{noop}Test@2024#User', 1);
+
+-- ❌ 错误示例：不要使用弱密码
+-- VALUES ('test_user', '{noop}123456', 1);
+-- VALUES ('test_user', '{noop}test123', 1);
+```
+
+#### 11.2.3 数据库配置规范
+
+**使用真实数据库**:
+- ✅ 使用真实的 MySQL 数据库进行测试
+- ❌ 不使用 H2 内存数据库（避免方言差异导致的问题）
+
+**JDBC URL 配置**:
+
+必须包含完整的连接参数：
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    # password: 请在 application-local.yml 中配置（见 10.1 敏感配置管理）
+```
+
+**参数说明**:
+- `useUnicode=true&characterEncoding=UTF-8`：确保字符编码正确
+- `useSSL=false`：测试环境禁用 SSL（生产环境应启用）
+- `serverTimezone=Asia/Shanghai`：设置时区
+- `allowPublicKeyRetrieval=true`：允许客户端从服务器获取公钥
+
+**JPA 配置**（如果使用 JPA）:
+```yaml
+spring:
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: create-drop  # 测试时自动创建和删除表
+    show-sql: true           # 显示 SQL 语句（便于调试）
+```
+
+**注意事项**:
+- `ddl-auto: create-drop` 仅用于测试环境
+- 生产环境必须使用 `ddl-auto: none` 或 `validate`
+- 敏感配置（如密码）必须使用 `application-local.yml` 管理（见 [10.1 敏感配置管理](#101-敏感配置管理)）
+
+---
+
+## 12. 测试规范
+
+### 12.1 测试目录结构
 
 > **包名规范**：测试代码的包名规范遵循 [1.1 包名规范](#11-包名规范)
 
@@ -1216,7 +1618,7 @@ smart-keyword-sensitive-starter/
 
 ---
 
-### 11.2 TestApplication 规范
+### 12.2 TestApplication 规范
 
 **位置**：`src/test/java/io/github/surezzzzzz/sdk/{domain}/{module}/test/{模块名}TestApplication.java`
 
@@ -1257,7 +1659,7 @@ public class SmartKeywordSensitiveTestApplication {
 
 ---
 
-### 11.3 测试类规范
+### 12.3 测试类规范
 
 **位置**：`src/test/java/io/github/surezzzzzz/sdk/{domain}/{module}/test/cases/{测试类名}.java`
 
@@ -1312,7 +1714,7 @@ class SomeFeatureTest {
 
 ---
 
-### 11.4 测试数据和配置规范
+### 12.4 测试数据和配置规范
 
 **配置文件（application.yml）**：
 
@@ -1348,65 +1750,11 @@ logging:
 
 **敏感配置管理**：
 
-对于包含敏感信息（如数据库密码、API密钥等）的测试配置，必须使用以下方式管理：
-
-1. **application.yml**（提交到 git）：
-   - 包含公共配置和配置结构
-   - 敏感字段留空或注释掉
-   - 作为配置模板供团队参考
-
-2. **application-local.yml**（不提交到 git）：
-   - 包含本地真实的敏感配置
-   - 每个开发者本地维护
-   - 添加到 `.gitignore` 忽略列表
-
-3. **application-local.yml.example**（提交到 git）：
-   - 配置模板文件
-   - 提供配置示例和说明
-   - 帮助新开发者快速配置本地环境
-
-**示例**：
-
-```yaml
-# application.yml（提交到git）
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8
-    username: root
-    # password: 请在 application-local.yml 中配置
-
-# application-local.yml（不提交到git）
-spring:
-  datasource:
-    password: your_real_password
-
-# application-local.yml.example（提交到git）
-spring:
-  datasource:
-    password: your_password_here  # 请修改为实际密码
-```
-
-**.gitignore 配置**：
-
-在项目根目录的 `.gitignore` 中添加：
-```
-# 敏感配置文件
-**/application-local.yml
-
-# 证书和密钥文件
-*.pem
-*.crt
-*.cer
-*.key
-*.p12
-*.pfx
-*.jks
-*.keystore
-```
+对于包含敏感信息（如数据库密码、API密钥等）的测试配置，请参考 [10.1 敏感配置管理](#101-敏感配置管理)。
 
 ---
 
-### 11.5 日志和断言规范
+### 12.5 日志和断言规范
 
 **日志规范**：
 
@@ -1443,7 +1791,7 @@ void testMask() {
 
 ---
 
-### 11.6 Gradle 依赖配置
+### 12.6 Gradle 依赖配置
 
 在 `build.gradle` 的 `dependencies` 块中添加测试依赖：
 
@@ -1465,7 +1813,7 @@ dependencies {
 
 ---
 
-### 11.7 测试覆盖要求
+### 12.7 测试覆盖要求
 
 **核心要求**：
 
@@ -1482,149 +1830,24 @@ dependencies {
 
 ---
 
-### 11.8 数据库测试规范
+### 12.8 数据库测试规范
 
 > **适用范围**：本节规范仅适用于需要连接数据库（如 MySQL）的 SDK 模块
 
-#### SQL 文件组织结构
+**MySQL相关规范**：
 
-**位置**：放在模块的 `docs/` 目录下
+数据库相关的规范（SQL文件组织、表设计、配置等）请参考 [11.2 MySQL规范](#112-mysql规范)，包括：
+- SQL文件组织结构（docs/目录、文件命名）
+- SQL文件编写规范（字符集、建表规范、字段注释、密码处理）
+- 数据库配置规范（JDBC URL、JPA配置）
 
-**文件命名**：使用序号前缀标识执行顺序
-
-**文件分类**：
-```
-{模块名}-starter/
-├── docs/
-│   ├── README.md                    ← 执行说明文档
-│   ├── 00_database.sql              ← 数据库创建脚本
-│   ├── 01_schema.sql                ← 表结构定义
-│   ├── 02_init_data.sql             ← 必要的初始数据
-│   └── 03_test_data.sql             ← 可选的测试数据
-```
-
-**README.md 内容**：
-- SQL 文件执行顺序说明
-- 数据库配置要求
-- 测试数据说明
+**测试注意事项**：
+- 使用真实的 MySQL 数据库进行测试，不使用 H2 内存数据库
+- 敏感配置（如密码）使用 `application-local.yml` 管理（见 [10.1 敏感配置管理](#101-敏感配置管理)）
 
 ---
 
-#### SQL 文件编写规范
-
-**字符集要求**：
-- 统一使用 `utf8mb4` 字符集
-- 确保支持完整的 Unicode 字符（包括 emoji）
-
-**建表规范**：
-
-✅ **必须要求**：
-- 使用 `DROP TABLE IF EXISTS` 避免重复创建错误
-- **所有字段必须添加 COMMENT 注释**
-- 主键、索引必须明确定义
-- 使用 `ENGINE=InnoDB` 存储引擎
-
-**完整示例**：
-
-```sql
--- 使用 DROP TABLE IF EXISTS 避免重复创建错误
-DROP TABLE IF EXISTS `oauth2_registered_client`;
-
-CREATE TABLE `oauth2_registered_client` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `client_id` VARCHAR(100) NOT NULL COMMENT '客户端ID',
-    `client_secret` VARCHAR(200) NOT NULL COMMENT '客户端密钥',
-    `client_name` VARCHAR(200) NOT NULL COMMENT '客户端名称',
-    `client_type` VARCHAR(50) NOT NULL COMMENT '客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端',
-    `grant_types` VARCHAR(500) NOT NULL COMMENT '授权类型，多个用逗号分隔',
-    `redirect_uris` TEXT COMMENT '重定向URI，多个用逗号分隔',
-    `scopes` VARCHAR(500) COMMENT '授权范围，多个用逗号分隔',
-    `token_expiry` INT NOT NULL DEFAULT 3600 COMMENT 'Token过期时间（秒）',
-    `refresh_token_expiry` INT NOT NULL DEFAULT 86400 COMMENT 'Refresh Token过期时间（秒）',
-    `enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用：0-禁用，1-启用',
-    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_client_id` (`client_id`),
-    KEY `idx_client_type` (`client_type`),
-    KEY `idx_enabled` (`enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='OAuth2客户端注册表';
-```
-
-**字段注释规范**：
-- 主键字段：说明用途（如"主键ID"）
-- 业务字段：说明字段含义和业务用途
-- 枚举字段：列出所有可能的值及其含义（如"客户端类型：PLATFORM-平台客户端，THIRD_PARTY-第三方客户端"）
-- 时间字段：说明时间含义（如"创建时间"、"更新时间"）
-- 布尔字段：说明0和1的含义（如"是否启用：0-禁用，1-启用"）
-
-**查询规范**：
-- 注释掉需要特殊权限的查询（如 `information_schema` 查询）
-- 避免使用可能导致权限问题的系统表查询
-
-**密码处理**：
-- 生产数据：使用 `{bcrypt}` 前缀 + BCrypt 加密密码
-- 测试数据：使用 `{noop}` 前缀 + 明文密码（仅用于测试）
-- ❌ **禁止使用弱密码**：即使是测试数据，也不能使用弱密码（如 `123456`、`password`、`test123`、`admin123` 等）
-- ✅ **建议使用相对复杂的测试密码**：包含字母、数字、特殊字符的组合
-
-```sql
--- 生产数据示例
-INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
-VALUES ('admin', '{bcrypt}$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', 1);
-
--- 测试数据示例（使用相对复杂的密码）
-INSERT INTO `oauth2_user` (`username`, `password`, `enabled`)
-VALUES ('test_user', '{noop}Test@2024#User', 1);
-
--- ❌ 错误示例：不要使用弱密码
--- VALUES ('test_user', '{noop}123456', 1);
--- VALUES ('test_user', '{noop}test123', 1);
-```
-
----
-
-#### 数据库配置规范
-
-**使用真实数据库**：
-- ✅ 使用真实的 MySQL 数据库进行测试
-- ❌ 不使用 H2 内存数据库（避免方言差异导致的问题）
-
-**JDBC URL 配置**：
-
-必须包含完整的连接参数：
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/test_db?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    # password: 请在 application-local.yml 中配置
-```
-
-**参数说明**：
-- `useUnicode=true&characterEncoding=UTF-8`：确保字符编码正确
-- `useSSL=false`：测试环境禁用 SSL（生产环境应启用）
-- `serverTimezone=Asia/Shanghai`：设置时区
-- `allowPublicKeyRetrieval=true`：允许客户端从服务器获取公钥
-
-**JPA 配置**（如果使用 JPA）：
-```yaml
-spring:
-  jpa:
-    database-platform: org.hibernate.dialect.MySQL8Dialect
-    hibernate:
-      ddl-auto: create-drop  # 测试时自动创建和删除表
-    show-sql: true           # 显示 SQL 语句（便于调试）
-```
-
-**注意事项**：
-- `ddl-auto: create-drop` 仅用于测试环境
-- 生产环境必须使用 `ddl-auto: none` 或 `validate`
-- 敏感配置（如密码）必须使用 `application-local.yml` 管理（见 [11.4 测试数据和配置规范](#114-测试数据和配置规范)）
-
----
-
-## 12. 总结
+## 13. 总结
 
 ### 核心原则
 
@@ -1641,7 +1864,8 @@ spring:
 11. ✅ **测试配置分离**：中间件配置、SDK配置、log配置放yml，测试数据放代码里
 12. ✅ **测试简单直接**：不使用 @ActiveProfiles，只维护一个 application.yml
 13. ✅ **敏感配置分离**：敏感信息使用application-local.yml管理，不提交到git，证书密钥文件加入.gitignore
-14. ✅ **数据库规范化**（仅数据库SDK）：SQL字段必须有COMMENT注释，使用utf8mb4字符集，禁止弱密码
+14. ✅ **Redis Key标准化**（仅Redis SDK）：使用标准Key结构`{sdk-prefix}:{business-type}:{me}::{data-id}`，支持多实例和Redis Cluster
+15. ✅ **数据库规范化**（仅数据库SDK）：SQL字段必须有COMMENT注释，使用utf8mb4字符集，禁止弱密码
 
 ### 检查清单
 
@@ -1699,5 +1923,15 @@ spring:
 - [ ] JDBC URL包含完整参数
 - [ ] 使用真实MySQL数据库测试（不用H2）
 
----
+**Redis相关**（仅Redis SDK）：
+
+- [ ] Redis Key使用标准结构：`{sdk-prefix}:{business-type}:{me}::{data-id}`
+- [ ] `me`参数在RedisConfig级别配置（不在具体缓存类型配置中）
+- [ ] 使用`'{' + #id + '}'`格式支持Redis Cluster Hash Tag
+- [ ] SDK前缀保持描述性（业务驱动，不强制缩短）
+- [ ] 业务类型使用冒号分隔的层级结构
+- [ ] 配置了合理的TTL过期时间
+- [ ] 使用`unless = "#result == null"`避免缓存空值
+
+
 
