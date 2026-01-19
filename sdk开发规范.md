@@ -1071,20 +1071,36 @@ String errorMsg = String.format(ErrorMessage.SOME_ERROR, message);
 
 **仅以下情况可以不提取常量**：
 
-1. **RESTful API 路径**（可直接写在 Controller 注解中）：
+1. **Controller Mapping路径**（可直接写在注解中）：
    ```java
-   @GetMapping("/api/resource")
+   @RequestMapping("/admin")
+   @GetMapping("/api/users/{id}")
    @PostMapping("/api/resource")
    @DeleteMapping("/api/resource/{id}")
    ```
 
-2. **日志输出**（动态内容，不影响业务逻辑）：
+   **说明**：路径直接写在映射注解中更加直观，易于理解API结构。
+
+2. **重定向和模板路径**（可直接写在代码中）：
+   ```java
+   // 重定向路径
+   return "redirect:/admin/login";
+   return "redirect:/admin/create-success";
+
+   // 模板引擎视图名称
+   return "admin/index";
+   return "user/profile";
+   ```
+
+   **说明**：这些路径在使用点直接写出更加清晰。如果某个路径被多次重用，可以考虑提取常量（但不强制）。
+
+3. **日志输出**（动态内容，不影响业务逻辑）：
    ```java
    log.info("Processing request for user: {}", userId);
    log.debug("Operation completed successfully");
    ```
 
-3. **测试代码**（测试数据可以硬编码）：
+4. **测试代码**（测试数据可以硬编码）：
    ```java
    @Test
    void testSomething() {
