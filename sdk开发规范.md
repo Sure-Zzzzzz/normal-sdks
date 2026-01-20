@@ -20,6 +20,7 @@
   - [3.1 Package Marker（必需）](#31-package-marker必需)
   - [3.2 自定义组件注解（必需）](#32-自定义组件注解必需)
   - [3.3 标准目录结构](#33-标准目录结构)
+  - [3.4 数据类包规范](#34-数据类包规范)
 - [4. 配置类规范](#4-配置类规范)
   - [4.1 全局 Properties 类（单一）](#41-全局-properties-类单一)
   - [4.2 AutoConfiguration 类](#42-autoconfiguration-类)
@@ -447,6 +448,152 @@ smart-keyword-sensitive-starter/
 │   │   └── SensitiveOrgType.java               ← 枚举
 │   └── ...
 ```
+
+---
+
+### 3.4 数据类包规范
+
+SDK开发中常用的数据类包括：`entity`、`model`、`request`、`response`。各包职责明确，命名规范如下：
+
+#### 3.4.1 entity包 - 数据库实体
+
+**用途**：专门用于数据库实体映射（JPA、MyBatis等ORM框架）
+
+**命名规范**：
+- 类名必须使用 `Entity` 后缀
+- 例如：`UserEntity`、`ClientEntity`、`RegisteredClientEntity`
+
+**示例**：
+```java
+package io.github.surezzzzzz.sdk.auth.aksk.server.entity;
+
+@Entity
+@Table(name = "registered_client")
+public class RegisteredClientEntity {
+    @Id
+    private String id;
+    private String clientId;
+    private String clientSecret;
+    // ...
+}
+```
+
+#### 3.4.2 model包 - 业务模型
+
+**用途**：用于业务逻辑层的领域模型、数据传输对象
+
+**命名规范**：
+- 不强制后缀，根据业务语义命名
+- 例如：`TokenInfo`、`QueryIntent`、`Expression`、`FieldMetadata`
+
+**示例**：
+```java
+package io.github.surezzzzzz.sdk.auth.aksk.server.model;
+
+public class TokenInfo {
+    private String accessToken;
+    private String tokenType;
+    private Integer expiresIn;
+    // ...
+}
+```
+
+#### 3.4.3 request包 - API请求参数
+
+**用途**：用于API接口的请求参数封装
+
+**命名规范**：
+- 类名必须使用 `Request` 后缀
+- 例如：`QueryRangeRequest`、`CreateUserRequest`、`LoginRequest`
+
+**包位置**：
+- 推荐放在 `controller` 包或 `endpoint` 包下
+- request/response与controller紧密关联，放在一起更直观
+
+**示例**：
+```java
+package io.github.surezzzzzz.sdk.prometheus.api.controller.request;
+
+public class QueryRangeRequest {
+    private String query;
+    private Long start;
+    private Long end;
+    private String step;
+    // ...
+}
+```
+
+#### 3.4.4 response包 - API响应结果
+
+**用途**：用于API接口的响应结果封装
+
+**命名规范**：
+- 类名必须使用 `Response` 后缀
+- 例如：`QueryRangeResponse`、`UserInfoResponse`、`LoginResponse`
+
+**包位置**：
+- 推荐放在 `controller` 包或 `endpoint` 包下
+- request/response与controller紧密关联，放在一起更直观
+
+**示例**：
+```java
+package io.github.surezzzzzz.sdk.prometheus.api.controller.response;
+
+public class QueryRangeResponse {
+    private String status;
+    private Data data;
+    // ...
+}
+```
+
+#### 3.4.5 包组织建议
+
+根据模块复杂度，可以选择以下组织方式：
+
+**方式1：controller包下组织**（推荐）
+```
+sdk/{domain}/{module}/
+├── entity/
+│   ├── UserEntity.java
+│   └── ClientEntity.java
+├── model/
+│   ├── TokenInfo.java
+│   └── ClientInfo.java
+└── controller/
+    ├── UserController.java
+    ├── AdminController.java
+    ├── request/
+    │   ├── CreateUserRequest.java
+    │   └── LoginRequest.java
+    └── response/
+        ├── UserInfoResponse.java
+        └── LoginResponse.java
+```
+
+**方式2：endpoint包下组织**（适用于使用endpoint命名的模块）
+```
+sdk/{domain}/{module}/
+├── entity/
+│   ├── UserEntity.java
+│   └── ClientEntity.java
+├── model/
+│   ├── TokenInfo.java
+│   └── ClientInfo.java
+└── endpoint/
+    ├── UserEndpoint.java
+    ├── AdminEndpoint.java
+    ├── request/
+    │   ├── CreateUserRequest.java
+    │   └── LoginRequest.java
+    └── response/
+        ├── UserInfoResponse.java
+        └── LoginResponse.java
+```
+
+**选择建议**：
+- request/response优先放在controller或endpoint包下，与API接口定义放在一起
+- entity包保持独立，用于数据库实体映射
+- model包保持独立，用于业务逻辑层的领域模型
 
 ---
 
