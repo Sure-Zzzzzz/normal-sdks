@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.elasticsearch.route.registry;
+package io.github.surezzzzzz.sdk.elasticsearch.route.model;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;

@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.VersionException;
-import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ServerVersion;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ServerVersion;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;

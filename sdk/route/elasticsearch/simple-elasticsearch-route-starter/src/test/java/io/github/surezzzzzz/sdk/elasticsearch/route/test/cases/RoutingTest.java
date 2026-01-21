@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.DocumentIndexHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.document.TestDocument;

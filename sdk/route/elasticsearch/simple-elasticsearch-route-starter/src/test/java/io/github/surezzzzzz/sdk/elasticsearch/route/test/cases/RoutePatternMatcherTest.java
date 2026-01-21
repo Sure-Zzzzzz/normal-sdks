@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.RoutePatternMatcher;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RoutePatternMatcher;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;

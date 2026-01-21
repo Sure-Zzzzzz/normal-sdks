@@ -1,36 +1,78 @@
-package io.github.surezzzzzz.sdk.elasticsearch.route.support;
+package io.github.surezzzzzz.sdk.elasticsearch.route.proxy;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.VersionCompatibilityErrorPattern;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexNameExtractor;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.springframework.cglib.proxy.Enhancer;
 import org.springframework.cglib.proxy.MethodInterceptor;
 import org.springframework.cglib.proxy.MethodProxy;
-import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
-import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Map;
 
 /**
- * ElasticsearchRestTemplate 路由代理（使用 CGLIB）
+ * ElasticsearchRestTemplate 路由代理(使用 CGLIB)
  * 支持 SpEL 表达式解析
  *
- * <p><b>版本兼容性说明：</b></p>
+ * <p><b>版本兼容性说明:</b></p>
  * <ul>
  *   <li>本代理仅负责根据索引名称将请求路由到不同的 Elasticsearch 数据源</li>
  *   <li>不负责屏蔽 Spring Data Elasticsearch 与不同 ES 版本之间的 API 兼容性问题</li>
- *   <li>某些 Spring Data API（如 IndexOperations.getSettings()）可能在特定 ES 版本下不兼容</li>
- *   <li>建议：对于版本敏感的操作，使用 {@link io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry#getHighLevelClient(String)}
+ *   <li>某些 Spring Data API(如 IndexOperations.getSettings())可能在特定 ES 版本下不兼容</li>
+ *   <li>建议: 对于版本敏感的操作,使用 {@link io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry#getHighLevelClient(String)}
  *       获取原生 RestHighLevelClient 进行操作</li>
  * </ul>
+ *
+ * <p><b>索引名称提取策略(动态加载,责任链模式):</b></p>
+ * <p>系统会自动发现所有实现了 {@link IndexNameExtractor} 接口并标注了
+ * {@link io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent} 的 Bean,
+ * 按照 @Order 注解定义的优先级顺序执行提取。</p>
+ *
+ * <p>内置提取器:</p>
+ * <ol>
+ *   <li>{@link io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexCoordinatesExtractor} - Order(1) - 从 IndexCoordinates 参数提取(优先级最高)</li>
+ *   <li>{@link io.github.surezzzzzz.sdk.elasticsearch.route.extractor.EntityObjectExtractor} - Order(2) - 从实体对象提取(修复 save 方法 bug)</li>
+ *   <li>{@link io.github.surezzzzzz.sdk.elasticsearch.route.extractor.ClassTypeExtractor} - Order(3) - 从 Class 类型参数提取</li>
+ *   <li>{@link io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexQueryExtractor} - Order(4) - 从 IndexQuery 参数提取(批量索引场景)</li>
+ * </ol>
+ *
+ * <p><b>如何添加自定义提取器:</b></p>
+ * <pre>
+ * &#64;SimpleElasticsearchRouteComponent
+ * &#64;Order(10)  // 设置优先级,数字越小优先级越高 (内置提取器已占用 1-4)
+ * public class MyCustomExtractor implements IndexNameExtractor {
+ *     &#64;Override
+ *     public String extract(Method method, Object[] args) {
+ *         // 遍历方法参数,查找目标参数
+ *         for (Object arg : args) {
+ *             if (supports(arg)) {
+ *                 // 从参数中提取索引名
+ *                 String indexName = extractIndexNameFrom(arg);
+ *                 if (indexName != null &amp;&amp; !indexName.isEmpty()) {
+ *                     return indexName;
+ *                 }
+ *             }
+ *         }
+ *         return null;  // 未找到索引名,责任链继续
+ *     }
+ *
+ *     &#64;Override
+ *     public boolean supports(Object arg) {
+ *         // 判断是否支持此参数类型
+ *         return arg instanceof YourCustomType;
+ *     }
+ * }
+ * </pre>
  *
  * @author surezzzzzz
  */
@@ -43,28 +85,36 @@ public class RouteTemplateProxy implements MethodInterceptor {
     private final RouteResolver routeResolver;
 
     /**
+     * 索引名称提取器责任链(按优先级排序,动态注入)
+     * <p>通过 Spring 自动收集所有标注了 @SimpleElasticsearchRouteComponent 的 IndexNameExtractor 实现</p>
+     */
+    private final List<IndexNameExtractor> indexNameExtractors;
+
+    /**
      * 创建代理实例
      */
     public static ElasticsearchRestTemplate createProxy(
             Map<String, ElasticsearchRestTemplate> templates,
             ElasticsearchRestTemplate defaultTemplate,
-            RouteResolver routeResolver) {
+            RouteResolver routeResolver,
+            List<IndexNameExtractor> extractors) {
         RestHighLevelClient client = extractClient(defaultTemplate);
-        return createProxy(templates, defaultTemplate, routeResolver, client);
+        return createProxy(templates, defaultTemplate, routeResolver, extractors, client);
     }
 
     /**
-     * 创建代理实例（显式指定 client，避免反射提取）
+     * 创建代理实例(显式指定 client,避免反射提取)
      */
     public static ElasticsearchRestTemplate createProxy(
             Map<String, ElasticsearchRestTemplate> templates,
             ElasticsearchRestTemplate defaultTemplate,
             RouteResolver routeResolver,
+            List<IndexNameExtractor> extractors,
             RestHighLevelClient client) {
 
         Enhancer enhancer = new Enhancer();
         enhancer.setSuperclass(ElasticsearchRestTemplate.class);
-        enhancer.setCallback(new RouteTemplateProxy(templates, defaultTemplate, routeResolver));
+        enhancer.setCallback(new RouteTemplateProxy(templates, defaultTemplate, routeResolver, extractors));
 
         return (ElasticsearchRestTemplate) enhancer.create(
                 new Class<?>[]{RestHighLevelClient.class},
@@ -156,57 +206,22 @@ public class RouteTemplateProxy implements MethodInterceptor {
     }
 
     /**
-     * 从方法参数中提取索引名称
+     * 从方法参数中提取索引名称(使用责任链模式,动态注入的提取器)
      */
     private String extractIndexName(Method method, Object[] args) {
         if (args == null || args.length == 0) {
             return null;
         }
 
-        for (Object arg : args) {
-            if (arg == null) {
-                continue;
-            }
-
-            // 优先从 IndexCoordinates 获取（已解析，最准确）
-            if (arg instanceof IndexCoordinates) {
-                String indexName = ((IndexCoordinates) arg).getIndexName();
-                log.trace("Extracted index name [{}] from IndexCoordinates", indexName);
+        // 责任链模式: 按优先级遍历提取器
+        for (IndexNameExtractor extractor : indexNameExtractors) {
+            String indexName = extractor.extract(method, args);
+            if (indexName != null) {
                 return indexName;
-            }
-
-            // 从 Class 类型的 @Document 注解获取
-            if (arg instanceof Class) {
-                String indexName = extractIndexFromClass((Class<?>) arg);
-                if (indexName != null) {
-                    log.trace("Extracted index name [{}] from Class annotation", indexName);
-                    return indexName;
-                }
             }
         }
 
         log.trace("No index name extracted from method [{}] arguments", method.getName());
-        return null;
-    }
-
-    /**
-     * 从 Class 的 @Document 注解中提取索引名称
-     * 支持 SpEL 表达式解析
-     */
-    private String extractIndexFromClass(Class<?> clazz) {
-        Document doc = clazz.getAnnotation(Document.class);
-        if (doc != null) {
-            String indexName = doc.indexName();
-
-            // ========== 解析 SpEL 表达式 ==========
-            if (SpELResolver.isSpEL(indexName)) {
-                String resolved = SpELResolver.resolve(indexName);
-                log.trace("Resolved SpEL index name from [{}] to [{}]", indexName, resolved);
-                return resolved;
-            }
-
-            return indexName;
-        }
         return null;
     }
 

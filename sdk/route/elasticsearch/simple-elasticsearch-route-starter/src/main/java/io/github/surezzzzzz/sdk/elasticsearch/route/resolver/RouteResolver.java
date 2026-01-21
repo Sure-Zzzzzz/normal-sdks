@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.elasticsearch.route.support;
+package io.github.surezzzzzz.sdk.elasticsearch.route.resolver;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;

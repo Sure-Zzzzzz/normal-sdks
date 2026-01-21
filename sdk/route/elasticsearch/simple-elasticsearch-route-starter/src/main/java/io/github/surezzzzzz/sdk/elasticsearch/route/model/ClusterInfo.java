@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.elasticsearch.route.registry;
+package io.github.surezzzzzz.sdk.elasticsearch.route.model;
 
 import lombok.Getter;
 import lombok.ToString;

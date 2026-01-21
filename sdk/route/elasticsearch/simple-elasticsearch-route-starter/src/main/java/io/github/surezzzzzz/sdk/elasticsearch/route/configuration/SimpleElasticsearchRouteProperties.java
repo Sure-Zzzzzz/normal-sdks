@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.RouteMatchType;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
-import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ServerVersion;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ServerVersion;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;

@@ -17,7 +17,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.6'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -340,9 +340,12 @@ try {
 方法调用 → 提取索引名称 → 路由规则匹配 → 选择数据源 → 执行实际操作
 ```
 
-1. **索引提取**：从方法参数中提取索引名称
-   - `IndexCoordinates` 类型：直接获取索引名
-   - `Class<?>` 类型：通过 `@Document` 注解获取索引名（支持 SpEL 表达式解析）
+1. **索引提取**：从方法参数中提取索引名称（责任链模式，动态加载）
+   - `IndexCoordinatesExtractor` (Order 1)：从 `IndexCoordinates` 类型参数提取索引名
+   - `EntityObjectExtractor` (Order 2)：从实体对象的 `@Document` 注解提取索引名（支持 SpEL）
+   - `ClassTypeExtractor` (Order 3)：从 `Class<?>` 类型参数的 `@Document` 注解提取索引名（支持 SpEL）
+   - `IndexQueryExtractor` (Order 4)：从 `IndexQuery` 参数提取手动指定的索引名（批量索引场景）
+   - **支持自定义提取器**：实现 `IndexNameExtractor` 接口并标注 `@SimpleElasticsearchRouteComponent` + `@Order` 即可自动加载
 
 2. **规则匹配**：按优先级遍历所有启用的路由规则
    - 精确匹配 (`exact`)：完全相等的字符串匹配
@@ -500,13 +503,59 @@ public class TestDocument {
 }
 ```
 
-### 2. 性能优化
+### 2. 自定义索引名称提取器（1.0.6+）
+
+支持动态加载自定义的索引名称提取器，无需修改框架代码：
+
+```java
+import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexNameExtractor;
+import org.springframework.core.annotation.Order;
+
+/**
+ * 自定义提取器示例：从自定义注解中提取索引名
+ */
+@SimpleElasticsearchRouteComponent
+@Order(10)  // 设置优先级，数字越小优先级越高（内置提取器已占用 1-4）
+public class CustomAnnotationExtractor implements IndexNameExtractor {
+
+    @Override
+    public String extract(Method method, Object[] args) {
+        if (args == null || args.length == 0) {
+            return null;
+        }
+
+        for (Object arg : args) {
+            if (supports(arg)) {
+                // 从自定义注解提取索引名
+                MyIndexAnnotation annotation = arg.getClass().getAnnotation(MyIndexAnnotation.class);
+                return annotation.indexName();
+            }
+        }
+
+        return null;
+    }
+
+    @Override
+    public boolean supports(Object arg) {
+        return arg != null && arg.getClass().isAnnotationPresent(MyIndexAnnotation.class);
+    }
+}
+```
+
+**启动日志示例：**
+```
+INFO  SimpleElasticsearchRouteConfiguration : Loaded 5 IndexNameExtractor(s):
+  [IndexCoordinatesExtractor, EntityObjectExtractor, ClassTypeExtractor, IndexQueryExtractor, CustomAnnotationExtractor]
+```
+
+### 3. 性能优化
 
 - **SpEL 表达式缓存**：缓存编译后的 Expression 对象
 - **Pattern 编译缓存**：正则表达式编译结果缓存
 - **路由规则排序缓存**：启动时缓存排序后的规则列表
 
-### 3. 配置验证
+### 4. 配置验证
 
 启动时进行 20+ 项配置检查，快速失败定位问题：
 
@@ -546,6 +595,9 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
+- [CHANGELOG 1.0.6](./CHANGELOG.1.0.6.md) - **最新版本**
+- [CHANGELOG 1.0.5](./CHANGELOG.1.0.5.md)
+- [CHANGELOG 1.0.4](./CHANGELOG.1.0.4.md)
 - [CHANGELOG 1.0.3](./CHANGELOG.1.0.3.md)
 - [CHANGELOG 1.0.2](./CHANGELOG.1.0.2.md)
 - [CHANGELOG 1.0.1](./CHANGELOG.1.0.1.md)

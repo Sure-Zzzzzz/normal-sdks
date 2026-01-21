@@ -8,6 +8,7 @@ io:
             default-source: primary
 
             sources:
+              # primary 指向不存在的端口,如果路由错误会连接失败
               primary:
                 urls: http://localhost:9201
                 connect-timeout: 5000
@@ -17,6 +18,7 @@ io:
                 max-conn-per-route: 10
                 enable-connection-reuse: true
 
+              # secondary 指向真实的 ES
               secondary:
                 urls: http://localhost:9200
                 connect-timeout: 5000
@@ -27,14 +29,17 @@ io:
                 enable-connection-reuse: true
 
             rules:
+              # test_index_b.secondary 应该路由到 secondary (9200)
               - pattern: "test_index_b.secondary"
                 datasource: secondary
                 type: exact
                 priority: 10
-              - pattern: "test_index.history"
+              # write_test_secondary 应该路由到 secondary (9200)
+              - pattern: "write_test_secondary"
                 datasource: secondary
                 type: exact
                 priority: 10
+              # *.secondary 通配符规则
               - pattern: "*.secondary"
                 datasource: secondary
                 type: wildcard
