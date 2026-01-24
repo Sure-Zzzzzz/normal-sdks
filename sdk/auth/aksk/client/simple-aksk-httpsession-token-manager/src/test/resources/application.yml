@@ -1,0 +1,25 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://localhost:8080
+              token-endpoint: /oauth2/token
+              # client-id 和 client-secret 请在 application-local.yml 中配置
+              token:
+                refresh-before-expire: 300
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+
+# 本地测试配置: 请复制 application-local.yml.example 为 application-local.yml 并填入真实配置
+# Spring Boot 会自动加载 application-local.yml (如果存在)
+
