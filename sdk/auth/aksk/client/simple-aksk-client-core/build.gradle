@@ -1,0 +1,23 @@
+dependencies {
+    // 依赖 core 模块
+    api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.0'
+
+    // Task Retry
+    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.0'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly "com.fasterxml.jackson.core:jackson-databind"
+
+    // Web 支持（用于 RestTemplate）
+    compileOnly 'org.springframework:spring-web'
+
+    // JWT 解析（用于解析 Token 获取过期时间）
+    api 'com.nimbusds:nimbus-jose-jwt:10.0.2'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+}
