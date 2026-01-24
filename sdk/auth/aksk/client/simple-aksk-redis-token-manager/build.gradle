@@ -1,0 +1,22 @@
+dependencies {
+    // 依赖 client-core 模块
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.0'
+
+    // 依赖 simple-redis-lock-starter@1.0.0
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.0'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // Redis 支持（必须）
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+    // Web 支持（用于 RestTemplate）
+    compileOnly 'org.springframework:spring-web'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}
