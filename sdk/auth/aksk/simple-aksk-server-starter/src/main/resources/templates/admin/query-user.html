@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查询用户级AKSK</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4>查询用户级AKSK</h4>
+                </div>
+                <div class="card-body">
+                    <!-- 错误提示 -->
+                    <div th:if="${error}" class="alert alert-danger" role="alert">
+                        <span th:text="${error}"></span>
+                    </div>
+
+                    <form th:action="@{/admin/query-user-result}" method="get">
+                        <div class="mb-3">
+                            <label for="userId" class="form-label">用户ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="userId" name="userId"
+                                   placeholder="例如：10086" required>
+                            <div class="form-text">输入用户ID查询该用户的所有用户级AKSK</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">查询</button>
+                            <a href="/admin" class="btn btn-secondary">返回</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

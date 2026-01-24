@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创建用户级AKSK</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4>创建用户级AKSK</h4>
+                </div>
+                <div class="card-body">
+                    <!-- 错误提示 -->
+                    <div th:if="${error}" class="alert alert-danger" role="alert">
+                        <span th:text="${error}"></span>
+                    </div>
+
+                    <form th:action="@{/admin/create-user}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+                        <div class="mb-3">
+                            <label for="ownerUserId" class="form-label">用户ID <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="ownerUserId" name="ownerUserId"
+                                   placeholder="例如：user123" required>
+                            <div class="form-text">拥有此AKSK的用户唯一标识</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ownerUsername" class="form-label">用户名 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="ownerUsername" name="ownerUsername"
+                                   placeholder="例如：张三" required>
+                            <div class="form-text">用户的显示名称</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="name" class="form-label">AKSK名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="name" name="name"
+                                   placeholder="例如：移动端应用密钥" required>
+                            <div class="form-text">用于标识此AKSK的用途</div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">创建</button>
+                            <a href="/admin" class="btn btn-secondary">返回</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token详情</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Token详情</h2>
+        <div>
+            <a href="/admin/token" class="btn btn-secondary">返回Token列表</a>
+        </div>
+    </div>
+
+    <!-- 基本信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>基本信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>授权ID:</strong></div>
+                <div class="col-md-9"><code th:text="${token.id}"></code></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>Client ID:</strong></div>
+                <div class="col-md-9"><code th:text="${token.clientId}"></code></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>Client名称:</strong></div>
+                <div class="col-md-9" th:text="${token.clientName}"></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>Client类型:</strong></div>
+                <div class="col-md-9">
+                    <span th:if="${token.clientType == 1}" class="badge bg-primary">平台级</span>
+                    <span th:if="${token.clientType == 2}" class="badge bg-info">用户级</span>
+                </div>
+            </div>
+            <div th:if="${token.ownerUserId != null}" class="row mb-2">
+                <div class="col-md-3"><strong>所属用户ID:</strong></div>
+                <div class="col-md-9"><code th:text="${token.ownerUserId}"></code></div>
+            </div>
+            <div th:if="${token.ownerUsername != null}" class="row mb-2">
+                <div class="col-md-3"><strong>所属用户名:</strong></div>
+                <div class="col-md-9" th:text="${token.ownerUsername}"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Token信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>Token信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>Token值:</strong></div>
+                <div class="col-md-9">
+                    <div class="input-group">
+                        <input type="text" class="form-control" th:value="${token.tokenValue}" readonly id="tokenValue">
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToken()">复制</button>
+                    </div>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>Token类型:</strong></div>
+                <div class="col-md-9"><span class="badge bg-primary">Bearer</span></div>
+            </div>
+            <div class="row mb-2" th:if="${token.scopes != null && !#lists.isEmpty(token.scopes)}">
+                <div class="col-md-3"><strong>Scopes:</strong></div>
+                <div class="col-md-9">
+                    <span th:each="scope : ${token.scopes}" class="badge bg-secondary me-1" th:text="${scope}"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 时间信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>时间信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>签发时间:</strong></div>
+                <div class="col-md-9" th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>过期时间:</strong></div>
+                <div class="col-md-9" th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
+            </div>
+            <div class="row mb-2" th:if="${token.expiresAt != null}">
+                <div class="col-md-3"><strong>剩余时间:</strong></div>
+                <div class="col-md-9">
+                    <span th:if="${token.status.name() == 'ACTIVE'}" class="text-success">
+                        <span th:with="remainingSeconds=${T(java.time.Duration).between(T(java.time.Instant).now(), token.expiresAt).seconds}">
+                            <span th:if="${remainingSeconds >= 3600}" th:text="${#numbers.formatInteger(remainingSeconds / 3600, 1)} + '小时 ' + ${#numbers.formatInteger((remainingSeconds % 3600) / 60, 1)} + '分钟'"></span>
+                            <span th:if="${remainingSeconds < 3600 && remainingSeconds >= 60}" th:text="${#numbers.formatInteger(remainingSeconds / 60, 1)} + '分钟'"></span>
+                            <span th:if="${remainingSeconds < 60}" th:text="${remainingSeconds} + '秒'"></span>
+                        </span>
+                    </span>
+                    <span th:if="${token.status.name() == 'EXPIRED'}" class="text-danger">已过期</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 状态信息 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <h5>状态信息</h5>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>状态:</strong></div>
+                <div class="col-md-9">
+                    <span th:if="${token.status.name() == 'ACTIVE'}" class="badge bg-success">有效</span>
+                    <span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-danger">过期</span>
+                </div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-3"><strong>数据源:</strong></div>
+                <div class="col-md-9">
+                    <span th:if="${token.dataSource.name() == 'MYSQL'}" class="badge bg-primary">MySQL</span>
+                    <span th:if="${token.dataSource.name() == 'REDIS'}" class="badge bg-warning">Redis</span>
+                    <span th:if="${token.dataSource.name() == 'BOTH'}" class="badge bg-success">Both</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+        <button type="button" class="btn btn-danger" th:data-token-id="${token.id}" onclick="deleteToken(this)">删除此Token</button>
+        <a href="/admin/token" class="btn btn-secondary">返回列表</a>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+
+    function copyToken() {
+        const tokenInput = document.getElementById('tokenValue');
+        tokenInput.select();
+        document.execCommand('copy');
+        alert('Token已复制到剪贴板');
+    }
+
+    function deleteToken(button) {
+        const tokenId = button.getAttribute('data-token-id');
+        if (!confirm('确定要删除此Token吗？删除后将立即失效。')) return;
+
+        fetch(`/api/token/${tokenId}`, {
+            method: 'DELETE',
+            headers: {
+                [csrfHeader]: csrfToken
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('删除成功');
+                window.location.href = '/admin/token';
+            } else {
+                alert('删除失败');
+            }
+        })
+        .catch(error => {
+            alert('删除失败：' + error);
+        });
+    }
+    /*]]>*/
+</script>
+</body>
+</html>

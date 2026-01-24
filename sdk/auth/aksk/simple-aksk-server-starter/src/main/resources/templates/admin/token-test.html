@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>换Token测试</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>换Token测试</h2>
+        <div>
+            <a href="/admin/token" class="btn btn-secondary">返回Token管理</a>
+            <a href="/admin" class="btn btn-secondary">返回AKSK管理</a>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${message}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${error}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- 换Token表单 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5>AKSK换Token</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="/admin/token/test">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+                <div class="mb-3">
+                    <label for="clientId" class="form-label">Client ID *</label>
+                    <input type="text" class="form-control" id="clientId" name="clientId"
+                           th:value="${clientId}" placeholder="输入AKSK的Client ID" required>
+                    <div class="form-text">AKSK的Access Key</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="clientSecret" class="form-label">Client Secret *</label>
+                    <input type="password" class="form-control" id="clientSecret" name="clientSecret"
+                           placeholder="输入AKSK的Client Secret" required>
+                    <div class="form-text">AKSK的Secret Key（仅创建时显示一次）</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="scope" class="form-label">Scope</label>
+                    <input type="text" class="form-control" id="scope" name="scope"
+                           th:value="${scope != null ? scope : 'read write'}" placeholder="read write">
+                    <div class="form-text">权限范围，多个权限用空格分隔，默认为 "read write"</div>
+                </div>
+
+                <button type="submit" class="btn btn-primary">换取Token</button>
+                <button type="reset" class="btn btn-secondary">重置</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Token结果展示 -->
+    <div th:if="${accessToken != null}" class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5>换Token成功</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="accessToken" class="form-label"><strong>Access Token:</strong></label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="accessToken" th:value="${accessToken}" readonly>
+                    <button class="btn btn-outline-secondary" type="button" onclick="copyAccessToken()">复制</button>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label class="form-label"><strong>Token类型:</strong></label>
+                    <p th:text="${tokenType != null ? tokenType : 'Bearer'}"></p>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label"><strong>过期时间（秒）:</strong></label>
+                    <p th:text="${expiresIn}"></p>
+                </div>
+            </div>
+
+            <div th:if="${returnedScope != null}" class="mb-3">
+                <label class="form-label"><strong>Scope:</strong></label>
+                <p th:text="${returnedScope}"></p>
+            </div>
+
+            <div class="alert alert-info" role="alert">
+                <strong>提示:</strong> 此Token已保存到MySQL和Redis中,可在Token管理页面查看和管理。
+            </div>
+
+            <!-- 测试Token功能 -->
+            <div class="mt-3">
+                <button class="btn btn-success" onclick="testToken()">测试Token - 调用 GET /api/client</button>
+                <div id="testResult" class="mt-3" style="display:none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <strong>API响应:</strong>
+                        </div>
+                        <div class="card-body">
+                            <pre id="testResultContent" class="bg-light p-2" style="max-height: 400px; overflow-y: auto;"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="card">
+        <div class="card-header">
+            <h5>使用说明</h5>
+        </div>
+        <div class="card-body">
+            <h6>1. 获取AKSK</h6>
+            <p>在<a href="/admin">AKSK管理页面</a>创建平台级或用户级AKSK，创建成功后会显示Client ID和Client Secret（仅显示一次，请妥善保存）。</p>
+
+            <h6>2. 换取Token</h6>
+            <p>使用Client ID和Client Secret通过OAuth2 Client Credentials Grant流程换取Access Token。</p>
+
+            <h6>3. 使用Token</h6>
+            <p>在API请求的Authorization头中携带Token：</p>
+            <pre class="bg-light p-2"><code>Authorization: Bearer {access_token}</code></pre>
+
+            <h6>4. Token管理</h6>
+            <p>可在<a href="/admin/token">Token管理页面</a>查看、搜索、删除Token。</p>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script>
+    function copyAccessToken() {
+        const tokenInput = document.getElementById('accessToken');
+        tokenInput.select();
+        document.execCommand('copy');
+        alert('Access Token已复制到剪贴板');
+    }
+
+    function testToken() {
+        const accessToken = document.getElementById('accessToken').value;
+        const resultDiv = document.getElementById('testResult');
+        const resultContent = document.getElementById('testResultContent');
+
+        // 显示加载状态
+        resultDiv.style.display = 'block';
+        resultContent.textContent = '正在调用API...';
+
+        // 调用GET /api/client API
+        fetch('/api/client', {
+            method: 'GET',
+            headers: {
+                'Authorization': 'Bearer ' + accessToken
+            }
+        })
+        .then(response => {
+            const statusText = `HTTP ${response.status} ${response.statusText}`;
+            return response.json().then(data => ({
+                status: response.status,
+                statusText: statusText,
+                data: data
+            }));
+        })
+        .then(result => {
+            // 格式化显示结果
+            const formatted = `状态: ${result.statusText}\n\n响应内容:\n${JSON.stringify(result.data, null, 2)}`;
+            resultContent.textContent = formatted;
+        })
+        .catch(error => {
+            resultContent.textContent = `调用失败: ${error.message}`;
+        });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AKSK详情</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>AKSK详情</h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                        <tr>
+                            <th width="30%">Client ID</th>
+                            <td><code th:text="${client.clientId}"></code></td>
+                        </tr>
+                        <tr>
+                            <th>名称</th>
+                            <td th:text="${client.clientName}"></td>
+                        </tr>
+                        <tr>
+                            <th>类型</th>
+                            <td>
+                                <span th:if="${client.clientType == 1}" class="badge bg-primary">平台级</span>
+                                <span th:if="${client.clientType == 2}" class="badge bg-info">用户级</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${client.ownerUserId != null}">
+                            <th>所属用户ID</th>
+                            <td th:text="${client.ownerUserId}"></td>
+                        </tr>
+                        <tr>
+                            <th>Client Secret</th>
+                            <td>
+                                <span class="text-muted">****** (已加密，无法查看)</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="alert alert-info" role="alert">
+                        <strong>提示：</strong>Client Secret仅在创建时显示一次，后续无法查看。
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="/admin" class="btn btn-primary">返回管理页面</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>创建成功</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h4>✓ AKSK创建成功</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning" role="alert">
+                        <strong>⚠️ 重要提示：</strong>Client Secret仅显示一次，请立即复制保存！
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Client ID</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" th:value="${clientId}" id="clientId" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('clientId')">
+                                复制
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-danger">Client Secret (仅显示一次)</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" th:value="${clientSecret}" id="clientSecret" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('clientSecret')">
+                                复制
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info" role="alert">
+                        <p class="mb-0">请妥善保存以上信息，关闭此页面后将无法再次查看Client Secret。</p>
+                    </div>
+
+                    <div class="d-grid">
+                        <a href="/admin" class="btn btn-primary">返回管理页面</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script>
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    element.select();
+    document.execCommand('copy');
+    alert('已复制到剪贴板');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Token管理</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Token管理</h2>
+        <div>
+            <a href="/admin/token/test" class="btn btn-success">换Token测试</a>
+            <button type="button" class="btn btn-warning" onclick="cleanupExpiredTokens()">清理过期Token</button>
+            <a href="/admin" class="btn btn-secondary">返回AKSK管理</a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit" class="btn btn-outline-danger">退出登录</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${message}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${error}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- 统计卡片（仅MySQL数据） -->
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">总Token数（MySQL）</h5>
+                    <p class="card-text display-6" th:text="${statistics.totalCount}">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">有效Token（MySQL）</h5>
+                    <p class="card-text display-6 text-success" th:text="${statistics.activeCount}">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">过期Token（MySQL）</h5>
+                    <p class="card-text display-6 text-danger" th:text="${statistics.expiredCount}">0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab导航 -->
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link"
+               th:classappend="${currentSource == 'mysql' ? 'active' : ''}"
+               th:href="@{/admin/token(source='mysql', page=1, size=${pageSize}, status=${currentStatus})}">
+                MySQL Token
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link"
+               th:classappend="${currentSource == 'redis' ? 'active' : ''}"
+               th:href="@{/admin/token(source='redis', page=1, size=${pageSize})}">
+                Redis Token
+            </a>
+        </li>
+    </ul>
+
+    <!-- 过滤和搜索 -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" action="/admin/token" class="row g-3">
+                <!-- 隐藏字段保持当前source -->
+                <input type="hidden" name="source" th:value="${currentSource}">
+
+                <!-- 类型过滤（仅MySQL Tab显示） -->
+                <div class="col-auto" th:if="${currentSource == 'mysql'}">
+                    <label class="form-label">类型过滤：</label>
+                    <div class="btn-group" role="group">
+                        <a th:href="@{/admin/token(source=${currentSource}, status=${currentStatus}, search=${currentSearch})}"
+                           th:classappend="${currentClientType == null} ? 'active' : ''"
+                           class="btn btn-outline-primary">全部</a>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=1, status=${currentStatus}, search=${currentSearch})}"
+                           th:classappend="${currentClientType == 1} ? 'active' : ''"
+                           class="btn btn-outline-primary">平台级</a>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=2, status=${currentStatus}, search=${currentSearch})}"
+                           th:classappend="${currentClientType == 2} ? 'active' : ''"
+                           class="btn btn-outline-primary">用户级</a>
+                    </div>
+                </div>
+
+                <!-- 状态过滤（两个Tab都显示） -->
+                <div class="col-auto">
+                    <label class="form-label">状态过滤：</label>
+                    <div class="btn-group" role="group">
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, search=${currentSearch})}"
+                           th:classappend="${currentStatus == null} ? 'active' : ''"
+                           class="btn btn-outline-success">全部</a>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, status='ACTIVE', search=${currentSearch})}"
+                           th:classappend="${currentStatus?.name() == 'ACTIVE'} ? 'active' : ''"
+                           class="btn btn-outline-success">有效</a>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, status='EXPIRED', search=${currentSearch})}"
+                           th:classappend="${currentStatus?.name() == 'EXPIRED'} ? 'active' : ''"
+                           class="btn btn-outline-success">过期</a>
+                    </div>
+                </div>
+
+                <!-- 搜索框（仅MySQL Tab显示） -->
+                <div class="col-auto ms-auto" th:if="${currentSource == 'mysql'}">
+                    <label for="searchInput" class="form-label">搜索：</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" name="search"
+                               th:value="${currentSearch}" placeholder="Client ID / Client名称">
+                        <button type="submit" class="btn btn-primary">搜索</button>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, status=${currentStatus})}"
+                           class="btn btn-secondary">清除</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Token列表 -->
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>Client ID</th>
+                    <th>Client名称</th>
+                    <th>类型</th>
+                    <th>Token</th>
+                    <th>签发时间</th>
+                    <th>过期时间</th>
+                    <th>状态</th>
+                    <th>数据源</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="token : ${tokens}">
+                    <td><code th:text="${token.clientId}"></code></td>
+                    <td>
+                        <span th:attr="data-client-id=${token.clientId}" class="client-name-loading">
+                            <span class="spinner-border spinner-border-sm" role="status"></span> 加载中...
+                        </span>
+                    </td>
+                    <td>
+                        <span th:attr="data-client-id=${token.clientId}" class="client-type-loading">
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                        </span>
+                    </td>
+                    <td>
+                        <code th:text="${#strings.abbreviate(token.tokenValue, 30)}" style="font-size: 0.85em;"></code>
+                    </td>
+                    <td th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                    <td th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                    <td>
+                        <span th:if="${token.status.name() == 'ACTIVE'}" class="badge bg-success">有效</span>
+                        <span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-danger">过期</span>
+                    </td>
+                    <td>
+                        <span th:if="${token.dataSource.name() == 'MYSQL'}" class="badge bg-primary">MySQL</span>
+                        <span th:if="${token.dataSource.name() == 'REDIS'}" class="badge bg-warning">Redis</span>
+                        <span th:if="${token.dataSource.name() == 'BOTH'}" class="badge bg-success">Both</span>
+                    </td>
+                    <td>
+                        <a th:href="@{/admin/token/{id}(id=${token.id})}" class="btn btn-sm btn-info">详情</a>
+                        <button type="button" class="btn btn-sm btn-danger"
+                                th:data-token-id="${token.id}"
+                                onclick="deleteToken(this.getAttribute('data-token-id'))">删除
+                        </button>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(tokens)}">
+                    <td colspan="9" class="text-center text-muted">暂无数据</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    <nav th:if="${totalPages > 1}" aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''">
+                <a class="page-link"
+                   th:href="@{/admin/token(source=${currentSource}, page=${currentPage - 1}, size=${pageSize}, clientType=${currentClientType}, status=${currentStatus}, search=${currentSearch})}">上一页</a>
+            </li>
+
+            <li th:each="i : ${#numbers.sequence(1, totalPages)}"
+                class="page-item"
+                th:classappend="${i == currentPage} ? 'active' : ''">
+                <a class="page-link"
+                   th:href="@{/admin/token(source=${currentSource}, page=${i}, size=${pageSize}, clientType=${currentClientType}, status=${currentStatus}, search=${currentSearch})}"
+                   th:text="${i}"></a>
+            </li>
+
+            <li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''">
+                <a class="page-link"
+                   th:href="@{/admin/token(source=${currentSource}, page=${currentPage + 1}, size=${pageSize}, clientType=${currentClientType}, status=${currentStatus}, search=${currentSearch})}">下一页</a>
+            </li>
+        </ul>
+        <p class="text-center text-muted">
+            第 <span th:text="${currentPage}"></span> / <span th:text="${totalPages}"></span> 页，
+            共 <span th:text="${totalTokens}"></span> 条记录
+        </p>
+    </nav>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+
+    function deleteToken(tokenId) {
+        if (!confirm('确定要删除此Token吗？此操作会同时删除MySQL和Redis中的数据。')) return;
+
+        fetch(`/api/token/${tokenId}`, {
+            method: 'DELETE',
+            headers: {
+                [csrfHeader]: csrfToken
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('删除成功（已同时删除MySQL和Redis中的数据）');
+                location.reload();
+            } else {
+                alert('删除失败');
+            }
+        })
+        .catch(error => {
+            alert('删除失败：' + error);
+        });
+    }
+
+    function cleanupExpiredTokens() {
+        if (!confirm('确定要清理所有过期Token吗？')) return;
+
+        fetch('/api/token/expired', {
+            method: 'DELETE',
+            headers: {
+                [csrfHeader]: csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message + '（删除了' + data.deletedCount + '个Token）');
+            location.reload();
+        })
+        .catch(error => {
+            alert('清理失败：' + error);
+        });
+    }
+
+    // 异步加载Client详情
+    function loadClientDetails() {
+        // 收集所有需要加载的clientId
+        const clientNameElements = document.querySelectorAll('.client-name-loading');
+        const clientTypeElements = document.querySelectorAll('.client-type-loading');
+
+        if (clientNameElements.length === 0) {
+            return; // 没有需要加载的数据
+        }
+
+        // 提取唯一的clientId列表
+        const clientIds = new Set();
+        clientNameElements.forEach(el => {
+            const clientId = el.getAttribute('data-client-id');
+            if (clientId) {
+                clientIds.add(clientId);
+            }
+        });
+
+        if (clientIds.size === 0) {
+            return;
+        }
+
+        // 批量查询Client详情（使用GET请求 + Query Parameter）
+        const params = new URLSearchParams();
+        Array.from(clientIds).forEach(id => params.append('clientIds', id));
+
+        fetch(`/api/client?${params.toString()}`)
+            .then(response => response.json())
+            .then(data =>{
+                // 更新Client名称
+                clientNameElements.forEach(el => {
+                    const clientId = el.getAttribute('data-client-id');
+                    const clientInfo = data.clients[clientId];
+                    if (clientInfo) {
+                        el.textContent = clientInfo.clientName || '-';
+                        el.classList.remove('client-name-loading');
+                    } else {
+                        el.textContent = '-';
+                        el.classList.remove('client-name-loading');
+                    }
+                });
+
+                // 更新Client类型
+                clientTypeElements.forEach(el => {
+                    const clientId = el.getAttribute('data-client-id');
+                    const clientInfo = data.clients[clientId];
+                    if (clientInfo) {
+                        if (clientInfo.clientType === 1) {
+                            el.innerHTML = '<span class="badge bg-primary">平台级</span>';
+                        } else if (clientInfo.clientType === 2) {
+                            el.innerHTML = '<span class="badge bg-info">用户级</span>';
+                        } else {
+                            el.textContent = '-';
+                        }
+                        el.classList.remove('client-type-loading');
+                    } else {
+                        el.textContent = '-';
+                        el.classList.remove('client-type-loading');
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('加载Client详情失败：', error);
+                // 发生错误时显示占位符
+                clientNameElements.forEach(el => {
+                    el.textContent = '加载失败';
+                    el.classList.remove('client-name-loading');
+                });
+                clientTypeElements.forEach(el => {
+                    el.textContent = '-';
+                    el.classList.remove('client-type-loading');
+                });
+            });
+    }
+
+    // 页面加载完成后异步加载Client详情
+    document.addEventListener('DOMContentLoaded', function() {
+        loadClientDetails();
+    });
+    /*]]>*/
+</script>
+</body>
+</html>

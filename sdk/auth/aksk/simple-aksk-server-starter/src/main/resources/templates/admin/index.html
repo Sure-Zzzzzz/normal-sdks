@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AKSK管理</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>AKSK管理</h2>
+        <div>
+            <a href="/admin/create-platform" class="btn btn-primary">创建平台级AKSK</a>
+            <a href="/admin/create-user" class="btn btn-success">创建用户级AKSK</a>
+            <a href="/admin/token" class="btn btn-info">Token管理</a>
+            <a href="/admin/token/test" class="btn btn-warning">换Token测试</a>
+            <a href="/admin/security-context-demo" class="btn btn-secondary">Security Context演示</a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                <button type="submit" class="btn btn-outline-danger">退出登录</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${message}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${error}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- 过滤和搜索 -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <form method="get" action="/admin" class="row g-3">
+                <div class="col-auto">
+                    <label class="form-label">类型过滤：</label>
+                    <div class="btn-group" role="group">
+                        <a th:href="@{/admin(search=${currentSearch})}"
+                           th:classappend="${currentType == null} ? 'active' : ''"
+                           class="btn btn-outline-primary">全部</a>
+                        <a th:href="@{/admin(type='platform',search=${currentSearch})}"
+                           th:classappend="${currentType == 'platform'} ? 'active' : ''"
+                           class="btn btn-outline-primary">平台级</a>
+                        <a th:href="@{/admin(type='user',search=${currentSearch})}"
+                           th:classappend="${currentType == 'user'} ? 'active' : ''"
+                           class="btn btn-outline-primary">用户级</a>
+                    </div>
+                </div>
+                <div class="col-auto ms-auto">
+                    <label for="searchInput" class="form-label">搜索：</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="searchInput" name="search"
+                               th:value="${currentSearch}" placeholder="Client ID / 名称 / 用户ID / 用户名">
+                        <button type="submit" class="btn btn-primary">搜索</button>
+                        <a th:href="@{/admin(type=${currentType})}" class="btn btn-secondary">清除</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- AKSK列表 -->
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th>Client ID</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>所属用户</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="client : ${clients}">
+                    <td><code th:text="${client.clientId}"></code></td>
+                    <td th:text="${client.clientName}"></td>
+                    <td>
+                        <span th:if="${client.clientType == 1}" class="badge bg-primary">平台级</span>
+                        <span th:if="${client.clientType == 2}" class="badge bg-info">用户级</span>
+                    </td>
+                    <td>
+                        <span th:if="${client.ownerUsername != null}" th:text="${client.ownerUsername}"></span>
+                        <span th:if="${client.ownerUsername != null && client.ownerUserId != null}"> / </span>
+                        <span th:if="${client.ownerUserId != null}"><code th:text="${client.ownerUserId}"></code></span>
+                        <span th:if="${client.ownerUsername == null && client.ownerUserId == null}" class="text-muted">-</span>
+                    </td>
+                    <td>
+                        <span th:if="${client.enabled}" class="badge bg-success">已启用</span>
+                        <span th:if="${!client.enabled}" class="badge bg-secondary">已禁用</span>
+                    </td>
+                    <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                    <td>
+                        <a th:href="@{/admin/{id}(id=${client.clientId})}" class="btn btn-sm btn-info">详情</a>
+                        <button th:if="${client.enabled}"
+                                type="button"
+                                class="btn btn-sm btn-warning"
+                                th:attr="data-client-id=${client.clientId}"
+                                onclick="disableClient(this.getAttribute('data-client-id'))">禁用</button>
+                        <button th:if="${!client.enabled}"
+                                type="button"
+                                class="btn btn-sm btn-success"
+                                th:attr="data-client-id=${client.clientId}"
+                                onclick="enableClient(this.getAttribute('data-client-id'))">启用</button>
+                        <button type="button"
+                                class="btn btn-sm btn-danger"
+                                th:attr="data-client-id=${client.clientId}"
+                                onclick="deleteClient(this.getAttribute('data-client-id'))">删除</button>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(clients)}">
+                    <td colspan="7" class="text-center text-muted">暂无数据</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    <nav th:if="${totalPages > 1}" aria-label="Page navigation">
+        <ul class="pagination justify-content-center">
+            <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''">
+                <a class="page-link" th:href="@{/admin(page=${currentPage - 1},size=${pageSize},type=${currentType},search=${currentSearch})}">上一页</a>
+            </li>
+
+            <li th:each="i : ${#numbers.sequence(1, totalPages)}"
+                class="page-item"
+                th:classappend="${i == currentPage} ? 'active' : ''">
+                <a class="page-link" th:href="@{/admin(page=${i},size=${pageSize},type=${currentType},search=${currentSearch})}" th:text="${i}"></a>
+            </li>
+
+            <li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''">
+                <a class="page-link" th:href="@{/admin(page=${currentPage + 1},size=${pageSize},type=${currentType},search=${currentSearch})}">下一页</a>
+            </li>
+        </ul>
+        <p class="text-center text-muted">
+            第 <span th:text="${currentPage}"></span> / <span th:text="${totalPages}"></span> 页，
+            共 <span th:text="${totalClients}"></span> 条记录
+        </p>
+    </nav>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+
+    function deleteClient(clientId) {
+        if (!confirm('确认删除此AKSK？')) return;
+
+        fetch(`/admin/${clientId}`, {
+            method: 'DELETE',
+            headers: {
+                [csrfHeader]: csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('删除失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('删除失败：' + error);
+        });
+    }
+
+    function enableClient(clientId) {
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify({ enabled: true })
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) {
+                location.reload();
+            }
+        })
+        .catch(error => {
+            alert('启用失败：' + error);
+        });
+    }
+
+    function disableClient(clientId) {
+        if (!confirm('确认禁用此AKSK？')) return;
+
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify({ enabled: false })
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) {
+                location.reload();
+            }
+        })
+        .catch(error => {
+            alert('禁用失败：' + error);
+        });
+    }
+    /*]]>*/
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+spring:
+  profiles:
+    active: local
+  datasource:
+    url: jdbc:mysql://localhost:3306/sure_auth_aksk?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: # 请在 application-local.yml 中配置真实密码
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  redis:
+    host: localhost
+    port: 6379
+    database: 1
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 2
+        max-wait: -1ms
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            server:
+              jwt:
+                key-id: test-key-2026
+                public-key: classpath:keys/public.pem
+                private-key: classpath:keys/private.pem
+                expires-in: 3600
+              redis:
+                enabled: true
+                token:
+                  me: "test-app"
+              admin:
+                enabled: true
+                username: admin
+                password: # 请在 application-local.yml 中配置真实密码
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk.server: DEBUG
+    org.springframework.security: DEBUG
