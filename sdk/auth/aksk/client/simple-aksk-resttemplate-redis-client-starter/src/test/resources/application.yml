@@ -1,0 +1,40 @@
+# 测试配置
+# 请复制 application-local.yml.example 为 application-local.yml 并填写真实的 AKSK 信息
+
+spring:
+  profiles:
+    active: local
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              # 使用 application-local.yml 覆盖这些配置
+              server-url: http://localhost:8080
+              token-endpoint: /oauth2/token
+              client-id: test-client-id
+              client-secret: test-client-secret
+              token:
+                refresh-before-expire: 300
+              redis:
+                token:
+                  me: resttemplate-test-app
+              resttemplate:
+                enable: true
+                max-total: 100
+                max-per-route: 20
+                connect-timeout: 5000
+                read-timeout: 30000
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG

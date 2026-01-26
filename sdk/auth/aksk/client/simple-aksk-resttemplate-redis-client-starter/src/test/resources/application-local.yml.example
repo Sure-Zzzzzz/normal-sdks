@@ -1,0 +1,15 @@
+# 本地测试配置模板
+# 使用方法：
+# 1. 复制本文件为 application-local.yml
+# 2. 将 your_client_id_here 和 your_client_secret_here 替换为真实的 AKSK 凭证
+# 3. application-local.yml 不会被提交到 git（已在 .gitignore 中配置）
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              client-id: your_client_id_here
+              client-secret: your_client_secret_here
