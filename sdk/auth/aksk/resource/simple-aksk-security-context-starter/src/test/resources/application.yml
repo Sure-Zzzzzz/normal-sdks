@@ -1,0 +1,23 @@
+server:
+  port: 0  # 使用随机端口
+
+spring:
+  application:
+    name: simple-aksk-security-context-test
+
+# Simple AKSK Security Context 配置
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              security-context:
+                enable: true
+                header-prefix: x-sure-auth-aksk-
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext: DEBUG

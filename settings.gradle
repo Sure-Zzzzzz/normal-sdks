@@ -44,4 +44,12 @@ include(
         ':sdk:search:elasticsearch:simple-elasticsearch-search-starter',
         ':sdk:sensitive:keyword:smart-keyword-sensitive-starter',
         ':sdk:sensitive:ip:simple-ip-sensitive-starter',
+        ':sdk:auth:aksk:simple-aksk-core',
+        ':sdk:auth:aksk:simple-aksk-server-starter',
+        ':sdk:auth:aksk:client:simple-aksk-client-core',
+        ':sdk:auth:aksk:client:simple-aksk-redis-token-manager',
+        ':sdk:auth:aksk:client:simple-aksk-httpsession-token-manager',
+        ':sdk:auth:aksk:client:simple-aksk-resttemplate-redis-client-starter',
+        ':sdk:auth:aksk:client:simple-aksk-feign-redis-client-starter',
+        ':sdk:auth:aksk:resource:simple-aksk-security-context-starter',
 )

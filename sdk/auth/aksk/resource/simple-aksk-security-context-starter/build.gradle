@@ -1,0 +1,17 @@
+dependencies {
+    // 依赖上层 core（提供通用常量、枚举、工具类）
+    api project(':sdk:auth:aksk:simple-aksk-core')
+
+    // Spring Boot（仅编译时依赖）
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
