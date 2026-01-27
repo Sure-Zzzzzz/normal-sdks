@@ -1,0 +1,42 @@
+dependencies {
+    // 依赖 simple-aksk-redis-token-manager（提供 TokenManager Bean）
+    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:1.0.0'
+
+    // Spring Cloud OpenFeign（compileOnly，用户自行引入）
+    // 版本号仅用于编译，运行时使用用户环境的版本
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // ==================== 测试依赖 ====================
+    // 注意：根据您的 Spring Boot 版本选择对应的依赖版本
+    //
+    // Spring Boot 2.7.x (推荐):
+    //   - spring-cloud-starter-openfeign: 3.1.8
+    //   - feign-httpclient: 11.10
+    //
+    // Spring Boot 2.4.x - 2.6.x:
+    //   - spring-cloud-starter-openfeign: 3.0.3
+    //   - feign-httpclient: 10.12
+    // ================================================
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // Spring Cloud OpenFeign（当前使用 3.1.8，适配 Spring Boot 2.7.9）
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
+    // 如果使用 Spring Boot 2.4.5，请改用：
+    // testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.0.3'
+
+    // Feign HttpClient（当前使用 11.10，适配 Spring Boot 2.7.9）
+    testImplementation 'io.github.openfeign:feign-httpclient:11.10'
+    // 如果使用 Spring Boot 2.4.5，请改用：
+    // testImplementation 'io.github.openfeign:feign-httpclient:10.12'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+
+}

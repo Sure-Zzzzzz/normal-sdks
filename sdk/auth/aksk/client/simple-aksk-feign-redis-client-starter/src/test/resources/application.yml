@@ -1,0 +1,38 @@
+spring:
+  profiles:
+    active: local
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              client-id: test-client-id
+              client-secret: test-client-secret
+              server-url: http://localhost:8080
+              token-endpoint: /oauth2/token
+              token:
+                refresh-before-expire: 300
+              redis:
+                token:
+                  me: feign-test-app
+
+# Feign 配置
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 30000
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
