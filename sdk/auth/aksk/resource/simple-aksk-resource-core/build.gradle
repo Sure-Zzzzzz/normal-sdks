@@ -1,0 +1,14 @@
+dependencies {
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+
+    // Spring Expression Language (SpEL)
+    compileOnly 'org.springframework:spring-expression'
+
+    // Test dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}

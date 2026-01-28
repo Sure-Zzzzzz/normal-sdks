@@ -1,7 +1,7 @@
-package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.exception;
+package io.github.surezzzzzz.sdk.auth.aksk.resource.core.exception;
 
 /**
- * AKSK 安全异常
+ * Simple AKSK 安全异常
  *
  * <p>当安全校验失败时抛出此异常。
  *
@@ -16,13 +16,13 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.exception;
  * @author surezzzzzz
  * @since 1.0.0
  */
-public class AkskSecurityException extends RuntimeException {
+public class SimpleAkskSecurityException extends RuntimeException {
 
-    public AkskSecurityException(String message) {
+    public SimpleAkskSecurityException(String message) {
         super(message);
     }
 
-    public AkskSecurityException(String message, Throwable cause) {
+    public SimpleAkskSecurityException(String message, Throwable cause) {
         super(message, cause);
     }
 }
