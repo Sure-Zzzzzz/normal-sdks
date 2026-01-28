@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: simple-aksk-resource-server-test
+  profiles:
+    active: local
+
+# Simple AKSK Resource Server 配置
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: true
+                jwt:
+                  # 使用 issuer-uri 自动从 aksk-server 获取 JWKS
+                  issuer-uri: http://localhost:8080
+                security:
+                  # 需要保护的路径
+                  protected-paths:
+                    - /api/**
+                    - /test/**
+                  # 白名单路径（不需要认证）
+                  permit-all-paths:
+                    - /actuator/health
+                    - /public/**
+
+test:
+  oauth2:
+    client-id: 11111
+    client-secret: 22222
+    token-uri: http://localhost:8080/oauth2/token
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    org.springframework.security: DEBUG
+
+# 本地测试配置: 请复制 application-local.yml.example 为 application-local.yml 并填入真实配置
+# Spring Boot 会自动加载 application-local.yml (如果存在)

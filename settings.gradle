@@ -51,5 +51,7 @@ include(
         ':sdk:auth:aksk:client:simple-aksk-httpsession-token-manager',
         ':sdk:auth:aksk:client:simple-aksk-resttemplate-redis-client-starter',
         ':sdk:auth:aksk:client:simple-aksk-feign-redis-client-starter',
+        ':sdk:auth:aksk:resource:simple-aksk-resource-core',
         ':sdk:auth:aksk:resource:simple-aksk-security-context-starter',
+        ':sdk:auth:aksk:resource:simple-aksk-resource-server-starter',
 )

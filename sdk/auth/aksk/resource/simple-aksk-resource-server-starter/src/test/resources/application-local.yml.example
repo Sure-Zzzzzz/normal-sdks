@@ -1,0 +1,10 @@
+# 本地测试配置文件示例
+# 请将此文件复制为 application-local.yml 并填入真实的 client-id 和 client-secret
+# application-local.yml 不会被提交到 git
+
+# 测试用的 OAuth2 Client 凭证
+# 用于从 aksk-server 获取 JWT Token 进行测试
+test:
+  oauth2:
+    client-id: your_client_id_here
+    client-secret: your_client_secret_here
