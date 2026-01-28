@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.filter;
 
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.configuration.SimpleAkskSecurityContextProperties;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.context.AkskUserContext;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.support.HeaderNameConverter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -51,9 +51,9 @@ public class AkskSecurityContextFilter implements Filter {
         // 提取 Header 并转换为 Map
         Map<String, String> context = extractSecurityContext(httpRequest);
 
-        // 注入到 Request Attribute
+        // 直接注入到 Request Attribute
         if (!context.isEmpty()) {
-            AkskUserContext.setContext(context);
+            httpRequest.setAttribute(SimpleAkskResourceConstant.CONTEXT_ATTRIBUTE, context);
             log.debug("Security context injected: {} fields", context.size());
         }
 

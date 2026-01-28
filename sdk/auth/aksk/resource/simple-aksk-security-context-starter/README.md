@@ -1,6 +1,6 @@
 # Simple AKSK Security Context Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 资源服务器端安全上下文解析器，从 HTTP Header 自动提取用户信息并提供便捷的 API 访问。
@@ -17,39 +17,74 @@
 
 ### 2. 便捷的静态 API
 
-- **AkskUserContext** - 用户上下文 API
+- **SimpleAkskSecurityContextHelper** - 用户上下文 API
   - 类似 Shiro 的便捷 API 风格
   - 基于 Request Attribute 实现
   - 支持获取预定义字段（userId、username、roles 等）
   - 支持获取任意自定义字段
   - 支持数组字段自动提取
 
-### 3. 权限注解
+### 3. Provider 实现
+
+- **AkskUserContextProvider** - 上下文提供者实现
+  - 实现 `SimpleAkskSecurityContextProvider` 接口（来自 resource-core）
+  - 适配 SimpleAkskSecurityContextHelper 的静态方法
+  - 用于 SimpleAkskSecurityAspect 的依赖注入
+  - 从 HTTP Headers 获取上下文数据
+
+### 4. 权限注解
 
 - **@RequireContext** - 要求存在安全上下文
 - **@RequireField** - 要求存在指定字段
 - **@RequireFieldValue** - 要求字段值匹配
 - **@RequireExpression** - 要求 SpEL 表达式为 true
 
-### 4. AOP 权限校验
+### 5. AOP 权限校验
 
-- **AkskSecurityAspect** - 安全切面
+- **SimpleAkskSecurityAspect** - 安全切面
   - 自动拦截带权限注解的方法
-  - 校验失败抛出 `AkskSecurityException`
+  - 校验失败抛出 `SimpleAkskSecurityException`
   - 支持方法级别和类级别注解
   - 支持自定义错误消息
 
-### 5. Header 名称转换
+### 6. Header 名称转换
 
 - **HeaderNameConverter** - 名称转换工具
   - 移除前缀（如 `x-sure-auth-aksk-`）
   - 转换为 camelCase 格式
   - 示例：`x-sure-auth-aksk-user-id` → `userId`
 
+## 架构设计
+
+### Provider 模式
+
+本模块采用 Provider 模式实现上下文提供：
+
+```
+simple-aksk-resource-core (定义接口)
+    ↓
+SimpleAkskSecurityContextProvider (接口)
+    ↓
+AkskUserContextProvider (实现类)
+    ↓
+SimpleAkskSecurityContextHelper (静态 API)
+```
+
+**工作原理**：
+1. **AkskSecurityContextFilter** 从 HTTP Headers 提取用户信息，存储到 Request Attribute
+2. **SimpleAkskSecurityContextHelper** 提供静态 API，从 Request Attribute 读取数据
+3. **AkskUserContextProvider** 实现 `SimpleAkskSecurityContextProvider` 接口，适配 Helper 的静态方法
+4. **SimpleAkskSecurityAspect** 通过 Provider 接口获取上下文，执行权限校验
+
+这种设计的优势：
+- ✅ **解耦**：切面不直接依赖 Helper，而是依赖抽象接口
+- ✅ **可测试**：可以轻松 mock Provider 进行单元测试
+- ✅ **可扩展**：未来可以替换不同的 Provider 实现
+
 ## 依赖说明
 
 本模块依赖：
-- simple-aksk-core - 客户端核心
+- simple-aksk-resource-core - 资源保护核心
 - Spring Boot - 自动配置
 - Spring Web - Servlet Filter
 - Spring AOP - 权限校验
@@ -76,7 +111,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.1'
 }
 ```
 
@@ -110,13 +145,13 @@ public class UserController {
     @GetMapping("/user/info")
     public UserInfo getUserInfo() {
         // 获取用户 ID
-        String userId = AkskUserContext.getUserId();
+        String userId = SimpleAkskSecurityContextHelper.getUserId();
 
         // 获取用户名
-        String username = AkskUserContext.getUsername();
+        String username = SimpleAkskSecurityContextHelper.getUsername();
 
         // 获取角色列表
-        List<String> roles = AkskUserContext.getRoles();
+        List<String> roles = SimpleAkskSecurityContextHelper.getRoles();
 
         return new UserInfo(userId, username, roles);
     }
@@ -127,14 +162,14 @@ public class UserController {
 
 ```java
 // 获取任意字段
-String tenantId = AkskUserContext.get("tenantId");
-String orgId = AkskUserContext.get("orgId");
+String tenantId = SimpleAkskSecurityContextHelper.get("tenantId");
+String orgId = SimpleAkskSecurityContextHelper.get("orgId");
 
 // 获取数组字段（自动提取 permissions0, permissions1, ...）
-List<String> permissions = AkskUserContext.getList("permissions");
+List<String> permissions = SimpleAkskSecurityContextHelper.getList("permissions");
 
 // 获取所有字段
-Map<String, String> allContext = AkskUserContext.getAll();
+Map<String, String> allContext = SimpleAkskSecurityContextHelper.getAll();
 ```
 
 ### 3. 使用权限注解
@@ -160,7 +195,7 @@ public class SecureController {
 @GetMapping("/user/profile")
 @RequireField("userId")  // 要求存在 userId 字段
 public UserProfile getUserProfile() {
-    String userId = AkskUserContext.getUserId();
+    String userId = SimpleAkskSecurityContextHelper.getUserId();
     return userService.getProfile(userId);
 }
 ```
@@ -181,7 +216,7 @@ public List<User> listUsers() {
 @GetMapping("/tenant/data")
 @RequireExpression("#context['tenantId'] != null && #context['tenantId'].startsWith('tenant-')")
 public TenantData getTenantData() {
-    String tenantId = AkskUserContext.get("tenantId");
+    String tenantId = SimpleAkskSecurityContextHelper.get("tenantId");
     return tenantService.getData(tenantId);
 }
 ```
@@ -197,7 +232,7 @@ public TenantData getTenantData() {
 @RequireExpression("#context['securityContext'] != null && #context['securityContext'].startsWith('eyJ')")
 public SecureData getSecureData() {
     // 确保 securityContext 是 JWT 格式（以 "eyJ" 开头）
-    String jwtToken = AkskUserContext.getSecurityContext();
+    String jwtToken = SimpleAkskSecurityContextHelper.getSecurityContext();
     return secureService.getData(jwtToken);
 }
 ```
@@ -251,15 +286,15 @@ public TenantSettings getTenantSettings(@PathVariable String tenantId) {
 
 ### 5. 异常处理
 
-权限校验失败时会抛出 `AkskSecurityException`，您可以自定义全局异常处理器：
+权限校验失败时会抛出 `SimpleAkskSecurityException`，您可以自定义全局异常处理器：
 
 ```java
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(AkskSecurityException.class)
+    @ExceptionHandler(SimpleAkskSecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public Map<String, Object> handleAkskSecurityException(AkskSecurityException e) {
+    public Map<String, Object> handleAkskSecurityException(SimpleAkskSecurityException e) {
         Map<String, Object> result = new HashMap<>();
         result.put("error", "Forbidden");
         result.put("message", e.getMessage());
@@ -271,7 +306,7 @@ public class GlobalExceptionHandler {
 
 ## API 参考
 
-### AkskUserContext 静态方法
+### SimpleAkskSecurityContextHelper 静态方法
 
 | 方法 | 返回类型 | 说明 |
 |------|---------|------|
@@ -308,7 +343,7 @@ HTTP Headers:
   x-sure-auth-aksk-roles2: viewer
 
 Java Code:
-  List<String> roles = AkskUserContext.getRoles();
+  List<String> roles = SimpleAkskSecurityContextHelper.getRoles();
   // 结果: ["admin", "operator", "viewer"]
 ```
 
@@ -323,9 +358,11 @@ AkskSecurityContextFilter (提取 Header)
     ↓
 Request Attribute (存储上下文)
     ↓
-AkskUserContext (静态 API 访问)
+SimpleAkskSecurityContextHelper (静态 API 访问)
     ↓
-AkskSecurityAspect (权限校验)
+AkskUserContextProvider (适配器，实现 SimpleAkskSecurityContextProvider)
+    ↓
+SimpleAkskSecurityAspect (权限校验)
     ↓
 Controller Method (业务逻辑)
 ```
@@ -382,7 +419,7 @@ Shiro 项目（调用方）
 @GetMapping("/orders")
 @RequireField("tenantId")  // 要求存在租户 ID
 public List<Order> getOrders() {
-    String tenantId = AkskUserContext.get("tenantId");
+    String tenantId = SimpleAkskSecurityContextHelper.get("tenantId");
     // 只返回当前租户的订单
     return orderService.getOrdersByTenant(tenantId);
 }
@@ -400,6 +437,12 @@ public void deleteUser(@PathVariable String id) {
 
 ## 版本历史
 
+### 1.0.1 (2026-01-28)
+
+依赖优化：
+- ✅ 移除未使用的 simple-aksk-core 依赖
+- ✅ 优化模块依赖结构
+
 ### 1.0.0 (2026-01-27)
 
 初始版本发布：
@@ -408,7 +451,7 @@ public void deleteUser(@PathVariable String id) {
 - ✅ 支持 4 种权限注解
 - ✅ 基于 Request Attribute（线程池安全）
 - ✅ 支持数组字段自动提取
-- ✅ 自定义异常（AkskSecurityException）
+- ✅ 自定义异常（SimpleAkskSecurityException）
 - ✅ 完整的测试覆盖
 
 ## 许可证

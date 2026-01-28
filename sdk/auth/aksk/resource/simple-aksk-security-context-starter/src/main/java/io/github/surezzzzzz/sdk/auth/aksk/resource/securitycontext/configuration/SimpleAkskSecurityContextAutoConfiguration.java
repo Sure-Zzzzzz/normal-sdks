@@ -1,9 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.aspect.SimpleAkskSecurityAspect;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.SimpleAkskSecurityContextPackage;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.annotation.SimpleAkskSecurityContextComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.constant.SimpleAkskSecurityContextConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.filter.AkskSecurityContextFilter;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.provider.AkskUserContextProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -11,6 +13,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
 import javax.annotation.PostConstruct;
 
@@ -30,6 +33,7 @@ import javax.annotation.PostConstruct;
  */
 @Slf4j
 @Configuration
+@EnableAspectJAutoProxy
 @EnableConfigurationProperties(SimpleAkskSecurityContextProperties.class)
 @ComponentScan(
         basePackageClasses = SimpleAkskSecurityContextPackage.class,
@@ -66,8 +70,22 @@ public class SimpleAkskSecurityContextAutoConfiguration {
         registration.setFilter(new AkskSecurityContextFilter(properties));
         registration.addUrlPatterns("/*");
         registration.setOrder(1);
-        registration.setName("akskSecurityContextFilter");
+        registration.setName(SimpleAkskSecurityContextConstant.FILTER_NAME);
         log.info("AkskSecurityContextFilter registered");
         return registration;
+    }
+
+    /**
+     * 注册 SimpleAkskSecurityAspect
+     * <p>
+     * 使用 AkskUserContextProvider 作为 SimpleAkskSecurityContextProvider 实现
+     * </p>
+     *
+     * @return SimpleAkskSecurityAspect
+     */
+    @Bean
+    public SimpleAkskSecurityAspect akskSecurityAspect() {
+        log.info("SimpleAkskSecurityAspect registered with AkskUserContextProvider");
+        return new SimpleAkskSecurityAspect(new AkskUserContextProvider());
     }
 }

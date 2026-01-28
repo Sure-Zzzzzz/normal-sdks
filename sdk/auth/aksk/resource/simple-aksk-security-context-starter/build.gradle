@@ -1,7 +1,6 @@
 dependencies {
-    // 依赖上层 core（提供通用常量、枚举、工具类）
-    api project(':sdk:auth:aksk:simple-aksk-core')
-
+    // 依赖 resource-core（提供权限注解、切面、异常等）
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.0'
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'

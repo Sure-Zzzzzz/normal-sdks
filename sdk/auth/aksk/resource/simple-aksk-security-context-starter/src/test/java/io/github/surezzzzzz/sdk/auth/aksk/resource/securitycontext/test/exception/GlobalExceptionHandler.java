@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.test.exception;
 
-import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.exception.AkskSecurityException;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.exception.SimpleAkskSecurityException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * 全局异常处理器（仅用于测试）
  *
- * <p>处理 AkskSecurityException 并返回 403 状态码
+ * <p>处理 SimpleAkskSecurityException 并返回 403 状态码
  *
  * <p>注意：此类仅用于测试，不会被打包到 starter 中
  *
@@ -25,11 +25,11 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     /**
-     * 处理 AkskSecurityException
+     * 处理 SimpleAkskSecurityException
      */
-    @ExceptionHandler(AkskSecurityException.class)
+    @ExceptionHandler(SimpleAkskSecurityException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
-    public Map<String, Object> handleAkskSecurityException(AkskSecurityException e) {
+    public Map<String, Object> handleSimpleAkskSecurityException(SimpleAkskSecurityException e) {
         log.warn("Security check failed: {}", e.getMessage());
         Map<String, Object> result = new HashMap<>();
         result.put("error", "Forbidden");

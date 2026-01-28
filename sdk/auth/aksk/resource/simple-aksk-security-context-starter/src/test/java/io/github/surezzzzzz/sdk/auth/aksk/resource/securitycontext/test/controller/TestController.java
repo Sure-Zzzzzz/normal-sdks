@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.test.controller;
 
-import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.annotation.*;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.context.AkskUserContext;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.*;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.support.SimpleAkskSecurityContextHelper;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,12 +28,12 @@ public class TestController {
     @GetMapping("/basic")
     public Map<String, Object> basic() {
         Map<String, Object> result = new HashMap<>();
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("username", AkskUserContext.getUsername());
-        result.put("clientId", AkskUserContext.getClientId());
-        result.put("roles", AkskUserContext.getRoles());
-        result.put("scope", AkskUserContext.getScope());
-        result.put("allContext", AkskUserContext.getAll());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("username", SimpleAkskSecurityContextHelper.getUsername());
+        result.put("clientId", SimpleAkskSecurityContextHelper.getClientId());
+        result.put("roles", SimpleAkskSecurityContextHelper.getRoles());
+        result.put("scope", SimpleAkskSecurityContextHelper.getScope());
+        result.put("allContext", SimpleAkskSecurityContextHelper.getAll());
         return result;
     }
 
@@ -45,7 +45,7 @@ public class TestController {
     public Map<String, Object> requireContext() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Context exists");
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         return result;
     }
 
@@ -57,7 +57,7 @@ public class TestController {
     public Map<String, Object> requireField() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Field userId exists");
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         return result;
     }
 
@@ -69,7 +69,7 @@ public class TestController {
     public Map<String, Object> requireFieldValue() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Role is admin");
-        result.put("role", AkskUserContext.get("role"));
+        result.put("role", SimpleAkskSecurityContextHelper.get("role"));
         return result;
     }
 
@@ -81,7 +81,7 @@ public class TestController {
     public Map<String, Object> requireExpression() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Expression passed");
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         return result;
     }
 
@@ -93,8 +93,8 @@ public class TestController {
     public Map<String, Object> requireExpressionAnd() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Both userId and username exist");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("username", AkskUserContext.getUsername());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("username", SimpleAkskSecurityContextHelper.getUsername());
         return result;
     }
 
@@ -106,8 +106,8 @@ public class TestController {
     public Map<String, Object> requireExpressionOr() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Either userId or clientId exists");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("clientId", AkskUserContext.getClientId());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("clientId", SimpleAkskSecurityContextHelper.getClientId());
         return result;
     }
 
@@ -119,7 +119,7 @@ public class TestController {
     public Map<String, Object> requireExpressionContains() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Username contains 'admin'");
-        result.put("username", AkskUserContext.getUsername());
+        result.put("username", SimpleAkskSecurityContextHelper.getUsername());
         return result;
     }
 
@@ -131,7 +131,7 @@ public class TestController {
     public Map<String, Object> requireExpressionStartsWith() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "UserId starts with 'user'");
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         return result;
     }
 
@@ -143,8 +143,8 @@ public class TestController {
     public Map<String, Object> requireExpressionLength() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "UserId length >= 5");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("length", AkskUserContext.getUserId().length());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("length", SimpleAkskSecurityContextHelper.getUserId().length());
         return result;
     }
 
@@ -156,8 +156,8 @@ public class TestController {
     public Map<String, Object> requireExpressionComplex() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Complex expression passed");
-        result.put("role", AkskUserContext.get("role"));
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("role", SimpleAkskSecurityContextHelper.get("role"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         return result;
     }
 
@@ -169,7 +169,7 @@ public class TestController {
     public Map<String, Object> requireExpressionSecurityContextExists() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context exists");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -181,7 +181,7 @@ public class TestController {
     public Map<String, Object> requireExpressionSecurityContextJwt() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context is JWT format");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -193,8 +193,8 @@ public class TestController {
     public Map<String, Object> requireExpressionSecurityContextLength() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context length is sufficient");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
-        result.put("length", AkskUserContext.getSecurityContext().length());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
+        result.put("length", SimpleAkskSecurityContextHelper.getSecurityContext().length());
         return result;
     }
 
@@ -206,8 +206,8 @@ public class TestController {
     public Map<String, Object> requireExpressionUserAndContext() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Both userId and securityContext exist");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -221,8 +221,8 @@ public class TestController {
     public Map<String, Object> adminDashboard() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Welcome to admin dashboard");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("role", AkskUserContext.get("role"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("role", SimpleAkskSecurityContextHelper.get("role"));
         result.put("permissions", List.of("user:read", "user:write", "user:delete", "system:config"));
         return result;
     }
@@ -235,9 +235,9 @@ public class TestController {
     public Map<String, Object> managementUsers() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "User management interface");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("role", AkskUserContext.get("role"));
-        result.put("accessLevel", AkskUserContext.get("role").equals("admin") ? "full" : "limited");
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("role", SimpleAkskSecurityContextHelper.get("role"));
+        result.put("accessLevel", SimpleAkskSecurityContextHelper.get("role").equals("admin") ? "full" : "limited");
         return result;
     }
 
@@ -249,9 +249,9 @@ public class TestController {
     public Map<String, Object> tenantData() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Tenant data access");
-        result.put("tenantId", AkskUserContext.get("tenantId"));
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("dataScope", "tenant-" + AkskUserContext.get("tenantId"));
+        result.put("tenantId", SimpleAkskSecurityContextHelper.get("tenantId"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("dataScope", "tenant-" + SimpleAkskSecurityContextHelper.get("tenantId"));
         return result;
     }
 
@@ -263,8 +263,8 @@ public class TestController {
     public Map<String, Object> deleteResource() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Resource deletion authorized");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("permissions", AkskUserContext.get("permissions"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("permissions", SimpleAkskSecurityContextHelper.get("permissions"));
         result.put("action", "delete");
         return result;
     }
@@ -277,10 +277,10 @@ public class TestController {
     public Map<String, Object> premiumFeature() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Premium feature access granted");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("userLevel", AkskUserContext.get("userLevel"));
-        result.put("subscriptionStatus", AkskUserContext.get("subscriptionStatus"));
-        result.put("subscriptionPlan", AkskUserContext.get("subscriptionPlan"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("userLevel", SimpleAkskSecurityContextHelper.get("userLevel"));
+        result.put("subscriptionStatus", SimpleAkskSecurityContextHelper.get("subscriptionStatus"));
+        result.put("subscriptionPlan", SimpleAkskSecurityContextHelper.get("subscriptionPlan"));
         return result;
     }
 
@@ -292,8 +292,8 @@ public class TestController {
     public Map<String, Object> regionalContent() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Regional content access");
-        result.put("region", AkskUserContext.get("region"));
-        result.put("userId", AkskUserContext.getUserId());
+        result.put("region", SimpleAkskSecurityContextHelper.get("region"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
         result.put("contentType", "region-specific");
         return result;
     }
@@ -306,8 +306,8 @@ public class TestController {
     public Map<String, Object> timeSensitiveAction() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Time-sensitive action authorized");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("expiresAt", AkskUserContext.get("expiresAt"));
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("expiresAt", SimpleAkskSecurityContextHelper.get("expiresAt"));
         result.put("currentTime", System.currentTimeMillis());
         return result;
     }
@@ -320,10 +320,10 @@ public class TestController {
     public Map<String, Object> editResource() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Resource edit authorized");
-        result.put("userId", AkskUserContext.getUserId());
-        result.put("role", AkskUserContext.get("role"));
-        result.put("resourceOwnerId", AkskUserContext.get("resourceOwnerId"));
-        result.put("authReason", AkskUserContext.get("role") != null && AkskUserContext.get("role").equals("admin") ? "admin" : "owner");
+        result.put("userId", SimpleAkskSecurityContextHelper.getUserId());
+        result.put("role", SimpleAkskSecurityContextHelper.get("role"));
+        result.put("resourceOwnerId", SimpleAkskSecurityContextHelper.get("resourceOwnerId"));
+        result.put("authReason", SimpleAkskSecurityContextHelper.get("role") != null && SimpleAkskSecurityContextHelper.get("role").equals("admin") ? "admin" : "owner");
         return result;
     }
 
@@ -337,8 +337,8 @@ public class TestController {
     public Map<String, Object> validateUserConfig() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "User config validated");
-        result.put("userType", AkskUserContext.get("userType"));
-        result.put("userStatus", AkskUserContext.get("userStatus"));
+        result.put("userType", SimpleAkskSecurityContextHelper.get("userType"));
+        result.put("userStatus", SimpleAkskSecurityContextHelper.get("userStatus"));
         return result;
     }
 
@@ -350,9 +350,9 @@ public class TestController {
     public Map<String, Object> validateSubscription() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Subscription validated");
-        result.put("subscriptionType", AkskUserContext.get("subscriptionType"));
-        result.put("subscriptionLevel", AkskUserContext.get("subscriptionLevel"));
-        result.put("subscriptionExpiry", AkskUserContext.get("subscriptionExpiry"));
+        result.put("subscriptionType", SimpleAkskSecurityContextHelper.get("subscriptionType"));
+        result.put("subscriptionLevel", SimpleAkskSecurityContextHelper.get("subscriptionLevel"));
+        result.put("subscriptionExpiry", SimpleAkskSecurityContextHelper.get("subscriptionExpiry"));
         return result;
     }
 
@@ -364,9 +364,9 @@ public class TestController {
     public Map<String, Object> validateAccountPermissions() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Account permissions validated");
-        result.put("accountType", AkskUserContext.get("accountType"));
-        result.put("accountLevel", AkskUserContext.get("accountLevel"));
-        result.put("accountPermissions", AkskUserContext.get("accountPermissions"));
+        result.put("accountType", SimpleAkskSecurityContextHelper.get("accountType"));
+        result.put("accountLevel", SimpleAkskSecurityContextHelper.get("accountLevel"));
+        result.put("accountPermissions", SimpleAkskSecurityContextHelper.get("accountPermissions"));
         return result;
     }
 
@@ -378,9 +378,9 @@ public class TestController {
     public Map<String, Object> validateOrgRelationship() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Organization relationship validated");
-        result.put("orgId", AkskUserContext.get("orgId"));
-        result.put("orgRole", AkskUserContext.get("orgRole"));
-        result.put("orgStatus", AkskUserContext.get("orgStatus"));
+        result.put("orgId", SimpleAkskSecurityContextHelper.get("orgId"));
+        result.put("orgRole", SimpleAkskSecurityContextHelper.get("orgRole"));
+        result.put("orgStatus", SimpleAkskSecurityContextHelper.get("orgStatus"));
         return result;
     }
 
@@ -392,9 +392,9 @@ public class TestController {
     public Map<String, Object> validateDeviceInfo() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Device info validated");
-        result.put("deviceType", AkskUserContext.get("deviceType"));
-        result.put("deviceTrust", AkskUserContext.get("deviceTrust"));
-        result.put("deviceLocation", AkskUserContext.get("deviceLocation"));
+        result.put("deviceType", SimpleAkskSecurityContextHelper.get("deviceType"));
+        result.put("deviceTrust", SimpleAkskSecurityContextHelper.get("deviceTrust"));
+        result.put("deviceLocation", SimpleAkskSecurityContextHelper.get("deviceLocation"));
         return result;
     }
 
@@ -406,11 +406,11 @@ public class TestController {
     public Map<String, Object> validateComplexCombo() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Complex combination validated");
-        result.put("userType", AkskUserContext.get("userType"));
-        result.put("memberLevel", AkskUserContext.get("memberLevel"));
-        result.put("accountStatus", AkskUserContext.get("accountStatus"));
-        result.put("riskLevel", AkskUserContext.get("riskLevel"));
-        result.put("creditScore", AkskUserContext.get("creditScore"));
+        result.put("userType", SimpleAkskSecurityContextHelper.get("userType"));
+        result.put("memberLevel", SimpleAkskSecurityContextHelper.get("memberLevel"));
+        result.put("accountStatus", SimpleAkskSecurityContextHelper.get("accountStatus"));
+        result.put("riskLevel", SimpleAkskSecurityContextHelper.get("riskLevel"));
+        result.put("creditScore", SimpleAkskSecurityContextHelper.get("creditScore"));
         return result;
     }
 
@@ -420,8 +420,8 @@ public class TestController {
     @GetMapping("/array-fields")
     public Map<String, Object> arrayFields() {
         Map<String, Object> result = new HashMap<>();
-        List<String> roles = AkskUserContext.getRoles();
-        List<String> scope = AkskUserContext.getScope();
+        List<String> roles = SimpleAkskSecurityContextHelper.getRoles();
+        List<String> scope = SimpleAkskSecurityContextHelper.getScope();
         result.put("roles", roles);
         result.put("scope", scope);
         result.put("rolesCount", roles.size());
@@ -435,9 +435,9 @@ public class TestController {
     @GetMapping("/custom-fields")
     public Map<String, Object> customFields() {
         Map<String, Object> result = new HashMap<>();
-        result.put("tenantId", AkskUserContext.get("tenantId"));
-        result.put("orgId", AkskUserContext.get("orgId"));
-        result.put("customField", AkskUserContext.get("customField"));
+        result.put("tenantId", SimpleAkskSecurityContextHelper.get("tenantId"));
+        result.put("orgId", SimpleAkskSecurityContextHelper.get("orgId"));
+        result.put("customField", SimpleAkskSecurityContextHelper.get("customField"));
         return result;
     }
 
@@ -447,7 +447,7 @@ public class TestController {
     @GetMapping("/security-context")
     public Map<String, Object> securityContext() {
         Map<String, Object> result = new HashMap<>();
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -461,7 +461,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextContainsKeyValue() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains role:admin");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -473,7 +473,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextMultipleKeyValues() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains both role:admin and level:5");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -485,7 +485,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextOrValues() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains admin or manager role");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -497,7 +497,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextJsonField() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains userType:premium in JSON format");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -509,7 +509,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextJsonMultipleFields() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains premium user with active status");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -521,7 +521,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextVipOrHighLevel() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context indicates VIP or leveled user");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -533,7 +533,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextPermissions() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains full permissions");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -545,7 +545,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextSpecificPermission() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains delete permission");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -557,7 +557,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextTenantIsolation() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains tenant-123");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -569,7 +569,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextTenantAndRole() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains tenant-123 with admin or owner role");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -581,7 +581,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextSubscriptionStatus() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains active premium subscription");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -593,7 +593,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextRegionCheck() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains allowed region (CN or US)");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -605,7 +605,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextDeviceTrust() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context contains trusted mobile device");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -617,7 +617,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextComplexCombination() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context validated: premium user with active subscription and API access");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -629,7 +629,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextJwtContent() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context is a valid JWT token format");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 
@@ -641,7 +641,7 @@ public class TestController {
     public Map<String, Object> parseSecurityContextBase64Encoded() {
         Map<String, Object> result = new HashMap<>();
         result.put("message", "Security context is Base64 encoded");
-        result.put("securityContext", AkskUserContext.getSecurityContext());
+        result.put("securityContext", SimpleAkskSecurityContextHelper.getSecurityContext());
         return result;
     }
 }
