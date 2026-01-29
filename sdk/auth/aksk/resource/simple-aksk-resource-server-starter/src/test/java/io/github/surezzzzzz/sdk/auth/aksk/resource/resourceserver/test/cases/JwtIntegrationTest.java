@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.cases;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.SimpleAkskResourceServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.helper.FakeJwtTokenGenerator;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.helper.OAuth2TokenHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ public class JwtIntegrationTest {
     private OAuth2TokenHelper tokenHelper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final FakeJwtTokenGenerator fakeTokenGenerator = new FakeJwtTokenGenerator();
 
     private String validToken;
 
@@ -198,6 +200,60 @@ public class JwtIntegrationTest {
                 .andExpect(status().isUnauthorized());
 
         log.info("Correctly returned 401 Unauthorized with empty token");
+    }
+
+    /**
+     * 测试使用别人签发的 JWT Token - 应返回 401
+     * <p>
+     * 这个测试验证了资源服务器的安全性：
+     * 即使 JWT token 格式正确、未过期，但如果不是用正确的私钥签名，也会被拒绝
+     */
+    @Test
+    @DisplayName("测试使用别人签发的 JWT Token（不同私钥签名）")
+    public void testAccessProtectedEndpointWithFakeToken() throws Exception {
+        log.info("======================================");
+        log.info("测试使用别人签发的 JWT Token（不同私钥签名）");
+        log.info("======================================");
+
+        // 生成一个使用不同私钥签名的 JWT token
+        String fakeToken = fakeTokenGenerator.generateFakeToken();
+        log.info("Generated fake token (signed with different private key)");
+        log.debug("Fake token: {}", fakeToken);
+
+        // 验证格式是 JWT
+        assertTrue(fakeToken.startsWith("eyJ"), "Fake token should be in JWT format");
+
+        // 尝试使用假 token 访问受保护接口
+        MvcResult result = mockMvc.perform(get("/test/basic")
+                        .header("Authorization", "Bearer " + fakeToken))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+
+        log.info("✅ Correctly returned 401 Unauthorized with fake token");
+        log.info("✅ Resource server successfully rejected token signed with different private key");
+        log.info("Response: {}", result.getResponse().getContentAsString());
+    }
+
+    /**
+     * 测试使用过期的假 JWT Token - 应返回 401
+     */
+    @Test
+    @DisplayName("测试使用过期的假 JWT Token")
+    public void testAccessProtectedEndpointWithExpiredFakeToken() throws Exception {
+        log.info("======================================");
+        log.info("测试使用过期的假 JWT Token");
+        log.info("======================================");
+
+        // 生成一个过期的假 token
+        String expiredFakeToken = fakeTokenGenerator.generateExpiredFakeToken();
+        log.info("Generated expired fake token");
+
+        // 尝试使用过期的假 token 访问受保护接口
+        mockMvc.perform(get("/test/basic")
+                        .header("Authorization", "Bearer " + expiredFakeToken))
+                .andExpect(status().isUnauthorized());
+
+        log.info("✅ Correctly returned 401 Unauthorized with expired fake token");
     }
 
     // ==================== 白名单路径测试 ====================
