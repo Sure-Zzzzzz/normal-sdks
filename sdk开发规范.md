@@ -346,6 +346,10 @@ public interface SimpleAkskPackage {
 
 ### 3.2 自定义组件注解（必需）
 
+**适用范围**：
+- ✅ **starter包必须包含自定义组件注解**
+- ❌ **core包不需要自定义组件注解**
+
 **位置**：`annotation/{模块名}Component.java`
 
 **命名规则**：`{模块名}Component`
@@ -384,14 +388,16 @@ public class ClientManagementService {
 
 ### 3.3 标准目录结构
 
+#### 3.3.1 starter包目录结构
+
 ```
 {模块名}-starter/
 ├── build.gradle                                        ← 子模块构建（仅写依赖）
 ├── version.properties                                  ← 版本文件
 ├── src/main/java/io/github/surezzzzzz/sdk/{domain}/{module}/
-│   ├── {模块名}Package.java                            ← Package 标记（必需）
+│   ├── {模块名}Package.java                            ← Package 标记（starter包必需）
 │   ├── annotation/
-│   │   └── {模块名}Component.java                      ← 自定义注解（必需）
+│   │   └── {模块名}Component.java                      ← 自定义注解（starter包必需）
 │   ├── configuration/
 │   │   ├── {模块名}Properties.java                     ← 全局配置（单一）
 │   │   └── {模块名}Configuration.java                  ← 自动配置
@@ -414,6 +420,31 @@ public class ClientManagementService {
 │   └── META-INF/
 │       └── spring.factories                            ← Spring Boot 自动配置
 ```
+
+#### 3.3.2 core包目录结构
+
+```
+{模块名}-core/
+├── build.gradle                                        ← 子模块构建（仅写依赖）
+├── version.properties                                  ← 版本文件
+├── src/main/java/io/github/surezzzzzz/sdk/{domain}/{module}/
+│   ├── constant/
+│   │   ├── {模块名}Constant.java                       ← 常量
+│   │   ├── ErrorCode.java                              ← 错误码
+│   │   ├── ErrorMessage.java                           ← 错误信息
+│   │   ├── {业务枚举1}.java                            ← 业务枚举
+│   │   └── {业务枚举2}.java                            ← 业务枚举
+│   ├── exception/
+│   │   ├── {模块名}Exception.java                      ← 基础异常
+│   │   └── {业务异常}.java                             ← 其他业务异常
+│   ├── model/                                          ← 数据模型
+│   ├── support/                                        ← 工具类（可选，使用Helper后缀）
+│   └── ...
+```
+
+**说明**：
+- core包不需要 Package Marker、自定义注解、Configuration 类和 spring.factories
+- core包通常包含核心业务逻辑、模型、常量、异常等，不涉及 Spring Boot 自动配置
 
 **实际示例**：
 
@@ -659,6 +690,10 @@ public class {模块名}Properties {
 ---
 
 ### 4.2 AutoConfiguration 类
+
+**适用范围**：
+- ✅ **仅适用于 starter 包**
+- ❌ **core 包不需要 AutoConfiguration 类**
 
 **命名规则**：`{模块名}Configuration`
 
@@ -2041,7 +2076,7 @@ dependencies {
 **主体代码**：
 
 - [ ] 包名、类名全部使用单数（主体和测试统一遵循，见 [1.1 包名规范](#11-包名规范)）
-- [ ] Package Marker 和自定义注解已创建（命名规范：`{模块名}Package`, `{模块名}Component`）
+- [ ] Package Marker 和自定义注解已创建（仅starter包需要，core包不需要；命名规范：`{模块名}Package`, `{模块名}Component`）
 - [ ] Properties 类只有一个（命名规范：`{模块名}Properties`）
 - [ ] 所有默认值引用常量
 - [ ] 无硬编码字符串或数字（API 路径和日志除外）
