@@ -12,8 +12,8 @@
 
 | SDK | 版本    | 说明 | 文档 |
 |-----|-------|------|------|
-| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.5 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.2 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.6 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.3 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 
 **核心特性**：
 - 多数据源路由和自动切换
@@ -21,6 +21,25 @@
 - 零代码配置驱动的查询和聚合
 - 支持日期分割索引
 - RESTful API 自动生成
+
+### 🔐 认证与授权
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-aksk-server-starter](sdk/auth/aksk/simple-aksk-server-starter) | 1.0.0 | AKSK 认证服务器 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-feign-redis-client-starter](sdk/auth/aksk/client/simple-aksk-feign-redis-client-starter) | 1.0.0 | AKSK Feign 客户端 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-resttemplate-redis-client-starter](sdk/auth/aksk/client/simple-aksk-resttemplate-redis-client-starter) | 1.0.0 | AKSK RestTemplate 客户端 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 1.0.0 | AKSK 资源服务器（JWT 验证） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-security-context-starter](sdk/auth/aksk/resource/simple-aksk-security-context-starter) | 1.0.1 | AKSK 安全上下文（Header 解析） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+
+**核心特性**：
+- **双层级 AKSK 管理**：支持平台级（AKP）和用户级（AKU）两种 AKSK 类型
+- **OAuth2 标准协议**：基于 Spring Authorization Server，完全符合 OAuth2 规范
+- **JWT Token 签发**：使用 RSA 算法签发 JWT Token，支持自定义公私钥
+- **多种客户端实现**：支持 Feign、RestTemplate 等多种 HTTP 客户端
+- **灵活的 Token 管理**：支持 Redis 和 HttpSession 两种 Token 缓存策略
+- **资源保护**：提供 JWT 验证和 HTTP Header 解析两种资源保护方式
+- **权限注解**：提供 4 种权限校验注解，支持 SpEL 表达式
 
 ### 🔒 Redis
 

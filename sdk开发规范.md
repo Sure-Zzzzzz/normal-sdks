@@ -307,6 +307,10 @@ public class ClientManagementService {
 
 ### 3.1 Package Marker（必需）
 
+**适用范围**：
+- ✅ **starter包必须包含 Package Marker**
+- ❌ **core包不需要 Package Marker**
+
 **位置**：模块根包下
 
 **命名规则**：`{模块名}Package`（如 `SimpleAkskPackage`, `SmartKeywordSensitivePackage`）
