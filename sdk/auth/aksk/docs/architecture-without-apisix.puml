@@ -1,0 +1,104 @@
+@startuml Simple AKSK Architecture without APISIX
+
+title Simple AKSK 架构图（无 APISIX 网关）
+
+' 定义样式 - 亚马逊风格配色
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+    BackgroundColor #E3F2FD
+    BorderColor #1976D2
+    FontColor #0D47A1
+}
+skinparam rectangle<<Client>> {
+    BackgroundColor #BBDEFB
+    BorderColor #1565C0
+}
+skinparam rectangle<<Server>> {
+    BackgroundColor #FFF9C4
+    BorderColor #F9A825
+}
+skinparam rectangle<<Resource>> {
+    BackgroundColor #B2EBF2
+    BorderColor #00838F
+}
+skinparam rectangle<<Storage>> {
+    BackgroundColor #E0E0E0
+    BorderColor #616161
+}
+skinparam database {
+    BackgroundColor #E0E0E0
+    BorderColor #616161
+}
+skinparam note {
+    BackgroundColor #FFF3E0
+    BorderColor #FF6F00
+}
+
+' 客户端层
+package "客户端层" #E3F2FD {
+    rectangle "Feign Client Starter" <<Client>> as feign
+    rectangle "RestTemplate Client Starter" <<Client>> as rest
+    rectangle "自定义 HTTP 客户端" <<Client>> as custom
+}
+
+' Token 管理层
+package "Token 管理层" #E3F2FD {
+    rectangle "Redis Token Manager" <<Client>> as redis_tm
+    rectangle "HttpSession Token Manager" <<Client>> as http_tm
+}
+
+' 服务端层
+package "服务端层" #FFF9C4 {
+    rectangle "AKSK Server Starter" <<Server>> as aksk_server
+    rectangle "Admin 管理界面" <<Server>> as admin
+}
+
+' 资源服务层
+package "资源服务层" #B2EBF2 {
+    rectangle "Resource Server Starter" <<Resource>> as resource_server
+}
+
+' 数据存储层
+package "数据存储层" #E0E0E0 {
+    database "MySQL" <<Storage>> as mysql
+    database "Redis" <<Storage>> as redis
+}
+
+' 连接关系
+feign --> redis_tm : 使用
+rest --> redis_tm : 使用
+custom --> http_tm : 使用
+
+redis_tm --> aksk_server : 1. 获取 Token\n(AKSK 换 JWT)
+http_tm --> aksk_server : 1. 获取 Token\n(AKSK 换 JWT)
+
+redis_tm --> resource_server : 2. 调用 API\n携带 JWT
+http_tm --> resource_server : 2. 调用 API\n携带 JWT
+
+aksk_server --> mysql : 持久化
+aksk_server --> redis : 缓存（可选）
+
+resource_server --> aksk_server : 3. 获取 JWKS\n验证 JWT
+resource_server --> mysql : 数据权限查询
+
+' 公网/内网标注
+note right of aksk_server
+  <b>内网</b>
+  AKSK Server
+end note
+
+note right of resource_server
+  <b>内网</b>
+  资源服务
+  <b>直接验证 JWT</b>
+end note
+
+' 图例
+legend right
+  |<#BBDEFB><color:#1565C0> 客户端层 | Token 管理、HTTP 客户端 |
+  |<#FFF9C4><color:#F9A825> 服务端层 | AKSK Server、Admin |
+  |<#B2EBF2><color:#00838F> 资源服务层 | Resource Server |
+  |<#E0E0E0><color:#616161> 数据存储层 | MySQL、Redis |
+endlegend
+
+@enduml
