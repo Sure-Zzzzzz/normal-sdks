@@ -45,4 +45,6 @@ public final class ErrorMessage {
     public static final String CLIENT_DELETE_FAILED = "Client删除失败：%s";
 
     public static final String CLIENT_ALREADY_EXISTS = "Client已存在：%s";
+
+    public static final String CLIENT_UPDATE_FAILED = "Client更新失败：%s";
 }
