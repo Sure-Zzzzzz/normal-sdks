@@ -317,8 +317,8 @@ public class ClientManagementServiceImpl implements ClientManagementService {
         } catch (Exception e) {
             log.error("Failed to disable client: {}", clientId, e);
             throw new ClientException(
-                    ErrorCode.CLIENT_CREATE_FAILED,
-                    String.format(ErrorMessage.CLIENT_CREATE_FAILED, e.getMessage()),
+                    ErrorCode.CLIENT_UPDATE_FAILED,
+                    String.format(ErrorMessage.CLIENT_UPDATE_FAILED, e.getMessage()),
                     e
             );
         }
@@ -340,8 +340,32 @@ public class ClientManagementServiceImpl implements ClientManagementService {
         } catch (Exception e) {
             log.error("Failed to enable client: {}", clientId, e);
             throw new ClientException(
-                    ErrorCode.CLIENT_CREATE_FAILED,
-                    String.format(ErrorMessage.CLIENT_CREATE_FAILED, e.getMessage()),
+                    ErrorCode.CLIENT_UPDATE_FAILED,
+                    String.format(ErrorMessage.CLIENT_UPDATE_FAILED, e.getMessage()),
+                    e
+            );
+        }
+    }
+
+    @Override
+    public void updateClientScopes(String clientId, List<String> scopes) {
+        OAuth2RegisteredClientEntity entity = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(
+                        ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)
+                ));
+
+        String scopesStr = String.join(SimpleAkskServerConstant.SCOPE_DELIMITER, scopes);
+        entity.setScopes(scopesStr);
+
+        try {
+            clientRepository.save(entity);
+            log.info("Updated scopes for client: {}, new scopes: {}", clientId, scopesStr);
+        } catch (Exception e) {
+            log.error("Failed to update scopes for client: {}", clientId, e);
+            throw new ClientException(
+                    ErrorCode.CLIENT_UPDATE_FAILED,
+                    String.format(ErrorMessage.CLIENT_UPDATE_FAILED, e.getMessage()),
                     e
             );
         }
@@ -365,7 +389,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     private ClientInfoResponse toClientInfoResponse(OAuth2RegisteredClientEntity entity) {
         ClientInfoResponse info = new ClientInfoResponse();
         info.setClientId(entity.getClientId());
-        info.setClientSecret(entity.getClientSecret());
+        info.setClientSecret(null);  // 不返回secret，仅创建时返回一次
         info.setClientName(entity.getClientName());
         info.setClientType(entity.getClientType());
         info.setOwnerUserId(entity.getOwnerUserId());

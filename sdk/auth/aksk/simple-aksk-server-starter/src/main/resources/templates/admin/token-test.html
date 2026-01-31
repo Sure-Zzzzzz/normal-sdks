@@ -50,10 +50,10 @@
                 </div>
 
                 <div class="mb-3">
-                    <label for="scope" class="form-label">Scope</label>
+                    <label for="scope" class="form-label">Scope（可选）</label>
                     <input type="text" class="form-control" id="scope" name="scope"
-                           th:value="${scope != null ? scope : 'read write'}" placeholder="read write">
-                    <div class="form-text">权限范围，多个权限用空格分隔，默认为 "read write"</div>
+                           th:value="${scope}" placeholder="留空则使用数据库中注册的scope">
+                    <div class="form-text">权限范围，多个权限用空格分隔。留空则使用数据库中注册的所有scope</div>
                 </div>
 
                 <button type="submit" class="btn btn-primary">换取Token</button>

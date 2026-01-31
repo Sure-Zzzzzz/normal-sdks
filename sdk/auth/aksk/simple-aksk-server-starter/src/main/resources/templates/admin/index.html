@@ -188,9 +188,10 @@
         })
         .then(response => response.json())
         .then(data => {
-            alert(data.message);
             if (data.success) {
                 location.reload();
+            } else {
+                alert(data.message || '启用失败');
             }
         })
         .catch(error => {
@@ -211,9 +212,10 @@
         })
         .then(response => response.json())
         .then(data => {
-            alert(data.message);
             if (data.success) {
                 location.reload();
+            } else {
+                alert(data.message || '禁用失败');
             }
         })
         .catch(error => {

@@ -1,11 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
-import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import lombok.RequiredArgsConstructor;
@@ -134,9 +134,19 @@ public class AdminController {
      */
     @PostMapping("/create-platform")
     public String createPlatform(@RequestParam String name,
+                                 @RequestParam(required = false) String scopes,
                                  RedirectAttributes redirectAttributes) {
         try {
-            ClientInfoResponse clientInfo = clientManagementService.createPlatformClient(name);
+            // 解析 scopes
+            List<String> scopeList = null;
+            if (scopes != null && !scopes.trim().isEmpty()) {
+                scopeList = java.util.Arrays.stream(scopes.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(java.util.stream.Collectors.toList());
+            }
+
+            ClientInfoResponse clientInfo = clientManagementService.createPlatformClient(name, scopeList);
 
             redirectAttributes.addFlashAttribute("success", true);
             redirectAttributes.addFlashAttribute("clientId", clientInfo.getClientId());
@@ -174,9 +184,19 @@ public class AdminController {
     public String createUser(@RequestParam String ownerUserId,
                              @RequestParam String ownerUsername,
                              @RequestParam String name,
+                             @RequestParam(required = false) String scopes,
                              RedirectAttributes redirectAttributes) {
         try {
-            ClientInfoResponse clientInfo = clientManagementService.createUserClient(ownerUserId, ownerUsername, name);
+            // 解析 scopes
+            List<String> scopeList = null;
+            if (scopes != null && !scopes.trim().isEmpty()) {
+                scopeList = java.util.Arrays.stream(scopes.split(","))
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .collect(java.util.stream.Collectors.toList());
+            }
+
+            ClientInfoResponse clientInfo = clientManagementService.createUserClient(ownerUserId, ownerUsername, name, scopeList);
 
             redirectAttributes.addFlashAttribute("success", true);
             redirectAttributes.addFlashAttribute("clientId", clientInfo.getClientId());
@@ -208,31 +228,38 @@ public class AdminController {
     }
 
     /**
-     * 修改AKSK状态 (RESTful API - 启用/禁用)
+     * 修改AKSK (RESTful API - 启用/禁用/权限范围)
      */
     @PatchMapping("/{clientId}")
     @ResponseBody
     public ResponseEntity<ApiResponse> updateClient(@PathVariable String clientId,
                                                     @RequestBody UpdateClientRequest request) {
         try {
-            if (request.getEnabled() == null) {
-                return ResponseEntity.badRequest()
-                        .body(new ApiResponse("enabled字段不能为空"));
+            // 处理 enabled 字段（保持原有逻辑）
+            if (request.getEnabled() != null) {
+                if (request.getEnabled()) {
+                    clientManagementService.enableClient(clientId);
+                    return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_ENABLE_SUCCESS));
+                } else {
+                    clientManagementService.disableClient(clientId);
+                    return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_DISABLE_SUCCESS));
+                }
             }
 
-            if (request.getEnabled()) {
-                clientManagementService.enableClient(clientId);
-                return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_ENABLE_SUCCESS));
-            } else {
-                clientManagementService.disableClient(clientId);
-                return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_DISABLE_SUCCESS));
+            // 处理 scopes 字段（新增）
+            if (request.getScopes() != null) {
+                clientManagementService.updateClientScopes(clientId, request.getScopes());
+                return ResponseEntity.ok(new ApiResponse("权限范围更新成功"));
             }
+
+            // 如果两个字段都没传
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse("请提供要更新的字段（enabled 或 scopes）"));
+
         } catch (Exception e) {
             log.error("Failed to update client: {}", clientId, e);
-            String errorMessage = request.getEnabled() ?
-                    String.format(ServerErrorMessage.ADMIN_ENABLE_FAILED, e.getMessage()) :
-                    String.format(ServerErrorMessage.ADMIN_DISABLE_FAILED, e.getMessage());
-            return ResponseEntity.status(500).body(new ApiResponse(errorMessage));
+            return ResponseEntity.status(500)
+                    .body(new ApiResponse("更新失败：" + e.getMessage()));
         }
     }
 
@@ -375,7 +402,7 @@ public class AdminController {
     @PostMapping("/token/test")
     public String tokenTest(@RequestParam String clientId,
                             @RequestParam String clientSecret,
-                            @RequestParam(defaultValue = "read write") String scope,
+                            @RequestParam(required = false) String scope,
                             Model model) {
         try {
             RestTemplate restTemplate = restTemplateBuilder
@@ -384,7 +411,10 @@ public class AdminController {
 
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
             body.add("grant_type", "client_credentials");
-            body.add("scope", scope);
+            // 只有当scope不为空时才添加到请求中
+            if (scope != null && !scope.trim().isEmpty()) {
+                body.add("scope", scope);
+            }
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -406,7 +436,7 @@ public class AdminController {
                 model.addAttribute("accessToken", tokenResponse.get("access_token"));
                 model.addAttribute("tokenType", tokenResponse.get("token_type"));
                 model.addAttribute("expiresIn", tokenResponse.get("expires_in"));
-                model.addAttribute("scope", tokenResponse.get("scope"));
+                model.addAttribute("returnedScope", tokenResponse.get("scope"));
             } else {
                 model.addAttribute("error", "Token请求失败: " + response.getStatusCode());
             }
@@ -419,7 +449,7 @@ public class AdminController {
         }
 
         model.addAttribute("clientId", clientId);
-        model.addAttribute("requestedScope", scope);
+        model.addAttribute("scope", scope);
         return "admin/token-test";
     }
 

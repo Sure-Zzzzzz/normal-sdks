@@ -1,6 +1,5 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.service;
 
-import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 
@@ -26,7 +25,7 @@ public interface ClientManagementService {
      * 创建平台级AKSK
      *
      * @param clientName 客户端名称
-     * @param scopes 权限范围
+     * @param scopes     权限范围
      * @return Client信息（包含明文SecretKey，仅在创建时返回）
      */
     ClientInfoResponse createPlatformClient(String clientName, List<String> scopes);
@@ -34,9 +33,9 @@ public interface ClientManagementService {
     /**
      * 创建用户级AKSK
      *
-     * @param ownerUserId 所属用户ID
+     * @param ownerUserId   所属用户ID
      * @param ownerUsername 所属用户名
-     * @param clientName  客户端名称
+     * @param clientName    客户端名称
      * @return Client信息（包含明文SecretKey，仅在创建时返回）
      */
     ClientInfoResponse createUserClient(String ownerUserId, String ownerUsername, String clientName);
@@ -44,10 +43,10 @@ public interface ClientManagementService {
     /**
      * 创建用户级AKSK
      *
-     * @param ownerUserId 所属用户ID
+     * @param ownerUserId   所属用户ID
      * @param ownerUsername 所属用户名
-     * @param clientName  客户端名称
-     * @param scopes 权限范围
+     * @param clientName    客户端名称
+     * @param scopes        权限范围
      * @return Client信息（包含明文SecretKey，仅在创建时返回）
      */
     ClientInfoResponse createUserClient(String ownerUserId, String ownerUsername, String clientName, List<String> scopes);
@@ -80,9 +79,9 @@ public interface ClientManagementService {
      * 分页查询Client列表（支持过滤条件）
      *
      * @param ownerUserId 所属用户ID（可选）
-     * @param type 客户端类型（可选）
-     * @param page 页码（从1开始）
-     * @param size 每页大小
+     * @param type        客户端类型（可选）
+     * @param page        页码（从1开始）
+     * @param size        每页大小
      * @return 分页后的Client列表
      */
     PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Integer page, Integer size);
@@ -99,7 +98,7 @@ public interface ClientManagementService {
      * 同步用户权限（批量更新用户的所有用户级AKSK的scope）
      *
      * @param ownerUserId 所属用户ID
-     * @param scopes 新的权限列表
+     * @param scopes      新的权限列表
      * @return 更新的Client数量
      */
     int syncUserScopes(String ownerUserId, List<String> scopes);
@@ -117,4 +116,12 @@ public interface ClientManagementService {
      * @param clientId 客户端ID
      */
     void enableClient(String clientId);
+
+    /**
+     * 更新客户端的权限范围
+     *
+     * @param clientId 客户端ID
+     * @param scopes   新的权限范围列表
+     */
+    void updateClientScopes(String clientId, List<String> scopes);
 }

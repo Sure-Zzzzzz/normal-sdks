@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.DefaultScopeAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.JwtKeyProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -24,11 +27,21 @@ import org.springframework.security.web.SecurityFilterChain;
 public class OAuth2SecurityConfiguration {
 
     private final JwtKeyProvider jwtKeyProvider;
+    private final OAuth2RegisteredClientEntityRepository entityRepository;
 
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http) throws Exception {
+        // 应用默认的OAuth2授权服务器安全配置
         OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
+
+        // 获取OAuth2AuthorizationServerConfigurer并自定义token endpoint
+        http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
+                .tokenEndpoint(tokenEndpoint ->
+                        tokenEndpoint.accessTokenRequestConverter(
+                                new DefaultScopeAuthenticationConverter(entityRepository)
+                        )
+                );
 
         // 禁用httpBasic,避免弹出浏览器登录框
         http.httpBasic().disable();

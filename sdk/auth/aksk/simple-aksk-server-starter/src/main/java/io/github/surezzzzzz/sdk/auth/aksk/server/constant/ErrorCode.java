@@ -44,5 +44,10 @@ public final class ErrorCode {
      */
     public static final String CLIENT_ALREADY_EXISTS = "CLIENT_004";
 
+    /**
+     * Client更新失败
+     */
+    public static final String CLIENT_UPDATE_FAILED = "CLIENT_005";
+
 
 }

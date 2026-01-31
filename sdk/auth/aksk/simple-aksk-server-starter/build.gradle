@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.1'
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-starter-security'

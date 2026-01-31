@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.0-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -27,7 +27,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.0.1'
 }
 ```
 
@@ -601,6 +601,25 @@ io.github.surezzzzzz.sdk.auth.aksk.server.jwt.security-context-max-size: 8192  #
 ```
 
 ## 版本历史
+
+### 1.0.1 (2026-01-31)
+
+**新增功能**：
+- ✅ 支持换token时scope参数可选（不传scope时自动使用数据库注册的scope）
+- ✅ Admin创建页面支持指定scopes（默认值：`/api/**`）
+- ✅ Admin详情页支持查看和编辑scopes（RESTful PATCH API）
+
+**安全性增强**：
+- ✅ `/api/client` 接口不再返回 `clientSecret` 字段（仅创建时返回一次）
+- ✅ 数据库无scope时抛出异常，防止数据完整性问题
+
+**体验优化**：
+- ✅ Admin详情页编辑scope成功后先关闭Modal再刷新页面
+- ✅ Admin首页启用/禁用AKSK成功后直接刷新，不再弹出提示
+- ✅ Token测试页面scope输入框支持留空
+
+**Bug修复**：
+- ✅ 修复 `disableClient` 和 `enableClient` 使用错误的错误码
 
 ### 1.0.0 (2026-01-19)
 

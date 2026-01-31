@@ -37,6 +37,20 @@
                             <td th:text="${client.ownerUserId}"></td>
                         </tr>
                         <tr>
+                            <th>API 权限范围</th>
+                            <td>
+                                <div th:if="${client.scopes != null and !client.scopes.isEmpty()}">
+                                    <ul class="list-unstyled mb-0">
+                                        <li th:each="scope : ${client.scopes}">
+                                            <code th:text="${scope}"></code>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <span th:if="${client.scopes == null or client.scopes.isEmpty()}"
+                                      class="text-muted">未设置（默认：read,write）</span>
+                            </td>
+                        </tr>
+                        <tr>
                             <th>Client Secret</th>
                             <td>
                                 <span class="text-muted">****** (已加密，无法查看)</span>
@@ -50,6 +64,11 @@
                     </div>
 
                     <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editScopesModal">
+                            编辑权限范围
+                        </button>
                         <a href="/admin" class="btn btn-primary">返回管理页面</a>
                     </div>
                 </div>
@@ -58,6 +77,87 @@
     </div>
 </div>
 
+<!-- 编辑权限范围 Modal -->
+<div class="modal fade" id="editScopesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑 API 权限范围</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="editScopes" class="form-label">API 权限范围</label>
+                    <textarea class="form-control" id="editScopes" rows="5"
+                              th:text="${#strings.listJoin(client.scopes, ',')}"></textarea>
+                    <div class="form-text">
+                        多个权限用逗号分隔，支持通配符 (*)
+                    </div>
+                </div>
+
+                <div class="alert alert-warning" role="alert">
+                    <strong>⚠️ 注意：</strong>修改后，下次换取 Token 时生效（最多 1 小时延迟）
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateScopes()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+    const clientId = /*[[${client.clientId}]]*/ '';
+
+    function updateScopes() {
+        const scopesText = document.getElementById('editScopes').value.trim();
+
+        // 解析 scopes（逗号分隔）
+        const scopes = scopesText
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+
+        if (scopes.length === 0) {
+            alert('请至少输入一个权限范围');
+            return;
+        }
+
+        // 发送 PATCH 请求
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify({ scopes: scopes })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 关闭modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                // 刷新页面显示最新数据
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            alert('更新失败：' + error);
+        });
+    }
+    /*]]>*/
+</script>
 </body>
 </html>

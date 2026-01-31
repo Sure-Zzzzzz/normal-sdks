@@ -44,6 +44,15 @@
                             <div class="form-text">用于标识此AKSK的用途</div>
                         </div>
 
+                        <div class="mb-3">
+                            <label for="scopes" class="form-label">API 权限范围</label>
+                            <textarea class="form-control" id="scopes" name="scopes" rows="3"
+                                      placeholder="例如：/api/**">/api/**</textarea>
+                            <div class="form-text">
+                                多个权限用逗号分隔，支持通配符 (*)。留空则使用默认权限
+                            </div>
+                        </div>
+
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary">创建</button>
                             <a href="/admin" class="btn btn-secondary">返回</a>
