@@ -158,8 +158,17 @@ public final class SimpleAkskServerConstant {
 
     /**
      * JWT Claim名称: client_id
+     * 客户端标识（AKSK），与标准claim sub相同，但更明确
      */
     public static final String JWT_CLAIM_CLIENT_ID = "client_id";
+
+    /**
+     * JWT Claim名称: auth_server_id
+     * 认证服务器标识，用于多认证服务器场景区分token来源
+     * 值来自配置项 jwt.key-id，通常与 JWT Header 的 kid 保持一致
+     * 用途：API网关（如APISIX）可通过此字段识别token来源，实现多租户或多环境隔离
+     */
+    public static final String JWT_CLAIM_AUTH_SERVER_ID = "auth_server_id";
 
     /**
      * JWT Claim名称: client_type

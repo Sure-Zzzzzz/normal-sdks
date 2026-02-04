@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.0-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -27,7 +27,8 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.0.2'
+}
 }
 ```
 
@@ -601,6 +602,19 @@ io.github.surezzzzzz.sdk.auth.aksk.server.jwt.security-context-max-size: 8192  #
 ```
 
 ## 版本历史
+
+### 1.0.2 (2026-02-04)
+
+**新增功能**：
+- ✅ JWT Token 中新增 `auth_server_id` claim，用于多认证服务器场景
+  - 值从配置项 `jwt.key-id` 中获取
+  - 与 JWT Header 的 `kid` 保持一致
+  - 用途：API网关（如APISIX）可通过此字段识别token来源，实现多租户或多环境隔离
+
+**代码质量提升**：
+- ✅ 完善 `JwtTokenCustomizer` 类的注释文档
+- ✅ 优化日志输出，合并基础 claims 的日志
+- ✅ 完善常量类的注释说明
 
 ### 1.0.1 (2026-01-31)
 
