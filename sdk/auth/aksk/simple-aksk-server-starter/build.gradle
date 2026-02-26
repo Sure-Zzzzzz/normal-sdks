@@ -1,5 +1,6 @@
 dependencies {
     api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.0'
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-starter-security'
@@ -10,7 +11,7 @@ dependencies {
     compileOnly "org.springframework.boot:spring-boot-starter-validation"
 
     // Spring Authorization Server
-    api 'org.springframework.security:spring-security-oauth2-authorization-server:0.4.0'
+    api 'org.springframework.security:spring-security-oauth2-authorization-server:0.4.1'
 
     // 指数退避重试
     api 'io.github.sure-zzzzzz:task-retry-starter:1.0.0'

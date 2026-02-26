@@ -82,15 +82,19 @@ class TokenManagementIntegrationTest {
         log.info("准备测试数据...");
 
         // 使用Service创建bootstrap client（不走API，避免循环依赖）
-        ClientInfoResponse bootstrapClient = clientManagementService.createPlatformClient("Bootstrap Test Client");
+        // 需要包含 /api/token scope 才能访问 TokenManagementController
+        ClientInfoResponse bootstrapClient = clientManagementService.createPlatformClient(
+                "Bootstrap Test Client",
+                Arrays.asList("/api/token")
+        );
         bootstrapClientId = bootstrapClient.getClientId();
         bootstrapClientSecret = bootstrapClient.getClientSecret();
 
         log.info("Bootstrap client创建成功: {}", bootstrapClientId);
 
-        // 获取JWT token
+        // 获取JWT token，指定scope为 /api/token
         jwtToken = JwtTokenTestHelper.getTokenByClientCredentials(
-                restTemplate, port, bootstrapClientId, bootstrapClientSecret
+                restTemplate, port, bootstrapClientId, bootstrapClientSecret, "/api/token"
         );
 
         log.info("JWT token已获取");
@@ -565,6 +569,36 @@ class TokenManagementIntegrationTest {
         clientManagementService.deleteClient(clientId);
 
         log.info("完整Token生命周期API测试通过");
+    }
+
+    @Test
+    void testAccessDeniedWithoutRequiredScope() {
+        log.info("测试没有所需scope时访问被拒绝");
+
+        // Given - 创建一个只有 read,write scope 的client（没有 /api/token scope）
+        ClientInfoResponse testClient = clientManagementService.createPlatformClient(
+                "Test Client without API Scope",
+                Arrays.asList("read", "write")
+        );
+
+        // When - 使用这个client的token尝试访问 /api/token API
+        String tokenWithoutApiScope = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, testClient.getClientId(), testClient.getClientSecret(), "read write"
+        );
+
+        String url = String.format("http://localhost:%d/api/token", port);
+        HttpEntity<Void> request = JwtTokenTestHelper.createAuthEntity(tokenWithoutApiScope);
+        ResponseEntity<String> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        // Then - 应该返回403 Forbidden
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+
+        log.info("没有所需scope时访问被正确拒绝");
     }
 
     /**

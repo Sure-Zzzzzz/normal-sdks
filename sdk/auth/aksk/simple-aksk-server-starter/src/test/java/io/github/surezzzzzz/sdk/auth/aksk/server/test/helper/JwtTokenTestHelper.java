@@ -59,7 +59,7 @@ public class JwtTokenTestHelper {
     }
 
     /**
-     * 使用Client凭证获取JWT Token
+     * 使用Client凭证获取JWT Token（使用默认scope: read write）
      *
      * @param restTemplate TestRestTemplate实例
      * @param port         服务端口
@@ -68,12 +68,26 @@ public class JwtTokenTestHelper {
      * @return JWT Access Token
      */
     public static String getTokenByClientCredentials(TestRestTemplate restTemplate, int port, String clientId, String clientSecret) {
+        return getTokenByClientCredentials(restTemplate, port, clientId, clientSecret, "read write");
+    }
+
+    /**
+     * 使用Client凭证获取JWT Token（指定scope）
+     *
+     * @param restTemplate TestRestTemplate实例
+     * @param port         服务端口
+     * @param clientId     客户端ID
+     * @param clientSecret 客户端密钥
+     * @param scope        请求的scope（空格分隔）
+     * @return JWT Access Token
+     */
+    public static String getTokenByClientCredentials(TestRestTemplate restTemplate, int port, String clientId, String clientSecret, String scope) {
         String tokenUrl = String.format("http://localhost:%d/oauth2/token", port);
 
         // 构建请求体
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "client_credentials");
-        body.add("scope", "read write");
+        body.add("scope", scope);
 
         // 设置Basic Auth
         HttpHeaders headers = new HttpHeaders();
@@ -89,7 +103,7 @@ public class JwtTokenTestHelper {
         }
 
         String accessToken = (String) response.getBody().get("access_token");
-        log.info("Got access token for client: {}", clientId);
+        log.info("Got access token for client: {} with scope: {}", clientId, scope);
 
         return accessToken;
     }

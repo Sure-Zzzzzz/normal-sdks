@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.RequireExpression;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.DeleteExpiredResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
@@ -22,6 +23,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/token")
 @RequiredArgsConstructor
+@RequireExpression(
+        value = "#context['scope'] != null && " +
+                "(' ' + #context['scope'] + ' ').contains(' /api/token ')",
+        message = "Access denied: /api/token scope required"
+)
 public class TokenManagementController {
 
     private final TokenManagementService tokenManagementService;

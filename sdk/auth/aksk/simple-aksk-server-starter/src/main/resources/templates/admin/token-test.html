@@ -162,16 +162,39 @@
         })
         .then(response => {
             const statusText = `HTTP ${response.status} ${response.statusText}`;
-            return response.json().then(data => ({
-                status: response.status,
-                statusText: statusText,
-                data: data
-            }));
+            const contentType = response.headers.get('content-type');
+
+            // 根据Content-Type判断是JSON还是纯文本
+            if (contentType && contentType.includes('application/json')) {
+                return response.json().then(data => ({
+                    status: response.status,
+                    statusText: statusText,
+                    data: data,
+                    isJson: true
+                }));
+            } else {
+                return response.text().then(text => ({
+                    status: response.status,
+                    statusText: statusText,
+                    data: text,
+                    isJson: false
+                }));
+            }
         })
         .then(result => {
             // 格式化显示结果
-            const formatted = `状态: ${result.statusText}\n\n响应内容:\n${JSON.stringify(result.data, null, 2)}`;
+            let formatted;
+            if (result.isJson) {
+                formatted = `状态: ${result.statusText}\n\n响应内容:\n${JSON.stringify(result.data, null, 2)}`;
+            } else {
+                formatted = `状态: ${result.statusText}\n\n响应内容:\n${result.data}`;
+            }
             resultContent.textContent = formatted;
+
+            // 如果是403错误，添加提示信息
+            if (result.status === 403) {
+                resultContent.textContent += '\n\n提示: 当前Token没有 /api/client scope权限。请使用包含该scope的Token进行测试。';
+            }
         })
         .catch(error => {
             resultContent.textContent = `调用失败: ${error.message}`;

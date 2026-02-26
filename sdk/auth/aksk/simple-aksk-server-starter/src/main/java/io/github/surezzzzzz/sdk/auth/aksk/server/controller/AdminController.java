@@ -137,6 +137,12 @@ public class AdminController {
                                  @RequestParam(required = false) String scopes,
                                  RedirectAttributes redirectAttributes) {
         try {
+            // 后端验证：检查scopes是否包含换行符
+            if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
+                redirectAttributes.addFlashAttribute("error", "权限范围不允许包含换行符，请使用逗号分隔");
+                return "redirect:/admin/create-platform";
+            }
+
             // 解析 scopes
             List<String> scopeList = null;
             if (scopes != null && !scopes.trim().isEmpty()) {
@@ -187,6 +193,12 @@ public class AdminController {
                              @RequestParam(required = false) String scopes,
                              RedirectAttributes redirectAttributes) {
         try {
+            // 后端验证：检查scopes是否包含换行符
+            if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
+                redirectAttributes.addFlashAttribute("error", "权限范围不允许包含换行符，请使用逗号分隔");
+                return "redirect:/admin/create-user";
+            }
+
             // 解析 scopes
             List<String> scopeList = null;
             if (scopes != null && !scopes.trim().isEmpty()) {
@@ -352,9 +364,21 @@ public class AdminController {
         int totalPages = pageResponse.getTotalPages();
         page = Math.max(1, Math.min(page, totalPages > 0 ? totalPages : 1));
 
+        // 批量获取Client信息（用于显示Client名称和类型）
+        List<String> clientIds = pageResponse.getData().stream()
+                .map(TokenInfoResponse::getClientId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<String, ClientInfoResponse> clientInfoMap = java.util.Collections.emptyMap();
+        if (!clientIds.isEmpty()) {
+            clientInfoMap = clientManagementService.batchGetClientsByIds(clientIds);
+        }
+
         // 添加模型属性
         model.addAttribute("currentSource", source);  // 用于Tab高亮和逻辑判断
         model.addAttribute("tokens", pageResponse.getData());
+        model.addAttribute("clientInfoMap", clientInfoMap);  // 添加Client信息Map
         model.addAttribute("statistics", statistics);
         model.addAttribute("currentPage", page);
         model.addAttribute("totalPages", totalPages);

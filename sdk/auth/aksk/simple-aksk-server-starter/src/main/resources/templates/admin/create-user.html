@@ -47,14 +47,17 @@
                         <div class="mb-3">
                             <label for="scopes" class="form-label">API 权限范围</label>
                             <textarea class="form-control" id="scopes" name="scopes" rows="3"
-                                      placeholder="例如：/api/**">/api/**</textarea>
+                                      placeholder="例如：/api/**,/admin/**,/user/**">/api/**</textarea>
                             <div class="form-text">
-                                多个权限用逗号分隔，支持通配符 (*)。留空则使用默认权限
+                                多个权限用<strong>逗号</strong>分隔，支持通配符 (*)。<span class="text-danger">不允许使用回车换行</span>
+                            </div>
+                            <div class="form-text text-danger" id="scopeError" style="display:none;">
+                                ⚠️ 检测到回车换行，请使用逗号分隔
                             </div>
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">创建</button>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">创建</button>
                             <a href="/admin" class="btn btn-secondary">返回</a>
                         </div>
                     </form>
@@ -65,5 +68,92 @@
 </div>
 
 <script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script>
+    (function() {
+        const scopesTextarea = document.getElementById('scopes');
+        const scopeError = document.getElementById('scopeError');
+        const form = document.querySelector('form');
+
+        // 1. 阻止回车输入
+        scopesTextarea.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                scopeError.style.display = 'block';
+                scopesTextarea.classList.add('is-invalid');
+
+                // 3秒后自动隐藏错误提示
+                setTimeout(function() {
+                    scopeError.style.display = 'none';
+                    scopesTextarea.classList.remove('is-invalid');
+                }, 3000);
+            }
+        });
+
+        // 2. 处理粘贴内容，自动替换换行为逗号
+        scopesTextarea.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+
+            // 将所有换行符（\n, \r\n, \r）替换为逗号
+            const cleanedText = pastedText.replace(/[\r\n]+/g, ',');
+
+            // 插入到光标位置
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            const currentValue = this.value;
+            this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
+
+            // 设置光标位置
+            const newPosition = start + cleanedText.length;
+            this.setSelectionRange(newPosition, newPosition);
+
+            // 如果原始内容包含换行，显示提示
+            if (pastedText !== cleanedText) {
+                scopeError.textContent = '✓ 已自动将换行符替换为逗号';
+                scopeError.classList.remove('text-danger');
+                scopeError.classList.add('text-success');
+                scopeError.style.display = 'block';
+
+                setTimeout(function() {
+                    scopeError.style.display = 'none';
+                    scopeError.classList.remove('text-success');
+                    scopeError.classList.add('text-danger');
+                    scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
+                }, 3000);
+            }
+        });
+
+        // 3. 表单提交前验证
+        form.addEventListener('submit', function(e) {
+            const scopesValue = scopesTextarea.value;
+
+            // 检查是否包含换行符
+            if (/[\r\n]/.test(scopesValue)) {
+                e.preventDefault();
+                scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
+                scopeError.style.display = 'block';
+                scopesTextarea.classList.add('is-invalid');
+                scopesTextarea.focus();
+
+                // 滚动到错误位置
+                scopesTextarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+
+            return true;
+        });
+
+        // 4. 输入时实时检查
+        scopesTextarea.addEventListener('input', function() {
+            if (/[\r\n]/.test(this.value)) {
+                scopeError.style.display = 'block';
+                this.classList.add('is-invalid');
+            } else {
+                scopeError.style.display = 'none';
+                this.classList.remove('is-invalid');
+            }
+        });
+    })();
+</script>
 </body>
 </html>

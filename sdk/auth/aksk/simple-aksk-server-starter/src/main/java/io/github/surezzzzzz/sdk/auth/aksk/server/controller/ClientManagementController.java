@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.RequireExpression;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.CreateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
@@ -28,6 +29,11 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/client")
 @RequiredArgsConstructor
+@RequireExpression(
+        value = "#context['scope'] != null && " +
+                "(' ' + #context['scope'] + ' ').contains(' /api/client ')",
+        message = "Access denied: /api/client scope required"
+)
 public class ClientManagementController {
 
     private final ClientManagementService clientManagementService;

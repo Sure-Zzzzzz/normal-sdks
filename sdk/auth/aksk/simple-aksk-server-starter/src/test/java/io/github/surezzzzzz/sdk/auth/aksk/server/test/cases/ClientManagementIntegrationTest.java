@@ -26,6 +26,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -73,15 +74,19 @@ class ClientManagementIntegrationTest {
         log.info("通过Service创建bootstrap client用于测试...");
 
         // 使用Service创建bootstrap client（不走API，避免循环依赖）
-        ClientInfoResponse bootstrapClient = clientManagementService.createPlatformClient("Bootstrap Test Client");
+        // 需要包含 /api/client scope 才能访问 ClientManagementController
+        ClientInfoResponse bootstrapClient = clientManagementService.createPlatformClient(
+                "Bootstrap Test Client",
+                Arrays.asList("/api/client")
+        );
         bootstrapClientId = bootstrapClient.getClientId();
         bootstrapClientSecret = bootstrapClient.getClientSecret();
 
         log.info("Bootstrap client创建成功: {}", bootstrapClientId);
 
-        // 获取JWT token
+        // 获取JWT token，指定scope为 /api/client
         jwtToken = JwtTokenTestHelper.getTokenByClientCredentials(
-                restTemplate, port, bootstrapClientId, bootstrapClientSecret
+                restTemplate, port, bootstrapClientId, bootstrapClientSecret, "/api/client"
         );
 
         log.info("JWT token已获取");
@@ -357,5 +362,87 @@ class ClientManagementIntegrationTest {
         assertFalse(clients.containsKey("NON_EXISTENT_ID_2"));
 
         log.info("批量查询不存在ID测试通过，只返回存在的Client");
+    }
+
+    @Test
+    void testGetTokenWithDefaultScope() {
+        log.info("测试使用默认scope获取token");
+
+        // Given - 创建一个带有默认scope (read,write) 的client
+        ClientInfoResponse testClient = clientManagementService.createPlatformClient(
+                "Test Client with Default Scope",
+                Arrays.asList("read", "write")
+        );
+
+        // When - 使用不带scope参数的方法获取token（默认请求 "read write" scope）
+        String token = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, testClient.getClientId(), testClient.getClientSecret()
+        );
+
+        // Then
+        assertNotNull(token);
+        assertFalse(token.isEmpty());
+
+        log.info("使用默认scope获取token成功");
+    }
+
+    @Test
+    void testAccessDeniedWithoutRequiredScope() {
+        log.info("测试没有所需scope时访问被拒绝");
+
+        // Given - 创建一个只有 read,write scope 的client（没有 /api/client scope）
+        ClientInfoResponse testClient = clientManagementService.createPlatformClient(
+                "Test Client without API Scope",
+                Arrays.asList("read", "write")
+        );
+
+        // When - 使用这个client的token尝试访问 /api/client API
+        String tokenWithoutApiScope = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, testClient.getClientId(), testClient.getClientSecret(), "read write"
+        );
+
+        String url = String.format("http://localhost:%d/api/client?type=platform", port);
+        HttpEntity<Void> request = JwtTokenTestHelper.createAuthEntity(tokenWithoutApiScope);
+        ResponseEntity<String> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        // Then - 应该返回403 Forbidden
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+
+        log.info("没有所需scope时访问被正确拒绝");
+    }
+
+    @Test
+    void testAccessDeniedWithWildcardScope() {
+        log.info("测试使用通配符scope时访问被拒绝");
+
+        // Given - 创建一个带有 /api/** 通配符scope的client
+        ClientInfoResponse testClient = clientManagementService.createPlatformClient(
+                "Test Client with Wildcard Scope",
+                Arrays.asList("/api/**")
+        );
+
+        // When - 使用这个client的token尝试访问 /api/client API
+        String tokenWithWildcardScope = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, testClient.getClientId(), testClient.getClientSecret(), "/api/**"
+        );
+
+        String url = String.format("http://localhost:%d/api/client?type=platform", port);
+        HttpEntity<Void> request = JwtTokenTestHelper.createAuthEntity(tokenWithWildcardScope);
+        ResponseEntity<String> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                request,
+                String.class
+        );
+
+        // Then - 应该返回403 Forbidden（通配符不应该被允许）
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+
+        log.info("使用通配符scope时访问被正确拒绝");
     }
 }

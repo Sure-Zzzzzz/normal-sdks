@@ -152,14 +152,14 @@
                 <tr th:each="token : ${tokens}">
                     <td><code th:text="${token.clientId}"></code></td>
                     <td>
-                        <span th:attr="data-client-id=${token.clientId}" class="client-name-loading">
-                            <span class="spinner-border spinner-border-sm" role="status"></span> 加载中...
-                        </span>
+                        <span th:text="${clientInfoMap.containsKey(token.clientId) ? clientInfoMap.get(token.clientId).clientName : '-'}"></span>
                     </td>
                     <td>
-                        <span th:attr="data-client-id=${token.clientId}" class="client-type-loading">
-                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                        <span th:if="${clientInfoMap.containsKey(token.clientId)}">
+                            <span th:if="${clientInfoMap.get(token.clientId).clientType == 1}" class="badge bg-primary">平台级</span>
+                            <span th:if="${clientInfoMap.get(token.clientId).clientType == 2}" class="badge bg-info">用户级</span>
                         </span>
+                        <span th:unless="${clientInfoMap.containsKey(token.clientId)}">-</span>
                     </td>
                     <td>
                         <code th:text="${#strings.abbreviate(token.tokenValue, 30)}" style="font-size: 0.85em;"></code>
@@ -265,87 +265,6 @@
             alert('清理失败：' + error);
         });
     }
-
-    // 异步加载Client详情
-    function loadClientDetails() {
-        // 收集所有需要加载的clientId
-        const clientNameElements = document.querySelectorAll('.client-name-loading');
-        const clientTypeElements = document.querySelectorAll('.client-type-loading');
-
-        if (clientNameElements.length === 0) {
-            return; // 没有需要加载的数据
-        }
-
-        // 提取唯一的clientId列表
-        const clientIds = new Set();
-        clientNameElements.forEach(el => {
-            const clientId = el.getAttribute('data-client-id');
-            if (clientId) {
-                clientIds.add(clientId);
-            }
-        });
-
-        if (clientIds.size === 0) {
-            return;
-        }
-
-        // 批量查询Client详情（使用GET请求 + Query Parameter）
-        const params = new URLSearchParams();
-        Array.from(clientIds).forEach(id => params.append('clientIds', id));
-
-        fetch(`/api/client?${params.toString()}`)
-            .then(response => response.json())
-            .then(data =>{
-                // 更新Client名称
-                clientNameElements.forEach(el => {
-                    const clientId = el.getAttribute('data-client-id');
-                    const clientInfo = data.clients[clientId];
-                    if (clientInfo) {
-                        el.textContent = clientInfo.clientName || '-';
-                        el.classList.remove('client-name-loading');
-                    } else {
-                        el.textContent = '-';
-                        el.classList.remove('client-name-loading');
-                    }
-                });
-
-                // 更新Client类型
-                clientTypeElements.forEach(el => {
-                    const clientId = el.getAttribute('data-client-id');
-                    const clientInfo = data.clients[clientId];
-                    if (clientInfo) {
-                        if (clientInfo.clientType === 1) {
-                            el.innerHTML = '<span class="badge bg-primary">平台级</span>';
-                        } else if (clientInfo.clientType === 2) {
-                            el.innerHTML = '<span class="badge bg-info">用户级</span>';
-                        } else {
-                            el.textContent = '-';
-                        }
-                        el.classList.remove('client-type-loading');
-                    } else {
-                        el.textContent = '-';
-                        el.classList.remove('client-type-loading');
-                    }
-                });
-            })
-            .catch(error => {
-                console.error('加载Client详情失败：', error);
-                // 发生错误时显示占位符
-                clientNameElements.forEach(el => {
-                    el.textContent = '加载失败';
-                    el.classList.remove('client-name-loading');
-                });
-                clientTypeElements.forEach(el => {
-                    el.textContent = '-';
-                    el.classList.remove('client-type-loading');
-                });
-            });
-    }
-
-    // 页面加载完成后异步加载Client详情
-    document.addEventListener('DOMContentLoaded', function() {
-        loadClientDetails();
-    });
     /*]]>*/
 </script>
 </body>
