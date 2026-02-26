@@ -94,6 +94,9 @@
                     <div class="form-text">
                         多个权限用逗号分隔，支持通配符 (*)
                     </div>
+                    <div class="form-text text-danger" id="scopeError" style="display:none;">
+                        ⚠️ 检测到回车换行，请使用逗号分隔
+                    </div>
                 </div>
 
                 <div class="alert alert-warning" role="alert">
@@ -116,8 +119,68 @@
     const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
     const clientId = /*[[${client.clientId}]]*/ '';
 
+    // 监听 textarea 的键盘事件，阻止回车
+    const scopesTextarea = document.getElementById('editScopes');
+    const scopeError = document.getElementById('scopeError');
+
+    scopesTextarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            scopeError.style.display = 'block';
+            scopesTextarea.classList.add('is-invalid');
+            setTimeout(() => {
+                scopeError.style.display = 'none';
+                scopesTextarea.classList.remove('is-invalid');
+            }, 2000);
+        }
+    });
+
+    // 监听粘贴事件，自动替换换行符为逗号
+    scopesTextarea.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+
+        // 检测是否包含换行符
+        if (pastedText.includes('\n') || pastedText.includes('\r')) {
+            // 替换所有换行符为逗号
+            const cleanedText = pastedText
+                .replace(/\r\n/g, ',')
+                .replace(/\n/g, ',')
+                .replace(/\r/g, ',')
+                .replace(/,+/g, ',')  // 合并多个连续逗号
+                .replace(/^,|,$/g, '');  // 移除首尾逗号
+
+            // 插入清理后的文本
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            const currentValue = this.value;
+            this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
+
+            // 显示成功提示
+            scopeError.textContent = '✓ 已自动将换行符替换为逗号';
+            scopeError.classList.remove('text-danger');
+            scopeError.classList.add('text-success');
+            scopeError.style.display = 'block';
+            setTimeout(() => {
+                scopeError.style.display = 'none';
+                scopeError.classList.remove('text-success');
+                scopeError.classList.add('text-danger');
+                scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
+            }, 2000);
+        } else {
+            // 没有换行符，正常粘贴
+            document.execCommand('insertText', false, pastedText);
+        }
+    });
+
     function updateScopes() {
         const scopesText = document.getElementById('editScopes').value.trim();
+
+        // 后端验证：检查是否包含换行符
+        if (scopesText.match(/[\r\n]+/)) {
+            alert('权限范围不允许包含换行符，请使用逗号分隔');
+            return;
+        }
 
         // 解析 scopes（逗号分隔）
         const scopes = scopesText
