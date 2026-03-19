@@ -54,4 +54,5 @@ include(
         ':sdk:auth:aksk:resource:simple-aksk-resource-core',
         ':sdk:auth:aksk:resource:simple-aksk-security-context-starter',
         ':sdk:auth:aksk:resource:simple-aksk-resource-server-starter',
+        ':sdk:cache:smart-cache-starter',
 )

@@ -1,0 +1,24 @@
+dependencies {
+    // Caffeine 本地缓存（compileOnly，用户项目需自行引入）
+    compileOnly 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+
+    // Spring Boot Starter
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+
+    // Spring Data Redis（compileOnly，用户项目需自行引入）
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Spring AOP（用于注解式 API）
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.1'
+    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.0'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+}
