@@ -6,7 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,6 +22,16 @@ public class SimpleRedisLock {
     @Autowired
     @Qualifier("simpleRedisLockRedisTemplate")
     protected RedisTemplate<String, String> simpleRedisLockRedisTemplate;
+
+    // Lua脚本：原子性地检查并删除锁
+    private static final String UNLOCK_SCRIPT =
+            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
+                    "    return redis.call('del', KEYS[1]) " +
+                    "else " +
+                    "    return 0 " +
+                    "end";
+
+    private static final DefaultRedisScript<Long> UNLOCK_REDIS_SCRIPT = new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class);
 
     // 尝试获取锁
     public boolean tryLock(String lockKey, String lockValue, long expireTime, TimeUnit timeUnit) {
@@ -38,19 +50,19 @@ public class SimpleRedisLock {
     // 释放锁
     public void unlock(String lockKey, String lockValue) {
         log.debug("开始尝试解锁，lockKey:{}", lockKey);
-        ValueOperations<String, String> ops = simpleRedisLockRedisTemplate.opsForValue();
-        String currentValue = ops.get(lockKey);
-        // 如果当前值为 null，说明锁已经过期或自动释放
-        if (currentValue == null) {
-            log.info("锁已经过期或被自动释放，lockKey={} 已不存在", lockKey);
-            return;
-        }
-        // 只有当前持有锁的客户端才能释放锁
-        if (lockValue.equals(currentValue)) {
-            simpleRedisLockRedisTemplate.delete(lockKey);
-            log.info("成功释放锁，lockKey={}, lockValue={}", lockKey, lockValue);
-        } else {
-            log.info("释放锁失败，lockKey={} 的持有者与当前持有者不匹配，锁未被删除", lockKey);
+        try {
+            Long result = simpleRedisLockRedisTemplate.execute(
+                    UNLOCK_REDIS_SCRIPT,
+                    Collections.singletonList(lockKey),
+                    lockValue
+            );
+            if (result != null && result == 1) {
+                log.info("成功释放锁，lockKey={}, lockValue={}", lockKey, lockValue);
+            } else {
+                log.info("释放锁失败，lockKey={} 的持有者与当前持有者不匹配或锁已过期", lockKey);
+            }
+        } catch (Exception e) {
+            log.error("释放锁异常，lockKey={}, lockValue={}", lockKey, lockValue, e);
         }
     }
 }

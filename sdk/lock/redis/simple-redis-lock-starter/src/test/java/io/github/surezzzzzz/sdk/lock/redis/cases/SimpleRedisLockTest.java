@@ -3,14 +3,11 @@ package io.github.surezzzzzz.sdk.lock.redis.cases;
 import io.github.surezzzzzz.sdk.lock.redis.LockApplication;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import redis.embedded.RedisServer;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -29,49 +26,24 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = LockApplication.class)
 public class SimpleRedisLockTest {
 
-    private RedisServer redisServer;
-    private static int redisPort;
-
-    @DynamicPropertySource
-    static void configureRedis(DynamicPropertyRegistry registry) {
-        redisPort = findAvailablePort();
-        registry.add("spring.redis.host", () -> "localhost");
-        registry.add("spring.redis.port", () -> redisPort);
-    }
-
-    @BeforeEach
-    void setUp() throws Exception {
-        try {
-            redisServer = new RedisServer(redisPort);
-            redisServer.start();
-        } catch (Exception e) {
-            redisPort = findAvailablePort();
-            redisServer = new RedisServer(redisPort);
-            redisServer.start();
-        }
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        if (redisServer != null) {
-            try {
-                redisServer.stop();
-            } catch (Exception e) {
-                // 忽略停止时的异常
-            }
-        }
-    }
-
-    private static int findAvailablePort() {
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (Exception e) {
-            return 6380 + (int) (Math.random() * 1000);
-        }
-    }
-
     @Autowired
     private SimpleRedisLock simpleRedisLock;
+
+    @Autowired
+    private RedisTemplate<String, String> simpleRedisLockRedisTemplate;
+
+    @BeforeEach
+    void setUp() {
+        // 清理测试数据
+        try {
+            simpleRedisLockRedisTemplate.delete("test:lock:simple");
+            simpleRedisLockRedisTemplate.delete("test:mutex:lock");
+            simpleRedisLockRedisTemplate.delete("test:expire:lock");
+            simpleRedisLockRedisTemplate.delete("test:concurrent:lock");
+        } catch (Exception e) {
+            log.warn("清理测试数据失败，可能 Redis 未启动: {}", e.getMessage());
+        }
+    }
 
     private static final String TEST_LOCK_KEY = "test:lock:simple";
     private static final String TEST_LOCK_VALUE = "test-client-id";
