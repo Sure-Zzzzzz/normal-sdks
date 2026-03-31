@@ -44,16 +44,30 @@
 - **权限注解**：提供 @RequireExpression 等权限校验注解，支持 SpEL 表达式
 - **Web 管理界面**：提供完整的 AKSK 和 Token 管理页面，支持在线测试
 
+### 💾 缓存
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [smart-cache-starter](sdk/cache/smart-cache-starter) | 1.0.1 | 两级缓存框架（L1+L2） | [README](sdk/cache/smart-cache-starter/README.md) |
+
+**核心特性**：
+- **双层缓存架构**：L1 本地缓存（Caffeine）+ L2 分布式缓存（Redis）
+- **缓存一致性**：支持最终一致性模式，通过 Redis Pub/Sub 同步缓存失效
+- **防护机制**：缓存穿透、缓存击穿、缓存雪崩的完整保护
+- **注解式 API**：`@SmartCache`、`@SmartCacheEvict`、`@SmartCachePut` 等注解
+- **灵活配置**：支持 TTL、刷新策略、降级策略等配置
+- **统计监控**：缓存命中率、性能统计
+
 ### 🔒 Redis
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-redis-lock-starter](sdk/lock/redis/simple-redis-lock-starter) | 1.0.0 | Redis 分布式锁 | [README](sdk/lock/redis/simple-redis-lock-starter/README.md) |
+| [simple-redis-lock-starter](sdk/lock/redis/simple-redis-lock-starter) | 1.0.1 | Redis 分布式锁 | [README](sdk/lock/redis/simple-redis-lock-starter/README.md) |
 | [simple-redis-limiter-starter](sdk/limiter/redis/simple-redis-limiter-starter) | 1.0.1 | Redis 限流器（简单版） | [README](sdk/limiter/redis/simple-redis-limiter-starter/README.md) |
 | [smart-redis-limiter-starter](sdk/limiter/redis/smart-redis-limiter-starter) | 1.0.2 | Redis 限流器（智能版） | [README](sdk/limiter/redis/smart-redis-limiter-starter/README.md) |
 
 **核心特性**：
-- 简单分布式锁（基于 SETNX + 过期时间）
+- 分布式锁（基于 SETNX + 过期时间，Lua 脚本原子解锁）
 - 智能限流器（基于固定窗口计数器算法）
 - 注解驱动和拦截器模式，配置灵活
 
