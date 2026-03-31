@@ -2,6 +2,7 @@ dependencies {
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+    compileOnly 'org.springframework:spring-context'
 
     // Spring Expression Language (SpEL)
     compileOnly 'org.springframework:spring-expression'
