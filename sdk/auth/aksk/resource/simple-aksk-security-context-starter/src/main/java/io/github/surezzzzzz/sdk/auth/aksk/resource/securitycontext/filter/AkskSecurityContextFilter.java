@@ -1,9 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.filter;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.configuration.SimpleAkskSecurityContextProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.support.HeaderNameConverter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
@@ -23,6 +25,7 @@ import java.util.Map;
  *   <li>筛选出以指定前缀开头的 Header</li>
  *   <li>移除前缀并转换为 camelCase</li>
  *   <li>存储到 Request Attribute</li>
+ *   <li>发布 AkskAccessEvent 事件</li>
  * </ol>
  *
  * @author surezzzzzz
@@ -32,9 +35,12 @@ import java.util.Map;
 public class AkskSecurityContextFilter implements Filter {
 
     private final SimpleAkskSecurityContextProperties properties;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public AkskSecurityContextFilter(SimpleAkskSecurityContextProperties properties) {
+    public AkskSecurityContextFilter(SimpleAkskSecurityContextProperties properties,
+                                     ApplicationEventPublisher eventPublisher) {
         this.properties = properties;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -55,10 +61,40 @@ public class AkskSecurityContextFilter implements Filter {
         if (!context.isEmpty()) {
             httpRequest.setAttribute(SimpleAkskResourceConstant.CONTEXT_ATTRIBUTE, context);
             log.debug("Security context injected: {} fields", context.size());
+
+            // 发布事件
+            try {
+                AkskAccessEvent event = buildAccessEvent(context, httpRequest);
+                eventPublisher.publishEvent(event);
+            } catch (Exception e) {
+                log.warn("Failed to publish AkskAccessEvent", e);
+            }
         }
 
         // 继续过滤器链
         chain.doFilter(request, response);
+    }
+
+    /**
+     * 构建访问事件
+     */
+    private AkskAccessEvent buildAccessEvent(Map<String, String> context, HttpServletRequest request) {
+        return new AkskAccessEvent(
+                this,
+                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_ID),
+                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_TYPE),
+                context.get(SimpleAkskResourceConstant.FIELD_USER_ID),
+                context.get(SimpleAkskResourceConstant.FIELD_USERNAME),
+                context.get(SimpleAkskResourceConstant.FIELD_ROLES),
+                context.get(SimpleAkskResourceConstant.FIELD_SCOPE),
+                request.getRequestURI(),
+                request.getMethod(),
+                request.getRemoteAddr(),
+                request.getHeader("User-Agent"),
+                "header",
+                context.get("traceId"),
+                context
+        );
     }
 
     /**
@@ -68,7 +104,7 @@ public class AkskSecurityContextFilter implements Filter {
      * @return 安全上下文 Map（camelCase 格式的字段名）
      */
     private Map<String, String> extractSecurityContext(HttpServletRequest request) {
-        Map<String, String> context = new HashMap<>();
+        Map<String, String> context = new HashMap<String, String>();
         String prefix = properties.getHeaderPrefix();
 
         Enumeration<String> headerNames = request.getHeaderNames();

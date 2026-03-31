@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@ import javax.annotation.PostConstruct;
  * <ul>
  *   <li>io.github.surezzzzzz.sdk.auth.aksk.resource.security-context.enable: 是否启用（默认：true）</li>
  *   <li>io.github.surezzzzzz.sdk.auth.aksk.resource.security-context.header-prefix: Header 前缀（默认：x-sure-auth-aksk-）</li>
+ *   <li>io.github.surezzzzzz.sdk.auth.aksk.resource.security-context.trace-id-field: 链路追踪ID字段名（默认：traceId）</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -62,12 +64,14 @@ public class SimpleAkskSecurityContextAutoConfiguration {
     /**
      * 注册 AkskSecurityContextFilter
      *
+     * @param eventPublisher 事件发布器
      * @return FilterRegistrationBean
      */
     @Bean
-    public FilterRegistrationBean<AkskSecurityContextFilter> akskSecurityContextFilter() {
-        FilterRegistrationBean<AkskSecurityContextFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new AkskSecurityContextFilter(properties));
+    public FilterRegistrationBean<AkskSecurityContextFilter> akskSecurityContextFilter(
+            ApplicationEventPublisher eventPublisher) {
+        FilterRegistrationBean<AkskSecurityContextFilter> registration = new FilterRegistrationBean<AkskSecurityContextFilter>();
+        registration.setFilter(new AkskSecurityContextFilter(properties, eventPublisher));
         registration.addUrlPatterns("/*");
         registration.setOrder(1);
         registration.setName(SimpleAkskSecurityContextConstant.FILTER_NAME);
