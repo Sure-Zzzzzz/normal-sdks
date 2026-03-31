@@ -1,4 +1,6 @@
 dependencies {
+    // 依赖 core（包含事件定义和 model）
+    api "${group}:simple-elasticsearch-search-core:1.0.1"
     // 依赖 route-starter
     api "${group}:simple-elasticsearch-route-starter:1.0.5"
     // 依赖 nl-parser
@@ -10,8 +12,8 @@ dependencies {
     compileOnly "org.apache.httpcomponents:httpclient"
     compileOnly "org.apache.httpcomponents:httpcore"
     // Web 支持（API 需要）
-    compileOnly "org.springframework.boot:spring-boot-starter-web"
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    compileOnly "org.springframework.boot:spring-boot-starter-web"
 
     // 测试
     testImplementation "org.springframework.boot:spring-boot-starter-web"

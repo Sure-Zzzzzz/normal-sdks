@@ -7,11 +7,9 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.AggExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
@@ -37,6 +35,7 @@ import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
 import org.elasticsearch.search.aggregations.metrics.Stats;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -81,6 +80,9 @@ public class AggExecutorImpl implements AggExecutor {
 
     @Autowired
     private RouteResolver routeResolver;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public AggResponse execute(AggRequest request) {
@@ -129,7 +131,7 @@ public class AggExecutorImpl implements AggExecutor {
      * 执行聚合查询（带降级重试）
      */
     private AggResponse executeWithDowngradeRetry(AggRequest request, IndexMetadata metadata,
-                                                   QueryRequest.DateRange dateRange, long startTime) throws IOException {
+                                                  QueryRequest.DateRange dateRange, long startTime) throws IOException {
         // ✅ 先进行降级预估，如果需要降级，直接从预估的级别开始
         DowngradeLevel currentLevel = DowngradeLevel.LEVEL_0;
 
@@ -177,7 +179,7 @@ public class AggExecutorImpl implements AggExecutor {
      * 执行一次聚合查询
      */
     private AggResponse executeOnce(AggRequest request, IndexMetadata metadata,
-                                     QueryRequest.DateRange dateRange, long startTime, DowngradeLevel downgradeLevel) throws IOException {
+                                    QueryRequest.DateRange dateRange, long startTime, DowngradeLevel downgradeLevel) throws IOException {
         // 1. 构建 ES 查询
         SearchRequest searchRequest = buildSearchRequest(request, metadata, dateRange, downgradeLevel);
 
@@ -204,6 +206,18 @@ public class AggExecutorImpl implements AggExecutor {
 
         log.debug("Aggregation executed: index={}, downgradeLevel={}, took={}ms",
                 request.getIndex(), downgradeLevel, took);
+
+        // 5. 发布聚合事件
+        try {
+            AggExecutionContext context = AggExecutionContext.builder()
+                    .actualIndices(searchRequest.indices())
+                    .datasource(datasourceKey)
+                    .build();
+
+            eventPublisher.publishEvent(new EsAggEvent(this, request, response, context));
+        } catch (Exception e) {
+            log.warn("Failed to publish EsAggEvent", e);
+        }
 
         return response;
     }
@@ -234,7 +248,8 @@ public class AggExecutorImpl implements AggExecutor {
 
         @SuppressWarnings("unchecked")
         Map<String, Object> responseMap = objectMapper.readValue(responseJson,
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                });
 
         // 提取聚合结果
         @SuppressWarnings("unchecked")

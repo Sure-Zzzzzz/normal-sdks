@@ -8,6 +8,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.QueryExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
@@ -30,6 +32,7 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -73,6 +76,9 @@ public class QueryExecutorImpl implements QueryExecutor {
 
     @Autowired
     private RouteResolver routeResolver;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
 
     @Override
     public QueryResponse execute(QueryRequest request) {
@@ -175,6 +181,18 @@ public class QueryExecutorImpl implements QueryExecutor {
 
         log.debug("Query executed: index={}, downgradeLevel={}, took={}ms, hits={}",
                 request.getIndex(), downgradeLevel, took, response.getTotal());
+
+        // 5. 发布查询事件
+        try {
+            QueryExecutionContext context = QueryExecutionContext.builder()
+                    .actualIndices(searchRequest.indices())
+                    .datasource(datasourceKey)
+                    .build();
+
+            eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
+        } catch (Exception e) {
+            log.warn("Failed to publish EsQueryEvent", e);
+        }
 
         return response;
     }
