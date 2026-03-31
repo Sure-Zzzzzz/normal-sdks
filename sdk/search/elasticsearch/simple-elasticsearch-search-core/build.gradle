@@ -1,0 +1,4 @@
+dependencies {
+    // core 包含所有 model，不需要额外依赖
+    compileOnly "org.springframework.boot:spring-boot-starter-web"
+}
