@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.Simpl
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskJwtAuthenticationConverter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.Resource;
@@ -47,6 +48,7 @@ public class ResourceServerSecurityConfiguration {
 
     private final SimpleAkskResourceServerProperties properties;
     private final ResourceLoader resourceLoader;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 配置安全过滤链
@@ -81,7 +83,7 @@ public class ResourceServerSecurityConfiguration {
                 })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt
-                                .jwtAuthenticationConverter(new AkskJwtAuthenticationConverter())
+                                .jwtAuthenticationConverter(new AkskJwtAuthenticationConverter(eventPublisher))
                         )
                 )
                 .csrf().disable();

@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -27,6 +29,7 @@ import java.util.stream.Collectors;
  *   <li>提取 JWT claims 并转换为 camelCase 格式</li>
  *   <li>存储到 Request Attribute</li>
  *   <li>提取 scope 作为 GrantedAuthority</li>
+ *   <li>发布 AkskAccessEvent 事件</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -34,6 +37,12 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    public AkskJwtAuthenticationConverter(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
@@ -45,6 +54,14 @@ public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
         if (request != null) {
             request.setAttribute(SimpleAkskResourceConstant.CONTEXT_ATTRIBUTE, context);
             log.debug("JWT context injected: {} fields", context.size());
+
+            // 发布事件
+            try {
+                AkskAccessEvent event = buildAccessEvent(context, request);
+                eventPublisher.publishEvent(event);
+            } catch (Exception e) {
+                log.warn("Failed to publish AkskAccessEvent", e);
+            }
         }
 
         // 提取权限（从 scope claim）
@@ -55,13 +72,35 @@ public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
     }
 
     /**
+     * 构建访问事件
+     */
+    private AkskAccessEvent buildAccessEvent(Map<String, String> context, HttpServletRequest request) {
+        return new AkskAccessEvent(
+                this,
+                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_ID),
+                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_TYPE),
+                context.get(SimpleAkskResourceConstant.FIELD_USER_ID),
+                context.get(SimpleAkskResourceConstant.FIELD_USERNAME),
+                context.get(SimpleAkskResourceConstant.FIELD_ROLES),
+                context.get(SimpleAkskResourceConstant.FIELD_SCOPE),
+                request.getRequestURI(),
+                request.getMethod(),
+                request.getRemoteAddr(),
+                request.getHeader("User-Agent"),
+                "jwt",
+                context.get("traceId"),
+                context
+        );
+    }
+
+    /**
      * 提取 JWT claims 并转换为上下文 Map
      *
      * @param jwt JWT Token
      * @return 上下文 Map（key: camelCase 字段名, value: claim 值）
      */
     private Map<String, String> extractContext(Jwt jwt) {
-        Map<String, String> context = new HashMap<>();
+        Map<String, String> context = new HashMap<String, String>();
 
         // 遍历 JWT_CLAIM_TO_FIELD 映射，提取 claims
         SimpleAkskResourceConstant.JWT_CLAIM_TO_FIELD.forEach((jwtClaimName, fieldName) -> {
