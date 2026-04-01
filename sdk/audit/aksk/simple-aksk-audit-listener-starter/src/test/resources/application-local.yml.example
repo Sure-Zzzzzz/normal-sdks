@@ -1,0 +1,13 @@
+# 本地测试配置文件示例
+# 使用方法：
+# 1. 复制本文件为 application-local.yml
+# 2. 填入真实的 client-id 和 client-secret
+# 3. application-local.yml 不会被提交到 git（已在 .gitignore 中）
+
+# 测试用的 OAuth2 Client 凭证
+test:
+  oauth2:
+    # 从 AKSK Server 注册的客户端 ID
+    client-id: your-client-id-here
+    # 从 AKSK Server 注册的客户端密钥
+    client-secret: your-client-secret-here

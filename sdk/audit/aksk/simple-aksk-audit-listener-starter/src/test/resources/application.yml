@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: simple-aksk-audit-listener-test
+  profiles:
+    active: local
+  main:
+    allow-bean-definition-overriding: true  # 允许Bean覆盖（security-context和resource-server可能有冲突）
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        audit:
+          aksk:
+            listener:
+              handler:
+                log:
+                  enabled: true  # 启用默认日志Handler
+        auth:
+          aksk:
+            resource:
+              security-context:
+                enable: true  # 启用Header认证
+                header-prefix: x-sure-auth-aksk-  # Header前缀
+              server:
+                enabled: true  # 启用JWT认证
+                jwt:
+                  # 使用 issuer-uri 自动从 aksk-server 获取 JWKS
+                  issuer-uri: http://localhost:8080
+                security:
+                  # 需要保护的路径
+                  protected-paths:
+                    - /api/**
+                    - /test/**
+                  # 白名单路径（不需要认证）
+                  permit-all-paths:
+                    - /actuator/health
+                    - /public/**
+
+# 测试用的 OAuth2 配置
+test:
+  oauth2:
+    client-id: 11111
+    client-secret: 22222
+    token-uri: http://localhost:8080/oauth2/token
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.aksk: DEBUG
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
