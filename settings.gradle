@@ -41,6 +41,7 @@ include(
 //        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
+        ':sdk:search:elasticsearch:simple-elasticsearch-search-core',
         ':sdk:search:elasticsearch:simple-elasticsearch-search-starter',
         ':sdk:sensitive:keyword:smart-keyword-sensitive-starter',
         ':sdk:sensitive:ip:simple-ip-sensitive-starter',
@@ -54,5 +55,7 @@ include(
         ':sdk:auth:aksk:resource:simple-aksk-resource-core',
         ':sdk:auth:aksk:resource:simple-aksk-security-context-starter',
         ':sdk:auth:aksk:resource:simple-aksk-resource-server-starter',
+        ':sdk:audit:aksk:simple-aksk-audit-listener-starter',
+        ':sdk:audit:search:elasticsearch:simple-elasticsearch-search-audit-listener-starter',
         ':sdk:cache:smart-cache-starter',
 )
