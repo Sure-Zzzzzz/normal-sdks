@@ -1,0 +1,113 @@
+spring:
+  application:
+    name: simple-elasticsearch-audit-listener-test
+  profiles:
+    active: local
+  main:
+    allow-bean-definition-overriding: true
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        # ES 审计配置
+        audit:
+          search:
+            elasticsearch:
+              listener:
+                executor:
+                  core-size: 4
+                  max-size: 20
+                  queue-capacity: 2000
+                  keep-alive-seconds: 60
+                  reject-policy: CALLER_RUNS
+                handler:
+                  log:
+                    enabled: true  # 启用默认日志Handler
+
+        # ES 查询配置
+        elasticsearch:
+          search:
+            enable: true
+            indices:
+              - name: "test-index"
+                lazy-load: true
+              - name: "agg-index"
+                lazy-load: true
+              - name: "api-index-*"
+                lazy-load: true
+              - name: "audit_test_user"
+                lazy-load: true
+              - name: "audit_test_order"
+                lazy-load: true
+              - name: "audit_test_log_0"
+                lazy-load: true
+              - name: "audit_test_log_1"
+                lazy-load: true
+              - name: "audit_jwt_user"
+                lazy-load: true
+              - name: "audit_jwt_order"
+                lazy-load: true
+              - name: "audit_jwt_log_0"
+                lazy-load: true
+              - name: "audit_jwt_log_1"
+                lazy-load: true
+              - name: "aksk_event_header_user"
+                lazy-load: true
+              - name: "aksk_event_header_order"
+                lazy-load: true
+              - name: "aksk_event_jwt_user"
+                lazy-load: true
+              - name: "aksk_event_jwt_order"
+                lazy-load: true
+            query-limits:
+              max-size: 10000
+              default-size: 20
+              ignore-unavailable-indices: true
+
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              primary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+              secondary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+
+        # AKSK 认证配置
+        auth:
+          aksk:
+            resource:
+              security-context:
+                enable: true
+                header-prefix: x-sure-auth-aksk-
+              server:
+                enabled: true
+                jwt:
+                  issuer-uri: http://localhost:8080
+                security:
+                  protected-paths:
+                    - /api/**
+                    - /test/**
+                  permit-all-paths:
+                    - /actuator/health
+                    - /public/**
+
+# 测试用的 OAuth2 配置
+test:
+  oauth2:
+    client-id: 11111
+    client-secret: 22222
+    token-uri: http://localhost:8080/oauth2/token
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.search.elasticsearch: DEBUG
+    io.github.surezzzzzz.sdk.audit.aksk: DEBUG
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    io.github.surezzzzzz.sdk.elasticsearch.search: DEBUG

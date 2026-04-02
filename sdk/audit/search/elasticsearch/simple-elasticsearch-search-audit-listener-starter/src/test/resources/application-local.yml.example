@@ -1,0 +1,7 @@
+# 本地测试配置（敏感信息）
+# 复制此文件为 application-local.yml 并填入真实值
+
+test:
+  oauth2:
+    client-id: YOUR_CLIENT_ID
+    client-secret: YOUR_CLIENT_SECRET
