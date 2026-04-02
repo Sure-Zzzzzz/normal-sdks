@@ -161,7 +161,7 @@ implementation "io.github.surezzzzzz:simple-elasticsearch-search-core:1.0.1"
 
 1. **事件只是定义**：core 包只定义事件，不负责发布和监听
 2. **业务需要监听器**：业务需要实现 `@EventListener` 来监听这些事件
-3. **推荐使用 audit-listener**：可以引入 `simple-elasticsearch-audit-listener-starter` 来简化审计功能的实现
+3. **推荐使用 audit-listener**：可以引入 `simple-elasticsearch-search-audit-listener-starter` 来简化审计功能的实现
 
 ## 贡献者
 
