@@ -36,6 +36,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -108,7 +109,7 @@ public class QueryExecutorImpl implements QueryExecutor {
      * 执行查询（带降级重试）
      */
     private QueryResponse executeWithDowngradeRetry(QueryRequest request, IndexMetadata metadata, long startTime) throws IOException {
-        // ✅ 先进行降级预估，如果需要降级，直接从预估的级别开始
+        // 先进行降级预估，如果需要降级，直接从预估的级别开始
         DowngradeLevel currentLevel = DowngradeLevel.LEVEL_0;
 
         // 如果启用了预估，尝试预估降级级别
@@ -290,8 +291,11 @@ public class QueryExecutorImpl implements QueryExecutor {
         QueryBuilder queryBuilder = queryDslBuilder.build(request.getIndex(), request.getQuery());
         sourceBuilder.query(queryBuilder);
 
-        // ✅ 3. 添加日期范围过滤（如果需要更精确的时间过滤）
-        if (request.getDateRange() != null && metadata.isDateSplit() && metadata.getDateField() != null) {
+        // ✅ 3. 添加日期范围过滤
+        // strictDateFilter=true（默认）：始终过滤，防止索引内存在跨天数据
+        // strictDateFilter=false：整天范围时跳过，依赖索引路由覆盖（仅在数据按事件时间严格路由时可用）
+        if (request.getDateRange() != null && metadata.isDateSplit() && metadata.getDateField() != null
+                && (properties.getQueryLimits().isStrictDateFilter() || needsDateFilter(request.getDateRange()))) {
             addDateRangeFilter(sourceBuilder, request.getDateRange(), metadata);
         }
 
@@ -316,6 +320,11 @@ public class QueryExecutorImpl implements QueryExecutor {
                 SortOrder order = SimpleElasticsearchSearchConstant.SORT_ORDER_DESC.equalsIgnoreCase(sortField.getOrder()) ?
                         SortOrder.DESC : SortOrder.ASC;
                 sourceBuilder.sort(sortField.getField(), order);
+            }
+            // search_after 分页时追加 _id 作为 tiebreaker，防止非唯一排序字段导致丢数据
+            // collapse 场景除外：ES 不允许 collapse + search_after 同时使用多个排序字段
+            if (pagination.isSearchAfterPagination() && request.getCollapse() == null) {
+                sourceBuilder.sort("_id", SortOrder.ASC);
             }
         }
 
@@ -408,7 +417,6 @@ public class QueryExecutorImpl implements QueryExecutor {
 
         // 3. 处理数据
         List<Map<String, Object>> items = new ArrayList<>();
-        Object[] lastSortValues = null;
 
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> source = hit.getSourceAsMap();
@@ -425,28 +433,24 @@ public class QueryExecutorImpl implements QueryExecutor {
             }
 
             items.add(source);
-
-            // 记录最后一个文档的 sort 值（用于 search_after）
-            if (hit.getSortValues() != null && hit.getSortValues().length > 0) {
-                lastSortValues = hit.getSortValues();
-            }
         }
 
         builder.items(items);
 
         // 4. 分页结果
+        boolean hasMore = items.size() == pagination.getSize();
         QueryResponse.PaginationResult paginationResult = QueryResponse.PaginationResult.builder()
                 .type(pagination.getType())
-                .hasMore(items.size() >= pagination.getSize())
+                .hasMore(hasMore)
                 .build();
 
-        // search_after 的下一页参数
-        if (pagination.isSearchAfterPagination() && lastSortValues != null) {
-            List<Object> nextSearchAfter = new ArrayList<>();
-            for (Object value : lastSortValues) {
-                nextSearchAfter.add(value);
+        // search_after 的下一页参数，仅在 hasMore=true 时返回
+        if (pagination.isSearchAfterPagination() && hasMore) {
+            SearchHit[] hits = searchResponse.getHits().getHits();
+            if (hits.length > 0 && hits[hits.length - 1].getSortValues() != null
+                    && hits[hits.length - 1].getSortValues().length > 0) {
+                paginationResult.setNextSearchAfter(Arrays.asList(hits[hits.length - 1].getSortValues()));
             }
-            paginationResult.setNextSearchAfter(nextSearchAfter);
         }
 
         builder.pagination(paginationResult);

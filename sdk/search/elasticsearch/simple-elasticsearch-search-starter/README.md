@@ -20,6 +20,8 @@
   - **时间范围支持**：支持从自然语言中解析时间范围条件（v1.1.1+）
   - **search_after 深度分页**：支持从自然语言中解析 search_after 游标值（v1.1.2+）
 - **字段折叠（去重）**：支持按字段去重查询，可与深度分页组合使用（v1.1.3+）
+- **查询事件发布**：查询/聚合执行后自动发布 Spring 事件，支持审计、监控等扩展（v1.2.0+）
+- **严格日期过滤**：日期分割索引默认始终追加 date range filter，防止入库延迟导致的跨天脏数据（v1.2.1+）
 - **RESTful API**：提供标准的 REST 接口
 
 ## 快速开始
@@ -28,7 +30,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.1.3'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.2.1'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -116,6 +118,7 @@ io:
               default-size: 20                   # 默认分页大小
               max-offset: 10000                  # from + size 的最大值（超过此值强制使用 search_after）
               ignore-unavailable-indices: false  # 是否忽略不存在的索引（日期分割索引推荐开启）
+              strict-date-filter: true           # 是否始终追加 date range filter（默认 true，防止跨天脏数据）
 
             # API 配置
             api:

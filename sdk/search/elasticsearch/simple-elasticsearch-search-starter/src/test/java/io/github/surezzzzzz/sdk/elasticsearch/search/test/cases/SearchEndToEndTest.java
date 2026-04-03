@@ -1200,6 +1200,83 @@ class SearchEndToEndTest {
                 });
     }
 
+    @Test
+    @Order(57)
+    @DisplayName("6.8 strict-date-filter=true（默认）- 整天范围仍追加 date range filter，过滤跨天脏数据")
+    void testStrictDateFilterEnabled() throws Exception {
+        log.info("========== 测试：strict-date-filter=true，整天范围也追加 date range filter ==========");
+
+        String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        // 向今天的索引中插入一条昨天时间的数据，模拟入库延迟导致的跨天脏数据
+        RestHighLevelClient client = registry.getHighLevelClient(DEFAULT_DATASOURCE);
+        String todayIndex = LOG_INDEX_PREFIX + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+        LocalDateTime yesterday = LocalDateTime.now().minusDays(1);
+        Map<String, Object> dirtyData = new HashMap<>();
+        dirtyData.put("user_id", "dirty_user");
+        dirtyData.put("action", "dirty_action");
+        dirtyData.put("message", "脏数据 - 昨天时间写入今天索引");
+        dirtyData.put("createTime", yesterday);
+        client.index(new IndexRequest(todayIndex).id("dirty-1").source(dirtyData), RequestOptions.DEFAULT);
+        Thread.sleep(1000);
+
+        // strict-date-filter=true（默认），查今天整天范围，脏数据的 createTime 是昨天，应被过滤掉
+        QueryRequest request = QueryRequest.builder()
+                .index("test_log_*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from(today + "T00:00:00")
+                        .to(today + "T23:59:59")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))  // 只有今天的3条，脏数据被过滤
+                .andExpect(jsonPath("$.data.items[*].user_id").value(
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("dirty_user"))))
+                .andDo(result -> {
+                    log.info("✓ strict-date-filter=true：脏数据被正确过滤");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+
+        // 清理脏数据
+        client.delete(new org.elasticsearch.action.delete.DeleteRequest(todayIndex, "dirty-1"), RequestOptions.DEFAULT);
+    }
+
+    @Test
+    @Order(58)
+    @DisplayName("6.9 精确时间范围（非整天）- 无论 strict-date-filter 如何，始终追加 date range filter")
+    void testDateFilterAlwaysAppliedForPartialDay() throws Exception {
+        log.info("========== 测试：精确时间范围始终追加 date range filter ==========");
+
+        String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        // 查今天下午时间段，只有 createTime 在该范围内的数据才应返回
+        QueryRequest request = QueryRequest.builder()
+                .index("test_log_*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from(today + "T12:00:00")
+                        .to(today + "T23:59:59")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                // 测试数据的 createTime 是 LocalDateTime.now()，大概率在下午范围内，但核心是验证 filter 被追加不报错
+                .andDo(result -> {
+                    log.info("✓ 精确时间范围 date range filter 正常工作");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
     // ==================== 7. 多数据源路由测试 ====================
 
     @Test

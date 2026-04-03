@@ -328,6 +328,16 @@ public class SimpleElasticsearchSearchProperties {
          * </p>
          */
         private boolean ignoreUnavailableIndices = false;
+
+        /**
+         * 是否对日期分割索引始终追加 date range filter（默认 true）
+         * <p>
+         * true: 无论时间范围是否为整天，始终在 DSL 中追加日期字段过滤，防止索引内存在跨天数据时查出脏数据（默认，推荐）
+         * false: 整天范围（00:00:00 ~ 23:59:59）时跳过 date range filter，依赖索引路由覆盖，
+         *        仅在确认数据按事件时间严格路由到对应索引时可开启此优化
+         * </p>
+         */
+        private boolean strictDateFilter = true;
     }
 
     /**
