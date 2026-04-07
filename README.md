@@ -13,7 +13,7 @@
 | SDK | 版本    | 说明 | 文档 |
 |-----|-------|------|------|
 | [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.6 | Elasticsearch 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.1.3 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.2.1 | Elasticsearch 搜索查询框架 | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 
 **核心特性**：
 - 多数据源路由和自动切换
@@ -21,6 +21,20 @@
 - 零代码配置驱动的查询和聚合
 - 支持日期分割索引
 - RESTful API 自动生成
+- 查询/聚合执行后自动发布 `EsQueryEvent` / `EsAggEvent`，支持审计和监控扩展
+
+### 📋 审计
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-aksk-audit-listener-starter](sdk/audit/aksk/simple-aksk-audit-listener-starter) | 1.0.0 | AKSK 访问审计 | [README](sdk/audit/aksk/simple-aksk-audit-listener-starter/README.md) |
+| [simple-elasticsearch-search-audit-listener-starter](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter) | 1.0.0 | ES 查询审计 | [README](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter/README.md) |
+
+**核心特性**：
+- 基于 Spring 事件机制，零侵入接入
+- 内置异步线程池（4核/20最大/2000队列），不影响主流程性能
+- SPI 设计，业务方实现 `EsAuditHandler` 即可接收审计记录
+- 支持自定义用户信息提供者，兼容 Header 认证、JWT 认证等多种场景
 
 ### 🔐 认证与授权
 
@@ -29,9 +43,9 @@
 | [simple-aksk-server-starter](sdk/auth/aksk/simple-aksk-server-starter) | 1.0.4 | AKSK 认证服务器 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
 | [simple-aksk-feign-redis-client-starter](sdk/auth/aksk/client/simple-aksk-feign-redis-client-starter) | 1.0.0 | AKSK Feign 客户端 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
 | [simple-aksk-resttemplate-redis-client-starter](sdk/auth/aksk/client/simple-aksk-resttemplate-redis-client-starter) | 1.0.0 | AKSK RestTemplate 客户端 | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
-| [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 1.0.0 | AKSK 资源服务器（JWT 验证） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
-| [simple-aksk-resource-core](sdk/auth/aksk/resource/simple-aksk-resource-core) | 1.0.0 | AKSK 资源核心库（权限控制） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
-| [simple-aksk-security-context-starter](sdk/auth/aksk/resource/simple-aksk-security-context-starter) | 1.0.1 | AKSK 安全上下文（Header 解析） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 1.0.1 | AKSK 资源服务器（JWT 验证） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-resource-core](sdk/auth/aksk/resource/simple-aksk-resource-core) | 1.0.1 | AKSK 资源核心库（权限控制） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
+| [simple-aksk-security-context-starter](sdk/auth/aksk/resource/simple-aksk-security-context-starter) | 1.0.2 | AKSK 安全上下文（Header 解析） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
 
 **核心特性**：
 - **双层级 AKSK 管理**：支持平台级（AKP）和用户级（AKU）两种 AKSK 类型
