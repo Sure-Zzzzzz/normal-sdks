@@ -4,39 +4,18 @@ import feign.RequestInterceptor;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.interceptor.AkskFeignRequestInterceptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 /**
  * AKSK Feign Configuration
  *
- * <p>预配置的 Feign 配置类，自动注入 AKSK 认证拦截器。
+ * <p>Feign 客户端级别的配置类，将 AKSK 拦截器注册为 RequestInterceptor，
+ * 使 Feign 在发送请求时自动添加 Authorization 请求头。
  *
- * <p>使用方式1：通过 @AkskClientFeignClient 注解（推荐）
- * <pre>{@code
- * @AkskClientFeignClient(name = "my-service", url = "http://localhost:8080")
- * public interface MyServiceClient {
- *     @GetMapping("/api/resource")
- *     String getResource();
- * }
- * }</pre>
- *
- * <p>使用方式2：显式配置（备选）
- * <pre>{@code
- * @FeignClient(
- *     name = "my-service",
- *     url = "http://localhost:8080",
- *     configuration = AkskFeignConfiguration.class
- * )
- * public interface MyServiceClient {
- *     @GetMapping("/api/resource")
- *     String getResource();
- * }
- * }</pre>
+ * <p>注意：此类不加 @Configuration，避免被 Spring 全局扫描注册，
+ * 仅在 @AkskClientFeignClient 或显式指定 configuration 时生效于对应客户端的子上下文。
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
-@Configuration
 public class AkskFeignConfiguration {
 
     @Autowired

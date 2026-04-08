@@ -1,6 +1,6 @@
 # Simple AKSK Feign Redis Client Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter,集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
@@ -94,7 +94,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.0.1'
 }
 ```
 
@@ -292,7 +292,6 @@ AkskFeignRequestInterceptor 拦截请求
 ✅ **集成测试**（FeignIntegrationTest）
 - TokenManager Bean 是否存在
 - AkskFeignRequestInterceptor Bean 是否存在
-- AkskFeignConfiguration Bean 是否存在
 - 拦截器是否可以访问 TokenManager
 
 ✅ **端到端测试**（FeignEndToEndTest）
@@ -303,7 +302,7 @@ AkskFeignRequestInterceptor 拦截请求
 - ExplicitConfigFeignClient 应该存在
 - 使用显式配置的 FeignClient 调用应该成功
 
-**总计：12 个测试，100% 通过**
+**总计：11 个测试，100% 通过**
 
 ## 常见问题
 
@@ -423,6 +422,10 @@ feign:
 - 两个版本可以同时使用，互不冲突
 
 ## 版本历史
+
+### 1.0.1 (2026-04-08)
+
+- 🐛 修复 `AkskFeignConfiguration` 加了 `@Configuration` 导致所有 Feign 客户端都携带 AKSK token 的问题
 
 ### 1.0.0 (2026-01-27)
 
