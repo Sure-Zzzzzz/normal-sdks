@@ -1,0 +1,9 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              client-id: YOUR_CLIENT_ID
+              client-secret: YOUR_CLIENT_SECRET
