@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li>Authorization by ID: sure-auth-aksk:{me}:oauth2:authorization::{id}</li>
  *   <li>Authorization by Token: sure-auth-aksk:{me}:oauth2:authorization:token::{token}:{tokenType}</li>
- *   <li>Revoked Token: sure-auth-aksk:{me}:revoked::{sha256(token)}</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -38,11 +37,6 @@ public class RedisKeyHelper {
      * OAuth2 Authorization缓存名称（按Token索引）
      */
     public static final String CACHE_OAUTH2_AUTHORIZATION_TOKEN = "oauth2:authorization:token";
-
-    /**
-     * 撤销 Token 缓存名称
-     */
-    public static final String CACHE_REVOKED_TOKEN = "revoked";
 
     // ==================== 私有常量 ====================
 
@@ -79,20 +73,5 @@ public class RedisKeyHelper {
         return BRACE_PREFIX + token + BRACE_SUFFIX
                 + SEPARATOR_COLON
                 + (tokenType != null ? tokenType : STRING_NULL);
-    }
-
-    /**
-     * 构建撤销 Token 的 Redis Key
-     * 格式: sure-auth-aksk:{me}:revoked::{sha256(token)}
-     *
-     * @param tokenHash token 的 SHA-256 哈希值
-     * @return Redis Key
-     */
-    public String buildRevokedTokenKey(String tokenHash) {
-        String me = properties.getRedis().getToken().getMe();
-        return String.format(REDIS_KEY_PREFIX_TEMPLATE, me)
-                + CACHE_REVOKED_TOKEN
-                + SEPARATOR_DOUBLE_COLON
-                + BRACE_PREFIX + tokenHash + BRACE_SUFFIX;
     }
 }
