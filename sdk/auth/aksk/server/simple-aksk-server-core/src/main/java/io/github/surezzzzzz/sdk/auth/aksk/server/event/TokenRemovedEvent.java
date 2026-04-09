@@ -4,20 +4,20 @@ import java.time.Instant;
 import java.util.Set;
 
 /**
- * Token Revoked Event
+ * Token Removed Event
  *
- * <p>Published when a token is explicitly revoked via {@code /oauth2/revoke}.
+ * <p>Published when a token is removed by Spring Authorization Server internally.
  *
  * @author surezzzzzz
  */
-public class TokenRevokedEvent extends AbstractTokenEvent {
+public class TokenRemovedEvent extends AbstractTokenEvent {
 
-    public TokenRevokedEvent(Object source,
+    public TokenRemovedEvent(Object source,
                              String clientId, String clientType,
                              String userId, String username,
                              String tokenValue, Set<String> scopes,
                              Instant issuedAt, Instant expiresAt) {
-        super(source, TokenEventType.REVOKED,
+        super(source, TokenEventType.REMOVED,
                 clientId, clientType, userId, username,
                 tokenValue, scopes, issuedAt, expiresAt);
     }
