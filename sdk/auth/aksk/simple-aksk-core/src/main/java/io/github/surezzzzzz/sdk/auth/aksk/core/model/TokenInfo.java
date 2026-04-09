@@ -89,7 +89,11 @@ public class TokenInfo {
         /**
          * 已过期
          */
-        EXPIRED
+        EXPIRED,
+        /**
+         * 已撤销（主动调用 /oauth2/revoke）
+         */
+        REVOKED
     }
 
     /**
