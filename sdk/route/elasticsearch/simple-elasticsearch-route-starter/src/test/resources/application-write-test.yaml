@@ -10,7 +10,7 @@ io:
             sources:
               # primary 指向不存在的端口,如果路由错误会连接失败
               primary:
-                urls: http://localhost:9201
+                urls: http://localhost:9202
                 connect-timeout: 5000
                 socket-timeout: 60000
                 keep-alive-strategy: 300

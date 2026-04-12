@@ -38,13 +38,24 @@ public class IndexQueryExtractor implements IndexNameExtractor {
 
     @Override
     public String extract(Method method, Object[] args) {
+
         for (Object arg : args) {
             if (supports(arg)) {
                 IndexQuery query = (IndexQuery) arg;
-                String indexName = query.getIndexName();
-                if (indexName != null && !indexName.isEmpty()) {
-                    log.trace("Extracted index name [{}] from IndexQuery", indexName);
-                    return indexName;
+                // getIndexName() 在 Spring Data Elasticsearch 4.2+ 才有，4.1.x 不存在
+                // 用反射兼容两个版本，4.1.x 下返回 null，由后续提取器处理
+                try {
+                    java.lang.reflect.Method getIndexName = IndexQuery.class.getMethod("getIndexName");
+                    String indexName = (String) getIndexName.invoke(query);
+                    if (indexName != null && !indexName.isEmpty()) {
+                        log.trace("Extracted index name [{}] from IndexQuery", indexName);
+                        return indexName;
+                    }
+                } catch (NoSuchMethodException e) {
+                    // Spring Data Elasticsearch 4.1.x 不支持，忽略
+                    log.trace("IndexQuery.getIndexName() not available in current Spring Data Elasticsearch version");
+                } catch (Exception e) {
+                    log.trace("Failed to extract index name from IndexQuery", e);
                 }
             }
         }

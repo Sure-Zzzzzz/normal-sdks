@@ -17,7 +17,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.6'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.7'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -242,7 +242,26 @@ OrderDocument order = new OrderDocument();
 elasticsearchTemplate.save(order); // 索引: orders -> 路由到 cluster3
 ```
 
-## 📝 版本兼容性说明
+## ⚠️ Spring Boot 版本兼容性
+
+### ElasticsearchRestTemplate 路由代理
+
+route-starter 使用 CGLIB 动态代理创建 `ElasticsearchRestTemplate`，在不同 Spring Boot 版本下行为如下：
+
+| Spring Boot 版本 | 单数据源 | 多数据源 |
+|-----------------|---------|---------|
+| 2.7.x+（推荐） | ✅ 路由代理正常 | ✅ 路由代理正常 |
+| 2.4.x | ✅ 自动降级到简单 template（路由无意义） | ❌ 启动失败，需升级版本 |
+
+**Spring Boot 2.4.x 多数据源说明：**
+
+CGLIB 在 2.4.x 下无法访问 `AbstractElasticsearchTemplate` 的 protected 成员，代理创建失败。多数据源场景下路由失效会导致数据写入错误的集群，因此 route-starter 会在启动时直接报错，而不是静默失败。
+
+如果你的业务**不使用 `ElasticsearchRestTemplate`**（例如只通过 `registry.getHighLevelClient()` 操作 ES），多数据源在 2.4.x 下实际上是可以工作的——`ElasticsearchRestTemplate` 这个 bean 只是给 Spring Data Repository 用的，直接使用原生客户端的场景不受影响。
+
+**建议：** 新项目使用 Spring Boot 2.7.x+，存量 2.4.x 项目如需多数据源请升级。
+
+
 
 ### route-starter 的版本屏蔽职责边界
 
@@ -595,7 +614,8 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
-- [CHANGELOG 1.0.6](./CHANGELOG.1.0.6.md) - **最新版本**
+- [CHANGELOG 1.0.7](./CHANGELOG.1.0.7.md) - **最新版本**
+- [CHANGELOG 1.0.6](./CHANGELOG.1.0.6.md)
 - [CHANGELOG 1.0.5](./CHANGELOG.1.0.5.md)
 - [CHANGELOG 1.0.4](./CHANGELOG.1.0.4.md)
 - [CHANGELOG 1.0.3](./CHANGELOG.1.0.3.md)
