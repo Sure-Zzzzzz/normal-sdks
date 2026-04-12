@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
@@ -800,6 +801,217 @@ class SearchEndToEndTest {
                     log.info("✓ 字段不存在错误处理正确");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
+    }
+
+    // ==================== 9. search_after 翻页模式测试 ====================
+
+    @Test
+    @Order(70)
+    @DisplayName("9.1 searchAfterMode=tiebreaker（默认）- 正常翻页，行为与旧版本一致")
+    void testSearchAfterTiebreakerMode() throws Exception {
+        log.info("========== 测试：searchAfterMode=tiebreaker 翻页 ==========");
+
+        // 第一页
+        QueryRequest firstPage = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .size(2)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("age").order("asc").build()
+                        ))
+                        // 不传 searchAfterMode，默认 tiebreaker
+                        .build())
+                .build();
+
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter").isArray())
+                .andExpect(jsonPath("$.data.pagination.pitId").doesNotExist())
+                .andDo(result -> log.info("✓ tiebreaker 第一页成功"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        // 取出 nextSearchAfter，翻第二页
+        List<Object> nextSearchAfter = objectMapper.readTree(firstResponse)
+                .path("data").path("pagination").path("nextSearchAfter")
+                .traverse(objectMapper).readValueAs(List.class);
+
+        QueryRequest secondPage = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .size(2)
+                        .searchAfter(nextSearchAfter)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("age").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(secondPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> log.info("✓ tiebreaker 第二页成功"));
+    }
+
+    @Test
+    @Order(71)
+    @DisplayName("9.2 searchAfterMode=none - 排序字段唯一时正常翻页，不追加 _id")
+    void testSearchAfterNoneMode() throws Exception {
+        log.info("========== 测试：searchAfterMode=none 翻页 ==========");
+
+        // name 是 keyword，每条数据唯一，排序字段本身唯一，不需要 tiebreaker
+        QueryRequest firstPage = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("none")
+                        .size(2)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("name").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter").isArray())
+                .andDo(result -> log.info("✓ none 模式第一页成功"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        List<Object> nextSearchAfter = objectMapper.readTree(firstResponse)
+                .path("data").path("pagination").path("nextSearchAfter")
+                .traverse(objectMapper).readValueAs(List.class);
+
+        QueryRequest secondPage = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("none")
+                        .size(2)
+                        .searchAfter(nextSearchAfter)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("name").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(secondPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> log.info("✓ none 模式第二页成功"));
+    }
+
+    @Test
+    @Order(72)
+    @DisplayName("9.3 searchAfterMode=pit，pitKeepAlive 未传 - 报 400")
+    void testSearchAfterPitMissingKeepAlive() throws Exception {
+        log.info("========== 测试：pit 模式缺少 pitKeepAlive ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("pit")
+                        // 故意不传 pitKeepAlive
+                        .size(10)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("age").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("pitKeepAlive")))
+                .andDo(result -> log.info("✓ 缺少 pitKeepAlive 正确报错"));
+    }
+
+    @Test
+    @Order(73)
+    @DisplayName("9.4 searchAfterMode=pit，pitKeepAlive 超过服务端上限 - 报 400")
+    void testSearchAfterPitKeepAliveExceeded() throws Exception {
+        log.info("========== 测试：pit 模式 pitKeepAlive 超过上限 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("pit")
+                        .pitKeepAlive("24h")  // 超过默认上限 5m
+                        .size(10)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("age").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("24h")))
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("5m")))
+                .andDo(result -> log.info("✓ pitKeepAlive 超限正确报错"));
+    }
+
+    @Test
+    @Order(74)
+    @DisplayName("9.5 searchAfterMode=pit，ES 6.x 不支持 PIT - 报 400（secondary 非 6.x 时跳过）")
+    void testSearchAfterPitNotSupportedOnEs6() throws Exception {
+        log.info("========== 测试：ES 6.x 不支持 PIT ==========");
+
+        ClusterInfo clusterInfo = registry.getClusterInfo("secondary");
+        Assumptions.assumeTrue(
+                clusterInfo != null
+                        && clusterInfo.getEffectiveVersion() != null
+                        && clusterInfo.getEffectiveVersion().getMajor() == 6,
+                "secondary 数据源不是 ES 6.x，跳过此测试"
+        );
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_index_b.secondary")
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("pit")
+                        .pitKeepAlive("1m")
+                        .size(10)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("price").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").exists())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("不支持 PIT")))
+                .andDo(result -> log.info("✓ ES 6.x 不支持 PIT 正确报错"));
     }
 
     // ==================== 辅助方法 ====================

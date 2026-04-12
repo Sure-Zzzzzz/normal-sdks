@@ -1,13 +1,11 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.QueryExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
@@ -56,6 +54,9 @@ import java.util.Map;
 @Slf4j
 @SimpleElasticsearchSearchComponent
 public class QueryExecutorImpl implements QueryExecutor {
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     @Autowired
     private SimpleElasticsearchSearchProperties properties;
@@ -261,6 +262,11 @@ public class QueryExecutorImpl implements QueryExecutor {
             if (pagination.getSort() == null || pagination.getSort().isEmpty()) {
                 throw new QueryException(ErrorCode.SEARCH_AFTER_SORT_REQUIRED, ErrorMessage.SEARCH_AFTER_SORT_REQUIRED);
             }
+
+            // PIT 模式额外校验
+            if (SearchAfterMode.PIT == pagination.getSearchAfterModeEnum()) {
+                validatePitMode(request, pagination);
+            }
         }
 
         // collapse 必须有排序（深度分页需要）
@@ -269,6 +275,59 @@ public class QueryExecutorImpl implements QueryExecutor {
                 throw new QueryException(ErrorCode.COLLAPSE_SORT_REQUIRED, "使用字段折叠（collapse）时必须指定排序字段");
             }
         }
+    }
+
+    /**
+     * 校验 PIT 模式参数
+     */
+    private void validatePitMode(QueryRequest request, PaginationInfo pagination) {
+        // 1. ES 版本校验（不暴露版本号，防止信息泄露）
+        String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+        ClusterInfo clusterInfo = registry.getClusterInfo(datasourceKey);
+        if (clusterInfo == null || clusterInfo.getEffectiveVersion() == null) {
+            throw new QueryException(ErrorCode.PIT_VERSION_NOT_READY, ErrorMessage.PIT_VERSION_NOT_READY);
+        }
+        int major = clusterInfo.getEffectiveVersion().getMajor();
+        int minor = clusterInfo.getEffectiveVersion().getMinor();
+        // PIT 需要 ES 7.10+（minor == -1 表示未解析到 minor，保守拒绝）
+        boolean supported = major > 7 || (major == 7 && minor >= 10);
+        if (!supported) {
+            throw new QueryException(ErrorCode.PIT_NOT_SUPPORTED, ErrorMessage.PIT_NOT_SUPPORTED);
+        }
+
+        // 2. pitKeepAlive 必填
+        if (pagination.getPitKeepAlive() == null || pagination.getPitKeepAlive().isBlank()) {
+            throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_REQUIRED, ErrorMessage.PIT_KEEP_ALIVE_REQUIRED);
+        }
+
+        // 3. pitKeepAlive 不能超过服务端上限
+        String maxKeepAlive = properties.getPit().getMaxKeepAlive();
+        long userMs = parseKeepAliveToMillis(pagination.getPitKeepAlive());
+        long maxMs = parseKeepAliveToMillis(maxKeepAlive);
+        if (userMs > maxMs) {
+            throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_EXCEEDED,
+                    String.format(ErrorMessage.PIT_KEEP_ALIVE_EXCEEDED, pagination.getPitKeepAlive(), maxKeepAlive));
+        }
+    }
+
+    /**
+     * 解析 keepAlive 字符串为毫秒，支持 d/h/m/s 单位
+     * 例如："5m" → 300000，"1h" → 3600000
+     */
+    private long parseKeepAliveToMillis(String keepAlive) {
+        if (keepAlive == null || keepAlive.isBlank()) {
+            throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_REQUIRED, ErrorMessage.PIT_KEEP_ALIVE_REQUIRED);
+        }
+        String s = keepAlive.trim().toLowerCase();
+        try {
+            if (s.endsWith("d")) return Long.parseLong(s.substring(0, s.length() - 1)) * 86400_000L;
+            if (s.endsWith("h")) return Long.parseLong(s.substring(0, s.length() - 1)) * 3600_000L;
+            if (s.endsWith("m")) return Long.parseLong(s.substring(0, s.length() - 1)) * 60_000L;
+            if (s.endsWith("s")) return Long.parseLong(s.substring(0, s.length() - 1)) * 1_000L;
+        } catch (NumberFormatException ignored) {
+        }
+        throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_INVALID_FORMAT,
+                String.format(ErrorMessage.PIT_KEEP_ALIVE_INVALID_FORMAT, keepAlive));
     }
 
     /**
@@ -312,6 +371,14 @@ public class QueryExecutorImpl implements QueryExecutor {
             if (pagination.getSearchAfter() != null) {
                 sourceBuilder.searchAfter(pagination.getSearchAfter().toArray());
             }
+            // PIT 模式：设置 pit（pitId 不为空时复用，为空时由 processResponse 在首次查询后 open）
+            if (SearchAfterMode.PIT == pagination.getSearchAfterModeEnum()
+                    && pagination.getPitId() != null && !pagination.getPitId().isBlank()) {
+                searchRequest.source().pointInTimeBuilder(
+                        new org.elasticsearch.search.builder.PointInTimeBuilder(pagination.getPitId())
+                                .setKeepAlive(pagination.getPitKeepAlive())
+                );
+            }
         }
 
         // 5. 排序
@@ -321,10 +388,17 @@ public class QueryExecutorImpl implements QueryExecutor {
                         SortOrder.DESC : SortOrder.ASC;
                 sourceBuilder.sort(sortField.getField(), order);
             }
-            // search_after 分页时追加 _id 作为 tiebreaker，防止非唯一排序字段导致丢数据
-            // collapse 场景除外：ES 不允许 collapse + search_after 同时使用多个排序字段
             if (pagination.isSearchAfterPagination() && request.getCollapse() == null) {
-                sourceBuilder.sort("_id", SortOrder.ASC);
+                switch (pagination.getSearchAfterModeEnum()) {
+                    case TIEBREAKER:
+                        // 原有行为：追加 _id ASC 保证排序稳定性
+                        sourceBuilder.sort("_id", SortOrder.ASC);
+                        break;
+                    case PIT:
+                    case NONE:
+                        // PIT 由快照保证一致性，NONE 由调用方保证唯一排序，均不追加 _id
+                        break;
+                }
             }
         }
 
@@ -359,7 +433,55 @@ public class QueryExecutorImpl implements QueryExecutor {
     }
 
     /**
-     * ✅ 判断是否需要额外的日期过滤
+     * PIT 首次 open 或复用已有 pitId
+     * 首次请求（pitId 为空）：调用 ES open PIT API，返回新 pitId
+     * 后续翻页（pitId 不为空）：直接复用，keepAlive 已在 buildSearchRequest 中续期
+     */
+    private String openOrRenewPit(QueryRequest request, PaginationInfo pagination, SearchResponse searchResponse) {
+        if (pagination.getPitId() != null && !pagination.getPitId().isBlank()) {
+            // 复用已有 PIT，pitId 不变
+            return pagination.getPitId();
+        }
+        // 首次：open PIT
+        try {
+            String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+            RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+            // 使用低级 API 调用 open PIT（高级 API 在部分版本不支持）
+            String keepAlive = pagination.getPitKeepAlive();
+            org.elasticsearch.client.Request pitRequest = new org.elasticsearch.client.Request(
+                    "POST", "/" + request.getIndex() + "/_pit?keep_alive=" + keepAlive);
+            org.elasticsearch.client.Response pitResponse = client.getLowLevelClient().performRequest(pitRequest);
+            String body = new String(pitResponse.getEntity().getContent().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            // 解析 {"id":"..."}
+            return OBJECT_MAPPER.readTree(body).path("id").asText();
+        } catch (Exception e) {
+            log.warn("Failed to open PIT for index [{}], PIT mode degraded silently: {}", request.getIndex(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 静默关闭 PIT，失败只打 warn 不抛异常（不影响业务响应）
+     */
+    private void closePitQuietly(String pitId, String index) {
+        if (pitId == null || pitId.isBlank()) {
+            return;
+        }
+        try {
+            String datasourceKey = routeResolver.resolveDataSource(index);
+            RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+            org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request("DELETE", "/_pit");
+            closeRequest.setJsonEntity("{\"id\":\"" + pitId + "\"}");
+            client.getLowLevelClient().performRequest(closeRequest);
+            log.debug("PIT closed: index={}", index);
+        } catch (Exception e) {
+            log.warn("Failed to close PIT [{}] for index [{}]: {}", pitId, index, e.getMessage());
+        }
+    }
+
+    /**
+     * 判断是否需要额外的日期过滤
      * 如果时间范围精确到小时/分钟/秒，需要在查询中过滤
      * 如果只是日期范围（00:00:00 ~ 23:59:59），索引路由已经优化了，不需要额外过滤
      */
@@ -450,6 +572,18 @@ public class QueryExecutorImpl implements QueryExecutor {
             if (hits.length > 0 && hits[hits.length - 1].getSortValues() != null
                     && hits[hits.length - 1].getSortValues().length > 0) {
                 paginationResult.setNextSearchAfter(Arrays.asList(hits[hits.length - 1].getSortValues()));
+            }
+        }
+
+        // PIT 生命周期管理
+        if (pagination.isSearchAfterPagination() && SearchAfterMode.PIT == pagination.getSearchAfterModeEnum()) {
+            if (hasMore) {
+                // 有更多数据：open（首次）或复用（后续）PIT，将 pitId 写入响应
+                String pitId = openOrRenewPit(request, pagination, searchResponse);
+                paginationResult.setPitId(pitId);
+            } else {
+                // 最后一页：自动 close PIT，释放 ES 资源
+                closePitQuietly(pagination.getPitId(), request.getIndex());
             }
         }
 

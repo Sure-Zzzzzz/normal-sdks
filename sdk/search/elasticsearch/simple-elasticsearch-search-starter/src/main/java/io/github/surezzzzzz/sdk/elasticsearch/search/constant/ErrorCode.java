@@ -174,6 +174,33 @@ public class ErrorCode {
      */
     public static final String UNSUPPORTED_DOWNGRADE_LEVEL = "SEARCH_DOWNGRADE_003";
 
+    // ========== PIT 相关错误码 ==========
+
+    /**
+     * PIT 模式下 pitKeepAlive 未提供
+     */
+    public static final String PIT_KEEP_ALIVE_REQUIRED = "SEARCH_PIT_001";
+
+    /**
+     * PIT 模式下 pitKeepAlive 超过服务端上限
+     */
+    public static final String PIT_KEEP_ALIVE_EXCEEDED = "SEARCH_PIT_002";
+
+    /**
+     * 当前 ES 版本不支持 PIT
+     */
+    public static final String PIT_NOT_SUPPORTED = "SEARCH_PIT_003";
+
+    /**
+     * ES 版本信息未就绪，无法使用 PIT
+     */
+    public static final String PIT_VERSION_NOT_READY = "SEARCH_PIT_004";
+
+    /**
+     * pitKeepAlive 格式不合法
+     */
+    public static final String PIT_KEEP_ALIVE_INVALID_FORMAT = "SEARCH_PIT_005";
+
     // ========== 通用错误码 ==========
 
     /**

@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsea
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ConfigurationException;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -61,6 +62,11 @@ public class SimpleElasticsearchSearchProperties {
      * 降级配置
      */
     private DowngradeConfig downgrade = new DowngradeConfig();
+
+    /**
+     * PIT 配置
+     */
+    private PitConfig pit = new PitConfig();
 
     @PostConstruct
     public void init() {
@@ -334,7 +340,7 @@ public class SimpleElasticsearchSearchProperties {
          * <p>
          * true: 无论时间范围是否为整天，始终在 DSL 中追加日期字段过滤，防止索引内存在跨天数据时查出脏数据（默认，推荐）
          * false: 整天范围（00:00:00 ~ 23:59:59）时跳过 date range filter，依赖索引路由覆盖，
-         *        仅在确认数据按事件时间严格路由到对应索引时可开启此优化
+         * 仅在确认数据按事件时间严格路由到对应索引时可开启此优化
          * </p>
          */
         private boolean strictDateFilter = true;
@@ -411,5 +417,20 @@ public class SimpleElasticsearchSearchProperties {
          * 当索引数量超过此值时，自动触发降级
          */
         private int autoDowngradeIndexCountThreshold = 200;
+    }
+
+    /**
+     * PIT 配置
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class PitConfig {
+        /**
+         * PIT 保活时间上限（如 "5m"）
+         * 用户传入的 pitKeepAlive 不能超过此值，超过则报错
+         * 防止用户设置过长的 keepAlive 导致 ES 资源长期占用
+         */
+        private String maxKeepAlive = SimpleElasticsearchSearchConstant.DEFAULT_PIT_MAX_KEEP_ALIVE;
     }
 }

@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.support;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import lombok.extern.slf4j.Slf4j;

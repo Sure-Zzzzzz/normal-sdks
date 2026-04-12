@@ -152,6 +152,33 @@ public class ErrorMessage {
      */
     public static final String CONFIG_VALIDATION_FAILED = "Simple Elasticsearch Search 配置验证失败，请检查配置文件";
 
+    // ========== PIT 相关 ==========
+
+    /**
+     * pitKeepAlive 未提供
+     */
+    public static final String PIT_KEEP_ALIVE_REQUIRED = "searchAfterMode=pit 时必须提供 pitKeepAlive，建议值：1m ~ 5m";
+
+    /**
+     * pitKeepAlive 超过服务端上限
+     */
+    public static final String PIT_KEEP_ALIVE_EXCEEDED = "pitKeepAlive [%s] 超过服务端限制，最大允许 %s";
+
+    /**
+     * 当前 ES 版本不支持 PIT
+     */
+    public static final String PIT_NOT_SUPPORTED = "当前 Elasticsearch 不支持 PIT 翻页模式（需要 ES 7.10+），请改用 searchAfterMode=none";
+
+    /**
+     * ES 版本信息未就绪
+     */
+    public static final String PIT_VERSION_NOT_READY = "当前 Elasticsearch 版本信息未就绪，PIT 翻页模式暂不可用，请稍后重试或改用 searchAfterMode=none";
+
+    /**
+     * pitKeepAlive 格式不合法
+     */
+    public static final String PIT_KEEP_ALIVE_INVALID_FORMAT = "pitKeepAlive 格式不合法，支持格式：1d / 1h / 5m / 30s，当前值：%s";
+
     // ========== 降级相关 ==========
 
     /**

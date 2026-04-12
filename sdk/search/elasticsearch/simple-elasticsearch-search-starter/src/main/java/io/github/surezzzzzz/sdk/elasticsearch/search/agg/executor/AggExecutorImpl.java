@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.executor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.RouteResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.AggregationDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;

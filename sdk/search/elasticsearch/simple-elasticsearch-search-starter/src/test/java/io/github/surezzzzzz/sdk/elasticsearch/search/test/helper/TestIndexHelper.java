@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.helper;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.registry.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RequestOptions;

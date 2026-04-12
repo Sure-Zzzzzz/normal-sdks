@@ -13,7 +13,10 @@
 - **灵活查询**：支持多种查询操作符和复杂的逻辑组合
 - **聚合分析**：支持指标聚合和桶聚合，支持嵌套聚合
 - **敏感字段保护**：支持字段禁止访问和脱敏
-- **深分页支持**：自动切换 offset 和 search_after 分页策略
+- **深分页支持**：自动切换 offset 和 search_after 分页策略，支持多种翻页模式（v1.3.0+）
+  - `tiebreaker`（默认）：自动追加 `_id ASC` 保证排序稳定
+  - `pit`：使用 Point In Time 快照翻页，不追加 `_id`，适合内存敏感场景（ES 7.10+）
+  - `none`：排序字段本身唯一时使用，不追加任何 tiebreaker
 - **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
 - **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
 - **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
@@ -30,7 +33,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.2.1'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.3.0'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -126,6 +129,10 @@ io:
               base-path: "/api"                   # API 基础路径
               include-score: false                # 是否返回 _score（评分）
               include-raw-response: false         # 是否返回原始聚合响应（仅 ES 6.x 聚合场景）
+
+            # PIT 配置（v1.3.0+）
+            pit:
+              max-keep-alive: 5m                  # PIT 保活时间上限，用户传入值超过此值时报 400
 ```
 
 #### 多数据源配置（支持版本兼容）
@@ -956,20 +963,60 @@ io:
 
 ### 深分页优化
 
-当 offset 超过配置的最大值时，自动切换到 search_after 分页：
+当 offset 超过配置的最大值时，自动切换到 search_after 分页。
+
+#### tiebreaker 模式（默认）
+
+自动追加 `_id ASC` 保证排序稳定，兼容旧版本行为：
 
 ```json
 {
   "pagination": {
     "type": "search_after",
     "size": 20,
-    "searchAfter": [1640000000000, "doc_id_123"],
-    "sort": [
-      {
-        "field": "createTime",
-        "order": "desc"
-      }
-    ]
+    "searchAfter": [1640000000000],
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+#### pit 模式（内存敏感场景，ES 7.10+）
+
+不追加 `_id`，使用 Point In Time 快照保证翻页一致性。PIT 生命周期由框架自动管理，第一页不传 `pitId`，后续翻页将响应中的 `pitId` 带回即可：
+
+```json
+{
+  "pagination": {
+    "type": "search_after",
+    "searchAfterMode": "pit",
+    "pitKeepAlive": "1m",
+    "pitId": "46ToAwMD...",
+    "searchAfter": [1640000000000],
+    "size": 20,
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+服务端可配置 PIT 保活时间上限（默认 5m），用户传入值超过上限时报 400：
+
+```yaml
+search:
+  pit:
+    max-keep-alive: 5m
+```
+
+#### none 模式
+
+排序字段本身已唯一（如按唯一 ID 排序）时使用，不追加任何 tiebreaker：
+
+```json
+{
+  "pagination": {
+    "type": "search_after",
+    "searchAfterMode": "none",
+    "size": 20,
+    "sort": [{"field": "orderId", "order": "asc"}]
   }
 }
 ```

@@ -444,6 +444,13 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String DATE_INTERVAL_Y = "y";
 
+    // ========== PIT 相关 ==========
+
+    /**
+     * PIT 保活时间默认上限
+     */
+    public static final String DEFAULT_PIT_MAX_KEEP_ALIVE = "5m";
+
     private SimpleElasticsearchSearchConstant() {
         // 私有构造函数，防止实例化
     }
