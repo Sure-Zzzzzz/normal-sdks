@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.query.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.PaginationType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SearchAfterMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -48,6 +49,27 @@ public class PaginationInfo {
     private List<SortField> sort;
 
     /**
+     * search_after 翻页模式（仅 search_after 分页生效）
+     * tiebreaker（默认）：自动追加 _id ASC 作为 tiebreaker，兼容 v1.2.1 行为
+     * pit             ：使用 Point In Time 快照翻页，需要 ES 7.10+，不追加 _id
+     * none            ：不追加任何 tiebreaker，由调用方自己保证排序字段唯一性
+     */
+    private String searchAfterMode;
+
+    /**
+     * PIT ID（searchAfterMode=pit 时使用）
+     * 第一次请求不传，库自动 open PIT 并在响应中返回；后续翻页将响应中的 pitId 带回即可
+     */
+    private String pitId;
+
+    /**
+     * PIT 保活时间（searchAfterMode=pit 时必填，如 "1m"、"5m"）
+     * 含义：两次翻页之间的最长空闲时间，每次查询自动续期
+     * 不能超过服务端 pit.max-keep-alive 配置，超过则报错
+     */
+    private String pitKeepAlive;
+
+    /**
      * 获取分页类型枚举
      */
     @JsonIgnore
@@ -69,6 +91,14 @@ public class PaginationInfo {
     @JsonIgnore
     public boolean isSearchAfterPagination() {
         return PaginationType.SEARCH_AFTER == getTypeEnum();
+    }
+
+    /**
+     * 获取 search_after 翻页模式枚举，默认 TIEBREAKER
+     */
+    @JsonIgnore
+    public SearchAfterMode getSearchAfterModeEnum() {
+        return SearchAfterMode.fromCode(searchAfterMode);
     }
 
     /**

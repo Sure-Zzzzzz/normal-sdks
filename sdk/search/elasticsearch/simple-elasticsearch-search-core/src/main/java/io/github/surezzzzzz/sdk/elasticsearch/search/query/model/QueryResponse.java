@@ -69,9 +69,15 @@ public class QueryResponse {
         private Boolean hasMore;
 
         /**
-         * 下一次 search_after 参数
+         * 下一次 search_after 参数（hasMore=true 时返回）
          */
         private List<Object> nextSearchAfter;
+
+        /**
+         * PIT ID（searchAfterMode=pit 且 hasMore=true 时返回）
+         * 调用方需将此值带入下一次请求的 pagination.pitId
+         */
+        private String pitId;
     }
 
     /**

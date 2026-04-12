@@ -2,23 +2,23 @@
 
 ## 概述
 
-`simple-elasticsearch-search-core` 是 Elasticsearch 搜索 SDK 的核心包，提供拦截器接口、数据模型和常量定义。
+`simple-elasticsearch-search-core` 是 Elasticsearch 搜索 SDK 的核心包，提供数据模型、枚举常量和事件定义。
 
-该包不包含任何实现逻辑，仅定义接口和数据结构，用于解耦核心定义与具体实现。
+该包不包含任何实现逻辑，仅定义数据结构，用于解耦核心定义与具体实现。
 
 ## 版本
 
-- 当前版本：`1.0.0`
-- 依赖方：`simple-elasticsearch-search-starter:1.2.0+`
+- 当前版本：`1.0.2`
+- 依赖方：`simple-elasticsearch-search-starter:1.3.0+`
 
 ## 包结构
 
 ```
 io.github.surezzzzzz.sdk.elasticsearch.search
 ├── core
-│   ├── interceptor          # 拦截器接口
-│   │   ├── QueryExecutionInterceptor.java
-│   │   └── AggExecutionInterceptor.java
+│   ├── event                # Spring 事件定义（v1.0.1+）
+│   │   ├── EsQueryEvent.java
+│   │   └── EsAggEvent.java
 │   └── model                # 执行上下文
 │       ├── QueryExecutionContext.java
 │       └── AggExecutionContext.java
@@ -36,81 +36,46 @@ io.github.surezzzzzz.sdk.elasticsearch.search
 └── constant                 # 常量枚举
     ├── QueryOperator.java
     ├── PaginationType.java
-    └── AggType.java
+    ├── AggType.java
+    └── SearchAfterMode.java  # v1.0.2+
 ```
 
-## 核心接口
+## 核心模型
 
-### QueryExecutionInterceptor
+### PaginationInfo
 
-查询执行拦截器，在查询执行后触发。
+分页信息，支持 `offset` 和 `search_after` 两种分页类型。
 
-```java
-public interface QueryExecutionInterceptor {
-    void afterQueryExecuted(QueryRequest request, QueryResponse response, QueryExecutionContext context);
-}
-```
+`search_after` 模式下可通过 `searchAfterMode` 控制翻页策略（v1.0.2+）：
 
-### AggExecutionInterceptor
+| `searchAfterMode` | 说明 |
+|-------------------|------|
+| `tiebreaker`（默认） | 自动追加 `_id ASC` 保证排序稳定，兼容旧行为 |
+| `pit` | 使用 Point In Time 快照翻页，需要 ES 7.10+，不追加 `_id` |
+| `none` | 不追加任何 tiebreaker，由调用方保证排序字段唯一性 |
 
-聚合执行拦截器，在聚合执行后触发。
+### QueryResponse.PaginationResult
 
-```java
-public interface AggExecutionInterceptor {
-    void afterAggExecuted(AggRequest request, AggResponse response, AggExecutionContext context);
-}
-```
-
-## 使用场景
-
-### 1. 实现审计监听器
-
-```java
-@Component
-public class ElasticsearchAuditInterceptor implements QueryExecutionInterceptor {
-
-    @Override
-    public void afterQueryExecuted(QueryRequest request, QueryResponse response, QueryExecutionContext context) {
-        // 发布审计事件
-        eventPublisher.publishEvent(new ElasticsearchQueryEvent(
-            request.getIndex(),
-            context.getActualIndices(),
-            response.getTotal()
-        ));
-    }
-}
-```
-
-### 2. 实现性能监控
-
-```java
-@Component
-public class PerformanceMonitorInterceptor implements QueryExecutionInterceptor {
-
-    @Override
-    public void afterQueryExecuted(QueryRequest request, QueryResponse response, QueryExecutionContext context) {
-        // 记录查询性能指标
-        metrics.record("es.query.took", response.getTook());
-        metrics.record("es.query.hits", response.getTotal());
-    }
-}
-```
+查询响应中的分页结果，`pit` 模式下 `hasMore=true` 时会返回 `pitId`，调用方需将其带入下一次请求。
 
 ## 依赖
 
 该包仅依赖：
 - `lombok`（编译时）
 - `spring-boot-starter-web`（compileOnly）
+- `spring-context`（compileOnly）
 
-无其他运行时依赖，保持轻量。
+无运行时依赖，保持轻量。
 
-## 版本兼容性
+## 版本历史
 
 - `1.0.0`：初始版本，定义拦截器接口和数据模型
-- 向后兼容：所有 import 路径保持不变，业务代码无需修改
+- `1.0.1`：架构调整，改为 Spring 事件模式，新增 `EsQueryEvent` / `EsAggEvent`
+- `1.0.2`：新增 `SearchAfterMode` 枚举，`PaginationInfo` 支持 PIT 翻页模式
+
 
 ## 注意事项
 
 1. 该包不应被业务直接依赖，由 `simple-elasticsearch-search-starter` 传递依赖
-2. 拦截器实现类应注册为 Spring Bean，会被自动注入到 Executor
-3. 拦截器执行失败不会影响主流程，仅记录警告日志
+2. 事件监听使用 Spring `@EventListener` 注解
+
