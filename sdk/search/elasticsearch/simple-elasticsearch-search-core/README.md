@@ -8,7 +8,7 @@
 
 ## 版本
 
-- 当前版本：`1.0.2`
+- 当前版本：`1.0.3`
 - 依赖方：`simple-elasticsearch-search-starter:1.3.0+`
 
 ## 包结构
@@ -72,6 +72,7 @@ io.github.surezzzzzz.sdk.elasticsearch.search
 - `1.0.0`：初始版本，定义拦截器接口和数据模型
 - `1.0.1`：架构调整，改为 Spring 事件模式，新增 `EsQueryEvent` / `EsAggEvent`
 - `1.0.2`：新增 `SearchAfterMode` 枚举，`PaginationInfo` 支持 PIT 翻页模式
+- `1.0.3`：`SearchAfterMode` 枚举规范化，字段名改为 `code`/`description`，新增 `isValid()`/`getAllCodes()`，`fromString` 改为 `fromCode`
 
 
 ## 注意事项
