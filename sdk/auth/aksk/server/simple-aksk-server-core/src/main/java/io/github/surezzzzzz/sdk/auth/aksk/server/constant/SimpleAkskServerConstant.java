@@ -31,6 +31,11 @@ public final class SimpleAkskServerConstant {
      */
     public static final String DEFAULT_JWT_KEY_ID = "sure-auth-aksk-2026";
 
+    /**
+     * 默认 Security Context 最大大小（字节）
+     */
+    public static final int DEFAULT_SECURITY_CONTEXT_MAX_SIZE = 4096;
+
     // ==================== Redis相关常量 ====================
 
     /**
