@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AKSK详情</title>
+    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
+</head>
+<body>
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>AKSK详情</h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                        <tr>
+                            <th width="30%">Client ID</th>
+                            <td><code th:text="${client.clientId}"></code></td>
+                        </tr>
+                        <tr>
+                            <th>名称</th>
+                            <td th:text="${client.clientName}"></td>
+                        </tr>
+                        <tr>
+                            <th>类型</th>
+                            <td>
+                                <span th:if="${client.clientType == 1}" class="badge bg-primary">平台级</span>
+                                <span th:if="${client.clientType == 2}" class="badge bg-info">用户级</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${client.ownerUserId != null}">
+                            <th>所属用户ID</th>
+                            <td th:text="${client.ownerUserId}"></td>
+                        </tr>
+                        <tr>
+                            <th>API 权限范围</th>
+                            <td>
+                                <div th:if="${client.scopes != null and !client.scopes.isEmpty()}">
+                                    <ul class="list-unstyled mb-0">
+                                        <li th:each="scope : ${client.scopes}">
+                                            <code th:text="${scope}"></code>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <span th:if="${client.scopes == null or client.scopes.isEmpty()}"
+                                      class="text-muted">未设置（默认：read,write）</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Client Secret</th>
+                            <td>
+                                <span class="text-muted">****** (已加密，无法查看)</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+
+                    <div class="alert alert-info" role="alert">
+                        <strong>提示：</strong>Client Secret仅在创建时显示一次，后续无法查看。
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-warning"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editScopesModal">
+                            编辑权限范围
+                        </button>
+                        <a href="/admin" class="btn btn-primary">返回管理页面</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑权限范围 Modal -->
+<div class="modal fade" id="editScopesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑 API 权限范围</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="editScopes" class="form-label">API 权限范围</label>
+                    <textarea class="form-control" id="editScopes" rows="5"
+                              th:text="${#strings.listJoin(client.scopes, ',')}"></textarea>
+                    <div class="form-text">
+                        多个权限用逗号分隔，支持通配符 (*)
+                    </div>
+                    <div class="form-text text-danger" id="scopeError" style="display:none;">
+                        ⚠️ 检测到回车换行，请使用逗号分隔
+                    </div>
+                </div>
+
+                <div class="alert alert-warning" role="alert">
+                    <strong>⚠️ 注意：</strong>修改后，下次换取 Token 时生效（最多 1 小时延迟）
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateScopes()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/admin/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 统一处理 session 失效，服务重启后自动跳转登录页
+    (function() {
+        const _fetch = window.fetch;
+        window.fetch = function() {
+            return _fetch.apply(this, arguments).then(function(response) {
+                if (response.status === 401) {
+                    window.location.href = "/admin/login";
+                }
+                return response;
+            });
+        };
+    })();
+</script>
+<script th:inline="javascript">
+    /*<![CDATA[*/
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+    const clientId = /*[[${client.clientId}]]*/ '';
+
+    // 监听 textarea 的键盘事件，阻止回车
+    const scopesTextarea = document.getElementById('editScopes');
+    const scopeError = document.getElementById('scopeError');
+
+    scopesTextarea.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            scopeError.style.display = 'block';
+            scopesTextarea.classList.add('is-invalid');
+            setTimeout(() => {
+                scopeError.style.display = 'none';
+                scopesTextarea.classList.remove('is-invalid');
+            }, 2000);
+        }
+    });
+
+    // 监听粘贴事件，自动替换换行符为逗号
+    scopesTextarea.addEventListener('paste', function(e) {
+        e.preventDefault();
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+
+        // 检测是否包含换行符
+        if (pastedText.includes('\n') || pastedText.includes('\r')) {
+            // 替换所有换行符为逗号
+            const cleanedText = pastedText
+                .replace(/\r\n/g, ',')
+                .replace(/\n/g, ',')
+                .replace(/\r/g, ',')
+                .replace(/,+/g, ',')  // 合并多个连续逗号
+                .replace(/^,|,$/g, '');  // 移除首尾逗号
+
+            // 插入清理后的文本
+            const start = this.selectionStart;
+            const end = this.selectionEnd;
+            const currentValue = this.value;
+            this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
+
+            // 显示成功提示
+            scopeError.textContent = '✓ 已自动将换行符替换为逗号';
+            scopeError.classList.remove('text-danger');
+            scopeError.classList.add('text-success');
+            scopeError.style.display = 'block';
+            setTimeout(() => {
+                scopeError.style.display = 'none';
+                scopeError.classList.remove('text-success');
+                scopeError.classList.add('text-danger');
+                scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
+            }, 2000);
+        } else {
+            // 没有换行符，正常粘贴
+            document.execCommand('insertText', false, pastedText);
+        }
+    });
+
+    function updateScopes() {
+        const scopesText = document.getElementById('editScopes').value.trim();
+
+        // 后端验证：检查是否包含换行符
+        if (scopesText.match(/[\r\n]+/)) {
+            alert('权限范围不允许包含换行符，请使用逗号分隔');
+            return;
+        }
+
+        // 解析 scopes（逗号分隔）
+        const scopes = scopesText
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
+
+        if (scopes.length === 0) {
+            alert('请至少输入一个权限范围');
+            return;
+        }
+
+        // 发送 PATCH 请求
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                [csrfHeader]: csrfToken
+            },
+            body: JSON.stringify({ scopes: scopes })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 关闭modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                // 刷新页面显示最新数据
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            alert('更新失败：' + error);
+        });
+    }
+    /*]]>*/
+</script>
+</body>
+</html>
