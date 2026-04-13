@@ -116,12 +116,9 @@ public class SimpleAkskSecurityContextHelper {
     }
 
     /**
-     * 获取数组字段
-     *
-     * <p>自动提取数组字段（如 roles0, roles1 → ["admin", "operator"]）
-     *
-     * @param prefix 数组字段前缀（如 "roles"）
-     * @return 数组值列表，如果不存在则返回空列表
+     * 修复后的 getList：同时支持两种存储格式
+     * 1. 直接 key = prefix（value 为空格分隔字符串）→ 优先匹配（scope 场景）
+     * 2. indexed 格式 prefix0、prefix1...（roles 等原有场景）
      */
     public static List<String> getList(String prefix) {
         Map<String, String> context = getAll();
@@ -129,6 +126,20 @@ public class SimpleAkskSecurityContextHelper {
             return Collections.emptyList();
         }
 
+        // 【新增】优先处理直接 key = prefix 的情况（scope 的实际存储方式）
+        String directValue = context.get(prefix);
+        if (directValue != null && !directValue.trim().isEmpty()) {
+            List<String> result = new ArrayList<>();
+            for (String item : directValue.trim().split("\\s+")) {
+                String trimmed = item.trim();
+                if (!trimmed.isEmpty()) {
+                    result.add(trimmed);
+                }
+            }
+            return result;
+        }
+
+        // 【兼容】原有 indexed keys 逻辑（roles0、roles1...）
         List<String> result = new ArrayList<>();
         int index = 0;
         while (true) {
