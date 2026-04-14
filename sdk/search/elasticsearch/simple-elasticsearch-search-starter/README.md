@@ -13,7 +13,7 @@
 - **灵活查询**：支持多种查询操作符和复杂的逻辑组合
 - **聚合分析**：支持指标聚合和桶聚合，支持嵌套聚合
 - **敏感字段保护**：支持字段禁止访问和脱敏
-- **深分页支持**：自动切换 offset 和 search_after 分页策略，支持多种翻页模式（v1.3.0+）
+- **深分页支持**：自动切换 offset 和 search_after 分页策略，支持多种翻页模式（v1.3.0+），策略可扩展（v1.3.1+）
   - `tiebreaker`（默认）：自动追加 `_id ASC` 保证排序稳定
   - `pit`：使用 Point In Time 快照翻页，不追加 `_id`，适合内存敏感场景（ES 7.10+）
   - `none`：排序字段本身唯一时使用，不追加任何 tiebreaker
@@ -33,7 +33,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.3.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.3.1'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"

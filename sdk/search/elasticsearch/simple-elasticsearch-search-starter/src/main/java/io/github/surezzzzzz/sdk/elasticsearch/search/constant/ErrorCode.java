@@ -201,6 +201,18 @@ public class ErrorCode {
      */
     public static final String PIT_KEEP_ALIVE_INVALID_FORMAT = "SEARCH_PIT_005";
 
+    // ========== 翻页策略相关错误码 ==========
+
+    /**
+     * 翻页策略 key 已存在，不允许覆盖
+     */
+    public static final String PAGINATION_STRATEGY_DUPLICATE = "SEARCH_PAGINATION_001";
+
+    /**
+     * 不支持的翻页策略
+     */
+    public static final String PAGINATION_STRATEGY_NOT_FOUND = "SEARCH_PAGINATION_002";
+
     // ========== 通用错误码 ==========
 
     /**

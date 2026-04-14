@@ -831,6 +831,7 @@ class SearchEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
                 .andExpect(jsonPath("$.data.pagination.nextSearchAfter").isArray())
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter.length()").value(2)) // tiebreaker 模式：age + _id
                 .andExpect(jsonPath("$.data.pagination.pitId").doesNotExist())
                 .andDo(result -> log.info("✓ tiebreaker 第一页成功"))
                 .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
@@ -888,6 +889,7 @@ class SearchEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
                 .andExpect(jsonPath("$.data.pagination.nextSearchAfter").isArray())
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter.length()").value(1)) // none 模式：只有 name，不追加 _id
                 .andDo(result -> log.info("✓ none 模式第一页成功"))
                 .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
 

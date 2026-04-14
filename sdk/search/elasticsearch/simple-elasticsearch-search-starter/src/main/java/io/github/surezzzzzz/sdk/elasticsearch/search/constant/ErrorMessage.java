@@ -179,6 +179,18 @@ public class ErrorMessage {
      */
     public static final String PIT_KEEP_ALIVE_INVALID_FORMAT = "pitKeepAlive 格式不合法，支持格式：1d / 1h / 5m / 30s，当前值：%s";
 
+    // ========== 翻页策略相关 ==========
+
+    /**
+     * 翻页策略 key 已存在
+     */
+    public static final String PAGINATION_STRATEGY_DUPLICATE = "翻页策略 [%s] 已存在，不允许覆盖内置策略";
+
+    /**
+     * 不支持的翻页策略
+     */
+    public static final String PAGINATION_STRATEGY_NOT_FOUND = "不支持的翻页策略: %s";
+
     // ========== 降级相关 ==========
 
     /**
