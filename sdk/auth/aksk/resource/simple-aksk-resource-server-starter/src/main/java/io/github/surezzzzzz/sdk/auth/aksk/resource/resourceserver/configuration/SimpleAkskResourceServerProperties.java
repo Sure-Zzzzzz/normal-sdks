@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.VerificationMode;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -11,7 +12,6 @@ import java.util.List;
  * Simple AKSK Resource Server Configuration Properties
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
 @Data
 @ConfigurationProperties(prefix = SimpleAkskResourceServerConstant.CONFIG_PREFIX)
@@ -23,69 +23,72 @@ public class SimpleAkskResourceServerProperties {
     private boolean enabled = true;
 
     /**
-     * JWT 配置
+     * Token 验证模式
+     * JWT（默认）：本地验签，性能最好，不支持即时撤销感知
+     * INTROSPECT：调 introspect 端点验证，支持即时撤销感知，每次请求多一次 HTTP 调用
+     */
+    private VerificationMode verificationMode = VerificationMode.JWT;
+
+    /**
+     * JWT 配置（verificationMode=JWT 时使用）
      */
     private Jwt jwt = new Jwt();
+
+    /**
+     * Introspect 配置（verificationMode=INTROSPECT 时使用）
+     */
+    private Introspect introspect = new Introspect();
 
     /**
      * 安全配置
      */
     private Security security = new Security();
 
-    /**
-     * JWT 配置
-     */
     @Data
     public static class Jwt {
 
         /**
          * OAuth2 授权服务器的 Issuer URI（推荐方式）
-         * <p>
-         * 配置后，Resource Server 会自动从 {issuer-uri}/.well-known/oauth-authorization-server
-         * 获取授权服务器元数据，并从 JWKS 端点获取公钥
-         * <p>
-         * 示例：http://localhost:8080
          */
         private String issuerUri;
 
         /**
-         * JWT 公钥（PEM 格式字符串）
-         * <p>
-         * 仅在未配置 issuer-uri 时使用
-         * <p>
-         * 示例：
-         * <pre>
-         * -----BEGIN PUBLIC KEY-----
-         * MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
-         * -----END PUBLIC KEY-----
-         * </pre>
+         * JWT 公钥（PEM 格式字符串），仅在未配置 issuer-uri 时使用
          */
         private String publicKey;
 
         /**
-         * JWT 公钥文件路径（支持 classpath: 和 file: 前缀）
-         * <p>
-         * 仅在未配置 issuer-uri 时使用
-         * <p>
-         * 示例：
-         * <ul>
-         *   <li>classpath:jwt-public-key.pem</li>
-         *   <li>file:/etc/aksk/jwt-public-key.pem</li>
-         * </ul>
+         * JWT 公钥文件路径（支持 classpath: 和 file: 前缀），仅在未配置 issuer-uri 时使用
          */
         private String publicKeyLocation;
     }
 
-    /**
-     * 安全配置
-     */
+    @Data
+    public static class Introspect {
+
+        /**
+         * introspect 端点地址
+         * 示例：http://localhost:8080/oauth2/introspect
+         */
+        private String endpoint;
+
+        /**
+         * 调 introspect 用的 clientId
+         * 留空则不带认证（仅适用于 server 端 require-authentication=false 的场景）
+         */
+        private String clientId;
+
+        /**
+         * 调 introspect 用的 clientSecret
+         */
+        private String clientSecret;
+    }
+
     @Data
     public static class Security {
 
         /**
-         * 需要保护的路径（需要 JWT 认证）
-         * <p>
-         * 默认：/api/**
+         * 需要保护的路径（需要认证），默认：/api/**
          */
         private List<String> protectedPaths = new ArrayList<String>() {{
             add("/api/**");
@@ -93,12 +96,6 @@ public class SimpleAkskResourceServerProperties {
 
         /**
          * 白名单路径（不需要认证）
-         * <p>
-         * 示例：
-         * <ul>
-         *   <li>/api/health</li>
-         *   <li>/api/public/**</li>
-         * </ul>
          */
         private List<String> permitAllPaths = new ArrayList<>();
     }

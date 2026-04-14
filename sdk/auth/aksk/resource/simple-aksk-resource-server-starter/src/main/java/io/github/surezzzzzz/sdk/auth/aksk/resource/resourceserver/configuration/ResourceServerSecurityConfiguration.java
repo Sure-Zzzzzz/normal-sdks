@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.VerificationMode;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskIntrospectionAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskJwtAuthenticationConverter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,8 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtDecoders;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.introspection.NimbusOpaqueTokenIntrospector;
+import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.util.StreamUtils;
 import org.springframework.util.StringUtils;
@@ -28,17 +32,13 @@ import java.util.List;
 /**
  * Resource Server Security Configuration
  *
- * <p>配置 JWT 验证和路径安全规则。
- *
- * <p>功能：
+ * <p>支持两种 Token 验证模式：
  * <ul>
- *   <li>JWT Token 验证（使用公钥）</li>
- *   <li>路径安全规则（保护路径 + 白名单路径）</li>
- *   <li>自定义 JWT 转换器（提取 claims 到上下文）</li>
+ *   <li>JWT（默认）：本地验签，性能最好，不支持即时撤销感知</li>
+ *   <li>INTROSPECT：调 /oauth2/introspect 端点验证，支持即时撤销感知</li>
  * </ul>
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
 @Slf4j
 @Configuration
@@ -50,131 +50,128 @@ public class ResourceServerSecurityConfiguration {
     private final ResourceLoader resourceLoader;
     private final ApplicationEventPublisher eventPublisher;
 
-    /**
-     * 配置安全过滤链
-     *
-     * @param http HttpSecurity
-     * @return SecurityFilterChain
-     * @throws Exception 配置异常
-     */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         List<String> protectedPaths = properties.getSecurity().getProtectedPaths();
         List<String> permitAllPaths = properties.getSecurity().getPermitAllPaths();
+        VerificationMode mode = properties.getVerificationMode();
 
-        log.info("Configuring security filter chain");
+        log.info("Configuring security filter chain, verificationMode={}", mode);
         log.info("Protected paths: {}", protectedPaths);
         log.info("Permit all paths: {}", permitAllPaths);
 
         http
                 .authorizeRequests(authorize -> {
-                    // 白名单路径：不需要认证
                     if (!permitAllPaths.isEmpty()) {
                         authorize.antMatchers(permitAllPaths.toArray(new String[0])).permitAll();
                     }
-
-                    // 保护路径：需要 JWT 认证
                     if (!protectedPaths.isEmpty()) {
                         authorize.antMatchers(protectedPaths.toArray(new String[0])).authenticated();
                     }
-
-                    // 其他路径：默认放行
                     authorize.anyRequest().permitAll();
                 })
-                .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt
-                                .jwtAuthenticationConverter(new AkskJwtAuthenticationConverter(eventPublisher))
-                        )
-                )
                 .csrf().disable();
+
+        if (VerificationMode.INTROSPECT.equals(mode)) {
+            // Introspect 模式
+            http.oauth2ResourceServer(oauth2 -> oauth2
+                    .opaqueToken(opaque -> opaque
+                            .introspector(opaqueTokenIntrospector())
+                    )
+            );
+        } else {
+            // JWT 模式（默认）
+            http.oauth2ResourceServer(oauth2 -> oauth2
+                    .jwt(jwt -> jwt
+                            .jwtAuthenticationConverter(new AkskJwtAuthenticationConverter(eventPublisher))
+                    )
+            );
+        }
 
         log.info("Security filter chain configured successfully");
         return http.build();
     }
 
-    /**
-     * 配置 JWT Decoder
-     * <p>
-     * 优先级：
-     * <ol>
-     *   <li>issuer-uri: 从授权服务器自动获取 JWKS（推荐）</li>
-     *   <li>public-key: 手动配置公钥字符串</li>
-     *   <li>public-key-location: 从文件加载公钥</li>
-     * </ol>
-     *
-     * @return JwtDecoder
-     * @throws Exception 配置异常
-     */
     @Bean
     public JwtDecoder jwtDecoder() throws Exception {
-        String issuerUri = properties.getJwt().getIssuerUri();
+        // introspect 模式下不需要 JwtDecoder，但 bean 仍需存在避免自动配置报错
+        if (VerificationMode.INTROSPECT.equals(properties.getVerificationMode())) {
+            log.info("Introspect mode enabled, JwtDecoder not used for token verification");
+        }
 
-        // 方式1：使用 issuer-uri（推荐）
+        String issuerUri = properties.getJwt().getIssuerUri();
         if (StringUtils.hasText(issuerUri)) {
             log.info("Configuring JWT Decoder with issuer-uri: {}", issuerUri);
-            log.info("Will fetch JWKS from: {}/oauth2/jwks", issuerUri);
             return JwtDecoders.fromIssuerLocation(issuerUri);
         }
 
-        // 方式2：手动配置公钥
         log.info("Configuring JWT Decoder with manual public key");
         RSAPublicKey publicKey = loadPublicKey();
-        log.info("JWT Decoder configured with RSA public key");
         return NimbusJwtDecoder.withPublicKey(publicKey).build();
     }
 
     /**
-     * 加载 RSA 公钥
-     *
-     * @return RSAPublicKey
-     * @throws Exception 加载异常
+     * Introspect 模式下的 OpaqueTokenIntrospector
      */
+    private OpaqueTokenIntrospector opaqueTokenIntrospector() {
+        SimpleAkskResourceServerProperties.Introspect config = properties.getIntrospect();
+        String endpoint = config.getEndpoint();
+        String clientId = config.getClientId();
+        String clientSecret = config.getClientSecret();
+
+        if (!StringUtils.hasText(endpoint)) {
+            throw new IllegalArgumentException(
+                    "introspect.endpoint must be configured when verificationMode=INTROSPECT");
+        }
+
+        OpaqueTokenIntrospector delegate;
+        if (StringUtils.hasText(clientId) && StringUtils.hasText(clientSecret)) {
+            log.info("Configuring OpaqueTokenIntrospector with credentials: endpoint={}", endpoint);
+            delegate = new NimbusOpaqueTokenIntrospector(endpoint, clientId, clientSecret);
+        } else {
+            log.warn("Configuring OpaqueTokenIntrospector without credentials: endpoint={}", endpoint);
+            log.warn("Make sure server introspect.require-authentication=false is configured");
+            // 不带认证，使用自定义 RestTemplate
+            org.springframework.web.client.RestTemplate restTemplate =
+                    new org.springframework.web.client.RestTemplate();
+            delegate = new NimbusOpaqueTokenIntrospector(endpoint, restTemplate);
+        }
+
+        // 用 AkskIntrospectionAuthenticationConverter 包装，注入上下文并发布事件
+        return new AkskIntrospectionAuthenticationConverter(delegate, eventPublisher);
+    }
+
     private RSAPublicKey loadPublicKey() throws Exception {
         String publicKeyString = properties.getJwt().getPublicKey();
         String publicKeyLocation = properties.getJwt().getPublicKeyLocation();
 
-        // 方式1：从配置字符串加载
         if (StringUtils.hasText(publicKeyString)) {
             log.info("Loading public key from configuration string");
             return parsePublicKey(publicKeyString);
         }
 
-        // 方式2：从文件加载
         if (StringUtils.hasText(publicKeyLocation)) {
             log.info("Loading public key from location: {}", publicKeyLocation);
             Resource resource = resourceLoader.getResource(publicKeyLocation);
             if (!resource.exists()) {
-                throw new IllegalArgumentException(SimpleAkskResourceServerConstant.ERROR_PUBLIC_KEY_FILE_NOT_FOUND + publicKeyLocation);
+                throw new IllegalArgumentException(
+                        SimpleAkskResourceServerConstant.ERROR_PUBLIC_KEY_FILE_NOT_FOUND + publicKeyLocation);
             }
-
             try (InputStream inputStream = resource.getInputStream()) {
                 byte[] keyBytes = StreamUtils.copyToByteArray(inputStream);
-                String keyContent = new String(keyBytes);
-                return parsePublicKey(keyContent);
+                return parsePublicKey(new String(keyBytes));
             }
         }
 
         throw new IllegalArgumentException(SimpleAkskResourceServerConstant.ERROR_PUBLIC_KEY_NOT_CONFIGURED);
     }
 
-    /**
-     * 解析 PEM 格式的公钥字符串
-     *
-     * @param keyContent PEM 格式的公钥字符串
-     * @return RSAPublicKey
-     * @throws Exception 解析异常
-     */
     private RSAPublicKey parsePublicKey(String keyContent) throws Exception {
-        // 移除 PEM 头尾和换行符
         String publicKeyPEM = keyContent
                 .replace(SimpleAkskResourceServerConstant.PEM_PUBLIC_KEY_HEADER, "")
                 .replace(SimpleAkskResourceServerConstant.PEM_PUBLIC_KEY_FOOTER, "")
                 .replaceAll("\\s", "");
-
-        // Base64 解码
         byte[] encoded = Base64.getDecoder().decode(publicKeyPEM);
-
-        // 生成公钥
         KeyFactory keyFactory = KeyFactory.getInstance(SimpleAkskResourceServerConstant.ALGORITHM_RSA);
         X509EncodedKeySpec keySpec = new X509EncodedKeySpec(encoded);
         return (RSAPublicKey) keyFactory.generatePublic(keySpec);

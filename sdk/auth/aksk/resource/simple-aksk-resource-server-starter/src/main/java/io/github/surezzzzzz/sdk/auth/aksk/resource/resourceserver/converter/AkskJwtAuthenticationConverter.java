@@ -106,27 +106,22 @@ public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
         SimpleAkskResourceConstant.JWT_CLAIM_TO_FIELD.forEach((jwtClaimName, fieldName) -> {
             Object claimValue = jwt.getClaim(jwtClaimName);
             if (claimValue != null) {
-                context.put(fieldName, claimValue.toString());
+                context.put(fieldName, claimValueToString(claimValue));
                 log.debug("Extracted JWT claim: {} -> {} = {}", jwtClaimName, fieldName, claimValue);
             }
         });
 
         // 提取其他自定义 claims（不在标准映射中的）
         jwt.getClaims().forEach((claimName, claimValue) -> {
-            // 跳过标准 JWT claims（iss, sub, aud, exp, nbf, iat, jti）
             if (isStandardJwtClaim(claimName)) {
                 return;
             }
-
-            // 跳过已经映射的 claims
             if (SimpleAkskResourceConstant.JWT_CLAIM_TO_FIELD.containsKey(claimName)) {
                 return;
             }
-
-            // 转换为 camelCase 并存储
             String fieldName = convertToCamelCase(claimName);
             if (claimValue != null) {
-                context.put(fieldName, claimValue.toString());
+                context.put(fieldName, claimValueToString(claimValue));
                 log.debug("Extracted custom JWT claim: {} -> {} = {}", claimName, fieldName, claimValue);
             }
         });
@@ -152,6 +147,18 @@ public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
                 .filter(s -> !s.isEmpty())
                 .map(s -> new SimpleGrantedAuthority("SCOPE_" + s))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 将 claim 值转换为字符串
+     * List 类型（如 scope）用空格拼接，其他类型直接 toString
+     */
+    @SuppressWarnings("unchecked")
+    private String claimValueToString(Object claimValue) {
+        if (claimValue instanceof java.util.List) {
+            return String.join(" ", (java.util.List<String>) claimValue);
+        }
+        return claimValue.toString();
     }
 
     /**

@@ -8,3 +8,15 @@ test:
   oauth2:
     client-id: your_client_id_here
     client-secret: your_client_secret_here
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                introspect:
+                  client-id: your_client_id_here      # 用于调 /oauth2/introspect，任意有效 AKSK 均可
+                  client-secret: your_client_secret_here
