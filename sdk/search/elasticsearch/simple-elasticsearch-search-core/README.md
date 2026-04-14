@@ -8,8 +8,8 @@
 
 ## 版本
 
-- 当前版本：`1.0.3`
-- 依赖方：`simple-elasticsearch-search-starter:1.3.0+`
+- 当前版本：`1.0.4`
+- 依赖方：`simple-elasticsearch-search-starter:1.4.0+`
 
 ## 包结构
 
@@ -42,6 +42,39 @@ io.github.surezzzzzz.sdk.elasticsearch.search
 
 ## 核心模型
 
+### AggDefinition
+
+聚合定义，v1.0.4 新增 `composite` 和 `order` 字段，支持 composite 聚合翻页：
+
+| 字段 | 说明 |
+|------|------|
+| `composite` | 是否使用 composite 聚合，仅对 terms、date_histogram、histogram 生效 |
+| `order` | composite 排序方向（asc / desc），默认 asc |
+
+### AggRequest
+
+聚合请求，v1.0.4 新增 `after` 字段，用于传入翻页游标：
+
+```json
+{
+  "after": {
+    "all_users": {"userId": "user_1000"}
+  }
+}
+```
+
+### AggResponse
+
+聚合响应，v1.0.4 新增 `afterKey` 字段，为 null 时表示已无更多数据：
+
+```json
+{
+  "afterKey": {
+    "all_users": {"userId": "user_1000"}
+  }
+}
+```
+
 ### PaginationInfo
 
 分页信息，支持 `offset` 和 `search_after` 两种分页类型。
@@ -73,6 +106,7 @@ io.github.surezzzzzz.sdk.elasticsearch.search
 - `1.0.1`：架构调整，改为 Spring 事件模式，新增 `EsQueryEvent` / `EsAggEvent`
 - `1.0.2`：新增 `SearchAfterMode` 枚举，`PaginationInfo` 支持 PIT 翻页模式
 - `1.0.3`：`SearchAfterMode` 枚举规范化，字段名改为 `code`/`description`，新增 `isValid()`/`getAllCodes()`，`fromString` 改为 `fromCode`
+- `1.0.4`：`AggDefinition` 新增 `composite`/`order`，`AggRequest` 新增 `after`，`AggResponse` 新增 `afterKey`，支持 composite 聚合翻页
 
 
 ## 注意事项

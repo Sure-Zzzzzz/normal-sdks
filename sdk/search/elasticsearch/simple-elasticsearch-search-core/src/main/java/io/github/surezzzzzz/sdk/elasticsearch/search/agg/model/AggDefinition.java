@@ -55,6 +55,20 @@ public class AggDefinition {
     private List<Range> ranges;
 
     /**
+     * 是否使用 composite 聚合（支持翻页）
+     * 仅对 terms、date_histogram、histogram 生效
+     * 默认 null/false，不影响现有行为
+     */
+    private Boolean composite;
+
+    /**
+     * composite 聚合的排序方向（asc / desc）
+     * 按分组字段值排序，不能按 doc_count 排序
+     * 默认 asc
+     */
+    private String order;
+
+    /**
      * 嵌套聚合（支持多层嵌套）
      */
     private List<AggDefinition> aggs;

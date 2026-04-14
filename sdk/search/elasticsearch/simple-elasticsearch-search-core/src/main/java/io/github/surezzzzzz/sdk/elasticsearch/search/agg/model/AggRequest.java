@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 聚合请求
@@ -36,6 +37,16 @@ public class AggRequest {
      * 聚合定义列表
      */
     private List<AggDefinition> aggs;
+
+    /**
+     * composite 聚合的翻页游标
+     * key：聚合名称（对应 AggDefinition.name）
+     * value：上一页响应中返回的 afterKey
+     * <p>
+     * 支持同一请求中多个 composite 聚合各自独立翻页
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Map<String, Map<String, Object>> after;
 
     /**
      * 初始化集合

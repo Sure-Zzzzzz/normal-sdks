@@ -33,6 +33,16 @@ public class AggResponse {
     private Long took;
 
     /**
+     * composite 聚合的下一页游标
+     * key：聚合名称
+     * value：游标值，传入下次请求的 after 字段
+     * <p>
+     * 为 null 或不包含某聚合名时，表示该聚合已无更多数据
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Map<String, Map<String, Object>> afterKey;
+
+    /**
      * 原始聚合响应（仅 ES 6.x 聚合场景 + 配置启用时返回）
      * <p>
      * 包含未解析的原始聚合数据（如 {"avg_price": {"value": 6439.0}}），
