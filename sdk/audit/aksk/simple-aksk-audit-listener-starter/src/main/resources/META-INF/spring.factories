@@ -1,2 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.surezzzzzz.sdk.audit.aksk.configuration.AkskAuditListenerAutoConfiguration
