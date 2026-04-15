@@ -501,6 +501,22 @@ public class AdminController {
     }
 
     /**
+     * 清理过期Token（admin页面专用）
+     */
+    @DeleteMapping("/token/expired")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> adminDeleteExpiredTokens() {
+        log.info("Admin deleting expired tokens");
+        int deletedCount = tokenManagementService.deleteExpiredTokens();
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("deletedCount", deletedCount);
+        result.put("message", deletedCount > 0 ? "清理成功" : "没有过期Token需要清理");
+
+        return ResponseEntity.ok(result);
+    }
+
+    /**
      * 撤销Token（token-test 页面用，通过 clientId/clientSecret 调标准 revoke 端点）
      */
     @PostMapping("/token/revoke")

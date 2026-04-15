@@ -297,7 +297,7 @@
     function cleanupExpiredTokens() {
         if (!confirm('确定要清理所有过期Token吗？')) return;
 
-        fetch('/api/token/expired', {
+        fetch('/admin/token/expired', {
             method: 'DELETE',
             headers: {
                 [csrfHeader]: csrfToken
