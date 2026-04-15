@@ -61,6 +61,7 @@ io:
               default-size: 20
               max-offset: 10000
               ignore-unavailable-indices: true  # 测试环境开启，避免日期分割索引查询404
+              default-date-range: 30d  # 通配索引未传 dateRange 时，自动补充最近 30 天
 
             # API 配置
             api:

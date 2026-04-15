@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.TimeRangeHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -137,22 +138,13 @@ public class PitPaginationStrategy implements PaginationStrategy {
     }
 
     /**
-     * 解析 keepAlive 字符串为毫秒，支持 d/h/m/s 单位
+     * 解析 keepAlive 字符串为毫秒，委托给 TimeRangeHelper
      */
     public long parseKeepAliveToMillis(String keepAlive) {
         if (!StringUtils.hasText(keepAlive)) {
             throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_REQUIRED, ErrorMessage.PIT_KEEP_ALIVE_REQUIRED);
         }
-        String s = keepAlive.trim().toLowerCase();
-        try {
-            if (s.endsWith("d")) return Long.parseLong(s.substring(0, s.length() - 1)) * 86400_000L;
-            if (s.endsWith("h")) return Long.parseLong(s.substring(0, s.length() - 1)) * 3600_000L;
-            if (s.endsWith("m")) return Long.parseLong(s.substring(0, s.length() - 1)) * 60_000L;
-            if (s.endsWith("s")) return Long.parseLong(s.substring(0, s.length() - 1)) * 1_000L;
-        } catch (NumberFormatException ignored) {
-        }
-        throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_INVALID_FORMAT,
-                String.format(ErrorMessage.PIT_KEEP_ALIVE_INVALID_FORMAT, keepAlive));
+        return TimeRangeHelper.parseToMillis(keepAlive);
     }
 
     private String openOrRenewPit(QueryRequest request, PaginationInfo pagination) {

@@ -1773,6 +1773,416 @@ class SearchEndToEndTest {
         log.info("========== Multi-fields 功能测试完成 ==========");
     }
 
+    @Test
+    @Order(80)
+    @DisplayName("10.1 composite 聚合 - 第一页（不传 after）")
+    void testCompositeAggFirstPage() throws Exception {
+        log.info("========== 测试：composite 聚合第一页 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("all_status")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("status")
+                                .composite(true)
+                                .size(2)
+                                .build()
+                ))
+                .build();
+
+        String responseBody = mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.all_status").isArray())
+                .andExpect(jsonPath("$.data.aggregations.all_status.length()").value(2))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        log.info("composite 第一页响应: {}", responseBody);
+
+        // 解析 afterKey，验证存在（说明还有下一页）
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resp = objectMapper.readValue(responseBody, Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) resp.get("data");
+        Object afterKey = data.get("afterKey");
+
+        log.info("afterKey: {}", afterKey);
+        org.junit.jupiter.api.Assertions.assertNotNull(afterKey, "第一页应返回 afterKey（还有更多数据）");
+        log.info("✓ composite 聚合第一页成功，afterKey 存在");
+    }
+
+    @Test
+    @Order(81)
+    @DisplayName("10.2 composite 聚合 - 翻页（传 after）")
+    void testCompositeAggNextPage() throws Exception {
+        log.info("========== 测试：composite 聚合翻页 ==========");
+
+        // 第一页：size=2，取 afterKey
+        AggRequest firstRequest = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("all_status")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("status")
+                                .composite(true)
+                                .size(2)
+                                .build()
+                ))
+                .build();
+
+        String firstResponse = mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstRequest)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> firstResp = objectMapper.readValue(firstResponse, Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> firstData = (Map<String, Object>) firstResp.get("data");
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, Object>> afterKey = (Map<String, Map<String, Object>>) firstData.get("afterKey");
+
+        org.junit.jupiter.api.Assertions.assertNotNull(afterKey, "第一页应返回 afterKey");
+        log.info("第一页 afterKey: {}", afterKey);
+
+        // 第二页：传入 afterKey
+        AggRequest secondRequest = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .after(afterKey)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("all_status")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("status")
+                                .composite(true)
+                                .size(2)
+                                .build()
+                ))
+                .build();
+
+        String secondResponse = mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(secondRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.all_status").isArray())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        log.info("composite 第二页响应: {}", secondResponse);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> secondResp = objectMapper.readValue(secondResponse, Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> secondData = (Map<String, Object>) secondResp.get("data");
+        Object secondAfterKey = secondData.get("afterKey");
+
+        // 第二页 afterKey 为 null 说明已是最后一页（order 索引只有 3 种 status，size=2 翻两页）
+        log.info("第二页 afterKey: {}", secondAfterKey);
+        log.info("✓ composite 聚合翻页成功");
+    }
+
+    @Test
+    @Order(82)
+    @DisplayName("10.3 composite 聚合 - 不支持的类型（RANGE）报 400")
+    void testCompositeAggUnsupportedType() throws Exception {
+        log.info("========== 测试：composite 聚合不支持的类型 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("bad_agg")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.RANGE.getType())
+                                .field("amount")
+                                .composite(true)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> {
+                    log.info("✓ composite 不支持 RANGE 类型，正确返回 400");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(83)
+    @DisplayName("10.4 composite 聚合 - 嵌套 bucket 聚合报 400")
+    void testCompositeAggNestedBucketNotAllowed() throws Exception {
+        log.info("========== 测试：composite 聚合嵌套 bucket 聚合 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("all_status")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("status")
+                                .composite(true)
+                                .aggs(Arrays.asList(
+                                        AggDefinition.builder()
+                                                .name("nested_terms")
+                                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                                .field("product_name")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> {
+                    log.info("✓ composite 内部嵌套 bucket 聚合，正确返回 400");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(84)
+    @DisplayName("10.5 composite 聚合 - 嵌套 metrics 子聚合（合法）")
+    void testCompositeAggWithMetricsSubAgg() throws Exception {
+        log.info("========== 测试：composite 聚合嵌套 metrics 子聚合 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("status_with_avg")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("status")
+                                .composite(true)
+                                .size(10)
+                                .aggs(Arrays.asList(
+                                        AggDefinition.builder()
+                                                .name("avg_amount")
+                                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.AVG.getType())
+                                                .field("amount")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.status_with_avg").isArray())
+                .andExpect(jsonPath("$.data.aggregations.status_with_avg[0].avg_amount").exists())
+                .andDo(result -> {
+                    log.info("✓ composite 聚合嵌套 metrics 子聚合成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(85)
+    @DisplayName("10.6 composite 聚合 - ES 6.x（secondary 数据源）")
+    void testCompositeAggOnEs6x() throws Exception {
+        log.info("========== 测试：composite 聚合 ES 6.x 路径 ==========");
+
+        // secondary 是 ES 6.2.2，composite 是 beta 特性（6.1+）
+        // 使用 7.x Java client 构建的 composite 请求在 6.x 上可能因 DSL 差异返回 400
+        // 本测试验证：请求能正常发出，不抛出未处理异常（400 是 ES 侧拒绝，属于预期内行为）
+        AggRequest request = AggRequest.builder()
+                .index(SECONDARY_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("all_category")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("category")
+                                .composite(true)
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        org.springframework.test.web.servlet.MvcResult result = mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.all_category").isArray())
+                .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        log.info("ES 6.x composite 响应: {}", responseBody);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resp = objectMapper.readValue(responseBody, Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) resp.get("data");
+
+        // secondary 索引只有 1 种 category（Electronics），afterKey 应为 null（已遍历完）
+        Object afterKey = data.get("afterKey");
+        log.info("ES 6.x composite afterKey: {}", afterKey);
+        log.info("✓ ES 6.x composite 聚合成功");
+    }
+
+    @Test
+    @Order(86)
+    @DisplayName("10.7 composite 聚合 - date_histogram 类型")
+    void testCompositeAggDateHistogram() throws Exception {
+        log.info("========== 测试：composite date_histogram 聚合 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("orders_by_day")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.DATE_HISTOGRAM.getType())
+                                .field("created_at")
+                                .interval("day")
+                                .composite(true)
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.orders_by_day").isArray())
+                .andDo(result -> {
+                    log.info("✓ composite date_histogram 聚合成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(90)
+    @DisplayName("11.1 default-date-range - 通配索引 query 未传 dateRange，自动补充最近 30 天")
+    void testDefaultDateRangeQueryWildcard() throws Exception {
+        log.info("========== 测试：通配索引 query 自动补充 default-date-range ==========");
+
+        // test_log_* 是通配索引，不传 dateRange，应自动补充最近 30 天（配置在 application.yaml）
+        QueryRequest request = QueryRequest.builder()
+                .index(LOG_INDEX_PREFIX + "*")
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.total").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> {
+                    log.info("✓ 通配索引 query 自动补充 default-date-range，正常返回数据");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(91)
+    @DisplayName("11.2 default-date-range - 通配索引 agg 未传 query，自动补充最近 30 天")
+    void testDefaultDateRangeAggWildcard() throws Exception {
+        log.info("========== 测试：通配索引 agg 自动补充 default-date-range ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index(LOG_INDEX_PREFIX + "*")
+                .aggs(Arrays.asList(
+                        AggDefinition.builder()
+                                .name("action_count")
+                                .type(io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType.TERMS.getType())
+                                .field("action")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.action_count").isArray())
+                .andExpect(jsonPath("$.data.aggregations.action_count.length()").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andDo(result -> {
+                    log.info("✓ 通配索引 agg 自动补充 default-date-range，正常返回聚合结果");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(92)
+    @DisplayName("11.3 default-date-range - 精确索引不触发，全量返回")
+    void testDefaultDateRangeExactIndexNotAffected() throws Exception {
+        log.info("========== 测试：精确索引不触发 default-date-range ==========");
+
+        // test_order_index 无通配符，不应补充时间范围，全量返回 5 条
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andDo(result -> {
+                    log.info("✓ 精确索引不受 default-date-range 影响，全量返回 5 条");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(93)
+    @DisplayName("11.4 default-date-range - 通配索引已传 dateRange，不覆盖")
+    void testDefaultDateRangeNotOverrideExplicit() throws Exception {
+        log.info("========== 测试：通配索引已传 dateRange，不被 default-date-range 覆盖 ==========");
+
+        // 显式传入 2020 年的时间范围，该年无数据
+        // 如果被 default-date-range 覆盖成最近 30 天，则会返回数据（不符合预期）
+        QueryRequest request = QueryRequest.builder()
+                .index(LOG_INDEX_PREFIX + "*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from("2020-01-01T00:00:00")
+                        .to("2020-01-02T23:59:59")
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0))
+                .andDo(result -> {
+                    log.info("✓ 通配索引已传 dateRange，不被 default-date-range 覆盖，2020 年无数据");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
     // ==================== 辅助方法 ====================
 
     private static String createLogIndex(RestHighLevelClient client) throws Exception {

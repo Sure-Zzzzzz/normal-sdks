@@ -85,6 +85,16 @@ public class ErrorMessage {
      */
     public static final String UNSUPPORTED_AGG_TYPE = "不支持的聚合类型: %s";
 
+    /**
+     * composite 聚合不支持该类型（仅支持 terms、date_histogram、histogram）
+     */
+    public static final String COMPOSITE_UNSUPPORTED_TYPE = "composite 聚合不支持类型 [%s]，仅支持 terms、date_histogram、histogram";
+
+    /**
+     * composite 聚合内部不允许嵌套 bucket 聚合
+     */
+    public static final String COMPOSITE_NESTED_NOT_ALLOWED = "composite 聚合内部不允许嵌套 bucket 聚合";
+
     // ========== 配置相关 ==========
 
     /**
@@ -207,6 +217,16 @@ public class ErrorMessage {
      * 不支持的降级级别
      */
     public static final String UNSUPPORTED_DOWNGRADE_LEVEL = "降级级别 [%s] 不适用于日期粒度 [%s]";
+
+    /**
+     * 时间字符串格式不合法
+     */
+    public static final String TIME_RANGE_INVALID_FORMAT = "时间格式不合法，支持格式：30d / 1h / 5m / 30s，当前值：%s";
+
+    /**
+     * default-date-range 配置格式不合法
+     */
+    public static final String DEFAULT_DATE_RANGE_INVALID_FORMAT = "query-limits.default-date-range 格式不合法，支持格式：30d / 1h / 5m / 30s，当前值：%s";
 
     private ErrorMessage() {
         // 私有构造函数，防止实例化

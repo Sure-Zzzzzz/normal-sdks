@@ -252,7 +252,11 @@ public class ElasticsearchCompatibilityHelper {
 
         // 设置请求体（SearchSourceBuilder 的 JSON）
         if (searchRequest.source() != null) {
-            request.setJsonEntity(searchRequest.source().toString());
+            String dsl = searchRequest.source().toString();
+            // ES 6.x 不支持 composite 聚合 source 中的 missing_bucket 字段（7.x client 默认序列化）
+            // 在发送前移除，保证 6.x 兼容性
+            dsl = removeEs7OnlyCompositeFields(dsl);
+            request.setJsonEntity(dsl);
         }
 
         // 执行请求
@@ -447,5 +451,26 @@ public class ElasticsearchCompatibilityHelper {
         } finally {
             closeParser(parser);
         }
+    }
+
+    /**
+     * 移除 ES 7.x 特有的 composite 聚合字段，保证 ES 6.x 兼容性
+     * <p>
+     * ES 7.x Java client 序列化 composite source 时会带上 missing_bucket 字段，
+     * 而 ES 6.x 不认识该字段，会返回 parsing_exception。
+     * 使用正则替换移除，避免引入额外依赖。
+     *
+     * @param dsl 原始 DSL JSON 字符串
+     * @return 移除 ES 7.x 特有字段后的 DSL
+     */
+    static String removeEs7OnlyCompositeFields(String dsl) {
+        if (dsl == null || !dsl.contains("missing_bucket")) {
+            return dsl;
+        }
+        // 移除 "missing_bucket":false 和 "missing_bucket":true（含前后逗号）
+        return dsl
+                .replaceAll(",\\s*\"missing_bucket\"\\s*:\\s*(true|false)", "")
+                .replaceAll("\"missing_bucket\"\\s*:\\s*(true|false)\\s*,", "")
+                .replaceAll("\"missing_bucket\"\\s*:\\s*(true|false)", "");
     }
 }

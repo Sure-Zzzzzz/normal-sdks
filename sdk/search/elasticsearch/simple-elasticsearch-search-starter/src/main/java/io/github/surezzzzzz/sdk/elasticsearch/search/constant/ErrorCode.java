@@ -118,6 +118,16 @@ public class ErrorCode {
      */
     public static final String UNSUPPORTED_AGG_TYPE = "SEARCH_AGG_003";
 
+    /**
+     * composite 聚合不支持该聚合类型（仅支持 terms、date_histogram、histogram）
+     */
+    public static final String COMPOSITE_UNSUPPORTED_TYPE = "SEARCH_AGG_004";
+
+    /**
+     * composite 聚合内部不允许嵌套 bucket 聚合
+     */
+    public static final String COMPOSITE_NESTED_NOT_ALLOWED = "SEARCH_AGG_005";
+
     // ========== Mapping 相关错误码 ==========
 
     /**
@@ -220,12 +230,22 @@ public class ErrorCode {
      */
     public static final String INVALID_PARAMETER = "SEARCH_COMMON_001";
 
+    /**
+     * 时间字符串格式不合法（支持格式：30d / 1h / 5m / 30s）
+     */
+    public static final String TIME_RANGE_INVALID_FORMAT = "SEARCH_COMMON_002";
+
     // ========== 自然语言转换错误码 ==========
 
     /**
      * NL转DSL翻译失败
      */
     public static final String NL_TRANSLATION_FAILED = "SEARCH_NL_001";
+
+    /**
+     * 配置验证失败（SEARCH_CONFIG_010 预留给 default-date-range 格式校验）
+     */
+    public static final String DEFAULT_DATE_RANGE_INVALID_FORMAT = "SEARCH_CONFIG_010";
 
     private ErrorCode() {
         // 私有构造函数，防止实例化

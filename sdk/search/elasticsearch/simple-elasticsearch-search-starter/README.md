@@ -17,6 +17,7 @@
   - `tiebreaker`（默认）：自动追加 `_id ASC` 保证排序稳定
   - `pit`：使用 Point In Time 快照翻页，不追加 `_id`，适合内存敏感场景（ES 7.10+）
   - `none`：排序字段本身唯一时使用，不追加任何 tiebreaker
+- **composite 聚合翻页**：支持对 terms/date_histogram/histogram 使用 composite 模式，实现无限翻页，突破 65535 条限制（v1.4.0+，ES 6.1+）
 - **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
 - **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
 - **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
@@ -33,7 +34,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.3.1'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.4.0'
 
     // 需要自行引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -122,6 +123,7 @@ io:
               max-offset: 10000                  # from + size 的最大值（超过此值强制使用 search_after）
               ignore-unavailable-indices: false  # 是否忽略不存在的索引（日期分割索引推荐开启）
               strict-date-filter: true           # 是否始终追加 date range filter（默认 true，防止跨天脏数据）
+              default-date-range: 30d            # 通配索引未传时间范围时的默认范围（v1.4.0+，null 表示不限制）
 
             # API 配置
             api:
@@ -634,6 +636,152 @@ const nextResult = await fetch('/api/query', {
 - 大范围时间查询时，框架自动启用索引路由降级策略（v1.0.10+）
 - 配置 `date-field` 后，框架自动在 DSL 中添加时间过滤以提高查询精度
 
+### 场景：全量遍历聚合数据（composite 翻页）
+
+**需求**：统计某索引中所有用户的订单总金额，用户数量超过 65535，需要全量遍历。
+
+**步骤 1：第一页（不传 after）**
+
+```bash
+POST /api/agg
+Content-Type: application/json
+
+{
+  "index": "order_index",
+  "query": {
+    "field": "status",
+    "op": "eq",
+    "value": "completed"
+  },
+  "aggs": [
+    {
+      "name": "user_total",
+      "type": "terms",
+      "field": "userId",
+      "composite": true,
+      "size": 1000,
+      "aggs": [
+        {
+          "name": "total_amount",
+          "type": "sum",
+          "field": "amount"
+        }
+      ]
+    }
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "data": {
+    "aggregations": {
+      "user_total": [
+        {"key": "user_001", "count": 5, "total_amount": 1299.0},
+        {"key": "user_002", "count": 3, "total_amount": 599.0}
+      ]
+    },
+    "afterKey": {
+      "user_total": {"userId": "user_002"}
+    },
+    "took": 12
+  }
+}
+```
+
+**步骤 2：翻页（传入上一页的 afterKey）**
+
+```bash
+POST /api/agg
+Content-Type: application/json
+
+{
+  "index": "order_index",
+  "query": {
+    "field": "status",
+    "op": "eq",
+    "value": "completed"
+  },
+  "after": {
+    "user_total": {"userId": "user_002"}
+  },
+  "aggs": [
+    {
+      "name": "user_total",
+      "type": "terms",
+      "field": "userId",
+      "composite": true,
+      "size": 1000,
+      "aggs": [
+        {
+          "name": "total_amount",
+          "type": "sum",
+          "field": "amount"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**步骤 3：判断是否结束**
+
+```javascript
+async function fetchAllUserTotals() {
+  let after = null;
+  const allResults = [];
+
+  while (true) {
+    const body = {
+      index: "order_index",
+      query: { field: "status", op: "eq", value: "completed" },
+      after: after,
+      aggs: [{
+        name: "user_total",
+        type: "terms",
+        field: "userId",
+        composite: true,
+        size: 1000,
+        aggs: [{ name: "total_amount", type: "sum", field: "amount" }]
+      }]
+    };
+
+    const resp = await fetch('/api/agg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json());
+
+    const buckets = resp.data.aggregations.user_total;
+    allResults.push(...buckets);
+
+    // afterKey 为 null 表示已遍历完
+    after = resp.data.afterKey;
+    if (!after) break;
+  }
+
+  return allResults;
+}
+```
+
+**关键特性说明：**
+1. `composite: true`：启用 composite 模式，突破 65535 条限制
+2. `size: 1000`：每页返回 1000 个 bucket，可根据性能调整
+3. `afterKey`：下一页游标，为 `null` 时表示遍历完成
+4. 嵌套 metrics 子聚合（`total_amount`）在 composite 模式下正常工作
+5. 支持 ES 6.1+（含 ES 6.x 和 7.x+）
+
+**对比 TERMS 聚合：**
+
+| | TERMS 聚合 | composite 聚合 |
+|--|-----------|--------------|
+| 最大返回数 | 65535 | 无限制 |
+| 翻页支持 | ❌ | ✅ |
+| 排序方式 | 按 doc_count | 按字段值 |
+| 适用场景 | Top N 统计 | 全量遍历 |
+
 ## 查询操作符
 
 | 操作符 | 说明 | 示例 |
@@ -674,6 +822,23 @@ const nextResult = await fetch('/api/query', {
 - `date_histogram` - 日期直方图
 - `histogram` - 数值直方图
 - `range` - 范围聚合
+
+### composite 聚合翻页（v1.4.0+）
+
+对 `terms`、`date_histogram`、`histogram` 支持 composite 模式，实现无限翻页，突破 65535 条限制（ES 6.1+）：
+
+```json
+{
+  "name": "all_users",
+  "type": "terms",
+  "field": "userId",
+  "composite": true,
+  "size": 1000,
+  "order": "asc"
+}
+```
+
+响应中的 `afterKey` 传入下次请求的 `after` 字段即可翻页，`afterKey` 为 `null` 表示已遍历完。
 
 ## 响应格式
 
@@ -1020,6 +1185,106 @@ search:
   }
 }
 ```
+
+### composite 聚合翻页（v1.4.0+）
+
+对大基数字段（如用户 ID、设备 ID）做全量遍历时，`terms` 聚合最多返回 65535 条。使用 composite 模式可突破此限制，实现无限翻页。
+
+**第一页（不传 after）：**
+
+```json
+POST /api/agg
+{
+  "index": "order_index",
+  "aggs": [
+    {
+      "name": "all_users",
+      "type": "terms",
+      "field": "userId",
+      "composite": true,
+      "size": 1000
+    }
+  ]
+}
+```
+
+响应：
+
+```json
+{
+  "data": {
+    "aggregations": {
+      "all_users": [
+        {"key": "user_001", "count": 42},
+        {"key": "user_002", "count": 18}
+      ]
+    },
+    "afterKey": {
+      "all_users": {"userId": "user_002"}
+    }
+  }
+}
+```
+
+**下一页（传入 afterKey）：**
+
+```json
+POST /api/agg
+{
+  "index": "order_index",
+  "after": {
+    "all_users": {"userId": "user_002"}
+  },
+  "aggs": [
+    {
+      "name": "all_users",
+      "type": "terms",
+      "field": "userId",
+      "composite": true,
+      "size": 1000
+    }
+  ]
+}
+```
+
+`afterKey` 为 `null` 时表示已遍历完所有数据。
+
+**支持嵌套 metrics 子聚合：**
+
+```json
+{
+  "name": "all_users",
+  "type": "terms",
+  "field": "userId",
+  "composite": true,
+  "size": 1000,
+  "aggs": [
+    {"name": "total_amount", "type": "sum", "field": "amount"}
+  ]
+}
+```
+
+**注意：**
+- composite 内部只允许嵌套 metrics 聚合，不允许嵌套 bucket 聚合
+- 支持 ES 6.1+（含 ES 6.x 和 7.x+）
+
+### 通配索引默认时间范围（v1.4.0+）
+
+对含通配符（`*` 或 `?`）的索引，若请求未传时间范围，自动补充默认时间范围，防止全量扫描。
+
+```yaml
+search:
+  query-limits:
+    default-date-range: 30d  # 支持 30d / 7d / 24h / 1h 等，null 表示不限制（默认）
+```
+
+| 场景 | 行为 |
+|------|------|
+| 通配索引 + 未传时间范围 | 自动补充最近 N 时间 |
+| 通配索引 + 已传时间范围 | 不覆盖，使用用户传入值 |
+| 精确索引（无通配符） | 不触发，全量查询 |
+
+配置格式不合法时，启动时快速失败。
 
 ## 许可证
 

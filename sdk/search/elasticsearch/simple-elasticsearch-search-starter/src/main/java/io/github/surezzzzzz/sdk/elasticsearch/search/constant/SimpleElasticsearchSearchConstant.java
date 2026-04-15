@@ -451,6 +451,23 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String DEFAULT_PIT_MAX_KEEP_ALIVE = "5m";
 
+    // ========== Composite 聚合相关 ==========
+
+    /**
+     * composite 聚合默认 size
+     */
+    public static final int COMPOSITE_DEFAULT_SIZE = 1000;
+
+    /**
+     * composite 聚合默认排序方向
+     */
+    public static final String COMPOSITE_DEFAULT_ORDER = "asc";
+
+    /**
+     * ES composite 聚合响应中的 after_key 字段名
+     */
+    public static final String ES_JSON_AFTER_KEY = "after_key";
+
     private SimpleElasticsearchSearchConstant() {
         // 私有构造函数，防止实例化
     }

@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SensitiveStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.TimeRangeHelper;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -109,6 +110,16 @@ public class SimpleElasticsearchSearchProperties {
 
             // 4. 校验降级配置
             validateDowngradeConfig();
+
+            // 5. 校验 default-date-range 格式
+            if (StringUtils.hasText(queryLimits.getDefaultDateRange())) {
+                try {
+                    TimeRangeHelper.parseToMillis(queryLimits.getDefaultDateRange());
+                } catch (Exception e) {
+                    throw new ConfigurationException(ErrorCode.DEFAULT_DATE_RANGE_INVALID_FORMAT,
+                            String.format(ErrorMessage.DEFAULT_DATE_RANGE_INVALID_FORMAT, queryLimits.getDefaultDateRange()));
+                }
+            }
 
             log.info("Configuration validation passed");
 
@@ -344,6 +355,16 @@ public class SimpleElasticsearchSearchProperties {
          * </p>
          */
         private boolean strictDateFilter = true;
+
+        /**
+         * 通配索引（含 * 或 ?）未传 dateRange 时的默认时间范围
+         * 支持格式：30d / 7d / 24h / 1h 等
+         * null 表示不限制（查全量），默认 null
+         * <p>
+         * 建议生产环境配置为 30d，防止全量扫描通配索引
+         * </p>
+         */
+        private String defaultDateRange;
     }
 
     /**

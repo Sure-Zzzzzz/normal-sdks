@@ -19,6 +19,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuild
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.TimeRangeHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.search.SearchRequest;
@@ -31,6 +32,7 @@ import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
 import org.elasticsearch.search.aggregations.metrics.Stats;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
@@ -243,16 +245,14 @@ public class AggExecutorImpl implements AggExecutor {
      * 手动解析 ES 6.x 聚合响应 JSON
      * 保持与 processResponse() 相同的数据结构
      */
+    @SuppressWarnings("unchecked")
     private AggResponse parseEs6xAggregationResponse(String responseJson) throws Exception {
         com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
-        @SuppressWarnings("unchecked")
         Map<String, Object> responseMap = objectMapper.readValue(responseJson,
                 new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
                 });
 
-        // 提取聚合结果
-        @SuppressWarnings("unchecked")
         Map<String, Object> rawAggregations = (Map<String, Object>) responseMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AGGREGATIONS);
 
         if (rawAggregations == null) {
@@ -261,27 +261,85 @@ public class AggExecutorImpl implements AggExecutor {
                     .build();
         }
 
-        // 手动解析聚合结果，提取实际值（和 processResponse 保持一致）
         Map<String, Object> parsedAggregations = new HashMap<>();
+        Map<String, Map<String, Object>> afterKey = new HashMap<>();
+
         for (Map.Entry<String, Object> entry : rawAggregations.entrySet()) {
             String aggName = entry.getKey();
             Object aggValue = entry.getValue();
 
-            Object parsedValue = parseAggregationValue(aggValue);
-            parsedAggregations.put(aggName, parsedValue);
+            // 检测是否是 composite 聚合（含 after_key 字段）
+            if (aggValue instanceof Map) {
+                Map<String, Object> aggMap = (Map<String, Object>) aggValue;
+                if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_AFTER_KEY)) {
+                    Map<String, Object> key = (Map<String, Object>) aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AFTER_KEY);
+                    if (key != null && !key.isEmpty()) {
+                        afterKey.put(aggName, key);
+                    }
+                    parsedAggregations.put(aggName, parseCompositeAggregationValue(aggMap));
+                    continue;
+                }
+            }
+
+            parsedAggregations.put(aggName, parseAggregationValue(aggValue));
         }
 
-        // ✅ 构建响应，根据配置决定是否包含原始聚合数据
         AggResponse.AggResponseBuilder builder = AggResponse.builder()
-                .aggregations(parsedAggregations);
+                .aggregations(parsedAggregations)
+                .afterKey(afterKey.isEmpty() ? null : afterKey);
 
-        // 如果配置启用了 include-raw-response，添加原始聚合数据（未解析的）
         if (properties.getApi().isIncludeRawResponse()) {
             builder.rawResponse(rawAggregations);
             log.debug("Included raw ES 6.x aggregations in AggResponse (config enabled)");
         }
 
         return builder.build();
+    }
+
+    /**
+     * 解析 composite 聚合的 buckets（ES 6.x 路径）
+     * composite bucket 的 key 是 Map，单 source 时取第一个值作为展示 key
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseCompositeAggregationValue(Map<String, Object> aggMap) {
+        List<Map<String, Object>> buckets = new ArrayList<>();
+        Object bucketsValue = aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS);
+        if (!(bucketsValue instanceof List)) {
+            return buckets;
+        }
+
+        for (Object bucketObj : (List<?>) bucketsValue) {
+            if (!(bucketObj instanceof Map)) {
+                continue;
+            }
+            Map<String, Object> bucket = (Map<String, Object>) bucketObj;
+            Map<String, Object> parsedBucket = new HashMap<>();
+
+            // composite bucket 的 key 是 Map，单 source 时直接取值
+            Object keyObj = bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_KEY);
+            if (keyObj instanceof Map) {
+                Map<String, Object> keyMap = (Map<String, Object>) keyObj;
+                parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY,
+                        keyMap.size() == 1 ? keyMap.values().iterator().next() : keyMap);
+            } else {
+                parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY, keyObj);
+            }
+
+            parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
+                    bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT));
+
+            // 嵌套 metrics
+            for (Map.Entry<String, Object> e : bucket.entrySet()) {
+                String k = e.getKey();
+                if (!k.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY)
+                        && !k.equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
+                    parsedBucket.put(k, parseAggregationValue(e.getValue()));
+                }
+            }
+
+            buckets.add(parsedBucket);
+        }
+        return buckets;
     }
 
     /**
@@ -362,6 +420,48 @@ public class AggExecutorImpl implements AggExecutor {
         if (request.getAggs() == null || request.getAggs().isEmpty()) {
             throw new AggregationException(ErrorCode.AGG_DEFINITION_REQUIRED, ErrorMessage.AGG_DEFINITION_REQUIRED);
         }
+
+        // 通配索引默认时间范围补充
+        String defaultDateRange = properties.getQueryLimits().getDefaultDateRange();
+        if (org.springframework.util.StringUtils.hasText(defaultDateRange)
+                && request.getQuery() == null
+                && isWildcardIndex(request.getIndex())) {
+            QueryRequest.DateRange range = TimeRangeHelper.buildRecentRange(defaultDateRange);
+            // 将默认时间范围注入 query，供 extractDateRangeFromQuery 使用
+            request.setQuery(buildDateRangeQuery(range, request.getIndex()));
+            log.debug("Applied default date range [{}] for wildcard index [{}]", defaultDateRange, request.getIndex());
+        }
+    }
+
+    /**
+     * 判断索引名是否包含通配符
+     */
+    private boolean isWildcardIndex(String index) {
+        return index != null && (index.contains(SimpleElasticsearchSearchConstant.WILDCARD_STAR)
+                || index.contains(SimpleElasticsearchSearchConstant.WILDCARD_QUESTION));
+    }
+
+    /**
+     * 根据 DateRange 构建 QueryCondition（用于聚合的默认时间范围注入）
+     */
+    private QueryCondition buildDateRangeQuery(QueryRequest.DateRange range, String index) {
+        // 获取索引元数据，找到日期字段
+        try {
+            io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata metadata =
+                    mappingManager.getMetadata(index);
+            String dateField = metadata.getDateField();
+            if (dateField == null) {
+                return null;
+            }
+            return QueryCondition.builder()
+                    .field(dateField)
+                    .op(QueryOperator.BETWEEN.getOperator())
+                    .values(java.util.Arrays.asList(range.getFrom(), range.getTo()))
+                    .build();
+        } catch (Exception e) {
+            log.debug("Could not build default date range query for index [{}]: {}", index, e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -391,7 +491,7 @@ public class AggExecutorImpl implements AggExecutor {
         sourceBuilder.query(queryBuilder);
 
         // 3. 构建聚合
-        AggregationBuilder[] aggBuilders = aggDslBuilder.build(request.getIndex(), request.getAggs());
+        AggregationBuilder[] aggBuilders = aggDslBuilder.build(request.getIndex(), request.getAggs(), request.getAfter());
         for (AggregationBuilder aggBuilder : aggBuilders) {
             sourceBuilder.aggregation(aggBuilder);
         }
@@ -458,17 +558,27 @@ public class AggExecutorImpl implements AggExecutor {
      */
     private AggResponse processResponse(SearchResponse searchResponse) {
         Map<String, Object> data = new HashMap<>();
+        Map<String, Map<String, Object>> afterKey = new HashMap<>();
 
         Aggregations aggregations = searchResponse.getAggregations();
         if (aggregations != null) {
             for (Aggregation aggregation : aggregations) {
-                Object result = parseAggregation(aggregation);
-                data.put(aggregation.getName(), result);
+                if (aggregation instanceof CompositeAggregation) {
+                    CompositeAggregation composite = (CompositeAggregation) aggregation;
+                    data.put(aggregation.getName(), parseBucketAggregation(composite));
+                    Map<String, Object> key = composite.afterKey();
+                    if (key != null && !key.isEmpty()) {
+                        afterKey.put(aggregation.getName(), key);
+                    }
+                } else {
+                    data.put(aggregation.getName(), parseAggregation(aggregation));
+                }
             }
         }
 
         return AggResponse.builder()
                 .aggregations(data)
+                .afterKey(afterKey.isEmpty() ? null : afterKey)
                 .build();
     }
 

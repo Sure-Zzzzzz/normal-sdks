@@ -24,6 +24,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.Pagination
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PaginationStrategyRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PitPaginationStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.search.support.TimeRangeHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.search.SearchRequest;
@@ -227,6 +228,15 @@ public class QueryExecutorImpl implements QueryExecutor {
             throw new QueryException(ErrorCode.INDEX_ALIAS_REQUIRED, ErrorMessage.INDEX_ALIAS_REQUIRED);
         }
 
+        // 通配索引默认时间范围补充
+        String defaultDateRange = properties.getQueryLimits().getDefaultDateRange();
+        if (org.springframework.util.StringUtils.hasText(defaultDateRange)
+                && request.getDateRange() == null
+                && isWildcardIndex(request.getIndex())) {
+            request.setDateRange(TimeRangeHelper.buildRecentRange(defaultDateRange));
+            log.debug("Applied default date range [{}] for wildcard index [{}]", defaultDateRange, request.getIndex());
+        }
+
         // 验证分页参数
         PaginationInfo pagination = request.getPagination();
         if (pagination == null) {
@@ -340,6 +350,14 @@ public class QueryExecutorImpl implements QueryExecutor {
         searchRequest.source(sourceBuilder);
 
         return searchRequest;
+    }
+
+    /**
+     * 判断索引名是否包含通配符
+     */
+    private boolean isWildcardIndex(String index) {
+        return index != null && (index.contains(SimpleElasticsearchSearchConstant.WILDCARD_STAR)
+                || index.contains(SimpleElasticsearchSearchConstant.WILDCARD_QUESTION));
     }
 
     /**
