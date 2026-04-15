@@ -57,7 +57,8 @@ include(
         ':sdk:auth:aksk:resource:simple-aksk-resource-core',
         ':sdk:auth:aksk:resource:simple-aksk-security-context-starter',
         ':sdk:auth:aksk:resource:simple-aksk-resource-server-starter',
-        ':sdk:audit:aksk:simple-aksk-audit-listener-starter',
+        ':sdk:audit:aksk:simple-aksk-resource-audit-listener-starter',
+        ':sdk:audit:aksk:simple-aksk-server-audit-listener-starter',
         ':sdk:audit:search:elasticsearch:simple-elasticsearch-search-audit-listener-starter',
         ':sdk:cache:smart-cache-starter',
 )
