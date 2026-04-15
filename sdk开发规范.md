@@ -124,12 +124,7 @@
 **Gradle 依赖**：
 ```gradle
 dependencies {
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-
-    // 测试依赖
-    testCompileOnly 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.projectlombok:lombok'
+   # 不用在子模块里写依赖，父gradle已经都带上了
 }
 ```
 

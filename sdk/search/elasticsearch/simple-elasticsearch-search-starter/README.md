@@ -4,29 +4,22 @@
 
 ## 特性
 
-- **零代码侵入**：完全配置驱动，无需编写任何业务代码
-- **多数据源路由**：支持多个 Elasticsearch 集群，自动路由到对应数据源
-- **版本兼容性**：支持 ES 6.x 和 7.x+ 版本，自动适配 API 差异
-  - **ES 6.x 聚合兼容**：自动检测并使用低级 API + 手动 JSON 解析，完美支持 ES 6.x 聚合查询
-  - **可选 rawResponse**：提供原始 ES 聚合响应，支持零侵入迁移（从 RestTemplate/TransportClient 迁移）
-- **动态 Mapping**：自动获取并缓存索引的字段元数据
-- **灵活查询**：支持多种查询操作符和复杂的逻辑组合
-- **聚合分析**：支持指标聚合和桶聚合，支持嵌套聚合
-- **敏感字段保护**：支持字段禁止访问和脱敏
-- **深分页支持**：自动切换 offset 和 search_after 分页策略，支持多种翻页模式（v1.3.0+），策略可扩展（v1.3.1+）
-  - `tiebreaker`（默认）：自动追加 `_id ASC` 保证排序稳定
-  - `pit`：使用 Point In Time 快照翻页，不追加 `_id`，适合内存敏感场景（ES 7.10+）
-  - `none`：排序字段本身唯一时使用，不追加任何 tiebreaker
-- **composite 聚合翻页**：支持对 terms/date_histogram/histogram 使用 composite 模式，实现无限翻页，突破 65535 条限制（v1.4.0+，ES 6.1+）
-- **日期分割索引**：支持按日期分割的索引（如 `log-2025.01.01`）
-- **索引路由智能降级**：自动处理大范围日期查询的 HTTP 请求行过长问题（v1.0.10+）
-- **自然语言查询**：支持将中文自然语言直接转换为 Elasticsearch DSL（v1.1.0+）
-  - **时间范围支持**：支持从自然语言中解析时间范围条件（v1.1.1+）
-  - **search_after 深度分页**：支持从自然语言中解析 search_after 游标值（v1.1.2+）
-- **字段折叠（去重）**：支持按字段去重查询，可与深度分页组合使用（v1.1.3+）
-- **查询事件发布**：查询/聚合执行后自动发布 Spring 事件，支持审计、监控等扩展（v1.2.0+）
-- **严格日期过滤**：日期分割索引默认始终追加 date range filter，防止入库延迟导致的跨天脏数据（v1.2.1+）
-- **RESTful API**：提供标准的 REST 接口
+| 特性 | 说明 | 版本 |
+|------|------|------|
+| 零代码侵入 | 完全配置驱动，无需编写任何业务代码 | v1.0.0+ |
+| 多数据源路由 | 支持多个 ES 集群，自动路由 | v1.0.2+ |
+| 版本兼容 | 支持 ES 6.x 和 7.x+，自动适配 API 差异 | v1.0.0+ |
+| 动态 Mapping | 自动获取并缓存索引字段元数据 | v1.0.0+ |
+| 灵活查询 | 支持 18 种操作符和嵌套逻辑组合 | v1.0.0+ |
+| 聚合分析 | 支持指标聚合、桶聚合、嵌套聚合 | v1.0.0+ |
+| composite 聚合翻页 | 突破 65535 条限制，支持全量遍历（ES 6.1+） | v1.4.0+ |
+| 深分页 | search_after 多种模式（tiebreaker/pit/none） | v1.3.0+ |
+| 日期分割索引 | 按年/月/日分割，自动路由 + 智能降级 | v1.0.0+ |
+| 敏感字段保护 | 支持字段禁止访问和脱敏 | v1.0.0+ |
+| 自然语言查询 | 中文自然语言转 ES DSL | v1.1.0+ |
+| 查询事件发布 | 查询/聚合后发布 Spring 事件，支持审计扩展 | v1.2.0+ |
+
+---
 
 ## 快速开始
 
@@ -36,7 +29,7 @@
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.4.0'
 
-    // 需要自行引入以下依赖
+    // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -45,18 +38,9 @@ dependencies {
 }
 ```
 
-**注意**：
-- 从 1.0.2 版本开始，search-starter 完全依赖 `simple-elasticsearch-route-starter` 进行多数据源管理
-- route-starter 会自动被依赖引入（版本 1.0.3+），无需手动添加
-- 部分依赖使用 compileOnly，需要用户自行引入上述依赖
-- **Spring Boot 版本兼容性**（1.0.4+）：
-  - 推荐使用 Spring Boot 2.7.x 或 3.x
-  - Spring Boot 2.4.x 单数据源可正常使用（自动降级）
-  - Spring Boot 2.4.x 多数据源需升级到 2.7.x+（详见 CHANGELOG.1.0.4.md）
+> route-starter 会自动传递依赖，无需手动添加。推荐 Spring Boot 2.7.x 或 3.x。
 
-### 2. 配置
-
-#### 基础配置（单数据源）
+### 2. 最小配置
 
 ```yaml
 io:
@@ -64,7 +48,204 @@ io:
     surezzzzzz:
       sdk:
         elasticsearch:
-          # route-starter 配置
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              primary:
+                urls: http://localhost:9200
+
+          search:
+            enable: true
+            indices:
+              - name: "user_behavior_*"
+                alias: user_behavior
+                date-split: true
+                date-pattern: "yyyy.MM.dd"
+                date-field: "createTime"
+```
+
+### 3. 发起查询
+
+```bash
+POST /api/query
+{
+  "index": "user_behavior",
+  "query": {
+    "field": "status",
+    "op": "eq",
+    "value": "active"
+  },
+  "pagination": {
+    "type": "offset",
+    "page": 1,
+    "size": 20,
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+---
+
+## API 参考
+
+### POST /api/query — 数据查询
+
+**请求字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `index` | String | 索引别名或名称（必填） |
+| `query` | QueryCondition | 查询条件（可选，不传则查全量） |
+| `dateRange` | DateRange | 时间范围，用于日期分割索引路由 |
+| `pagination` | PaginationInfo | 分页配置（可选，默认 offset 第1页） |
+| `fields` | List\<String\> | 字段投影，只返回指定字段 |
+| `collapse` | CollapseConfig | 字段折叠去重（v1.1.3+） |
+
+**QueryCondition 字段：**
+
+| 字段 | 说明 |
+|------|------|
+| `field` | 字段名 |
+| `op` | 操作符（见下方操作符表） |
+| `value` | 单值 |
+| `values` | 多值（in/between/not_in 使用） |
+| `logic` | 逻辑操作符（and/or），用于嵌套条件 |
+| `conditions` | 子条件列表 |
+
+**PaginationInfo 字段：**
+
+| 字段 | 说明 |
+|------|------|
+| `type` | `offset` 或 `search_after` |
+| `page` | 页码（offset 模式） |
+| `size` | 每页数量 |
+| `sort` | 排序字段列表 |
+| `searchAfter` | 上一页游标（search_after 模式） |
+| `searchAfterMode` | `tiebreaker`（默认）/ `pit` / `none` |
+| `pitKeepAlive` | PIT 保活时间（pit 模式，如 `1m`） |
+| `pitId` | PIT ID（pit 模式，首页不传） |
+
+---
+
+### POST /api/agg — 聚合查询
+
+**请求字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `index` | String | 索引别名或名称（必填） |
+| `query` | QueryCondition | 过滤条件（可选） |
+| `aggs` | List\<AggDefinition\> | 聚合定义列表（必填） |
+| `after` | Map | composite 聚合翻页游标（v1.4.0+） |
+
+**AggDefinition 字段：**
+
+| 字段 | 说明 |
+|------|------|
+| `name` | 聚合名称（响应中的 key） |
+| `type` | 聚合类型（见下方聚合类型表） |
+| `field` | 聚合字段 |
+| `size` | bucket 数量（terms/histogram）或每页大小（composite） |
+| `interval` | 时间间隔（date_histogram，如 `day`/`1d`） |
+| `ranges` | 范围列表（range 聚合） |
+| `aggs` | 嵌套子聚合 |
+| `composite` | 是否使用 composite 翻页模式（v1.4.0+） |
+| `order` | composite 排序方向 asc/desc（v1.4.0+，默认 asc） |
+
+**响应字段：**
+
+| 字段 | 说明 |
+|------|------|
+| `aggregations` | 聚合结果，key 为聚合名称 |
+| `afterKey` | composite 翻页游标，null 表示已遍历完（v1.4.0+） |
+| `took` | 耗时（毫秒） |
+| `rawResponse` | 原始 ES 聚合响应（仅 ES 6.x + 配置启用时） |
+
+---
+
+### GET /api/indices — 索引列表
+
+### GET /api/indices/{index}/fields — 字段信息
+
+### POST /api/indices/refresh — 刷新所有 Mapping
+
+### POST /api/indices/{index}/refresh — 刷新指定索引 Mapping
+
+### GET /api/nl/dsl — 自然语言转 DSL（v1.1.0+）
+
+```bash
+GET /api/nl/dsl?text=查询user_behavior索引，age大于18，按createTime降序，取50条
+```
+
+返回可直接传给 `/api/query` 或 `/api/agg` 的 DSL 对象。
+
+---
+
+## 操作符
+
+| 操作符 | 说明 | 值字段 |
+|--------|------|--------|
+| `eq` | 等于 | `value` |
+| `ne` | 不等于 | `value` |
+| `gt` / `gte` | 大于 / 大于等于 | `value` |
+| `lt` / `lte` | 小于 / 小于等于 | `value` |
+| `in` | 在列表中 | `values` |
+| `not_in` | 不在列表中 | `values` |
+| `between` | 在范围内 | `values: [from, to]` |
+| `like` | 模糊匹配（wildcard） | `value` |
+| `prefix` | 前缀匹配 | `value` |
+| `suffix` | 后缀匹配 | `value` |
+| `regex` | 正则匹配 | `value` |
+| `exists` | 字段存在 | — |
+| `not_exists` | 字段不存在 | — |
+| `is_null` | 字段为空 | — |
+| `is_not_null` | 字段不为空 | — |
+
+---
+
+## 聚合类型
+
+### 指标聚合（Metrics）
+
+`sum` / `avg` / `min` / `max` / `count` / `cardinality` / `stats` / `extended_stats` / `percentiles` / `percentile_ranks`
+
+### 桶聚合（Bucket）
+
+| 类型 | 说明 | 支持 composite |
+|------|------|---------------|
+| `terms` | 分组聚合 | ✅ |
+| `date_histogram` | 日期直方图 | ✅ |
+| `histogram` | 数值直方图 | ✅ |
+| `range` | 范围聚合 | ❌ |
+
+---
+
+## 响应格式
+
+```json
+// 成功（HTTP 200）
+{"data": { ... }}
+
+// 业务错误（HTTP 400）
+{"error": "错误信息"}
+
+// 服务器错误（HTTP 500）
+{"error": "服务器内部错误"}
+```
+
+---
+
+## 高级特性
+
+### 完整配置参考
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
           route:
             enable: true
             default-source: primary
@@ -77,1062 +258,68 @@ io:
                 max-conn-total: 100
                 max-conn-per-route: 10
                 enable-connection-reuse: true
-
-          # search-starter 配置
-          search:
-            enable: true
-
-            # 索引配置
-            indices:
-              - name: "user_behavior_*"          # 索引名称或匹配模式
-                alias: user_behavior              # 索引别名（API 中使用）
-                date-split: true                  # 是否按日期分割
-                date-pattern: "yyyy.MM.dd"        # 日期格式（支持 yyyy, yyyy.MM, yyyy.MM.dd 等）
-                date-field: "createTime"          # 日期字段 可选，用于自动添加 DSL 时间过滤
-                lazy-load: false                  # 是否延迟加载 mapping
-                cache-mapping: true               # 是否缓存 mapping
-
-                # 敏感字段配置
-                sensitive-fields:
-                  - field: "userId"
-                    strategy: "MASK"              # 脱敏策略: MASK / FORBIDDEN
-                    mask-start: 3                 # 保留前3位
-                    mask-end: 4                   # 保留后4位
-                    mask-pattern: "****"          # 脱敏字符
-
-                  - field: "password"
-                    strategy: "FORBIDDEN"         # 禁止访问
-
-            # Mapping 刷新配置
-            mapping-refresh:
-              enabled: true                       # 启用定时刷新
-              interval-seconds: 300              # 刷新间隔（秒），默认300秒
-
-            # 索引路由降级配置（v1.0.10+）
-            downgrade:
-              enabled: true                       # 启用降级功能（默认：true）
-              max-http-line-length: 4096         # HTTP 请求行最大长度（字节，默认：4096）
-              max-level: 3                       # 最大降级级别（0-3，默认：3）
-              enable-estimate: true              # 是否启用预估触发（默认：true）
-              auto-downgrade-index-count-threshold: 200  # 索引数量阈值（默认：200）
-
-            # 查询限制配置
-            query-limits:
-              max-size: 10000                    # 单次查询最大返回数量
-              default-size: 20                   # 默认分页大小
-              max-offset: 10000                  # from + size 的最大值（超过此值强制使用 search_after）
-              ignore-unavailable-indices: false  # 是否忽略不存在的索引（日期分割索引推荐开启）
-              strict-date-filter: true           # 是否始终追加 date range filter（默认 true，防止跨天脏数据）
-              default-date-range: 30d            # 通配索引未传时间范围时的默认范围（v1.4.0+，null 表示不限制）
-
-            # API 配置
-            api:
-              enabled: true                       # 启用 REST API
-              base-path: "/api"                   # API 基础路径
-              include-score: false                # 是否返回 _score（评分）
-              include-raw-response: false         # 是否返回原始聚合响应（仅 ES 6.x 聚合场景）
-
-            # PIT 配置（v1.3.0+）
-            pit:
-              max-keep-alive: 5m                  # PIT 保活时间上限，用户传入值超过此值时报 400
-```
-
-#### 多数据源配置（支持版本兼容）
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        elasticsearch:
-          # route-starter 配置（多数据源）
-          route:
-            enable: true
-            default-source: primary
-            sources:
-              # 主数据源（ES 7.x）
-              primary:
-                urls: http://localhost:9200
-                connect-timeout: 5000
-                socket-timeout: 60000
-
-              # 次数据源（ES 6.2.2）
-              legacy:
+              legacy:                              # 多数据源（ES 6.x）
                 urls: http://legacy-es:9200
-                server-version: 6.2.2           # 指定服务端版本（推荐配置）
-                connect-timeout: 5000
-                socket-timeout: 60000
-
-            # 路由规则
+                server-version: 6.2.2             # 指定版本，自动适配 API 差异
             rules:
-              - pattern: "old_*"                 # 匹配 old_ 开头的索引
+              - pattern: "old_*"
                 datasource: legacy
                 type: prefix
                 priority: 10
 
-          # search-starter 配置
           search:
             enable: true
             indices:
               - name: "user_behavior_*"
                 alias: user_behavior
-                # 默认路由到 primary 数据源
+                date-split: true
+                date-pattern: "yyyy.MM.dd"
+                date-field: "createTime"
+                lazy-load: false
+                cache-mapping: true
+                sensitive-fields:
+                  - field: "phone"
+                    strategy: "MASK"
+                    mask-start: 3
+                    mask-end: 4
+                    mask-pattern: "****"
+                  - field: "password"
+                    strategy: "FORBIDDEN"
+
+            mapping-refresh:
+              enabled: true
+              interval-seconds: 300
+
+            query-limits:
+              max-size: 10000
+              default-size: 20
+              max-offset: 10000
+              ignore-unavailable-indices: false    # 日期分割索引推荐开启
+              strict-date-filter: true             # 防止跨天脏数据（默认 true）
+              default-date-range: 30d              # 通配索引默认时间范围（v1.4.0+）
 
-              - name: "old_logs_*"
-                alias: old_logs
-                # 通过路由规则自动路由到 legacy 数据源
-```
-
-**版本兼容性说明**：
-- 配置 `server-version` 后，框架会针对不同 ES 版本自动适配 API 差异
-- ES 6.x：使用低级 RestClient API 绕过参数兼容性问题
-- ES 7.x+：使用标准的高级 API
-- 未配置版本时，框架会异步检测并自动适配
-
-### 3. 使用 API
-
-#### 查询数据
-
-```bash
-POST /api/query
-Content-Type: application/json
-
-{
-  "index": "user_behavior",
-  "query": {
-    "logic": "and",
-    "conditions": [
-      {
-        "field": "age",
-        "operator": "gte",
-        "value": 18
-      },
-      {
-        "field": "city",
-        "operator": "in",
-        "values": ["Beijing", "Shanghai"]
-      }
-    ]
-  },
-  "pagination": {
-    "type": "offset",
-    "page": 1,
-    "size": 20,
-    "sort": [
-      {
-        "field": "createTime",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-#### 字段折叠（去重）查询（v1.1.3+）
-
-按指定字段去重，每个唯一值只返回一条文档：
-
-```bash
-POST /api/query
-Content-Type: application/json
-
-{
-  "index": "logs",
-  "fields": ["源IP", "@timestamp"],
-  "collapse": {
-    "field": "源IP"
-  },
-  "pagination": {
-    "type": "search_after",
-    "size": 100,
-    "sort": [
-      {
-        "field": "源IP",
-        "order": "asc"
-      }
-    ]
-  }
-}
-```
-
-**说明：**
-- `collapse.field`: 按哪个字段去重
-- 使用 collapse 时**必须指定排序字段**
-- 支持 offset 和 search_after 两种分页方式
-- 仅支持单字段去重（ES 原生限制）
-
-**对比 TERMS 聚合：**
-- TERMS 聚合：不支持翻页，最多返回 65535 条
-- Collapse：支持深度分页，无数量限制
-
-#### 聚合查询
-
-```bash
-POST /api/agg
-Content-Type: application/json
-
-{
-  "index": "user_behavior",
-  "query": {
-    "field": "status",
-    "operator": "eq",
-    "value": "active"
-  },
-  "aggs": [
-    {
-      "name": "city_distribution",
-      "type": "terms",
-      "field": "city",
-      "size": 10,
-      "aggs": [
-        {
-          "name": "avg_age",
-          "type": "avg",
-          "field": "age"
-        }
-      ]
-    },
-    {
-      "name": "daily_stats",
-      "type": "date_histogram",
-      "field": "createTime",
-      "interval": "1d"
-    }
-  ]
-}
-```
-
-#### 获取索引列表
-
-```bash
-GET /api/indices
-```
-
-#### 获取字段信息
-
-```bash
-GET /api/indices/user_behavior/fields
-```
-
-#### 刷新 Mapping
-
-```bash
-# 刷新所有索引
-POST /api/indices/refresh
-
-# 刷新指定索引
-POST /api/indices/user_behavior/refresh
-```
-
-#### 自然语言转 DSL（v1.1.0+）
-
-将中文自然语言查询转换为标准的 QueryRequest 或 AggRequest 对象：
-
-**查询示例：**
-
-```bash
-GET /api/nl/dsl?text=查询user_behavior索引，age大于等于18并且city在Beijing、Shanghai，按createTime降序，取50条
-```
-
-响应（直接返回 DSL 对象，无包装）：
-
-```json
-{
-  "index": "user_behavior",
-  "query": {
-    "logic": "and",
-    "conditions": [
-      {
-        "field": "age",
-        "op": "gte",
-        "value": 18
-      },
-      {
-        "field": "city",
-        "op": "in",
-        "values": ["Beijing", "Shanghai"]
-      }
-    ]
-  },
-  "pagination": {
-    "type": "offset",
-    "page": 1,
-    "size": 50,
-    "sort": [
-      {
-        "field": "createTime",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-**聚合示例：**
-
-```bash
-GET /api/nl/dsl?text=查询user_behavior索引，status等于active，按city分组前10名计算age平均值，按createTime每天统计
-```
-
-响应：
-
-```json
-{
-  "index": "user_behavior",
-  "query": {
-    "field": "status",
-    "op": "eq",
-    "value": "active"
-  },
-  "aggs": [
-    {
-      "name": "city_distribution",
-      "type": "terms",
-      "field": "city",
-      "size": 10,
-      "aggs": [
-        {
-          "name": "avg_age",
-          "type": "avg",
-          "field": "age"
-        }
-      ]
-    },
-    {
-      "name": "daily_stats",
-      "type": "date_histogram",
-      "field": "createTime",
-      "interval": "1d"
-    }
-  ]
-}
-```
-
-**时间范围查询示例（v1.1.1+）：**
-
-```bash
-GET /api/nl/dsl?text=查询user_behavior索引，status等于active，时间范围2025-01-01到2025-12-31，按createTime降序
-```
-
-响应：
-
-```json
-{
-  "index": "user_behavior",
-  "query": {
-    "field": "status",
-    "op": "eq",
-    "value": "active"
-  },
-  "dateRange": {
-    "from": "2025-01-01T00:00:00",
-    "to": "2025-12-31T00:00:00"
-  },
-  "pagination": {
-    "type": "offset",
-    "page": 1,
-    "size": 20,
-    "sort": [
-      {
-        "field": "createTime",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-**search_after 深度分页示例（v1.1.2+）：**
-
-```bash
-GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条
-```
-
-响应：
-
-```json
-{
-  "index": "app_access_log-*",
-  "query": {
-    "field": "clientIP",
-    "op": "eq",
-    "value": "192.168.1.1"
-  },
-  "dateRange": {
-    "from": "2025-01-01T00:00:00",
-    "to": "2026-01-01T00:00:00"
-  },
-  "pagination": {
-    "type": "search_after",
-    "searchAfter": [1704110400000, "user_123", "doc_456"],
-    "size": 500,
-    "sort": [
-      {
-        "field": "timestamp",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-**与其他 API 配合使用：**
-
-生成的 DSL 对象可以直接传递给 `/api/query` 或 `/api/agg` 执行查询：
-
-```javascript
-// 步骤 1：生成 DSL
-const dsl = await fetch('/api/nl/dsl?text=查询订单，状态为已完成，按时间降序，取20条')
-  .then(res => res.json());
-
-// 步骤 2：执行查询
-const result = await fetch('/api/query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(dsl)
-}).then(res => res.json());
-```
-
-**注意事项：**
-- 自然语言中的字段名需要与索引中的实际字段名一致
-- 必须通过自然语言或 `index` 参数指定索引名
-- 未指定分页时自动应用 `query-limits.default-size`（默认 20 条）
-- **时间范围支持（v1.1.1+）**：支持"时间范围2025-01-01到2025-12-31"等语法
-- **search_after 深度分页（v1.1.2+）**：支持"接着[value1,value2]继续查询"等语法
-- 详细语法和示例请参考 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)、[CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md) 和 [CHANGELOG.1.1.2.md](CHANGELOG.1.1.2.md)
-
-## DSL 最佳实践
-
-以下示例展示了如何使用自然语言查询 + search_after 深度分页处理复杂的日志查询场景，涵盖了条件查询、时间范围过滤、排序和深度分页等核心功能。
-
-### 场景：大规模日志深度分页查询
-
-**需求**：查询某个客户端的访问日志，时间范围为一整年，按时间戳降序，使用 search_after 进行深度分页，每次返回 500 条。
-
-**步骤 1：生成第一页查询 DSL**
-
-```bash
-GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，返回500条
-```
-
-响应（自动生成的 DSL）：
-
-```json
-{
-  "index": "app_access_log-*",
-  "query": {
-    "field": "clientIP",
-    "op": "eq",
-    "value": "192.168.1.1"
-  },
-  "dateRange": {
-    "from": "2025-01-01T00:00:00",
-    "to": "2026-01-01T00:00:00"
-  },
-  "pagination": {
-    "type": "offset",
-    "page": 1,
-    "size": 500,
-    "sort": [
-      {
-        "field": "timestamp",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-**步骤 2：执行第一页查询**
-
-将生成的 DSL 发送给 `/api/query` 执行：
-
-```javascript
-const dsl = await fetch('/api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，返回500条')
-  .then(res => res.json());
-
-const result = await fetch('/api/query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(dsl)
-}).then(res => res.json());
-
-// 响应数据中包含 search_after 值
-const lastHit = result.data.hits[result.data.hits.length - 1];
-const searchAfterValue = lastHit.sort; // 例如：[1704110400000, "user_123", "doc_456"]
-```
-
-**步骤 3：生成第二页查询 DSL（使用 search_after）**
-
-使用上一页的最后一条记录的 `sort` 值作为 searchAfter 参数：
-
-```bash
-GET /api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条
-```
-
-响应（DSL 自动切换到 search_after 分页）：
-
-```json
-{
-  "index": "app_access_log-*",
-  "query": {
-    "field": "clientIP",
-    "op": "eq",
-    "value": "192.168.1.1"
-  },
-  "dateRange": {
-    "from": "2025-01-01T00:00:00",
-    "to": "2026-01-01T00:00:00"
-  },
-  "pagination": {
-    "type": "search_after",
-    "searchAfter": [1704110400000, "user_123", "doc_456"],
-    "size": 500,
-    "sort": [
-      {
-        "field": "timestamp",
-        "order": "desc"
-      }
-    ]
-  }
-}
-```
-
-**步骤 4：执行第二页查询**
-
-```javascript
-const nextPageDsl = await fetch('/api/nl/dsl?text=查询app_access_log-*索引，clientIP等于192.168.1.1，时间范围2025-01-01到2026-01-01，按timestamp降序，接着[1704110400000,user_123,doc_456]继续查询，返回500条')
-  .then(res => res.json());
-
-const nextResult = await fetch('/api/query', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(nextPageDsl)
-}).then(res => res.json());
-
-// 继续获取下一页的 search_after 值...
-```
-
-### 关键特性说明
-
-1. **条件查询**：`clientIP等于192.168.1.1` → 精确匹配过滤
-2. **时间范围过滤**：`时间范围2025-01-01到2026-01-01` → 自动转换为 `dateRange` 字段
-3. **日期分割索引路由**：`app_access_log-*` → 框架根据 `dateRange` 自动计算需要查询的具体索引
-4. **排序**：`按timestamp降序` → 确保结果按时间倒序排列
-5. **深度分页**：`接着[value1,value2,value3]继续查询` → 使用 search_after 避免 Elasticsearch 10000 条的 `max_result_window` 限制
-6. **多值 searchAfter**：支持多个排序字段的游标值（timestamp、user_id、doc_id 等）
-
-### 适用场景
-
-- ✅ 日志导出（需要遍历大量数据）
-- ✅ 数据迁移（跨集群同步）
-- ✅ 安全审计（长时间跨度的用户行为分析）
-- ✅ 实时数据流（持续获取新增数据）
-
-### 性能优化建议
-
-- 使用 `search_after` 替代 `offset` 进行深度分页（offset > 10000 时强制切换）
-- 排序字段建议包含唯一标识字段（如 `_id`）以保证结果稳定性
-- 大范围时间查询时，框架自动启用索引路由降级策略（v1.0.10+）
-- 配置 `date-field` 后，框架自动在 DSL 中添加时间过滤以提高查询精度
-
-### 场景：全量遍历聚合数据（composite 翻页）
-
-**需求**：统计某索引中所有用户的订单总金额，用户数量超过 65535，需要全量遍历。
-
-**步骤 1：第一页（不传 after）**
-
-```bash
-POST /api/agg
-Content-Type: application/json
-
-{
-  "index": "order_index",
-  "query": {
-    "field": "status",
-    "op": "eq",
-    "value": "completed"
-  },
-  "aggs": [
-    {
-      "name": "user_total",
-      "type": "terms",
-      "field": "userId",
-      "composite": true,
-      "size": 1000,
-      "aggs": [
-        {
-          "name": "total_amount",
-          "type": "sum",
-          "field": "amount"
-        }
-      ]
-    }
-  ]
-}
-```
-
-响应：
-
-```json
-{
-  "data": {
-    "aggregations": {
-      "user_total": [
-        {"key": "user_001", "count": 5, "total_amount": 1299.0},
-        {"key": "user_002", "count": 3, "total_amount": 599.0}
-      ]
-    },
-    "afterKey": {
-      "user_total": {"userId": "user_002"}
-    },
-    "took": 12
-  }
-}
-```
-
-**步骤 2：翻页（传入上一页的 afterKey）**
-
-```bash
-POST /api/agg
-Content-Type: application/json
-
-{
-  "index": "order_index",
-  "query": {
-    "field": "status",
-    "op": "eq",
-    "value": "completed"
-  },
-  "after": {
-    "user_total": {"userId": "user_002"}
-  },
-  "aggs": [
-    {
-      "name": "user_total",
-      "type": "terms",
-      "field": "userId",
-      "composite": true,
-      "size": 1000,
-      "aggs": [
-        {
-          "name": "total_amount",
-          "type": "sum",
-          "field": "amount"
-        }
-      ]
-    }
-  ]
-}
-```
-
-**步骤 3：判断是否结束**
-
-```javascript
-async function fetchAllUserTotals() {
-  let after = null;
-  const allResults = [];
-
-  while (true) {
-    const body = {
-      index: "order_index",
-      query: { field: "status", op: "eq", value: "completed" },
-      after: after,
-      aggs: [{
-        name: "user_total",
-        type: "terms",
-        field: "userId",
-        composite: true,
-        size: 1000,
-        aggs: [{ name: "total_amount", type: "sum", field: "amount" }]
-      }]
-    };
-
-    const resp = await fetch('/api/agg', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(r => r.json());
-
-    const buckets = resp.data.aggregations.user_total;
-    allResults.push(...buckets);
-
-    // afterKey 为 null 表示已遍历完
-    after = resp.data.afterKey;
-    if (!after) break;
-  }
-
-  return allResults;
-}
-```
-
-**关键特性说明：**
-1. `composite: true`：启用 composite 模式，突破 65535 条限制
-2. `size: 1000`：每页返回 1000 个 bucket，可根据性能调整
-3. `afterKey`：下一页游标，为 `null` 时表示遍历完成
-4. 嵌套 metrics 子聚合（`total_amount`）在 composite 模式下正常工作
-5. 支持 ES 6.1+（含 ES 6.x 和 7.x+）
-
-**对比 TERMS 聚合：**
-
-| | TERMS 聚合 | composite 聚合 |
-|--|-----------|--------------|
-| 最大返回数 | 65535 | 无限制 |
-| 翻页支持 | ❌ | ✅ |
-| 排序方式 | 按 doc_count | 按字段值 |
-| 适用场景 | Top N 统计 | 全量遍历 |
-
-## 查询操作符
-
-| 操作符 | 说明 | 示例 |
-|--------|------|------|
-| `eq` | 等于 | `{"field": "status", "operator": "eq", "value": "active"}` |
-| `ne` | 不等于 | `{"field": "status", "operator": "ne", "value": "deleted"}` |
-| `gt` | 大于 | `{"field": "age", "operator": "gt", "value": 18}` |
-| `gte` | 大于等于 | `{"field": "age", "operator": "gte", "value": 18}` |
-| `lt` | 小于 | `{"field": "score", "operator": "lt", "value": 60}` |
-| `lte` | 小于等于 | `{"field": "score", "operator": "lte", "value": 60}` |
-| `in` | 在列表中 | `{"field": "city", "operator": "in", "values": ["Beijing", "Shanghai"]}` |
-| `not_in` | 不在列表中 | `{"field": "status", "operator": "not_in", "values": ["deleted", "banned"]}` |
-| `between` | 在范围内 | `{"field": "age", "operator": "between", "values": [18, 65]}` |
-| `like` | 模糊匹配 | `{"field": "username", "operator": "like", "value": "admin"}` |
-| `prefix` | 前缀匹配 | `{"field": "email", "operator": "prefix", "value": "admin"}` |
-| `suffix` | 后缀匹配 | `{"field": "email", "operator": "suffix", "value": "@gmail.com"}` |
-| `exists` | 字段存在 | `{"field": "phone", "operator": "exists"}` |
-| `not_exists` | 字段不存在 | `{"field": "deletedAt", "operator": "not_exists"}` |
-| `is_null` | 字段为空 | `{"field": "remark", "operator": "is_null"}` |
-| `is_not_null` | 字段不为空 | `{"field": "userId", "operator": "is_not_null"}` |
-| `regex` | 正则匹配 | `{"field": "phone", "operator": "regex", "value": "1[3-9]\\d{9}"}` |
-
-## 聚合类型
-
-### 指标聚合
-
-- `sum` - 求和
-- `avg` - 平均值
-- `min` - 最小值
-- `max` - 最大值
-- `count` - 计数（使用 value_count）
-- `cardinality` - 基数（去重计数）
-- `stats` - 统计（包含 count、min、max、avg、sum）
-
-### 桶聚合
-
-- `terms` - 分组聚合
-- `date_histogram` - 日期直方图
-- `histogram` - 数值直方图
-- `range` - 范围聚合
-
-### composite 聚合翻页（v1.4.0+）
-
-对 `terms`、`date_histogram`、`histogram` 支持 composite 模式，实现无限翻页，突破 65535 条限制（ES 6.1+）：
-
-```json
-{
-  "name": "all_users",
-  "type": "terms",
-  "field": "userId",
-  "composite": true,
-  "size": 1000,
-  "order": "asc"
-}
-```
-
-响应中的 `afterKey` 传入下次请求的 `after` 字段即可翻页，`afterKey` 为 `null` 表示已遍历完。
-
-## 响应格式
-
-### 成功响应（HTTP 200）
-
-```json
-{
-  "data": {
-    // 响应数据，如查询结果、聚合结果等
-  }
-}
-```
-
-### 业务错误（HTTP 400）
-
-```json
-{
-  "error": "参数错误信息"
-}
-```
-
-### 服务器错误（HTTP 500）
-
-```json
-{
-  "error": "服务器内部错误"
-}
-```
-
-## 高级特性
-
-### ES 6.x 聚合兼容性
-
-**背景**：
-在使用 Spring Boot 2.4.x（ES 6.x 客户端）查询 ES 6.x 集群时，由于 ES 7.x 客户端的 `NamedXContentRegistry` 无法正确解析 ES 6.x 的聚合响应格式，会导致聚合查询失败。
-
-**解决方案**：
-SDK 自动检测 ES 6.x 聚合响应，使用低级 API + 手动 JSON 解析，完美支持 ES 6.x 聚合查询。
-
-**特性**：
-- **自动检测**：无需配置，SDK 自动识别 ES 6.x 聚合响应
-- **手动解析**：使用 Jackson 手动解析聚合数据，避免 NamedXContentRegistry 问题
-- **格式统一**：自动提取嵌套值（如 `{"value": 123.0}` → `123.0`），保持与 ES 7.x+ 的响应格式一致
-- **零侵入**：业务代码无需任何修改
-
-### rawResponse 支持（零侵入迁移）
-
-**背景**：
-从 Spring Boot 2.4.x + RestTemplate/TransportClient 迁移到 SDK 时，现有业务代码可能直接解析 ES 原始响应格式（如 `{"avg_price": {"value": 6439.0}}`）。
-
-**解决方案**：
-SDK 提供可选的 `rawResponse` 字段，包含未经解析的原始聚合数据，让用户可以：
-1. **零侵入迁移**：业务代码无需修改，直接使用 `rawResponse`
-2. **数据对比**：对比 `aggregations`（解析后）和 `rawResponse`（原始），验证数据正确性
-3. **自主选择**：根据需要选择使用解析后的统一格式或原始 ES 格式
-
-**配置示例**：
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        elasticsearch:
-          search:
             api:
-              include-raw-response: true  # 启用原始响应（默认 false）
-```
+              enabled: true
+              base-path: "/api"
+              include-score: false
+              include-raw-response: false          # ES 6.x 原始聚合响应
 
-**响应格式对比**：
-
-**未启用**（默认）：
-```json
-{
-  "data": {
-    "aggregations": {
-      "avg_price": 6439.0,
-      "total_stock": 550.0
-    },
-    "took": 15
-  }
-}
-```
-
-**已启用**：
-```json
-{
-  "data": {
-    "aggregations": {
-      "avg_price": 6439.0,
-      "total_stock": 550.0
-    },
-    "rawResponse": {
-      "avg_price": {"value": 6439.0},
-      "total_stock": {"value": 550.0}
-    },
-    "took": 15
-  }
-}
-```
-
-**使用场景**：
-- ✅ 从旧版 ES 客户端迁移，需要兼容现有 JSON 解析逻辑
-- ✅ 需要对比验证 SDK 解析结果的正确性
-- ❌ 新项目，推荐直接使用解析后的统一格式（`aggregations`）
-
-**注意事项**：
-- `rawResponse` 仅在 **ES 6.x 聚合场景**下有值
-- ES 7.x+ 聚合查询，`rawResponse` 为 `null`（不会序列化）
-- 非聚合查询（普通 query），`rawResponse` 为 `null`
-
-### 日期分割索引查询
-
-框架支持按 **年、月、日** 三种粒度的日期分割索引：
-
-**支持的日期格式：**
-- `yyyy` - 按年分割（如 `log_2025`）
-- `yyyy.MM` 或 `yyyy-MM` - 按月分割（如 `log_2025.01`）
-- `yyyy.MM.dd` 或 `yyyy-MM-dd` - 按天分割（如 `log_2025.01.15`）
-
-**配置示例：**
-
-```yaml
-# 按月分割
-indices:
-  - name: "monthly_log_*"
-    alias: monthly_log
-    date-split: true
-    date-pattern: "yyyy.MM"        # 按月分割
-    date-field: "timestamp"        # 可选，配置后自动添加 DSL 时间过滤
-
-# 按年分割
-  - name: "yearly_archive_*"
-    alias: yearly_archive
-    date-split: true
-    date-pattern: "yyyy"            # 按年分割
-    date-field: "created_at"       # 可选，配置后自动添加 DSL 时间过滤
-```
-
-**查询示例：**
-
-对于按日期分割的索引（如 `user_behavior_2025.12.17`），可以使用 `dateRange` 参数进行精确查询：
-
-```json
-{
-  "index": "user_behavior",
-  "dateRange": {
-    "from": "2025-12-17T00:00:00",
-    "to": "2025-12-18T23:59:59"
-  },
-  "query": {
-    "field": "action",
-    "operator": "eq",
-    "value": "login"
-  }
-}
-```
-
-说明：
-- `dateRange` 用于索引路由，框架会根据 `date-pattern` 自动判断分割粒度
-- **按年分割**：查询 2023-2025 年数据，生成 `log_2023`, `log_2024`, `log_2025`
-- **按月分割**：查询 2025-01 到 2025-03，生成 `log_2025.01`, `log_2025.02`, `log_2025.03`
-- **按天分割**：查询 3 天数据，生成对应的 3 个索引
-- 如果配置了 `date-field`，框架会自动在 DSL 中添加时间范围过滤
-- 日期格式支持 ISO 格式（`2025-12-17T00:00:00`）和纯日期格式（`2025-12-17`）
-
-### 索引路由智能降级（v1.0.10+）
-
-**背景问题：**
-查询大范围日期分割索引时（如查询一年365天的日志），索引名过多会导致 HTTP 请求行超过 Elasticsearch 默认的 4096 字节限制，触发 `too_long_frame_exception` 异常。
-
-**解决方案：**
-框架采用多级智能降级策略，自动将具体索引名转换为通配符模式，减少 HTTP 请求行长度。
-
-**降级策略：**
-
-| 降级级别 | 日粒度索引示例 | 月粒度索引示例 | 年粒度索引示例 |
-|---------|-------------|-------------|-------------|
-| LEVEL_0 | `log_2025.01.01` | `log_2025.01` | `log_2025` |
-| LEVEL_1 | `log_2025.01.*` | `log_2025.*` | `log_*` |
-| LEVEL_2 | `log_2025.*` | `log_*` | `log_*` |
-| LEVEL_3 | `log_*` | `log_*` | `log_*` |
-
-**触发方式：**
-1. **预估触发**（默认启用）：查询前预估索引数量和请求行长度，如果超过阈值，自动使用合适的降级级别
-2. **异常触发**（兜底）：捕获 `too_long_frame_exception` 异常，自动降级重试
-
-**配置示例：**
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        elasticsearch:
-          search:
             downgrade:
-              enabled: true                       # 启用降级（默认 true）
-              max-http-line-length: 4096         # HTTP 请求行限制（默认 4096）
-              max-level: 3                       # 最大降级级别（默认 3）
-              enable-estimate: true              # 启用预估触发（默认 true）
-              auto-downgrade-index-count-threshold: 200  # 索引数量阈值（默认 200）
+              enabled: true
+              max-http-line-length: 4096
+              max-level: 3
+              enable-estimate: true
+              auto-downgrade-index-count-threshold: 200
+
+            pit:
+              max-keep-alive: 5m                   # PIT 保活时间上限（v1.3.0+）
 ```
 
-**使用示例：**
+### 深分页（search_after）
 
-```json
-{
-  "index": "daily_log",
-  "dateRange": {
-    "from": "2025-01-01",
-    "to": "2025-12-31"
-  },
-  "query": {
-    "field": "level",
-    "operator": "eq",
-    "value": "ERROR"
-  }
-}
-```
+三种模式，通过 `searchAfterMode` 指定：
 
-**执行流程：**
-1. 初始生成 365 个具体索引（超过阈值200，且HTTP请求行 > 4096字节）
-2. 自动降级到 LEVEL_1：生成 12 个月级通配符（`log_2025.01.*`, ..., `log_2025.12.*`）
-3. 查询成功
-
-**注意事项：**
-- 降级级别越高，查询精度越低，可能查询到范围外的索引
-- 建议在查询条件中添加时间过滤以保证精度
-- 通过日志可以监控降级触发情况
-
-### 复杂查询条件
-
-支持嵌套的逻辑组合（AND/OR）：
-
-```json
-{
-  "logic": "and",
-  "conditions": [
-    {
-      "field": "status",
-      "operator": "eq",
-      "value": "active"
-    },
-    {
-      "logic": "or",
-      "conditions": [
-        {
-          "field": "city",
-          "operator": "eq",
-          "value": "Beijing"
-        },
-        {
-          "field": "city",
-          "operator": "eq",
-          "value": "Shanghai"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### 嵌套聚合
-
-```json
-{
-  "name": "city_distribution",
-  "type": "terms",
-  "field": "city",
-  "aggs": [
-    {
-      "name": "gender_distribution",
-      "type": "terms",
-      "field": "gender",
-      "aggs": [
-        {
-          "name": "avg_age",
-          "type": "avg",
-          "field": "age"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### 深分页优化
-
-当 offset 超过配置的最大值时，自动切换到 search_after 分页。
-
-#### tiebreaker 模式（默认）
-
-自动追加 `_id ASC` 保证排序稳定，兼容旧版本行为：
+**tiebreaker（默认）**：自动追加 `_id ASC`，保证排序稳定
 
 ```json
 {
@@ -1145,9 +332,7 @@ io:
 }
 ```
 
-#### pit 模式（内存敏感场景，ES 7.10+）
-
-不追加 `_id`，使用 Point In Time 快照保证翻页一致性。PIT 生命周期由框架自动管理，第一页不传 `pitId`，后续翻页将响应中的 `pitId` 带回即可：
+**pit（ES 7.10+）**：使用 Point In Time 快照，不追加 `_id`，适合内存敏感场景。框架自动管理 PIT 生命周期，首页不传 `pitId`，后续翻页将响应中的 `pitId` 带回即可：
 
 ```json
 {
@@ -1163,17 +348,7 @@ io:
 }
 ```
 
-服务端可配置 PIT 保活时间上限（默认 5m），用户传入值超过上限时报 400：
-
-```yaml
-search:
-  pit:
-    max-keep-alive: 5m
-```
-
-#### none 模式
-
-排序字段本身已唯一（如按唯一 ID 排序）时使用，不追加任何 tiebreaker：
+**none**：排序字段本身唯一时使用，不追加任何 tiebreaker：
 
 ```json
 {
@@ -1188,7 +363,292 @@ search:
 
 ### composite 聚合翻页（v1.4.0+）
 
-对大基数字段（如用户 ID、设备 ID）做全量遍历时，`terms` 聚合最多返回 65535 条。使用 composite 模式可突破此限制，实现无限翻页。
+对大基数字段全量遍历时，`terms` 聚合最多返回 65535 条。`composite: true` 可突破此限制，支持 ES 6.1+：
+
+```json
+{
+  "aggs": [{
+    "name": "all_users",
+    "type": "terms",
+    "field": "userId",
+    "composite": true,
+    "size": 1000,
+    "aggs": [{"name": "total_amount", "type": "sum", "field": "amount"}]
+  }]
+}
+```
+
+响应中的 `afterKey` 传入下次请求的 `after` 字段即可翻页，`afterKey` 为 `null` 表示遍历完成。
+
+| | TERMS 聚合 | composite 聚合 |
+|--|-----------|--------------|
+| 最大返回数 | 65535 | 无限制 |
+| 翻页支持 | ❌ | ✅ |
+| 排序方式 | 按 doc_count | 按字段值 |
+| 适用场景 | Top N 统计 | 全量遍历 |
+
+### 通配索引默认时间范围（v1.4.0+）
+
+对含 `*` 或 `?` 的索引，未传时间范围时自动补充，防止全量扫描：
+
+```yaml
+query-limits:
+  default-date-range: 30d  # 支持 30d / 7d / 24h / 1h 等，null 表示不限制（默认）
+```
+
+| 场景 | 行为 |
+|------|------|
+| 通配索引 + 未传时间范围 | 自动补充最近 N 时间 |
+| 通配索引 + 已传时间范围 | 不覆盖，使用用户传入值 |
+| 精确索引（无通配符） | 不触发，全量查询 |
+
+### 日期分割索引
+
+支持按年/月/日分割，`dateRange` 用于索引路由：
+
+```json
+{
+  "index": "user_behavior",
+  "dateRange": {"from": "2025-12-01T00:00:00", "to": "2025-12-31T23:59:59"},
+  "query": {"field": "action", "op": "eq", "value": "login"}
+}
+```
+
+大范围查询时（如全年365天），框架自动启用索引路由降级，将具体索引名转为通配符模式，避免 HTTP 请求行超限。
+
+### ES 6.x 兼容性
+
+- 自动检测 ES 版本，6.x 使用低级 API 绕过参数兼容性问题
+- 聚合响应自动用 Jackson 手动解析，格式与 7.x+ 保持一致
+- composite 聚合自动移除 7.x client 序列化的 `missing_bucket` 字段，保证 ES 6.1+ 可用
+- 可选 `include-raw-response: true` 返回原始聚合 JSON，支持零侵入迁移
+
+---
+
+## 最佳实践
+
+### 场景一：普通分页查询
+
+最常见的场景，按条件查询并分页返回。
+
+**第一页：**
+
+```json
+POST /api/query
+{
+  "index": "user_behavior",
+  "query": {
+    "logic": "and",
+    "conditions": [
+      {"field": "status", "op": "eq", "value": "active"},
+      {"field": "age", "op": "gte", "value": 18}
+    ]
+  },
+  "pagination": {
+    "type": "offset",
+    "page": 1,
+    "size": 20,
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+**响应：**
+
+```json
+{
+  "data": {
+    "total": 1234,
+    "page": 1,
+    "size": 20,
+    "items": [
+      {"_id": "doc1", "userId": "u001", "status": "active"}
+    ],
+    "pagination": {
+      "type": "offset",
+      "hasMore": true
+    }
+  }
+}
+```
+
+**翻页：** 修改 `page` 字段即可，`page: 2`、`page: 3`……
+
+**注意：** offset 分页在 `(page-1)*size > max-offset`（默认 10000）时会报 400，超深分页请改用 search_after。
+
+---
+
+### 场景二：大规模数据深度分页（search_after）
+
+当数据量超过 10000 条，或需要遍历全量数据时，使用 search_after 模式。
+
+**第一页（不传 searchAfter）：**
+
+```json
+POST /api/query
+{
+  "index": "app_access_log",
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2025-12-31T23:59:59"
+  },
+  "query": {"field": "clientIP", "op": "eq", "value": "192.168.1.1"},
+  "pagination": {
+    "type": "search_after",
+    "size": 500,
+    "sort": [
+      {"field": "timestamp", "order": "desc"},
+      {"field": "requestId", "order": "asc"}
+    ]
+  }
+}
+```
+
+**响应：**
+
+```json
+{
+  "data": {
+    "total": 58000,
+    "size": 500,
+    "items": [...],
+    "pagination": {
+      "type": "search_after",
+      "hasMore": true,
+      "nextSearchAfter": [1735660800000, "req_abc123"]
+    }
+  }
+}
+```
+
+**下一页（传入 nextSearchAfter）：**
+
+```json
+POST /api/query
+{
+  "index": "app_access_log",
+  "dateRange": {"from": "2025-01-01T00:00:00", "to": "2025-12-31T23:59:59"},
+  "query": {"field": "clientIP", "op": "eq", "value": "192.168.1.1"},
+  "pagination": {
+    "type": "search_after",
+    "size": 500,
+    "searchAfter": [1735660800000, "req_abc123"],
+    "sort": [
+      {"field": "timestamp", "order": "desc"},
+      {"field": "requestId", "order": "asc"}
+    ]
+  }
+}
+```
+
+**循环翻页直到结束：**
+
+```javascript
+async function fetchAll() {
+  let searchAfter = null;
+  const allItems = [];
+
+  while (true) {
+    const resp = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        index: "app_access_log",
+        dateRange: {from: "2025-01-01T00:00:00", to: "2025-12-31T23:59:59"},
+        query: {field: "clientIP", op: "eq", value: "192.168.1.1"},
+        pagination: {
+          type: "search_after",
+          size: 500,
+          searchAfter: searchAfter,
+          sort: [
+            {field: "timestamp", order: "desc"},
+            {field: "requestId", order: "asc"}
+          ]
+        }
+      })
+    }).then(r => r.json());
+
+    allItems.push(...resp.data.items);
+
+    if (!resp.data.pagination.hasMore) break;
+    searchAfter = resp.data.pagination.nextSearchAfter;
+  }
+
+  return allItems;
+}
+```
+
+**注意事项：**
+- 排序字段组合必须能唯一确定一条记录，否则翻页可能漏数据。推荐末尾加一个唯一字段（如 `requestId`）
+- 默认 `tiebreaker` 模式会自动追加 `_id ASC`，可以不手动加唯一字段
+- 每次翻页必须传相同的 `sort` 和 `dateRange`，不能中途修改
+
+---
+
+### 场景三：内存敏感场景（PIT 模式，ES 7.10+）
+
+`tiebreaker` 模式会在排序中追加 `_id`，ES 需要为 `_id` 加载 fielddata，内存占用较高。如果集群内存紧张，改用 `pit` 模式：
+
+**第一页（不传 pitId）：**
+
+```json
+POST /api/query
+{
+  "index": "large_index",
+  "pagination": {
+    "type": "search_after",
+    "searchAfterMode": "pit",
+    "pitKeepAlive": "1m",
+    "size": 1000,
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+**响应：**
+
+```json
+{
+  "data": {
+    "pagination": {
+      "type": "search_after",
+      "hasMore": true,
+      "pitId": "46ToAwMDaWR...",
+      "nextSearchAfter": [1735660800000]
+    }
+  }
+}
+```
+
+**下一页（带回 pitId 和 nextSearchAfter）：**
+
+```json
+POST /api/query
+{
+  "index": "large_index",
+  "pagination": {
+    "type": "search_after",
+    "searchAfterMode": "pit",
+    "pitKeepAlive": "1m",
+    "pitId": "46ToAwMDaWR...",
+    "searchAfter": [1735660800000],
+    "size": 1000,
+    "sort": [{"field": "createTime", "order": "desc"}]
+  }
+}
+```
+
+**注意事项：**
+- `pitKeepAlive` 建议设 `1m`~`5m`，不要太长，避免占用 ES 资源
+- 每次翻页都要把上一页响应的 `pitId` 带回，框架会自动续期
+- 最后一页（`hasMore: false`）框架自动关闭 PIT，无需手动处理
+- 服务端可配置 `pit.max-keep-alive` 限制最大保活时间（默认 5m），超过则报 400
+
+---
+
+### 场景四：全量遍历聚合数据（composite 翻页）
+
+`terms` 聚合默认最多返回 65535 个 bucket，无法遍历全量。`composite: true` 可突破此限制，支持 ES 6.1+。
 
 **第一页（不传 after）：**
 
@@ -1196,32 +656,38 @@ search:
 POST /api/agg
 {
   "index": "order_index",
+  "query": {"field": "status", "op": "eq", "value": "completed"},
   "aggs": [
     {
-      "name": "all_users",
+      "name": "user_total",
       "type": "terms",
       "field": "userId",
       "composite": true,
-      "size": 1000
+      "size": 1000,
+      "aggs": [
+        {"name": "total_amount", "type": "sum", "field": "amount"},
+        {"name": "order_count", "type": "count", "field": "orderId"}
+      ]
     }
   ]
 }
 ```
 
-响应：
+**响应：**
 
 ```json
 {
   "data": {
     "aggregations": {
-      "all_users": [
-        {"key": "user_001", "count": 42},
-        {"key": "user_002", "count": 18}
+      "user_total": [
+        {"key": "user_001", "count": 5, "total_amount": 1299.0, "order_count": 5},
+        {"key": "user_002", "count": 3, "total_amount": 599.0, "order_count": 3}
       ]
     },
     "afterKey": {
-      "all_users": {"userId": "user_002"}
-    }
+      "user_total": {"userId": "user_002"}
+    },
+    "took": 12
   }
 }
 ```
@@ -1232,60 +698,181 @@ POST /api/agg
 POST /api/agg
 {
   "index": "order_index",
+  "query": {"field": "status", "op": "eq", "value": "completed"},
   "after": {
-    "all_users": {"userId": "user_002"}
+    "user_total": {"userId": "user_002"}
   },
   "aggs": [
     {
-      "name": "all_users",
+      "name": "user_total",
       "type": "terms",
       "field": "userId",
       "composite": true,
-      "size": 1000
+      "size": 1000,
+      "aggs": [
+        {"name": "total_amount", "type": "sum", "field": "amount"},
+        {"name": "order_count", "type": "count", "field": "orderId"}
+      ]
     }
   ]
 }
 ```
 
-`afterKey` 为 `null` 时表示已遍历完所有数据。
+**循环翻页直到结束：**
 
-**支持嵌套 metrics 子聚合：**
+```javascript
+async function fetchAllUserTotals() {
+  let after = null;
+  const allResults = [];
 
-```json
-{
-  "name": "all_users",
-  "type": "terms",
-  "field": "userId",
-  "composite": true,
-  "size": 1000,
-  "aggs": [
-    {"name": "total_amount", "type": "sum", "field": "amount"}
-  ]
+  while (true) {
+    const resp = await fetch('/api/agg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        index: "order_index",
+        query: {field: "status", op: "eq", value: "completed"},
+        after: after,
+        aggs: [{
+          name: "user_total",
+          type: "terms",
+          field: "userId",
+          composite: true,
+          size: 1000,
+          aggs: [
+            {name: "total_amount", type: "sum", field: "amount"},
+            {name: "order_count", type: "count", field: "orderId"}
+          ]
+        }]
+      })
+    }).then(r => r.json());
+
+    allResults.push(...resp.data.aggregations.user_total);
+
+    // afterKey 为 null 表示已遍历完所有数据
+    after = resp.data.afterKey;
+    if (!after) break;
+  }
+
+  return allResults;
 }
 ```
 
-**注意：**
-- composite 内部只允许嵌套 metrics 聚合，不允许嵌套 bucket 聚合
-- 支持 ES 6.1+（含 ES 6.x 和 7.x+）
+**注意事项：**
+- `size` 建议 500~2000，太小请求次数多，太大单次响应慢
+- composite 内部只允许嵌套 metrics 子聚合（sum/avg/min/max/count 等），不允许嵌套 terms 等 bucket 聚合
+- 每次翻页必须传相同的 `query` 和 `aggs` 定义，只改 `after`
+- `afterKey` 为 `null` 时表示遍历完成，不要继续请求
 
-### 通配索引默认时间范围（v1.4.0+）
+---
 
-对含通配符（`*` 或 `?`）的索引，若请求未传时间范围，自动补充默认时间范围，防止全量扫描。
+### 场景五：嵌套逻辑查询
 
-```yaml
-search:
-  query-limits:
-    default-date-range: 30d  # 支持 30d / 7d / 24h / 1h 等，null 表示不限制（默认）
+等价于 SQL：`WHERE status='active' AND age BETWEEN 18 AND 60 AND (city='Beijing' OR city='Shanghai' OR city='Guangzhou')`
+
+```json
+POST /api/query
+{
+  "index": "user_behavior",
+  "query": {
+    "logic": "and",
+    "conditions": [
+      {"field": "status", "op": "eq", "value": "active"},
+      {"field": "age", "op": "between", "values": [18, 60]},
+      {
+        "logic": "or",
+        "conditions": [
+          {"field": "city", "op": "eq", "value": "Beijing"},
+          {"field": "city", "op": "eq", "value": "Shanghai"},
+          {"field": "city", "op": "eq", "value": "Guangzhou"}
+        ]
+      }
+    ]
+  },
+  "pagination": {"type": "offset", "page": 1, "size": 20}
+}
 ```
 
-| 场景 | 行为 |
-|------|------|
-| 通配索引 + 未传时间范围 | 自动补充最近 N 时间 |
-| 通配索引 + 已传时间范围 | 不覆盖，使用用户传入值 |
-| 精确索引（无通配符） | 不触发，全量查询 |
+---
 
-配置格式不合法时，启动时快速失败。
+### 场景六：字段折叠去重（v1.1.3+）
+
+按源 IP 去重，每个 IP 只返回最新一条记录，支持深度翻页：
+
+```json
+POST /api/query
+{
+  "index": "access_log",
+  "fields": ["sourceIP", "lastAccessTime", "requestCount"],
+  "collapse": {"field": "sourceIP"},
+  "pagination": {
+    "type": "search_after",
+    "size": 100,
+    "sort": [{"field": "sourceIP", "order": "asc"}]
+  }
+}
+```
+
+**注意事项：**
+- 使用 collapse 时**必须指定排序字段**
+- 仅支持单字段去重（ES 原生限制）
+- 与 TERMS 聚合的区别：collapse 返回完整文档，TERMS 只返回 key 和 count
+
+---
+
+### 场景七：日期分割索引查询
+
+索引按天分割（如 `app_log_2025.01.01`），通过 `dateRange` 自动路由到对应索引：
+
+```json
+POST /api/query
+{
+  "index": "app_log",
+  "dateRange": {
+    "from": "2025-01-01T00:00:00",
+    "to": "2025-01-07T23:59:59"
+  },
+  "query": {"field": "level", "op": "eq", "value": "ERROR"},
+  "pagination": {"type": "offset", "page": 1, "size": 50}
+}
+```
+
+框架自动路由到 `app_log_2025.01.01` ~ `app_log_2025.01.07` 共 7 个索引。
+
+**查询范围超大时（如全年365天）：** 框架自动降级，将 365 个具体索引名压缩为月级通配符（`app_log_2025.01.*` 等），避免 HTTP 请求行超限。
+
+**注意事项：**
+- 索引配置中必须设置 `date-split: true` 和 `date-pattern`
+- 建议同时配置 `date-field`，框架会在 DSL 中自动追加时间过滤，防止跨天脏数据
+- 开启 `ignore-unavailable-indices: true` 可忽略不存在的索引（部分日期无数据时不报错）
+
+---
+
+### 场景八：通配索引防全量扫描（v1.4.0+）
+
+直接查询通配索引（如 `app_log_*`）时，不传时间范围会扫描所有历史数据，性能极差。配置 `default-date-range` 自动兜底：
+
+```yaml
+query-limits:
+  default-date-range: 30d
+```
+
+配置后，以下请求会自动补充"最近 30 天"的时间范围：
+
+```json
+POST /api/query
+{
+  "index": "app_log_*",
+  "query": {"field": "level", "op": "eq", "value": "ERROR"},
+  "pagination": {"type": "offset", "page": 1, "size": 20}
+}
+```
+
+如果用户自己传了 `dateRange`，则不会被覆盖。精确索引（无通配符）不受影响。
+
+---
 
 ## 许可证
 
 Apache License 2.0
+
