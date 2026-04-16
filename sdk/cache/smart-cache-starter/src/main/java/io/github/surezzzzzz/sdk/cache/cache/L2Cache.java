@@ -14,7 +14,10 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.serializer.RedisSerializer;
 
 import javax.annotation.PostConstruct;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
@@ -57,8 +60,7 @@ public class L2Cache {
     }
 
     /**
-     * 构建 Redis Key
-     * 格式：{keyPrefix}:{cacheName}:{me}::{key}
+     * 构建 Redis Key（使用配置的 keyFormat）
      */
     private String buildKey(String cacheName, String key) {
         String keyPrefix = properties != null && properties.getKeyPrefix() != null
@@ -67,13 +69,28 @@ public class L2Cache {
         String me = properties != null && properties.getMe() != null
                 ? properties.getMe()
                 : SmartCacheConstant.DEFAULT_INSTANCE_ID;
+        String keyFormat = properties != null && properties.getL2() != null && properties.getL2().getKeyFormat() != null
+                ? properties.getL2().getKeyFormat()
+                : "{keyPrefix}:{cacheName}:{me}::{key}";
 
-        return KeyHelper.buildCacheKey(
-                keyPrefix,
-                cacheName,
-                me,
-                key
-        );
+        return KeyHelper.buildCacheKey(keyFormat, keyPrefix, cacheName, me, key);
+    }
+
+    /**
+     * 构建 Redis Key 匹配模式（用于 SCAN）
+     */
+    private String buildKeyPattern(String cacheName) {
+        String keyPrefix = properties != null && properties.getKeyPrefix() != null
+                ? properties.getKeyPrefix()
+                : SmartCacheConstant.REDIS_KEY_PREFIX;
+        String me = properties != null && properties.getMe() != null
+                ? properties.getMe()
+                : SmartCacheConstant.DEFAULT_INSTANCE_ID;
+        String keyFormat = properties != null && properties.getL2() != null && properties.getL2().getKeyFormat() != null
+                ? properties.getL2().getKeyFormat()
+                : "{keyPrefix}:{cacheName}:{me}::{key}";
+
+        return KeyHelper.buildCacheKeyPattern(keyFormat, keyPrefix, cacheName, me);
     }
 
     /**
@@ -105,7 +122,7 @@ public class L2Cache {
             return value != null ? (T) value : null;
         } catch (Exception e) {
             log.warn("L2 cache get failed, cacheName: {}, key: {}, fallback to L1 only. Error: {}",
-                     cacheName, key, e.getMessage());
+                    cacheName, key, e.getMessage());
             return null;
         }
     }
@@ -124,7 +141,7 @@ public class L2Cache {
             redisTemplate.opsForValue().set(redisKey, value, actualTtl, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("L2 cache put failed, cacheName: {}, key: {}, continue with L1 only. Error: {}",
-                     cacheName, key, e.getMessage());
+                    cacheName, key, e.getMessage());
         }
     }
 
@@ -147,7 +164,7 @@ public class L2Cache {
             redisTemplate.opsForValue().set(redisKey, value, ttl, timeUnit);
         } catch (Exception e) {
             log.warn("L2 cache put failed, cacheName: {}, key: {}, continue with L1 only. Error: {}",
-                     cacheName, key, e.getMessage());
+                    cacheName, key, e.getMessage());
         }
     }
 
@@ -160,7 +177,7 @@ public class L2Cache {
             redisTemplate.delete(redisKey);
         } catch (Exception e) {
             log.warn("L2 cache evict failed, cacheName: {}, key: {}, continue with L1 only. Error: {}",
-                     cacheName, key, e.getMessage());
+                    cacheName, key, e.getMessage());
         }
     }
 
@@ -170,19 +187,7 @@ public class L2Cache {
      */
     public void clear(String cacheName) {
         try {
-            String keyPrefix = properties != null && properties.getKeyPrefix() != null
-                    ? properties.getKeyPrefix()
-                    : SmartCacheConstant.REDIS_KEY_PREFIX;
-            String me = properties != null && properties.getMe() != null
-                    ? properties.getMe()
-                    : SmartCacheConstant.DEFAULT_INSTANCE_ID;
-
-            String pattern = KeyHelper.buildCacheKeyPattern(
-                    keyPrefix,
-                    cacheName,
-                    me
-            );
-
+            String pattern = buildKeyPattern(cacheName);
             // 使用流式删除，边扫描边删除
             scanAndDelete(pattern);
         } catch (Exception e) {
@@ -269,18 +274,7 @@ public class L2Cache {
      */
     public long size(String cacheName) {
         try {
-            String keyPrefix = properties != null && properties.getKeyPrefix() != null
-                    ? properties.getKeyPrefix()
-                    : SmartCacheConstant.REDIS_KEY_PREFIX;
-            String me = properties != null && properties.getMe() != null
-                    ? properties.getMe()
-                    : SmartCacheConstant.DEFAULT_INSTANCE_ID;
-
-            String pattern = KeyHelper.buildCacheKeyPattern(
-                    keyPrefix,
-                    cacheName,
-                    me
-            );
+            String pattern = buildKeyPattern(cacheName);
             return countKeys(pattern);
         } catch (Exception e) {
             log.error("L2 cache size error, cacheName: {}", cacheName, e);

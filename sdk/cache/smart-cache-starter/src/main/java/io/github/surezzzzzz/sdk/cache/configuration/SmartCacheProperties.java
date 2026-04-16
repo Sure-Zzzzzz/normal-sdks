@@ -194,6 +194,33 @@ public class SmartCacheProperties {
          * TTL 随机偏移比例（0-1），用于防止缓存雪崩
          */
         private double ttlRandomOffsetRatio = 0.1;
+
+        /**
+         * Redis Key 前缀（已废弃，请使用 keyFormat）
+         *
+         * @deprecated 使用 keyFormat 替代
+         */
+        @Deprecated
+        private String keyPrefix;
+
+        /**
+         * Redis Key 格式模板，支持占位符：
+         * <ul>
+         *   <li>{keyPrefix} - key 前缀（来自全局配置 io.github.surezzzzzz.sdk.cache.keyPrefix）</li>
+         *   <li>{cacheName} - 缓存名称</li>
+         *   <li>{me} - 实例标识（来自全局配置 io.github.surezzzzzz.sdk.cache.me）</li>
+         *   <li>{key} - 缓存 key（带 hash tag）</li>
+         * </ul>
+         * 默认格式：{keyPrefix}:{cacheName}:{me}::{key}
+         * <p>
+         * 示例：
+         * <ul>
+         *   <li>{keyPrefix}:{cacheName}:{me}::{key} - 默认格式（SmartCache 标准格式）</li>
+         *   <li>{keyPrefix}:{me}:{cacheName}::{key} - AKSK 老格式</li>
+         *   <li>custom-prefix:{cacheName}:{me}::{key} - 自定义前缀</li>
+         * </ul>
+         */
+        private String keyFormat = "{keyPrefix}:{cacheName}:{me}::{key}";
     }
 
     /**

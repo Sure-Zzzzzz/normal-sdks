@@ -39,7 +39,7 @@
 <dependency>
     <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>smart-cache-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
@@ -63,6 +63,7 @@ io:
             enabled: true                  # 启用 L2 缓存
             expire-seconds: 3600           # L2 过期时间(秒)
             ttl-random-offset-ratio: 0.1   # TTL 随机偏移比例(防雪崩)
+            key-format: "{keyPrefix}:{cacheName}:{me}::{key}"  # Redis key 格式模板(可选,默认值如左)
           consistency:
             mode: strong                   # 一致性模式: strong(强一致,默认) / eventual(最终一致)
           stats:
@@ -72,6 +73,29 @@ spring:
   redis:
     host: localhost
     port: 6379
+```
+
+**Redis Key 格式自定义** (v1.0.2+):
+
+`key-format` 支持以下占位符:
+- `{keyPrefix}` - key 前缀(来自全局配置 `key-prefix`)
+- `{cacheName}` - 缓存名称
+- `{me}` - 实例标识(来自全局配置 `me`)
+- `{key}` - 缓存 key(自动添加 hash tag `{xxx}`,确保 Redis Cluster 模式下同一 cacheName 的 key 在同一个 slot)
+
+常见格式示例:
+```yaml
+# 默认格式(SmartCache 标准格式)
+key-format: "{keyPrefix}:{cacheName}:{me}::{key}"
+# 生成: sure-cache:userCache:instance::{userId}
+
+# AKSK 老格式(me 和 cacheName 位置互换)
+key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+# 生成: sure-cache:instance:userCache::{userId}
+
+# 自定义前缀
+key-format: "custom-prefix:{cacheName}:{me}::{key}"
+# 生成: custom-prefix:userCache:instance::{userId}
 ```
 
 ### 3. 使用注解

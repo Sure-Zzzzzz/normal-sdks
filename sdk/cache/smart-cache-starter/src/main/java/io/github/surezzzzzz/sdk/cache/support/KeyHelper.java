@@ -13,10 +13,44 @@ import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 public class KeyHelper {
 
     /**
-     * 构建缓存数据 Key
+     * 构建缓存数据 Key（使用自定义格式模板）
+     * <p>
+     * 支持的占位符：
+     * <ul>
+     *   <li>{keyPrefix} - key 前缀</li>
+     *   <li>{cacheName} - 缓存名称</li>
+     *   <li>{me} - 实例标识</li>
+     *   <li>{key} - 缓存 key（自动添加 hash tag）</li>
+     * </ul>
+     * <p>
+     * 注意：{key} 占位符会自动添加 hash tag（{xxx}），确保 Redis Cluster 模式下同一 cacheName 的 key 在同一个 slot
+     *
+     * @param keyFormat 格式模板，如 "{keyPrefix}:{cacheName}:{me}::{key}"
+     * @param keyPrefix key 前缀
+     * @param cacheName 缓存名称
+     * @param me        实例标识
+     * @param key       缓存 key
+     * @return 完整的 Redis key
+     */
+    public static String buildCacheKey(String keyFormat, String keyPrefix, String cacheName, String me, String key) {
+        // key 必须带 hash tag，确保 Redis Cluster 模式下同一 cacheName 的 key 在同一个 slot
+        String keyWithHashTag = SmartCacheConstant.HASH_TAG_PREFIX + key + SmartCacheConstant.HASH_TAG_SUFFIX;
+
+        return keyFormat
+                .replace("{keyPrefix}", keyPrefix)
+                .replace("{cacheName}", cacheName)
+                .replace("{me}", me)
+                .replace("{key}", keyWithHashTag);
+    }
+
+    /**
+     * 构建缓存数据 Key（使用默认格式）
      * 格式：{keyPrefix}:{cacheName}:{me}::{key}
      * Hash Tag 用于 Redis Cluster 确保相同 key 在同一个 slot
+     *
+     * @deprecated 使用 buildCacheKey(String keyFormat, ...) 替代
      */
+    @Deprecated
     public static String buildCacheKey(String keyPrefix, String cacheName, String me, String key) {
         return keyPrefix + SmartCacheConstant.KEY_SEPARATOR +
                 cacheName + SmartCacheConstant.KEY_SEPARATOR +
@@ -26,9 +60,31 @@ public class KeyHelper {
     }
 
     /**
-     * 构建缓存数据 Key 的匹配模式
-     * 格式：{keyPrefix}:{cacheName}:{me}::*
+     * 构建缓存数据 Key 的匹配模式（使用自定义格式模板）
+     * <p>
+     * 将 {key} 占位符替换为 *，用于 Redis SCAN 命令
+     *
+     * @param keyFormat 格式模板
+     * @param keyPrefix key 前缀
+     * @param cacheName 缓存名称
+     * @param me        实例标识
+     * @return key 匹配模式
      */
+    public static String buildCacheKeyPattern(String keyFormat, String keyPrefix, String cacheName, String me) {
+        return keyFormat
+                .replace("{keyPrefix}", keyPrefix)
+                .replace("{cacheName}", cacheName)
+                .replace("{me}", me)
+                .replace("{key}", "*");
+    }
+
+    /**
+     * 构建缓存数据 Key 的匹配模式（使用默认格式）
+     * 格式：{keyPrefix}:{cacheName}:{me}::*
+     *
+     * @deprecated 使用 buildCacheKeyPattern(String keyFormat, ...) 替代
+     */
+    @Deprecated
     public static String buildCacheKeyPattern(String keyPrefix, String cacheName, String me) {
         return keyPrefix + SmartCacheConstant.KEY_SEPARATOR +
                 cacheName + SmartCacheConstant.KEY_SEPARATOR +
