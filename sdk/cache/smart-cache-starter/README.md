@@ -4,99 +4,137 @@
 
 ## 核心特性
 
-### 🚀 双层缓存架构
+### 双层缓存架构
 - **L1 缓存 (Caffeine)**: 进程内高速缓存,微秒级响应
 - **L2 缓存 (Redis)**: 分布式缓存,支持集群共享
 - **智能降级**: L1 未命中自动查询 L2,L2 未命中触发数据加载
 - **Redis 降级**: Redis 不可用时自动切换到 L1-only 模式,保证服务可用性
 
-### 🛡️ 缓存三大问题防护
-- **缓存穿透**: 空值缓存,防止恶意查询击穿数据库
+### 缓存三大问题防护
+- **缓存穿透**: 空值缓存(L1),防止恶意查询击穿数据库
 - **缓存击穿**: 分布式锁 + 重试机制,高并发下只有一个线程访问数据库
 - **缓存雪崩**: TTL 随机偏移,避免大量缓存同时失效
 
-### 🔄 一致性保障
+### 一致性保障
 - **强一致性模式(默认)**: Redis Pub/Sub 实时同步缓存失效,多实例间秒级同步,单实例也可用
 - **最终一致性模式**: L1 短 TTL + L2 长 TTL,平衡性能与一致性
 
-### 📊 企业级功能
+### 企业级功能
 - **循环依赖检测**: ThreadLocal 追踪加载链,防止死锁
 - **缓存预热**: 应用启动时自动加载热点数据,支持顺序控制和分布式协调
 - **统计监控**: L1/L2 命中率、未命中次数实时统计
-- **SpEL 支持**: 动态 key 生成,支持复杂表达式,表达式缓存优化
+- **SpEL 支持**: 动态 key 生成,支持复杂表达式
 - **条件缓存**: 基于 SpEL 的条件判断,灵活控制缓存行为
-- **本地锁兜底**: 分布式锁失败时使用本地锁防止缓存击穿
-- **统一异常包装**: 所有异常统一包装为 SmartCacheException,保留原始异常链
-- **配置自动校验**: 启动时自动校验配置参数,防止配置错误
-- **健康检查**: 自动检测 Redis 可用性,动态调整缓存策略
-- **快速失败**: Redis 连接超时 3 秒,避免长时间阻塞
+- **Redis Key 格式自定义**: 支持自定义 key 格式模板,兼容不同 key 规范
+
+---
 
 ## 快速开始
 
 ### 1. 添加依赖
 
+**本框架通过 `compileOnly` 声明了部分依赖，使用方必须自行引入，否则启动会报错。**
+
+#### Gradle
+
+```gradle
+// 框架本身
+implementation 'io.github.sure-zzzzzz:smart-cache-starter:1.0.3'
+
+// 必须自行引入（框架 compileOnly，不会传递）
+implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'          // L1 缓存
+implementation 'org.springframework.boot:spring-boot-starter-data-redis' // L2 缓存
+implementation 'org.springframework.boot:spring-boot-starter-aop'        // 注解式 API（仅使用注解时需要）
+```
+
+#### Maven
+
 ```xml
+<!-- 框架本身 -->
 <dependency>
     <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>smart-cache-starter</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
+</dependency>
+
+<!-- 必须自行引入（框架 compileOnly，不会传递） -->
+<!-- L1 缓存 -->
+<dependency>
+    <groupId>com.github.ben-manes.caffeine</groupId>
+    <artifactId>caffeine</artifactId>
+    <version>2.9.3</version>
+</dependency>
+<!-- L2 缓存 -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+<!-- 注解式 API（仅使用注解时需要） -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-aop</artifactId>
 </dependency>
 ```
+
+> **说明**：`jackson-datatype-jsr310` 已通过 `api` 传递，无需手动引入。
+
+---
 
 ### 2. 配置文件
 
 ```yaml
+spring:
+  redis:
+    host: localhost
+    port: 6379
+
 io:
   github:
     surezzzzzz:
       sdk:
         cache:
-          enabled: true                    # 启用缓存
-          key-prefix: my-app-cache         # Redis key 前缀(可选,默认 sure-cache)
-          me: instance                     # 应用标识(同一应用的多个实例使用相同的 me)
+          key-prefix: my-app              # Redis key 前缀（默认 sure-cache）
+          me: instance-1                  # 应用实例标识，同一应用多实例保持一致
           l1:
-            enabled: true                  # 启用 L1 缓存
-            max-size: 10000                # L1 最大条目数
-            expire-seconds: 300            # L1 过期时间(秒)
-            refresh-seconds: 240           # L1 异步刷新时间(秒)
+            enabled: true                 # 启用 L1 缓存（默认 true）
+            max-size: 10000               # L1 最大条目数（默认 10000）
+            expire-seconds: 300           # L1 过期时间，秒（默认 300）
+            refresh-seconds: 240          # L1 异步刷新时间，秒（默认 270）
           l2:
-            enabled: true                  # 启用 L2 缓存
-            expire-seconds: 3600           # L2 过期时间(秒)
-            ttl-random-offset-ratio: 0.1   # TTL 随机偏移比例(防雪崩)
-            key-format: "{keyPrefix}:{cacheName}:{me}::{key}"  # Redis key 格式模板(可选,默认值如左)
+            enabled: true                 # 启用 L2 缓存（默认 true）
+            expire-seconds: 3600          # L2 过期时间，秒（默认 3600）
+            ttl-random-offset-ratio: 0.1  # TTL 随机偏移比例，防雪崩（默认 0.1）
+            key-format: "{keyPrefix}:{cacheName}:{me}::{key}"  # key 格式模板（默认值如左）
           consistency:
-            mode: strong                   # 一致性模式: strong(强一致,默认) / eventual(最终一致)
+            mode: strong                  # strong（强一致，默认）/ eventual（最终一致）
           stats:
-            enabled: true                  # 启用统计
-
-spring:
-  redis:
-    host: localhost
-    port: 6379
+            enabled: true                 # 启用统计（默认 true）
 ```
 
-**Redis Key 格式自定义** (v1.0.2+):
+**Redis Key 格式说明**
 
-`key-format` 支持以下占位符:
-- `{keyPrefix}` - key 前缀(来自全局配置 `key-prefix`)
-- `{cacheName}` - 缓存名称
-- `{me}` - 实例标识(来自全局配置 `me`)
-- `{key}` - 缓存 key(自动添加 hash tag `{xxx}`,确保 Redis Cluster 模式下同一 cacheName 的 key 在同一个 slot)
+`key-format` 支持以下占位符：
 
-常见格式示例:
+| 占位符 | 说明 |
+|--------|------|
+| `{keyPrefix}` | key 前缀，来自 `key-prefix` 配置 |
+| `{cacheName}` | 缓存名称 |
+| `{me}` | 实例标识，来自 `me` 配置 |
+| `{key}` | 缓存 key，自动添加 hash tag `{xxx}`，确保 Redis Cluster 同一 cacheName 的 key 在同一 slot |
+
+常见格式示例：
+
 ```yaml
-# 默认格式(SmartCache 标准格式)
+# 默认格式
 key-format: "{keyPrefix}:{cacheName}:{me}::{key}"
-# 生成: sure-cache:userCache:instance::{userId}
+# 生成: my-app:userCache:instance-1::{userId}
 
-# AKSK 老格式(me 和 cacheName 位置互换)
+# me 和 cacheName 位置互换（兼容老格式）
 key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
-# 生成: sure-cache:instance:userCache::{userId}
-
-# 自定义前缀
-key-format: "custom-prefix:{cacheName}:{me}::{key}"
-# 生成: custom-prefix:userCache:instance::{userId}
+# 生成: my-app:instance-1:userCache::{userId}
 ```
+
+---
 
 ### 3. 使用注解
 
@@ -104,31 +142,21 @@ key-format: "custom-prefix:{cacheName}:{me}::{key}"
 @Service
 public class UserService {
 
-    // 查询缓存
     @SmartCacheable(cacheName = "userCache", key = "#userId")
     public User getUserById(Long userId) {
         return userRepository.findById(userId);
     }
 
-    // 更新缓存
     @SmartCachePut(cacheName = "userCache", key = "#user.id")
     public User updateUser(User user) {
         return userRepository.save(user);
     }
 
-    // 删除缓存
     @SmartCacheEvict(cacheName = "userCache", key = "#userId")
     public void deleteUser(Long userId) {
         userRepository.deleteById(userId);
     }
 
-    // 方法执行前删除缓存(即使方法失败也会删除)
-    @SmartCacheEvict(cacheName = "userCache", key = "#userId", beforeInvocation = true)
-    public void deleteUserBefore(Long userId) {
-        userRepository.deleteById(userId);
-    }
-
-    // 清空所有缓存
     @SmartCacheEvict(cacheName = "userCache", allEntries = true)
     public void clearAllUsers() {
         userRepository.deleteAll();
@@ -146,24 +174,38 @@ public class ProductService {
     private SmartCacheManager cacheManager;
 
     public Product getProduct(Long productId) {
-        // 带 loader 的查询,未命中时自动加载
         return cacheManager.get("productCache", String.valueOf(productId),
             () -> productRepository.findById(productId));
     }
 
     public void updateProduct(Product product) {
         productRepository.save(product);
-        // 手动更新缓存
         cacheManager.put("productCache", String.valueOf(product.getId()), product);
     }
 
     public void deleteProduct(Long productId) {
         productRepository.deleteById(productId);
-        // 手动删除缓存
         cacheManager.evict("productCache", String.valueOf(productId));
     }
 }
 ```
+
+---
+
+## 依赖说明
+
+| 依赖 | 声明方式 | 说明 |
+|------|----------|------|
+| `caffeine` | `compileOnly` | L1 缓存实现，**使用方必须自行引入** |
+| `spring-boot-starter-data-redis` | `compileOnly` | L2 缓存实现，**使用方必须自行引入** |
+| `spring-boot-starter-aop` | `compileOnly` | 注解式 API 支持，**使用注解时必须自行引入** |
+| `jackson-datatype-jsr310` | `api` | Java 8 时间类型序列化支持，自动传递 |
+| `simple-redis-lock-starter` | `api` | 分布式锁，防缓存击穿，自动传递 |
+| `task-retry-starter` | `api` | 重试机制，自动传递 |
+
+> `compileOnly` 依赖不会传递给使用方，必须手动引入；`api` 依赖会自动传递，无需重复声明。
+
+---
 
 ## 文档导航
 
@@ -171,52 +213,38 @@ public class ProductService {
 - [配置说明](docs/configuration.md) - 完整的配置参数说明和 Redis Key 设计
 - [最佳实践](docs/best-practices.md) - 傻瓜式指南、常见场景速查表、性能优化建议
 
+---
+
 ## 测试覆盖
 
-框架提供了完整的测试覆盖(共 **86 个测试用例**,100% 通过),包括:
+框架提供了完整的测试覆盖（共 **93 个测试用例**，100% 通过），包括：
 
-### 核心功能测试
-- **端到端测试** ([EndToEndTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/EndToEndTest.java)): 14 个测试用例
-- **注解 API 测试** ([AnnotationApiTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/AnnotationApiTest.java)): 7 个测试用例
-- **缓存管理器测试** ([SmartCacheManagerTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/SmartCacheManagerTest.java)): 8 个测试用例
+- **端到端测试**: 14 个
+- **注解 API 测试**: 7 个
+- **缓存管理器测试**: 8 个
+- **强一致性测试**: 6 个
+- **最终一致性测试**: 3 个
+- **Pub/Sub 验证测试**: 5 个
+- **并发测试**: 8 个
+- **压力测试**: 5 个
+- **L1/L2 集成测试**: 6 个
+- **边界条件测试**: 10 个
+- **批量操作和统计测试**: 5 个
+- **循环依赖测试**: 3 个
+- **缓存预热测试**: 2 个
+- **降级和异常测试**: 4 个
+- **Key 格式自定义测试**: 7 个（v1.0.2+）
 
-### 一致性测试
-- **强一致性测试** ([StrongConsistencyTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/StrongConsistencyTest.java)): 6 个测试用例
-- **最终一致性测试** ([EventualConsistencyTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/EventualConsistencyTest.java)): 3 个测试用例
-- **Pub/Sub 验证测试** ([PubSubVerificationTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/PubSubVerificationTest.java)): 5 个测试用例
+所有测试支持 Redis 可用/不可用两种场景，Redis 不可用时自动降级到 L1-only 模式，测试依然通过。
 
-### 性能和稳定性测试
-- **并发测试** ([ConcurrencyTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/ConcurrencyTest.java)): 8 个测试用例
-- **压力测试** ([StressTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/StressTest.java)): 5 个测试用例
-
-### 集成和边界测试
-- **L1/L2 集成测试** ([L1L2CacheIntegrationTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/L1L2CacheIntegrationTest.java)): 6 个测试用例
-- **边界条件测试** ([BoundaryConditionsTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/BoundaryConditionsTest.java)): 10 个测试用例
-- **批量操作和统计测试** ([BatchOperationsAndStatsTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/BatchOperationsAndStatsTest.java)): 5 个测试用例
-
-### 特殊场景测试
-- **循环依赖测试** ([CircularDependencyTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/CircularDependencyTest.java)): 3 个测试用例
-- **缓存预热测试** ([CacheWarmUpTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/CacheWarmUpTest.java)): 2 个测试用例
-- **降级和异常测试** ([FallbackAndExceptionTest.java](src/test/java/io/github/surezzzzzz/sdk/cache/test/cases/FallbackAndExceptionTest.java)): 4 个测试用例
-
-### Redis 降级测试
-
-所有测试用例都支持 **Redis 可用/不可用** 两种场景,验证框架的优雅降级能力:
-
-- **Redis 可用**: 完整测试 L1+L2 双层缓存、Pub/Sub 同步等功能
-- **Redis 不可用**: 自动降级到 L1-only 模式,所有测试依然通过
-
-**降级特性**:
-- 快速失败: Redis 连接超时 3 秒,避免长时间阻塞
-- 自动跳过: 需要 Redis 的测试(如 Pub/Sub)自动跳过
-- 动态调整: 测试规模根据 Redis 可用性和 L1 容量自适应
-- 零影响: Redis 不可用不影响应用启动和运行
+---
 
 ## 技术栈
 
 - Spring Boot 2.7.9
 - Caffeine 2.9.3
 - Spring Data Redis 2.7.9
+- Jackson 2.x（含 JSR310 模块）
 - Lombok
 
 ## 许可证

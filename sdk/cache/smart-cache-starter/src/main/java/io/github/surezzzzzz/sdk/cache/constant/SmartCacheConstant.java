@@ -51,6 +51,16 @@ public class SmartCacheConstant {
     public static final String OPERATION_CLEAR = "clear";
 
     /**
+     * 一致性模式：强一致性（Pub/Sub 实时同步）
+     */
+    public static final String CONSISTENCY_MODE_STRONG = "strong";
+
+    /**
+     * 一致性模式：最终一致性（依赖 TTL）
+     */
+    public static final String CONSISTENCY_MODE_EVENTUAL = "eventual";
+
+    /**
      * 空值占位符（防止缓存穿透）
      * <p>
      * 使用单例对象作为标记，避免字符串比较开销

@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.cache.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.surezzzzzz.sdk.cache.SmartCachePackage;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import lombok.extern.slf4j.Slf4j;
@@ -49,7 +52,17 @@ public class SmartCacheConfiguration {
         template.setHashKeySerializer(stringSerializer);
 
         // 使用 JSON 序列化器作为 value 序列化器
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
+        // 注册 JavaTimeModule 支持 Java 8 时间类型（Instant、LocalDateTime 等）
+        // 禁用 WRITE_DATES_AS_TIMESTAMPS，时间序列化为 ISO 字符串而非数组
+        // 启用 DefaultTyping 写入 @class 字段，确保反序列化时能正确还原具体类型
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        objectMapper.activateDefaultTyping(
+                objectMapper.getPolymorphicTypeValidator(),
+                ObjectMapper.DefaultTyping.NON_FINAL
+        );
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
 
@@ -67,7 +80,6 @@ public class SmartCacheConfiguration {
     @Bean(destroyMethod = "destroy")
     @ConditionalOnClass(RedisConnectionFactory.class)
     @ConditionalOnMissingBean(RedisMessageListenerContainer.class)
-    @ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.cache.consistency", name = "mode", havingValue = "strong", matchIfMissing = false)
     public RedisMessageListenerContainer redisMessageListenerContainer(RedisConnectionFactory connectionFactory) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);

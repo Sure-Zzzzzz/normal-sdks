@@ -14,8 +14,6 @@ io:
             enabled: true
             expire-seconds: 300
             ttl-random-offset-ratio: 0.1
-          consistency:
-            mode: eventual
           stats:
             enabled: true
 

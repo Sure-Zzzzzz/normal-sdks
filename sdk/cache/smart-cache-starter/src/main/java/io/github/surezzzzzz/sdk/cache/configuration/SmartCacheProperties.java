@@ -128,11 +128,16 @@ public class SmartCacheProperties {
 
         // 校验一致性模式
         if (consistency.mode == null || consistency.mode.trim().isEmpty()) {
-            log.warn("Consistency mode is null or empty, using default: strong");
-            consistency.mode = "strong";
-        } else if (!consistency.mode.equals("eventual") && !consistency.mode.equals("strong")) {
-            log.warn("Invalid consistency mode: {}, must be 'eventual' or 'strong', using default: strong", consistency.mode);
-            consistency.mode = "strong";
+            log.warn("Consistency mode is null or empty, using default: {}", SmartCacheConstant.CONSISTENCY_MODE_STRONG);
+            consistency.mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
+        } else if (!consistency.mode.equals(SmartCacheConstant.CONSISTENCY_MODE_EVENTUAL)
+                && !consistency.mode.equals(SmartCacheConstant.CONSISTENCY_MODE_STRONG)) {
+            log.warn("Invalid consistency mode: {}, must be '{}' or '{}', using default: {}",
+                    consistency.mode,
+                    SmartCacheConstant.CONSISTENCY_MODE_EVENTUAL,
+                    SmartCacheConstant.CONSISTENCY_MODE_STRONG,
+                    SmartCacheConstant.CONSISTENCY_MODE_STRONG);
+            consistency.mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
         }
 
         // 校验预热配置
@@ -247,7 +252,7 @@ public class SmartCacheProperties {
          * 一致性模式：eventual（最终一致性）、strong（强一致性）
          * 默认：strong（推荐，适合多实例部署，单实例也可用）
          */
-        private String mode = "strong";
+        private String mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
 
         /**
          * Pub/Sub 频道前缀

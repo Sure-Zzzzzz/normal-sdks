@@ -376,11 +376,9 @@ public class SmartCacheManager {
                     l1Cache.put(cacheName, key, value);
                 }
             } else {
-                // 缓存空值，防止缓存穿透
+                // 缓存空值防穿透：仅写 L1，不写 L2
+                // L2（Redis）存匿名占位符会导致序列化失败，且分布式场景下防穿透意义有限
                 Object placeholder = SmartCacheConstant.NULL_PLACEHOLDER;
-                if (l2Cache != null) {
-                    l2Cache.put(cacheName, key, placeholder, SmartCacheConstant.NULL_CACHE_TTL_SECONDS);
-                }
                 if (l1Cache != null) {
                     l1Cache.put(cacheName, key, placeholder);
                 }

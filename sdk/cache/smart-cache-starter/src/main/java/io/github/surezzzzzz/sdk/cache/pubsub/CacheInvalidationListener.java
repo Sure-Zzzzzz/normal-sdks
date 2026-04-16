@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -36,7 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @SmartCacheComponent
 @ConditionalOnClass(RedisMessageListenerContainer.class)
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.cache.consistency", name = "mode", havingValue = "strong", matchIfMissing = false)
 public class CacheInvalidationListener implements MessageListener {
 
     @Autowired(required = false)
@@ -85,10 +83,16 @@ public class CacheInvalidationListener implements MessageListener {
             serializer = redisTemplate.getValueSerializer();
         }
 
+        // 只有强一致性模式才启动 Pub/Sub 订阅
+        if (properties == null || !SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(properties.getConsistency().getMode())) {
+            log.info("Cache invalidation listener skipped (consistency mode is not strong)");
+            return;
+        }
+
         if (listenerContainer != null) {
             try {
                 String channelPrefix = properties.getPubsubChannelPrefix();
-                String me = properties != null ? properties.getMe() : SmartCacheConstant.DEFAULT_INSTANCE_ID;
+                String me = properties.getMe();
                 String channel = channelPrefix + SmartCacheConstant.KEY_SEPARATOR + me + SmartCacheConstant.KEY_SEPARATOR + "*";
                 listenerContainer.addMessageListener(this, new PatternTopic(channel));
 
@@ -177,9 +181,12 @@ public class CacheInvalidationListener implements MessageListener {
      * @param operation 操作类型（evict/clear）
      */
     public void publishInvalidation(String cacheName, String key, String operation) {
+        if (properties == null || !SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(properties.getConsistency().getMode())) {
+            return;
+        }
         try {
             String channelPrefix = properties.getPubsubChannelPrefix();
-            String me = properties != null ? properties.getMe() : SmartCacheConstant.DEFAULT_INSTANCE_ID;
+            String me = properties.getMe();
             String channel = KeyHelper.buildPubSubChannel(channelPrefix, me, cacheName);
             CacheInvalidationMessage msg = new CacheInvalidationMessage(
                     cacheName, key, operation, me);
