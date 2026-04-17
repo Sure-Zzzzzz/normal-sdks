@@ -2,6 +2,11 @@ dependencies {
     api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.2'
     api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.0'
     api 'io.github.sure-zzzzzz:simple-aksk-server-core:1.0.4'
+
+    // SmartCache
+    api 'io.github.sure-zzzzzz:smart-cache-starter:1.0.4'
+    api 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-starter-security'

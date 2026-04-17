@@ -10,11 +10,10 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.service.AuditableOAuth2Authoriz
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2AuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
-import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
+import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,10 +39,9 @@ public class AuthorizationServerConfiguration {
     private final SimpleAkskServerProperties properties;
     private final OAuth2RegisteredClientEntityRepository entityRepository;
     private final ApplicationEventPublisher eventPublisher;
-    private final TaskRetryExecutor taskRetryExecutor;
 
     @Autowired(required = false)
-    private CacheManager cacheManager;
+    private SmartCacheManager smartCacheManager;
 
     @Autowired(required = false)
     private RedisKeyHelper redisKeyHelper;
@@ -78,10 +76,14 @@ public class AuthorizationServerConfiguration {
 
         OAuth2AuthorizationService service = jdbcService;
 
-        // 可选：Redis 缓存层
+        // 可选：SmartCache 缓存层（L1+L2）
         if (properties.getRedis().getEnabled()) {
-            log.info("Redis caching enabled for OAuth2 authorization storage");
-            service = new CachedOAuth2AuthorizationService(jdbcService, cacheManager, redisKeyHelper, taskRetryExecutor);
+            if (smartCacheManager != null) {
+                log.info("Smart cache (L1+L2) enabled for OAuth2 authorization storage");
+            } else {
+                log.info("Redis enabled but SmartCacheManager not available, using database only");
+            }
+            service = new CachedOAuth2AuthorizationService(jdbcService, smartCacheManager, redisKeyHelper);
         }
 
         // 始终：审计事件层

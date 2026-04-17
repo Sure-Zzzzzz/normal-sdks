@@ -1,11 +1,12 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-基于 Spring Authorization Server 的 AKSK（Access Key / Secret Key）认证服务器 Starter，支持平台级和用户级 AKSK 管理，提供完整的 OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
+基于 Spring Authorization Server 的 AKSK（Access Key / Secret Key）认证服务器 Starter，支持平台级和用户级 AKSK 管理，提供完整的
+OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 ---
 
@@ -16,7 +17,8 @@
 - ✅ **JWT Token 签发**：RSA 算法签发，支持自定义公私钥和 `auth_server_id`
 - ✅ **Token 即时撤销**：`/oauth2/revoke` 撤销后 introspect 立即返回 `active=false`
 - ✅ **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件，无论是否启用 Redis 均发布
-- ✅ **Redis 缓存支持**：可选，提升 Token 验证性能
+- ✅ **L1+L2 两级缓存**：Caffeine 本地缓存 + Redis 分布式缓存，introspect 热路径命中 L1 无需访问 Redis
+- ✅ **多实例缓存一致性**：Redis Pub/Sub 广播缓存失效，多副本间 L1 缓存强一致
 - ✅ **Admin 管理界面**：AKSK 和 Token 的创建、查询、启用/禁用、撤销、删除
 - ✅ **Client 管理 API**：内网 REST API，支持创建、查询、删除、权限同步
 - ✅ **Token 管理 API**：内网 REST API，支持查询、撤销、删除、统计
@@ -30,7 +32,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.0.6'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.0'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -38,8 +40,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     runtimeOnly 'mysql:mysql-connector-java:8.0.33'
 
-    // 可选：Redis 缓存
+    // 可选：Redis 两级缓存（推荐）
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 }
 ```
 
@@ -52,13 +55,30 @@ mysql -u root -p sure_auth_aksk < docs/01_schema.sql
 
 ### 3. 配置应用
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/sure_auth_aksk?useSSL=false&serverTimezone=Asia/Shanghai
-    username: root
-    # password: 请在 application-local.yml 中配置
+**最小配置（无 Redis）**：
 
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            server:
+              jwt:
+                key-id: sure-auth-aksk-2026
+                expires-in: 3600
+                public-key: classpath:keys/public.pem
+                private-key: classpath:keys/private.pem
+              admin:
+                enabled: true
+                username: admin
+                # password: 请在 application-local.yml 中配置
+```
+
+**推荐配置（启用 L1+L2 两级缓存）**：
+
+```yaml
 io:
   github:
     surezzzzzz:
@@ -72,13 +92,25 @@ io:
                 public-key: classpath:keys/public.pem
                 private-key: classpath:keys/private.pem
               redis:
-                enabled: false
+                enabled: true
                 token:
-                  me: my-app
+                  me: my-app          # 应用标识，多实例需保持一致
               admin:
                 enabled: true
                 username: admin
-                # password: 请在 application-local.yml 中配置
+        cache:
+          key-prefix: sure-auth-aksk
+          me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me:my-app}
+          l1:
+            enabled: true
+            expire-seconds: 10        # L1 本地缓存 TTL（秒）
+            max-size: 10000
+          l2:
+            enabled: true
+            expire-seconds: ${io.github.surezzzzzz.sdk.auth.aksk.server.jwt.expires-in:3600}
+            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+          consistency:
+            mode: strong              # 多实例 Pub/Sub 强一致
 ```
 
 ### 4. 访问 Admin 管理页面
@@ -96,6 +128,7 @@ io:
 **通过代码**：
 
 ```java
+
 @Autowired
 private ClientManagementService clientManagementService;
 
@@ -127,9 +160,9 @@ curl -X POST http://localhost:8080/oauth2/token \
 
 ### Scope 说明
 
-| 请求方式 | 说明 |
-|---------|------|
-| 不传 scope | 使用 Client 注册时配置的所有 scope |
+| 请求方式     | 说明                        |
+|----------|---------------------------|
+| 不传 scope | 使用 Client 注册时配置的所有 scope  |
 | 指定 scope | 必须在 Client 授权范围内，可缩小但不能扩大 |
 
 ### 撤销 Token
@@ -140,7 +173,7 @@ curl -X POST http://localhost:8080/oauth2/revoke \
   -u "AKP1234567890abcdefgh:SK..." \
   -d "token=eyJraWQi..."
 
-# 撤销后 introspect 返回 active=false
+# 撤销后 introspect 返回 active=false（L1+L2 缓存同步清除）
 curl -X POST http://localhost:8080/oauth2/introspect \
   -u "AKP1234567890abcdefgh:SK..." \
   -d "token=eyJraWQi..."
@@ -150,6 +183,7 @@ curl -X POST http://localhost:8080/oauth2/introspect \
 ### 监听审计事件
 
 ```java
+
 @EventListener
 public void onTokenIssued(TokenIssuedEvent event) {
     log.info("Token issued: clientId={}, scopes={}", event.getClientId(), event.getScopes());
@@ -192,13 +226,13 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 
 ## Spring Authorization Server 默认端点
 
-| 端点 | 方法 | 说明 | 鉴权 |
-|------|------|------|------|
-| `/oauth2/token` | POST | 颁发 Access Token | Basic Auth (AKSK) |
-| `/oauth2/revoke` | POST | 撤销 token | Basic Auth (AKSK) |
-| `/oauth2/introspect` | POST | 查询 token 状态 | Basic Auth (AKSK) |
-| `/oauth2/jwks` | GET | 公钥集合（JWK Set） | 公开 |
-| `/.well-known/oauth-authorization-server` | GET | 服务器元数据 | 公开 |
+| 端点                                        | 方法   | 说明              | 鉴权                |
+|-------------------------------------------|------|-----------------|-------------------|
+| `/oauth2/token`                           | POST | 颁发 Access Token | Basic Auth (AKSK) |
+| `/oauth2/revoke`                          | POST | 撤销 token        | Basic Auth (AKSK) |
+| `/oauth2/introspect`                      | POST | 查询 token 状态     | Basic Auth (AKSK) |
+| `/oauth2/jwks`                            | GET  | 公钥集合（JWK Set）   | 公开                |
+| `/.well-known/oauth-authorization-server` | GET  | 服务器元数据          | 公开                |
 
 ### introspect 响应示例
 
@@ -219,36 +253,36 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 
 ### APISIX 集成建议
 
-| 方式 | 插件 | 优点 | 缺点 |
-|------|------|------|------|
-| 本地验签 | jwt-auth | 性能最好，无额外 IO | 无法感知 token 撤销 |
-| introspect 验证 | openid-connect | 可即时感知撤销 | 每次请求多一次 HTTP 调用 |
+| 方式            | 插件             | 优点              | 缺点                           |
+|---------------|----------------|-----------------|------------------------------|
+| 本地验签          | jwt-auth       | 性能最好，无额外 IO     | 无法感知 token 撤销                |
+| introspect 验证 | openid-connect | 可即时感知撤销，L1 缓存加速 | 每次请求多一次 HTTP 调用（命中 L1 时极低延迟） |
 
 ---
 
 ## Client 管理 API
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/client` | POST | 创建 Client |
-| `/api/client` | GET | 查询 Client 列表（分页/批量） |
-| `/api/client/{clientId}` | GET | 查询 Client 详情 |
-| `/api/client/{clientId}` | DELETE | 删除 Client |
-| `/api/client?owner_user_id={userId}` | PATCH | 批量同步用户权限 |
+| 端点                                   | 方法     | 说明                  |
+|--------------------------------------|--------|---------------------|
+| `/api/client`                        | POST   | 创建 Client           |
+| `/api/client`                        | GET    | 查询 Client 列表（分页/批量） |
+| `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
+| `/api/client/{clientId}`             | DELETE | 删除 Client           |
+| `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户权限            |
 
 以上接口需要携带有效 token，且 token 的 scope 中包含 `/api/client`。
 
 ## Token 管理 API
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/token` | GET | 查询 Token 列表（MySQL） |
-| `/api/token/redis` | GET | 查询 Redis 中的 Token 列表 |
-| `/api/token/{id}` | GET | 查询 Token 详情 |
-| `/api/token/{id}/revoke` | POST | 撤销 Token |
-| `/api/token/{id}` | DELETE | 删除 Token（先撤销再删除） |
-| `/api/token/expired` | DELETE | 清理过期 Token |
-| `/api/token/statistics` | GET | 获取 Token 统计信息 |
+| 端点                       | 方法     | 说明                         |
+|--------------------------|--------|----------------------------|
+| `/api/token`             | GET    | 查询 Token 列表（MySQL）         |
+| `/api/token/redis`       | GET    | 查询 Redis 缓存中的 Token 列表     |
+| `/api/token/{id}`        | GET    | 查询 Token 详情                |
+| `/api/token/{id}/revoke` | POST   | 撤销 Token（同步清除 L1+L2 缓存并广播） |
+| `/api/token/{id}`        | DELETE | 删除 Token（先撤销再删除）           |
+| `/api/token/expired`     | DELETE | 清理过期 Token                 |
+| `/api/token/statistics`  | GET    | 获取 Token 统计信息              |
 
 以上接口需要携带有效 token，且 token 的 scope 中包含 `/api/token`。
 
@@ -258,45 +292,59 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 
 ### JWT 配置
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `jwt.key-id` | JWT Key ID | sure-auth-aksk-2026 |
-| `jwt.expires-in` | Token 过期时间（秒） | 3600 |
-| `jwt.public-key` | RSA 公钥（支持文件路径/PEM内容/Base64） | - |
-| `jwt.private-key` | RSA 私钥 | - |
-| `jwt.security-context-max-size` | Security Context 最大大小（字节） | 4096 |
+| 配置项                             | 说明                          | 默认值                 |
+|---------------------------------|-----------------------------|---------------------|
+| `jwt.key-id`                    | JWT Key ID                  | sure-auth-aksk-2026 |
+| `jwt.expires-in`                | Token 过期时间（秒）               | 3600                |
+| `jwt.public-key`                | RSA 公钥（支持文件路径/PEM内容/Base64） | -                   |
+| `jwt.private-key`               | RSA 私钥                      | -                   |
+| `jwt.security-context-max-size` | Security Context 最大大小（字节）   | 4096                |
 
 ### Redis 配置
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `redis.enabled` | 是否启用 Redis 缓存 | false |
-| `redis.token.me` | 应用标识，用于多实例隔离 | default |
+| 配置项              | 说明            | 默认值     |
+|------------------|---------------|---------|
+| `redis.enabled`  | 是否启用 Redis 缓存 | false   |
+| `redis.token.me` | 应用标识，多实例需保持一致 | default |
+
+### SmartCache 配置（启用 Redis 时推荐配置）
+
+| 配置项                       | 说明                                  | 默认值                                   |
+|---------------------------|-------------------------------------|---------------------------------------|
+| `cache.key-prefix`        | Redis key 前缀                        | sure-auth-aksk                        |
+| `cache.me`                | 实例标识，建议与 `redis.token.me` 保持一致      | -                                     |
+| `cache.l1.enabled`        | 是否启用 L1 本地缓存                        | true                                  |
+| `cache.l1.expire-seconds` | L1 缓存 TTL（秒）                        | 10                                    |
+| `cache.l1.max-size`       | L1 最大条目数                            | 10000                                 |
+| `cache.l2.enabled`        | 是否启用 L2 Redis 缓存                    | true                                  |
+| `cache.l2.expire-seconds` | L2 缓存 TTL（秒），建议与 JWT 过期时间一致         | 3600                                  |
+| `cache.l2.key-format`     | Redis key 格式，需与 AKSK key 格式一致       | `{keyPrefix}:{me}:{cacheName}::{key}` |
+| `cache.consistency.mode`  | 一致性模式：`strong`（Pub/Sub）或 `eventual` | strong                                |
 
 ### Admin 配置
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `admin.enabled` | 是否启用 Admin 管理页面 | true |
-| `admin.username` | Admin 用户名 | admin |
-| `admin.password` | Admin 密码 | - |
-| `admin.session-timeout-minutes` | Session 超时时间（分钟） | 30 |
+| 配置项                             | 说明               | 默认值   |
+|---------------------------------|------------------|-------|
+| `admin.enabled`                 | 是否启用 Admin 管理页面  | true  |
+| `admin.username`                | Admin 用户名        | admin |
+| `admin.password`                | Admin 密码         | -     |
+| `admin.session-timeout-minutes` | Session 超时时间（分钟） | 30    |
 
 ### Introspect 配置
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
+| 配置项                                 | 说明                     | 默认值  |
+|-------------------------------------|------------------------|------|
 | `introspect.require-authentication` | introspect 端点是否需要客户端认证 | true |
 
 ---
 
 ## AKSK 类型说明
 
-| 类型 | 前缀 | 用途 |
-|------|------|------|
-| 平台级（AKP） | `AKP` | 服务间调用、后台任务、系统级操作 |
-| 用户级（AKU） | `AKU` | 用户 API 调用、移动端、第三方集成 |
-| Secret Key | `SK` | 与 AK 配对，BCrypt 加密存储，仅创建时返回明文 |
+| 类型         | 前缀    | 用途                           |
+|------------|-------|------------------------------|
+| 平台级（AKP）   | `AKP` | 服务间调用、后台任务、系统级操作             |
+| 用户级（AKU）   | `AKU` | 用户 API 调用、移动端、第三方集成          |
+| Secret Key | `SK`  | 与 AK 配对，BCrypt 加密存储，仅创建时返回明文 |
 
 ---
 
@@ -317,9 +365,22 @@ io.github.surezzzzzz.sdk.auth.aksk.server.admin.enabled: false
 
 ### 3. Redis 是否必需？
 
-不是。Redis 仅用于缓存 OAuth2 授权信息提升性能，默认使用 MySQL 存储。
+不是。Redis 仅用于缓存提升性能，默认使用 MySQL 存储。不配置 Redis 时自动降级为纯数据库模式。
 
-### 4. 启动时出现 `Cannot load module CasJackson2Module` 警告
+### 4. 多实例部署时缓存如何保持一致？
+
+`consistency.mode=strong` 时，任意实例 revoke token 后会通过 Redis Pub/Sub 广播缓存失效消息，其他实例的 L1
+缓存立即清除。每个实例启动时生成唯一 UUID 作为实例标识，不会误忽略其他实例的消息。
+
+### 5. token 撤销后 introspect 仍返回 active=true？
+
+检查以下几点：
+
+- `redis.token.me` 与 `cache.me` 是否一致
+- `cache.consistency.mode` 是否为 `strong`
+- Redis Pub/Sub 连接是否正常（查看启动日志中 `Cache invalidation listener initialized` 是否出现）
+
+### 6. 启动时出现 `Cannot load module CasJackson2Module` 警告
 
 无害警告，如需屏蔽：
 
@@ -329,33 +390,44 @@ logging:
     org.springframework.security.jackson2: ERROR
 ```
 
-### 5. token 撤销后 introspect 仍返回 active=true？
-
-确认 Redis 缓存已正确清除。撤销操作会同时 evict Redis 缓存，如果仍有问题请检查 `redis.token.me` 配置是否与 server 一致。
-
 ---
 
 ## 版本历史
 
+### 1.1.0 (2026-04-17)
+
+引入 SmartCache L1+L2 两级缓存，Redis Pub/Sub 多实例强一致。详见 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)
+
+### 1.0.7 (2026-04-15)
+
+Admin 清理过期 Token 接口路径修复。详见 [CHANGELOG.1.0.7.md](CHANGELOG.1.0.7.md)
+
 ### 1.0.6 (2026-04-13)
-Introspect 端点匿名访问支持、Admin session 超时白屏修复、换 Token 测试页面增强。详见 [CHANGELOG.1.0.6.md](CHANGELOG.1.0.6.md)
+
+Introspect 端点匿名访问支持、Admin session 超时白屏修复。详见 [CHANGELOG.1.0.6.md](CHANGELOG.1.0.6.md)
 
 ### 1.0.5 (2026-04-10)
-Token 全生命周期审计事件、Token 撤销能力、Admin 撤销操作、品牌 Logo。详见 [CHANGELOG.1.0.5.md](CHANGELOG.1.0.5.md)
+
+Token 全生命周期审计事件、Token 撤销能力、Admin 撤销操作。详见 [CHANGELOG.1.0.5.md](CHANGELOG.1.0.5.md)
 
 ### 1.0.4 (2026-xx-xx)
+
 Admin 编辑权限页面 UX 优化。详见 [CHANGELOG.1.0.4.md](CHANGELOG.1.0.4.md)
 
 ### 1.0.3 (2026-xx-xx)
+
 OAuth2 scope 权限控制、JWT 安全上下文提取、统一异常处理。详见 [CHANGELOG.1.0.3.md](CHANGELOG.1.0.3.md)
 
 ### 1.0.2 (2026-02-04)
+
 JWT 新增 `auth_server_id` claim。详见 [CHANGELOG.1.0.2.md](CHANGELOG.1.0.2.md)
 
 ### 1.0.1 (2026-01-31)
+
 scope 参数可选、Admin 页面增强。详见 [CHANGELOG.1.0.1.md](CHANGELOG.1.0.1.md)
 
 ### 1.0.0 (2026-01-19)
+
 初始版本发布。
 
 ---
@@ -366,6 +438,7 @@ scope 参数可选、Admin 页面增强。详见 [CHANGELOG.1.0.1.md](CHANGELOG.
 - Spring Authorization Server 0.4.1
 - Spring Data JPA + MySQL
 - Spring Data Redis（可选）
+- SmartCache（Caffeine L1 + Redis L2）
 - Thymeleaf
 - Lombok / JUnit 5
 

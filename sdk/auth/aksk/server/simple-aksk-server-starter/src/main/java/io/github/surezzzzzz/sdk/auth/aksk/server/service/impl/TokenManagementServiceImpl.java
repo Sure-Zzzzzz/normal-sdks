@@ -17,16 +17,16 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClie
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.RedisTokenRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
+import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
@@ -54,7 +54,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     private RedisTokenRepository redisRepository;
 
     @Autowired(required = false)
-    private CacheManager cacheManager;
+    private SmartCacheManager smartCacheManager;
 
     @Autowired(required = false)
     private RedisKeyHelper redisKeyHelper;
@@ -214,20 +214,25 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     }
 
     private void evictTokenCache(String id, OAuth2AuthorizationEntity entity) {
-        if (cacheManager == null || redisKeyHelper == null) return;
+        if (smartCacheManager == null || redisKeyHelper == null) return;
         try {
-            // evict Spring Cache（按 id 索引）
-            Cache idCache = cacheManager.getCache(RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION);
-            if (idCache != null) {
-                idCache.evict(redisKeyHelper.buildCacheKeyById(id));
-            }
-            // evict Spring Cache（按 token value 索引）
-            Cache tokenCache = cacheManager.getCache(RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN);
-            if (tokenCache != null && entity.getAccessTokenValue() != null) {
+            // evict SmartCache（按 id 索引）
+            smartCacheManager.evict(
+                    RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION,
+                    redisKeyHelper.buildCacheKeyById(id)
+            );
+            // evict SmartCache（按 token value 索引）
+            if (entity.getAccessTokenValue() != null) {
                 String tokenValue = deserializeTokenValue(entity.getAccessTokenValue());
                 if (tokenValue != null) {
-                    tokenCache.evict(redisKeyHelper.buildCacheKeyByToken(tokenValue, null));
-                    tokenCache.evict(redisKeyHelper.buildCacheKeyByToken(tokenValue, "access_token"));
+                    smartCacheManager.evict(
+                            RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN,
+                            redisKeyHelper.buildCacheKeyByToken(tokenValue, null)
+                    );
+                    smartCacheManager.evict(
+                            RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN,
+                            redisKeyHelper.buildCacheKeyByToken(tokenValue, OAuth2TokenType.ACCESS_TOKEN.getValue())
+                    );
                 }
             }
             // 同时删掉 RedisTokenRepository 扫描用的完整 key
