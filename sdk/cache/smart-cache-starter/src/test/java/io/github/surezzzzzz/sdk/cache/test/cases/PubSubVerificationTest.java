@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.cache.test.cases;
 import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationListener;
 import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationMessage;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
@@ -38,6 +39,9 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
 
     @Autowired
     private SmartCacheProperties properties;
+
+    @Autowired
+    private CacheInvalidationListener invalidationListener;
 
     @Autowired
     @Qualifier("smartCacheRedisTemplate")
@@ -173,16 +177,16 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
         // 验证数据已写入
         assertEquals(value, l1Cache.get(cacheName, key));
 
-        // 步骤2: 使用当前实例的 me 标识发送消息
+        // 步骤2: 使用当前实例的 instanceId 发送消息（模拟自己发送）
         log.info("【步骤 2】使用当前实例标识发送消息");
         String channelPrefix = properties.getPubsubChannelPrefix();
         String me = properties.getMe();
         String channel = KeyHelper.buildPubSubChannel(channelPrefix, me, cacheName);
 
         CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                cacheName, key, SmartCacheConstant.OPERATION_EVICT, me);
+                cacheName, key, SmartCacheConstant.OPERATION_EVICT, invalidationListener.getInstanceId());
 
-        log.info("发送 Pub/Sub 消息，sender: {} (当前实例)", me);
+        log.info("发送 Pub/Sub 消息，sender: {} (当前实例)", invalidationListener.getInstanceId());
         redisTemplate.convertAndSend(channel, msg);
 
         // 步骤3: 等待消息处理

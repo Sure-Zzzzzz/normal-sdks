@@ -39,7 +39,7 @@
 
 ```gradle
 // 框架本身
-implementation 'io.github.sure-zzzzzz:smart-cache-starter:1.0.3'
+implementation 'io.github.sure-zzzzzz:smart-cache-starter:1.0.4'
 
 // 必须自行引入（框架 compileOnly，不会传递）
 implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'          // L1 缓存
@@ -54,7 +54,7 @@ implementation 'org.springframework.boot:spring-boot-starter-aop'        // 注�
 <dependency>
     <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>smart-cache-starter</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
 </dependency>
 
 <!-- 必须自行引入（框架 compileOnly，不会传递） -->

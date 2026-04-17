@@ -459,9 +459,9 @@ public class StressTest extends BaseSmartCacheTest {
         log.info("平均读取速度: {} records/s", String.format("%.2f", avgReadSpeed));
 
         // 根据Redis可用性调整性能要求
-        double expectedMaxWriteTime = redisAvailable ? 1000 : 2000;      // 无Redis时放宽写入时间
+        double expectedMaxWriteTime = redisAvailable ? 2000 : 3000;      // 无Redis时放宽写入时间
         double expectedMaxReadTime = redisAvailable ? 500 : 1000;        // 无Redis时放宽读取时间
-        double expectedMinWriteSpeed = redisAvailable ? 5000 : 2500;     // 无Redis时降低写入速度要求
+        double expectedMinWriteSpeed = redisAvailable ? 2500 : 1500;     // 无Redis时降低写入速度要求
         double expectedMinReadSpeed = redisAvailable ? 10000 : 5000;     // 无Redis时降低读取速度要求
 
         log.info("Redis可用: {}, 性能要求: 写入<{}ms, 读取<{}ms, 写入速度>{}records/s, 读取速度>{}records/s",

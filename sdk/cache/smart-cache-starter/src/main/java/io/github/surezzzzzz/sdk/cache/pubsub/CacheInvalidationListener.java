@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -18,6 +19,7 @@ import org.springframework.data.redis.serializer.RedisSerializer;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -49,6 +51,13 @@ public class CacheInvalidationListener implements MessageListener {
 
     @Autowired(required = false)
     private RedisMessageListenerContainer listenerContainer;
+
+    /**
+     * 实例唯一标识，用于 Pub/Sub 消息的"忽略自己"判断
+     * 使用 UUID 而非 me（应用名），确保同一应用的多副本能正确区分
+     */
+    @Getter
+    private final String instanceId = UUID.randomUUID().toString();
 
     /**
      * 线程计数器，用于生成唯一的线程名称
@@ -99,7 +108,7 @@ public class CacheInvalidationListener implements MessageListener {
                 // 手动启动容器，并捕获可能的连接异常
                 try {
                     listenerContainer.start();
-                    log.info("Cache invalidation listener initialized successfully, channel: {}", channel);
+                    log.info("Cache invalidation listener initialized successfully, instanceId: {}, channel: {}", instanceId, channel);
                 } catch (Exception startEx) {
                     log.warn("Failed to start Redis Pub/Sub listener, strong consistency will not work. " +
                             "This is expected if Redis is not available. Error: {}", startEx.getMessage());
@@ -148,10 +157,8 @@ public class CacheInvalidationListener implements MessageListener {
                 return;
             }
 
-            // 忽略自己发送的消息
-            String me = properties != null ? properties.getMe() : null;
-            String sender = msg.getSender();
-            if (me != null && me.equals(sender)) {
+            // 忽略自己发送的消息（用 instanceId 而非 me，支持同应用多副本）
+            if (instanceId.equals(msg.getSender())) {
                 return;
             }
 
@@ -159,13 +166,12 @@ public class CacheInvalidationListener implements MessageListener {
             if (SmartCacheConstant.OPERATION_EVICT.equals(msg.getOperation())) {
                 if (l1Cache != null) {
                     l1Cache.evict(msg.getCacheName(), msg.getKey());
-                    log.trace("Received cache evict message: cacheName={}, key={}",
-                            msg.getCacheName(), msg.getKey());
+                    log.debug("Received cache evict message: cacheName={}, key={}", msg.getCacheName(), msg.getKey());
                 }
             } else if (SmartCacheConstant.OPERATION_CLEAR.equals(msg.getOperation())) {
                 if (l1Cache != null) {
                     l1Cache.clear(msg.getCacheName());
-                    log.trace("Received cache clear message: cacheName={}", msg.getCacheName());
+                    log.debug("Received cache clear message: cacheName={}", msg.getCacheName());
                 }
             }
         } catch (Exception e) {
@@ -189,10 +195,9 @@ public class CacheInvalidationListener implements MessageListener {
             String me = properties.getMe();
             String channel = KeyHelper.buildPubSubChannel(channelPrefix, me, cacheName);
             CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                    cacheName, key, operation, me);
+                    cacheName, key, operation, instanceId);
             redisTemplate.convertAndSend(channel, msg);
-            log.trace("Published cache invalidation message: cacheName={}, key={}, operation={}",
-                    cacheName, key, operation);
+            log.debug("Published cache invalidation message: cacheName={}, key={}, operation={}", cacheName, key, operation);
         } catch (Exception e) {
             log.error("Failed to publish cache invalidation message", e);
         }
