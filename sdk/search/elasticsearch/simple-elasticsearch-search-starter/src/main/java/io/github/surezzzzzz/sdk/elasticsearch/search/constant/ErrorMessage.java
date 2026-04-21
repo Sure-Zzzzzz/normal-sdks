@@ -228,6 +228,20 @@ public class ErrorMessage {
      */
     public static final String DEFAULT_DATE_RANGE_INVALID_FORMAT = "query-limits.default-date-range 格式不合法，支持格式：30d / 1h / 5m / 30s，当前值：%s";
 
+    // ========== 操作符策略相关 ==========
+
+    /**
+     * 操作符策略 key 已存在
+     */
+    public static final String OPERATOR_STRATEGY_DUPLICATE = "操作符策略 [%s] 已存在，不允许覆盖内置策略";
+
+    // ========== 聚合策略相关 ==========
+
+    /**
+     * 聚合策略 key 已存在
+     */
+    public static final String AGG_STRATEGY_DUPLICATE = "聚合策略 [%s] 已存在，不允许覆盖内置策略";
+
     private ErrorMessage() {
         // 私有构造函数，防止实例化
     }

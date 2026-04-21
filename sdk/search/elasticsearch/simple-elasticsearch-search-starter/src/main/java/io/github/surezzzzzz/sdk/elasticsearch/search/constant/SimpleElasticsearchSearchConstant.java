@@ -468,6 +468,13 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String ES_JSON_AFTER_KEY = "after_key";
 
+    // ========== 异常关键字 ==========
+
+    /**
+     * ES too_long_frame_exception 异常关键字，用于降级重试判断
+     */
+    public static final String TOO_LONG_FRAME_EXCEPTION = "too_long_frame_exception";
+
     private SimpleElasticsearchSearchConstant() {
         // 私有构造函数，防止实例化
     }

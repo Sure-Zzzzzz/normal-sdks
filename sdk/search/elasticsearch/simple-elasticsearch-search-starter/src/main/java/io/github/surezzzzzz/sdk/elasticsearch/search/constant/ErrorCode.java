@@ -247,6 +247,20 @@ public class ErrorCode {
      */
     public static final String DEFAULT_DATE_RANGE_INVALID_FORMAT = "SEARCH_CONFIG_010";
 
+    // ========== 操作符策略相关错误码 ==========
+
+    /**
+     * 操作符策略 key 已存在，不允许覆盖内置策略
+     */
+    public static final String OPERATOR_STRATEGY_DUPLICATE = "SEARCH_QUERY_010";
+
+    // ========== 聚合策略相关错误码 ==========
+
+    /**
+     * 聚合策略 key 已存在，不允许覆盖内置策略
+     */
+    public static final String AGG_STRATEGY_DUPLICATE = "SEARCH_AGG_006";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }
