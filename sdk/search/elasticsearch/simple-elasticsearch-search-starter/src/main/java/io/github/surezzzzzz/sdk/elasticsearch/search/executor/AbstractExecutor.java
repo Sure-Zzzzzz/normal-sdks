@@ -10,7 +10,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
-import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteProcessor;
+import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteDowngradeProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.ElasticsearchException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +37,7 @@ public abstract class AbstractExecutor<Req, Resp> {
     protected MappingManager mappingManager;
 
     @Autowired
-    protected IndexRouteProcessor indexRouteProcessor;
+    protected IndexRouteDowngradeProcessor indexRouteProcessor;
 
     @Autowired
     protected SimpleElasticsearchRouteRegistry registry;

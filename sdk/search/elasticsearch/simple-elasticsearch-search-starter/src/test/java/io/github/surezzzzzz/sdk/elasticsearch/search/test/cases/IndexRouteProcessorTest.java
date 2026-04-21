@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
-import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteProcessor;
+import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteDowngradeProcessor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +15,7 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * IndexRouteProcessor 单元测试
+ * IndexRouteDowngradeProcessor 单元测试
  * 测试按年、月、日三种粒度的日期分割索引路由
  *
  * @author surezzzzzz
@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class IndexRouteProcessorTest {
 
     @Autowired
-    private IndexRouteProcessor processor;
+    private IndexRouteDowngradeProcessor processor;
 
     @Test
     @DisplayName("按天分割 - yyyy.MM.dd 格式")
