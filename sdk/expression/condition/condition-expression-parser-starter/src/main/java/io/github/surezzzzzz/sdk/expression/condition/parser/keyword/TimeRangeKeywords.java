@@ -23,41 +23,107 @@ public class TimeRangeKeywords {
     static {
         // 分钟级
         register("近5分钟", TimeRange.LAST_5_MINUTES);
+        register("最近5分钟", TimeRange.LAST_5_MINUTES);
+        register("近五分钟", TimeRange.LAST_5_MINUTES);
+        register("最近五分钟", TimeRange.LAST_5_MINUTES);
         register("近10分钟", TimeRange.LAST_10_MINUTES);
+        register("最近10分钟", TimeRange.LAST_10_MINUTES);
+        register("近十分钟", TimeRange.LAST_10_MINUTES);
+        register("最近十分钟", TimeRange.LAST_10_MINUTES);
         register("近15分钟", TimeRange.LAST_15_MINUTES);
+        register("最近15分钟", TimeRange.LAST_15_MINUTES);
+        register("近十五分钟", TimeRange.LAST_15_MINUTES);
+        register("最近十五分钟", TimeRange.LAST_15_MINUTES);
         register("近30分钟", TimeRange.LAST_30_MINUTES);
+        register("最近30分钟", TimeRange.LAST_30_MINUTES);
+        register("近三十分钟", TimeRange.LAST_30_MINUTES);
+        register("最近三十分钟", TimeRange.LAST_30_MINUTES);
 
         // 小时级
         register("近1小时", TimeRange.LAST_1_HOUR);
+        register("最近1小时", TimeRange.LAST_1_HOUR);
+        register("近一小时", TimeRange.LAST_1_HOUR);
+        register("最近一小时", TimeRange.LAST_1_HOUR);
         register("近6小时", TimeRange.LAST_6_HOURS);
+        register("最近6小时", TimeRange.LAST_6_HOURS);
+        register("近六小时", TimeRange.LAST_6_HOURS);
+        register("最近六小时", TimeRange.LAST_6_HOURS);
         register("近12小时", TimeRange.LAST_12_HOURS);
+        register("最近12小时", TimeRange.LAST_12_HOURS);
+        register("近十二小时", TimeRange.LAST_12_HOURS);
+        register("最近十二小时", TimeRange.LAST_12_HOURS);
         register("近24小时", TimeRange.LAST_24_HOURS);
+        register("最近24小时", TimeRange.LAST_24_HOURS);
+        register("近二十四小时", TimeRange.LAST_24_HOURS);
+        register("最近二十四小时", TimeRange.LAST_24_HOURS);
 
         // 天级
         register("近1天", TimeRange.LAST_1_DAY);
+        register("最近1天", TimeRange.LAST_1_DAY);
+        register("近一天", TimeRange.LAST_1_DAY);
+        register("最近一天", TimeRange.LAST_1_DAY);
         register("近3天", TimeRange.LAST_3_DAYS);
+        register("最近3天", TimeRange.LAST_3_DAYS);
+        register("近三天", TimeRange.LAST_3_DAYS);
+        register("最近三天", TimeRange.LAST_3_DAYS);
         register("近7天", TimeRange.LAST_7_DAYS);
+        register("最近7天", TimeRange.LAST_7_DAYS);
+        register("近七天", TimeRange.LAST_7_DAYS);
+        register("最近七天", TimeRange.LAST_7_DAYS);
+        register("最近14天", TimeRange.LAST_2_WEEKS);
+        register("最近十四天", TimeRange.LAST_2_WEEKS);
+        register("最近30天", TimeRange.LAST_1_MONTH);
+        register("最近三十天", TimeRange.LAST_1_MONTH);
+        register("最近60天", TimeRange.LAST_2_MONTHS);
+        register("最近六十天", TimeRange.LAST_2_MONTHS);
+        register("最近90天", TimeRange.LAST_3_MONTHS);
+        register("最近九十天", TimeRange.LAST_3_MONTHS);
 
         // 周级
         register("近1周", TimeRange.LAST_1_WEEK);
+        register("最近1周", TimeRange.LAST_1_WEEK);
+        register("近一周", TimeRange.LAST_1_WEEK);
+        register("最近一周", TimeRange.LAST_1_WEEK);
         register("近2周", TimeRange.LAST_2_WEEKS);
+        register("最近2周", TimeRange.LAST_2_WEEKS);
+        register("近两周", TimeRange.LAST_2_WEEKS);
+        register("最近两周", TimeRange.LAST_2_WEEKS);
+        register("近二周", TimeRange.LAST_2_WEEKS);
+        register("最近二周", TimeRange.LAST_2_WEEKS);
 
-        // 月级（重点：匹配业务场景）
+        // 月级
         register("近1个月", TimeRange.LAST_1_MONTH);
-        register("一个月", TimeRange.LAST_1_MONTH);  // 别名
+        register("最近1个月", TimeRange.LAST_1_MONTH);
+        register("近一个月", TimeRange.LAST_1_MONTH);
+        register("最近一个月", TimeRange.LAST_1_MONTH);
+        register("一个月", TimeRange.LAST_1_MONTH);
         register("近2个月", TimeRange.LAST_2_MONTHS);
-        register("近3个月", TimeRange.LAST_3_MONTHS);  // 数字版
+        register("最近2个月", TimeRange.LAST_2_MONTHS);
+        register("近两个月", TimeRange.LAST_2_MONTHS);
+        register("最近两个月", TimeRange.LAST_2_MONTHS);
         register("近三个月", TimeRange.LAST_3_MONTHS);
-        register("三个月", TimeRange.LAST_3_MONTHS);  // 别名
-        register("近6个月", TimeRange.LAST_6_MONTHS);  // 数字版
+        register("最近3个月", TimeRange.LAST_3_MONTHS);
+        register("最近三个月", TimeRange.LAST_3_MONTHS);
+        register("三个月", TimeRange.LAST_3_MONTHS);
         register("近半年", TimeRange.LAST_6_MONTHS);
-        register("半年", TimeRange.LAST_6_MONTHS);  // 别名
+        register("最近6个月", TimeRange.LAST_6_MONTHS);
+        register("最近六个月", TimeRange.LAST_6_MONTHS);
+        register("半年", TimeRange.LAST_6_MONTHS);
 
         // 年级
         register("近1年", TimeRange.LAST_1_YEAR);
-        register("一年", TimeRange.LAST_1_YEAR);  // 别名
+        register("最近1年", TimeRange.LAST_1_YEAR);
+        register("近一年", TimeRange.LAST_1_YEAR);
+        register("最近一年", TimeRange.LAST_1_YEAR);
+        register("一年", TimeRange.LAST_1_YEAR);
         register("近2年", TimeRange.LAST_2_YEARS);
+        register("最近2年", TimeRange.LAST_2_YEARS);
+        register("近两年", TimeRange.LAST_2_YEARS);
+        register("最近两年", TimeRange.LAST_2_YEARS);
         register("近3年", TimeRange.LAST_3_YEARS);
+        register("最近3年", TimeRange.LAST_3_YEARS);
+        register("近三年", TimeRange.LAST_3_YEARS);
+        register("最近三年", TimeRange.LAST_3_YEARS);
 
         // 相对时间点
         register("今天", TimeRange.TODAY);
