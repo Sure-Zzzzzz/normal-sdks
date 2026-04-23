@@ -38,6 +38,7 @@ public class OperatorStrategyRegistry {
     private final NotInOperatorStrategy notInStrategy;
     private final BetweenOperatorStrategy betweenStrategy;
     private final LikeOperatorStrategy likeStrategy;
+    private final NotLikeOperatorStrategy notLikeStrategy;
     private final PrefixOperatorStrategy prefixStrategy;
     private final SuffixOperatorStrategy suffixStrategy;
     private final ExistsOperatorStrategy existsStrategy;
@@ -58,6 +59,7 @@ public class OperatorStrategyRegistry {
         register(QueryOperator.NOT_IN.getOperator(), notInStrategy);
         register(QueryOperator.BETWEEN.getOperator(), betweenStrategy);
         register(QueryOperator.LIKE.getOperator(), likeStrategy);
+        register(QueryOperator.NOT_LIKE.getOperator(), notLikeStrategy);
         register(QueryOperator.PREFIX.getOperator(), prefixStrategy);
         register(QueryOperator.SUFFIX.getOperator(), suffixStrategy);
         register(QueryOperator.EXISTS.getOperator(), existsStrategy);

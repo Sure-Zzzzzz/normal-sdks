@@ -261,6 +261,13 @@ public class ErrorCode {
      */
     public static final String AGG_STRATEGY_DUPLICATE = "SEARCH_AGG_006";
 
+    // ========== 高级表达式相关错误码 ==========
+
+    /**
+     * 高级表达式解析失败
+     */
+    public static final String EXPRESSION_PARSE_FAILED = "SEARCH_EXPRESSION_001";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }

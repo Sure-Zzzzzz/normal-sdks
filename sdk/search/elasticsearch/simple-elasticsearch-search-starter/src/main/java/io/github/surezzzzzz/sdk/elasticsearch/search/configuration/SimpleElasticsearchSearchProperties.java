@@ -18,7 +18,9 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Simple Elasticsearch Search Properties
@@ -173,6 +175,21 @@ public class SimpleElasticsearchSearchProperties {
                 }
             }
         }
+
+        // 5. 校验字段名映射配置
+        if (!CollectionUtils.isEmpty(config.getFieldMapping())) {
+            for (Map.Entry<String, String> entry : config.getFieldMapping().entrySet()) {
+                if (isEmpty(entry.getKey())) {
+                    throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                            String.format("索引 [%s] 的 field-mapping 存在空的 key", identifier));
+                }
+                if (isEmpty(entry.getValue())) {
+                    throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                            String.format("索引 [%s] 的 field-mapping [%s] 对应的 ES 字段名不能为空",
+                                    identifier, entry.getKey()));
+                }
+            }
+        }
     }
 
     /**
@@ -262,6 +279,13 @@ public class SimpleElasticsearchSearchProperties {
          * 敏感字段配置
          */
         private List<SensitiveFieldConfig> sensitiveFields = new ArrayList<>();
+
+        /**
+         * 字段名映射（高级表达式查询用）
+         * key：表达式中使用的字段名（如中文），value：ES 中的实际字段名
+         * 示例：威胁类型 → threat_type
+         */
+        private Map<String, String> fieldMapping = new HashMap<>();
     }
 
     /**
@@ -397,6 +421,24 @@ public class SimpleElasticsearchSearchProperties {
          * </p>
          */
         private boolean includeRawResponse = false;
+
+        /**
+         * 表达式查询配置
+         */
+        private ExpressionConfig expression = new ExpressionConfig();
+    }
+
+    /**
+     * 表达式查询配置
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ExpressionConfig {
+        /**
+         * 表达式最大长度（字符数），0 表示不限制，默认 2048
+         */
+        private int maxLength = 2048;
     }
 
     /**

@@ -222,7 +222,7 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.error").doesNotExist())
                 .andDo(result -> {
                     log.info("✓ 获取索引列表成功");
-                    log.debug("Response: {}", result.getResponse().getContentAsString());
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
 
@@ -239,7 +239,7 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.fields").isArray())
                 .andDo(result -> {
                     log.info("✓ 获取字段信息成功");
-                    log.debug("Response: {}", result.getResponse().getContentAsString());
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
 
@@ -256,7 +256,7 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.fields").isArray())
                 .andDo(result -> {
                     log.info("✓ 获取字段信息成功");
-                    log.debug("Response: {}", result.getResponse().getContentAsString());
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
 
@@ -269,7 +269,10 @@ class SearchEndToEndTest {
         mockMvc.perform(post("/api/indices/test_user/refresh"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isString())
-                .andDo(result -> log.info("✓ 刷新 Mapping 成功"));
+                .andDo(result -> {
+                    log.info("✓ 刷新 Mapping 成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
     }
 
     // ==================== 2. 数据查询测试 ====================
@@ -2239,6 +2242,127 @@ class SearchEndToEndTest {
         order.put("status", status);
         order.put("created_at", new Date());
         return order;
+    }
+
+    // ==================== 表达式查询端到端测试 ====================
+
+    @Test
+    @Order(200)
+    @DisplayName("表达式查询 - 等于")
+    void testExpressionQueryEq() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"status = \\\"completed\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andDo(result -> log.info("✓ 表达式等于查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(201)
+    @DisplayName("表达式查询 - 数值大于")
+    void testExpressionQueryGt() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"amount > 5000\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andDo(result -> log.info("✓ 表达式大于查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(202)
+    @DisplayName("表达式查询 - AND 组合")
+    void testExpressionQueryAnd() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"status = \\\"completed\\\" AND amount > 2000\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andDo(result -> log.info("✓ 表达式 AND 查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(203)
+    @DisplayName("表达式查询 - IN 多值")
+    void testExpressionQueryIn() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"status IN (\\\"completed\\\", \\\"pending\\\")\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andDo(result -> log.info("✓ 表达式 IN 查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(204)
+    @DisplayName("表达式查询 - NOT 取反")
+    void testExpressionQueryNot() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"NOT status = \\\"cancelled\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andDo(result -> log.info("✓ 表达式 NOT 查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(205)
+    @DisplayName("表达式查询 - LIKE 模糊匹配")
+    void testExpressionQueryLike() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"product_name LIKE \\\"Apple\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andDo(result -> log.info("✓ 表达式 LIKE 查询: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(206)
+    @DisplayName("表达式查询 - 语法错误返回 400")
+    void testExpressionQuerySyntaxError() throws Exception {
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"status = \"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ 表达式语法错误返回 400: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(207)
+    @DisplayName("表达式校验 - 合法表达式")
+    void testExpressionValidateValid() throws Exception {
+        mockMvc.perform(get("/api/expression/validate")
+                        .param("expression", "status = \"completed\" AND amount > 1000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(true))
+                .andExpect(jsonPath("$.data.errorMessage").doesNotExist())
+                .andDo(result -> log.info("✓ 表达式校验合法: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(208)
+    @DisplayName("表达式校验 - 语法错误")
+    void testExpressionValidateInvalid() throws Exception {
+        mockMvc.perform(get("/api/expression/validate")
+                        .param("expression", "status = \"completed\" AND amount >="))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(false))
+                .andExpect(jsonPath("$.data.errorMessage").isString())
+                .andDo(result -> log.info("✓ 表达式校验语法错误: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private static Map<String, Object> createUser(String username, String name, int age, String city, String phone, String password) {

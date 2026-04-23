@@ -6,14 +6,19 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexFieldsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexInfoResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.NLDslTranslationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.nl.service.NLDslService;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.QueryExecutor;
+import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.log.truncate.support.LogTruncator;
@@ -57,6 +62,9 @@ public class SimpleElasticsearchSearchApiEndpoint {
 
     @Autowired(required = false)
     private NLDslService nlDslService;
+
+    @Autowired(required = false)
+    private ExpressionService expressionService;
 
     @Autowired(required = false)
     @Qualifier("logTruncator")
@@ -253,5 +261,63 @@ public class SimpleElasticsearchSearchApiEndpoint {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("翻译失败: " + e.getMessage()));
         }
+    }
+
+    /**
+     * 条件表达式查询
+     *
+     * @param request 表达式查询请求
+     * @return 查询结果
+     */
+    @PostMapping("/query/expression")
+    public ResponseEntity<ApiResponse<QueryResponse>> queryByExpression(@RequestBody ExpressionQueryRequest request) {
+        if (expressionService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error("表达式查询功能未启用，请引入 condition-expression-parser-starter 依赖"));
+        }
+        if (!StringUtils.hasText(request.getExpression())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("expression 不能为空"));
+        }
+        try {
+            log.debug("Received expression query request: index={}", request.getIndex());
+            QueryCondition condition = expressionService.translate(
+                    request.getExpression(), request.getIndex());
+            QueryRequest queryRequest = QueryRequest.builder()
+                    .index(request.getIndex())
+                    .query(condition)
+                    .pagination(request.getPagination())
+                    .fields(request.getFields())
+                    .dateRange(request.getDateRange())
+                    .build();
+            QueryResponse response = queryExecutor.execute(queryRequest);
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (ExpressionParseException e) {
+            log.warn("Expression parse failed: index={}, error={}", request.getIndex(), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (SimpleElasticsearchSearchException e) {
+            log.warn("Expression query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Expression query failed: index={}", request.getIndex(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    /**
+     * 校验条件表达式语法
+     *
+     * @param expression 表达式字符串
+     * @return 校验结果
+     */
+    @GetMapping("/expression/validate")
+    public ResponseEntity<ApiResponse<ExpressionValidationResult>> validateExpression(
+            @RequestParam String expression) {
+        if (expressionService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error("表达式查询功能未启用，请引入 condition-expression-parser-starter 依赖"));
+        }
+        ExpressionValidationResult result = expressionService.validate(expression);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

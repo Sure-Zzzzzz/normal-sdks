@@ -242,6 +242,18 @@ public class ErrorMessage {
      */
     public static final String AGG_STRATEGY_DUPLICATE = "聚合策略 [%s] 已存在，不允许覆盖内置策略";
 
+    // ========== 高级表达式相关 ==========
+
+    /**
+     * 高级表达式解析失败
+     */
+    public static final String EXPRESSION_PARSE_FAILED = "高级表达式解析失败：%s";
+
+    /**
+     * 表达式超出最大长度限制
+     */
+    public static final String EXPRESSION_TOO_LONG = "表达式长度超出限制，最大允许 %d 个字符，当前 %d 个字符";
+
     private ErrorMessage() {
         // 私有构造函数，防止实例化
     }

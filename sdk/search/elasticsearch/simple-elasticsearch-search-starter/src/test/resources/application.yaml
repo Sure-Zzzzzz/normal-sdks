@@ -12,6 +12,10 @@ io:
               # 普通索引（无标识符，直接使用索引名）
               - name: "test_order_index"
                 lazy-load: true
+                field-mapping:
+                  "[威胁类型]": threat_type
+                  "[攻击次数]": attack_count
+                  "[首次告警时间]": first_alert_time
 
               # 通配符索引（无标识符，用于日期分割场景）
               - name: "test_log_*"
@@ -105,6 +109,16 @@ io:
                 datasource: secondary
                 type: exact
                 priority: 10
+
+        expression:
+          condition:
+            parser:
+              custom-time-ranges:
+                最近1天: LAST_1_DAY
+                最近3天: LAST_3_DAYS
+                最近7天: LAST_7_DAYS
+                最近14天: LAST_2_WEEKS
+                最近30天: LAST_1_MONTH
 
 logging:
   level:
