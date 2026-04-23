@@ -74,6 +74,15 @@ public class AggDefinition {
     private List<AggDefinition> aggs;
 
     /**
+     * Pipeline 聚合列表
+     * 作用于当前 bucket 聚合的结果，在 ES 中作为 sub-aggregation 发送。
+     * 仅对普通 bucket 聚合有效（terms、date_histogram、histogram、range 等），
+     * composite 聚合下不允许使用（ES 不支持）。
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private List<PipelineAggDefinition> pipelineAggs;
+
+    /**
      * 获取聚合类型枚举
      */
     @JsonIgnore
@@ -101,6 +110,7 @@ public class AggDefinition {
         public AggDefinitionBuilder() {
             this.aggs = new ArrayList<>();
             this.ranges = new ArrayList<>();
+            this.pipelineAggs = new ArrayList<>();
         }
     }
 }

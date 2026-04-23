@@ -88,6 +88,11 @@ public enum QueryOperator {
     IS_NOT_NULL("is_not_null", "不为空"),
 
     /**
+     * 模糊不匹配（根据字段类型自动选择 must_not match 或 must_not wildcard）
+     */
+    NOT_LIKE("not_like", "模糊不匹配"),
+
+    /**
      * 正则表达式匹配
      */
     REGEX("regex", "正则匹配");
