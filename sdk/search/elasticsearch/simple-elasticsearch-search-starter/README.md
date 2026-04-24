@@ -12,6 +12,7 @@
 | 动态 Mapping | 自动获取并缓存索引字段元数据 | v1.0.0+ |
 | 灵活查询 | 支持 18 种操作符和嵌套逻辑组合 | v1.0.0+ |
 | 条件表达式查询 | 类 SQL 表达式直接查询，支持字段名映射 | v1.5.2+ |
+| 表达式提示 | 前端自动补全数据源（字段、运算符、时间范围） | v1.5.3+ |
 | 聚合分析 | 支持指标聚合、桶聚合、嵌套聚合 | v1.0.0+ |
 | composite 聚合翻页 | 突破 65535 条限制，支持全量遍历（ES 6.1+） | v1.4.0+ |
 | 深分页 | search_after 多种模式（tiebreaker/pit/none） | v1.3.0+ |
@@ -28,7 +29,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.2'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.3'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -234,6 +235,50 @@ GET /api/expression/validate?expression=status = "paid" AND amount >= 100
 
 ---
 
+### GET /api/expression/hints — 表达式提示（v1.5.3+）
+
+获取指定索引的表达式提示信息，供前端搜索框自动补全。
+
+```bash
+GET /api/expression/hints?index=order
+```
+
+**响应：**
+
+```json
+{
+  "data": {
+    "fields": [
+      {"name": "status", "label": ["状态", "订单状态"]},
+      {"name": "amount", "label": ["金额"]}
+    ],
+    "operators": [
+      {"op": "=", "description": "等于", "chinese": "等于"},
+      {"op": "!=", "description": "不等于", "chinese": "不等于"},
+      {"op": "IN", "description": "在列表中", "chinese": "包含于"},
+      {"op": "LIKE", "description": "模糊匹配", "chinese": "包含"},
+      {"op": "AND", "description": "逻辑与", "chinese": "且、并且"},
+      {"op": "OR", "description": "逻辑或", "chinese": "或、或者"}
+    ],
+    "timeRanges": ["近5分钟", "近1小时", "近7天", "近1个月", "近3个月", "今天", ...],
+    "valueRules": {
+      "stringNeedsQuote": true,
+      "supportedQuotes": ["'", "\""],
+      "booleanKeywords": ["true", "false", "真", "假"],
+      "numberNoQuote": true
+    }
+  }
+}
+```
+
+**说明：**
+- `fields`：来自索引 `field-mapping` 配置，只有配置了映射的字段才会出现；`index` 参数可选，不传时 `fields` 为空
+- `operators`：所有支持的运算符及其中文别名（完整列表见场景九）
+- `timeRanges`：时间范围主关键字
+- `valueRules`：值规则——字符串/中文值必须加引号，数字和布尔值不需要
+
+---
+
 ## 操作符
 
 | 操作符 | 说明 | 值字段 |
@@ -329,8 +374,11 @@ io:
                 date-pattern: "yyyy.MM.dd"
                 date-field: "createTime"
                 field-mapping:                            # 字段名映射（v1.5.2+，表达式查询用）
-                  "[用户状态]": status
-                  "[金额]": amount
+                  status:                                  # key = ES 字段名
+                    - 用户状态                              # value = 中文标签列表
+                    - 状态
+                  amount:
+                    - 金额
                 lazy-load: false
                 cache-mapping: true
                 sensitive-fields:
@@ -970,12 +1018,16 @@ indices:
   - name: "order_*"
     alias: order
     field-mapping:
-      "[订单状态]": status
-      "[金额]": amount
-      "[首次告警时间]": first_alert_time
+      status:                  # key = ES 字段名
+        - 订单状态              # value = 中文标签列表（支持多个别名）
+        - 状态
+      amount:
+        - 金额
+      first_alert_time:
+        - 首次告警时间
 ```
 
-表达式中即可使用：`订单状态 = "paid" AND 金额 >= 100`
+表达式中即可使用：`订单状态 = "paid" AND 金额 >= 100`（`状态` 同样有效）
 
 #### 3. 时间范围
 
@@ -1050,9 +1102,33 @@ async function search(expression) {
 
 - `condition-expression-parser-starter` 已通过 starter 传递依赖引入，无需单独添加
 - 表达式最大长度默认 2048 字符，可通过 `api.expression.max-length` 调整
-- `field-mapping` 中含特殊字符（中文等）的 key 需用 `[key]` 语法包裹
+- `field-mapping` 的 key 为 ES 字段名，value 为中文标签列表，多个标签均可在表达式中使用
 - 表达式查询走标准查询链路，支持分页、字段投影、日期路由等所有特性
 - `NOT LIKE` 对应 ES `must_not wildcard`，性能与 `LIKE` 一致，大数据量下慎用
+- **字符串值必须加引号**（ASCII 单引号 `'` 或双引号 `"`），数字和布尔值不需要：
+  - ✅ `status = 'paid'` / `name LIKE '测试'` / `时间 = '近7天'`
+  - ✅ `amount >= 100` / `enabled = true`
+  - ❌ `status = paid`（`paid` 不加引号会被识别为字段名）
+  - 不支持中文引号 `""`
+
+#### 8. 前端自动补全（v1.5.3+）
+
+调用 `GET /api/expression/hints?index={alias}` 获取提示数据：
+
+```javascript
+async function loadHints(index) {
+  const resp = await fetch(`/api/expression/hints?index=${index}`);
+  const { data } = await resp.json();
+
+  // data.fields     → 字段列表（name, label）
+  //                    label 为中文标签列表（来自 field-mapping），前端可展示给用户
+  //                    name 为 ES 实际字段名，前端构造表达式时使用
+  // data.operators  → 运算符列表（op, description, chinese）
+  // data.timeRanges → 时间范围关键字
+  // data.valueRules → 值规则（引号要求等）
+  return data;
+}
+```
 
 ---
 

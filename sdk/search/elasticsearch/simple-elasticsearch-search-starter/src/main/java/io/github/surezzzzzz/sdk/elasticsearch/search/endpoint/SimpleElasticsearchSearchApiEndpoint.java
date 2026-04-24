@@ -7,10 +7,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsea
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexFieldsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexInfoResponse;
-import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.NLDslTranslationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
@@ -23,6 +23,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.log.truncate.support.LogTruncator;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -44,21 +45,15 @@ import java.util.stream.Collectors;
 @Slf4j
 @SimpleElasticsearchSearchComponent
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("${io.github.surezzzzzz.sdk.elasticsearch.search.api.base-path:/api}")
 @ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.elasticsearch.search.api", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class SimpleElasticsearchSearchApiEndpoint {
 
-    @Autowired
-    private QueryExecutor queryExecutor;
-
-    @Autowired
-    private AggExecutor aggExecutor;
-
-    @Autowired
-    private MappingManager mappingManager;
-
-    @Autowired
-    private SimpleElasticsearchSearchProperties properties;
+    private final QueryExecutor queryExecutor;
+    private final AggExecutor aggExecutor;
+    private final MappingManager mappingManager;
+    private final SimpleElasticsearchSearchProperties properties;
 
     @Autowired(required = false)
     private NLDslService nlDslService;
@@ -70,6 +65,8 @@ public class SimpleElasticsearchSearchApiEndpoint {
     @Qualifier("logTruncator")
     private LogTruncator logTruncator;
 
+    // ==================== 查询 ====================
+
     /**
      * 查询数据
      */
@@ -77,15 +74,13 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<QueryResponse>> query(@RequestBody QueryRequest request) {
         try {
             log.debug("Received query request: index={}", request.getIndex());
-            QueryResponse response = queryExecutor.execute(request);
-            return ResponseEntity.ok(ApiResponse.success(response));
+            return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("Query failed: index={}", request.getIndex(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
@@ -96,17 +91,17 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<AggResponse>> aggregate(@RequestBody AggRequest request) {
         try {
             log.debug("Received aggregation request: index={}", request.getIndex());
-            AggResponse response = aggExecutor.execute(request);
-            return ResponseEntity.ok(ApiResponse.success(response));
+            return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Aggregation validation failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("Aggregation failed: index={}", request.getIndex(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
+
+    // ==================== 索引管理 ====================
 
     /**
      * 获取所有索引列表
@@ -114,17 +109,13 @@ public class SimpleElasticsearchSearchApiEndpoint {
     @GetMapping("/indices")
     public ResponseEntity<ApiResponse<List<IndexInfoResponse>>> getIndices() {
         try {
-            List<SimpleElasticsearchSearchProperties.IndexConfig> indices = mappingManager.getAllIndices();
-
-            List<IndexInfoResponse> result = indices.stream()
+            List<IndexInfoResponse> result = mappingManager.getAllIndices().stream()
                     .map(config -> IndexInfoResponse.from(config, mappingManager))
                     .collect(Collectors.toList());
-
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
             log.error("Get indices failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
@@ -140,15 +131,13 @@ public class SimpleElasticsearchSearchApiEndpoint {
             @RequestParam(required = false) String indexName) {
         try {
             IndexMetadata metadata = mappingManager.getMetadata(alias, indexName);
-            IndexFieldsResponse response = IndexFieldsResponse.from(metadata);
-            return ResponseEntity.ok(ApiResponse.success(response));
+            return ResponseEntity.ok(ApiResponse.success(IndexFieldsResponse.from(metadata)));
         } catch (SimpleElasticsearchSearchException e) {
-            log.warn("Get fields validation failed: alias={}, indexName={}, error={}", alias, indexName, e.getMessage());
+            log.warn("Get fields failed: alias={}, indexName={}, error={}", alias, indexName, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("Get fields failed: alias={}, indexName={}", alias, indexName, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
@@ -162,8 +151,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             return ResponseEntity.ok(ApiResponse.success(ApiMessage.ALL_INDEX_MAPPINGS_REFRESHED));
         } catch (Exception e) {
             log.error("Refresh all mappings failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
@@ -176,112 +164,67 @@ public class SimpleElasticsearchSearchApiEndpoint {
             mappingManager.refreshMetadata(alias);
             return ResponseEntity.ok(ApiResponse.success(ApiMessage.INDEX_MAPPING_REFRESHED));
         } catch (SimpleElasticsearchSearchException e) {
-            log.warn("Refresh mapping validation failed: alias={}, error={}", alias, e.getMessage());
+            log.warn("Refresh mapping failed: alias={}, error={}", alias, e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("Refresh mapping failed: alias={}", alias, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
+    // ==================== 自然语言 ====================
+
     /**
-     * 自然语言转DSL
+     * 自然语言转 DSL
      *
-     * @param text  自然语言查询文本（必填）
-     * @param index 索引别名（可选，优先级高于NL中的提示）
-     * @return DSL查询对象（QueryRequest或AggRequest）
+     * @param text  自然语言查询文本
+     * @param index 索引别名（可选）
      */
     @GetMapping(value = "/nl/dsl", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> translateNLToDsl(
-            @RequestParam("text") String text,
-            @RequestParam(value = "index", required = false) String index
-    ) {
-        // 参数验证
+    public ResponseEntity<ApiResponse<?>> translateNLToDsl(
+            @RequestParam String text,
+            @RequestParam(required = false) String index) {
+        if (nlDslService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error("自然语言查询功能未启用，请引入 nl-dsl-starter 依赖"));
+        }
         if (!StringUtils.hasText(text)) {
-            log.warn("NL翻译请求参数无效: text为空");
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("查询文本不能为空"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("text 不能为空"));
         }
-
-        // 使用LogTruncator记录日志
-        if (logTruncator != null) {
-            log.info("收到NL转DSL请求 - text: '{}', index: '{}'",
-                    logTruncator.truncateRaw(text), index);
-        } else {
-            log.info("收到NL转DSL请求 - text: '{}', index: '{}'", text, index);
-        }
-
+        log.info("Received NL-to-DSL request: text='{}', index='{}'", truncate(text), index);
         try {
-            // 执行翻译
             Object dsl = nlDslService.translateToRequest(text, index);
-
-            // 记录生成的DSL
-            if (log.isDebugEnabled() && logTruncator != null) {
-                log.debug("生成DSL: {}", logTruncator.truncate(dsl));
-            }
-
-            if (logTruncator != null) {
-                log.info("NL转DSL成功 - text: '{}'", logTruncator.truncateRaw(text));
-            } else {
-                log.info("NL转DSL成功 - text: '{}'", text);
-            }
-
-            // 直接返回DSL对象，不包装
-            return ResponseEntity.ok(dsl);
-
+            log.debug("NL-to-DSL succeeded: dsl={}", truncate(dsl));
+            return ResponseEntity.ok(ApiResponse.success(dsl));
         } catch (NLParseException e) {
-            if (logTruncator != null) {
-                log.warn("NL解析失败 - text: '{}', error: {}",
-                        logTruncator.truncateRaw(text),
-                        logTruncator.truncateRaw(e.getMessage()));
-            } else {
-                log.warn("NL解析失败 - text: '{}', error: {}", text, e.getMessage());
-            }
+            log.warn("NL-to-DSL failed: text='{}', error={}", truncate(text), truncate(e.getMessage()));
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-
         } catch (NLDslTranslationException e) {
-            if (logTruncator != null) {
-                log.warn("DSL翻译失败 - text: '{}', error: {}",
-                        logTruncator.truncateRaw(text),
-                        logTruncator.truncateRaw(e.getMessage()));
-            } else {
-                log.warn("DSL翻译失败 - text: '{}', error: {}", text, e.getMessage());
-            }
+            log.warn("NL-to-DSL failed: text='{}', error={}", truncate(text), truncate(e.getMessage()));
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
-
         } catch (Exception e) {
-            if (logTruncator != null) {
-                log.error("翻译过程发生未预期错误 - text: '{}', exception: {}",
-                        logTruncator.truncateRaw(text),
-                        logTruncator.truncate(e));
-            } else {
-                log.error("翻译过程发生未预期错误 - text: '{}'", text, e);
-            }
+            log.error("NL-to-DSL unexpected error: text='{}'", truncate(text), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("翻译失败: " + e.getMessage()));
         }
     }
 
+    // ==================== 条件表达式 ====================
+
     /**
      * 条件表达式查询
-     *
-     * @param request 表达式查询请求
-     * @return 查询结果
      */
     @PostMapping("/query/expression")
     public ResponseEntity<ApiResponse<QueryResponse>> queryByExpression(@RequestBody ExpressionQueryRequest request) {
         if (expressionService == null) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(ApiResponse.error("表达式查询功能未启用，请引入 condition-expression-parser-starter 依赖"));
+            return unavailableExpression();
         }
         if (!StringUtils.hasText(request.getExpression())) {
             return ResponseEntity.badRequest().body(ApiResponse.error("expression 不能为空"));
         }
         try {
             log.debug("Received expression query request: index={}", request.getIndex());
-            QueryCondition condition = expressionService.translate(
-                    request.getExpression(), request.getIndex());
+            QueryCondition condition = expressionService.translate(request.getExpression(), request.getIndex());
             QueryRequest queryRequest = QueryRequest.builder()
                     .index(request.getIndex())
                     .query(condition)
@@ -289,18 +232,32 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .fields(request.getFields())
                     .dateRange(request.getDateRange())
                     .build();
-            QueryResponse response = queryExecutor.execute(queryRequest);
-            return ResponseEntity.ok(ApiResponse.success(response));
-        } catch (ExpressionParseException e) {
-            log.warn("Expression parse failed: index={}, error={}", request.getIndex(), e.getMessage());
-            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(queryRequest)));
         } catch (SimpleElasticsearchSearchException e) {
-            log.warn("Expression query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
+            log.warn("Expression query failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("Expression query failed: index={}", request.getIndex(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.error(e.getMessage()));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取表达式提示信息（供前端自动补全）
+     *
+     * @param index 索引别名（可选）
+     */
+    @GetMapping("/expression/hints")
+    public ResponseEntity<ApiResponse<ExpressionHintsResponse>> expressionHints(
+            @RequestParam(required = false) String index) {
+        if (expressionService == null) {
+            return unavailableExpression();
+        }
+        try {
+            return ResponseEntity.ok(ApiResponse.success(expressionService.getHints(index)));
+        } catch (Exception e) {
+            log.error("Get expression hints failed: index={}", index, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(e.getMessage()));
         }
     }
 
@@ -308,16 +265,27 @@ public class SimpleElasticsearchSearchApiEndpoint {
      * 校验条件表达式语法
      *
      * @param expression 表达式字符串
-     * @return 校验结果
      */
     @GetMapping("/expression/validate")
     public ResponseEntity<ApiResponse<ExpressionValidationResult>> validateExpression(
             @RequestParam String expression) {
         if (expressionService == null) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(ApiResponse.error("表达式查询功能未启用，请引入 condition-expression-parser-starter 依赖"));
+            return unavailableExpression();
         }
-        ExpressionValidationResult result = expressionService.validate(expression);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(expressionService.validate(expression)));
+    }
+
+    // ==================== 私有工具方法 ====================
+
+    private <T> ResponseEntity<ApiResponse<T>> unavailableExpression() {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("表达式查询功能未启用，请引入 condition-expression-parser-starter 依赖"));
+    }
+
+    private String truncate(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        return logTruncator != null ? logTruncator.truncateRaw(obj.toString()) : obj.toString();
     }
 }

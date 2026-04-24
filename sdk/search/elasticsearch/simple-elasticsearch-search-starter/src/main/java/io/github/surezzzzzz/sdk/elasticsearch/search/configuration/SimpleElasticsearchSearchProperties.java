@@ -154,11 +154,18 @@ public class SimpleElasticsearchSearchProperties {
 
         // 4. 校验敏感字段配置
         if (!CollectionUtils.isEmpty(config.getSensitiveFields())) {
+            List<String> sensitiveFieldNames = new ArrayList<>();
             for (SensitiveFieldConfig sensitiveField : config.getSensitiveFields()) {
                 if (isEmpty(sensitiveField.getField())) {
                     throw new ConfigurationException(ErrorCode.SENSITIVE_FIELD_NAME_REQUIRED,
                             String.format(ErrorMessage.SENSITIVE_FIELD_NAME_REQUIRED, identifier));
                 }
+                if (sensitiveFieldNames.contains(sensitiveField.getField())) {
+                    throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                            String.format("索引 [%s] 的 sensitive-fields 存在重复字段: %s",
+                                    identifier, sensitiveField.getField()));
+                }
+                sensitiveFieldNames.add(sensitiveField.getField());
                 if (isEmpty(sensitiveField.getStrategy())) {
                     throw new ConfigurationException(ErrorCode.SENSITIVE_FIELD_STRATEGY_REQUIRED,
                             String.format(ErrorMessage.SENSITIVE_FIELD_STRATEGY_REQUIRED,
@@ -178,15 +185,41 @@ public class SimpleElasticsearchSearchProperties {
 
         // 5. 校验字段名映射配置
         if (!CollectionUtils.isEmpty(config.getFieldMapping())) {
-            for (Map.Entry<String, String> entry : config.getFieldMapping().entrySet()) {
+            List<String> allLabels = new ArrayList<>();
+            for (Map.Entry<String, List<String>> entry : config.getFieldMapping().entrySet()) {
                 if (isEmpty(entry.getKey())) {
                     throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
                             String.format("索引 [%s] 的 field-mapping 存在空的 key", identifier));
                 }
-                if (isEmpty(entry.getValue())) {
+                if (CollectionUtils.isEmpty(entry.getValue())) {
                     throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
-                            String.format("索引 [%s] 的 field-mapping [%s] 对应的 ES 字段名不能为空",
+                            String.format("索引 [%s] 的 field-mapping [%s] 对应的中文标签列表不能为空",
                                     identifier, entry.getKey()));
+                }
+                for (String label : entry.getValue()) {
+                    if (isEmpty(label)) {
+                        throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                                String.format("索引 [%s] 的 field-mapping [%s] 存在空的中文标签",
+                                        identifier, entry.getKey()));
+                    }
+                    if (allLabels.contains(label)) {
+                        throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                                String.format("索引 [%s] 的 field-mapping 存在重复的中文标签 [%s]，会导致表达式翻译歧义",
+                                        identifier, label));
+                    }
+                    allLabels.add(label);
+                }
+            }
+
+            // 6. 校验 field-mapping 与 sensitive-fields 的交叉：FORBIDDEN 字段不应出现在 field-mapping 中
+            if (!CollectionUtils.isEmpty(config.getSensitiveFields())) {
+                for (SensitiveFieldConfig sensitiveField : config.getSensitiveFields()) {
+                    if (SensitiveStrategy.FORBIDDEN.getStrategy().equalsIgnoreCase(sensitiveField.getStrategy())
+                            && config.getFieldMapping().containsKey(sensitiveField.getField())) {
+                        throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                                String.format("索引 [%s] 的字段 [%s] 策略为 FORBIDDEN，不应同时出现在 field-mapping 中（会导致表达式查询绕过敏感字段保护）",
+                                        identifier, sensitiveField.getField()));
+                    }
                 }
             }
         }
@@ -282,10 +315,10 @@ public class SimpleElasticsearchSearchProperties {
 
         /**
          * 字段名映射（高级表达式查询用）
-         * key：表达式中使用的字段名（如中文），value：ES 中的实际字段名
-         * 示例：威胁类型 → threat_type
+         * key：ES 中的实际字段名，value：中文标签列表（供前端展示和表达式输入）
+         * 示例：order_id → [订单号, 订单ID]
          */
-        private Map<String, String> fieldMapping = new HashMap<>();
+        private Map<String, List<String>> fieldMapping = new HashMap<>();
     }
 
     /**

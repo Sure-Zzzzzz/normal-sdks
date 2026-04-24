@@ -27,6 +27,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -218,7 +220,7 @@ class SearchEndToEndTest {
         mockMvc.perform(get("/api/indices"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(5))
+                .andExpect(jsonPath("$.data.length()").value(6))
                 .andExpect(jsonPath("$.error").doesNotExist())
                 .andDo(result -> {
                     log.info("✓ 获取索引列表成功");
@@ -2363,6 +2365,62 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.valid").value(false))
                 .andExpect(jsonPath("$.data.errorMessage").isString())
                 .andDo(result -> log.info("✓ 表达式校验语法错误: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(209)
+    @DisplayName("表达式提示 - 获取提示信息（含字段中文 label）")
+    void testExpressionHints() throws Exception {
+        mockMvc.perform(get("/api/expression/hints")
+                        .param("index", "test_order_index"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.operators").isArray())
+                .andExpect(jsonPath("$.data.operators.length()").value(17))
+                .andExpect(jsonPath("$.data.timeRanges").isArray())
+                .andExpect(jsonPath("$.data.timeRanges.length()").value(31))
+                .andExpect(jsonPath("$.data.valueRules.stringNeedsQuote").value(true))
+                .andExpect(jsonPath("$.data.valueRules.numberNoQuote").value(true))
+                .andDo(result -> {
+                    String content = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                    // 验证字段包含中文 label
+                    assertTrue(content.contains("订单号"), "应包含字段 label：订单号");
+                    assertTrue(content.contains("订单ID"), "应包含字段 label：订单ID");
+                    assertTrue(content.contains("商品名"), "应包含字段 label：商品名");
+                    assertTrue(content.contains("金额"), "应包含字段 label：金额");
+                    assertTrue(content.contains("状态"), "应包含字段 label：状态");
+                    assertTrue(content.contains("订单状态"), "应包含字段 label：订单状态");
+                    assertTrue(content.contains("创建时间"), "应包含字段 label：创建时间");
+                    log.info("✓ 表达式提示（含中文 label）: {}", content);
+                });
+    }
+
+    @Test
+    @Order(210)
+    @DisplayName("表达式提示 - 敏感字段不暴露")
+    void testExpressionHintsExcludeSensitive() throws Exception {
+        mockMvc.perform(get("/api/expression/hints")
+                        .param("index", "test_user"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.operators").isArray())
+                .andDo(result -> {
+                    String content = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                    assertFalse(content.contains("password"), "password 是 FORBIDDEN 字段，不应暴露");
+                    assertFalse(content.contains("phone"), "phone 是 MASK 字段，不应暴露");
+                    log.info("✓ 表达式提示敏感字段未暴露: {}", content);
+                });
+    }
+
+    @Test
+    @Order(211)
+    @DisplayName("表达式提示 - 不存在的索引仍返回全局提示")
+    void testExpressionHintsNonExistentIndex() throws Exception {
+        mockMvc.perform(get("/api/expression/hints")
+                        .param("index", "non_existent_index"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.operators").isArray())
+                .andExpect(jsonPath("$.data.timeRanges").isArray())
+                .andExpect(jsonPath("$.data.valueRules").isMap())
+                .andDo(result -> log.info("✓ 不存在索引仍返回全局提示: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     private static Map<String, Object> createUser(String username, String name, int age, String city, String phone, String password) {

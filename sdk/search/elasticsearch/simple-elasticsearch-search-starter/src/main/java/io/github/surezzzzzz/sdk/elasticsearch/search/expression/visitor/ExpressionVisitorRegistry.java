@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import javax.annotation.PostConstruct;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,15 +37,34 @@ public class ExpressionVisitorRegistry {
      */
     private final Map<String, ExpressionToQueryConditionVisitor> registry = new HashMap<>();
 
+    /**
+     * key：索引别名
+     * value：ES 字段名 → 中文标签列表
+     */
+    private final Map<String, Map<String, List<String>>> labelMapRegistry = new HashMap<>();
+
     @PostConstruct
     public void init() {
         for (SimpleElasticsearchSearchProperties.IndexConfig config : properties.getIndices()) {
             String key = StringUtils.hasText(config.getAlias()) ? config.getAlias() : config.getName();
-            Map<String, String> fieldMapping = config.getFieldMapping();
+            Map<String, List<String>> fieldMapping = config.getFieldMapping();
             if (fieldMapping != null && !fieldMapping.isEmpty()) {
+                // 展开中文标签列表：中文 → ES 字段名（供 Visitor 翻译表达式）
+                Map<String, String> reverseMapping = new HashMap<>();
+                for (Map.Entry<String, List<String>> entry : fieldMapping.entrySet()) {
+                    String esField = entry.getKey();
+                    for (String label : entry.getValue()) {
+                        reverseMapping.put(label, esField);
+                    }
+                }
                 registry.put(key, new ExpressionToQueryConditionVisitor(
-                        Collections.unmodifiableMap(fieldMapping)));
-                log.debug("Registered expression visitor: index={}, mappings={}", key, fieldMapping.size());
+                        Collections.unmodifiableMap(reverseMapping)));
+
+                // labelMap：ES 字段名 → 中文标签列表（供 hints 展示）
+                labelMapRegistry.put(key, Collections.unmodifiableMap(fieldMapping));
+
+                log.debug("Registered expression visitor: index={}, esFields={}, labels={}",
+                        key, fieldMapping.size(), reverseMapping.size());
             }
         }
         log.info("ExpressionVisitorRegistry initialized with {} index mappings", registry.size());
@@ -62,5 +82,19 @@ public class ExpressionVisitorRegistry {
             return DEFAULT_VISITOR;
         }
         return registry.getOrDefault(index, DEFAULT_VISITOR);
+    }
+
+    /**
+     * 根据索引别名获取字段 label 映射（ES 字段名 → 中文标签列表）
+     * 未配置 field-mapping 的索引返回空 Map
+     *
+     * @param index 索引别名
+     * @return ES 字段名 → 中文标签列表的映射
+     */
+    public Map<String, List<String>> resolveLabelMap(String index) {
+        if (!StringUtils.hasText(index)) {
+            return Collections.emptyMap();
+        }
+        return labelMapRegistry.getOrDefault(index, Collections.emptyMap());
     }
 }

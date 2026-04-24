@@ -7,7 +7,7 @@ dependencies {
     api "${group}:natural-language-parser-starter:1.0.6"
     api "${group}:log-truncate-starter:1.0.0"
     // 依赖 condition-expression-parser
-    api "${group}:condition-expression-parser-starter:1.0.2"
+    api "${group}:condition-expression-parser-starter:1.0.3"
     // ES 依赖（route-starter 是 compileOnly，我们也需要声明 compileOnly）
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework.boot:spring-boot-starter-data-elasticsearch"

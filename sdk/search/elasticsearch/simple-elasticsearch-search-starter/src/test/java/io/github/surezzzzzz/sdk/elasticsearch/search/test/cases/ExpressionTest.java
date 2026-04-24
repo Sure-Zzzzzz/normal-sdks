@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
@@ -7,11 +8,14 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.Expressi
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionVisitorRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -207,13 +211,13 @@ class ExpressionTest {
     void testTranslateFieldMapping() {
         // test_order_index 在 application.yaml 中配置了 field-mapping
         QueryCondition result = expressionService.translate(
-                "威胁类型 = \"木马\" AND 攻击次数 >= 10", "test_order_index");
+                "状态 = \"已完成\" AND 金额 >= 10", "test_order_index");
         log.info("field mapping: {}", result);
 
         QueryCondition left = result.getConditions().get(0);
         QueryCondition right = result.getConditions().get(1);
-        assertEquals("threat_type", left.getField());
-        assertEquals("attack_count", right.getField());
+        assertEquals("status", left.getField());
+        assertEquals("amount", right.getField());
     }
 
     @Test
@@ -224,12 +228,24 @@ class ExpressionTest {
         assertEquals("未知字段", result.getField());
     }
 
+    @Test
+    @DisplayName("translate - 多个中文标签都映射到同一 ES 字段")
+    void testTranslateFieldMappingMultipleLabels() {
+        // "订单状态" 和 "状态" 都映射到 status
+        QueryCondition r1 = expressionService.translate("状态 = \"已完成\"", "test_order_index");
+        QueryCondition r2 = expressionService.translate("订单状态 = \"已完成\"", "test_order_index");
+        log.info("label 1: {}", r1);
+        log.info("label 2: {}", r2);
+        assertEquals("status", r1.getField());
+        assertEquals("status", r2.getField());
+    }
+
     // ==================== translate - 时间范围 ====================
 
     @Test
     @DisplayName("translate - 时间范围 = 最近7天 转为 between")
     void testTranslateTimeRange() {
-        QueryCondition result = expressionService.translate("首次告警时间 = 最近7天", "test_order_index");
+        QueryCondition result = expressionService.translate("创建时间 = 最近7天", "test_order_index");
         log.info("time range: {}", result);
         assertEquals("between", result.getOp());
         assertNotNull(result.getValues());
@@ -277,5 +293,213 @@ class ExpressionTest {
     void testTranslateThrowsOnSyntaxError() {
         assertThrows(ExpressionParseException.class, () ->
                 expressionService.translate("威胁类型 = ", null));
+    }
+
+    // ==================== getHints ====================
+
+    @Test
+    @DisplayName("getHints - 全局提示不依赖索引（运算符、时间范围、值规则）")
+    void testGetHintsGlobalHints() {
+        log.info("========== 测试：getHints 全局提示 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints(null);
+        log.info("hints: {}", hints);
+
+        assertNotNull(hints);
+        assertNotNull(hints.getOperators());
+        assertNotNull(hints.getTimeRanges());
+        assertNotNull(hints.getValueRules());
+
+        // 运算符不为空，且无重复
+        assertFalse(hints.getOperators().isEmpty(), "运算符列表不应为空");
+        long distinctOps = hints.getOperators().stream()
+                .map(ExpressionHintsResponse.OperatorHint::getOp)
+                .distinct().count();
+        assertEquals(hints.getOperators().size(), distinctOps, "运算符列表不应有重复");
+
+        // 包含核心运算符
+        List<String> ops = hints.getOperators().stream()
+                .map(ExpressionHintsResponse.OperatorHint::getOp)
+                .collect(java.util.stream.Collectors.toList());
+        assertTrue(ops.contains("="), "应包含 =");
+        assertTrue(ops.contains("!="), "应包含 !=");
+        assertTrue(ops.contains("IN"), "应包含 IN");
+        assertTrue(ops.contains("NOT IN"), "应包含 NOT IN");
+        assertTrue(ops.contains("LIKE"), "应包含 LIKE");
+        assertTrue(ops.contains("IS NULL"), "应包含 IS NULL");
+        assertTrue(ops.contains("AND"), "应包含 AND");
+        assertTrue(ops.contains("OR"), "应包含 OR");
+        assertTrue(ops.contains("NOT"), "应包含 NOT");
+
+        // 时间范围数量与 TimeRange 枚举一致
+        assertEquals(TimeRange.values().length, hints.getTimeRanges().size(),
+                "时间范围数量应与 TimeRange 枚举一致");
+
+        log.info("✓ getHints 全局提示测试通过");
+    }
+
+    @Test
+    @DisplayName("getHints - 运算符包含中文别名")
+    void testGetHintsOperatorsWithChinese() {
+        log.info("========== 测试：getHints 运算符中文别名 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints(null);
+
+        boolean hasEqWithChinese = hints.getOperators().stream()
+                .anyMatch(op -> "=".equals(op.getOp()) && op.getChinese() != null && !op.getChinese().isEmpty());
+        assertTrue(hasEqWithChinese, "等于运算符应有中文别名");
+
+        boolean hasAndWithChinese = hints.getOperators().stream()
+                .anyMatch(op -> "AND".equals(op.getOp()) && op.getChinese() != null && !op.getChinese().isEmpty());
+        assertTrue(hasAndWithChinese, "AND 运算符应有中文别名");
+
+        log.info("✓ 运算符中文别名测试通过");
+    }
+
+    @Test
+    @DisplayName("getHints - 时间范围包含所有主关键字")
+    void testGetHintsTimeRanges() {
+        log.info("========== 测试：getHints 时间范围主关键字 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints(null);
+        List<String> timeRanges = hints.getTimeRanges();
+        log.info("timeRanges: {}", timeRanges);
+
+        assertTrue(timeRanges.contains("近7天"), "应包含 '近7天'");
+        assertTrue(timeRanges.contains("近1小时"), "应包含 '近1小时'");
+        assertTrue(timeRanges.contains("近3个月"), "应包含 '近3个月'");
+        assertTrue(timeRanges.contains("今天"), "应包含 '今天'");
+        assertTrue(timeRanges.contains("近1个月"), "应包含 '近1个月'");
+
+        for (TimeRange range : TimeRange.values()) {
+            assertTrue(timeRanges.contains(range.getKeyword()),
+                    "应包含主关键字: " + range.getKeyword());
+        }
+
+        log.info("✓ 时间范围主关键字测试通过");
+    }
+
+    @Test
+    @DisplayName("getHints - 值规则正确")
+    void testGetHintsValueRules() {
+        log.info("========== 测试：getHints 值规则 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints(null);
+        ExpressionHintsResponse.ValueRules rules = hints.getValueRules();
+        log.info("valueRules: {}", rules);
+
+        assertTrue(rules.isStringNeedsQuote(), "字符串值需要加引号");
+        assertTrue(rules.isNumberNoQuote(), "数字不需要引号");
+        assertTrue(rules.getSupportedQuotes().contains("'"), "支持单引号");
+        assertTrue(rules.getSupportedQuotes().contains("\""), "支持双引号");
+        assertTrue(rules.getBooleanKeywords().contains("true"), "布尔关键字包含 true");
+        assertTrue(rules.getBooleanKeywords().contains("假"), "布尔关键字包含 假");
+
+        log.info("✓ 值规则测试通过");
+    }
+
+    @Test
+    @DisplayName("getHints - 所有运算符都有非空中文描述")
+    void testGetHintsAllOperatorsHaveChinese() {
+        ExpressionHintsResponse hints = expressionService.getHints(null);
+        hints.getOperators().forEach(op ->
+                assertNotNull(op.getChinese(),
+                        "运算符 " + op.getOp() + " 的 chinese 不应为 null"));
+        hints.getOperators().forEach(op ->
+                assertFalse(op.getChinese().isEmpty(),
+                        "运算符 " + op.getOp() + " 的 chinese 不应为空字符串"));
+    }
+
+    @Test
+    @DisplayName("getHints - 不存在的索引字段为空但全局提示仍返回")
+    void testGetHintsNonExistentIndex() {
+        log.info("========== 测试：getHints 不存在的索引 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints("不存在的索引");
+        log.info("hints for non-existent index: {}", hints);
+
+        assertNotNull(hints);
+        assertTrue(hints.getFields() == null || hints.getFields().isEmpty(),
+                "不存在索引的字段列表应为空");
+        assertNotNull(hints.getOperators());
+        assertNotNull(hints.getTimeRanges());
+
+        log.info("✓ 不存在索引测试通过");
+    }
+
+    @Test
+    @DisplayName("getHints - 敏感字段被正确排除")
+    void testGetHintsSensitiveFieldsExcluded() {
+        log.info("========== 测试：getHints 敏感字段排除 ==========");
+
+        ExpressionHintsResponse hints = expressionService.getHints("test_employee");
+        log.info("hints for test_employee: {}", hints);
+
+        assertNotNull(hints);
+        List<ExpressionHintsResponse.FieldHint> fields = hints.getFields();
+        assertNotNull(fields);
+        log.info("fields returned: {}", fields.stream()
+                .map(ExpressionHintsResponse.FieldHint::getName)
+                .collect(java.util.stream.Collectors.toList()));
+
+        // 验证非敏感字段存在
+        assertTrue(fields.stream().anyMatch(f -> "emp_id".equals(f.getName())),
+                "应包含 emp_id");
+        assertTrue(fields.stream().anyMatch(f -> "emp_name".equals(f.getName())),
+                "应包含 emp_name");
+        assertTrue(fields.stream().anyMatch(f -> "department".equals(f.getName())),
+                "应包含 department");
+        assertTrue(fields.stream().anyMatch(f -> "join_date".equals(f.getName())),
+                "应包含 join_date");
+        assertTrue(fields.stream().anyMatch(f -> "phone".equals(f.getName())),
+                "应包含 phone");
+
+        // 验证敏感字段被排除
+        assertFalse(fields.stream().anyMatch(f -> "salary".equals(f.getName())),
+                "salary 是敏感字段应被排除");
+        assertFalse(fields.stream().anyMatch(f -> "id_card".equals(f.getName())),
+                "id_card 是敏感字段应被排除");
+
+        // 验证标签列表正确
+        fields.stream()
+                .filter(f -> "emp_id".equals(f.getName()))
+                .findFirst()
+                .ifPresent(f -> {
+                    assertNotNull(f.getLabel());
+                    assertEquals(2, f.getLabel().size());
+                    assertTrue(f.getLabel().contains("员工ID"));
+                    assertTrue(f.getLabel().contains("工号"));
+                });
+
+        log.info("✓ 敏感字段排除测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 同时有 field-mapping 和 sensitive-fields 的索引翻译正常")
+    void testTranslateWithFieldMappingAndSensitiveFields() {
+        log.info("========== 测试：translate 混合配置索引 ==========");
+
+        // 使用中文标签翻译（非敏感字段）
+        QueryCondition result1 = expressionService.translate(
+                "员工姓名 = '张三' AND 部门 = '研发部'",
+                "test_employee");
+        log.info("result1: {}", result1);
+        assertNotNull(result1);
+        assertEquals("and", result1.getLogic());
+
+        // 验证字段映射正确
+        QueryCondition cond1 = result1.getConditions().get(0);
+        QueryCondition cond2 = result1.getConditions().get(1);
+        assertEquals("emp_name", cond1.getField());
+        assertEquals("department", cond2.getField());
+
+        // 使用工号标签
+        QueryCondition result2 = expressionService.translate(
+                "工号 = 'E001'",
+                "test_employee");
+        log.info("result2: {}", result2);
+        assertEquals("emp_id", result2.getField());
+
+        log.info("✓ 混合配置索引翻译测试通过");
     }
 }

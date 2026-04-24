@@ -13,9 +13,20 @@ io:
               - name: "test_order_index"
                 lazy-load: true
                 field-mapping:
-                  "[威胁类型]": threat_type
-                  "[攻击次数]": attack_count
-                  "[首次告警时间]": first_alert_time
+                  order_id:
+                    - 订单号
+                    - 订单ID
+                  product_name:
+                    - 商品名
+                  amount:
+                    - 金额
+                  quantity:
+                    - 数量
+                  status:
+                    - 状态
+                    - 订单状态
+                  created_at:
+                    - 创建时间
 
               # 通配符索引（无标识符，用于日期分割场景）
               - name: "test_log_*"
@@ -52,6 +63,33 @@ io:
                 date-split: false
                 cache-mapping: true
                 lazy-load: true
+              # 同时有 field-mapping 和 sensitive-fields 的索引（测试敏感字段排除）
+              - name: "test_employee_index"
+                alias: "test_employee"
+                date-split: false
+                cache-mapping: true
+                lazy-load: true
+                field-mapping:
+                  emp_id:
+                    - 员工ID
+                    - 工号
+                  emp_name:
+                    - 员工姓名
+                    - 姓名
+                  department:
+                    - 部门
+                  join_date:
+                    - 入职日期
+                  phone:
+                    - 手机号
+                sensitive-fields:
+                  - field: salary
+                    strategy: FORBIDDEN
+                  - field: id_card
+                    strategy: MASK
+                    mask-start: 6
+                    mask-end: 4
+                    mask-pattern: "********"
 
 
             # Mapping 刷新配置
@@ -113,12 +151,7 @@ io:
         expression:
           condition:
             parser:
-              custom-time-ranges:
-                最近1天: LAST_1_DAY
-                最近3天: LAST_3_DAYS
-                最近7天: LAST_7_DAYS
-                最近14天: LAST_2_WEEKS
-                最近30天: LAST_1_MONTH
+              enabled: true
 
 logging:
   level:
