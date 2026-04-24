@@ -3,7 +3,6 @@ package io.github.surezzzzzz.sdk.expression.condition.parser.parser;
 import io.github.surezzzzzz.sdk.expression.condition.parser.annotation.ConditionExpressionParserComponent;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.ValueType;
-import io.github.surezzzzzz.sdk.expression.condition.parser.keyword.TimeRangeKeywords;
 import io.github.surezzzzzz.sdk.expression.condition.parser.model.ValueNode;
 import org.springframework.core.annotation.Order;
 
@@ -17,20 +16,14 @@ import org.springframework.core.annotation.Order;
 @ConditionExpressionParserComponent
 public class TimeRangeValueParseStrategy implements ValueParseStrategy {
 
-    private final TimeRangeKeywords timeRangeKeywords;
-
-    public TimeRangeValueParseStrategy(TimeRangeKeywords timeRangeKeywords) {
-        this.timeRangeKeywords = timeRangeKeywords;
-    }
-
     @Override
     public boolean canParse(String rawValue) {
-        return timeRangeKeywords.fromKeyword(rawValue) != null;
+        return TimeRange.isKeyword(rawValue);
     }
 
     @Override
     public ValueNode parse(String rawValue) {
-        TimeRange timeRange = timeRangeKeywords.fromKeyword(rawValue);
+        TimeRange timeRange = TimeRange.fromKeyword(rawValue);
         return ValueNode.builder()
                 .type(ValueType.TIME_RANGE)
                 .rawValue(rawValue)

@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.expression.condition.parser.exception;
 
+import lombok.Getter;
+
 /**
  * 条件表达式解析异常
  * 提供详细的错误上下文、位置信息和修复建议
@@ -13,6 +15,7 @@ package io.github.surezzzzzz.sdk.expression.condition.parser.exception;
  *
  * @author surezzzzzz
  */
+@Getter
 public class ConditionExpressionParseException extends RuntimeException {
 
     /**
@@ -48,6 +51,7 @@ public class ConditionExpressionParseException extends RuntimeException {
     /**
      * 错误类型枚举
      */
+    @Getter
     public enum ErrorType {
         /**
          * 语法错误：无法识别的语法结构
@@ -114,10 +118,6 @@ public class ConditionExpressionParseException extends RuntimeException {
         ErrorType(String description) {
             this.description = description;
         }
-
-        public String getDescription() {
-            return description;
-        }
     }
 
     /**
@@ -180,32 +180,6 @@ public class ConditionExpressionParseException extends RuntimeException {
         }
 
         return sb.toString();
-    }
-
-    // ========== Getter方法 ==========
-
-    public ErrorType getErrorType() {
-        return errorType;
-    }
-
-    public String getExpression() {
-        return expression;
-    }
-
-    public int getLine() {
-        return line;
-    }
-
-    public int getColumn() {
-        return column;
-    }
-
-    public String getOffendingToken() {
-        return offendingToken;
-    }
-
-    public String getSuggestion() {
-        return suggestion;
     }
 
     // ========== Builder模式 ==========

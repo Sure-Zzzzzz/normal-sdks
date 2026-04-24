@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.expression.condition.parser.exception;
 
+import lombok.Getter;
+
 /**
  * 表达式验证异常
  * <p>
@@ -8,6 +10,7 @@ package io.github.surezzzzzz.sdk.expression.condition.parser.exception;
  * @author surezzzzzz
  * @since 1.0.1
  */
+@Getter
 public class ExpressionValidationException extends RuntimeException {
 
     /**
@@ -62,21 +65,10 @@ public class ExpressionValidationException extends RuntimeException {
                 metricType.getDescription(), actualValue, maxValue);
     }
 
-    public MetricType getMetricType() {
-        return metricType;
-    }
-
-    public int getActualValue() {
-        return actualValue;
-    }
-
-    public int getMaxValue() {
-        return maxValue;
-    }
-
     /**
      * 度量类型枚举
      */
+    @Getter
     public enum MetricType {
         /**
          * 表达式深度
@@ -92,10 +84,6 @@ public class ExpressionValidationException extends RuntimeException {
 
         MetricType(String description) {
             this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
         }
     }
 }

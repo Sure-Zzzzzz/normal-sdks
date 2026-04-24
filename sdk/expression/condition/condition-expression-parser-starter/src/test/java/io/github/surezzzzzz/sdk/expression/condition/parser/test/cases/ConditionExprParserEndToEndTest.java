@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.expression.condition.parser.test.cases;
 
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.*;
 import io.github.surezzzzzz.sdk.expression.condition.parser.exception.ConditionExpressionParseException;
+import io.github.surezzzzzz.sdk.expression.condition.parser.exception.ExpressionValidationException;
 import io.github.surezzzzzz.sdk.expression.condition.parser.model.*;
 import io.github.surezzzzzz.sdk.expression.condition.parser.parser.ConditionExpressionParser;
 import io.github.surezzzzzz.sdk.expression.condition.parser.test.ConditionExpressionParserTestApplication;
@@ -9,6 +10,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -406,6 +409,8 @@ class ConditionExprParserEndToEndTest {
         log.info("✓ 时间范围测试通过");
     }
 
+    // ==================== v1.0.3 新增测试 ====================
+
     // ==================== 逻辑运算符测试 ====================
 
     @Test
@@ -698,5 +703,270 @@ class ConditionExprParserEndToEndTest {
         log.info("✓ 场景8通过：时间范围解析正确");
 
         log.info("\n========== ✓ 超级端到端测试全部通过 (8个场景) ==========");
+    }
+
+    // ==================== v1.0.3 新增测试 ====================
+
+    @Test
+    @Order(50)
+    @DisplayName("大小写不敏感 - And/Or/Not")
+    void testCaseInsensitiveLogicalOperators() {
+        log.info("========== 测试：大小写不敏感逻辑运算符 ==========");
+
+        // And
+        Expression result1 = parser.parse("年龄>18 And 年龄<60");
+        assertTrue(result1 instanceof BinaryExpression);
+        assertEquals(LogicalOperator.AND, ((BinaryExpression) result1).getOperator());
+
+        // Or
+        Expression result2 = parser.parse("状态='活跃' or 状态='待审核'");
+        assertTrue(result2 instanceof BinaryExpression);
+        assertEquals(LogicalOperator.OR, ((BinaryExpression) result2).getOperator());
+
+        // Not
+        Expression result3 = parser.parse("not 状态='已删除'");
+        assertTrue(result3 instanceof UnaryExpression);
+        assertEquals(UnaryOperator.NOT, ((UnaryExpression) result3).getOperator());
+
+        log.info("✓ 大小写不敏感逻辑运算符测试通过");
+    }
+
+    @Test
+    @Order(51)
+    @DisplayName("大小写不敏感 - Like/In/Prefix/Suffix")
+    void testCaseInsensitiveMatchOperators() {
+        log.info("========== 测试：大小写不敏感匹配运算符 ==========");
+
+        // like
+        Expression result1 = parser.parse("名称 like '测试'");
+        assertTrue(result1 instanceof LikeExpression);
+        assertEquals(MatchOperator.LIKE, ((LikeExpression) result1).getOperator());
+
+        // IN
+        Expression result2 = parser.parse("城市 In ('北京','上海')");
+        assertTrue(result2 instanceof InExpression);
+
+        // PREFIX LIKE
+        Expression result3 = parser.parse("名称 Prefix Like '测试'");
+        assertTrue(result3 instanceof LikeExpression);
+        assertEquals(MatchOperator.PREFIX, ((LikeExpression) result3).getOperator());
+
+        // SUFFIX LIKE
+        Expression result4 = parser.parse("名称 Suffix like '测试'");
+        assertTrue(result4 instanceof LikeExpression);
+        assertEquals(MatchOperator.SUFFIX, ((LikeExpression) result4).getOperator());
+
+        // NOT LIKE
+        Expression result5 = parser.parse("名称 Not Like '删除'");
+        assertTrue(result5 instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_LIKE, ((LikeExpression) result5).getOperator());
+
+        log.info("✓ 大小写不敏感匹配运算符测试通过");
+    }
+
+    @Test
+    @Order(52)
+    @DisplayName("错误处理 - 不暴露 EOF")
+    void testEofNotExposed() {
+        log.info("========== 测试：不暴露 EOF ==========");
+
+        // 不完整表达式（期望 ANTLR 报 EOF 错误）
+        try {
+            parser.parse("年龄>");
+            fail("应抛出 ConditionExpressionParseException");
+        } catch (ConditionExpressionParseException e) {
+            log.info("错误消息: {}", e.getMessage());
+            // 不应包含 <EOF>
+            assertFalse(e.getMessage().contains("<EOF>"), "错误消息不应包含 <EOF>");
+            assertFalse(e.getOffendingToken() != null && e.getOffendingToken().contains("<EOF>"),
+                    "offendingToken 不应是 <EOF>");
+        }
+
+        log.info("✓ EOF 不暴露测试通过");
+    }
+
+    @Test
+    @Order(53)
+    @DisplayName("TimeRange.fromKeyword - 主关键字查找")
+    void testTimeRangeFromKeyword() {
+        log.info("========== 测试：TimeRange.fromKeyword 主关键字 ==========");
+
+        assertEquals(TimeRange.LAST_7_DAYS, TimeRange.fromKeyword("近7天"));
+        assertEquals(TimeRange.LAST_1_HOUR, TimeRange.fromKeyword("近1小时"));
+        assertEquals(TimeRange.TODAY, TimeRange.fromKeyword("今天"));
+        assertEquals(TimeRange.LAST_1_MONTH, TimeRange.fromKeyword("近1个月"));
+        assertNull(TimeRange.fromKeyword("不存在的关键字"));
+        assertNull(TimeRange.fromKeyword(null));
+
+        log.info("✓ TimeRange.fromKeyword 主关键字测试通过");
+    }
+
+    @Test
+    @Order(54)
+    @DisplayName("TimeRange.fromKeyword - 别名查找")
+    void testTimeRangeFromKeywordAliases() {
+        log.info("========== 测试：TimeRange.fromKeyword 别名 ==========");
+
+        // "最近" 前缀
+        assertEquals(TimeRange.LAST_7_DAYS, TimeRange.fromKeyword("最近7天"));
+        assertEquals(TimeRange.LAST_1_HOUR, TimeRange.fromKeyword("最近一小时"));
+
+        // 中文数字
+        assertEquals(TimeRange.LAST_7_DAYS, TimeRange.fromKeyword("近七天"));
+        assertEquals(TimeRange.LAST_7_DAYS, TimeRange.fromKeyword("最近七天"));
+
+        // 近X天映射到月级
+        assertEquals(TimeRange.LAST_1_MONTH, TimeRange.fromKeyword("最近14天"));
+        assertEquals(TimeRange.LAST_1_MONTH, TimeRange.fromKeyword("最近30天"));
+
+        log.info("✓ TimeRange.fromKeyword 别名测试通过");
+    }
+
+    @Test
+    @Order(55)
+    @DisplayName("TimeRange.isKeyword - 关键字判断")
+    void testTimeRangeIsKeyword() {
+        log.info("========== 测试：TimeRange.isKeyword ==========");
+
+        assertTrue(TimeRange.isKeyword("近7天"));
+        assertTrue(TimeRange.isKeyword("最近一小时"));
+        assertTrue(TimeRange.isKeyword("今天"));
+        assertFalse(TimeRange.isKeyword("不存在"));
+        assertFalse(TimeRange.isKeyword(null));
+
+        log.info("✓ TimeRange.isKeyword 测试通过");
+    }
+
+    @Test
+    @Order(56)
+    @DisplayName("TimeRange.getAllKeywords - 映射完整性")
+    void testTimeRangeGetAllKeywords() {
+        log.info("========== 测试：TimeRange.getAllKeywords 完整性 ==========");
+
+        Map<String, TimeRange> keywords = TimeRange.getAllKeywords();
+
+        // 不可变
+        assertNotNull(keywords);
+        try {
+            keywords.put("test", TimeRange.TODAY);
+            fail("getAllKeywords 应返回不可变 Map");
+        } catch (UnsupportedOperationException e) {
+            // 预期
+        }
+
+        // 主关键字都在
+        for (TimeRange range : TimeRange.values()) {
+            assertTrue(keywords.containsKey(range.getKeyword()),
+                    "主关键字缺失: " + range.getKeyword());
+        }
+
+        // 别名也在
+        assertTrue(keywords.containsKey("最近7天"));
+        assertTrue(keywords.containsKey("近七天"));
+
+        // key 数量 > 枚举值数量（因为有别名）
+        assertTrue(keywords.size() > TimeRange.values().length);
+
+        log.info("✓ TimeRange.getAllKeywords 完整性测试通过，共 {} 个关键字", keywords.size());
+    }
+
+    @Test
+    @Order(57)
+    @DisplayName("中文逻辑运算符 - 且/或/非")
+    void testChineseLogicalOperators() {
+        log.info("========== 测试：中文逻辑运算符 ==========");
+
+        // 且
+        Expression result1 = parser.parse("年龄>18 且 年龄<60");
+        assertTrue(result1 instanceof BinaryExpression);
+        assertEquals(LogicalOperator.AND, ((BinaryExpression) result1).getOperator());
+
+        // 并且
+        Expression result2 = parser.parse("年龄>18 并且 年龄<60");
+        assertTrue(result2 instanceof BinaryExpression);
+        assertEquals(LogicalOperator.AND, ((BinaryExpression) result2).getOperator());
+
+        // 或者
+        Expression result3 = parser.parse("状态='活跃' 或者 状态='待审核'");
+        assertTrue(result3 instanceof BinaryExpression);
+        assertEquals(LogicalOperator.OR, ((BinaryExpression) result3).getOperator());
+
+        // 非
+        Expression result4 = parser.parse("非 状态='已删除'");
+        assertTrue(result4 instanceof UnaryExpression);
+        assertEquals(UnaryOperator.NOT, ((UnaryExpression) result4).getOperator());
+
+        log.info("✓ 中文逻辑运算符测试通过");
+    }
+
+    @Test
+    @Order(58)
+    @DisplayName("中文比较运算符 - 等于/不等于/大于/小于")
+    void testChineseComparisonOperators() {
+        log.info("========== 测试：中文比较运算符 ==========");
+
+        // 等于
+        ComparisonExpression result1 = asComparison(parser.parse("年龄等于25"));
+        assertEquals(ComparisonOperator.EQ, result1.getOperator());
+
+        // 不等于
+        ComparisonExpression result2 = asComparison(parser.parse("状态不等于'已删除'"));
+        assertEquals(ComparisonOperator.NE, result2.getOperator());
+
+        // 大于
+        ComparisonExpression result3 = asComparison(parser.parse("年龄大于18"));
+        assertEquals(ComparisonOperator.GT, result3.getOperator());
+
+        // 小于
+        ComparisonExpression result4 = asComparison(parser.parse("年龄小于60"));
+        assertEquals(ComparisonOperator.LT, result4.getOperator());
+
+        // 晚于
+        ComparisonExpression result5 = asComparison(parser.parse("时间晚于'2025-01-01'"));
+        assertEquals(ComparisonOperator.GT, result5.getOperator());
+
+        // 早于
+        ComparisonExpression result6 = asComparison(parser.parse("时间早于'2025-12-31'"));
+        assertEquals(ComparisonOperator.LT, result6.getOperator());
+
+        log.info("✓ 中文比较运算符测试通过");
+    }
+
+    @Test
+    @Order(59)
+    @DisplayName("枚举 Lombok @Getter 验证")
+    void testEnumLombokGetter() {
+        log.info("========== 测试：枚举 Lombok @Getter ==========");
+
+        // ComparisonOperator
+        assertEquals("等于", ComparisonOperator.EQ.getDescription());
+        assertEquals("不等于", ComparisonOperator.NE.getDescription());
+
+        // LogicalOperator
+        assertEquals("且", LogicalOperator.AND.getDescription());
+        assertEquals("或", LogicalOperator.OR.getDescription());
+
+        // MatchOperator
+        assertEquals("模糊匹配", MatchOperator.LIKE.getDescription());
+        assertEquals("不匹配", MatchOperator.NOT_LIKE.getDescription());
+
+        // UnaryOperator
+        assertEquals("逻辑非", UnaryOperator.NOT.getDescription());
+
+        // ValueType
+        assertEquals("字符串", ValueType.STRING.getDescription());
+        assertEquals("时间范围", ValueType.TIME_RANGE.getDescription());
+
+        // TimeRange
+        assertEquals("近7天", TimeRange.LAST_7_DAYS.getKeyword());
+        assertEquals(7, TimeRange.LAST_7_DAYS.getAmount());
+
+        // ErrorType
+        assertEquals("语法错误", ConditionExpressionParseException.ErrorType.SYNTAX_ERROR.getDescription());
+
+        // MetricType
+        assertEquals("深度", ExpressionValidationException.MetricType.DEPTH.getDescription());
+
+        log.info("✓ 枚举 Lombok @Getter 验证通过");
     }
 }

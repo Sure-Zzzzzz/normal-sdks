@@ -5,6 +5,8 @@ import io.github.surezzzzzz.sdk.expression.condition.parser.constant.ValueType;
 import io.github.surezzzzzz.sdk.expression.condition.parser.model.ValueNode;
 import org.springframework.core.annotation.Order;
 
+import java.util.regex.Pattern;
+
 /**
  * 数字解析策略
  * 优先级：3
@@ -15,11 +17,11 @@ import org.springframework.core.annotation.Order;
 @ConditionExpressionParserComponent
 public class NumberValueParseStrategy implements ValueParseStrategy {
 
-    private static final String NUMBER_PATTERN = "-?\\d+(\\.\\d+)?";
+    private static final Pattern NUMBER_PATTERN = Pattern.compile("-?\\d+(\\.\\d+)?");
 
     @Override
     public boolean canParse(String rawValue) {
-        return rawValue != null && rawValue.matches(NUMBER_PATTERN);
+        return rawValue != null && NUMBER_PATTERN.matcher(rawValue).matches();
     }
 
     @Override

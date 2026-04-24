@@ -8,40 +8,40 @@
 > 一个基于 ANTLR 的条件表达式解析器，将结构化条件表达式解析为 AST（抽象语法树），支持比较、集合、模糊匹配、空值检查等多种运算符，配合
 > Visitor 模式灵活转换为任意目标格式（SQL、ES DSL、MongoDB Query等）。
 
-## ✨ 特性
+## 特性
 
-- 🎯 **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
-- 🚀 **功能完善** - 6大类运算符：比较（=、!=、>、<、>=、<=）、集合（IN、NOT IN）、模糊（LIKE、PREFIX LIKE、SUFFIX LIKE、NOT LIKE）、空值（IS
-  NULL、IS NOT NULL）、逻辑（AND、OR、NOT）、括号优先级
-- 📊 **多值类型** - 字符串、整数、浮点数、布尔值、时间范围枚举（30+种预定义范围）
-- 🔧 **开箱即用** - Spring Boot Starter 自动配置，零配置启动
-- 🏗️ **Visitor 模式** - AST 输出，业务层通过 Visitor 自由转换为目标格式
-- 📦 **策略模式** - 值解析采用策略模式，优先级可配置，易扩展
-- 🛠️ **工具包完善** - 提供信息收集、复杂度度量、格式化输出、查询分析等工具类
-- 🌐 **中英文支持** - 关键字支持中英文，大小写不敏感
-- ⚠️ **友好错误** - 自定义异常，详细错误信息、位置提示、友好消息
-- 💡 **可扩展** - 关键字映射支持用户自定义扩展（合并/覆盖）
+- **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
+- **功能完善** - 6大类运算符：比较、集合、模糊、空值、逻辑、括号优先级
+- **中文友好** - 运算符支持中文写法（`等于`/`且`/`包含于`…），中文字段名无需空格分隔
+- **大小写不敏感** - 英文关键字 `AND`/`And`/`and` 均可
+- **多值类型** - 字符串、整数、浮点数、布尔值、时间范围枚举（30+种预定义范围）
+- **开箱即用** - Spring Boot Starter 自动配置，零配置启动
+- **Visitor 模式** - AST 输出，业务层通过 Visitor 自由转换为目标格式
+- **友好错误** - 自定义异常，详细错误信息、位置提示，不暴露内部 token
 
-## 🚀 快速开始
+## 快速开始
 
 ### 添加依赖
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.3'
 }
 ```
 
 ### 基础使用
 
 ```java
-
 @Autowired
 private ConditionExpressionParser parser;
 
 // 简单比较
 Expression expr = parser.parse("年龄>18");
 // → ComparisonExpression(field=年龄, operator=GT, value=18)
+
+// 中文运算符
+Expression expr = parser.parse("年龄等于25");
+// → ComparisonExpression(field=年龄, operator=EQ, value=25)
 
 // 复杂表达式
 Expression expr = parser.parse(
@@ -51,143 +51,104 @@ Expression expr = parser.parse(
 
 // 使用 Visitor 转换为 SQL
 String sql = expr.accept(new SqlVisitor());
-// → "type='活跃' AND category IN ('高','中') AND name LIKE '%测试%' AND remark IS NOT NULL"
 ```
 
-## 📖 支持的语法
+## 支持的语法
 
 ### 比较运算符
 
-| 符号 | 中文     | 英文                  | 示例          |
-|----|--------|---------------------|-------------|
-| =  | 等于、是、为 | equals, eq          | `年龄=25`     |
-| != | 不等于、不是 | not equals, ne, neq | `状态!='已删除'` |
-| >  | 大于     | greater than, gt    | `年龄>18`     |
-| >= | 大于等于   | gte                 | `年龄>=18`    |
-| <  | 小于     | less than, lt       | `年龄<60`     |
-| <= | 小于等于   | lte                 | `年龄<=60`    |
+| 符号 | 中文     | 示例             |
+|----|--------|----------------|
+| =  | 等于     | `年龄=25` 或 `年龄等于25` |
+| != | 不等于    | `状态!='已删除'` 或 `状态不等于'已删除'` |
+| >  | 大于、晚于  | `年龄>18` 或 `年龄大于18` 或 `时间晚于'2025-01-01'` |
+| >= | 大于等于   | `年龄>=18` |
+| <  | 小于、早于  | `年龄<60` 或 `时间早于'2025-12-31'` |
+| <= | 小于等于   | `年龄<=60` |
 
 ### 集合运算符
 
-| 关键字    | 中文   | 英文     | 示例                        |
-|--------|------|--------|---------------------------|
-| IN     | 在、属于 | in     | `城市 IN ('北京','上海','深圳')`  |
-| NOT IN | 不在   | not in | `状态 NOT IN ('已删除','已禁用')` |
+| 关键字    | 中文   | 示例                        |
+|--------|------|---------------------------|
+| IN     | 包含于  | `城市 IN ('北京','上海','深圳')`  |
+| NOT IN |      | `状态 NOT IN ('已删除','已禁用')` |
 
 ### 模糊匹配运算符
 
-| 关键字         | 中文    | 英文          | 说明    | 示例                    |
-|-------------|-------|-------------|-------|-----------------------|
-| LIKE        | 包含、匹配 | like        | 模糊匹配  | `名称 LIKE '测试'`        |
-| PREFIX LIKE | 前缀匹配  | prefix like | 前缀匹配  | `名称 PREFIX LIKE '测试'` |
-| SUFFIX LIKE | 后缀匹配  | suffix like | 后缀匹配  | `名称 SUFFIX LIKE '测试'` |
-| NOT LIKE    | 不包含   | not like    | 模糊不匹配 | `名称 NOT LIKE '删除'`    |
+| 关键字         | 中文    | 说明    | 示例                    |
+|-------------|-------|-------|-----------------------|
+| LIKE        | 包含    | 模糊匹配  | `名称 LIKE '测试'`        |
+| PREFIX LIKE | 前缀    | 前缀匹配  | `名称 PREFIX LIKE '测试'` |
+| SUFFIX LIKE | 后缀    | 后缀匹配  | `名称 SUFFIX LIKE '测试'` |
+| NOT LIKE    | 不包含   | 模糊不匹配 | `名称 NOT LIKE '删除'`    |
 
-**说明：** SDK 只识别运算符类型，业务层根据类型自行决定通配符位置（`%test%`、`test%`、`%test`）。
+> SDK 只识别运算符类型，业务层根据类型自行决定通配符位置（`%test%`、`test%`、`%test`）。
 
 ### 空值检查
 
-| 关键字         | 中文   | 英文          | 示例               |
-|-------------|------|-------------|------------------|
-| IS NULL     | 空、为空 | is null     | `备注 IS NULL`     |
-| IS NOT NULL | 非空   | is not null | `备注 IS NOT NULL` |
+| 关键字         | 中文  | 示例               |
+|-------------|-----|------------------|
+| IS NULL     | 空   | `备注 IS NULL`     |
+| IS NOT NULL | 非空  | `备注 IS NOT NULL` |
 
 ### 逻辑运算符
 
-| 符号  | 中文     | 英文  | 示例                    |
-|-----|--------|-----|-----------------------|
-| AND | 并且、且、和 | and | `年龄>18 AND 城市='北京'`   |
-| OR  | 或者、或   | or  | `状态='活跃' OR 状态='待审核'` |
-| NOT | 非、不是   | not | `NOT 状态='已删除'`        |
+| 符号  | 中文   | 示例                    |
+|-----|------|-----------------------|
+| AND | 并且、且 | `年龄>18 AND 城市='北京'`   |
+| OR  | 或者、或 | `状态='活跃' OR 状态='待审核'` |
+| NOT | 非    | `NOT 状态='已删除'`        |
+
+> 所有英文关键字大小写不敏感：`AND` / `And` / `and` 均可。
 
 ### 括号优先级
 
 ```java
 parser.parse("(年龄>18 AND 年龄<60) OR 状态='VIP'");
-// → ParenthesisExpression 包裹子表达式，控制优先级
 ```
 
-### 值类型
+### 值类型与引号规则
 
-#### 字符串
+| 值类型 | 引号 | 示例 |
+|-------|------|------|
+| 数字 | 不加 | `年龄=25`、`价格=99.9` |
+| 布尔值 | 不加 | `启用=true`、`启用='真'` |
+| 时间范围 | 加引号 | `时间='近1小时'` |
+| 字符串/中文值 | **必须加** | `名称='张三'`、`状态="活跃"` |
 
-```java
-parser.parse("名称='张三'");
-// → ValueNode(type=STRING, rawValue=张三, parsedValue=张三)
-```
+> 引号支持 ASCII 单引号 `'` 和双引号 `"`，不支持中文引号 `""`。
 
-#### 数值
+#### 时间范围
 
-```java
-// 整数
-parser.parse("年龄=25");
-// → ValueNode(type=INTEGER, rawValue=25, parsedValue=25L)
-
-// 浮点数
-parser.
-
-parse("价格=99.99");
-// → ValueNode(type=DECIMAL, rawValue=99.99, parsedValue=99.99)
-```
-
-#### 布尔值
-
-```java
-// 英文
-parser.parse("启用=true");   // true
-parser.
-
-parse("启用=false");  // false
-
-// 中文
-parser.
-
-parse("启用='真'");   // true
-parser.
-
-parse("启用='假'");   // false
-parser.
-
-parse("启用='否'");   // false
-```
-
-#### 时间范围枚举
-
-SDK 预定义了 30+ 种时间范围，**不计算具体时间**，只识别关键字并返回枚举值。业务层根据枚举值自行计算时间范围。
+SDK 预定义了 30+ 种时间范围，只识别关键字并返回枚举值，不计算具体时间。业务层根据枚举的 `amount` 和 `unit` 自行计算。
 
 ```java
 parser.parse("时间='近1小时'");
-// → ValueNode(type=TIME_RANGE, rawValue=近1小时, parsedValue=LAST_1_HOUR)
+// → ValueNode(type=TIME_RANGE, parsedValue=LAST_1_HOUR)
 
-parser.
+parser.parse("时间='近3个月'");
+// → ValueNode(type=TIME_RANGE, parsedValue=LAST_3_MONTHS)
 
-parse("时间='近3个月'");
-// → ValueNode(type=TIME_RANGE, rawValue=近3个月, parsedValue=LAST_3_MONTHS)
-
-parser.
-
-parse("时间='今天'");
-// → ValueNode(type=TIME_RANGE, rawValue=今天, parsedValue=TODAY)
+parser.parse("时间='今天'");
+// → ValueNode(type=TIME_RANGE, parsedValue=TODAY)
 ```
 
-**支持的时间范围：**
+| 分类    | 关键字                                  |
+|-------|--------------------------------------|
+| 分钟级   | 近5分钟、近10分钟、近15分钟、近30分钟               |
+| 小时级   | 近1小时、近6小时、近12小时、近24小时                |
+| 天级    | 近1天、近3天、近7天                          |
+| 周级    | 近1周、近2周                              |
+| 月级    | 近1个月、近2个月、近3个月、近半年、一个月、三个月、半年        |
+| 年级    | 近1年、近2年、近3年、一年                       |
+| 相对时间点 | 今天、昨天、前天、本周、上周、本月、上月、本季度、上季度、今年、去年   |
 
-| 分类    | 关键字                                     |
-|-------|-----------------------------------------|
-| 分钟级   | 近5分钟、近10分钟、近15分钟、近30分钟                  |
-| 小时级   | 近1小时、近6小时、近12小时、近24小时                   |
-| 天级    | 近1天、近3天、近7天                             |
-| 周级    | 近1周、近2周                                 |
-| 月级    | 近1个月、近2个月、近3个月、近三个月、近6个月、近半年、一个月、三个月、半年 |
-| 年级    | 近1年、近2年、近3年、一年                          |
-| 相对时间点 | 今天、昨天、前天、本周、上周、本月、上月、本季度、上季度、今年、去年      |
+> 每个时间范围均支持"近X"和"最近X"两种写法，数字支持阿拉伯数字和中文数字（如 `近七天` = `近7天`）。
+> 完整关键字列表可通过 `TimeRange.getAllKeywords()` 获取。
 
-**扩展时间范围：**
-
-业务层可以根据需要添加自定义关键字映射（支持中英文）：
+## 配置
 
 ```yaml
-# application.yml
 io:
   github:
     surezzzzzz:
@@ -195,796 +156,122 @@ io:
         expression:
           condition:
             parser:
-              custom-time-ranges:
-                # 中文关键字
-                近2小时: LAST_2_HOURS
-                近48小时: LAST_2_DAYS
-                近90天: LAST_3_MONTHS
-
-                # 英文关键字（业务传英文时使用）
-                last2hours: LAST_2_HOURS
-                last48hours: LAST_2_DAYS
-                last90days: LAST_3_MONTHS
-                yesterday: YESTERDAY
-                thisweek: THIS_WEEK
-                lastmonth: LAST_MONTH
+              enabled: true    # 是否启用（默认 true）
 ```
 
-**使用示例：**
+## 错误处理
+
+所有解析错误抛出 `ConditionExpressionParseException`，包含详细的错误类型、位置和建议：
 
 ```java
-// 中文关键字
-parser.parse("时间='近2小时'");  // → LAST_2_HOURS
-
-// 英文关键字（业务传英文）
-parser.parse("时间='last2hours'");  // → LAST_2_HOURS
-parser.parse("时间='yesterday'");   // → YESTERDAY
-```
-
-## 🎯 完整示例
-
-### 示例1：简单比较
-
-```java
-Expression expr = parser.parse("年龄=25");
-ComparisonExpression comp = (ComparisonExpression) expr;
-
-System.out.
-
-println(comp.getField());                    // 年龄
-        System.out.
-
-println(comp.getOperator());                 // EQ
-        System.out.
-
-println(comp.getValue().
-
-getParsedValue());   // 25L
-        System.out.
-
-println(comp.getValue().
-
-getType());          // INTEGER
-```
-
-### 示例2：IN 运算符
-
-```java
-Expression expr = parser.parse("城市 IN ('北京','上海','深圳')");
-InExpression in = (InExpression) expr;
-
-System.out.
-
-println(in.getField());        // 城市
-        System.out.
-
-println(in.isNotIn());         // false
-        System.out.
-
-println(in.getValues().
-
-size());// 3
-        System.out.
-
-println(in.getValues().
-
-get(0).
-
-getRawValue()); // 北京
-```
-
-### 示例3：逻辑组合
-
-```java
-Expression expr = parser.parse("年龄>18 AND 年龄<60");
-BinaryExpression binary = (BinaryExpression) expr;
-
-System.out.
-
-println(binary.getOperator());              // AND
-        System.out.
-
-println(binary.getLeft().
-
-getClass());       // ComparisonExpression
-        System.out.
-
-println(binary.getRight().
-
-getClass());      // ComparisonExpression
-```
-
-### 示例4：复杂表达式
-
-```java
-String expression = "类型='活跃' AND 分类 IN ('高','中') AND " +
-        "名称 LIKE '测试' AND 描述 PREFIX LIKE '用户' AND " +
-        "标签 SUFFIX LIKE '标记' AND 备注 NOT LIKE '删除' AND " +
-        "扩展字段 IS NULL AND 年龄>18 AND 年龄<=60 AND " +
-        "状态!='禁用' AND 时间='近1个月'";
-
-Expression expr = parser.parse(expression);
-// → 复杂的 BinaryExpression 树形结构
-```
-
-### 示例5：使用 Visitor 转换为 SQL
-
-```java
-// 自定义 Visitor 实现
-public class SqlVisitor implements ExpressionVisitor<String> {
-
-    @Override
-    public String visitComparison(ComparisonExpression expr) {
-        String field = mapFieldName(expr.getField());
-        String op = mapOperator(expr.getOperator());
-        Object value = expr.getValue().getParsedValue();
-
-        return field + " " + op + " " + formatValue(value);
-    }
-
-    @Override
-    public String visitIn(InExpression expr) {
-        String field = mapFieldName(expr.getField());
-        String op = expr.isNotIn() ? "NOT IN" : "IN";
-        String values = expr.getValues().stream()
-                .map(v -> formatValue(v.getParsedValue()))
-                .collect(Collectors.joining(",", "(", ")"));
-
-        return field + " " + op + " " + values;
-    }
-
-    @Override
-    public String visitBinary(BinaryExpression expr) {
-        String left = expr.getLeft().accept(this);
-        String right = expr.getRight().accept(this);
-        return "(" + left + " " + expr.getOperator() + " " + right + ")";
-    }
-
-    // ... 实现其他 visit 方法
-}
-
-// 使用
-Expression expr = parser.parse("年龄>18 AND 城市='北京'");
-String sql = expr.accept(new SqlVisitor());
-System.out.
-
-println(sql);
-// → (age > 18 AND city = '北京')
-```
-
-### 示例6：转换为 Elasticsearch DSL
-
-```java
-public class EsDslVisitor implements ExpressionVisitor<JsonNode> {
-
-    @Override
-    public JsonNode visitComparison(ComparisonExpression expr) {
-        String field = mapFieldName(expr.getField());
-        ComparisonOperator op = expr.getOperator();
-        Object value = expr.getValue().getParsedValue();
-
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-
-        switch (op) {
-            case EQ:
-                node.putObject("term").put(field, value.toString());
-                break;
-            case GT:
-                node.putObject("range").putObject(field).put("gt", value.toString());
-                break;
-            // ... 其他运算符
-        }
-
-        return node;
-    }
-
-    @Override
-    public JsonNode visitBinary(BinaryExpression expr) {
-        JsonNode left = expr.getLeft().accept(this);
-        JsonNode right = expr.getRight().accept(this);
-
-        ObjectMapper mapper = new ObjectMapper();
-        ObjectNode node = mapper.createObjectNode();
-
-        String boolType = expr.getOperator() == LogicalOperator.AND ? "must" : "should";
-        ArrayNode array = mapper.createArrayNode();
-        array.add(left);
-        array.add(right);
-
-        node.putObject("bool").putArray(boolType).addAll(array);
-
-        return node;
-    }
-
-    // ... 实现其他 visit 方法
-}
-
-// 使用
-Expression expr = parser.parse("年龄>18 AND 城市='北京'");
-JsonNode dsl = expr.accept(new EsDslVisitor());
-System.out.
-
-println(dsl.toPrettyString());
-```
-
-### 示例7：使用工具类
-
-```java
-Expression expr = parser.parse("威胁类型='恶意' AND 存活状态!='失活' AND 组织分类 IN ('一级','二级')");
-
-// 1. 收集字段和值
-Set<String> fields = ExpressionCollectors.collectFields(expr);
-System.out.
-
-println("涉及字段: "+fields);
-// → [威胁类型, 存活状态, 组织分类]
-
-List<ValueNode> values = ExpressionCollectors.collectValues(expr);
-values.
-
-forEach(v ->System.out.
-
-println(v.getRawValue() +" ("+v.
-
-getType() +")"));
-// → 恶意 (STRING)
-// → 失活 (STRING)
-// → 一级 (STRING)
-// → 二级 (STRING)
-
-// 2. 验证表达式复杂度
-        try{
-        ExpressionMetrics.
-
-validateDepth(expr, 10);          // 深度限制
-    ExpressionMetrics.
-
-validateConditionCount(expr, 20); // 条件数限制
-    System.out.
-
-println("验证通过");
-}catch(
-ExpressionValidationException e){
-        System.err.
-
-println("表达式过于复杂: "+e.getMetricType());
-        }
-
-// 3. 格式化输出（调试用）
-String compact = ExpressionPrinter.toCompactString(expr);
-System.out.
-
-println(compact);
-// → ((威胁类型 EQ 恶意 AND 存活状态 NEQ 失活) AND 组织分类 IN [一级, 二级])
-
-String tree = ExpressionPrinter.toTreeString(expr);
-System.out.
-
-println(tree);
-// → 多行树形结构，清晰展示 AST
-
-// 4. 字段查询
-boolean hasStatus = BaseExpressionVisitor.containsField(expr, "存活状态");
-System.out.
-
-println("包含'存活状态': "+hasStatus);  // true
-
-Expression statusCond = BaseExpressionVisitor.findFieldCondition(expr, "存活状态");
-System.out.
-
-println("状态条件: "+ExpressionPrinter.toCompactString(statusCond));
-// → 存活状态 NEQ 失活
-
-// 5. 逻辑分析
-        if(BaseExpressionVisitor.
-
-isAllAnd(expr)){
-        System.out.
-
-println("这是筛选规则（必须同时满足所有条件）");
-}
-
-// 排除规则示例
-Expression exclusion = parser.parse("存活状态='失活' OR 情报过期='是'");
-if(BaseExpressionVisitor.
-
-isAllOr(exclusion)){
-        System.out.
-
-println("这是排除规则（满足任一即排除）");
-}
-
-// 6. 条件查找
-List<Expression> comparisons = BaseExpressionVisitor.findConditions(expr,
-        e -> e instanceof ComparisonExpression);
-System.out.
-
-println("比较表达式数量: "+comparisons.size());  // 2
-
-List<Expression> inExpressions = BaseExpressionVisitor.findConditions(expr,
-        e -> e instanceof InExpression);
-System.out.
-
-println("IN 表达式数量: "+inExpressions.size());  // 1
-```
-
-## 🔧 配置
-
-```yaml
-# application.yml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        expression:
-          condition:
-            parser:
-              enabled: true                 # 是否启用（默认 true）
-              custom-time-ranges: # 自定义时间范围映射
-                近2小时: LAST_2_HOURS
-                近48小时: LAST_2_DAYS
-```
-
-## 🏗️ 工作原理
-
-### 架构设计
-
-```
-用户输入 (条件表达式字符串)
-    ↓
-ConditionExpressionParser (解析器入口)
-    ↓
-ANTLR 4.10.1
-    ├─ ConditionExprLexer (词法分析器)
-    ├─ ConditionExprParser (语法分析器)
-    └─ ParseTree (ANTLR 解析树)
-    ↓
-AstBuilder (Visitor实现)
-    ├─ ValueParser (值解析策略管理器)
-    │   ├─ BooleanValueParseStrategy (优先级1)
-    │   ├─ TimeRangeValueParseStrategy (优先级2)
-    │   ├─ NumberValueParseStrategy (优先级3)
-    │   └─ StringValueParseStrategy (优先级4)
-    └─ 构建自定义 AST
-    ↓
-Expression (AST 根节点)
-    ├─ ComparisonExpression
-    ├─ InExpression
-    ├─ LikeExpression
-    ├─ NullExpression
-    ├─ BinaryExpression
-    ├─ UnaryExpression
-    └─ ParenthesisExpression
-    ↓
-业务层 Visitor 转换
-    ├─ SqlVisitor → SQL
-    ├─ EsDslVisitor → ES DSL
-    ├─ MongoQueryVisitor → MongoDB Query
-    └─ 自定义 Visitor
-```
-
-**关键设计模式：**
-
-1. **Visitor 模式** - AST 遍历与转换
-    - `ExpressionVisitor<R>` 接口定义访问方法
-    - 业务层实现 Visitor 自由转换为目标格式
-    - 解耦解析与业务逻辑
-
-2. **策略模式** - 值解析
-    - `ValueParseStrategy` 接口
-    - 4个策略：布尔、时间范围、数字、字符串
-    - 按优先级依次尝试，第一个匹配的策略生效
-
-3. **建造者模式** - AST 构建 & 异常构建
-    - Lombok `@Builder` 注解
-    - `ConditionExpressionParseException.builder()`
-
-4. **ANTLR 语法驱动** - 词法和语法分析
-    - `.g4` 语法文件定义语言规则
-    - 自动生成 Lexer/Parser/Visitor
-    - 语法严谨、性能优异
-
-### ANTLR 语法文件
-
-核心语法定义（简化版）：
-
-```antlr
-grammar ConditionExpr;
-
-parse: expression EOF;
-
-expression: andExpression (OR andExpression)*;
-
-andExpression: unaryExpression (AND unaryExpression)*;
-
-unaryExpression
-    : NOT unaryExpression
-    | primaryExpression
-    ;
-
-primaryExpression
-    : '(' expression ')'
-    | condition
-    ;
-
-condition
-    : field comparisonOp value                      // 比较
-    | field IN valueList                            // IN
-    | field NOT IN valueList                        // NOT IN
-    | field LIKE value                              // LIKE
-    | field PREFIX LIKE value                       // PREFIX LIKE
-    | field SUFFIX LIKE value                       // SUFFIX LIKE
-    | field NOT LIKE value                          // NOT LIKE
-    | field IS NULL                                 // IS NULL
-    | field IS NOT NULL                             // IS NOT NULL
-    ;
-
-field: IDENTIFIER;
-value: STRING | NUMBER | BOOLEAN | TIME_RANGE_KEYWORD;
-valueList: '(' value (',' value)* ')';
-```
-
-## ⚠️ 错误处理
-
-### ConditionExpressionParseException
-
-所有解析错误都会抛出自定义异常，包含详细信息：
-
-```java
-try{
-Expression expr = parser.parse("年龄> AND 状态='活跃'");
-}catch(
-ConditionExpressionParseException e){
-// 错误类型
-ErrorType type = e.getErrorType();  // SYNTAX_ERROR
-
-// 原始表达式
-String expression = e.getExpression();  // "年龄> AND 状态='活跃'"
-
-// 错误行号和列号
-Integer line = e.getLine();  // 1
-Integer column = e.getColumn();  // 4
-
-// 有问题的 token
-String offending = e.getOffendingToken();  // "AND"
-
-// 友好的错误消息
-String message = e.getMessage();
-// → "语法错误：不期望的输入 "AND""
+try {
+    parser.parse("年龄> AND 状态='活跃'");
+} catch (ConditionExpressionParseException e) {
+    e.getErrorType();        // SYNTAX_ERROR
+    e.getExpression();       // "年龄> AND 状态='活跃'"
+    e.getLine();             // 1
+    e.getColumn();           // 4
+    e.getOffendingToken();   // "AND"（不暴露 <EOF> 等内部 token）
+    e.getMessage();          // 友好的中文错误消息
 }
 ```
 
 **错误类型：**
 
-| 错误类型               | 说明        | 示例                |
-|--------------------|-----------|-------------------|
-| `SYNTAX_ERROR`     | 语法错误      | `年龄> AND 状态='活跃'` |
-| `EMPTY_EXPRESSION` | 空表达式或只有空格 | `""` 或 `"   "`    |
-| `INVALID_VALUE`    | 值格式错误     | -                 |
+| 错误类型               | 说明        |
+|--------------------|-----------|
+| `SYNTAX_ERROR`     | 语法错误      |
+| `EMPTY_EXPRESSION` | 空表达式或只有空格 |
+| `INVALID_VALUE`    | 值格式错误     |
+| `MISMATCHED_PARENTHESIS` | 括号不匹配 |
+| `EMPTY_IN_LIST`    | IN 值列表为空  |
 
-## 📚 核心类说明
+## 工作原理
 
-### Expression（AST 基类）
+```
+条件表达式字符串
+    ↓
+ANTLR 4 (Lexer + Parser)
+    ↓
+ParseTree
+    ↓
+AstBuilder (Visitor) + ValueParser (策略模式)
+    ↓
+Expression (AST)
+    ├─ ComparisonExpression
+    ├─ InExpression
+    ├─ LikeExpression
+    ├─ NullExpression
+    ├─ BinaryExpression (AND/OR)
+    ├─ UnaryExpression (NOT)
+    └─ ParenthesisExpression
+    ↓
+业务层 Visitor → SQL / ES DSL / MongoDB Query / ...
+```
+
+## TimeRange API
 
 ```java
-public abstract class Expression {
-    public abstract <R> R accept(ExpressionVisitor<R> visitor);
-}
+// 关键字查找
+TimeRange range = TimeRange.fromKeyword("近7天");    // LAST_7_DAYS
+TimeRange range = TimeRange.fromKeyword("最近一小时"); // LAST_1_HOUR
+
+// 关键字判断
+boolean is = TimeRange.isKeyword("今天");            // true
+
+// 获取所有关键字映射（不可变 Map，可用于前端提示）
+Map<String, TimeRange> keywords = TimeRange.getAllKeywords();
+
+// 枚举元数据（业务层用于计算时间）
+int amount = range.getAmount();     // 7
+ChronoUnit unit = range.getUnit();  // DAYS
 ```
 
-**子类：**
-
-- `ComparisonExpression` - 比较表达式
-- `InExpression` - IN/NOT IN 表达式
-- `LikeExpression` - LIKE 表达式
-- `NullExpression` - NULL 检查表达式
-- `BinaryExpression` - 二元逻辑表达式（AND/OR）
-- `UnaryExpression` - 一元逻辑表达式（NOT）
-- `ParenthesisExpression` - 括号表达式
-
-### ValueNode（值节点）
-
-```java
-
-@Data
-@Builder
-public class ValueNode {
-    private ValueType type;        // 值类型：STRING/INTEGER/DECIMAL/BOOLEAN/TIME_RANGE
-    private String rawValue;       // 原始字符串
-    private Object parsedValue;    // 解析后的值
-}
-```
-
-### ExpressionVisitor（访问者接口）
-
-```java
-public interface ExpressionVisitor<R> {
-    R visitComparison(ComparisonExpression expression);
-
-    R visitIn(InExpression expression);
-
-    R visitLike(LikeExpression expression);
-
-    R visitNull(NullExpression expression);
-
-    R visitBinary(BinaryExpression expression);
-
-    R visitUnary(UnaryExpression expression);
-
-    R visitParenthesis(ParenthesisExpression expression);
-}
-```
-
-### BaseExpressionVisitor（访问者抽象基类）
-
-提供默认递归遍历实现 + 8个静态工具方法：
-
-```java
-public abstract class BaseExpressionVisitor<R> implements ExpressionVisitor<R> {
-    // 子类需实现
-    protected abstract R getDefaultResult();
-
-    // 可选 override
-    protected R combineBinaryResults(R left, R right, LogicalOperator operator);
-
-    protected R combineUnaryResult(R operand, UnaryOperator operator);
-
-    // 静态工具方法（全部 public static）
-    public static boolean isLeafExpression(Expression expr);
-
-    public static boolean isLogicalExpression(Expression expr);
-
-    public static boolean isParenthesisExpression(Expression expr);
-
-    public static boolean containsField(Expression expr, String fieldHint);
-
-    public static Expression findFieldCondition(Expression expr, String fieldHint);
-
-    public static boolean isAllAnd(Expression expr);
-
-    public static boolean isAllOr(Expression expr);
-
-    public static List<Expression> findConditions(Expression expr, Predicate<Expression> predicate);
-}
-```
-
-### Support 工具类
-
-**ExpressionCollectors** - 信息收集
-
-```java
-Set<String> fields = ExpressionCollectors.collectFields(expr);
-List<ValueNode> values = ExpressionCollectors.collectValues(expr);
-```
-
-**ExpressionMetrics** - 复杂度度量
-
-```java
-int depth = ExpressionMetrics.calculateDepth(expr);
-int count = ExpressionMetrics.countConditions(expr);
-ExpressionMetrics.
-
-validateDepth(expr, 10);
-ExpressionMetrics.
-
-validateConditionCount(expr, 20);
-```
-
-**ExpressionPrinter** - 格式化输出
-
-```java
-String compact = ExpressionPrinter.toCompactString(expr);  // 单行
-String tree = ExpressionPrinter.toTreeString(expr);         // 树形
-```
-
-**ExpressionValidationException** - 验证异常
-
-```java
-try{
-        ExpressionMetrics.validateDepth(expr, 5);
-}catch(
-ExpressionValidationException e){
-MetricType type = e.getMetricType();    // DEPTH / CONDITION_COUNT
-int actual = e.getActualValue();
-int max = e.getMaxValue();
-}
-```
-
-## ❓ 常见问题
-
-### Q: 如何添加自定义时间范围？
-
-配置文件中添加映射（支持中英文）：
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        expression:
-          condition:
-            parser:
-              custom-time-ranges:
-                # 中文关键字
-                近2小时: LAST_2_HOURS
-                最近一周: LAST_1_WEEK
-
-                # 英文关键字（业务传英文时使用）
-                last2hours: LAST_2_HOURS
-                lastweek: LAST_1_WEEK
-                yesterday: YESTERDAY
-```
-
-使用示例：
-
-```java
-// 中文
-parser.parse("时间='近2小时'");      // → LAST_2_HOURS
-
-// 英文（业务层传英文）
-parser.parse("时间='last2hours'");  // → LAST_2_HOURS
-parser.parse("时间='yesterday'");   // → YESTERDAY
-```
+## 常见问题
 
 ### Q: 如何实现字段名映射？
 
-在 Visitor 中实现 `mapFieldName` 方法：
+在 Visitor 中实现映射即可：
 
 ```java
 public class SqlVisitor implements ExpressionVisitor<String> {
-
-    private static final Map<String, String> FIELD_MAPPING = Map.of(
-            "年龄", "age",
-            "城市", "city",
-            "名称", "name"
-    );
-
     private String mapFieldName(String hint) {
         return FIELD_MAPPING.getOrDefault(hint, hint);
-    }
-
-    @Override
-    public String visitComparison(ComparisonExpression expr) {
-        String field = mapFieldName(expr.getField());  // 映射字段名
-        // ...
     }
 }
 ```
 
 ### Q: 时间范围如何计算具体时间？
 
-SDK 只返回枚举值，业务层根据枚举自行计算：
+SDK 只返回枚举值，业务层根据 `amount` 和 `unit` 计算：
 
 ```java
-public class TimeRangeCalculator {
-
-    public static LocalDateTime[] calculate(TimeRange range) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime start;
-
-        switch (range) {
-            case LAST_1_HOUR:
-                start = now.minusHours(1);
-                break;
-            case LAST_3_MONTHS:
-                start = now.minusMonths(3);
-                break;
-            case TODAY:
-                start = now.toLocalDate().atStartOfDay();
-                break;
-            // ... 其他枚举
-        }
-
-        return new LocalDateTime[]{start, now};
-    }
-}
+TimeRange range = valueNode.getParsedValue(); // 如 LAST_3_MONTHS
+LocalDateTime start = LocalDateTime.now().minus(range.getAmount(), range.getUnit());
 ```
+
+### Q: 中文运算符和中文字段名之间需要空格吗？
+
+不需要。`年龄等于25` 可以直接解析。ANTLR 会优先匹配更长的运算符关键字（`等于` 2字符 > 单个中文字符），自动正确拆分。
+
+唯一例外：如果字段名本身以运算符关键字开头（如 `包含规则`，`包含` 是 LIKE 别名），需要加空格：`` 包含 `规则 ` LIKE 'test' ``。但实际业务中极少出现这种情况。
 
 ### Q: 支持哪些数据库？
 
-解析器与数据库无关，生成的 AST 可用于任何查询引擎。通过实现不同的 Visitor 转换为目标格式：
+解析器与数据库无关。通过实现不同的 Visitor 转换为目标格式：SQL、Elasticsearch DSL、MongoDB Query、JPA Criteria API 等。
 
-- SQL（MySQL、PostgreSQL、Oracle等）
-- Elasticsearch DSL
-- MongoDB Query
-- JPA Criteria API
-- MyBatis Dynamic SQL
-
-### Q: LIKE 运算符的通配符在哪里添加？
-
-SDK 只识别运算符类型，业务层根据 `MatchOperator` 枚举决定通配符位置：
-
-```java
-
-@Override
-public String visitLike(LikeExpression expr) {
-    String field = mapFieldName(expr.getField());
-    String value = expr.getValue().getRawValue();
-    String pattern;
-
-    switch (expr.getOperator()) {
-        case LIKE:
-            pattern = "%" + value + "%";  // 模糊匹配
-            break;
-        case PREFIX:
-            pattern = value + "%";        // 前缀匹配
-            break;
-        case SUFFIX:
-            pattern = "%" + value;        // 后缀匹配
-            break;
-        case NOT_LIKE:
-            return field + " NOT LIKE '%" + value + "%'";
-    }
-
-    return field + " LIKE '" + pattern + "'";
-}
-```
-
-## 📦 依赖
+## 依赖
 
 - Java 8+
 - Spring Boot 2.x+
 - ANTLR 4.10.1
 
-## 📝 版本历史
-
-### v1.0.1 (2026-01-05)
-
-**✨ 新增工具包**
-
-- 🛠️ **support 包** - 3个静态工具类
-    - `ExpressionCollectors` - 收集字段和值
-    - `ExpressionMetrics` - 复杂度度量和验证
-    - `ExpressionPrinter` - 格式化输出（紧凑/树形）
-
-- 🔍 **增强 BaseExpressionVisitor** - 8个静态查询方法
-    - 类型检查：`isLeafExpression`、`isLogicalExpression`、`isParenthesisExpression`
-    - 字段查询：`containsField`、`findFieldCondition`
-    - 逻辑分析：`isAllAnd`、`isAllOr`
-    - 条件查找：`findConditions`
-
-- ⚠️ **exception 包** - 新增 `ExpressionValidationException`
-    - 支持深度超限、条件数超限等验证场景
-    - 包含 `MetricType` 枚举和详细错误信息
-
-**📚 详见：** [CHANGELOG.1.0.1.md](CHANGELOG.1.0.1.md)
-
-### v1.0.0 (2026-01-04)
-
-**✨ 核心功能**
-
-- 🎯 支持 6 大类运算符：比较、集合、模糊匹配、空值检查、逻辑运算、括号
-- 🚀 支持 5 种值类型：字符串、整数、浮点数、布尔、时间范围枚举
-- 📊 基于 ANTLR 4.10.1，语法严谨，性能优异
-- 🔧 Visitor 模式，灵活转换为任意目标格式
-- 🌐 中英文关键字支持，大小写不敏感
-- ⚠️ 自定义异常，详细错误信息
-
-**🏗️ 架构设计**
-
-- ✨ **ANTLR 驱动** - 词法/语法分析，自动生成 Lexer/Parser/Visitor
-- 🔄 **Visitor 模式** - 业务层通过 Visitor 自由转换 AST
-- 📦 **策略模式** - 值解析策略，按优先级依次匹配
-- 🏛️ **建造者模式** - AST 和异常构建
-
-**⚡ 性能优化**
-
-- ANTLR 高性能解析
-- 策略优先级排序，快速匹配
-- 关键字映射预构建
-
-## 📄 许可证
+## 许可证
 
 Apache License 2.0
 
-## 👤 作者
+## 作者
 
 **surezzzzzz**
 
 - GitHub: [@Sure-Zzzzzz](https://github.com/Sure-Zzzzzz)
-
-## 🙏 致谢
-
-- [ANTLR](https://www.antlr.org/) - 强大的语法分析工具
-- [Spring Boot](https://spring.io/projects/spring-boot) - 优秀的应用框架

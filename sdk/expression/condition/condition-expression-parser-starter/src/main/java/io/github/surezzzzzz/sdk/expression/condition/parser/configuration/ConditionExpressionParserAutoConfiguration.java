@@ -43,12 +43,8 @@ public class ConditionExpressionParserAutoConfiguration {
     @PostConstruct
     public void init() {
         log.info("========================================");
-        log.info("✅ Condition Expression Parser Starter Initialized");
+        log.info("Condition Expression Parser Starter Initialized");
         log.info("Enabled: {}", properties.isEnabled());
-        log.info("Custom Comparison Operators: {}", properties.getCustomComparisonOperators().size());
-        log.info("Custom Logical Operators: {}", properties.getCustomLogicalOperators().size());
-        log.info("Custom Time Ranges: {}", properties.getCustomTimeRanges().size());
-        log.info("Custom Match Operators: {}", properties.getCustomMatchOperators().size());
         log.info("========================================");
     }
 }

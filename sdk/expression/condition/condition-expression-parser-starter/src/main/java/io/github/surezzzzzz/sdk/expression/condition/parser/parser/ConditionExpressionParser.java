@@ -109,10 +109,14 @@ public class ConditionExpressionParser {
                 String msg,
                 RecognitionException e) {
 
-            // 提取有问题的 token
+            // 提取有问题的 token（过滤 EOF 等技术细节）
             String offendingText = null;
             if (offendingSymbol instanceof Token) {
-                offendingText = ((Token) offendingSymbol).getText();
+                String text = ((Token) offendingSymbol).getText();
+                // 不向用户暴露 EOF 等内部 token
+                if (!"<EOF>".equals(text) && !"<EOF".equals(text)) {
+                    offendingText = text;
+                }
             }
 
             // 尝试提供更友好的错误消息
@@ -131,16 +135,18 @@ public class ConditionExpressionParser {
          * 将 ANTLR 的技术性错误消息转换为用户友好的消息
          */
         private String makeFriendlyMessage(String antlrMessage, String offendingToken) {
-            if (antlrMessage.contains("mismatched input")) {
+            if (antlrMessage.contains("mismatched input") && offendingToken != null) {
                 return "语法错误：不期望的输入 \"" + offendingToken + "\"";
             } else if (antlrMessage.contains("missing")) {
                 return "语法错误：缺少必要的元素";
-            } else if (antlrMessage.contains("extraneous input")) {
+            } else if (antlrMessage.contains("extraneous input") && offendingToken != null) {
                 return "语法错误：多余的输入 \"" + offendingToken + "\"";
             } else if (antlrMessage.contains("no viable alternative")) {
                 return "语法错误：无法识别的语法结构";
+            } else if (antlrMessage.contains("EOF")) {
+                return "语法错误：表达式不完整";
             } else {
-                return "语法错误：" + antlrMessage;
+                return "语法错误：表达式格式不正确";
             }
         }
     }
