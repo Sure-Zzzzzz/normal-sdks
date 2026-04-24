@@ -430,6 +430,11 @@ public class SimpleElasticsearchSearchConstant {
     public static final String DATE_INTERVAL_QUARTER = "quarter";
 
     /**
+     * 日期间隔：季度（ES 字符串值，用于 6.8.x 兼容降级）
+     */
+    public static final String DATE_INTERVAL_QUARTER_VALUE = "1q";
+
+    /**
      * 日期间隔：季度（简写）
      */
     public static final String DATE_INTERVAL_Q = "q";

@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteDowngradeProcessor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -473,7 +474,8 @@ class IndexRouteProcessorTest {
                 .build();
 
         long startTime = System.currentTimeMillis();
-        String[] indices = processor.route(metadata, dateRange);
+        // 直接指定 LEVEL_0，绕过预估降级，验证月粒度索引生成逻辑
+        String[] indices = processor.routeWithDowngrade(metadata, dateRange, DowngradeLevel.LEVEL_0);
         long endTime = System.currentTimeMillis();
 
         log.info("Large range monthly query: {} indices in {}ms", indices.length, (endTime - startTime));

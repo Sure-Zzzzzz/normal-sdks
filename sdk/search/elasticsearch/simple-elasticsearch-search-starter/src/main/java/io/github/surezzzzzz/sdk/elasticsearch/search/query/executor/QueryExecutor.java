@@ -204,7 +204,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
     private QueryResponse processResponse(QueryRequest request, SearchResponse searchResponse) {
         QueryResponse.QueryResponseBuilder builder = QueryResponse.builder();
-        builder.total(searchResponse.getHits().getTotalHits().value);
+        builder.total(ElasticsearchCompatibilityHelper.extractTotalHits(searchResponse.getHits()));
 
         PaginationInfo pagination = request.getPagination();
         builder.page(pagination.getPage());

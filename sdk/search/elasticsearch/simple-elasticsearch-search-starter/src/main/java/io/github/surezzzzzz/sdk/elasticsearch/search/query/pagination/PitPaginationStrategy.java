@@ -23,6 +23,8 @@ import org.springframework.util.StringUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -31,13 +33,50 @@ import java.util.Arrays;
  *
  * <p>使用 Point In Time 快照翻页，不追加 _id，适合内存敏感场景。
  * PIT 生命周期由策略自动管理：首次请求自动 open，最后一页自动 close，中途放弃由 keepAlive 超时兜底。
- * 需要 ES 7.10+，版本校验在 {@code QueryExecutorImpl.validateRequest} 中完成。
+ * 需要 ES 7.10+，版本校验在 {@code validate} 中完成。
+ *
+ * <p>兼容性：{@code PointInTimeBuilder} 是 ES 7.10+ 才有的类，6.8.x 中不存在。
+ * 通过静态反射初始化检测其是否可用，6.8.x 下 PIT 分页在 validate 阶段即被拒绝，
+ * 不会走到 {@code applyToRequest}，此处反射仅保证类加载安全。
  *
  * @author surezzzzzz
  */
 @Slf4j
 @SimpleElasticsearchSearchComponent
 public class PitPaginationStrategy implements PaginationStrategy {
+
+    /**
+     * PointInTimeBuilder 构造器（ES 7.10+），6.8.x 下为 null
+     */
+    private static final Constructor<?> PIT_BUILDER_CTOR;
+
+    /**
+     * PointInTimeBuilder.setKeepAlive 方法（ES 7.10+），6.8.x 下为 null
+     */
+    private static final Method PIT_SET_KEEP_ALIVE_METHOD;
+
+    /**
+     * SearchSourceBuilder.pointInTimeBuilder 方法（ES 7.10+），6.8.x 下为 null
+     * 通过反射调用，避免字节码中出现对 PointInTimeBuilder 类型的硬引用
+     */
+    private static final Method SOURCE_BUILDER_PIT_METHOD;
+
+    static {
+        Constructor<?> ctor = null;
+        Method setKeepAlive = null;
+        Method pitMethod = null;
+        try {
+            Class<?> pitClass = Class.forName("org.elasticsearch.search.builder.PointInTimeBuilder");
+            ctor = pitClass.getConstructor(String.class);
+            setKeepAlive = pitClass.getMethod("setKeepAlive", String.class);
+            pitMethod = SearchSourceBuilder.class.getMethod("pointInTimeBuilder", pitClass);
+        } catch (Exception ignored) {
+            log.debug("PointInTimeBuilder not available (ES < 7.10), PIT pagination will be disabled");
+        }
+        PIT_BUILDER_CTOR = ctor;
+        PIT_SET_KEEP_ALIVE_METHOD = setKeepAlive;
+        SOURCE_BUILDER_PIT_METHOD = pitMethod;
+    }
 
     private static final com.fasterxml.jackson.databind.ObjectMapper OBJECT_MAPPER =
             new com.fasterxml.jackson.databind.ObjectMapper();
@@ -68,7 +107,7 @@ public class PitPaginationStrategy implements PaginationStrategy {
         }
 
         // 2. pitKeepAlive 必填
-        if (!org.springframework.util.StringUtils.hasText(pagination.getPitKeepAlive())) {
+        if (!StringUtils.hasText(pagination.getPitKeepAlive())) {
             throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_REQUIRED, ErrorMessage.PIT_KEEP_ALIVE_REQUIRED);
         }
 
@@ -95,10 +134,7 @@ public class PitPaginationStrategy implements PaginationStrategy {
 
         // 复用已有 PIT（续期 keepAlive）
         if (StringUtils.hasText(pagination.getPitId())) {
-            searchRequest.source().pointInTimeBuilder(
-                    new org.elasticsearch.search.builder.PointInTimeBuilder(pagination.getPitId())
-                            .setKeepAlive(pagination.getPitKeepAlive())
-            );
+            applyPointInTime(searchRequest, pagination.getPitId(), pagination.getPitKeepAlive());
         }
     }
 
@@ -145,6 +181,24 @@ public class PitPaginationStrategy implements PaginationStrategy {
             throw new QueryException(ErrorCode.PIT_KEEP_ALIVE_REQUIRED, ErrorMessage.PIT_KEEP_ALIVE_REQUIRED);
         }
         return TimeRangeHelper.parseToMillis(keepAlive);
+    }
+
+    /**
+     * 通过反射将 PointInTimeBuilder 设置到 SearchRequest
+     * ES 6.8.x 下 PIT_BUILDER_CTOR 为 null，此方法不会被调用（validate 阶段已拒绝）
+     */
+    private void applyPointInTime(SearchRequest searchRequest, String pitId, String keepAlive) {
+        if (PIT_BUILDER_CTOR == null || PIT_SET_KEEP_ALIVE_METHOD == null || SOURCE_BUILDER_PIT_METHOD == null) {
+            log.warn("PointInTimeBuilder not available, skipping PIT setup");
+            return;
+        }
+        try {
+            Object pitBuilder = PIT_BUILDER_CTOR.newInstance(pitId);
+            PIT_SET_KEEP_ALIVE_METHOD.invoke(pitBuilder, keepAlive);
+            SOURCE_BUILDER_PIT_METHOD.invoke(searchRequest.source(), pitBuilder);
+        } catch (Exception e) {
+            log.warn("Failed to apply PointInTimeBuilder via reflection: {}", e.getMessage());
+        }
     }
 
     private String openOrRenewPit(QueryRequest request, PaginationInfo pagination) {

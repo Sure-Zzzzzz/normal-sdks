@@ -118,7 +118,7 @@ io:
               max-http-line-length: 4096
               max-level: 3
               enable-estimate: true
-              auto-downgrade-index-count-threshold: 200
+              auto-downgrade-index-count-threshold: 35
 
           # Route 配置
           route:

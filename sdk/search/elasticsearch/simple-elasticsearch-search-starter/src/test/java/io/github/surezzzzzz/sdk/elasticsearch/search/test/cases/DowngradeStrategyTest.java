@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * 降级策略单元测试
- * 覆盖三种粒度（日/月/年）× 四个降级级别（LEVEL_0~3）
+ * 覆盖三种粒度（日/月/年）× 四个降级级别（LEVEL_0~3）及跨年边界，不依赖 ES 连接
  *
  * @author surezzzzzz
  */
@@ -59,7 +59,7 @@ class DowngradeStrategyTest {
     }
 
     @Test
-    @DisplayName("日粒度 LEVEL_1 - 生成月级通配符")
+    @DisplayName("日粒度 LEVEL_1 - 生成月级通配符（跨月）")
     void testDailyLevel1() {
         String[] result = dailyStrategy.apply("log_", LocalDate.of(2025, 1, 20),
                 LocalDate.of(2025, 3, 10), "yyyy.MM.dd", DowngradeLevel.LEVEL_1);
@@ -83,7 +83,19 @@ class DowngradeStrategyTest {
     }
 
     @Test
-    @DisplayName("日粒度 LEVEL_2 - 生成年级通配符")
+    @DisplayName("日粒度 LEVEL_1 - 跨年边界（12月→1月）通配符正确")
+    void testDailyLevel1CrossYear() {
+        String[] result = dailyStrategy.apply("log_", LocalDate.of(2024, 12, 1),
+                LocalDate.of(2025, 1, 31), "yyyy.MM.dd", DowngradeLevel.LEVEL_1);
+
+        log.info("Daily LEVEL_1 cross year: {}", Arrays.toString(result));
+        assertEquals(2, result.length);
+        assertEquals("log_2024.12.*", result[0]);
+        assertEquals("log_2025.01.*", result[1]);
+    }
+
+    @Test
+    @DisplayName("日粒度 LEVEL_2 - 生成年级通配符（跨年）")
     void testDailyLevel2() {
         String[] result = dailyStrategy.apply("log_", LocalDate.of(2024, 11, 1),
                 LocalDate.of(2025, 3, 31), "yyyy.MM.dd", DowngradeLevel.LEVEL_2);
@@ -92,6 +104,17 @@ class DowngradeStrategyTest {
         assertEquals(2, result.length);
         assertEquals("log_2024.*", result[0]);
         assertEquals("log_2025.*", result[1]);
+    }
+
+    @Test
+    @DisplayName("日粒度 LEVEL_2 - 单年内生成1个年级通配符")
+    void testDailyLevel2SingleYear() {
+        String[] result = dailyStrategy.apply("log_", LocalDate.of(2024, 1, 1),
+                LocalDate.of(2024, 12, 31), "yyyy.MM.dd", DowngradeLevel.LEVEL_2);
+
+        log.info("Daily LEVEL_2 single year: {}", Arrays.toString(result));
+        assertEquals(1, result.length);
+        assertEquals("log_2024.*", result[0]);
     }
 
     @Test
@@ -139,7 +162,7 @@ class DowngradeStrategyTest {
     }
 
     @Test
-    @DisplayName("月粒度 LEVEL_1 - 生成年级通配符")
+    @DisplayName("月粒度 LEVEL_1 - 生成年级通配符（跨年）")
     void testMonthlyLevel1() {
         String[] result = monthlyStrategy.apply("log_", LocalDate.of(2024, 6, 1),
                 LocalDate.of(2025, 3, 31), "yyyy.MM", DowngradeLevel.LEVEL_1);
@@ -192,7 +215,7 @@ class DowngradeStrategyTest {
     }
 
     @Test
-    @DisplayName("年粒度 LEVEL_0 - 生成具体年份索引")
+    @DisplayName("年粒度 LEVEL_0 - 生成具体年份索引（跨年）")
     void testYearlyLevel0() {
         String[] result = yearlyStrategy.apply("archive_", LocalDate.of(2023, 1, 1),
                 LocalDate.of(2025, 12, 31), "yyyy", DowngradeLevel.LEVEL_0);
@@ -202,6 +225,17 @@ class DowngradeStrategyTest {
         assertEquals("archive_2023", result[0]);
         assertEquals("archive_2024", result[1]);
         assertEquals("archive_2025", result[2]);
+    }
+
+    @Test
+    @DisplayName("年粒度 LEVEL_0 - 单年查询")
+    void testYearlyLevel0SingleYear() {
+        String[] result = yearlyStrategy.apply("data-", LocalDate.of(2025, 3, 1),
+                LocalDate.of(2025, 11, 30), "yyyy", DowngradeLevel.LEVEL_0);
+
+        log.info("Yearly LEVEL_0 single year: {}", Arrays.toString(result));
+        assertEquals(1, result.length);
+        assertEquals("data-2025", result[0]);
     }
 
     @Test
@@ -227,16 +261,5 @@ class DowngradeStrategyTest {
         log.info("Yearly LEVEL_3: {}", Arrays.toString(level3));
         assertArrayEquals(new String[]{"archive_*"}, level2);
         assertArrayEquals(new String[]{"archive_*"}, level3);
-    }
-
-    @Test
-    @DisplayName("年粒度 LEVEL_0 - 单年查询")
-    void testYearlyLevel0SingleYear() {
-        String[] result = yearlyStrategy.apply("data-", LocalDate.of(2025, 3, 1),
-                LocalDate.of(2025, 11, 30), "yyyy", DowngradeLevel.LEVEL_0);
-
-        log.info("Yearly LEVEL_0 single year: {}", Arrays.toString(result));
-        assertEquals(1, result.length);
-        assertEquals("data-2025", result[0]);
     }
 }

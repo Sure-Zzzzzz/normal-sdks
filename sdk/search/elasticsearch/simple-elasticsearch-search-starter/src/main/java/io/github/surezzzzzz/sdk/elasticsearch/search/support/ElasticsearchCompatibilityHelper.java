@@ -13,6 +13,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -38,6 +39,35 @@ public class ElasticsearchCompatibilityHelper {
 
         public String getResponseJson() {
             return responseJson;
+        }
+    }
+
+    /**
+     * 提取 SearchHits 中的 totalHits 数值，兼容 ES 6.x（返回 long）和 ES 7.x+（返回 TotalHits 对象）
+     *
+     * @param hits SearchHits
+     * @return total hits 数量
+     */
+    public static long extractTotalHits(org.elasticsearch.search.SearchHits hits) {
+        Object totalHitsObj = hits.getTotalHits();
+        if (totalHitsObj instanceof Long) {
+            // ES 6.x: getTotalHits() 返回 long（自动装箱）
+            return (Long) totalHitsObj;
+        }
+        // ES 7.x+: getTotalHits() 返回 TotalHits 对象，通过反射取 value 字段
+        try {
+            Method valueField = totalHitsObj.getClass().getMethod("value");
+            return (Long) valueField.invoke(totalHitsObj);
+        } catch (Exception e) {
+            log.warn("Failed to extract totalHits via reflection, falling back to direct field access: {}", e.getMessage());
+            // 最终兜底：直接访问 value 字段
+            try {
+                java.lang.reflect.Field field = totalHitsObj.getClass().getField("value");
+                return (Long) field.get(totalHitsObj);
+            } catch (Exception ex) {
+                log.warn("Failed to extract totalHits via field access: {}", ex.getMessage());
+                return 0L;
+            }
         }
     }
 
@@ -127,12 +157,6 @@ public class ElasticsearchCompatibilityHelper {
                 buffer.write(data, 0, nRead);
             }
             responseBytes = buffer.toByteArray();
-        }
-
-        if (log.isDebugEnabled()) {
-            String responseJson = new String(responseBytes, StandardCharsets.UTF_8);
-            log.debug("ES response JSON (first 500 chars): {}",
-                    responseJson.length() > 500 ? responseJson.substring(0, 500) + "..." : responseJson);
         }
 
         String responseJson = new String(responseBytes, StandardCharsets.UTF_8);
