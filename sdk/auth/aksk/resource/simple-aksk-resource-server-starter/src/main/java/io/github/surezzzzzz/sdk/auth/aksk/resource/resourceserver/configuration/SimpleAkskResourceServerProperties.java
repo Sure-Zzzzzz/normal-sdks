@@ -82,6 +82,30 @@ public class SimpleAkskResourceServerProperties {
          * 调 introspect 用的 clientSecret
          */
         private String clientSecret;
+
+        /**
+         * 本地缓存配置（可选，启用后减少 HTTP 往返）
+         */
+        private LocalCacheConfig localCache = new LocalCacheConfig();
+
+        @Data
+        public static class LocalCacheConfig {
+
+            /**
+             * 是否启用本地缓存（默认开启，撤销感知延迟 = TTL）
+             */
+            private boolean enabled = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_ENABLED;
+
+            /**
+             * 缓存 TTL（秒），默认 3s
+             */
+            private int expireSeconds = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_EXPIRE_SECONDS;
+
+            /**
+             * 最大缓存条目数，默认 10000
+             */
+            private int maxSize = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_MAX_SIZE;
+        }
     }
 
     @Data

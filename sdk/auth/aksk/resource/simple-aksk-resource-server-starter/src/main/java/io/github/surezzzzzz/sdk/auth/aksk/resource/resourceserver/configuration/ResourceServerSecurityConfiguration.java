@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.Simpl
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.VerificationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskIntrospectionAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskJwtAuthenticationConverter;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.IntrospectLocalCacheHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -49,6 +50,7 @@ public class ResourceServerSecurityConfiguration {
     private final SimpleAkskResourceServerProperties properties;
     private final ResourceLoader resourceLoader;
     private final ApplicationEventPublisher eventPublisher;
+    private final IntrospectLocalCacheHelper introspectLocalCacheHelper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -138,7 +140,7 @@ public class ResourceServerSecurityConfiguration {
         }
 
         // 用 AkskIntrospectionAuthenticationConverter 包装，注入上下文并发布事件
-        return new AkskIntrospectionAuthenticationConverter(delegate, eventPublisher);
+        return new AkskIntrospectionAuthenticationConverter(delegate, eventPublisher, introspectLocalCacheHelper);
     }
 
     private RSAPublicKey loadPublicKey() throws Exception {
