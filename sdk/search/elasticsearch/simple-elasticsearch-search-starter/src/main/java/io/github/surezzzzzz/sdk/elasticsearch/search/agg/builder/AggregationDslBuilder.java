@@ -4,9 +4,12 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.strategy.Aggreg
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.strategy.AggregationStrategyRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.strategy.bucket.CompositeAggregationStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.PipelineAggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.PipelineAggType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.FieldException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
@@ -14,6 +17,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadat
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -83,7 +88,12 @@ public class AggregationDslBuilder {
         }
 
         // composite 聚合走独立分支（composite 不是 AggType 枚举值，通过标志位区分）
+        // 提前校验：composite 下不允许挂 pipelineAggs
         if (Boolean.TRUE.equals(definition.getComposite())) {
+            if (!CollectionUtils.isEmpty(definition.getPipelineAggs())) {
+                throw new AggregationException(ErrorCode.PIPELINE_INVALID_PARENT,
+                        ErrorMessage.PIPELINE_INVALID_PARENT);
+            }
             return compositeAggregationStrategy.build(definition, metadata, after);
         }
 
@@ -91,15 +101,35 @@ public class AggregationDslBuilder {
         AggregationStrategy strategy = aggStrategyRegistry.resolve(definition.getTypeEnum());
         AggregationBuilder builder = strategy.build(definition, metadata, after);
 
-        // bucket 聚合追加 sub-agg
+        // bucket 聚合追加 sub-agg 和 pipeline agg
         if (definition.getTypeEnum().isBucket()) {
-            if (definition.getAggs() != null && !definition.getAggs().isEmpty()) {
+            if (!CollectionUtils.isEmpty(definition.getAggs())) {
                 for (AggDefinition subAgg : definition.getAggs()) {
                     builder.subAggregation(buildOne(subAgg, metadata, null));
                 }
             }
+            appendPipelineAggs(builder, definition);
         }
 
         return builder;
+    }
+
+    private void appendPipelineAggs(AggregationBuilder parent, AggDefinition def) {
+        if (CollectionUtils.isEmpty(def.getPipelineAggs())) {
+            return;
+        }
+        for (PipelineAggDefinition pipelineDef : def.getPipelineAggs()) {
+            PipelineAggType pipelineType = PipelineAggType.fromCode(pipelineDef.getType());
+            if (pipelineType == null) {
+                throw new AggregationException(ErrorCode.PIPELINE_UNSUPPORTED_TYPE,
+                        String.format(ErrorMessage.PIPELINE_UNSUPPORTED_TYPE, pipelineDef.getType()));
+            }
+            if (pipelineType == PipelineAggType.BUCKET_SELECTOR
+                    && !StringUtils.hasText(pipelineDef.getScript())) {
+                throw new AggregationException(ErrorCode.PIPELINE_MISSING_SCRIPT,
+                        ErrorMessage.PIPELINE_MISSING_SCRIPT);
+            }
+            parent.subAggregation(aggStrategyRegistry.resolvePipeline(pipelineType).build(pipelineDef));
+        }
     }
 }

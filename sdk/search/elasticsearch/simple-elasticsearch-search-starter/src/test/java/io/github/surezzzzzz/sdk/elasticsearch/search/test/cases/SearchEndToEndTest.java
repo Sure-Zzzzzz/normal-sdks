@@ -5,6 +5,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.PipelineAggDefinition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -2188,7 +2190,506 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== 12. Pipeline Aggregation 测试 ====================
+
+    @Test
+    @Order(94)
+    @DisplayName("12.1 bucket_sort - Top N（按 avg_age 降序取 Top 2 城市）")
+    void testPipelineBucketSortTopN() throws Exception {
+        log.info("========== 测试：bucket_sort Top N ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(100)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("avg_age")
+                                                .type("AVG")
+                                                .field("age")
+                                                .build()
+                                ))
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("top2")
+                                                .type("bucket_sort")
+                                                .sort(Collections.singletonMap("avg_age", "desc"))
+                                                .size(2)
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(2))
+                .andDo(result -> {
+                    log.info("✓ bucket_sort Top N 成功，返回 2 个城市");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(95)
+    @DisplayName("12.2 bucket_sort - 仅排序不截断")
+    void testPipelineBucketSortNoLimit() throws Exception {
+        log.info("========== 测试：bucket_sort 仅排序 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(100)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("avg_age")
+                                                .type("AVG")
+                                                .field("age")
+                                                .build()
+                                ))
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("sort_asc")
+                                                .type("bucket_sort")
+                                                .sort(Collections.singletonMap("avg_age", "asc"))
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(3))
+                .andDo(result -> {
+                    log.info("✓ bucket_sort 仅排序成功，返回全部 3 个城市");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(96)
+    @DisplayName("12.3 bucket_selector - HAVING 过滤（count > 1）")
+    void testPipelineBucketSelectorHaving() throws Exception {
+        log.info("========== 测试：bucket_selector HAVING ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(100)
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("having")
+                                                .type("bucket_selector")
+                                                .script("params._count > 1")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city").isArray())
+                .andDo(result -> {
+                    String body = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                    log.info("✓ bucket_selector HAVING 成功");
+                    log.debug("Response: {}", body);
+                });
+    }
+
+    @Test
+    @Order(97)
+    @DisplayName("12.4 bucket_selector - bucketsPath 自动推断")
+    void testPipelineBucketSelectorAutoInfer() throws Exception {
+        log.info("========== 测试：bucket_selector bucketsPath 自动推断 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(100)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("avg_age")
+                                                .type("AVG")
+                                                .field("age")
+                                                .build()
+                                ))
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("having")
+                                                .type("bucket_selector")
+                                                .script("params.avg_age > 25")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city").isArray())
+                .andDo(result -> {
+                    log.info("✓ bucket_selector 自动推断 bucketsPath 成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(98)
+    @DisplayName("12.5 bucket_selector + bucket_sort 组合")
+    void testPipelineCombined() throws Exception {
+        log.info("========== 测试：bucket_selector + bucket_sort 组合 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(100)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("avg_age")
+                                                .type("AVG")
+                                                .field("age")
+                                                .build()
+                                ))
+                                .pipelineAggs(Arrays.asList(
+                                        PipelineAggDefinition.builder()
+                                                .name("having")
+                                                .type("bucket_selector")
+                                                .script("params.avg_age > 20")
+                                                .build(),
+                                        PipelineAggDefinition.builder()
+                                                .name("top1")
+                                                .type("bucket_sort")
+                                                .sort(Collections.singletonMap("avg_age", "desc"))
+                                                .size(1)
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(1))
+                .andDo(result -> {
+                    log.info("✓ bucket_selector + bucket_sort 组合成功，返回 1 条");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(99)
+    @DisplayName("12.6 校验 - composite 下挂 pipelineAggs 返回 400")
+    void testPipelineCompositeNotAllowed() throws Exception {
+        log.info("========== 测试：composite 下挂 pipelineAggs 校验 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .composite(true)
+                                .size(10)
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("top1")
+                                                .type("bucket_sort")
+                                                .sort(Collections.singletonMap("_count", "desc"))
+                                                .size(1)
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ composite 下挂 pipelineAggs 正确返回 400"));
+    }
+
+    @Test
+    @Order(100)
+    @DisplayName("12.7 校验 - bucket_selector 缺少 script 返回 400")
+    void testPipelineMissingScript() throws Exception {
+        log.info("========== 测试：bucket_selector 缺少 script 校验 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(10)
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("having")
+                                                .type("bucket_selector")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ bucket_selector 缺少 script 正确返回 400"));
+    }
+
+    @Test
+    @Order(101)
+    @DisplayName("12.8 校验 - 不支持的 pipeline 类型返回 400")
+    void testPipelineUnsupportedType() throws Exception {
+        log.info("========== 测试：不支持的 pipeline 类型校验 ==========");
+
+        AggRequest request = AggRequest.builder()
+                .index("test_user")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_city")
+                                .type("TERMS")
+                                .field("city")
+                                .size(10)
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("unsupported")
+                                                .type("moving_avg")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ 不支持的 pipeline 类型正确返回 400"));
+    }
+
+    // ==================== 13. 表达式聚合测试 ====================
+
+    @Test
+    @Order(102)
+    @DisplayName("13.1 表达式聚合 - 基本过滤 + TERMS")
+    void testExpressionAggBasic() throws Exception {
+        log.info("========== 测试：表达式聚合基本用法 ==========");
+
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(ORDER_INDEX)
+                .expression("status = \"completed\"")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_product")
+                                .type("TERMS")
+                                .field("product_name")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_product").isArray())
+                .andDo(result -> {
+                    log.info("✓ 表达式聚合基本用法成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(103)
+    @DisplayName("13.2 表达式聚合 - 嵌套聚合")
+    void testExpressionAggNested() throws Exception {
+        log.info("========== 测试：表达式聚合 + 嵌套聚合 ==========");
+
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(ORDER_INDEX)
+                .expression("amount >= 1000")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_status")
+                                .type("TERMS")
+                                .field("status")
+                                .size(10)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("total_amount")
+                                                .type("SUM")
+                                                .field("amount")
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_status").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_status[0].total_amount").exists())
+                .andDo(result -> {
+                    log.info("✓ 表达式聚合 + 嵌套聚合成功");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(104)
+    @DisplayName("13.3 表达式聚合 + pipeline agg")
+    void testExpressionAggWithPipeline() throws Exception {
+        log.info("========== 测试：表达式聚合 + pipeline agg ==========");
+
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(ORDER_INDEX)
+                .expression("amount >= 1000")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_status")
+                                .type("TERMS")
+                                .field("status")
+                                .size(100)
+                                .aggs(Collections.singletonList(
+                                        AggDefinition.builder()
+                                                .name("total_amount")
+                                                .type("SUM")
+                                                .field("amount")
+                                                .build()
+                                ))
+                                .pipelineAggs(Collections.singletonList(
+                                        PipelineAggDefinition.builder()
+                                                .name("top1")
+                                                .type("bucket_sort")
+                                                .sort(Collections.singletonMap("total_amount", "desc"))
+                                                .size(1)
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_status").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_status.length()").value(1))
+                .andDo(result -> {
+                    log.info("✓ 表达式聚合 + pipeline agg 成功，返回 1 条");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(105)
+    @DisplayName("13.4 校验 - expression 为空返回 400")
+    void testExpressionAggEmptyExpression() throws Exception {
+        log.info("========== 测试：表达式聚合 expression 为空校验 ==========");
+
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(ORDER_INDEX)
+                .expression("")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_status")
+                                .type("TERMS")
+                                .field("status")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("expression 不能为空"))
+                .andDo(result -> log.info("✓ expression 为空正确返回 400"));
+    }
+
+    @Test
+    @Order(106)
+    @DisplayName("13.5 校验 - expression 语法错误返回 400")
+    void testExpressionAggSyntaxError() throws Exception {
+        log.info("========== 测试：表达式聚合语法错误校验 ==========");
+
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(ORDER_INDEX)
+                .expression("status = ")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_status")
+                                .type("TERMS")
+                                .field("status")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ expression 语法错误正确返回 400"));
+    }
+
+
 
     private static String createLogIndex(RestHighLevelClient client) throws Exception {
         String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));

@@ -261,6 +261,21 @@ public class ErrorCode {
      */
     public static final String AGG_STRATEGY_DUPLICATE = "SEARCH_AGG_006";
 
+    /**
+     * 不支持的 pipeline 聚合类型
+     */
+    public static final String PIPELINE_UNSUPPORTED_TYPE = "SEARCH_AGG_007";
+
+    /**
+     * pipeline 聚合挂在不支持的父聚合下（composite）
+     */
+    public static final String PIPELINE_INVALID_PARENT = "SEARCH_AGG_008";
+
+    /**
+     * bucket_selector 缺少 script 字段
+     */
+    public static final String PIPELINE_MISSING_SCRIPT = "SEARCH_AGG_009";
+
     // ========== 高级表达式相关错误码 ==========
 
     /**

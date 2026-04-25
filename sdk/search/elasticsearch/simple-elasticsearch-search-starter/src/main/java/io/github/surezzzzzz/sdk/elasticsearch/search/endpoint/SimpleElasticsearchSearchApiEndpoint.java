@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
@@ -273,6 +274,41 @@ public class SimpleElasticsearchSearchApiEndpoint {
             return unavailableExpression();
         }
         return ResponseEntity.ok(ApiResponse.success(expressionService.validate(expression)));
+    }
+
+    /**
+     * 条件表达式聚合查询
+     *
+     * @param request 表达式聚合请求
+     */
+    @PostMapping("/agg/expression")
+    public ResponseEntity<ApiResponse<AggResponse>> aggByExpression(
+            @RequestBody ExpressionAggRequest request) {
+        if (expressionService == null) {
+            return unavailableExpression();
+        }
+        if (!StringUtils.hasText(request.getExpression())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("expression 不能为空"));
+        }
+        try {
+            log.debug("Received expression agg request: index={}", request.getIndex());
+            QueryCondition condition = expressionService.translate(
+                    request.getExpression(), request.getIndex());
+            AggRequest aggRequest = AggRequest.builder()
+                    .index(request.getIndex())
+                    .query(condition)
+                    .aggs(request.getAggs())
+                    .after(request.getAfter())
+                    .build();
+            return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(aggRequest)));
+        } catch (SimpleElasticsearchSearchException e) {
+            log.warn("Expression agg failed: index={}, error={}", request.getIndex(), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Expression agg failed: index={}", request.getIndex(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error(e.getMessage()));
+        }
     }
 
     // ==================== 私有工具方法 ====================

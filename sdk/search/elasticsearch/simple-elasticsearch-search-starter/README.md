@@ -13,6 +13,8 @@
 | 灵活查询 | 支持 18 种操作符和嵌套逻辑组合 | v1.0.0+ |
 | 条件表达式查询 | 类 SQL 表达式直接查询，支持中文字段名映射 | v1.5.2+ |
 | 表达式提示 | 前端自动补全数据源（字段、运算符、时间范围） | v1.5.3+ |
+| Pipeline 聚合 | bucket_sort Top N、bucket_selector HAVING（ES 6.1+） | v1.5.5+ |
+| 表达式聚合 | 条件表达式作为聚合过滤条件 | v1.5.5+ |
 | 聚合分析 | 支持指标聚合、桶聚合、嵌套聚合 | v1.0.0+ |
 | composite 聚合翻页 | 突破 65535 条限制，支持全量遍历（ES 6.1+） | v1.4.0+ |
 | 深分页 | search_after 多种模式（tiebreaker/pit/none） | v1.3.0+ |
@@ -29,7 +31,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.4'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.5'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -154,6 +156,19 @@ POST /api/query
 | `aggs` | 嵌套子聚合 |
 | `composite` | 是否使用 composite 翻页模式（v1.4.0+） |
 | `order` | composite 排序方向 asc/desc（v1.4.0+，默认 asc） |
+| `pipelineAggs` | pipeline 聚合列表（v1.5.5+，仅普通 bucket 聚合有效） |
+
+**PipelineAggDefinition 字段（v1.5.5+）：**
+
+| 字段 | 说明 |
+|------|------|
+| `name` | 聚合名称 |
+| `type` | `bucket_sort` 或 `bucket_selector` |
+| `sort` | 排序字段（bucket_sort），key 为同级 metrics agg 名称，value 为 asc/desc |
+| `size` | Top N 数量（bucket_sort，不填则仅排序） |
+| `from` | 跳过的 bucket 数量（bucket_sort，默认 0） |
+| `script` | Painless 脚本（bucket_selector 必填），通过 `params.xxx` 引用同级 metrics agg |
+| `bucketsPath` | 变量名→聚合名映射（bucket_selector 可选，不填时自动从 script 推断） |
 
 **响应字段：**
 
@@ -163,6 +178,38 @@ POST /api/query
 | `afterKey` | composite 翻页游标，null 表示已遍历完（v1.4.0+） |
 | `took` | 耗时（毫秒） |
 | `rawResponse` | 原始 ES 聚合响应（仅 ES 6.x + 配置启用时） |
+
+---
+
+### POST /api/agg/expression — 表达式聚合（v1.5.5+）
+
+使用条件表达式字符串作为聚合过滤条件，其余字段与 `/api/agg` 完全一致。
+
+**请求字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `index` | String | 索引别名或名称（必填） |
+| `expression` | String | 条件表达式字符串（必填） |
+| `aggs` | List\<AggDefinition\> | 聚合定义列表（必填） |
+| `after` | Map | composite 聚合翻页游标（可选） |
+
+```json
+POST /api/agg/expression
+{
+  "index": "order",
+  "expression": "状态 = \"completed\" AND amount >= 100",
+  "aggs": [{
+    "name": "by_product",
+    "type": "terms",
+    "field": "product_name",
+    "size": 10,
+    "aggs": [{"name": "total_amount", "type": "sum", "field": "amount"}]
+  }]
+}
+```
+
+响应格式与 `/api/agg` 完全一致。
 
 ---
 
@@ -727,6 +774,7 @@ async function loadHints(index) {
 - composite 聚合自动移除 7.x client 序列化的 `missing_bucket` 字段，保证 ES 6.1+ 可用
 - 可选 `include-raw-response: true` 返回原始聚合 JSON，支持零侵入迁移
 - v1.5.4+ 支持 Spring Boot 2.2.5 / ES 6.8.x，PIT 分页在 6.x 服务端下自动禁用
+- pipeline 聚合（bucket_sort / bucket_selector）兼容 ES 6.1+，无需额外配置
 
 ---
 

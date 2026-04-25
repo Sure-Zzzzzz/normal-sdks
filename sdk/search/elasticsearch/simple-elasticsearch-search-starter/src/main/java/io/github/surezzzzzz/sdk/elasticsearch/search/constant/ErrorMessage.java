@@ -242,6 +242,21 @@ public class ErrorMessage {
      */
     public static final String AGG_STRATEGY_DUPLICATE = "聚合策略 [%s] 已存在，不允许覆盖内置策略";
 
+    /**
+     * 不支持的 pipeline 聚合类型
+     */
+    public static final String PIPELINE_UNSUPPORTED_TYPE = "pipeline 聚合不支持类型 [%s]，仅支持 bucket_sort、bucket_selector";
+
+    /**
+     * pipeline 聚合挂在不支持的父聚合下
+     */
+    public static final String PIPELINE_INVALID_PARENT = "pipeline 聚合不支持挂在 composite 聚合下";
+
+    /**
+     * bucket_selector 缺少 script 字段
+     */
+    public static final String PIPELINE_MISSING_SCRIPT = "bucket_selector 必须填写 script 字段";
+
     // ========== 高级表达式相关 ==========
 
     /**
