@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.agg.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.AggType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,6 +11,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 聚合定义
@@ -81,6 +83,21 @@ public class AggDefinition {
      */
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
     private List<PipelineAggDefinition> pipelineAggs;
+
+    /**
+     * 过滤条件（仅 filter 聚合使用）
+     * 对文档集应用单个过滤条件，只统计满足条件的文档
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private QueryCondition query;
+
+    /**
+     * 多命名过滤器（仅 filters 聚合使用）
+     * key：bucket 名称，value：对应的过滤条件
+     * 每个过滤器产生一个独立的 bucket，适合对比分析
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private Map<String, QueryCondition> filters;
 
     /**
      * 获取聚合类型枚举
