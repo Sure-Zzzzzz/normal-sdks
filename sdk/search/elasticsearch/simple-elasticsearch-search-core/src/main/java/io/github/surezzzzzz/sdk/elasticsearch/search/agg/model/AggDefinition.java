@@ -100,6 +100,20 @@ public class AggDefinition {
     private Map<String, QueryCondition> filters;
 
     /**
+     * 百分位列表（仅 percentiles 聚合使用）
+     * 不填时使用 ES 默认（1/5/25/50/75/95/99）
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private List<Double> percents;
+
+    /**
+     * 值列表（仅 percentile_ranks 聚合使用）
+     * 必填，指定要计算排名的值
+     */
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private List<Double> values;
+
+    /**
      * 获取聚合类型枚举
      */
     @JsonIgnore
