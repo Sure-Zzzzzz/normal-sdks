@@ -276,6 +276,16 @@ public class ErrorCode {
      */
     public static final String PIPELINE_MISSING_SCRIPT = "SEARCH_AGG_009";
 
+    /**
+     * filter 聚合缺少 query 字段
+     */
+    public static final String AGG_FILTER_QUERY_REQUIRED = "SEARCH_AGG_010";
+
+    /**
+     * filters 聚合缺少 filters 字段
+     */
+    public static final String AGG_FILTERS_REQUIRED = "SEARCH_AGG_011";
+
     // ========== 高级表达式相关错误码 ==========
 
     /**

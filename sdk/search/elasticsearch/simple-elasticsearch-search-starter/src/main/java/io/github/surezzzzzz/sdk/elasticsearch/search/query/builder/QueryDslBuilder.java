@@ -49,6 +49,20 @@ public class QueryDslBuilder {
     }
 
     /**
+     * 构建查询（直接传入 metadata，避免重复查询）
+     *
+     * @param metadata  索引元数据
+     * @param condition 查询条件
+     * @return ES QueryBuilder
+     */
+    public QueryBuilder build(IndexMetadata metadata, QueryCondition condition) {
+        if (condition == null) {
+            return QueryBuilders.matchAllQuery();
+        }
+        return buildCondition(condition, metadata);
+    }
+
+    /**
      * 构建条件（递归处理）
      */
     private QueryBuilder buildCondition(QueryCondition condition, IndexMetadata metadata) {

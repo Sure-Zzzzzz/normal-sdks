@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.agg.executor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.AggregationDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.agg.validator.AggRequestValidatorChain;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
@@ -26,6 +27,7 @@ import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
+import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregation;
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
 import org.elasticsearch.search.aggregations.metrics.Stats;
@@ -56,17 +58,16 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
     @Autowired
     private AggregationDslBuilder aggDslBuilder;
 
+    @Autowired
+    private AggRequestValidatorChain validatorChain;
+
     // ==================== 抽象方法实现 ====================
 
     @Override
     protected void validateRequest(AggRequest request) {
-        if (request.getIndex() == null || request.getIndex().trim().isEmpty()) {
-            throw new AggregationException(ErrorCode.INDEX_ALIAS_REQUIRED, ErrorMessage.INDEX_ALIAS_REQUIRED);
-        }
-        if (request.getAggs() == null || request.getAggs().isEmpty()) {
-            throw new AggregationException(ErrorCode.AGG_DEFINITION_REQUIRED, ErrorMessage.AGG_DEFINITION_REQUIRED);
-        }
-        // 通配索引默认时间范围注入
+        // 纯校验委托给 chain（index 非空、aggs 非空）
+        validatorChain.validate(request, properties);
+        // default-date-range 注入依赖 mappingManager，保留在此处
         String defaultDateRange = properties.getQueryLimits().getDefaultDateRange();
         if (StringUtils.hasText(defaultDateRange)
                 && request.getQuery() == null
@@ -286,6 +287,19 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, stats.getSum());
             return statsMap;
         }
+        if (aggregation instanceof SingleBucketAggregation) {
+            // filter / missing 等单桶聚合：返回 {count, subAgg1, subAgg2, ...}
+            SingleBucketAggregation single = (SingleBucketAggregation) aggregation;
+            Map<String, Object> result = new HashMap<>();
+            result.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, single.getDocCount());
+            Aggregations subAggs = single.getAggregations();
+            if (subAggs != null) {
+                for (Aggregation subAgg : subAggs) {
+                    result.put(subAgg.getName(), parseAggregation(subAgg));
+                }
+            }
+            return result;
+        }
         if (aggregation instanceof MultiBucketsAggregation) {
             return parseBucketAggregation((MultiBucketsAggregation) aggregation);
         }
@@ -396,6 +410,19 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         Map<String, Object> aggMap = (Map<String, Object>) aggValue;
         if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_VALUE) && aggMap.size() == 1) {
             return aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUE);
+        }
+        // filter / missing 等单桶聚合：{doc_count: N, sub_agg: {...}}
+        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)
+                && !aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS)) {
+            Map<String, Object> result = new HashMap<>();
+            result.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
+                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT));
+            for (Map.Entry<String, Object> entry : aggMap.entrySet()) {
+                if (!entry.getKey().equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
+                    result.put(entry.getKey(), parseAggregationValue(entry.getValue()));
+                }
+            }
+            return result;
         }
         if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_COUNT)
                 && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MIN)

@@ -15,7 +15,7 @@
 | 表达式提示 | 前端自动补全数据源（字段、运算符、时间范围） | v1.5.3+ |
 | Pipeline 聚合 | bucket_sort Top N、bucket_selector HAVING（ES 6.1+） | v1.5.5+ |
 | 表达式聚合 | 条件表达式作为聚合过滤条件 | v1.5.5+ |
-| 聚合分析 | 支持指标聚合、桶聚合、嵌套聚合 | v1.0.0+ |
+| 聚合分析 | 支持 17 种聚合类型（指标/桶/pipeline），含 filter、filters、missing、date_range、ip_range | v1.5.6+ |
 | composite 聚合翻页 | 突破 65535 条限制，支持全量遍历（ES 6.1+） | v1.4.0+ |
 | 深分页 | search_after 多种模式（tiebreaker/pit/none） | v1.3.0+ |
 | 日期分割索引 | 按年/月/日分割，自动路由 + 智能降级 | v1.0.0+ |
@@ -31,7 +31,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.5'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.6'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -157,6 +157,8 @@ POST /api/query
 | `composite` | 是否使用 composite 翻页模式（v1.4.0+） |
 | `order` | composite 排序方向 asc/desc（v1.4.0+，默认 asc） |
 | `pipelineAggs` | pipeline 聚合列表（v1.5.5+，仅普通 bucket 聚合有效） |
+| `query` | 过滤条件（filter 聚合专用，v1.5.6+，类型同 QueryCondition） |
+| `filters` | 多命名过滤器（filters 聚合专用，v1.5.6+，key 为 bucket 名称，value 为 QueryCondition） |
 
 **PipelineAggDefinition 字段（v1.5.5+）：**
 
@@ -340,12 +342,17 @@ GET /api/expression/hints?index=order
 
 ### 桶聚合（Bucket）
 
-| 类型 | 说明 | 支持 composite |
-|------|------|---------------|
-| `terms` | 分组聚合 | ✅ |
-| `date_histogram` | 日期直方图 | ✅ |
-| `histogram` | 数值直方图 | ✅ |
-| `range` | 范围聚合 | ❌ |
+| 类型 | 说明 | 支持 composite | 所需字段 |
+|------|------|---------------|---------|
+| `terms` | 分组聚合 | ✅ | `field` |
+| `date_histogram` | 日期直方图 | ✅ | `field`、`interval` |
+| `histogram` | 数值直方图 | ✅ | `field`、`interval` |
+| `range` | 数值范围分组 | ❌ | `field`、`ranges` |
+| `date_range` | 日期范围分组，支持相对时间（如 `now-1M`）（v1.5.6+） | ❌ | `field`、`ranges` |
+| `ip_range` | IP 范围分组，支持 CIDR（v1.5.6+） | ❌ | `field`、`ranges` |
+| `filter` | 单过滤器，只统计满足条件的文档（v1.5.6+） | ❌ | `query` |
+| `filters` | 多命名过滤器，每个过滤器产生独立 bucket（v1.5.6+） | ❌ | `filters` |
+| `missing` | 统计字段值为 null 或不存在的文档数（v1.5.6+） | ❌ | `field` |
 
 ---
 
@@ -767,7 +774,218 @@ async function loadHints(index) {
 
 ---
 
-## ES 6.x 兼容性
+### 场景十：filter / filters 聚合对比分析（v1.5.6+）
+
+**filter — 单过滤器，统计满足条件的子集：**
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [{
+    "name": "high_value",
+    "type": "filter",
+    "query": {"field": "amount", "op": "gte", "value": 1000},
+    "aggs": [
+      {"name": "total", "type": "sum", "field": "amount"},
+      {"name": "count", "type": "count", "field": "orderId"}
+    ]
+  }]
+}
+```
+
+**filters — 多命名过滤器，同时对比多个子集：**
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [{
+    "name": "by_status",
+    "type": "filters",
+    "filters": {
+      "completed": {"field": "status", "op": "eq", "value": "completed"},
+      "pending":   {"field": "status", "op": "eq", "value": "pending"},
+      "cancelled": {"field": "status", "op": "eq", "value": "cancelled"}
+    },
+    "aggs": [
+      {"name": "total_amount", "type": "sum", "field": "amount"}
+    ]
+  }]
+}
+```
+
+响应中每个 key 对应一个 bucket，适合同时对比多个分类的指标。
+
+---
+
+### 场景十一：missing 聚合统计数据质量（v1.5.6+）
+
+统计某字段为空或缺失的文档数，常用于数据质量检查：
+
+```json
+POST /api/agg
+{
+  "index": "user_profile",
+  "aggs": [
+    {"name": "no_email",    "type": "missing", "field": "email"},
+    {"name": "no_phone",    "type": "missing", "field": "phone"},
+    {"name": "no_category", "type": "missing", "field": "category"}
+  ]
+}
+```
+
+---
+
+### 场景十二：date_range / ip_range 聚合（v1.5.6+）
+
+**date_range — 按日期范围分组，支持相对时间：**
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [{
+    "name": "by_period",
+    "type": "date_range",
+    "field": "created_at",
+    "ranges": [
+      {"key": "this_month", "from": "now/M",  "to": "now"},
+      {"key": "last_month", "from": "now-1M/M", "to": "now/M"},
+      {"key": "older",      "to": "now-1M/M"}
+    ]
+  }]
+}
+```
+
+**ip_range — 按 IP 段分组：**
+
+```json
+POST /api/agg
+{
+  "index": "access_log",
+  "aggs": [{
+    "name": "by_network",
+    "type": "ip_range",
+    "field": "client_ip",
+    "ranges": [
+      {"key": "internal",  "from": "10.0.0.0",   "to": "10.255.255.255"},
+      {"key": "loopback",  "from": "127.0.0.0",  "to": "127.255.255.255"},
+      {"key": "external",  "from": "1.0.0.0",    "to": "9.255.255.255"}
+    ]
+  }]
+}
+```
+
+---
+
+### 场景十三：Pipeline 聚合 Top N + HAVING（v1.5.5+）
+
+先过滤再排序取 Top N，等价于 SQL 的 `HAVING + ORDER BY + LIMIT`：
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [{
+    "name": "by_city",
+    "type": "terms",
+    "field": "city",
+    "size": 1000,
+    "aggs": [
+      {"name": "total_sales", "type": "sum", "field": "amount"}
+    ],
+    "pipelineAggs": [
+      {
+        "name": "having",
+        "type": "bucket_selector",
+        "script": "params.total_sales > 10000"
+      },
+      {
+        "name": "top5",
+        "type": "bucket_sort",
+        "sort": {"total_sales": "desc"},
+        "size": 5
+      }
+    ]
+  }]
+}
+```
+
+---
+
+### 场景十四：ip 字段查询与 CIDR 聚合（v1.5.6+）
+
+ES 的 `ip` 字段类型原生支持 CIDR 表示法，`eq` 操作符传入 CIDR 即可匹配子网内所有 IP。
+
+**精确 IP 查询：**
+
+```json
+POST /api/query
+{
+  "index": "access_log",
+  "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.1"},
+  "pagination": {"type": "offset", "page": 1, "size": 20}
+}
+```
+
+**CIDR 子网查询（匹配 10.0.0.0/24 内所有 IP）：**
+
+```json
+POST /api/query
+{
+  "index": "access_log",
+  "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.0/24"},
+  "pagination": {"type": "offset", "page": 1, "size": 20}
+}
+```
+
+**CIDR + filter 聚合（统计子网内的指标）：**
+
+```json
+POST /api/agg
+{
+  "index": "access_log",
+  "aggs": [{
+    "name": "internal_traffic",
+    "type": "filter",
+    "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.0/8"},
+    "aggs": [
+      {"name": "total_bytes", "type": "sum", "field": "bytes"},
+      {"name": "request_count", "type": "count", "field": "request_id"}
+    ]
+  }]
+}
+```
+
+响应：`{"internal_traffic": {"count": N, "total_bytes": X, "request_count": Y}}`
+
+**ip_range 聚合（按 IP 段分组统计）：**
+
+```json
+POST /api/agg
+{
+  "index": "access_log",
+  "aggs": [{
+    "name": "by_network",
+    "type": "ip_range",
+    "field": "client_ip",
+    "ranges": [
+      {"key": "internal",  "from": "10.0.0.0",   "to": "10.255.255.255"},
+      {"key": "private",   "from": "192.168.0.0", "to": "192.168.255.255"},
+      {"key": "loopback",  "from": "127.0.0.0",   "to": "127.255.255.255"}
+    ]
+  }]
+}
+```
+
+- `ip` 字段类型在 ES 6.x 和 7.x 均支持
+- CIDR 查询通过 `eq` 操作符传入，如 `10.0.0.0/24`、`192.168.0.0/16`
+- `ip_range` 聚合支持 ES 6.1+
+
+---
+
+
 
 - 自动检测 ES 版本，6.x 使用低级 API 绕过参数兼容性问题
 - 聚合响应自动用 Jackson 手动解析，格式与 7.x+ 保持一致
@@ -775,6 +993,8 @@ async function loadHints(index) {
 - 可选 `include-raw-response: true` 返回原始聚合 JSON，支持零侵入迁移
 - v1.5.4+ 支持 Spring Boot 2.2.5 / ES 6.8.x，PIT 分页在 6.x 服务端下自动禁用
 - pipeline 聚合（bucket_sort / bucket_selector）兼容 ES 6.1+，无需额外配置
+- filter、filters、missing、date_range 聚合兼容 ES 1.0+；ip_range 聚合兼容 ES 6.1+
+- ip 字段类型及 CIDR 查询在 ES 6.x 和 7.x 均支持
 
 ---
 

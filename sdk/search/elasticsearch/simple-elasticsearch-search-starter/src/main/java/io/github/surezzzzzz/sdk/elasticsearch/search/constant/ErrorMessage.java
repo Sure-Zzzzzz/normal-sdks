@@ -257,6 +257,16 @@ public class ErrorMessage {
      */
     public static final String PIPELINE_MISSING_SCRIPT = "bucket_selector 必须填写 script 字段";
 
+    /**
+     * filter 聚合缺少 query 字段
+     */
+    public static final String AGG_FILTER_QUERY_REQUIRED = "filter 聚合 [%s] 必须填写 query 字段";
+
+    /**
+     * filters 聚合缺少 filters 字段
+     */
+    public static final String AGG_FILTERS_REQUIRED = "filters 聚合 [%s] 必须填写 filters 字段";
+
     // ========== 高级表达式相关 ==========
 
     /**
