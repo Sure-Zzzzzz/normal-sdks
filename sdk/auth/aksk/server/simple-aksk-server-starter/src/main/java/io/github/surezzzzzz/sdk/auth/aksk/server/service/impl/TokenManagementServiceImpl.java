@@ -3,14 +3,20 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.BatchRevokeResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2AuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -29,6 +35,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -142,9 +149,23 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     @Override
     public TokenInfoResponse getTokenById(String id) {
-        // 只从MySQL查询
+        // 先从 MySQL 查询
         TokenInfo tokenInfo = mysqlRepository.findById(id);
-        return tokenInfo != null ? toTokenInfoResponse(tokenInfo) : null;
+        if (tokenInfo != null) {
+            return toTokenInfoResponse(tokenInfo);
+        }
+        // MySQL 中不存在，fallback 到 Redis
+        if (redisRepository != null) {
+            List<TokenInfo> redisTokens = redisRepository.findAllFromRedis();
+            tokenInfo = redisTokens.stream()
+                    .filter(t -> id.equals(t.getId()))
+                    .findFirst()
+                    .orElse(null);
+            if (tokenInfo != null) {
+                return toTokenInfoResponse(enrichClientInfo(tokenInfo));
+            }
+        }
+        return null;
     }
 
     @Override
@@ -152,11 +173,48 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     public void revokeToken(String id) {
         OAuth2AuthorizationEntity entity = authorizationEntityRepository.findById(id).orElse(null);
         if (entity == null) {
-            // MySQL 里没有，但 Redis 里可能有，直接清 Redis
-            log.warn("Token not found in MySQL, trying to evict from Redis: {}", id);
+            // MySQL 里没有，但 Redis 里可能有
+            log.warn("Token not found in MySQL, checking Redis: {}", id);
             if (redisRepository != null) {
+                // 先尝试从 Redis 获取 token 信息，以便发布完整的撤销事件
+                List<TokenInfo> allRedisTokens = redisRepository.findAllFromRedis();
+                TokenInfo redisToken = allRedisTokens.stream()
+                        .filter(token -> id.equals(token.getId()))
+                        .findFirst()
+                        .orElse(null);
+
+                if (redisToken != null) {
+                    log.info("Token found in Redis, revoking: {}", id);
+                    // 发布 TokenRevokedEvent 事件
+                    try {
+                        eventPublisher.publishEvent(new TokenRevokedEvent(
+                                this,
+                                redisToken.getClientId(),
+                                null,
+                                redisToken.getOwnerUserId(),
+                                redisToken.getOwnerUsername(),
+                                redisToken.getTokenValue(),
+                                redisToken.getScopes() != null ? new java.util.HashSet<>(redisToken.getScopes()) : null,
+                                redisToken.getIssuedAt(),
+                                redisToken.getExpiresAt()
+                        ));
+                        log.debug("Published TokenRevokedEvent for Redis-only token: {}", id);
+                    } catch (Exception e) {
+                        log.warn("Failed to publish TokenRevokedEvent for Redis-only token: {}", id, e);
+                    }
+                }
+
+                // 清除 Redis 中的 token
                 redisRepository.deleteById(id);
             }
+            return;
+        }
+
+        // 检查是否已过期：已过期的 token 没必要撤销，等清理掉就行了
+        Instant now = Instant.now();
+        if (entity.getAccessTokenExpiresAt() != null
+                && entity.getAccessTokenExpiresAt().isBefore(now)) {
+            log.info("Token already expired, skip revoke: {}", id);
             return;
         }
 
@@ -281,29 +339,37 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     @Override
     public void deleteToken(String id) {
-        // 先撤销
+        // 先撤销（这会处理撤销事件和清理Redis）
         try {
             revokeToken(id);
         } catch (Exception e) {
             log.warn("Failed to revoke token before deletion: {}", id, e);
         }
 
-        // 再删除
+        // 再从 MySQL 删除（先检查存在性）
         try {
-            mysqlRepository.deleteById(id);
+            TokenInfo tokenInfo = mysqlRepository.findById(id);
+            if (tokenInfo != null) {
+                mysqlRepository.deleteById(id);
+                log.info("Token deleted from MySQL: {}", id);
+            } else {
+                log.info("Token not found in MySQL, skipping MySQL deletion: {}", id);
+            }
         } catch (Exception e) {
             log.error("Failed to delete token from MySQL: {}", id, e);
         }
 
+        // 确保也从 Redis 删除（revokeToken 里已经删了，这里再确保一下）
         if (redisRepository != null) {
             try {
                 redisRepository.deleteById(id);
+                log.info("Token deleted from Redis: {}", id);
             } catch (Exception e) {
                 log.error("Failed to delete token from Redis: {}", id, e);
             }
         }
 
-        log.info("Token deleted: {}", id);
+        log.info("Token deletion process completed: {}", id);
     }
 
     @Override
@@ -414,5 +480,56 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         }
 
         return tokenInfo;
+    }
+
+    @Override
+    public BatchRevokeResponse revokeAllByClientId(String clientId) {
+        if (clientId == null || clientId.trim().isEmpty()) {
+            throw new ClientException(
+                    ErrorCode.TOKEN_CLIENT_ID_REQUIRED,
+                    ServerErrorMessage.CLIENT_ID_REQUIRED
+            );
+        }
+
+        // 通过 clientId（AKSK 字符串）查找 registered client 的 UUID
+        OAuth2RegisteredClientEntity clientEntity = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(
+                        ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)
+                ));
+
+        int revokedCount = 0;
+        int page = 0;
+        int batchSize = 200;
+        Instant now = Instant.now();
+        org.springframework.data.domain.Page<OAuth2AuthorizationEntity> batch;
+
+        do {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, batchSize);
+            batch = authorizationEntityRepository
+                    .findByRegisteredClientIdOrderByAccessTokenIssuedAtDesc(clientEntity.getId(), pageable);
+
+            for (OAuth2AuthorizationEntity entity : batch.getContent()) {
+                // 跳过已过期的 token
+                if (entity.getAccessTokenExpiresAt() != null
+                        && entity.getAccessTokenExpiresAt().isBefore(now)) {
+                    continue;
+                }
+                // 跳过已撤销的 token
+                if (isAlreadyRevoked(entity.getAccessTokenMetadata())) {
+                    continue;
+                }
+                try {
+                    revokeToken(entity.getId());
+                    revokedCount++;
+                } catch (Exception e) {
+                    log.warn("Failed to revoke token: {}", entity.getId(), e);
+                }
+            }
+            page++;
+        } while (batch.hasNext());
+
+        log.info("Batch revoked {} tokens for client: {}", revokedCount, clientId);
+        return new BatchRevokeResponse(revokedCount);
     }
 }

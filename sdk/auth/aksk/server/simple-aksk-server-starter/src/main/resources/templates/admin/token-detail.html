@@ -94,7 +94,7 @@
                 <div class="col-md-3"><strong>过期时间:</strong></div>
                 <div class="col-md-9" th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
             </div>
-            <div class="row mb-2" th:if="${token.expiresAt != null}">
+            <div class="row mb-2" th:if="${token.expiresAt != null && token.status.name() != 'REVOKED'}">
                 <div class="col-md-3"><strong>剩余时间:</strong></div>
                 <div class="col-md-9">
                     <span th:if="${token.status.name() == 'ACTIVE'}" class="text-success">
@@ -104,7 +104,7 @@
                             <span th:if="${remainingSeconds < 60}" th:text="${remainingSeconds} + '秒'"></span>
                         </span>
                     </span>
-                    <span th:if="${token.status.name() == 'EXPIRED'}" class="text-danger">已过期</span>
+                    <span th:if="${token.status.name() == 'EXPIRED'}" class="text-secondary">已过期</span>
                 </div>
             </div>
         </div>
@@ -120,7 +120,8 @@
                 <div class="col-md-3"><strong>状态:</strong></div>
                 <div class="col-md-9">
                     <span th:if="${token.status.name() == 'ACTIVE'}" class="badge bg-success">有效</span>
-                    <span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-danger">过期</span>
+                    <span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-secondary">已过期</span>
+                    <span th:if="${token.status.name() == 'REVOKED'}" class="badge bg-danger">已撤销</span>
                 </div>
             </div>
             <div class="row mb-2">

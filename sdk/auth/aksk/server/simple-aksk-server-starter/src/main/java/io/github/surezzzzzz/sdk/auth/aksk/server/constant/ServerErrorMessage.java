@@ -50,4 +50,11 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_DISABLE_FAILED = "禁用失败：%s";
 
+    // ==================== Token管理消息 ====================
+
+    /**
+     * clientId 参数缺失
+     */
+    public static final String CLIENT_ID_REQUIRED = "clientId 不能为空";
+
 }

@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.service;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 
 import java.util.List;
 import java.util.Map;
@@ -124,4 +126,14 @@ public interface ClientManagementService {
      * @param scopes   新的权限范围列表
      */
     void updateClientScopes(String clientId, List<String> scopes);
+
+    /**
+     * 重置 Client Secret
+     *
+     * @param clientId     客户端 ID
+     * @param revokeTokens 是否同步撤销该 Client 下所有现存 token
+     * @return 重置结果，含新 Secret 明文
+     * @throws ClientException client 不存在时抛 CLIENT_002
+     */
+    ResetSecretResponse resetSecret(String clientId, boolean revokeTokens);
 }

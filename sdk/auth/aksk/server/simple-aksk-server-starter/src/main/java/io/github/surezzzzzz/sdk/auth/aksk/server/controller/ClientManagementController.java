@@ -161,4 +161,15 @@ public class ClientManagementController {
 
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * 重置 Client Secret
+     */
+    @PutMapping("/{clientId}/secret")
+    public ResponseEntity<ResetSecretResponse> resetSecret(
+            @PathVariable String clientId,
+            @RequestParam(defaultValue = "true") boolean revokeTokens) {
+        log.info("Resetting secret for client: {}, revokeTokens={}", clientId, revokeTokens);
+        return ResponseEntity.ok(clientManagementService.resetSecret(clientId, revokeTokens));
+    }
 }

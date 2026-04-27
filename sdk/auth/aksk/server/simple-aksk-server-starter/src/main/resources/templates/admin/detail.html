@@ -70,6 +70,16 @@
                                 data-bs-target="#editScopesModal">
                             编辑权限范围
                         </button>
+                        <button type="button" class="btn btn-danger"
+                                data-bs-toggle="modal"
+                                data-bs-target="#revokeAllTokensModal">
+                            撤销所有Token
+                        </button>
+                        <button type="button" class="btn btn-success"
+                                data-bs-toggle="modal"
+                                data-bs-target="#resetSecretModal">
+                            重置Secret
+                        </button>
                         <a href="/admin" class="btn btn-primary">返回管理页面</a>
                     </div>
                 </div>
@@ -108,6 +118,64 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="updateScopes()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 撤销所有Token Modal -->
+<div class="modal fade" id="revokeAllTokensModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">撤销所有Token</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="alert alert-danger" role="alert">
+                    <strong>⚠️ 确定要撤销此Client下所有活跃Token吗？</strong>
+                    <p class="mb-0 mt-2">此操作不可恢复，该Client需要重新换取Token才能继续使用。</p>
+                    <p class="mb-0 mt-1">已过期和已撤销的Token不会被处理。</p>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="revokeAllTokens()">确认撤销</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 重置Secret Modal -->
+<div class="modal fade" id="resetSecretModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">重置Secret</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="revokeTokensCheck" checked>
+                        <label class="form-check-label" for="revokeTokensCheck">
+                            同时撤销该Client下所有现存Token
+                        </label>
+                    </div>
+                </div>
+                <div class="alert alert-warning" role="alert">
+                    <strong>⚠️ 注意：</strong>
+                    <p class="mb-0 mt-2">新Secret仅在成功后显示一次，请妥善保管！</p>
+                    <p class="mb-0 mt-1">重置后，使用旧Secret的请求将立即失败。</p>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="resetSecret()">确认重置</button>
             </div>
         </div>
     </div>
@@ -233,6 +301,46 @@
         })
         .catch(error => {
             alert('更新失败：' + error);
+        });
+    }
+
+    function revokeAllTokens() {
+        if (!confirm('确定要撤销该Client下所有活跃Token吗？此操作不可恢复！')) return;
+
+        fetch(`/admin/${clientId}/token`, {
+            method: 'DELETE',
+            headers: { [csrfHeader]: csrfToken }
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('成功撤销 ' + data.revokedCount + ' 个Token');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('revokeAllTokensModal'));
+            if (modal) {
+                modal.hide();
+            }
+            location.reload();
+        })
+        .catch(error => {
+            alert('撤销失败：' + error);
+        });
+    }
+
+    function resetSecret() {
+        const revokeTokens = document.getElementById('revokeTokensCheck').checked;
+
+        fetch(`/admin/${clientId}/secret?revokeTokens=${revokeTokens}`, {
+            method: 'PUT',
+            headers: { [csrfHeader]: csrfToken }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // 跳转到创建成功页面显示新Secret
+            window.location.href = '/admin/create-success?clientId=' + data.clientId +
+                '&clientSecret=' + data.clientSecret +
+                '&message=' + encodeURIComponent('Secret 重置成功！请妥善保存新 Client Secret，此信息仅显示一次。');
+        })
+        .catch(error => {
+            alert('重置失败：' + error);
         });
     }
     /*]]>*/

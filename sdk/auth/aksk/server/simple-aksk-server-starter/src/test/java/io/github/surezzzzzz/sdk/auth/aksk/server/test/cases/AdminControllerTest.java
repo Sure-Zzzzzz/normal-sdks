@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRe
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
@@ -16,15 +17,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.*;
+import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.OAuth2AccessToken;
+import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
+import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
-import java.util.Map;
-import java.util.Set;
+import java.time.Instant;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -57,6 +64,15 @@ class AdminControllerTest {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private RegisteredClientRepository registeredClientRepository;
+
+    @Autowired
+    private OAuth2AuthorizationService authorizationService;
+
+    @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
 
     /**
      * 每个测试方法执行后清理数据
@@ -208,6 +224,112 @@ class AdminControllerTest {
         log.info("✓ Admin 删除 Token 测试通过");
     }
 
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testTokenDetailPageActiveStatus() throws Exception {
+        log.info("========== 测试：Token详情页 - ACTIVE 状态显示 ==========");
+
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Test Detail Active Client");
+        String tokenId = fetchTokenId(clientInfo.getClientId(), clientInfo.getClientSecret());
+        assertNotNull(tokenId, "应该能换取到 token");
+
+        MvcResult result = mockMvc.perform(get("/admin/token/" + tokenId))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin/token-detail"))
+                .andExpect(model().attributeExists("token"))
+                .andReturn();
+
+        String html = result.getResponse().getContentAsString();
+        assertTrue(html.contains("有效"), "ACTIVE 状态应显示 [有效]");
+        assertFalse(html.contains("已撤销"), "ACTIVE 状态不应显示 [已撤销]");
+        assertFalse(html.contains("已过期"), "ACTIVE 状态不应显示 [已过期]");
+
+        log.info("✓ Token详情页 ACTIVE 状态显示测试通过");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testTokenDetailPageRevokedStatus() throws Exception {
+        log.info("========== 测试：Token详情页 - REVOKED 状态显示 ==========");
+
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Test Detail Revoked Client");
+        String tokenId = fetchTokenId(clientInfo.getClientId(), clientInfo.getClientSecret());
+        assertNotNull(tokenId, "应该能换取到 token");
+
+        // 撤销 token
+        tokenManagementService.revokeToken(tokenId);
+
+        MvcResult result = mockMvc.perform(get("/admin/token/" + tokenId))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin/token-detail"))
+                .andExpect(model().attributeExists("token"))
+                .andReturn();
+
+        String html = result.getResponse().getContentAsString();
+        assertTrue(html.contains("已撤销"), "REVOKED 状态应显示 [已撤销]");
+        assertFalse(html.contains("有效"), "REVOKED 状态不应显示 [有效]");
+        // 撤销后剩余时间行应隐藏，不应出现"已过期"文字
+        assertFalse(html.contains("已过期"), "REVOKED 状态不应显示 [已过期]");
+
+        log.info("✓ Token详情页 REVOKED 状态显示测试通过");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testTokenDetailPageExpiredStatus() throws Exception {
+        log.info("========== 测试：Token详情页 - EXPIRED 状态显示 ==========");
+
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Test Detail Expired Client");
+        String tokenId = createExpiredToken(clientInfo.getClientId());
+        assertNotNull(tokenId, "应该能创建过期 token");
+
+        MvcResult result = mockMvc.perform(get("/admin/token/" + tokenId))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin/token-detail"))
+                .andExpect(model().attributeExists("token"))
+                .andReturn();
+
+        String html = result.getResponse().getContentAsString();
+        assertTrue(html.contains("已过期"), "EXPIRED 状态应显示 [已过期]");
+        assertFalse(html.contains("有效"), "EXPIRED 状态不应显示 [有效]");
+        assertFalse(html.contains("已撤销"), "EXPIRED 状态不应显示 [已撤销]");
+
+        log.info("✓ Token详情页 EXPIRED 状态显示测试通过");
+    }
+
+    /**
+     * 直接构造一个已过期的 token 记录
+     */
+    private String createExpiredToken(String clientId) {
+        try {
+            RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
+            if (registeredClient == null) return null;
+
+            Instant issuedAt = Instant.now().minusSeconds(7200);
+            Instant expiresAt = Instant.now().minusSeconds(3600);
+
+            OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                    OAuth2AccessToken.TokenType.BEARER,
+                    "expired_token_" + UUID.randomUUID().toString(),
+                    issuedAt,
+                    expiresAt,
+                    new HashSet<>(Arrays.asList("read", "write"))
+            );
+
+            OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(registeredClient)
+                    .principalName(clientId)
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .token(accessToken)
+                    .build();
+
+            authorizationService.save(authorization);
+            return authorization.getId();
+        } catch (Exception e) {
+            log.error("创建过期 token 失败: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
     /**
      * 换取 token 并返回 authorization id
      */
@@ -216,12 +338,12 @@ class AdminControllerTest {
         body.add("grant_type", "client_credentials");
 
         MvcResult result = mockMvc.perform(
-                org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/oauth2/token")
-                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
-                                .httpBasic(clientId, clientSecret))
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .params(body))
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                                .post("/oauth2/token")
+                                .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+                                        .httpBasic(clientId, clientSecret))
+                                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                                .params(body))
                 .andExpect(status().isOk())
                 .andReturn();
 

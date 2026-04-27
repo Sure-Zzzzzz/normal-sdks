@@ -1,12 +1,12 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.service;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.BatchRevokeResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
-
-import java.util.List;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 
 /**
  * Token Management Service
@@ -27,8 +27,8 @@ public interface TokenManagementService {
      * 查询Redis中的Token列表（支持状态过滤和分页）
      *
      * @param status Token状态过滤（可选）
-     * @param page 页码（从1开始）
-     * @param size 每页大小
+     * @param page   页码（从1开始）
+     * @param size   每页大小
      * @return Token信息分页响应
      */
     PageResponse<TokenInfoResponse> queryRedisTokens(TokenInfo.TokenStatus status, int page, int size);
@@ -68,4 +68,13 @@ public interface TokenManagementService {
      * @return 统计信息
      */
     TokenStatisticsResponse getStatistics();
+
+    /**
+     * 批量撤销指定 Client 下所有活跃 Token
+     *
+     * @param clientId 客户端 ID（AKSK 格式，如 AKP...）
+     * @return 撤销结果，含本次实际撤销数量
+     * @throws ClientException clientId 为空时抛 TOKEN_001；client 不存在时抛 CLIENT_002
+     */
+    BatchRevokeResponse revokeAllByClientId(String clientId);
 }

@@ -604,4 +604,27 @@ public class AdminController {
         return "admin/security-context-demo";
     }
 
+    /**
+     * 批量撤销指定Client下所有活跃Token（Admin页面用）
+     */
+    @DeleteMapping("/{clientId}/token")
+    @ResponseBody
+    public ResponseEntity<BatchRevokeResponse> adminRevokeAllTokens(@PathVariable String clientId) {
+        log.info("Admin batch revoking tokens for client: {}", clientId);
+        return ResponseEntity.ok(tokenManagementService.revokeAllByClientId(clientId));
+    }
+
+    /**
+     * 重置Client Secret（Admin页面用）
+     */
+    @PutMapping("/{clientId}/secret")
+    @ResponseBody
+    public ResponseEntity<ResetSecretResponse> adminResetSecret(
+            @PathVariable String clientId,
+            @RequestParam(defaultValue = "true") boolean revokeTokens) {
+        log.info("Admin resetting secret for client: {}, revokeTokens={}", clientId, revokeTokens);
+        ResetSecretResponse response = clientManagementService.resetSecret(clientId, revokeTokens);
+        return ResponseEntity.ok(response);
+    }
+
 }

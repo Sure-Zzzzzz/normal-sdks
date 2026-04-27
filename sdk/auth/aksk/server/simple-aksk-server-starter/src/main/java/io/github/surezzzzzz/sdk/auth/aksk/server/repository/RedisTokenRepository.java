@@ -185,12 +185,32 @@ public class RedisTokenRepository {
     }
 
     public void deleteById(String id) {
+        // 先尝试标准格式的key
         String key = redisKeyHelper.buildAuthorizationKeyById(id);
         Boolean deleted = redisTemplate.delete(key);
+
         if (Boolean.TRUE.equals(deleted)) {
             log.info("Deleted authorization from Redis: {}", id);
         } else {
-            log.warn("Authorization not found in Redis: {}", id);
+            // 如果标准格式没找到，尝试用多种模式扫描并删除
+            log.warn("Standard key not found, trying scan to find and delete: {}", id);
+            String scanPattern = redisKeyHelper.buildAuthorizationScanPattern();
+            Set<String> keys = scanKeys(scanPattern);
+
+            if (keys != null && !keys.isEmpty()) {
+                for (String k : keys) {
+                    if (k.contains(id)) {
+                        try {
+                            redisTemplate.delete(k);
+                            log.info("Scanned and deleted authorization from Redis: {}", k);
+                        } catch (Exception e) {
+                            log.warn("Failed to delete key via scan: {}", k, e);
+                        }
+                    }
+                }
+            } else {
+                log.warn("Authorization not found in Redis via scan: {}", id);
+            }
         }
     }
 

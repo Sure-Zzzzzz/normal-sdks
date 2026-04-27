@@ -50,4 +50,12 @@ public final class ErrorCode {
     public static final String CLIENT_UPDATE_FAILED = "CLIENT_005";
 
 
+    // ==================== Token管理错误 ====================
+
+    /**
+     * clientId 参数缺失
+     */
+    public static final String TOKEN_CLIENT_ID_REQUIRED = "TOKEN_001";
+
+
 }

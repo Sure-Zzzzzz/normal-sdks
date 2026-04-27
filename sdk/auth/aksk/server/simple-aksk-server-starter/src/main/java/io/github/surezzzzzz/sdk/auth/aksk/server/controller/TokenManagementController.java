@@ -3,10 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.RequireExpression;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.DeleteExpiredResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -122,5 +119,14 @@ public class TokenManagementController {
     public ResponseEntity<TokenStatisticsResponse> getStatistics() {
         TokenStatisticsResponse statistics = tokenManagementService.getStatistics();
         return ResponseEntity.ok(statistics);
+    }
+
+    /**
+     * 批量撤销指定 Client 下所有活跃 Token
+     */
+    @DeleteMapping
+    public ResponseEntity<BatchRevokeResponse> revokeByClientId(@RequestParam String clientId) {
+        log.info("Batch revoking tokens for client: {}", clientId);
+        return ResponseEntity.ok(tokenManagementService.revokeAllByClientId(clientId));
     }
 }

@@ -9,10 +9,12 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.OAuth2SettingsHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +42,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     private final OAuth2RegisteredClientEntityRepository clientRepository;
     private final PasswordEncoder passwordEncoder;
     private final SimpleAkskServerProperties properties;
+    private final TokenManagementService tokenManagementService;
 
     @Override
     public ClientInfoResponse createPlatformClient(String clientName) {
@@ -404,5 +407,16 @@ public class ClientManagementServiceImpl implements ClientManagementService {
         }
 
         return info;
+    }
+
+    @Override
+    public ResetSecretResponse resetSecret(String clientId, boolean revokeTokens) {
+        // 若 revokeTokens=true，先批量撤销（先撤销再换 Secret，避免新 Secret 颁发的 token 被误撤销）
+        if (revokeTokens) {
+            tokenManagementService.revokeAllByClientId(clientId);
+        }
+        // 复用已有方法生成新 Secret 并更新 DB（内部校验 client 存在，不存在抛 CLIENT_002）
+        String newSecret = regenerateSecretKey(clientId);
+        return new ResetSecretResponse(clientId, newSecret);
     }
 }

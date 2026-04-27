@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -32,7 +32,7 @@ OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.1'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -269,6 +269,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
 | `/api/client/{clientId}`             | DELETE | 删除 Client           |
 | `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户权限            |
+| `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
 
 以上接口需要携带有效 token，且 token 的 scope 中包含 `/api/client`。
 
@@ -277,6 +278,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | 端点                       | 方法     | 说明                         |
 |--------------------------|--------|----------------------------|
 | `/api/token`             | GET    | 查询 Token 列表（MySQL）         |
+| `/api/token`             | DELETE | 批量撤销指定 Client 下所有活跃 Token  |
 | `/api/token/redis`       | GET    | 查询 Redis 缓存中的 Token 列表     |
 | `/api/token/{id}`        | GET    | 查询 Token 详情                |
 | `/api/token/{id}/revoke` | POST   | 撤销 Token（同步清除 L1+L2 缓存并广播） |
@@ -393,6 +395,22 @@ logging:
 ---
 
 ## 版本历史
+
+### 1.1.1 (2026-04-27)
+
+新增功能：
+
+- **重置 Client Secret**：支持单独调用接口重置 Secret，可选是否同时撤销所有 Token
+- **批量撤销 Token**：支持通过 clientId 批量撤销该 Client 下所有活跃 Token
+- **过期 Token 处理优化**：已过期的 Token 不能再被撤销，只允许通过 `deleteExpiredTokens()` 清理
+- **Admin 界面增强**：详情页新增"撤销所有Token"和"重置Secret"按钮，Token列表页EXPIRED状态撤销按钮禁用
+
+Bug 修复：
+
+- 删除 Token 时若 MySQL 中已不存在不再抛出异常
+- 只在 Redis 中存在的 Token 撤销时正确发布 `TokenRevokedEvent`
+- Redis 列表页撤销 Token 后刷新状态正确更新
+- Token 详情页补充 REVOKED 状态显示，REVOKED 状态下隐藏剩余时间行
 
 ### 1.1.0 (2026-04-17)
 
