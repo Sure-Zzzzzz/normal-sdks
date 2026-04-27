@@ -267,6 +267,11 @@ public class ErrorMessage {
      */
     public static final String AGG_FILTERS_REQUIRED = "filters 聚合 [%s] 必须填写 filters 字段";
 
+    /**
+     * percentile_ranks 聚合缺少 values 字段
+     */
+    public static final String AGG_PERCENTILE_RANKS_VALUES_REQUIRED = "percentile_ranks 聚合 [%s] 必须填写 values 字段";
+
     // ========== 高级表达式相关 ==========
 
     /**

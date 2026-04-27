@@ -3631,5 +3631,234 @@ class SearchEndToEndTest {
                 .andExpect(status().isBadRequest())
                 .andDo(result -> log.info("✓ missing 不支持 composite，正确返回 400"));
     }
+
+    // ==================== 16. percentiles / percentile_ranks / extended_stats 修复验证 ====================
+
+    @Test
+    @Order(231)
+    @DisplayName("16.1 percentiles 聚合 - 指定百分位（ES 7.x primary）")
+    void testAggPercentiles() throws Exception {
+        log.info("========== 测试：percentiles 聚合 - 指定 percents ==========");
+        // amount: 1999, 2999, 4999, 7999, 15999（5条）
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("amount_percentiles")
+                                .type("percentiles")
+                                .field("amount")
+                                .percents(Arrays.asList(50.0, 95.0, 99.0))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles").isMap())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles['50.0']").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles['95.0']").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles['99.0']").isNumber())
+                .andDo(result -> {
+                    log.info("✓ percentiles 聚合成功（ES 7.x primary）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(232)
+    @DisplayName("16.2 percentiles 聚合 - 不填 percents 使用 ES 默认（ES 7.x primary）")
+    void testAggPercentilesDefault() throws Exception {
+        log.info("========== 测试：percentiles 聚合 - 默认百分位 ==========");
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("amount_percentiles_default")
+                                .type("percentiles")
+                                .field("amount")
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles_default").isMap())
+                // ES 默认包含 1.0, 5.0, 25.0, 50.0, 75.0, 95.0, 99.0
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles_default['50.0']").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_percentiles_default['95.0']").isNumber())
+                .andDo(result -> {
+                    log.info("✓ percentiles 聚合成功（默认百分位）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(233)
+    @DisplayName("16.3 percentile_ranks 聚合 - 指定 values（ES 7.x primary）")
+    void testAggPercentileRanks() throws Exception {
+        log.info("========== 测试：percentile_ranks 聚合 ==========");
+        // amount: 1999, 2999, 4999, 7999, 15999
+        // 5000 以下有 3 条（1999/2999/4999），占 60%
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("amount_ranks")
+                                .type("percentile_ranks")
+                                .field("amount")
+                                .values(Arrays.asList(5000.0, 10000.0))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.amount_ranks").isMap())
+                .andExpect(jsonPath("$.data.aggregations.amount_ranks['5000.0']").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_ranks['10000.0']").isNumber())
+                .andDo(result -> {
+                    log.info("✓ percentile_ranks 聚合成功（ES 7.x primary）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(234)
+    @DisplayName("16.4 percentile_ranks 聚合 - 不填 values 报 400")
+    void testAggPercentileRanksMissingValues() throws Exception {
+        log.info("========== 测试：percentile_ranks 缺少 values 报 400 ==========");
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("amount_ranks")
+                                .type("percentile_ranks")
+                                .field("amount")
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andDo(result -> log.info("✓ percentile_ranks 缺少 values 正确返回 400"));
+    }
+
+    @Test
+    @Order(235)
+    @DisplayName("16.5 extended_stats 聚合 - 返回完整 9 个字段（Bug 修复验证）")
+    void testAggExtendedStats() throws Exception {
+        log.info("========== 测试：extended_stats 聚合 - 完整字段验证 ==========");
+        AggRequest request = AggRequest.builder()
+                .index(ORDER_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("amount_extended_stats")
+                                .type("extended_stats")
+                                .field("amount")
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats").isMap())
+                // 5 个基础字段
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.count").value(5))
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.min").value(1999.0))
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.max").value(15999.0))
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.avg").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.sum").isNumber())
+                // 4 个扩展字段（修复前这些字段会丢失）
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.sum_of_squares").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.variance").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.std_deviation").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.std_deviation_bounds").isMap())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.std_deviation_bounds.upper").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.amount_extended_stats.std_deviation_bounds.lower").isNumber())
+                .andDo(result -> {
+                    log.info("✓ extended_stats 聚合返回完整 9 个字段（Bug 修复验证通过）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(236)
+    @DisplayName("16.6 percentiles 聚合 - ES 6.x secondary（兼容性验证）")
+    void testAggPercentilesOnEs6x() throws Exception {
+        log.info("========== 测试：percentiles 聚合 - ES 6.x secondary ==========");
+        // secondary 索引 price: 1899, 6299, 6999, 7999, 8999
+        AggRequest request = AggRequest.builder()
+                .index(SECONDARY_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("price_percentiles")
+                                .type("percentiles")
+                                .field("price")
+                                .percents(Arrays.asList(50.0, 99.0))
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.price_percentiles").isMap())
+                .andExpect(jsonPath("$.data.aggregations.price_percentiles['50.0']").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.price_percentiles['99.0']").isNumber())
+                .andDo(result -> {
+                    log.info("✓ percentiles 聚合成功（ES 6.x secondary）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
+
+    @Test
+    @Order(237)
+    @DisplayName("16.7 extended_stats 聚合 - ES 6.x secondary（兼容性验证）")
+    void testAggExtendedStatsOnEs6x() throws Exception {
+        log.info("========== 测试：extended_stats 聚合 - ES 6.x secondary ==========");
+        AggRequest request = AggRequest.builder()
+                .index(SECONDARY_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("price_extended_stats")
+                                .type("extended_stats")
+                                .field("price")
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats").isMap())
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats.count").value(5))
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats.sum_of_squares").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats.variance").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats.std_deviation").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.price_extended_stats.std_deviation_bounds").isMap())
+                .andDo(result -> {
+                    log.info("✓ extended_stats 聚合返回完整字段（ES 6.x secondary）");
+                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                });
+    }
 }
 

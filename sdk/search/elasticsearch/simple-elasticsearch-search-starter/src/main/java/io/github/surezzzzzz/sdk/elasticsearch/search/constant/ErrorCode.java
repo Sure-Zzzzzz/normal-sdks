@@ -286,6 +286,11 @@ public class ErrorCode {
      */
     public static final String AGG_FILTERS_REQUIRED = "SEARCH_AGG_011";
 
+    /**
+     * percentile_ranks 聚合缺少 values 字段
+     */
+    public static final String AGG_PERCENTILE_RANKS_VALUES_REQUIRED = "SEARCH_AGG_012";
+
     // ========== 高级表达式相关错误码 ==========
 
     /**

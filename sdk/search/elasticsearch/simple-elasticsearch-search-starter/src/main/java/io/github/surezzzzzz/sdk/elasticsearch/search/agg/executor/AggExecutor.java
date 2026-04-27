@@ -29,8 +29,7 @@ import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregation;
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
-import org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation;
-import org.elasticsearch.search.aggregations.metrics.Stats;
+import org.elasticsearch.search.aggregations.metrics.*;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
@@ -277,6 +276,26 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         if (aggregation instanceof NumericMetricsAggregation.SingleValue) {
             return ((NumericMetricsAggregation.SingleValue) aggregation).value();
         }
+        // ExtendedStats 必须在 Stats 之前，因为 ExtendedStats extends Stats
+        if (aggregation instanceof ExtendedStats) {
+            ExtendedStats es = (ExtendedStats) aggregation;
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, es.getCount());
+            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN, es.getMin());
+            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX, es.getMax());
+            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, es.getAvg());
+            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, es.getSum());
+            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES, es.getSumOfSquares());
+            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE, es.getVariance());
+            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION, es.getStdDeviation());
+            Map<String, Object> bounds = new LinkedHashMap<>();
+            bounds.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_BOUNDS_UPPER,
+                    es.getStdDeviationBound(ExtendedStats.Bounds.UPPER));
+            bounds.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_BOUNDS_LOWER,
+                    es.getStdDeviationBound(ExtendedStats.Bounds.LOWER));
+            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS, bounds);
+            return map;
+        }
         if (aggregation instanceof Stats) {
             Stats stats = (Stats) aggregation;
             Map<String, Object> statsMap = new HashMap<>();
@@ -286,6 +305,23 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, stats.getAvg());
             statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, stats.getSum());
             return statsMap;
+        }
+        // PercentileRanks 必须在 Percentiles 之前（两者都实现 Iterable<Percentile>，语义不同）
+        if (aggregation instanceof PercentileRanks) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            for (Percentile p : (PercentileRanks) aggregation) {
+                // key=传入的值, value=百分位排名
+                map.put(String.valueOf(p.getValue()), p.getPercent());
+            }
+            return map;
+        }
+        if (aggregation instanceof Percentiles) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            for (Percentile p : (Percentiles) aggregation) {
+                // key=百分位, value=对应的值
+                map.put(String.valueOf(p.getPercent()), p.getValue());
+            }
+            return map;
         }
         if (aggregation instanceof SingleBucketAggregation) {
             // filter / missing 等单桶聚合：返回 {count, subAgg1, subAgg2, ...}
@@ -427,6 +463,29 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_COUNT)
                 && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MIN)
                 && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MAX)) {
+            // extended_stats 必须在 stats 之前判断（extended_stats 包含 sum_of_squares 字段）
+            if (aggMap.containsKey(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES)) {
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
+                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_COUNT));
+                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN,
+                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MIN));
+                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX,
+                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MAX));
+                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG,
+                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AVG));
+                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM,
+                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_SUM));
+                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES,
+                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES));
+                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE,
+                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE));
+                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION,
+                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION));
+                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS,
+                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS));
+                return map;
+            }
             Map<String, Object> statsMap = new HashMap<>();
             statsMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
                     aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_COUNT));
@@ -469,6 +528,12 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
                 }
                 return buckets;
             }
+        }
+        // percentiles / percentile_ranks：{"values": {"50.0": X, "95.0": Y}}
+        // 区别于 SingleValue 的 {"value": X}（size=1），这里 values 是 Map
+        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_VALUES)
+                && aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUES) instanceof Map) {
+            return aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUES);
         }
         return aggValue;
     }

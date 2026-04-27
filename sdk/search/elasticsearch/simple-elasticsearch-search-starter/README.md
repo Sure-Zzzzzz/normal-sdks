@@ -15,7 +15,7 @@
 | 表达式提示 | 前端自动补全数据源（字段、运算符、时间范围） | v1.5.3+ |
 | Pipeline 聚合 | bucket_sort Top N、bucket_selector HAVING（ES 6.1+） | v1.5.5+ |
 | 表达式聚合 | 条件表达式作为聚合过滤条件 | v1.5.5+ |
-| 聚合分析 | 支持 17 种聚合类型（指标/桶/pipeline），含 filter、filters、missing、date_range、ip_range | v1.5.6+ |
+| 聚合分析 | 支持 19 种聚合类型（指标/桶/pipeline），含 filter、filters、missing、date_range、ip_range、percentiles、percentile_ranks | v1.5.7+ |
 | composite 聚合翻页 | 突破 65535 条限制，支持全量遍历（ES 6.1+） | v1.4.0+ |
 | 深分页 | search_after 多种模式（tiebreaker/pit/none） | v1.3.0+ |
 | 日期分割索引 | 按年/月/日分割，自动路由 + 智能降级 | v1.0.0+ |
@@ -31,7 +31,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.6'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.7'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -159,6 +159,8 @@ POST /api/query
 | `pipelineAggs` | pipeline 聚合列表（v1.5.5+，仅普通 bucket 聚合有效） |
 | `query` | 过滤条件（filter 聚合专用，v1.5.6+，类型同 QueryCondition） |
 | `filters` | 多命名过滤器（filters 聚合专用，v1.5.6+，key 为 bucket 名称，value 为 QueryCondition） |
+| `percents` | 百分位列表（percentiles 聚合专用，v1.5.7+，不填使用 ES 默认 1/5/25/50/75/95/99） |
+| `values` | 值列表（percentile_ranks 聚合专用，v1.5.7+，必填） |
 
 **PipelineAggDefinition 字段（v1.5.5+）：**
 
@@ -338,7 +340,14 @@ GET /api/expression/hints?index=order
 
 ### 指标聚合（Metrics）
 
-`sum` / `avg` / `min` / `max` / `count` / `cardinality` / `stats` / `extended_stats` / `percentiles` / `percentile_ranks`
+| 类型 | 说明 | 所需字段 |
+|------|------|---------|
+| `sum` / `avg` / `min` / `max` / `count` | 基础指标 | `field` |
+| `cardinality` | 去重计数（近似值） | `field` |
+| `stats` | 5 项统计（count/min/max/avg/sum） | `field` |
+| `extended_stats` | 9 项统计（含 variance/std_deviation/std_deviation_bounds） | `field` |
+| `percentiles` | 百分位数，如 P50/P95/P99（v1.5.7+） | `field`，可选 `percents` |
+| `percentile_ranks` | 百分位排名，如"1000 以下占比"（v1.5.7+） | `field`、`values`（必填） |
 
 ### 桶聚合（Bucket）
 
@@ -985,6 +994,55 @@ POST /api/agg
 
 ---
 
+### 场景十五：percentiles / percentile_ranks 聚合（v1.5.7+）
+
+**percentiles — 计算百分位数，适合分析响应时间、订单金额分布：**
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [
+    {
+      "name": "amount_percentiles",
+      "type": "percentiles",
+      "field": "amount",
+      "percents": [
+        50,
+        75,
+        90,
+        95,
+        99
+      ]
+    }
+  ]
+}
+```
+
+响应：`{"amount_percentiles": {"50.0": 1999.0, "75.0": 6999.0, "90.0": 15999.0, "95.0": 12999.0, "99.0": 15999.0}}`
+
+不填 `percents` 时使用 ES 默认百分位（1/5/25/50/75/95/99）。
+
+**percentile_ranks — 计算指定值的百分位排名，适合分析"达标率"：**
+
+```json
+POST /api/agg
+{
+  "index": "orders",
+  "aggs": [{
+    "name": "amount_ranks",
+    "type": "percentile_ranks",
+    "field": "amount",
+    "values": [1000, 5000, 10000]
+  }]
+}
+```
+
+响应：`{"amount_ranks": {"5000.0": 48.0, "10000.0": 72.7}}`
+
+key 为传入的原始值，value 为百分位排名。表示约 48% 的订单金额 ≤ 5000，约 73% ≤ 10000。`values` 字段必填，不填时报 400。
+
+---
 
 
 - 自动检测 ES 版本，6.x 使用低级 API 绕过参数兼容性问题

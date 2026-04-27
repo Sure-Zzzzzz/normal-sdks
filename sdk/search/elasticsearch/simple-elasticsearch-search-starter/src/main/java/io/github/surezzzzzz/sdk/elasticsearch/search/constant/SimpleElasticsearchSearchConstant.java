@@ -107,6 +107,36 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String STATS_RESULT_SUM = "sum";
 
+    /**
+     * ExtendedStats 聚合结果字段：sum_of_squares
+     */
+    public static final String EXTENDED_STATS_SUM_OF_SQUARES = "sum_of_squares";
+
+    /**
+     * ExtendedStats 聚合结果字段：variance
+     */
+    public static final String EXTENDED_STATS_VARIANCE = "variance";
+
+    /**
+     * ExtendedStats 聚合结果字段：std_deviation
+     */
+    public static final String EXTENDED_STATS_STD_DEVIATION = "std_deviation";
+
+    /**
+     * ExtendedStats 聚合结果字段：std_deviation_bounds
+     */
+    public static final String EXTENDED_STATS_STD_DEVIATION_BOUNDS = "std_deviation_bounds";
+
+    /**
+     * ExtendedStats std_deviation_bounds 子字段：upper
+     */
+    public static final String EXTENDED_STATS_BOUNDS_UPPER = "upper";
+
+    /**
+     * ExtendedStats std_deviation_bounds 子字段：lower
+     */
+    public static final String EXTENDED_STATS_BOUNDS_LOWER = "lower";
+
     // ========== 敏感字段处理 ==========
 
     /**
@@ -169,6 +199,11 @@ public class SimpleElasticsearchSearchConstant {
      * ES 聚合值字段（Metrics 聚合）
      */
     public static final String ES_JSON_VALUE = "value";
+
+    /**
+     * ES percentiles/percentile_ranks 聚合值字段（多值 Map）
+     */
+    public static final String ES_JSON_VALUES = "values";
 
     /**
      * ES 聚合 buckets 字段（Bucket 聚合）

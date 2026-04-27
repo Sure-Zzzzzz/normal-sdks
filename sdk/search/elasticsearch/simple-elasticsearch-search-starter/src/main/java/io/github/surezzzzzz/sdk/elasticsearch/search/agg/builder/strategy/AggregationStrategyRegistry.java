@@ -20,7 +20,7 @@ import java.util.Map;
 
 /**
  * 聚合策略注册表
- * 内置 17 种聚合类型策略和 2 种 pipeline 策略，启动时自动注册。
+ * 内置 19 种聚合类型策略和 2 种 pipeline 策略，启动时自动注册。
  * composite 聚合通过 AggDefinition.composite 标志位走独立分支，不在此注册。
  * 用户可通过注入此 Bean 调用 {@link #register} 扩展自定义策略，但不允许覆盖内置 key。
  *
@@ -51,6 +51,8 @@ public class AggregationStrategyRegistry {
     private final MissingAggregationStrategy missingStrategy;
     private final DateRangeAggregationStrategy dateRangeStrategy;
     private final IpRangeAggregationStrategy ipRangeStrategy;
+    private final PercentilesAggregationStrategy percentilesStrategy;
+    private final PercentileRanksAggregationStrategy percentileRanksStrategy;
     private final BucketSortPipelineStrategy bucketSortStrategy;
     private final BucketSelectorPipelineStrategy bucketSelectorStrategy;
 
@@ -73,6 +75,8 @@ public class AggregationStrategyRegistry {
         register(AggType.MISSING.getType(), missingStrategy);
         register(AggType.DATE_RANGE.getType(), dateRangeStrategy);
         register(AggType.IP_RANGE.getType(), ipRangeStrategy);
+        register(AggType.PERCENTILES.getType(), percentilesStrategy);
+        register(AggType.PERCENTILE_RANKS.getType(), percentileRanksStrategy);
         pipelineStrategies.put(PipelineAggType.BUCKET_SORT.getCode(), bucketSortStrategy);
         pipelineStrategies.put(PipelineAggType.BUCKET_SELECTOR.getCode(), bucketSelectorStrategy);
         log.info("AggregationStrategyRegistry initialized with {} strategies, {} pipeline strategies",
