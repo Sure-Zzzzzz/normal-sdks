@@ -1,7 +1,13 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -11,8 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.util.Arrays;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,6 +38,18 @@ class ResetSecretServiceTest {
 
     @Autowired
     private ClientManagementService clientManagementService;
+
+    @Autowired
+    private io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService tokenManagementService;
+
+    @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private OAuth2RegisteredClientEntityRepository clientRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
     private String testClientId;
     private String testClientSecret;
@@ -53,11 +73,22 @@ class ResetSecretServiceTest {
         log.info("清理测试数据...");
 
         try {
+            authorizationEntityRepository.deleteAll();
+        } catch (Exception e) {
+            log.warn("清理授权记录失败: {}", e.getMessage());
+        }
+
+        try {
             if (testClientId != null) {
                 clientManagementService.deleteClient(testClientId);
             }
         } catch (Exception e) {
             log.warn("清理测试Client失败: {}", e.getMessage());
+        }
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
         }
 
         log.info("测试数据清理完成");
@@ -67,30 +98,74 @@ class ResetSecretServiceTest {
     void testResetSecretWithRevokeTokens() {
         log.info("测试重置Secret并同时撤销Token");
 
+        // 先创建 token
+        io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.JwtTokenTestHelper.getTokenByClientCredentials(
+                new org.springframework.boot.test.web.client.TestRestTemplate(),
+                port, testClientId, testClientSecret
+        );
+
+        // 确认有 ACTIVE token
+        TokenQueryRequest query = new TokenQueryRequest();
+        query.setClientId(testClientId);
+        query.setPage(1);
+        query.setSize(10);
+        PageResponse<TokenInfoResponse> before = tokenManagementService.queryTokens(query);
+        long activeBefore = before.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertTrue(activeBefore >= 1, "重置前应至少有 1 个 ACTIVE token");
+
         ResetSecretResponse response = clientManagementService.resetSecret(testClientId, true);
         assertNotNull(response);
-
         assertEquals(testClientId, response.getClientId());
         assertNotNull(response.getClientSecret());
         assertNotEquals(testClientSecret, response.getClientSecret());
 
-        log.info("重置Secret成功，新Secret: {}", response.getClientSecret());
-        log.info("测试通过");
+        // 验证 token 已被撤销
+        PageResponse<TokenInfoResponse> after = tokenManagementService.queryTokens(query);
+        long activeAfter = after.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertEquals(0, activeAfter, "revokeTokens=true 时不应有 ACTIVE token");
+
+        log.info("重置Secret成功（撤销Token），新Secret长度: {}", response.getClientSecret().length());
     }
 
     @Test
     void testResetSecretWithoutRevokeTokens() {
         log.info("测试重置Secret但不撤销Token");
 
+        // 先创建 token
+        io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.JwtTokenTestHelper.getTokenByClientCredentials(
+                new org.springframework.boot.test.web.client.TestRestTemplate(),
+                port, testClientId, testClientSecret
+        );
+
+        // 确认有 ACTIVE token
+        TokenQueryRequest query = new TokenQueryRequest();
+        query.setClientId(testClientId);
+        query.setPage(1);
+        query.setSize(10);
+        PageResponse<TokenInfoResponse> before = tokenManagementService.queryTokens(query);
+        long activeBefore = before.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertTrue(activeBefore >= 1, "重置前应至少有 1 个 ACTIVE token");
+
         ResetSecretResponse response = clientManagementService.resetSecret(testClientId, false);
         assertNotNull(response);
-
         assertEquals(testClientId, response.getClientId());
         assertNotNull(response.getClientSecret());
         assertNotEquals(testClientSecret, response.getClientSecret());
 
-        log.info("重置Secret成功，新Secret: {}", response.getClientSecret());
-        log.info("测试通过");
+        // 验证 token 仍然有效
+        PageResponse<TokenInfoResponse> after = tokenManagementService.queryTokens(query);
+        long activeAfter = after.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertEquals(activeBefore, activeAfter, "revokeTokens=false 时 token 应仍有效");
+
+        log.info("重置Secret成功（不撤销Token），新Secret长度: {}", response.getClientSecret().length());
     }
 
     @Test

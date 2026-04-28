@@ -10,7 +10,8 @@
 <body>
 <div class="container mt-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">Token管理</h2>
+        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">Token管理
+        </h2>
         <div>
             <a href="/admin/token/test" class="btn btn-success">换Token测试</a>
             <button type="button" class="btn btn-warning" onclick="cleanupExpiredTokens()">清理过期Token</button>
@@ -122,6 +123,9 @@
                         <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, status='EXPIRED', search=${currentSearch})}"
                            th:classappend="${currentStatus?.name() == 'EXPIRED'} ? 'active' : ''"
                            class="btn btn-outline-success">过期</a>
+                        <a th:href="@{/admin/token(source=${currentSource}, clientType=${currentClientType}, status='REVOKED', search=${currentSearch})}"
+                           th:classappend="${currentStatus?.name() == 'REVOKED'} ? 'active' : ''"
+                           class="btn btn-outline-success">已撤销</a>
                     </div>
                 </div>
 
@@ -166,7 +170,8 @@
                     <td>
                         <span th:if="${clientInfoMap.containsKey(token.clientId)}">
                             <span th:if="${clientInfoMap.get(token.clientId).clientType == 1}" class="badge bg-primary">平台级</span>
-                            <span th:if="${clientInfoMap.get(token.clientId).clientType == 2}" class="badge bg-info">用户级</span>
+                            <span th:if="${clientInfoMap.get(token.clientId).clientType == 2}"
+                                  class="badge bg-info">用户级</span>
                         </span>
                         <span th:unless="${clientInfoMap.containsKey(token.clientId)}">-</span>
                     </td>

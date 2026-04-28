@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -12,13 +13,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 import java.util.Map;
+import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Introspect 端点认证配置测试
@@ -50,6 +54,12 @@ class IntrospectConfigTest {
     @Autowired
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
+    @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
     private String clientId;
     private String clientSecret;
     private String accessToken;
@@ -66,7 +76,13 @@ class IntrospectConfigTest {
 
     @AfterEach
     void tearDown() {
+        authorizationEntityRepository.deleteAll();
         clientRepository.deleteAll();
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     @Test
@@ -76,7 +92,7 @@ class IntrospectConfigTest {
         Map<String, Object> result = introspectWithCredentials(clientId, clientSecret, accessToken);
         log.info("introspect 响应: {}", result);
 
-        assertTrue((Boolean) result.get("active"), "有效 token 应该 active=true");
+        assertEquals(true, result.get("active"), "有效 token 应该 active=true");
         assertEquals(clientId, result.get("client_id"), "client_id 应该匹配");
         assertNotNull(result.get("scope"), "scope 不应为 null");
         log.info("✓ 携带有效凭证 introspect 成功");

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -19,9 +20,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -54,6 +56,12 @@ class TokenRevokedEventTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
     private TestTokenRevokedEventListener eventListener;
 
     private String clientId;
@@ -70,7 +78,14 @@ class TokenRevokedEventTest {
 
     @AfterEach
     void tearDown() {
+        eventListener.reset();
+        authorizationEntityRepository.deleteAll();
         clientRepository.deleteAll();
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     @Test
@@ -116,7 +131,7 @@ class TokenRevokedEventTest {
         revokeToken(clientId, clientSecret, token);
 
         // 等待撤销写库完成
-        Thread.sleep(10000);
+        Thread.sleep(3000);
 
         // 撤销后 introspect，应该 active=false
         Map<String, Object> afterRevoke = introspectToken(clientId, clientSecret, token);
@@ -190,7 +205,7 @@ class TokenRevokedEventTest {
     @Component
     static class TestTokenRevokedEventListener {
 
-        final List<TokenRevokedEvent> events = new ArrayList<>();
+        final List<TokenRevokedEvent> events = new CopyOnWriteArrayList<>();
         CountDownLatch latch = new CountDownLatch(1);
 
         @EventListener

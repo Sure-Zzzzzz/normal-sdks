@@ -65,14 +65,14 @@ public class AdminController {
      */
     @GetMapping
     public String index(@RequestParam(required = false) String type,
+                        @RequestParam(required = false) Boolean enabled,
                         @RequestParam(required = false) String search,
                         @RequestParam(defaultValue = "1") int page,
                         @RequestParam(defaultValue = "10") int size,
                         Model model) {
-        // 使用Service层的分页查询（支持类型过滤）
-        // type可以是"platform"或"user"
+        // 使用Service层的分页查询（支持类型 + enabled 过滤）
         PageResponse<ClientInfoResponse> pageResponse = clientManagementService.listClients(
-                null, type, page, size);
+                null, type, enabled, page, size);
 
         // 如果有search参数，需要在内存中过滤（因为listClients不支持search参数）
         List<ClientInfoResponse> clients = pageResponse.getData();
@@ -82,7 +82,7 @@ public class AdminController {
         if (search != null && !search.trim().isEmpty()) {
             // 重新获取所有数据进行搜索过滤
             PageResponse<ClientInfoResponse> allPageResponse = clientManagementService.listClients(
-                    null, type, 1, Integer.MAX_VALUE);
+                    null, type, enabled, 1, Integer.MAX_VALUE);
             List<ClientInfoResponse> allClients = allPageResponse.getData();
 
             // 搜索过滤（按clientId、name、userId、username）
@@ -116,6 +116,7 @@ public class AdminController {
         model.addAttribute("pageSize", size);
         model.addAttribute("totalClients", totalClients);
         model.addAttribute("currentType", type);
+        model.addAttribute("currentEnabled", enabled);
         model.addAttribute("currentSearch", search);
 
         return "admin/index";
@@ -171,7 +172,15 @@ public class AdminController {
      * 创建成功页面（显示client_secret）
      */
     @GetMapping("/create-success")
-    public String createSuccess() {
+    public String createSuccess(
+            @RequestParam(required = false) String clientId,
+            @RequestParam(required = false) String clientSecret,
+            @RequestParam(required = false) String message,
+            Model model) {
+        // 支持两种来源：flash attributes（创建时）和 URL 参数（重置 Secret 时）
+        if (clientId != null) model.addAttribute("clientId", clientId);
+        if (clientSecret != null) model.addAttribute("clientSecret", clientSecret);
+        if (message != null) model.addAttribute("message", message);
         return "admin/create-success";
     }
 
@@ -258,15 +267,21 @@ public class AdminController {
                 }
             }
 
-            // 处理 scopes 字段（新增）
+            // 处理 scopes 字段
             if (request.getScopes() != null) {
                 clientManagementService.updateClientScopes(clientId, request.getScopes());
                 return ResponseEntity.ok(new ApiResponse("权限范围更新成功"));
             }
 
-            // 如果两个字段都没传
+            // 处理 name 字段
+            if (request.getName() != null) {
+                clientManagementService.updateClientName(clientId, request.getName());
+                return ResponseEntity.ok(new ApiResponse("名称更新成功"));
+            }
+
+            // 如果字段都没传
             return ResponseEntity.badRequest()
-                    .body(new ApiResponse("请提供要更新的字段（enabled 或 scopes）"));
+                    .body(new ApiResponse("请提供要更新的字段（enabled、scopes 或 name）"));
 
         } catch (Exception e) {
             log.error("Failed to update client: {}", clientId, e);

@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageRespons
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -17,19 +18,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,7 +60,11 @@ class TokenManagementServiceTest {
     @Autowired
     private OAuth2AuthorizationService authorizationService;
 
-    private RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private OAuth2RegisteredClientEntityRepository clientEntityRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
     private String testClientId1;
     private String testClientSecret1;
@@ -129,6 +131,12 @@ class TokenManagementServiceTest {
         }
 
         log.info("测试数据清理完成");
+
+        // 清理Redis
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     @Test
@@ -233,20 +241,25 @@ class TokenManagementServiceTest {
 
     @Test
     void testQueryTokensByDataSource() {
-        log.info("测试按数据源过滤Token");
+        log.info("测试MySQL中的Token数据源标记");
 
-        // When - 查询MySQL中的Token
+        // When - 查询Token（通过 createAuthorizationDirectly 创建的都在 MySQL 中）
         TokenQueryRequest request = new TokenQueryRequest();
         request.setPage(1);
         request.setSize(10);
 
         PageResponse<TokenInfoResponse> pageResponse = tokenManagementService.queryTokens(request);
-        List<TokenInfoResponse> mysqlTokens = pageResponse.getData();
+        List<TokenInfoResponse> tokens = pageResponse.getData();
 
-        // Then
-        assertNotNull(mysqlTokens, "Token列表不应为null");
-        log.info("查询到 {} 个MySQL Token", mysqlTokens.size());
+        // Then - 通过 authorizationService 创建的 token 应标记为 MYSQL 数据源
+        assertNotNull(tokens, "Token列表不应为null");
+        assertTrue(tokens.size() >= 2, "应至少有2个Token");
+        assertTrue(tokens.stream().allMatch(t ->
+                        t.getDataSource() == TokenInfo.DataSource.MYSQL ||
+                                t.getDataSource() == TokenInfo.DataSource.BOTH),
+                "通过authorizationService创建的Token应标记为MYSQL或BOTH数据源");
 
+        log.info("查询到 {} 个MySQL Token", tokens.size());
         log.info("按数据源过滤测试通过");
     }
 
@@ -407,11 +420,14 @@ class TokenManagementServiceTest {
     void testDeleteExpiredTokens() {
         log.info("测试清理过期Token");
 
+        // Given - 创建一个过期 token
+        createExpiredAuthorizationDirectly(testClientId1);
+
         // When
         int deletedCount = tokenManagementService.deleteExpiredTokens();
 
-        // Then
-        assertTrue(deletedCount >= 0, "删除数量应大于等于0");
+        // Then - 应至少删除刚创建的过期 token
+        assertTrue(deletedCount >= 1, "应至少删除1个过期Token");
 
         log.info("清理了 {} 个过期Token", deletedCount);
         log.info("清理过期Token测试通过");
@@ -454,8 +470,7 @@ class TokenManagementServiceTest {
             // 查找RegisteredClient
             RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
             if (registeredClient == null) {
-                log.error("找不到Client: {}", clientId);
-                return;
+                throw new RuntimeException("找不到Client: " + clientId);
             }
 
             // 创建access token
@@ -482,7 +497,41 @@ class TokenManagementServiceTest {
 
             log.info("为Client {} 创建授权记录成功", clientId);
         } catch (Exception e) {
-            log.error("创建授权记录失败 for client {}: {}", clientId, e.getMessage(), e);
+            throw new RuntimeException("创建授权记录失败 for client " + clientId + ": " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 直接创建一个已过期的OAuth2授权记录(用于测试)
+     */
+    private void createExpiredAuthorizationDirectly(String clientId) {
+        try {
+            RegisteredClient registeredClient = registeredClientRepository.findByClientId(clientId);
+            if (registeredClient == null) {
+                throw new RuntimeException("找不到Client: " + clientId);
+            }
+
+            Instant issuedAt = Instant.now().minusSeconds(7200);
+            Instant expiresAt = Instant.now().minusSeconds(3600);
+
+            OAuth2AccessToken accessToken = new OAuth2AccessToken(
+                    OAuth2AccessToken.TokenType.BEARER,
+                    "expired_test_token_" + UUID.randomUUID().toString(),
+                    issuedAt,
+                    expiresAt,
+                    new HashSet<>(Arrays.asList("read", "write"))
+            );
+
+            OAuth2Authorization authorization = OAuth2Authorization.withRegisteredClient(registeredClient)
+                    .principalName(clientId)
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .token(accessToken)
+                    .build();
+
+            authorizationService.save(authorization);
+            log.info("为Client {} 创建过期授权记录成功", clientId);
+        } catch (Exception e) {
+            throw new RuntimeException("创建过期授权记录失败 for client " + clientId + ": " + e.getMessage(), e);
         }
     }
 }

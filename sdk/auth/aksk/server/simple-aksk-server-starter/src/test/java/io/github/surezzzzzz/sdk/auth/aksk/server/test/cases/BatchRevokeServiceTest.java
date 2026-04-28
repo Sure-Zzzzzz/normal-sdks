@@ -1,7 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.BatchRevokeResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -12,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 
 import java.util.Arrays;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,6 +40,15 @@ class BatchRevokeServiceTest {
 
     @Autowired
     private ClientManagementService clientManagementService;
+
+    @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private OAuth2RegisteredClientEntityRepository clientRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
 
     private String testClientId;
     private String testClientSecret;
@@ -57,11 +72,22 @@ class BatchRevokeServiceTest {
         log.info("清理测试数据...");
 
         try {
+            authorizationEntityRepository.deleteAll();
+        } catch (Exception e) {
+            log.warn("清理授权记录失败: {}", e.getMessage());
+        }
+
+        try {
             if (testClientId != null) {
                 clientManagementService.deleteClient(testClientId);
             }
         } catch (Exception e) {
             log.warn("清理测试Client失败: {}", e.getMessage());
+        }
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
         }
 
         log.info("测试数据清理完成");
@@ -71,13 +97,37 @@ class BatchRevokeServiceTest {
     void testRevokeAllWithActiveTokens() {
         log.info("测试批量撤销有活跃Token的Client");
 
-        // 这里我们需要实际获取一些Token
-        // 但直接在服务端创建Token会比较复杂
+        // 通过 OAuth2 端点获取 token，确保有活跃 token
+        io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.JwtTokenTestHelper.getTokenByClientCredentials(
+                new org.springframework.boot.test.web.client.TestRestTemplate(),
+                port, testClientId, testClientSecret
+        );
 
-        // 执行批量撤销（可能没有Token）
+        // 确认 token 为 ACTIVE 状态
+        io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest queryRequest =
+                new io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest();
+        queryRequest.setClientId(testClientId);
+        queryRequest.setPage(1);
+        queryRequest.setSize(10);
+        io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse<TokenInfoResponse> page =
+                tokenManagementService.queryTokens(queryRequest);
+        long activeBefore = page.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertTrue(activeBefore >= 1, "撤销前应至少有 1 个 ACTIVE token");
+
+        // 执行批量撤销
         BatchRevokeResponse response = tokenManagementService.revokeAllByClientId(testClientId);
         assertNotNull(response);
-        assertTrue(response.getRevokedCount() >= 0);
+        assertEquals(activeBefore, response.getRevokedCount(), "撤销数量应等于活跃 token 数量");
+
+        // 验证撤销后状态
+        io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse<TokenInfoResponse> pageAfter =
+                tokenManagementService.queryTokens(queryRequest);
+        long activeAfter = pageAfter.getData().stream()
+                .filter(t -> t.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .count();
+        assertEquals(0, activeAfter, "批量撤销后不应有 ACTIVE token");
 
         log.info("批量撤销测试通过，实际撤销 {} 个Token", response.getRevokedCount());
     }

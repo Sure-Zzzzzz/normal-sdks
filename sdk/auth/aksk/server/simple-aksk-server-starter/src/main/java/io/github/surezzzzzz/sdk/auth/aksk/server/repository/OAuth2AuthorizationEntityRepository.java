@@ -6,7 +6,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -97,6 +99,7 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      * @return 删除的记录数
      */
     @Modifying
+    @Transactional
     @Query("DELETE FROM OAuth2AuthorizationEntity a WHERE a.accessTokenExpiresAt < :now")
     int deleteByAccessTokenExpiresAtBefore(Instant now);
 
@@ -107,6 +110,7 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      * @param metadata 新的 metadata 字节数组
      */
     @Modifying
+    @Transactional
     @Query("UPDATE OAuth2AuthorizationEntity a SET a.accessTokenMetadata = :metadata WHERE a.id = :id")
     void updateAccessTokenMetadata(String id, byte[] metadata);
 
@@ -117,4 +121,22 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      */
     @Query("SELECT COUNT(a) FROM OAuth2AuthorizationEntity a")
     long countAllAuthorizations();
+
+    /**
+     * 统计过期的授权记录数
+     *
+     * @param now 当前时间
+     * @return 过期记录数
+     */
+    @Query("SELECT COUNT(a) FROM OAuth2AuthorizationEntity a WHERE a.accessTokenExpiresAt < :now")
+    long countExpired(@Param("now") Instant now);
+
+    /**
+     * 统计未过期的授权记录数
+     *
+     * @param now 当前时间
+     * @return 未过期记录数
+     */
+    @Query("SELECT COUNT(a) FROM OAuth2AuthorizationEntity a WHERE a.accessTokenExpiresAt >= :now")
+    long countNotExpired(@Param("now") Instant now);
 }

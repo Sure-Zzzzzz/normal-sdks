@@ -226,7 +226,7 @@ class ClientManagementIntegrationTest {
         // Given - Create test clients via Service
         clientManagementService.createPlatformClient("Platform Client 1");
         clientManagementService.createPlatformClient("Platform Client 2");
-        clientManagementService.createUserClient("User Client 1", "user001", "User 001");
+        clientManagementService.createUserClient("user001", "User 001", "User Client 1");
 
         // When
         String url = String.format("http://localhost:%d/api/client?type=%s", port, ClientType.PLATFORM.getValue());
@@ -273,6 +273,9 @@ class ClientManagementIntegrationTest {
 
         // Then
         assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        // Verify it's actually deleted
+        assertFalse(clientRepository.findById(clientId).isPresent(), "删除后 client 应不存在");
 
         log.info("通过REST API删除Client成功: {}", clientId);
     }

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
@@ -21,10 +22,7 @@ import org.springframework.security.oauth2.server.authorization.client.Registere
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -55,6 +53,9 @@ class RevokeTokenServiceTest {
     @Autowired
     private OAuth2AuthorizationService authorizationService;
 
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
     private String testClientId;
     private String testClientSecret;
 
@@ -77,13 +78,7 @@ class RevokeTokenServiceTest {
         log.info("清理测试数据...");
 
         try {
-            // 删除所有与该Client相关的授权记录
-            RegisteredClient registeredClient = registeredClientRepository.findByClientId(testClientId);
-            if (registeredClient != null) {
-                // 这里假设可以通过registeredClientId查询授权记录
-                // 实际项目中可能需要更复杂的查询逻辑
-                log.warn("测试后需要手动清理授权记录，因为没有直接的查询方法");
-            }
+            authorizationEntityRepository.deleteAll();
         } catch (Exception e) {
             log.warn("清理授权记录失败: {}", e.getMessage());
         }
@@ -97,6 +92,11 @@ class RevokeTokenServiceTest {
         }
 
         log.info("测试数据清理完成");
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
     }
 
     @Test
@@ -162,10 +162,23 @@ class RevokeTokenServiceTest {
         assertNotNull(testTokenId, "无法创建测试Token");
         tokenManagementService.revokeToken(testTokenId);
 
+        // 记录第一次撤销后的状态
+        Optional<OAuth2AuthorizationEntity> entityAfterFirst = authorizationEntityRepository.findById(testTokenId);
+        assertTrue(entityAfterFirst.isPresent());
+        assertTrue(isTokenRevoked(entityAfterFirst.get()), "第一次撤销后应为已撤销");
+        byte[] metadataAfterFirst = entityAfterFirst.get().getAccessTokenMetadata();
+
         // 再次执行撤销
         tokenManagementService.revokeToken(testTokenId);
 
-        log.info("再次撤销已撤销的Token测试通过（无异常）");
+        // 验证第二次撤销没有改变状态
+        Optional<OAuth2AuthorizationEntity> entityAfterSecond = authorizationEntityRepository.findById(testTokenId);
+        assertTrue(entityAfterSecond.isPresent());
+        assertTrue(isTokenRevoked(entityAfterSecond.get()), "第二次撤销后仍应为已撤销");
+        assertArrayEquals(metadataAfterFirst, entityAfterSecond.get().getAccessTokenMetadata(),
+                "第二次撤销不应修改metadata");
+
+        log.info("再次撤销已撤销的Token测试通过（状态未改变）");
     }
 
     @Test

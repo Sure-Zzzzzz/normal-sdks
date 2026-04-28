@@ -109,4 +109,23 @@ public interface OAuth2RegisteredClientEntityRepository extends JpaRepository<OA
      */
     @Query("SELECT c FROM OAuth2RegisteredClientEntity c WHERE c.clientId IN :clientIds ORDER BY c.clientIdIssuedAt DESC")
     List<OAuth2RegisteredClientEntity> findAllByClientIdIn(@Param("clientIds") List<String> clientIds);
+
+    /**
+     * 根据启用状态分页查询
+     *
+     * @param enabled  启用状态
+     * @param pageable 分页参数
+     * @return 客户端实体分页结果
+     */
+    Page<OAuth2RegisteredClientEntity> findByEnabled(boolean enabled, Pageable pageable);
+
+    /**
+     * 根据客户端类型和启用状态分页查询
+     *
+     * @param clientType 客户端类型
+     * @param enabled    启用状态
+     * @param pageable   分页参数
+     * @return 客户端实体分页结果
+     */
+    Page<OAuth2RegisteredClientEntity> findByClientTypeAndEnabled(Integer clientType, boolean enabled, Pageable pageable);
 }

@@ -10,7 +10,8 @@
 <body>
 <div class="container mt-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">Token详情</h2>
+        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">Token详情
+        </h2>
         <div>
             <a href="/admin/token" class="btn btn-secondary">返回Token列表</a>
         </div>
@@ -88,19 +89,23 @@
         <div class="card-body">
             <div class="row mb-2">
                 <div class="col-md-3"><strong>签发时间:</strong></div>
-                <div class="col-md-9" th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
+                <div class="col-md-9"
+                     th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
             </div>
             <div class="row mb-2">
                 <div class="col-md-3"><strong>过期时间:</strong></div>
-                <div class="col-md-9" th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
+                <div class="col-md-9"
+                     th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></div>
             </div>
             <div class="row mb-2" th:if="${token.expiresAt != null && token.status.name() != 'REVOKED'}">
                 <div class="col-md-3"><strong>剩余时间:</strong></div>
                 <div class="col-md-9">
                     <span th:if="${token.status.name() == 'ACTIVE'}" class="text-success">
                         <span th:with="remainingSeconds=${T(java.time.Duration).between(T(java.time.Instant).now(), token.expiresAt).seconds}">
-                            <span th:if="${remainingSeconds >= 3600}" th:text="${#numbers.formatInteger(remainingSeconds / 3600, 1)} + '小时 ' + ${#numbers.formatInteger((remainingSeconds % 3600) / 60, 1)} + '分钟'"></span>
-                            <span th:if="${remainingSeconds < 3600 && remainingSeconds >= 60}" th:text="${#numbers.formatInteger(remainingSeconds / 60, 1)} + '分钟'"></span>
+                            <span th:if="${remainingSeconds >= 3600}"
+                                  th:text="${#numbers.formatInteger(remainingSeconds / 3600, 1)} + '小时 ' + ${#numbers.formatInteger((remainingSeconds % 3600) / 60, 1)} + '分钟'"></span>
+                            <span th:if="${remainingSeconds < 3600 && remainingSeconds >= 60}"
+                                  th:text="${#numbers.formatInteger(remainingSeconds / 60, 1)} + '分钟'"></span>
                             <span th:if="${remainingSeconds < 60}" th:text="${remainingSeconds} + '秒'"></span>
                         </span>
                     </span>
@@ -139,9 +144,13 @@
     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
         <button type="button" class="btn btn-warning"
                 th:data-token-id="${token.id}"
-                th:disabled="${token.status.name() == 'REVOKED'}"
-                onclick="revokeToken(this)">撤销此Token</button>
-        <button type="button" class="btn btn-danger" th:data-token-id="${token.id}" onclick="deleteToken(this)">删除此Token</button>
+                th:disabled="${token.status.name() == 'REVOKED' || token.status.name() == 'EXPIRED'}"
+                th:title="${token.status.name() == 'EXPIRED' ? '已过期的Token无需撤销，可直接删除' : ''}"
+                onclick="revokeToken(this)">撤销此Token
+        </button>
+        <button type="button" class="btn btn-danger" th:data-token-id="${token.id}" onclick="deleteToken(this)">
+            删除此Token
+        </button>
         <a href="/admin/token" class="btn btn-secondary">返回列表</a>
     </div>
 </div>

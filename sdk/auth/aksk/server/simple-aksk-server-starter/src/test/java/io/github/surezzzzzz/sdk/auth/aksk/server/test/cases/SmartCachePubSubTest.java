@@ -213,7 +213,7 @@ class SmartCachePubSubTest {
                 assertNotNull(listener, "实例2 的 CacheInvalidationListener 应该存在");
                 log.info("实例2 CacheInvalidationListener 已初始化");
             } catch (Exception e) {
-                log.warn("实例2 CacheInvalidationListener 可能未初始化: {}", e.getMessage());
+                fail("实例2 CacheInvalidationListener 未初始化，Pub/Sub 测试无效: " + e.getMessage());
             }
 
             // 先让实例2 的 L1 缓存这个 token（模拟实例2 曾经 introspect 过）

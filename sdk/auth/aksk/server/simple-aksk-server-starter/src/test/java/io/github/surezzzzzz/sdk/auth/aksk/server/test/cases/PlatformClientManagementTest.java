@@ -61,6 +61,8 @@ class PlatformClientManagementTest {
         // Then
         assertNotNull(clientId, "客户端ID不应为null");
         assertTrue(clientId.startsWith("AKP"), "客户端ID应以'AKP'开头");
+        assertEquals("Test Platform Client", clientInfo.getClientName(), "客户端名称应匹配");
+        assertEquals(ClientType.PLATFORM.getCode(), clientInfo.getClientType(), "客户端类型应为PLATFORM");
 
         log.info("平台级客户端创建测试通过");
     }
@@ -79,13 +81,13 @@ class PlatformClientManagementTest {
         assertNotNull(clientId, "客户端ID不应为null");
         assertTrue(clientId.startsWith("AKP"), "客户端ID应以'AKP'开头");
 
-        // Verify default scopes
+        // Verify default scopes persisted to database
         ClientInfoResponse retrievedClientInfoResponse = clientManagementService.getClientById(clientId);
-        log.info("获取客户端信息: {}", clientInfo);
+        log.info("获取客户端信息: {}", retrievedClientInfoResponse);
 
-        assertNotNull(clientInfo.getScopes(), "Scopes不应为null");
-        assertTrue(clientInfo.getScopes().contains("read"), "应包含'read'权限");
-        assertTrue(clientInfo.getScopes().contains("write"), "应包含'write'权限");
+        assertNotNull(retrievedClientInfoResponse.getScopes(), "Scopes不应为null");
+        assertTrue(retrievedClientInfoResponse.getScopes().contains("read"), "应包含'read'权限");
+        assertTrue(retrievedClientInfoResponse.getScopes().contains("write"), "应包含'write'权限");
 
         log.info("平台级客户端创建（默认scopes）测试通过");
     }
@@ -212,7 +214,8 @@ class PlatformClientManagementTest {
         // Then
         assertNotNull(newSecret, "新密钥不应为null");
         assertFalse(newSecret.isEmpty(), "新密钥不应为空");
-        assertTrue(newSecret.length() > 0, "新密钥长度应大于0");
+        assertTrue(newSecret.startsWith("SK"), "新密钥应以'SK'开头");
+        assertNotEquals(clientInfo.getClientSecret(), newSecret, "新密钥应与旧密钥不同");
 
         log.info("平台级客户端密钥重新生成测试通过");
     }

@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -11,12 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.*;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -49,13 +52,25 @@ class AdminDisabledTest {
     @Autowired
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
+    @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
     /**
      * 每个测试方法执行后清理数据
      */
     @AfterEach
     void cleanupData() {
         log.info("清理测试数据...");
+        authorizationEntityRepository.deleteAll();
         clientRepository.deleteAll();
+
+        Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
         log.info("测试数据清理完成");
     }
 
@@ -70,13 +85,14 @@ class AdminDisabledTest {
 
         log.info("Admin页面响应 - Status: {}", response.getStatusCode());
 
-        // 验证返回404、401或403（取决于Spring Security配置的@Order）
-        // 当AdminController被@ConditionalOnProperty禁用后，Security配置仍在，会返回403
+        // 当AdminController被@ConditionalOnProperty禁用后：
+        // - 如果Security过滤器先匹配 → 403（未认证用户的默认拒绝）
+        // - 如果DispatcherServlet先匹配 → 404（没有对应的Controller映射）
+        // 两者都说明admin功能已禁用
         assertTrue(
                 response.getStatusCode() == HttpStatus.NOT_FOUND ||
-                        response.getStatusCode() == HttpStatus.UNAUTHORIZED ||
                         response.getStatusCode() == HttpStatus.FORBIDDEN,
-                "Admin页面应该不可访问，期望404/401/403，实际: " + response.getStatusCode()
+                "Admin页面应该不可访问（404或403），实际: " + response.getStatusCode()
         );
 
         log.info("Admin页面不可访问测试通过");
@@ -93,13 +109,10 @@ class AdminDisabledTest {
 
         log.info("Login页面响应 - Status: {}", response.getStatusCode());
 
-        // 验证返回404、401或403（取决于Spring Security配置的@Order）
-        // 当AdminController被@ConditionalOnProperty禁用后，Security配置仍在，会返回403
         assertTrue(
                 response.getStatusCode() == HttpStatus.NOT_FOUND ||
-                        response.getStatusCode() == HttpStatus.UNAUTHORIZED ||
                         response.getStatusCode() == HttpStatus.FORBIDDEN,
-                "Login页面应该不可访问，期望404/401/403，实际: " + response.getStatusCode()
+                "Login页面应该不可访问（404或403），实际: " + response.getStatusCode()
         );
 
         log.info("Login页面不可访问测试通过");

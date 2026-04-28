@@ -401,33 +401,31 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     @Override
     public TokenStatisticsResponse getStatistics() {
-        // 统计MySQL数据（使用count查询，避免加载所有数据）
-        long totalCount = mysqlRepository.countAll();
+        Instant now = Instant.now();
 
-        // 统计各状态的Token数量
-        int pageSize = 1000;
-        int pageNumber = 0;
-        long activeCount = 0;
-        long expiredCount = 0;
+        // EXPIRED：纯 SQL COUNT，O(1)
+        long expiredCount = authorizationEntityRepository.countExpired(now);
+        long notExpiredCount = authorizationEntityRepository.countNotExpired(now);
+        long totalCount = expiredCount + notExpiredCount;
+
+        // ACTIVE / REVOKED：只扫未过期的 token，数量通常远小于总数
         long revokedCount = 0;
-        Page<TokenInfo> page;
+        int pageNumber = 0;
+        int pageSize = 1000;
+        org.springframework.data.domain.Page<OAuth2AuthorizationEntity> batch;
 
         do {
             Pageable pageable = PageRequest.of(pageNumber, pageSize);
-            page = mysqlRepository.queryTokensWithFilters(null, null, null, null, pageable);
-
-            for (TokenInfo token : page.getContent()) {
-                if (token.getStatus() == TokenInfo.TokenStatus.ACTIVE) {
-                    activeCount++;
-                } else if (token.getStatus() == TokenInfo.TokenStatus.REVOKED) {
+            batch = authorizationEntityRepository.findActiveTokens(now, pageable);
+            for (OAuth2AuthorizationEntity entity : batch.getContent()) {
+                if (isAlreadyRevoked(entity.getAccessTokenMetadata())) {
                     revokedCount++;
-                } else {
-                    expiredCount++;
                 }
             }
-
             pageNumber++;
-        } while (page.hasNext());
+        } while (batch.hasNext());
+
+        long activeCount = notExpiredCount - revokedCount;
 
         TokenStatisticsResponse stats = new TokenStatisticsResponse();
         stats.setTotalCount(totalCount);

@@ -10,7 +10,8 @@
 <body>
 <div class="container mt-5">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">AKSK管理</h2>
+        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">AKSK管理
+        </h2>
         <div>
             <a href="/admin/create-platform" class="btn btn-primary">创建平台级AKSK</a>
             <a href="/admin/create-user" class="btn btn-success">创建用户级AKSK</a>
@@ -50,6 +51,20 @@
                         <a th:href="@{/admin(type='user',search=${currentSearch})}"
                            th:classappend="${currentType == 'user'} ? 'active' : ''"
                            class="btn btn-outline-primary">用户级</a>
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <label class="form-label">状态过滤：</label>
+                    <div class="btn-group" role="group">
+                        <a th:href="@{/admin(type=${currentType}, search=${currentSearch})}"
+                           th:classappend="${currentEnabled == null} ? 'active' : ''"
+                           class="btn btn-outline-success">全部</a>
+                        <a th:href="@{/admin(type=${currentType}, enabled=true, search=${currentSearch})}"
+                           th:classappend="${currentEnabled == true} ? 'active' : ''"
+                           class="btn btn-outline-success">已启用</a>
+                        <a th:href="@{/admin(type=${currentType}, enabled=false, search=${currentSearch})}"
+                           th:classappend="${currentEnabled == false} ? 'active' : ''"
+                           class="btn btn-outline-success">已禁用</a>
                     </div>
                 </div>
                 <div class="col-auto ms-auto">
@@ -92,7 +107,8 @@
                         <span th:if="${client.ownerUsername != null}" th:text="${client.ownerUsername}"></span>
                         <span th:if="${client.ownerUsername != null && client.ownerUserId != null}"> / </span>
                         <span th:if="${client.ownerUserId != null}"><code th:text="${client.ownerUserId}"></code></span>
-                        <span th:if="${client.ownerUsername == null && client.ownerUserId == null}" class="text-muted">-</span>
+                        <span th:if="${client.ownerUsername == null && client.ownerUserId == null}"
+                              class="text-muted">-</span>
                     </td>
                     <td>
                         <span th:if="${client.enabled}" class="badge bg-success">已启用</span>
@@ -105,16 +121,19 @@
                                 type="button"
                                 class="btn btn-sm btn-warning"
                                 th:attr="data-client-id=${client.clientId}"
-                                onclick="disableClient(this.getAttribute('data-client-id'))">禁用</button>
+                                onclick="disableClient(this.getAttribute('data-client-id'))">禁用
+                        </button>
                         <button th:if="${!client.enabled}"
                                 type="button"
                                 class="btn btn-sm btn-success"
                                 th:attr="data-client-id=${client.clientId}"
-                                onclick="enableClient(this.getAttribute('data-client-id'))">启用</button>
+                                onclick="enableClient(this.getAttribute('data-client-id'))">启用
+                        </button>
                         <button type="button"
                                 class="btn btn-sm btn-danger"
                                 th:attr="data-client-id=${client.clientId}"
-                                onclick="deleteClient(this.getAttribute('data-client-id'))">删除</button>
+                                onclick="deleteClient(this.getAttribute('data-client-id'))">删除
+                        </button>
                     </td>
                 </tr>
                 <tr th:if="${#lists.isEmpty(clients)}">
@@ -129,17 +148,21 @@
     <nav th:if="${totalPages > 1}" aria-label="Page navigation">
         <ul class="pagination justify-content-center">
             <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''">
-                <a class="page-link" th:href="@{/admin(page=${currentPage - 1},size=${pageSize},type=${currentType},search=${currentSearch})}">上一页</a>
+                <a class="page-link"
+                   th:href="@{/admin(page=${currentPage - 1},size=${pageSize},type=${currentType},search=${currentSearch})}">上一页</a>
             </li>
 
             <li th:each="i : ${#numbers.sequence(1, totalPages)}"
                 class="page-item"
                 th:classappend="${i == currentPage} ? 'active' : ''">
-                <a class="page-link" th:href="@{/admin(page=${i},size=${pageSize},type=${currentType},search=${currentSearch})}" th:text="${i}"></a>
+                <a class="page-link"
+                   th:href="@{/admin(page=${i},size=${pageSize},type=${currentType},search=${currentSearch})}"
+                   th:text="${i}"></a>
             </li>
 
             <li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''">
-                <a class="page-link" th:href="@{/admin(page=${currentPage + 1},size=${pageSize},type=${currentType},search=${currentSearch})}">下一页</a>
+                <a class="page-link"
+                   th:href="@{/admin(page=${currentPage + 1},size=${pageSize},type=${currentType},search=${currentSearch})}">下一页</a>
             </li>
         </ul>
         <p class="text-center text-muted">

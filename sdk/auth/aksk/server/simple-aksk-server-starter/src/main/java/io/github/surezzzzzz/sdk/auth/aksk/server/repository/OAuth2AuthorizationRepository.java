@@ -108,6 +108,24 @@ public class OAuth2AuthorizationRepository {
             } else {
                 authorizationPage = authorizationEntityRepository.findActiveTokens(now, pageable);
             }
+        } else if (status == TokenInfo.TokenStatus.REVOKED) {
+            // REVOKED 判断依赖 metadata BLOB，无法纯 SQL 过滤
+            // 查询所有未过期的 Token（REVOKED 一定是未过期的），内存过滤
+            if (registeredClientIds != null) {
+                authorizationPage = authorizationEntityRepository.findActiveTokensByClientIds(registeredClientIds, now, pageable);
+            } else {
+                authorizationPage = authorizationEntityRepository.findActiveTokens(now, pageable);
+            }
+            // 内存过滤：只保留已撤销的
+            List<OAuth2AuthorizationEntity> revokedList = authorizationPage.getContent().stream()
+                    .filter(e -> isTokenRevoked(e.getAccessTokenMetadata()))
+                    .collect(Collectors.toList());
+            authorizationPage = new org.springframework.data.domain.PageImpl<>(
+                    revokedList, authorizationPage.getPageable(),
+                    // 总数不准确，但用于页面展示足够
+                    revokedList.size()
+            );
+            return authorizationPage.map(this::convertToTokenInfo);
         } else {
             // 查询所有Token
             if (registeredClientIds != null) {

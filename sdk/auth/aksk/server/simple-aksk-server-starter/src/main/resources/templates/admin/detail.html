@@ -37,6 +37,21 @@
                             <th>所属用户ID</th>
                             <td th:text="${client.ownerUserId}"></td>
                         </tr>
+                        <tr th:if="${client.ownerUsername != null}">
+                            <th>所属用户名</th>
+                            <td th:text="${client.ownerUsername}"></td>
+                        </tr>
+                        <tr>
+                            <th>状态</th>
+                            <td>
+                                <span th:if="${client.enabled}" class="badge bg-success">已启用</span>
+                                <span th:if="${!client.enabled}" class="badge bg-secondary">已禁用</span>
+                            </td>
+                        </tr>
+                        <tr th:if="${client.clientIdIssuedAt != null}">
+                            <th>创建时间</th>
+                            <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                        </tr>
                         <tr>
                             <th>API 权限范围</th>
                             <td>
@@ -65,6 +80,11 @@
                     </div>
 
                     <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editNameModal">
+                            编辑名称
+                        </button>
                         <button type="button" class="btn btn-warning"
                                 data-bs-toggle="modal"
                                 data-bs-target="#editScopesModal">
@@ -83,6 +103,29 @@
                         <a href="/admin" class="btn btn-primary">返回管理页面</a>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑名称 Modal -->
+<div class="modal fade" id="editNameModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑名称</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="editName" class="form-label">Client 名称</label>
+                    <input type="text" class="form-control" id="editName"
+                           th:value="${client.clientName}" maxlength="200">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateName()">保存</button>
             </div>
         </div>
     </div>
@@ -255,6 +298,30 @@
             document.execCommand('insertText', false, pastedText);
         }
     });
+
+    function updateName() {
+        const name = document.getElementById('editName').value.trim();
+        if (!name) {
+            alert('名称不能为空');
+            return;
+        }
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+            body: JSON.stringify({ name: name })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
+                if (modal) modal.hide();
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => alert('更新失败：' + error));
+    }
 
     function updateScopes() {
         const scopesText = document.getElementById('editScopes').value.trim();

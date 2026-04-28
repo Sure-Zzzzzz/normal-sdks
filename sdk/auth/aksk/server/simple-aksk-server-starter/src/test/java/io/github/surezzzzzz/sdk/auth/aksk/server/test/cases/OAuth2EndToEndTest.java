@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -48,6 +49,9 @@ class OAuth2EndToEndTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private OAuth2AuthorizationEntityRepository authorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     /**
@@ -56,6 +60,7 @@ class OAuth2EndToEndTest {
     @AfterEach
     void cleanupData() {
         log.info("清理测试数据...");
+        authorizationRepository.deleteAll();
         clientRepository.deleteAll();
 
         // 清理Redis中的测试数据

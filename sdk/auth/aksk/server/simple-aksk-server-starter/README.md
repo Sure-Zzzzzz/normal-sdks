@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -32,7 +32,7 @@ OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.2'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -395,6 +395,27 @@ logging:
 ---
 
 ## 版本历史
+
+### 1.1.2 (2026-04-28)
+
+Bug 修复：
+
+- **删除 Client 时不撤销关联 Token**：`deleteClient()` 现在先撤销所有活跃 Token 再删除记录
+- **重置 Secret 后页面数据不回填**：`createSuccess()` 控制器读取 URL 参数并填充到页面
+- **Token 列表页 REVOKED 过滤结果未验证**：补充验证逻辑
+
+优化：
+
+- Token 详情页 REVOKED 状态撤销按钮禁用
+- Admin 首页和详情页断言增强
+- Client 列表页 enabled 过滤增强
+- create-success 页面动态标题（Secret 重置 / AKSK 创建）
+
+测试覆盖：
+
+- 全项目审计 27 个测试文件，修复 50+ 处断言问题（7 CRITICAL、8 HIGH、15+ MEDIUM、5 LOW）
+
+详见 [CHANGELOG.1.1.2.md](CHANGELOG.1.1.2.md)
 
 ### 1.1.1 (2026-04-27)
 

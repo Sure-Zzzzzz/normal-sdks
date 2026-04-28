@@ -175,6 +175,9 @@ public class ClientManagementServiceImpl implements ClientManagementService {
                 ));
 
         try {
+            // 先撤销该 Client 下所有活跃 Token，避免孤儿数据
+            tokenManagementService.revokeAllByClientId(clientId);
+            // 再删除 Client
             clientRepository.delete(entity);
             log.info("Deleted client: {}", clientId);
         } catch (Exception e) {
@@ -218,6 +221,11 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
     @Override
     public PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Integer page, Integer size) {
+        return listClients(ownerUserId, type, null, page, size);
+    }
+
+    @Override
+    public PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Boolean enabled, Integer page, Integer size) {
         // 创建分页参数 (Spring Data JPA的页码从0开始，所以需要-1)
         int currentPage = Math.max(1, page);
         int pageSize = Math.max(1, size);
@@ -230,11 +238,19 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             // 按用户ID查询（数据库分页）
             entityPage = clientRepository.findByOwnerUserId(ownerUserId, pageable);
         } else if (type != null && !type.trim().isEmpty()) {
-            // 按类型查询（数据库分页）
             ClientType clientType = ClientType.PLATFORM.getValue().equalsIgnoreCase(type)
                     ? ClientType.PLATFORM
                     : ClientType.USER;
-            entityPage = clientRepository.findByClientType(clientType.getCode(), pageable);
+            if (enabled != null) {
+                // 按类型 + 启用状态查询
+                entityPage = clientRepository.findByClientTypeAndEnabled(clientType.getCode(), enabled, pageable);
+            } else {
+                // 按类型查询（数据库分页）
+                entityPage = clientRepository.findByClientType(clientType.getCode(), pageable);
+            }
+        } else if (enabled != null) {
+            // 按启用状态查询
+            entityPage = clientRepository.findByEnabled(enabled, pageable);
         } else {
             // 查询全部（数据库分页）
             entityPage = clientRepository.findAll(pageable);
@@ -418,5 +434,28 @@ public class ClientManagementServiceImpl implements ClientManagementService {
         // 复用已有方法生成新 Secret 并更新 DB（内部校验 client 存在，不存在抛 CLIENT_002）
         String newSecret = regenerateSecretKey(clientId);
         return new ResetSecretResponse(clientId, newSecret);
+    }
+
+    @Override
+    public void updateClientName(String clientId, String clientName) {
+        OAuth2RegisteredClientEntity entity = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(
+                        ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)
+                ));
+
+        entity.setClientName(clientName);
+
+        try {
+            clientRepository.save(entity);
+            log.info("Updated client name for: {}, new name: {}", clientId, clientName);
+        } catch (Exception e) {
+            log.error("Failed to update client name for: {}", clientId, e);
+            throw new ClientException(
+                    ErrorCode.CLIENT_UPDATE_FAILED,
+                    String.format(ErrorMessage.CLIENT_UPDATE_FAILED, e.getMessage()),
+                    e
+            );
+        }
     }
 }

@@ -63,6 +63,10 @@ class UserClientManagementTest {
         // Then
         assertNotNull(clientId, "客户端ID不应为null");
         assertTrue(clientId.startsWith("AKU"), "客户端ID应以'AKU'开头");
+        assertEquals("Test User Client for 10086", clientInfo.getClientName(), "客户端名称应匹配");
+        assertEquals(ClientType.USER.getCode(), clientInfo.getClientType(), "客户端类型应为USER");
+        assertEquals("10086", clientInfo.getOwnerUserId(), "所属用户ID应匹配");
+        assertEquals("zhangsan", clientInfo.getOwnerUsername(), "所属用户名应匹配");
 
         log.info("用户级客户端创建测试通过");
     }

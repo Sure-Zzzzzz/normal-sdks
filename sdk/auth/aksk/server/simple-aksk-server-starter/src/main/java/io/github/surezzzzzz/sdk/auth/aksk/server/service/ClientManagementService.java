@@ -89,6 +89,18 @@ public interface ClientManagementService {
     PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Integer page, Integer size);
 
     /**
+     * 分页查询Client列表（支持过滤条件，含enabled过滤）
+     *
+     * @param ownerUserId 所属用户ID（可选）
+     * @param type        客户端类型（可选）
+     * @param enabled     启用状态（可选，null=全部）
+     * @param page        页码（从1开始）
+     * @param size        每页大小
+     * @return 分页后的Client列表
+     */
+    PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Boolean enabled, Integer page, Integer size);
+
+    /**
      * 重新生成SecretKey
      *
      * @param clientId 客户端ID
@@ -136,4 +148,12 @@ public interface ClientManagementService {
      * @throws ClientException client 不存在时抛 CLIENT_002
      */
     ResetSecretResponse resetSecret(String clientId, boolean revokeTokens);
+
+    /**
+     * 更新客户端名称
+     *
+     * @param clientId   客户端ID
+     * @param clientName 新的客户端名称
+     */
+    void updateClientName(String clientId, String clientName);
 }

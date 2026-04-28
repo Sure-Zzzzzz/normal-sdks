@@ -92,10 +92,9 @@ class JwtTokenValidationTest {
 
         log.info("获取到Access Token: {}", accessToken.substring(0, Math.min(50, accessToken.length())) + "...");
 
-        // Step 2: 解析JWT token
+        // Step 2: 解析JWT token（parse失败会抛ParseException，不需要assertNotNull）
         JWT jwt = JWTParser.parse(accessToken);
-        log.info("JWT解析结果: jwt={}, type={}", jwt != null ? "not null" : "null", jwt != null ? jwt.getClass().getSimpleName() : "N/A");
-        assertNotNull(jwt, "JWT token应该能够被解析");
+        log.info("JWT解析成功: type={}", jwt.getClass().getSimpleName());
 
         // Step 3: 验证JWT是SignedJWT
         boolean isSignedJWT = jwt instanceof SignedJWT;

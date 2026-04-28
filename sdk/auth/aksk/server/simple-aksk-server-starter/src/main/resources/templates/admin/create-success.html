@@ -13,7 +13,8 @@
         <div class="col-md-8">
             <div class="card border-success">
                 <div class="card-header bg-success text-white">
-                    <h4>✓ AKSK创建成功</h4>
+                    <h4 th:text="${message != null ? message.contains('重置') ? '✓ Secret 重置成功' : '✓ AKSK创建成功' : '✓ AKSK创建成功'}">
+                        ✓ AKSK创建成功</h4>
                 </div>
                 <div class="card-body">
                     <div class="alert alert-warning" role="alert">
@@ -24,7 +25,8 @@
                         <label class="form-label fw-bold">Client ID</label>
                         <div class="input-group">
                             <input type="text" class="form-control" th:value="${clientId}" id="clientId" readonly>
-                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('clientId')">
+                            <button class="btn btn-outline-secondary" type="button"
+                                    onclick="copyToClipboard('clientId')">
                                 复制
                             </button>
                         </div>
@@ -33,8 +35,10 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold text-danger">Client Secret (仅显示一次)</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" th:value="${clientSecret}" id="clientSecret" readonly>
-                            <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('clientSecret')">
+                            <input type="text" class="form-control" th:value="${clientSecret}" id="clientSecret"
+                                   readonly>
+                            <button class="btn btn-outline-secondary" type="button"
+                                    onclick="copyToClipboard('clientSecret')">
                                 复制
                             </button>
                         </div>
@@ -69,12 +73,12 @@
     })();
 </script>
 <script>
-function copyToClipboard(elementId) {
-    const element = document.getElementById(elementId);
-    element.select();
-    document.execCommand('copy');
-    alert('已复制到剪贴板');
-}
+    function copyToClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        element.select();
+        document.execCommand('copy');
+        alert('已复制到剪贴板');
+    }
 </script>
 </body>
 </html>
