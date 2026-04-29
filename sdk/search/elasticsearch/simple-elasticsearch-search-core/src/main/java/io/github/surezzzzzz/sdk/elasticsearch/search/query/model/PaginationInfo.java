@@ -24,7 +24,7 @@ import java.util.List;
 public class PaginationInfo {
 
     /**
-     * 分页类型：offset / search_after
+     * 分页类型：offset / search_after / scroll
      */
     private String type;
 
@@ -70,6 +70,19 @@ public class PaginationInfo {
     private String pitKeepAlive;
 
     /**
+     * scroll ID（scroll 翻页第二页及之后使用）
+     * 第一页不传，响应中返回 scrollId；后续翻页将响应中的 scrollId 带回即可
+     */
+    private String scrollId;
+
+    /**
+     * scroll 上下文保活时间（scroll 分页必填，如 "2m"、"5m"）
+     * 含义：两次请求间的最大空闲时间，每次请求自动续期
+     * 不能超过服务端 scroll.max-ttl 配置，超过则报错
+     */
+    private String scrollTtl;
+
+    /**
      * 获取分页类型枚举
      */
     @JsonIgnore
@@ -91,6 +104,14 @@ public class PaginationInfo {
     @JsonIgnore
     public boolean isSearchAfterPagination() {
         return PaginationType.SEARCH_AFTER == getTypeEnum();
+    }
+
+    /**
+     * 是否为 scroll 分页
+     */
+    @JsonIgnore
+    public boolean isScrollPagination() {
+        return PaginationType.SCROLL == getTypeEnum();
     }
 
     /**

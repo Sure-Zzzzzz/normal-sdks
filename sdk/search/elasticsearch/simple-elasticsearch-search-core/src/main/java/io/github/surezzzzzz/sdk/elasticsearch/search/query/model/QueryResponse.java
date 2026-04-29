@@ -78,6 +78,12 @@ public class QueryResponse {
          * 调用方需将此值带入下一次请求的 pagination.pitId
          */
         private String pitId;
+
+        /**
+         * scroll ID（scroll 分页且 hasMore=true 时返回）
+         * 调用方需将此值带入下一次请求的 pagination.scrollId
+         */
+        private String scrollId;
     }
 
     /**

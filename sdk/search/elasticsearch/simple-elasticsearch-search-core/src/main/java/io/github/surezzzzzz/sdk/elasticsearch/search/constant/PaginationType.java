@@ -17,7 +17,13 @@ public enum PaginationType {
      * 游标分页（search_after）
      * 适用于深分页场景，无深度限制，但必须有排序字段
      */
-    SEARCH_AFTER("search_after", "游标分页");
+    SEARCH_AFTER("search_after", "游标分页"),
+
+    /**
+     * 滚动翻页（scroll）
+     * 适用于全量遍历/数据导出场景，快照一致性，不支持跳页
+     */
+    SCROLL("scroll", "滚动翻页");
 
     private final String type;
     private final String description;
