@@ -20,6 +20,11 @@ public final class PaginationStrategyKey {
      */
     public static final String SEARCH_AFTER_PREFIX = "search_after:";
 
+    /**
+     * scroll 分页
+     */
+    public static final String SCROLL = "scroll";
+
     private PaginationStrategyKey() {
         throw new UnsupportedOperationException("Utility class");
     }

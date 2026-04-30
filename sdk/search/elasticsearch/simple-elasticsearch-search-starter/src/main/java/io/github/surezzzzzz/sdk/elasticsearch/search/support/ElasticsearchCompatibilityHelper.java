@@ -138,6 +138,12 @@ public class ElasticsearchCompatibilityHelper {
         String indices = String.join(",", searchRequest.indices());
         String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + indices + ElasticsearchApiConstant.ENDPOINT_SEARCH;
 
+        // scroll 参数追加到 URL（ES 6.x 低级 API 需要通过 query param 传递）
+        if (searchRequest.scroll() != null && searchRequest.scroll().keepAlive() != null) {
+            endpoint = endpoint + SimpleElasticsearchSearchConstant.ES_SCROLL_QUERY_PARAM
+                    + searchRequest.scroll().keepAlive().getStringRep();
+        }
+
         org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
                 ElasticsearchApiConstant.HTTP_METHOD_POST, endpoint);
 

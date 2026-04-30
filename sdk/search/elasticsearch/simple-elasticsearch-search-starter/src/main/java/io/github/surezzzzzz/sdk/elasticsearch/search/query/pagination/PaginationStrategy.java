@@ -1,9 +1,9 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
-import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
@@ -65,12 +65,14 @@ public interface PaginationStrategy {
                         QueryRequest request);
 
     /**
-     * 从响应中提取翻页结果（hasMore/nextSearchAfter/pitId 等）
+     * 从响应中提取翻页结果（hasMore/nextSearchAfter/pitId/scrollId 等）
      *
      * @param searchResponse ES 响应
      * @param pagination     分页信息
+     * @param request        原始查询请求（供需要管理上下文生命周期的策略使用，如 PIT）
      * @return 分页结果
      */
     QueryResponse.PaginationResult buildResult(SearchResponse searchResponse,
-                                               PaginationInfo pagination);
+                                               PaginationInfo pagination,
+                                               QueryRequest request);
 }

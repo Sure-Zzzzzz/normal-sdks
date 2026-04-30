@@ -71,6 +71,11 @@ public class SimpleElasticsearchSearchProperties {
      */
     private PitConfig pit = new PitConfig();
 
+    /**
+     * scroll 配置
+     */
+    private ScrollConfig scroll = new ScrollConfig();
+
     @PostConstruct
     public void init() {
         log.info("Simple Elasticsearch Search enabled: {}", enable);
@@ -528,5 +533,21 @@ public class SimpleElasticsearchSearchProperties {
          * 防止用户设置过长的 keepAlive 导致 ES 资源长期占用
          */
         private String maxKeepAlive = SimpleElasticsearchSearchConstant.DEFAULT_PIT_MAX_KEEP_ALIVE;
+    }
+
+    /**
+     * scroll 配置
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    public static class ScrollConfig {
+        /**
+         * scroll 保活时间上限（如 "5m"）
+         * 用户传入的 scrollTtl 不能超过此值，超过则报错
+         * 防止用户设置过长的 TTL 导致 ES scroll 上下文长期占用
+         * 默认值与 PIT 的 maxKeepAlive 保持一致
+         */
+        private String maxTtl = SimpleElasticsearchSearchConstant.DEFAULT_SCROLL_MAX_TTL;
     }
 }

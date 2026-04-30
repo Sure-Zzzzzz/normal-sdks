@@ -128,12 +128,13 @@ public class CollapseTest {
         QueryResponse response = queryExecutor.execute(request);
 
         assertNotNull(response);
-        assertTrue(response.getTotal() > 0, "应该有查询结果");
+        // test_log_* 是共享索引，total 取决于其他测试类写入的数据量，不做精确断言
+        assertTrue(response.getTotal() >= 30, "总数应至少为30条（CollapseTest 自身写入的数据）");
 
         // 验证去重：所有返回的字段值应该不重复
         List<Map<String, Object>> items = response.getItems();
         assertNotNull(items);
-        assertTrue(items.size() <= 100, "返回数量不应超过 size");
+        assertEquals(10, items.size(), "去重后应返回10条（10个不同的action）");
 
         long distinctCount = items.stream()
                 .map(item -> item.get("action"))
@@ -209,7 +210,7 @@ public class CollapseTest {
 
         QueryResponse secondPageResponse = queryExecutor.execute(secondPageRequest);
         assertNotNull(secondPageResponse);
-        assertTrue(secondPageResponse.getItems().size() > 0, "第二页应该有数据");
+        assertEquals(2, secondPageResponse.getItems().size(), "第二页应该返回2条数据");
 
         // 验证第二页的数据与第一页不重复
         String secondPageFirstAction = (String) secondPageResponse.getItems()

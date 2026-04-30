@@ -298,6 +298,33 @@ public class ErrorCode {
      */
     public static final String EXPRESSION_PARSE_FAILED = "SEARCH_EXPRESSION_001";
 
+    // ========== scroll 相关错误码 ==========
+
+    /**
+     * scroll 分页下 scrollTtl 未提供
+     */
+    public static final String SCROLL_TTL_REQUIRED = "SEARCH_SCROLL_001";
+
+    /**
+     * scroll 分页下 scrollTtl 超过服务端上限
+     */
+    public static final String SCROLL_TTL_EXCEEDED = "SEARCH_SCROLL_002";
+
+    /**
+     * scrollTtl 格式不合法
+     */
+    public static final String SCROLL_TTL_INVALID_FORMAT = "SEARCH_SCROLL_003";
+
+    /**
+     * scroll 分页第一页必须指定排序
+     */
+    public static final String SCROLL_SORT_REQUIRED = "SEARCH_SCROLL_004";
+
+    /**
+     * scroll 不支持与 collapse 同时使用
+     */
+    public static final String SCROLL_COLLAPSE_NOT_SUPPORTED = "SEARCH_SCROLL_005";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }

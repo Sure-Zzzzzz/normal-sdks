@@ -16,7 +16,7 @@ import java.util.Map;
 /**
  * 翻页策略注册表
  *
- * <p>内置四种策略在启动时自动注册。用户可通过注入此 Bean 调用 {@link #register} 扩展自定义策略，
+ * <p>内置五种策略在启动时自动注册。用户可通过注入此 Bean 调用 {@link #register} 扩展自定义策略，
  * 但不允许覆盖已注册的 key（包括内置策略）。
  *
  * @author surezzzzzz
@@ -31,15 +31,18 @@ public class PaginationStrategyRegistry {
     private final TiebreakerPaginationStrategy tiebreakerStrategy;
     private final NonePaginationStrategy noneStrategy;
     private final PitPaginationStrategy pitStrategy;
+    private final ScrollPaginationStrategy scrollStrategy;
 
     public PaginationStrategyRegistry(OffsetPaginationStrategy offsetStrategy,
                                       TiebreakerPaginationStrategy tiebreakerStrategy,
                                       NonePaginationStrategy noneStrategy,
-                                      PitPaginationStrategy pitStrategy) {
+                                      PitPaginationStrategy pitStrategy,
+                                      ScrollPaginationStrategy scrollStrategy) {
         this.offsetStrategy = offsetStrategy;
         this.tiebreakerStrategy = tiebreakerStrategy;
         this.noneStrategy = noneStrategy;
         this.pitStrategy = pitStrategy;
+        this.scrollStrategy = scrollStrategy;
     }
 
     @PostConstruct
@@ -48,6 +51,7 @@ public class PaginationStrategyRegistry {
         register(buildSearchAfterKey(SearchAfterMode.TIEBREAKER), tiebreakerStrategy);
         register(buildSearchAfterKey(SearchAfterMode.NONE), noneStrategy);
         register(buildSearchAfterKey(SearchAfterMode.PIT), pitStrategy);
+        register(PaginationStrategyKey.SCROLL, scrollStrategy);
         log.info("PaginationStrategyRegistry initialized with {} strategies: {}",
                 strategies.size(), strategies.keySet());
     }
@@ -105,6 +109,9 @@ public class PaginationStrategyRegistry {
     private String buildKey(PaginationInfo pagination) {
         if (pagination.isOffsetPagination()) {
             return buildOffsetKey();
+        }
+        if (pagination.isScrollPagination()) {
+            return PaginationStrategyKey.SCROLL;
         }
         return buildSearchAfterKey(pagination.getSearchAfterModeEnum());
     }

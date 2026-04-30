@@ -26,21 +26,22 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.Aggregations;
-import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
-import org.elasticsearch.search.aggregations.bucket.SingleBucketAggregation;
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation;
-import org.elasticsearch.search.aggregations.metrics.*;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 聚合执行器实现
- * 继承 {@link AbstractExecutor} 获得通用执行骨架（降级重试、异常处理），
- * 实现 agg 特有的 DSL 构建、响应处理逻辑。
+ *
+ * <p>继承 {@link AbstractExecutor} 获得通用执行骨架（降级重试、异常处理），
+ * 实现 agg 特有的 DSL 构建和响应编排逻辑。
+ * 聚合响应解析委托给 {@link AggregationResponseParser}，职责分离。
  *
  * <p>ES 6.x 兼容性：{@link ElasticsearchCompatibilityHelper.Es6xAggregationResponseException}
  * 在 {@link #executeOnce} 内部捕获处理，不冒泡到基类。
@@ -59,6 +60,9 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
 
     @Autowired
     private AggRequestValidatorChain validatorChain;
+
+    @Autowired
+    private AggregationResponseParser responseParser;
 
     // ==================== 抽象方法实现 ====================
 
@@ -255,13 +259,13 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             for (Aggregation aggregation : aggregations) {
                 if (aggregation instanceof CompositeAggregation) {
                     CompositeAggregation composite = (CompositeAggregation) aggregation;
-                    data.put(aggregation.getName(), parseBucketAggregation(composite));
+                    data.put(aggregation.getName(), responseParser.parseComposite(composite));
                     Map<String, Object> key = composite.afterKey();
                     if (key != null && !key.isEmpty()) {
                         afterKey.put(aggregation.getName(), key);
                     }
                 } else {
-                    data.put(aggregation.getName(), parseAggregation(aggregation));
+                    data.put(aggregation.getName(), responseParser.parse(aggregation));
                 }
             }
         }
@@ -272,104 +276,10 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
                 .build();
     }
 
-    private Object parseAggregation(Aggregation aggregation) {
-        if (aggregation instanceof NumericMetricsAggregation.SingleValue) {
-            return ((NumericMetricsAggregation.SingleValue) aggregation).value();
-        }
-        // ExtendedStats 必须在 Stats 之前，因为 ExtendedStats extends Stats
-        if (aggregation instanceof ExtendedStats) {
-            ExtendedStats es = (ExtendedStats) aggregation;
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, es.getCount());
-            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN, es.getMin());
-            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX, es.getMax());
-            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, es.getAvg());
-            map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, es.getSum());
-            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES, es.getSumOfSquares());
-            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE, es.getVariance());
-            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION, es.getStdDeviation());
-            Map<String, Object> bounds = new LinkedHashMap<>();
-            bounds.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_BOUNDS_UPPER,
-                    es.getStdDeviationBound(ExtendedStats.Bounds.UPPER));
-            bounds.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_BOUNDS_LOWER,
-                    es.getStdDeviationBound(ExtendedStats.Bounds.LOWER));
-            map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS, bounds);
-            return map;
-        }
-        if (aggregation instanceof Stats) {
-            Stats stats = (Stats) aggregation;
-            Map<String, Object> statsMap = new HashMap<>();
-            statsMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, stats.getCount());
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN, stats.getMin());
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX, stats.getMax());
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG, stats.getAvg());
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM, stats.getSum());
-            return statsMap;
-        }
-        // PercentileRanks 必须在 Percentiles 之前（两者都实现 Iterable<Percentile>，语义不同）
-        if (aggregation instanceof PercentileRanks) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            for (Percentile p : (PercentileRanks) aggregation) {
-                // key=传入的值, value=百分位排名
-                map.put(String.valueOf(p.getValue()), p.getPercent());
-            }
-            return map;
-        }
-        if (aggregation instanceof Percentiles) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            for (Percentile p : (Percentiles) aggregation) {
-                // key=百分位, value=对应的值
-                map.put(String.valueOf(p.getPercent()), p.getValue());
-            }
-            return map;
-        }
-        if (aggregation instanceof SingleBucketAggregation) {
-            // filter / missing 等单桶聚合：返回 {count, subAgg1, subAgg2, ...}
-            SingleBucketAggregation single = (SingleBucketAggregation) aggregation;
-            Map<String, Object> result = new HashMap<>();
-            result.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, single.getDocCount());
-            Aggregations subAggs = single.getAggregations();
-            if (subAggs != null) {
-                for (Aggregation subAgg : subAggs) {
-                    result.put(subAgg.getName(), parseAggregation(subAgg));
-                }
-            }
-            return result;
-        }
-        if (aggregation instanceof MultiBucketsAggregation) {
-            return parseBucketAggregation((MultiBucketsAggregation) aggregation);
-        }
-        return aggregation.toString();
-    }
-
-    private List<Map<String, Object>> parseBucketAggregation(MultiBucketsAggregation aggregation) {
-        List<Map<String, Object>> buckets = new ArrayList<>();
-        for (MultiBucketsAggregation.Bucket bucket : aggregation.getBuckets()) {
-            Map<String, Object> bucketMap = new HashMap<>();
-            bucketMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY, bucket.getKeyAsString());
-            bucketMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT, bucket.getDocCount());
-            Aggregations subAggs = bucket.getAggregations();
-            if (subAggs != null && !subAggs.asList().isEmpty()) {
-                for (Aggregation subAgg : subAggs) {
-                    bucketMap.put(subAgg.getName(), parseAggregation(subAgg));
-                }
-            }
-            buckets.add(bucketMap);
-        }
-        return buckets;
-    }
-
     @SuppressWarnings("unchecked")
     private AggResponse parseEs6xAggregationResponse(String responseJson) throws Exception {
-        com.fasterxml.jackson.databind.ObjectMapper objectMapper =
-                new com.fasterxml.jackson.databind.ObjectMapper();
-        Map<String, Object> responseMap = objectMapper.readValue(responseJson,
-                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
-                });
-        Map<String, Object> rawAggregations =
-                (Map<String, Object>) responseMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AGGREGATIONS);
-
-        if (rawAggregations == null) {
+        Map<String, Object> rawAggregations = responseParser.parseEs6xResponse(responseJson);
+        if (rawAggregations.isEmpty()) {
             return AggResponse.builder().aggregations(new HashMap<>()).build();
         }
 
@@ -387,11 +297,11 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
                     if (key != null && !key.isEmpty()) {
                         afterKey.put(aggName, key);
                     }
-                    parsedAggregations.put(aggName, parseCompositeAggregationValue(aggMap));
+                    parsedAggregations.put(aggName, parseEs6xComposite(aggMap));
                     continue;
                 }
             }
-            parsedAggregations.put(aggName, parseAggregationValue(aggValue));
+            parsedAggregations.put(aggName, responseParser.parseEs6xValue(aggValue));
         }
 
         AggResponse.AggResponseBuilder builder = AggResponse.builder()
@@ -404,13 +314,13 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> parseCompositeAggregationValue(Map<String, Object> aggMap) {
-        List<Map<String, Object>> buckets = new ArrayList<>();
+    private java.util.List<Map<String, Object>> parseEs6xComposite(Map<String, Object> aggMap) {
+        java.util.List<Map<String, Object>> buckets = new java.util.ArrayList<>();
         Object bucketsValue = aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS);
-        if (!(bucketsValue instanceof List)) {
+        if (!(bucketsValue instanceof java.util.List)) {
             return buckets;
         }
-        for (Object bucketObj : (List<?>) bucketsValue) {
+        for (Object bucketObj : (java.util.List<?>) bucketsValue) {
             if (!(bucketObj instanceof Map)) {
                 continue;
             }
@@ -430,111 +340,11 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
                 String k = e.getKey();
                 if (!k.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY)
                         && !k.equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
-                    parsedBucket.put(k, parseAggregationValue(e.getValue()));
+                    parsedBucket.put(k, responseParser.parseEs6xValue(e.getValue()));
                 }
             }
             buckets.add(parsedBucket);
         }
         return buckets;
-    }
-
-    @SuppressWarnings("unchecked")
-    private Object parseAggregationValue(Object aggValue) {
-        if (!(aggValue instanceof Map)) {
-            return aggValue;
-        }
-        Map<String, Object> aggMap = (Map<String, Object>) aggValue;
-        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_VALUE) && aggMap.size() == 1) {
-            return aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUE);
-        }
-        // filter / missing 等单桶聚合：{doc_count: N, sub_agg: {...}}
-        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)
-                && !aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS)) {
-            Map<String, Object> result = new HashMap<>();
-            result.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT));
-            for (Map.Entry<String, Object> entry : aggMap.entrySet()) {
-                if (!entry.getKey().equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
-                    result.put(entry.getKey(), parseAggregationValue(entry.getValue()));
-                }
-            }
-            return result;
-        }
-        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_COUNT)
-                && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MIN)
-                && aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_MAX)) {
-            // extended_stats 必须在 stats 之前判断（extended_stats 包含 sum_of_squares 字段）
-            if (aggMap.containsKey(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES)) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
-                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_COUNT));
-                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN,
-                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MIN));
-                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX,
-                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MAX));
-                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG,
-                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AVG));
-                map.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM,
-                        aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_SUM));
-                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES,
-                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_SUM_OF_SQUARES));
-                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE,
-                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_VARIANCE));
-                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION,
-                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION));
-                map.put(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS,
-                        aggMap.get(SimpleElasticsearchSearchConstant.EXTENDED_STATS_STD_DEVIATION_BOUNDS));
-                return map;
-            }
-            Map<String, Object> statsMap = new HashMap<>();
-            statsMap.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_COUNT));
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MIN,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MIN));
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_MAX,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_MAX));
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_AVG,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_AVG));
-            statsMap.put(SimpleElasticsearchSearchConstant.STATS_RESULT_SUM,
-                    aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_SUM));
-            return statsMap;
-        }
-        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS)) {
-            Object bucketsValue = aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_BUCKETS);
-            if (bucketsValue instanceof List) {
-                List<Map<String, Object>> buckets = new ArrayList<>();
-                for (Object bucketObj : (List<?>) bucketsValue) {
-                    if (bucketObj instanceof Map) {
-                        Map<String, Object> bucket = (Map<String, Object>) bucketObj;
-                        Map<String, Object> parsedBucket = new HashMap<>();
-                        parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY,
-                                bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_KEY_AS_STRING));
-                        if (parsedBucket.get(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY) == null) {
-                            parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_KEY,
-                                    bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_KEY));
-                        }
-                        parsedBucket.put(SimpleElasticsearchSearchConstant.AGG_RESULT_COUNT,
-                                bucket.get(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT));
-                        for (Map.Entry<String, Object> entry : bucket.entrySet()) {
-                            String key = entry.getKey();
-                            if (!key.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY)
-                                    && !key.equals(SimpleElasticsearchSearchConstant.ES_JSON_KEY_AS_STRING)
-                                    && !key.equals(SimpleElasticsearchSearchConstant.ES_JSON_DOC_COUNT)) {
-                                parsedBucket.put(key, parseAggregationValue(entry.getValue()));
-                            }
-                        }
-                        buckets.add(parsedBucket);
-                    }
-                }
-                return buckets;
-            }
-        }
-        // percentiles / percentile_ranks：{"values": {"50.0": X, "95.0": Y}}
-        // 区别于 SingleValue 的 {"value": X}（size=1），这里 values 是 Map
-        if (aggMap.containsKey(SimpleElasticsearchSearchConstant.ES_JSON_VALUES)
-                && aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUES) instanceof Map) {
-            return aggMap.get(SimpleElasticsearchSearchConstant.ES_JSON_VALUES);
-        }
-        return aggValue;
     }
 }

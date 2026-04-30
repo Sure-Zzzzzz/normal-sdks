@@ -284,6 +284,33 @@ public class ErrorMessage {
      */
     public static final String EXPRESSION_TOO_LONG = "表达式长度超出限制，最大允许 %d 个字符，当前 %d 个字符";
 
+    // ========== scroll 相关 ==========
+
+    /**
+     * scrollTtl 未提供
+     */
+    public static final String SCROLL_TTL_REQUIRED = "scroll 分页必须提供 scrollTtl，建议值：1m ~ 5m";
+
+    /**
+     * scrollTtl 超过服务端上限
+     */
+    public static final String SCROLL_TTL_EXCEEDED = "scrollTtl [%s] 超过服务端限制，最大允许 %s";
+
+    /**
+     * scrollTtl 格式不合法
+     */
+    public static final String SCROLL_TTL_INVALID_FORMAT = "scrollTtl 格式不合法，支持格式：1d / 1h / 5m / 30s，当前值：%s";
+
+    /**
+     * scroll 第一页必须指定排序
+     */
+    public static final String SCROLL_SORT_REQUIRED = "scroll 分页第一页必须指定排序字段";
+
+    /**
+     * scroll 不支持 collapse
+     */
+    public static final String SCROLL_COLLAPSE_NOT_SUPPORTED = "scroll 分页不支持与 collapse（字段折叠）同时使用";
+
     private ErrorMessage() {
         // 私有构造函数，防止实例化
     }

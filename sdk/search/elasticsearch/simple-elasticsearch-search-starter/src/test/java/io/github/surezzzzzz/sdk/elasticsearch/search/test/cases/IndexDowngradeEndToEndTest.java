@@ -151,7 +151,7 @@ class IndexDowngradeEndToEndTest {
                         .content(toJson(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isArray())
-                .andExpect(jsonPath("$.data.total").exists())
+                .andExpect(jsonPath("$.data.total").value(60))  // 2024-01（31天）+ 2024-02（29天）= 60条
                 .andDo(result -> log.info("✓ 大范围查询降级成功，response: {}",
                         result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
@@ -318,7 +318,7 @@ class IndexDowngradeEndToEndTest {
                         .content(toJson(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aggregations.by_action").isArray())
-                .andExpect(jsonPath("$.data.aggregations.by_action[0].user_count").exists())
+                .andExpect(jsonPath("$.data.aggregations.by_action[0].user_count").isNumber())
                 .andDo(result -> log.info("✓ 嵌套聚合降级成功"));
     }
 

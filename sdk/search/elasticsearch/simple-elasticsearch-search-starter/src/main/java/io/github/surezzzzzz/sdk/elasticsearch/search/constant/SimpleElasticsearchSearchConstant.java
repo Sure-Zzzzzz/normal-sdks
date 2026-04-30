@@ -20,6 +20,11 @@ public class SimpleElasticsearchSearchConstant {
     public static final String PAGINATION_TYPE_SEARCH_AFTER = "search_after";
 
     /**
+     * 分页类型：scroll
+     */
+    public static final String PAGINATION_TYPE_SCROLL = "scroll";
+
+    /**
      * 排序方向：升序
      */
     public static final String SORT_ORDER_ASC = "asc";
@@ -490,6 +495,51 @@ public class SimpleElasticsearchSearchConstant {
      * PIT 保活时间默认上限
      */
     public static final String DEFAULT_PIT_MAX_KEEP_ALIVE = "5m";
+
+    /**
+     * ES PIT API 路径
+     */
+    public static final String ES_API_PIT = "/_pit";
+
+    /**
+     * ES PIT 查询参数：keep_alive
+     */
+    public static final String ES_PIT_KEEP_ALIVE_PARAM = "?keep_alive=";
+
+    /**
+     * ES PIT JSON 模板：关闭 PIT
+     * 参数: pitId
+     */
+    public static final String ES_PIT_CLOSE_TEMPLATE = "{\"id\":\"%s\"}";
+
+    // ========== scroll 相关 ==========
+
+    /**
+     * scroll 保活时间默认上限（与 PIT 保持一致）
+     */
+    public static final String DEFAULT_SCROLL_MAX_TTL = "5m";
+
+    /**
+     * ES scroll API 路径
+     */
+    public static final String ES_API_SCROLL = "/_search/scroll";
+
+    /**
+     * ES scroll JSON 模板：续期翻页
+     * 参数: scrollTtl, scrollId
+     */
+    public static final String ES_SCROLL_CONTINUE_TEMPLATE = "{\"scroll\":\"%s\",\"scroll_id\":\"%s\"}";
+
+    /**
+     * ES scroll JSON 模板：清除上下文
+     * 参数: scrollId
+     */
+    public static final String ES_SCROLL_DELETE_TEMPLATE = "{\"scroll_id\":\"%s\"}";
+
+    /**
+     * ES scroll 查询参数（初始请求追加到 URL）
+     */
+    public static final String ES_SCROLL_QUERY_PARAM = "?scroll=";
 
     // ========== Composite 聚合相关 ==========
 

@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 
 /**
- * search_after 排序必填校验，并委托给具体策略做额外校验（如 PIT 版本校验）
+ * search_after / scroll 排序必填校验，并委托给具体策略做额外校验
  *
  * @author surezzzzzz
  */
@@ -27,6 +27,14 @@ public class SearchAfterSortValidator implements QueryRequestValidator {
     @Override
     public void validate(QueryRequest request, SimpleElasticsearchSearchProperties properties) {
         PaginationInfo pagination = request.getPagination();
+
+        // scroll 分页：委托给 ScrollPaginationStrategy 做完整校验
+        if (pagination.isScrollPagination()) {
+            PaginationStrategy strategy = paginationStrategyRegistry.resolve(pagination);
+            strategy.validate(request, pagination);
+            return;
+        }
+
         if (!pagination.isSearchAfterPagination()) {
             return;
         }

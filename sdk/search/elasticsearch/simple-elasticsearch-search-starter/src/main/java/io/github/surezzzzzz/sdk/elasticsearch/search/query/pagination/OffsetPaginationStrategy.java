@@ -29,7 +29,8 @@ public class OffsetPaginationStrategy implements PaginationStrategy {
 
     @Override
     public QueryResponse.PaginationResult buildResult(SearchResponse searchResponse,
-                                                      PaginationInfo pagination) {
+                                                      PaginationInfo pagination,
+                                                      QueryRequest request) {
         boolean hasMore = searchResponse.getHits().getHits().length == pagination.getSize();
         return QueryResponse.PaginationResult.builder()
                 .type(pagination.getType())

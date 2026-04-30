@@ -241,6 +241,9 @@ class SearchEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.index").value("test_order_index"))
                 .andExpect(jsonPath("$.data.fields").isArray())
+                .andExpect(jsonPath("$.data.fields.length()").value(7))
+                .andExpect(jsonPath("$.data.fields[?(@.name=='amount')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='status')]").exists())
                 .andDo(result -> {
                     log.info("✓ 获取字段信息成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -258,6 +261,9 @@ class SearchEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.index").value("test_user"))
                 .andExpect(jsonPath("$.data.fields").isArray())
+                .andExpect(jsonPath("$.data.fields.length()").value(7))
+                .andExpect(jsonPath("$.data.fields[?(@.name=='name')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='age')]").exists())
                 .andDo(result -> {
                     log.info("✓ 获取字段信息成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -485,7 +491,7 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items.length()").value(2))
-                .andExpect(jsonPath("$.data.total").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.data.total").value(5))
                 .andDo(result -> {
                     log.info("✓ 分页查询成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -520,6 +526,8 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.items[0].age").value(35))
                 .andExpect(jsonPath("$.data.items[1].age").value(30))
                 .andExpect(jsonPath("$.data.items[2].age").value(28))
+                .andExpect(jsonPath("$.data.items[3].age").value(25))
+                .andExpect(jsonPath("$.data.items[4].age").value(22))
                 .andDo(result -> {
                     log.info("✓ 排序查询成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -550,9 +558,8 @@ class SearchEndToEndTest {
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.aggregations.avg_age").exists())  // ✅ 改路径
                 .andExpect(jsonPath("$.data.aggregations.avg_age").value(28.0))
-                .andExpect(jsonPath("$.data.took").exists())
+                .andExpect(jsonPath("$.data.took").isNumber())
                 .andDo(result -> {
                     log.info("✓ AVG 聚合成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -619,6 +626,13 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(3))
                 .andExpect(jsonPath("$.data.aggregations.by_city[0].key").exists())
                 .andExpect(jsonPath("$.data.aggregations.by_city[0].count").exists())
+                // 北京2人、上海2人、深圳1人，按 count desc 排序
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='北京')].count").value(
+                        org.hamcrest.Matchers.hasItem(2)))
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='上海')].count").value(
+                        org.hamcrest.Matchers.hasItem(2)))
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='深圳')].count").value(
+                        org.hamcrest.Matchers.hasItem(1)))
                 .andDo(result -> {
                     log.info("✓ TERMS 聚合成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -657,9 +671,17 @@ class SearchEndToEndTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aggregations.by_city").isArray())  // ✅ 改路径
                 .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(3))
-                .andExpect(jsonPath("$.data.aggregations.by_city[0].avg_age").exists())
-                .andExpect(jsonPath("$.data.aggregations.by_city[0].key").exists())
-                .andExpect(jsonPath("$.data.aggregations.by_city[0].count").exists())
+                // 验证每个城市的 avg_age 存在且为数值
+                .andExpect(jsonPath("$.data.aggregations.by_city[0].avg_age").isNumber())
+                .andExpect(jsonPath("$.data.aggregations.by_city[0].key").isString())
+                .andExpect(jsonPath("$.data.aggregations.by_city[0].count").isNumber())
+                // 北京2人 avg=26.5，上海2人 avg=32.5，深圳1人 avg=22
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='北京')].avg_age").value(
+                        org.hamcrest.Matchers.hasItem(26.5)))
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='上海')].avg_age").value(
+                        org.hamcrest.Matchers.hasItem(32.5)))
+                .andExpect(jsonPath("$.data.aggregations.by_city[?(@.key=='深圳')].avg_age").value(
+                        org.hamcrest.Matchers.hasItem(22.0)))
                 .andDo(result -> {
                     log.info("✓ 嵌套聚合成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -694,7 +716,8 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].name").value("张三"))
-                .andExpect(jsonPath("$.data.items[0].phone").value(org.hamcrest.Matchers.containsString("****")))
+                // mask-start=3, mask-end=4, mask-pattern="****"：138****8000
+                .andExpect(jsonPath("$.data.items[0].phone").value("138****8000"))
                 .andDo(result -> {
                     log.info("✓ 敏感字段脱敏成功");
                     log.debug("Masked phone: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -722,7 +745,8 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items.length()").value(1))
                 .andExpect(jsonPath("$.data.items[0].password").doesNotExist())
-                .andExpect(jsonPath("$.data.items[0].phone").value(org.hamcrest.Matchers.containsString("****")))
+                // mask-start=3, mask-end=4, mask-pattern="****"：138****8000
+                .andExpect(jsonPath("$.data.items[0].phone").value("138****8000"))
                 .andDo(result -> {
                     log.info("✓ 敏感字段禁止访问成功");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
@@ -1592,8 +1616,7 @@ class SearchEndToEndTest {
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.aggregations.avg_price").exists())
-                .andExpect(jsonPath("$.data.aggregations.total_stock").exists())
+                .andExpect(jsonPath("$.data.aggregations.avg_price").value(6439.0))  // (8999+7999+1899+6999+6299)/5
                 .andExpect(jsonPath("$.data.aggregations.total_stock").value(550.0))  // 100+50+200+80+120
                 .andDo(result -> {
                     log.info("✓ Secondary 数据源聚合成功");
@@ -3859,6 +3882,418 @@ class SearchEndToEndTest {
                     log.info("✓ extended_stats 聚合返回完整字段（ES 6.x secondary）");
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
+    }
+
+    // ==================== 17. scroll 分页 ====================
+
+    /**
+     * scroll 链式翻页共享的 scrollId（static 保证跨测试方法实例共享）
+     */
+    private static String scrollId;
+
+    @Test
+    @Order(240)
+    @DisplayName("17.1 scroll 第一页 - 返回 scrollId，hasMore=true")
+    void testScrollFirstPage() throws Exception {
+        log.info("========== 测试：scroll 第一页请求，返回 scrollId ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        String response = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
+                .andExpect(jsonPath("$.data.pagination.scrollId").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.emptyString())))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination.pitId").doesNotExist())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andDo(result -> log.info("✓ scroll 第一页成功"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        scrollId = objectMapper.readTree(response)
+                .path("data").path("pagination").path("scrollId").asText();
+        log.info("scrollId: {}", scrollId);
+        assertFalse(scrollId.isEmpty(), "scrollId 不应为空");
+    }
+
+    @Test
+    @Order(241)
+    @DisplayName("17.2 scroll 后续翻页 - 带 scrollId 请求下一页")
+    void testScrollNextPage() throws Exception {
+        log.info("========== 测试：scroll 后续翻页 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("2m")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+
+        String response = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
+                .andExpect(jsonPath("$.data.pagination.scrollId").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.emptyString())))
+                .andDo(result -> log.info("✓ scroll 第二页成功"))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        scrollId = objectMapper.readTree(response)
+                .path("data").path("pagination").path("scrollId").asText();
+        log.info("新 scrollId: {}", scrollId);
+    }
+
+    @Test
+    @Order(242)
+    @DisplayName("17.3 scroll 最后一页 - hasMore=false，scrollId 不再返回，上下文自动清除")
+    void testScrollLastPage() throws Exception {
+        log.info("========== 测试：scroll 最后一页，自动清除上下文 ==========");
+
+        // test_order 共 5 条，前两页各 2 条，第三页剩余 1 条
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("2m")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andDo(result -> log.info("✓ scroll 最后一页成功，上下文已自动清除"));
+    }
+
+    @Test
+    @Order(243)
+    @DisplayName("17.4 scroll 不传 scrollTtl - 返回 400")
+    void testScrollTtlRequired() throws Exception {
+        log.info("========== 测试：scroll 不传 scrollTtl → 400 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")))
+                .andDo(result -> log.info("✓ 缺少 scrollTtl 正确报错"));
+    }
+
+    @Test
+    @Order(244)
+    @DisplayName("17.5 scroll scrollTtl 超过服务端上限 - 返回 400")
+    void testScrollTtlExceeded() throws Exception {
+        log.info("========== 测试：scrollTtl 超过 max-ttl → 400 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .scrollTtl("1h")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("1h")))
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("5m")))
+                .andDo(result -> log.info("✓ scrollTtl 超限正确报错"));
+    }
+
+    @Test
+    @Order(245)
+    @DisplayName("17.6 scroll 第一页不传 sort - 返回 400")
+    void testScrollSortRequired() throws Exception {
+        log.info("========== 测试：scroll 第一页不传 sort → 400 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .scrollTtl("2m")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("排序")))
+                .andDo(result -> log.info("✓ 缺少 sort 正确报错"));
+    }
+
+    @Test
+    @Order(246)
+    @DisplayName("17.7 scroll + collapse 同时使用 - 返回 400")
+    void testScrollCollapseNotSupported() throws Exception {
+        log.info("========== 测试：scroll + collapse → 400 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .collapse(QueryRequest.CollapseField.builder().field("status").build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("collapse")))
+                .andDo(result -> log.info("✓ scroll + collapse 正确报错"));
+    }
+
+    @Test
+    @Order(247)
+    @DisplayName("17.8 scroll scrollTtl 格式不合法 - 返回 400")
+    void testScrollTtlInvalidFormat() throws Exception {
+        log.info("========== 测试：scrollTtl 格式不合法 → 400 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .scrollTtl("abc")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("abc")))
+                .andDo(result -> log.info("✓ scrollTtl 格式非法正确报错"));
+    }
+
+    @Test
+    @Order(248)
+    @DisplayName("17.9 scroll 全量遍历一致性 - 数据不丢不重")
+    void testScrollFullTraversalConsistency() throws Exception {
+        log.info("========== 测试：scroll 全量遍历一致性 ==========");
+
+        Set<String> allIds = new HashSet<>();
+        String currentScrollId = null;
+        int pageCount = 0;
+
+        while (true) {
+            PaginationInfo.PaginationInfoBuilder paginationBuilder = PaginationInfo.builder()
+                    .type("scroll")
+                    .size(2)
+                    .scrollTtl("2m");
+
+            if (currentScrollId == null) {
+                paginationBuilder.sort(Collections.singletonList(
+                        PaginationInfo.SortField.builder().field("amount").order("asc").build()));
+            } else {
+                paginationBuilder.scrollId(currentScrollId);
+            }
+
+            QueryRequest request = QueryRequest.builder()
+                    .index(ORDER_INDEX)
+                    .pagination(paginationBuilder.build())
+                    .build();
+
+            String response = mockMvc.perform(post("/api/query")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .characterEncoding("UTF-8")
+                            .content(toJson(request)))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response);
+            com.fasterxml.jackson.databind.JsonNode items = root.path("data").path("items");
+            boolean hasMore = root.path("data").path("pagination").path("hasMore").asBoolean();
+
+            for (com.fasterxml.jackson.databind.JsonNode item : items) {
+                allIds.add(item.path("_id").asText());
+            }
+            pageCount++;
+            log.info("第 {} 页：{} 条，hasMore={}", pageCount, items.size(), hasMore);
+
+            if (!hasMore) {
+                break;
+            }
+            currentScrollId = root.path("data").path("pagination").path("scrollId").asText();
+        }
+
+        log.info("遍历完成：共 {} 页，收集 {} 个 id", pageCount, allIds.size());
+        assertTrue(allIds.size() == 5, "应遍历到全部 5 条数据，实际: " + allIds.size());
+        assertTrue(pageCount == 3, "应分 3 页遍历完，实际: " + pageCount);
+        // 验证 5 条数据的 _id 完整（1~5）
+        for (int i = 1; i <= 5; i++) {
+            assertTrue(allIds.contains(String.valueOf(i)), "缺少 _id=" + i);
+        }
+    }
+
+    @Test
+    @Order(249)
+    @DisplayName("17.10 scroll ES 6.x 兼容性 - secondary 数据源正常翻页")
+    void testScrollOnEs6x() throws Exception {
+        log.info("========== 测试：ES 6.x 环境下 scroll 翻页 ==========");
+
+        ClusterInfo clusterInfo = registry.getClusterInfo(SECONDARY_DATASOURCE);
+        Assumptions.assumeTrue(
+                clusterInfo != null
+                        && clusterInfo.getEffectiveVersion() != null
+                        && clusterInfo.getEffectiveVersion().getMajor() == 6,
+                "secondary 数据源不是 ES 6.x，跳过此测试"
+        );
+
+        QueryRequest request = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("price").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andDo(result -> log.info("✓ ES 6.x scroll 第一页成功"));
+    }
+
+    @Test
+    @Order(250)
+    @DisplayName("17.11 scroll 后续翻页不传 scrollTtl - 返回 400")
+    void testScrollContinuationMissingTtl() throws Exception {
+        log.info("========== 测试：scroll 后续翻页不传 scrollTtl → 400 ==========");
+
+        // 先拿一个合法的 scrollId
+        QueryRequest firstPage = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstPage)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        String sid = objectMapper.readTree(firstResponse)
+                .path("data").path("pagination").path("scrollId").asText();
+
+        // 后续翻页不传 scrollTtl
+        QueryRequest nextPage = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollId(sid)
+                        // 故意不传 scrollTtl
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(nextPage)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")))
+                .andDo(result -> log.info("✓ 后续翻页缺少 scrollTtl 正确报错"));
+    }
+
+    @Test
+    @Order(251)
+    @DisplayName("17.12 scroll scrollTtl 恰好等于 maxTtl - 应通过（边界值）")
+    void testScrollTtlEqualsMaxTtl() throws Exception {
+        log.info("========== 测试：scrollTtl 恰好等于 maxTtl（5m）→ 应通过 ==========");
+
+        // maxTtl 默认 5m，传 5m 应该通过
+        QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("5m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andDo(result -> log.info("✓ scrollTtl=maxTtl 边界值通过"));
     }
 }
 

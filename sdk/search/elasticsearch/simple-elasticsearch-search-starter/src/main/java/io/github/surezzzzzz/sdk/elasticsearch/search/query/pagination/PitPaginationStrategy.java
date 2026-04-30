@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
@@ -7,6 +8,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsea
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -140,17 +142,8 @@ public class PitPaginationStrategy implements PaginationStrategy {
 
     @Override
     public QueryResponse.PaginationResult buildResult(SearchResponse searchResponse,
-                                                      PaginationInfo pagination) {
-        // 此方法不直接调用，PIT 需要 request 上下文，由 buildResultWithRequest 处理
-        throw new UnsupportedOperationException("PitPaginationStrategy requires request context, use buildResultWithRequest");
-    }
-
-    /**
-     * 构建 PIT 分页结果，同时管理 PIT 生命周期
-     */
-    public QueryResponse.PaginationResult buildResultWithRequest(SearchResponse searchResponse,
-                                                                 PaginationInfo pagination,
-                                                                 QueryRequest request) {
+                                                      PaginationInfo pagination,
+                                                      QueryRequest request) {
         SearchHit[] hits = searchResponse.getHits().getHits();
         boolean hasMore = hits.length == pagination.getSize();
 
@@ -209,8 +202,11 @@ public class PitPaginationStrategy implements PaginationStrategy {
             String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
             String keepAlive = pagination.getPitKeepAlive();
+            String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + request.getIndex()
+                    + SimpleElasticsearchSearchConstant.ES_API_PIT
+                    + SimpleElasticsearchSearchConstant.ES_PIT_KEEP_ALIVE_PARAM + keepAlive;
             org.elasticsearch.client.Request pitRequest = new org.elasticsearch.client.Request(
-                    "POST", "/" + request.getIndex() + "/_pit?keep_alive=" + keepAlive);
+                    ElasticsearchApiConstant.HTTP_METHOD_POST, endpoint);
             org.elasticsearch.client.Response pitResponse = client.getLowLevelClient().performRequest(pitRequest);
             InputStream inputStream = pitResponse.getEntity().getContent();
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -234,8 +230,11 @@ public class PitPaginationStrategy implements PaginationStrategy {
         try {
             String datasourceKey = routeResolver.resolveDataSource(index);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
-            org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request("DELETE", "/_pit");
-            closeRequest.setJsonEntity("{\"id\":\"" + pitId + "\"}");
+            org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request(
+                    ElasticsearchApiConstant.HTTP_METHOD_DELETE,
+                    SimpleElasticsearchSearchConstant.ES_API_PIT);
+            closeRequest.setJsonEntity(String.format(
+                    SimpleElasticsearchSearchConstant.ES_PIT_CLOSE_TEMPLATE, pitId));
             client.getLowLevelClient().performRequest(closeRequest);
             log.debug("PIT closed: index={}", index);
         } catch (Exception e) {

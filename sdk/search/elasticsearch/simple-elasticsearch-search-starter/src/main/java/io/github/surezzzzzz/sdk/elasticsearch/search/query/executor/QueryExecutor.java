@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
@@ -17,7 +18,6 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PaginationStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PaginationStrategyRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PitPaginationStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.validator.QueryRequestValidatorChain;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +31,7 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.collapse.CollapseBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -77,6 +78,36 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     @Override
     protected QueryResponse executeOnce(QueryRequest request, IndexMetadata metadata,
                                         long startTime, DowngradeLevel level) throws IOException {
+        PaginationInfo pagination = request.getPagination();
+
+        // scroll 后续翻页：使用 scroll API，不走 search API
+        if (pagination != null && pagination.isScrollPagination()
+                && StringUtils.hasText(pagination.getScrollId())) {
+            SearchResponse searchResponse = executeScrollRequest(request);
+            QueryResponse response = processResponse(request, searchResponse);
+            response.setTook(System.currentTimeMillis() - startTime);
+
+            // 最后一页自动清除 scroll 上下文
+            if (response.getPagination() != null
+                    && Boolean.FALSE.equals(response.getPagination().getHasMore())
+                    && searchResponse.getScrollId() != null) {
+                closeScrollQuietly(searchResponse.getScrollId(), request.getIndex());
+            }
+
+            String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+            try {
+                QueryExecutionContext context = QueryExecutionContext.builder()
+                        .actualIndices(new String[]{request.getIndex()})
+                        .datasource(datasourceKey)
+                        .build();
+                eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
+            } catch (Exception e) {
+                log.warn("Failed to publish EsQueryEvent for scroll continuation", e);
+            }
+
+            return response;
+        }
+
         SearchRequest searchRequest = buildSearchRequest(request, metadata, level);
 
         log.debug("Executing query: indices={}, dsl={}",
@@ -92,6 +123,14 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
         QueryResponse response = processResponse(request, searchResponse);
         response.setTook(System.currentTimeMillis() - startTime);
+
+        // scroll 第一页：如果 hasMore=false（数据量不足一页），也需要清除 scroll 上下文
+        if (pagination != null && pagination.isScrollPagination()
+                && response.getPagination() != null
+                && Boolean.FALSE.equals(response.getPagination().getHasMore())
+                && searchResponse.getScrollId() != null) {
+            closeScrollQuietly(searchResponse.getScrollId(), request.getIndex());
+        }
 
         log.debug("Query executed: index={}, downgradeLevel={}, took={}ms, hits={}",
                 request.getIndex(), level, response.getTook(), response.getTotal());
@@ -223,15 +262,42 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         builder.items(items);
 
         PaginationStrategy strategy = paginationStrategyRegistry.resolve(pagination);
-        QueryResponse.PaginationResult paginationResult;
-        if (strategy instanceof PitPaginationStrategy) {
-            paginationResult = ((PitPaginationStrategy) strategy)
-                    .buildResultWithRequest(searchResponse, pagination, request);
-        } else {
-            paginationResult = strategy.buildResult(searchResponse, pagination);
-        }
+        QueryResponse.PaginationResult paginationResult = strategy.buildResult(searchResponse, pagination, request);
         builder.pagination(paginationResult);
 
         return builder.build();
+    }
+
+    private SearchResponse executeScrollRequest(QueryRequest request) throws IOException {
+        PaginationInfo pagination = request.getPagination();
+        String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
+        RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+
+        // 使用低级 API 调用 scroll 接口（兼容 ES 6.x）
+        org.elasticsearch.client.Request scrollRequest = new org.elasticsearch.client.Request(
+                ElasticsearchApiConstant.HTTP_METHOD_POST,
+                SimpleElasticsearchSearchConstant.ES_API_SCROLL);
+        scrollRequest.setJsonEntity(String.format(
+                SimpleElasticsearchSearchConstant.ES_SCROLL_CONTINUE_TEMPLATE,
+                pagination.getScrollTtl(), pagination.getScrollId()));
+
+        org.elasticsearch.client.Response response = client.getLowLevelClient().performRequest(scrollRequest);
+        return ElasticsearchCompatibilityHelper.parseResponse(response, SearchResponse.class);
+    }
+
+    private void closeScrollQuietly(String scrollId, String index) {
+        try {
+            String datasourceKey = routeResolver.resolveDataSource(index);
+            RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
+            org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request(
+                    ElasticsearchApiConstant.HTTP_METHOD_DELETE,
+                    SimpleElasticsearchSearchConstant.ES_API_SCROLL);
+            closeRequest.setJsonEntity(String.format(
+                    SimpleElasticsearchSearchConstant.ES_SCROLL_DELETE_TEMPLATE, scrollId));
+            client.getLowLevelClient().performRequest(closeRequest);
+            log.debug("Scroll context closed: index={}", index);
+        } catch (Exception e) {
+            log.warn("Failed to close scroll context for index [{}]: {}", index, e.getMessage());
+        }
     }
 }

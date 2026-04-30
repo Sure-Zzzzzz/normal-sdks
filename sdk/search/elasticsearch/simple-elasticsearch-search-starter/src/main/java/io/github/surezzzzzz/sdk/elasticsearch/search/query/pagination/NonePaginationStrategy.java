@@ -36,7 +36,8 @@ public class NonePaginationStrategy implements PaginationStrategy {
 
     @Override
     public QueryResponse.PaginationResult buildResult(SearchResponse searchResponse,
-                                                      PaginationInfo pagination) {
+                                                      PaginationInfo pagination,
+                                                      QueryRequest request) {
         SearchHit[] hits = searchResponse.getHits().getHits();
         boolean hasMore = hits.length == pagination.getSize();
 
