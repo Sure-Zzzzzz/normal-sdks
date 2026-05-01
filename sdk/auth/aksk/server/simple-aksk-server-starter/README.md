@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -32,7 +32,7 @@ OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.3'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -268,6 +268,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `/api/client`                        | GET    | 查询 Client 列表（分页/批量） |
 | `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
 | `/api/client/{clientId}`             | DELETE | 删除 Client           |
+| `/api/client/{clientId}`             | PATCH  | 更新 Client（enabled/scopes/name/ownerUserId） |
 | `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户权限            |
 | `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
 
@@ -395,6 +396,20 @@ logging:
 ---
 
 ## 版本历史
+
+### 1.1.3 (2026-05-01)
+
+新增功能：
+
+- **AKU 归属信息可修改**：新增 `updateOwnerInfo()` 接口，支持修改用户级 AKSK 的 ownerUserId/ownerUsername
+- **Admin 编辑归属信息**：详情页新增"编辑归属信息"按钮（仅 AKU 显示）
+- **`PATCH /api/client/{clientId}`**：新增内网 API，支持更新 enabled/scopes/name/ownerUserId
+
+Bug 修复：
+
+- **Admin 详情页编辑操作无响应**：修复 JS 通过 `data.success` 判断成功导致操作永远失败的问题，改用 `response.ok`
+
+详见 [CHANGELOG.1.1.3.md](CHANGELOG.1.1.3.md)
 
 ### 1.1.2 (2026-04-28)
 

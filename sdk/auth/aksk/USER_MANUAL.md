@@ -24,14 +24,14 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 ### 1.2 核心特性
 
 - **双层级 AKSK 管理**：平台级（AKP）和用户级（AKU）两种类型
-- **OAuth2 标准协议**：基于 Spring Authorization Server 0.4.1，完全符合 OAuth2 规范
-- **JWT Token 签发**：RSA 算法签发，支持自定义公私钥和 `auth_server_id`
 - **Token 即时撤销**：撤销后 introspect 立即返回 `active=false`
-- **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件
 - **L1+L2 两级缓存**：Caffeine 本地缓存 + Redis 分布式缓存，introspect 热路径命中 L1 无需访问 Redis（可选）
 - **多实例缓存一致性**：Redis Pub/Sub 广播缓存失效，多副本间 L1 缓存强一致（可选）
+- **资源保护**：Introspect 验证（推荐，即时感知撤销）和 HTTP Header 解析（已有网关场景）
+- **OAuth2 标准协议**：基于 Spring Authorization Server 0.4.1，完全符合 OAuth2 规范
+- **JWT Token 签发**：RSA 算法签发，支持自定义公私钥和 `auth_server_id`
+- **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件
 - **多种客户端实现**：Feign、RestTemplate，支持 Redis 和 HttpSession 两种 Token 缓存策略
-- **资源保护**：JWT 验证和 HTTP Header 解析两种方式
 - **权限注解**：4 种权限校验注解，支持 SpEL 表达式
 - **Admin 管理界面**：AKSK 和 Token 的完整管理操作
 
@@ -46,7 +46,7 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 | MySQL | 5.7+ / 8.0+ | Token 持久化 |
 | Redis | - | Token 缓存（可选） |
 | Caffeine | 2.9.x | L1 本地缓存（可选，需引入 Redis） |
-| APISIX | 3.x | API 网关（可选） |
+| APISIX | 3.x | API 网关（可选，已有网关基础设施时使用） |
 
 ---
 
@@ -65,22 +65,31 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 │  simple-aksk-server-starter  │  Admin 管理界面                   │
 │  /oauth2/token  /oauth2/revoke  /oauth2/introspect  /oauth2/jwks │
 └─────────────────────────────────────────────────────────────────┘
-                              ↓ 携带 JWT
-┌─────────────────────────────────────────────────────────────────┐
-│                     网关层 (APISIX，可选)                        │
-│  JWT 验证 → 注入用户信息到请求头 → 转发到业务服务               │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
+                              ↓ 携带 Token
 ┌─────────────────────────────────────────────────────────────────┐
 │                     资源服务层 (Resource)                        │
-│  JWT 验证（resource-server-starter）                             │
-│  Header 解析（security-context-starter，走网关时使用）           │
+│  Introspect 验证（resource-server-starter，推荐）                │
+│  Header 解析（security-context-starter，已有网关场景）           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 两种部署架构
 
-#### 架构 A：有 APISIX 网关（推荐生产环境）
+#### 架构 A：Introspect 验证（推荐）
+
+```
+客户端 → AKSK Server 换 Token → 携带 Token → 业务服务
+                                                    ↑
+                                        resource-server-starter
+                                        （INTROSPECT 模式，调用 /oauth2/introspect）
+```
+
+- 业务服务引入 `simple-aksk-resource-server-starter`，配置 `verification-mode: INTROSPECT`
+- 启用 L1+L2 缓存后，introspect 热路径命中 L1 缓存，无 Redis IO，性能与本地验签相当
+- 即时感知 token 撤销，撤销后下次请求立即返回 `active=false`
+- 无需网关，部署简单
+
+#### 架构 B：API 网关代理（已有 APISIX 等网关时）
 
 ```
 客户端 → AKSK Server 换 Token → 携带 JWT → APISIX 验签 → 注入 Header → 业务服务
@@ -89,21 +98,9 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
                                                           （从 Header 读用户信息）
 ```
 
-- APISIX 使用 jwt-auth 插件本地验签，性能最好
+- 适合已有 API 网关的基础设施，网关负责验签并注入用户信息到请求头
 - 业务服务引入 `simple-aksk-security-context-starter`，从请求头读取用户信息
-- 如需即时感知 token 撤销，APISIX 改用 openid-connect 插件调 `/oauth2/introspect`
-
-#### 架构 B：无 APISIX 网关（适合内网/测试环境）
-
-```
-客户端 → AKSK Server 换 Token → 携带 JWT → 业务服务
-                                              ↑
-                                  resource-server-starter
-                                  （直接验证 JWT 签名）
-```
-
-- 业务服务引入 `simple-aksk-resource-server-starter`，直接验证 JWT
-- 无法感知 token 撤销（JWT 本地验签不查数据库）
+- 注意：jwt-auth 插件本地验签无法感知 token 撤销，如需即时感知需改用 openid-connect 插件
 
 ---
 
@@ -119,9 +116,9 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 | `simple-aksk-httpsession-token-manager` | 1.0.0 | 客户端 | HttpSession Token 缓存管理 |
 | `simple-aksk-feign-redis-client-starter` | 1.0.1 | 客户端 | Feign + Redis Token 管理 |
 | `simple-aksk-resttemplate-redis-client-starter` | 1.0.0 | 客户端 | RestTemplate + Redis Token 管理 |
-| `simple-aksk-resource-core` | 1.0.1 | 资源端核心 | 权限注解、安全上下文工具 |
-| `simple-aksk-resource-server-starter` | 1.0.2 | 资源端 | JWT/Introspect 验证（无网关场景） |
-| `simple-aksk-security-context-starter` | 1.0.2 | 资源端 | Header 解析（有网关场景） |
+| `simple-aksk-resource-core` | 1.0.2 | 资源端核心 | 权限注解、安全上下文工具 |
+| `simple-aksk-resource-server-starter` | 1.0.2 | 资源端 | Introspect/JWT 验证（推荐 Introspect） |
+| `simple-aksk-security-context-starter` | 1.0.2 | 资源端 | Header 解析（已有 API 网关场景） |
 
 ---
 
@@ -166,11 +163,16 @@ AKSK 认证服务器，提供完整的 OAuth2 授权流程和管理能力。
 
 | 端点 | 方法 | 说明 | 所需 scope |
 |------|------|------|------|
-| `/api/client` | POST/GET | 创建/查询 Client | `/api/client` |
+| `/api/client` | POST | 创建 Client | `/api/client` |
+| `/api/client` | GET | 查询 Client 列表 | `/api/client` |
+| `/api/client` | PATCH | 同步用户 Scopes | `/api/client` |
 | `/api/client/{clientId}` | GET/DELETE | 详情/删除 | `/api/client` |
-| `/api/token` | GET | 查询 Token 列表 | `/api/token` |
+| `/api/client/{clientId}` | PATCH | 更新 Client（enabled/scopes/name/ownerUserId） | `/api/client` |
+| `/api/token` | GET | 查询 Token 列表（MySQL） | `/api/token` |
+| `/api/token/redis` | GET | 查询 Token 列表（Redis） | `/api/token` |
+| `/api/token/{id}` | GET/DELETE | 详情/删除 | `/api/token` |
 | `/api/token/{id}/revoke` | POST | 撤销 Token | `/api/token` |
-| `/api/token/{id}` | DELETE | 删除 Token | `/api/token` |
+| `/api/token/expired` | DELETE | 清理过期 Token | `/api/token` |
 | `/api/token/statistics` | GET | 统计信息 | `/api/token` |
 
 **配置示例**：
@@ -232,6 +234,23 @@ io:
           consistency:
             mode: strong
 ```
+
+**配置项**：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `jwt.key-id` | `sure-auth-aksk-2026` | JWT Key ID，同时作为 `auth_server_id` claim |
+| `jwt.expires-in` | `3600` | JWT 有效期（秒） |
+| `jwt.public-key` | - | RSA 公钥（classpath/file 路径、PEM 或 Base64） |
+| `jwt.private-key` | - | RSA 私钥（classpath/file 路径、PEM 或 Base64） |
+| `jwt.security-context-max-size` | `4096` | Token 请求中 `security_context` 参数最大字节数 |
+| `redis.enabled` | `false` | 启用 Redis 缓存层 |
+| `redis.token.me` | `default` | 应用标识，多实例必须一致 |
+| `admin.enabled` | `true` | 启用 Admin 管理页面 |
+| `admin.username` | `admin` | Admin 登录用户名 |
+| `admin.password` | - | Admin 登录密码（启用 admin 时必填） |
+| `admin.session-timeout-minutes` | `30` | Admin 会话超时时间（分钟） |
+| `introspect.require-authentication` | `true` | `false` 时 `/oauth2/introspect` 接受无鉴权请求（仅限内网/测试环境） |
 
 **JWT Token 内容**：
 
@@ -343,6 +362,18 @@ private RestTemplate akskClientRestTemplate;
 ResponseEntity<String> response = akskClientRestTemplate.getForEntity(url, String.class);
 ```
 
+**连接池配置**（`akskClientRestTemplate` 基于 Apache HttpClient 连接池）：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.enable` | `false` | 是否自动创建 `akskClientRestTemplate` bean |
+| `io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.max-total` | `100` | 连接池最大连接数 |
+| `io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.max-per-route` | `20` | 每个路由最大连接数 |
+| `io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.connect-timeout` | `5000` | 连接超时（ms） |
+| `io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.read-timeout` | `30000` | 读取超时（ms） |
+
+> **注意**：`resttemplate.enable` 默认为 `false`。设为 `true` 才会自动创建预配置的 `akskClientRestTemplate` bean；若为 `false`，`AkskRestTemplateInterceptor` 仍会注册，可手动添加到自己的 `RestTemplate`。
+
 ### 5.5 两种客户端共存
 
 Feign 和 RestTemplate 两个 starter 可以同时引用，共享同一个 `TokenManager`，token 只取一次，互不干扰。详见 `simple-aksk-client-demo`。
@@ -376,11 +407,22 @@ String clientType = SimpleAkskSecurityContextHelper.getClientType();
 
 ### 6.2 simple-aksk-resource-server-starter
 
-**适用场景**：无 APISIX 网关，业务服务直接验证 JWT。
+资源端验证 starter，支持 Introspect 和 JWT 两种模式。
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.2'
 ```
+
+支持两种验证模式：
+
+| 模式 | `verification-mode` | 验证方式 | 撤销感知 | 性能 |
+|------|------|----------|----------|------|
+| **INTROSPECT**（推荐） | `INTROSPECT` | 调用 `/oauth2/introspect` | 即时感知撤销 | 启用 L1 缓存后热路径无 IO |
+| JWT | `JWT` | 本地验证 JWT 签名 | 无法感知撤销 | 最快，无网络 IO |
+
+> **推荐 INTROSPECT 模式**：服务端启用 L1+L2 两级缓存后，introspect 热路径命中 L1 本地缓存，无 Redis IO、无 HTTP 回调，性能与 JWT 本地验签相当，同时支持即时撤销感知。
+
+**INTROSPECT 模式配置**（推荐）：
 
 ```yaml
 io:
@@ -392,8 +434,33 @@ io:
             resource:
               server:
                 enabled: true
+                verification-mode: INTROSPECT
+                introspect:
+                  endpoint: http://localhost:8080/oauth2/introspect
+                  client-id: AKP1234567890abcdefgh      # 留空则不鉴权（需服务端设置 require-authentication=false）
+                  client-secret: SK1234567890abcdefgh...
+                security:
+                  protected-paths:
+                    - /api/**
+```
+
+**JWT 模式配置**（不推荐，无法感知撤销）：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: true
+                verification-mode: JWT  # 默认值，可省略
                 jwt:
-                  issuer-uri: http://localhost:8080
+                  issuer-uri: http://localhost:8080  # 自动发现 JWKS
+                  # public-key: classpath:keys/public.pem  # 备选，无 issuer-uri 时使用
+                  # public-key-location: classpath:keys/public.pem  # 备选
                 security:
                   protected-paths:
                     - /api/**
@@ -401,11 +468,26 @@ io:
                     - /actuator/health
 ```
 
-验证通过后，JWT claims 自动注入到请求属性，可通过 `SimpleAkskSecurityContextHelper` 读取。同时发布 `AkskAccessEvent` 事件。
+**配置项**：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `enabled` | `true` | 是否启用 |
+| `verification-mode` | `JWT` | 验证模式：`JWT` 或 `INTROSPECT`（推荐 `INTROSPECT`） |
+| `jwt.issuer-uri` | - | 授权服务器地址（自动发现 JWKS） |
+| `jwt.public-key` | - | RSA 公钥（PEM 或 Base64，无 issuer-uri 时使用） |
+| `jwt.public-key-location` | - | RSA 公钥文件路径（支持 `classpath:` 和 `file:` 前缀） |
+| `introspect.endpoint` | - | Introspect 端点 URL |
+| `introspect.client-id` | - | Introspect 调用的客户端 ID |
+| `introspect.client-secret` | - | Introspect 调用的客户端 Secret |
+| `security.protected-paths` | `/api/**` | 需要认证的路径 |
+| `security.permit-all-paths` | - | 白名单路径 |
+
+验证通过后，JWT claims 或 introspect 结果自动注入请求属性，可通过 `SimpleAkskSecurityContextHelper` 读取。同时发布 `AkskAccessEvent` 事件（`source` 为 `"jwt"` 或 `"introspect"`）。
 
 ### 6.3 simple-aksk-security-context-starter
 
-**适用场景**：有 APISIX 网关，从网关注入的请求头中解析用户信息。
+**适用场景**：已有 API 网关（APISIX 等），网关负责验签并注入用户信息到请求头，业务服务只需解析。
 
 ```gradle
 implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.2'
@@ -484,7 +566,7 @@ public void onAnyTokenEvent(AbstractTokenEvent event) {
 public void onAkskAccess(AkskAccessEvent event) {
     log.info("AKSK access: clientId={}, uri={}, source={}",
         event.getClientId(), event.getRequestUri(), event.getSource());
-    // source: "header" 或 "jwt"
+    // source: "introspect"、"jwt" 或 "header"
 }
 ```
 
@@ -577,10 +659,10 @@ public interface MyServiceClient {
 
 ---
 
-### 8.3 保护资源服务（无网关）
+### 8.3 保护资源服务（推荐 Introspect 模式）
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.2'
 ```
 
 ```yaml
@@ -593,8 +675,14 @@ io:
             resource:
               server:
                 enabled: true
-                jwt:
-                  issuer-uri: http://localhost:8080
+                verification-mode: INTROSPECT
+                introspect:
+                  endpoint: http://localhost:8080/oauth2/introspect
+                  client-id: AKP1234567890abcdefgh
+                  client-secret: SK...
+                security:
+                  protected-paths:
+                    - /api/**
 ```
 
 ```java
@@ -615,7 +703,7 @@ public class MyController {
 
 ---
 
-### 8.4 保护资源服务（有 APISIX 网关）
+### 8.4 保护资源服务（已有 API 网关）
 
 ```gradle
 implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.2'
@@ -633,7 +721,7 @@ io:
                 enable: true
 ```
 
-APISIX 配置 jwt-auth 插件，验签后将用户信息注入请求头，业务服务通过 `SimpleAkskSecurityContextHelper` 读取。
+适用于已有 APISIX 等网关基础设施的场景，网关负责验签并注入用户信息到请求头，业务服务通过 `SimpleAkskSecurityContextHelper` 读取。
 
 ---
 
@@ -651,9 +739,9 @@ APISIX 配置 jwt-auth 插件，验签后将用户信息注入请求头，业务
 - Redis Pub/Sub 连接是否正常（查看启动日志中 `Cache invalidation listener initialized` 是否出现）
 - 如果未启用 Redis，撤销后 MySQL 已更新，introspect 应立即返回 `active=false`
 
-**Q3：APISIX 能感知 token 撤销吗？**
+**Q3：JWT 模式和 Introspect 模式怎么选？**
 
-使用 jwt-auth 插件（本地验签）无法感知撤销。如需即时感知，改用 openid-connect 插件配置 `introspection_endpoint` 指向 `/oauth2/introspect`，每次请求回调验证。
+推荐 Introspect 模式。服务端启用 L1+L2 两级缓存后，introspect 热路径命中 L1 本地缓存，性能与 JWT 本地验签相当，且支持即时撤销感知。JWT 模式无法感知 token 撤销，仅在不需要撤销能力的场景下适用。
 
 **Q4：Feign 和 RestTemplate 两个 starter 能同时用吗？**
 
@@ -665,8 +753,8 @@ APISIX 配置 jwt-auth 插件，验签后将用户信息注入请求头，业务
 
 **Q6：resource-server-starter 和 security-context-starter 有什么区别？**
 
-- `resource-server-starter`：直接验证 JWT 签名，适合无网关场景
-- `security-context-starter`：从请求头解析用户信息，适合有 APISIX 网关场景（网关已验签）
+- `resource-server-starter`：自行验证 token，支持 Introspect（推荐）和 JWT 两种模式，无需网关
+- `security-context-starter`：从请求头解析用户信息，适合已有 API 网关（APISIX 等）的场景，网关已验签
 
 两者都会发布 `AkskAccessEvent`，都支持 `SimpleAkskSecurityContextHelper` 和权限注解。
 
@@ -703,6 +791,7 @@ logging:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 1.1.3 | 2026-05-01 | AKU 归属信息可修改、新增 `PATCH /api/client/{clientId}`、修复 Admin 编辑操作无响应 |
 | 1.1.0 | 2026-04-17 | 引入 SmartCache L1+L2 两级缓存，Redis Pub/Sub 多实例强一致 |
 | 1.0.7 | 2026-04-15 | Admin 清理过期 Token 接口路径修复 |
 | 1.0.6 | 2026-04-13 | Introspect 端点匿名访问支持、Admin session 超时白屏修复 |

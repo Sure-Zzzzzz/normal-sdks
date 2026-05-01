@@ -14,6 +14,14 @@ public final class ErrorCode {
         throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
     }
 
+    // ==================== 参数验证错误 ====================
+
+    /**
+     * 参数验证失败
+     */
+    public static final String VALIDATION_FAILED = "VALIDATION_001";
+
+
     // ==================== 配置错误 ====================
 
     /**

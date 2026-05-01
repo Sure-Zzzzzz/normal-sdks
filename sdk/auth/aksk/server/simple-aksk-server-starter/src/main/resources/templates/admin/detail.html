@@ -90,6 +90,11 @@
                                 data-bs-target="#editScopesModal">
                             编辑权限范围
                         </button>
+                        <button th:if="${client.clientType == 2}" type="button" class="btn btn-info"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editOwnerInfoModal">
+                            编辑归属信息
+                        </button>
                         <button type="button" class="btn btn-danger"
                                 data-bs-toggle="modal"
                                 data-bs-target="#revokeAllTokensModal">
@@ -224,6 +229,34 @@
     </div>
 </div>
 
+<!-- 编辑归属信息 Modal（仅用户级AKSK显示） -->
+<div th:if="${client.clientType == 2}" class="modal fade" id="editOwnerInfoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑归属信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="editOwnerUserId" class="form-label">所属用户ID</label>
+                    <input type="text" class="form-control" id="editOwnerUserId"
+                           th:value="${client.ownerUserId}" maxlength="100">
+                </div>
+                <div class="mb-3">
+                    <label for="editOwnerUsername" class="form-label">所属用户名</label>
+                    <input type="text" class="form-control" id="editOwnerUsername"
+                           th:value="${client.ownerUsername}" maxlength="255">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateOwnerInfo()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="/admin/js/bootstrap.bundle.min.js"></script>
 <script>
     // 统一处理 session 失效，服务重启后自动跳转登录页
@@ -310,17 +343,15 @@
             headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
             body: JSON.stringify({ name: name })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
-                if (modal) modal.hide();
-                location.reload();
-            } else {
-                alert(data.message);
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
             }
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
+            if (modal) modal.hide();
+            location.reload();
         })
-        .catch(error => alert('更新失败：' + error));
+        .catch(error => alert('更新失败：' + error.message));
     }
 
     function updateScopes() {
@@ -352,22 +383,16 @@
             },
             body: JSON.stringify({ scopes: scopes })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // 关闭modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
-                if (modal) {
-                    modal.hide();
-                }
-                // 刷新页面显示最新数据
-                location.reload();
-            } else {
-                alert(data.message);
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
             }
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
+            if (modal) modal.hide();
+            location.reload();
         })
         .catch(error => {
-            alert('更新失败：' + error);
+            alert('更新失败：' + error.message);
         });
     }
 
@@ -409,6 +434,28 @@
         .catch(error => {
             alert('重置失败：' + error);
         });
+    }
+    function updateOwnerInfo() {
+        const ownerUserId = document.getElementById('editOwnerUserId').value.trim();
+        const ownerUsername = document.getElementById('editOwnerUsername').value.trim();
+        if (!ownerUserId) {
+            alert('所属用户ID不能为空');
+            return;
+        }
+        fetch(`/admin/${clientId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
+            body: JSON.stringify({ ownerUserId: ownerUserId, ownerUsername: ownerUsername })
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
+            }
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editOwnerInfoModal'));
+            if (modal) modal.hide();
+            location.reload();
+        })
+        .catch(error => alert('更新失败：' + error.message));
     }
     /*]]>*/
 </script>

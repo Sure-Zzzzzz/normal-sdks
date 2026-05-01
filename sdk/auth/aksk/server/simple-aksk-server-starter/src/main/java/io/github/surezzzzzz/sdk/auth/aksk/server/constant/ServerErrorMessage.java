@@ -50,6 +50,10 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_DISABLE_FAILED = "禁用失败：%s";
 
+    public static final String ADMIN_OWNER_INFO_UPDATE_SUCCESS = "归属信息更新成功";
+
+    public static final String ADMIN_UPDATE_FIELD_REQUIRED = "请提供要更新的字段（enabled、scopes、name 或 ownerUserId）";
+
     // ==================== Token管理消息 ====================
 
     /**

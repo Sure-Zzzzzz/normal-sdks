@@ -279,9 +279,15 @@ public class AdminController {
                 return ResponseEntity.ok(new ApiResponse("名称更新成功"));
             }
 
+            // 处理 ownerUserId 字段（仅用户级AKSK）
+            if (request.getOwnerUserId() != null) {
+                clientManagementService.updateOwnerInfo(clientId, request.getOwnerUserId(), request.getOwnerUsername());
+                return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_OWNER_INFO_UPDATE_SUCCESS));
+            }
+
             // 如果字段都没传
             return ResponseEntity.badRequest()
-                    .body(new ApiResponse("请提供要更新的字段（enabled、scopes 或 name）"));
+                    .body(new ApiResponse(ServerErrorMessage.ADMIN_UPDATE_FIELD_REQUIRED));
 
         } catch (Exception e) {
             log.error("Failed to update client: {}", clientId, e);

@@ -27,4 +27,14 @@ public class UpdateClientRequest {
      * Client名称（用于更新名称）
      */
     private String name;
+
+    /**
+     * 所属用户ID（仅用户级AKSK可修改）
+     */
+    private String ownerUserId;
+
+    /**
+     * 所属用户名（仅用户级AKSK可修改）
+     */
+    private String ownerUsername;
 }

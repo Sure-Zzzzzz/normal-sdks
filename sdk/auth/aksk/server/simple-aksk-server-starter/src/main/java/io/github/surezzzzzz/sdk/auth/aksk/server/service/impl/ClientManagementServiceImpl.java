@@ -458,4 +458,35 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             );
         }
     }
+
+    @Override
+    public void updateOwnerInfo(String clientId, String ownerUserId, String ownerUsername) {
+        OAuth2RegisteredClientEntity entity = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(
+                        ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)
+                ));
+
+        if (ClientType.fromCode(entity.getClientType()) != ClientType.USER) {
+            throw new ClientException(
+                    ErrorCode.VALIDATION_FAILED,
+                    String.format(ErrorMessage.VALIDATION_FAILED, "平台级AKSK不支持修改归属信息")
+            );
+        }
+
+        entity.setOwnerUserId(ownerUserId);
+        entity.setOwnerUsername(ownerUsername);
+
+        try {
+            clientRepository.save(entity);
+            log.info("Updated owner info for: {}, ownerUserId: {}, ownerUsername: {}", clientId, ownerUserId, ownerUsername);
+        } catch (Exception e) {
+            log.error("Failed to update owner info for: {}", clientId, e);
+            throw new ClientException(
+                    ErrorCode.CLIENT_UPDATE_FAILED,
+                    String.format(ErrorMessage.CLIENT_UPDATE_FAILED, e.getMessage()),
+                    e
+            );
+        }
+    }
 }

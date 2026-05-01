@@ -4,6 +4,7 @@
 
 ## 目录
 
+- [0. 基础环境规范](#0-基础环境规范)
 - [1. 命名规范](#1-命名规范)
   - [1.1 包名规范](#11-包名规范)
   - [1.2 类名规范](#12-类名规范)
@@ -61,6 +62,44 @@
 - [13. 总结](#13-总结)
   - [核心原则](#核心原则-1)
   - [检查清单](#检查清单)
+
+---
+
+## 0. 基础环境规范
+
+### 0.1 JDK 版本
+
+**目标兼容版本：JDK 1.8**
+
+所有 SDK 模块必须兼容 JDK 1.8，禁止使用 1.8 之后引入的语言特性和 API。
+
+**禁止使用：**
+
+- `var` 关键字（JDK 10+）
+- `switch` 表达式（JDK 14+）
+- `record`、`sealed`、`text block`（JDK 14+）
+- `Stream.toList()`（JDK 16+，应使用 `.collect(Collectors.toList())`）
+- `Map.of()` / `List.of()` / `Set.of()`（JDK 9+，应使用 `Collections.unmodifiableXxx` 或 `Arrays.asList`）
+- `Optional.ifPresentOrElse()`、`Optional.stream()`（JDK 9+）
+- `String.isBlank()`、`String.strip()`（JDK 11+，应使用 `StringUtils.hasText()` 或 `String.trim().isEmpty()`）
+- `InputStream.readAllBytes()`（JDK 9+）
+- `HttpClient`（JDK 11+）
+
+**允许使用（JDK 1.8 特性）：**
+
+- Lambda 表达式、方法引用
+- Stream API（`collect(Collectors.toList())` 等）
+- `Optional`（基础方法）
+- `CompletableFuture`
+- `java.time.*`（LocalDate、LocalDateTime 等）
+- 接口 `default` 方法
+
+**Gradle 编译配置**（由父 Gradle 统一管理，子模块无需重复配置）：
+
+```groovy
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+```
 
 ---
 
@@ -2067,6 +2106,11 @@ dependencies {
 ### 检查清单
 
 在提交代码前，请确认以下规范：
+
+**基础环境**：
+
+- [ ] 代码兼容 JDK 1.8，未使用 JDK 9+ 语法和 API（var、record、List.of、String.isBlank 等）
+- [ ] Stream 终止操作使用 `.collect(Collectors.toList())` 而非 `.toList()`
 
 **主体代码**：
 

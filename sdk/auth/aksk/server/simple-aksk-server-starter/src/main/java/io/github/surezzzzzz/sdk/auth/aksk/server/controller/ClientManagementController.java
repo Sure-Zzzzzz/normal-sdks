@@ -172,4 +172,32 @@ public class ClientManagementController {
         log.info("Resetting secret for client: {}, revokeTokens={}", clientId, revokeTokens);
         return ResponseEntity.ok(clientManagementService.resetSecret(clientId, revokeTokens));
     }
+
+    /**
+     * 更新Client信息（启用/禁用、权限范围、名称、归属信息）
+     */
+    @PatchMapping("/{clientId}")
+    public ResponseEntity<ApiResponse> updateClient(
+            @PathVariable String clientId,
+            @RequestBody UpdateClientRequest request) {
+        log.info("Updating client: {}", clientId);
+
+        if (request.getEnabled() != null) {
+            if (request.getEnabled()) {
+                clientManagementService.enableClient(clientId);
+            } else {
+                clientManagementService.disableClient(clientId);
+            }
+        } else if (request.getScopes() != null) {
+            clientManagementService.updateClientScopes(clientId, request.getScopes());
+        } else if (request.getName() != null) {
+            clientManagementService.updateClientName(clientId, request.getName());
+        } else if (request.getOwnerUserId() != null) {
+            clientManagementService.updateOwnerInfo(clientId, request.getOwnerUserId(), request.getOwnerUsername());
+        } else {
+            return ResponseEntity.badRequest().build();
+        }
+
+        return ResponseEntity.ok(new ApiResponse("更新成功"));
+    }
 }

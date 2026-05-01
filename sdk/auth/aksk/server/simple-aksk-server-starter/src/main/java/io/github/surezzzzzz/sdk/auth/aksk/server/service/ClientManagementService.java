@@ -156,4 +156,13 @@ public interface ClientManagementService {
      * @param clientName 新的客户端名称
      */
     void updateClientName(String clientId, String clientName);
+
+    /**
+     * 更新用户级AKSK的归属信息
+     *
+     * @param clientId      客户端ID
+     * @param ownerUserId   新的所属用户ID
+     * @param ownerUsername 新的所属用户名
+     */
+    void updateOwnerInfo(String clientId, String ownerUserId, String ownerUsername);
 }
