@@ -78,6 +78,10 @@ public class JwtIntegrationTest {
 
         // 验证响应包含基本字段
         assertNotNull(jsonResponse.get("allContext"), "allContext should not be null");
+        assertTrue(jsonResponse.get("allContext").isObject(), "allContext should be a JSON object");
+        assertNotNull(jsonResponse.get("clientId"), "clientId should not be null");
+        assertFalse(jsonResponse.get("clientId").asText().isEmpty(), "clientId should not be empty");
+        assertNotNull(jsonResponse.get("scope"), "scope should not be null");
 
         log.info("Client ID: {}", jsonResponse.get("clientId"));
         log.info("User ID: {}", jsonResponse.get("userId"));
@@ -105,18 +109,18 @@ public class JwtIntegrationTest {
         JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
         // 验证 clientId 字段存在（从 client_id claim 提取）
-        if (jsonResponse.has("clientId") && !jsonResponse.get("clientId").isNull()) {
-            String clientId = jsonResponse.get("clientId").asText();
-            log.info("Extracted clientId: {}", clientId);
-            assertNotNull(clientId, "clientId should not be null");
-        }
+        assertTrue(jsonResponse.has("clientId") && !jsonResponse.get("clientId").isNull(),
+                "clientId should be present in response");
+        String clientId = jsonResponse.get("clientId").asText();
+        log.info("Extracted clientId: {}", clientId);
+        assertFalse(clientId.isEmpty(), "clientId should not be empty");
 
-        // 验证 scope 字段存在
-        if (jsonResponse.has("scope") && !jsonResponse.get("scope").isNull()) {
-            String scope = jsonResponse.get("scope").asText();
-            log.info("Extracted scope: {}", scope);
-            assertNotNull(scope, "scope should not be null");
-        }
+        // 验证 scope 字段存在且非空（scope 是 List，序列化为 JSON 数组，用 toString() 判断）
+        assertTrue(jsonResponse.has("scope") && !jsonResponse.get("scope").isNull(),
+                "scope should be present in response");
+        String scope = jsonResponse.get("scope").toString();
+        log.info("Extracted scope: {}", scope);
+        assertFalse(scope.equals("null") || scope.equals("[]"), "scope should not be empty");
 
         log.info("Standard claims extraction test passed");
     }
@@ -146,6 +150,10 @@ public class JwtIntegrationTest {
 
         // 验证 allContext 是一个对象
         assertTrue(allContext.isObject(), "allContext should be an object");
+
+        // 验证 allContext 包含核心字段
+        assertTrue(allContext.has("clientId"), "allContext should contain clientId");
+        assertTrue(allContext.has("scope"), "allContext should contain scope");
 
         log.info("allContext test passed");
     }
@@ -296,13 +304,9 @@ public class JwtIntegrationTest {
 
         log.info("Security context response: {}", jsonResponse.toPrettyString());
 
-        // security_context 字段可能存在也可能不存在，取决于 aksk-server 的实现
-        if (jsonResponse.has("securityContext") && !jsonResponse.get("securityContext").isNull()) {
-            String securityContext = jsonResponse.get("securityContext").asText();
-            log.info("Security context: {}", securityContext);
-        } else {
-            log.info("Security context field not present in token (this is OK)");
-        }
+        // 验证响应包含 securityContext 字段
+        assertTrue(jsonResponse.has("securityContext"), "Response should contain securityContext field");
+        assertNotNull(jsonResponse.get("securityContext"), "securityContext should not be null");
     }
 
     // ==================== Token 重用测试 ====================

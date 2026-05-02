@@ -151,7 +151,7 @@ class IntrospectLocalCacheHelperTest {
     }
 
     @Test
-    @DisplayName("超过 maxSize 时不抛异常")
+    @DisplayName("超过 maxSize 时不抛异常且触发淘汰")
     void testMaxSizeEviction() {
         SimpleAkskResourceServerProperties props = buildProperties(true, 60, 10);
         IntrospectLocalCacheHelper smallHelper = new IntrospectLocalCacheHelper(props);
@@ -162,7 +162,19 @@ class IntrospectLocalCacheHelperTest {
                 smallHelper.put("token-" + i, buildResult(true));
             }
         });
+        // Caffeine 淘汰是异步的，需要手动触发同步清理后再断言
+        smallHelper.cleanUp();
         log.info("maxSize eviction: no exception thrown for 20 entries with maxSize=10");
+
+        // 验证早期插入的条目已被淘汰（maxSize=10，插入了20个，最早的应被驱逐）
+        assertNull(smallHelper.get("token-0"), "First entry should have been evicted when maxSize=10 and 20 entries were inserted");
+        assertNull(smallHelper.get("token-1"), "Second entry should have been evicted when maxSize=10 and 20 entries were inserted");
+
+        // 验证最新插入的条目仍然存在
+        assertNotNull(smallHelper.get("token-19"), "Last entry should still be in cache");
+        assertNotNull(smallHelper.get("token-18"), "Second-to-last entry should still be in cache");
+
+        log.info("maxSize eviction verified: early entries evicted, recent entries retained");
     }
 
     // ==================== 工具方法 ====================

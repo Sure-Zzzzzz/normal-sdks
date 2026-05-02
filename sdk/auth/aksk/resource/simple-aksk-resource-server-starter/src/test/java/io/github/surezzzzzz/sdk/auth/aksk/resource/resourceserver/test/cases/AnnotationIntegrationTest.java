@@ -98,8 +98,7 @@ public class AnnotationIntegrationTest {
     /**
      * 测试 @RequireField - 检查 userId 字段
      * <p>
-     * 注意：这个测试依赖于 aksk-server 返回的 token 中是否包含 user_id claim
-     * 如果 token 中没有 user_id，测试会失败（这是预期行为）
+     * client_credentials 令牌不包含 userId，@RequireField 应拒绝访问返回 403
      */
     @Test
     @DisplayName("测试 @RequireField - 检查 userId 字段")
@@ -108,31 +107,17 @@ public class AnnotationIntegrationTest {
         log.info("测试 @RequireField - 检查 userId 字段");
         log.info("======================================");
 
-        try {
-            MvcResult result = mockMvc.perform(get("/test/require-field")
-                            .header("Authorization", "Bearer " + validToken))
-                    .andReturn();
+        MvcResult result = mockMvc.perform(get("/test/require-field")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isForbidden())
+                .andReturn();
 
-            int status = result.getResponse().getStatus();
-            String responseBody = result.getResponse().getContentAsString();
-            JsonNode jsonResponse = objectMapper.readTree(responseBody);
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
-            if (status == 200) {
-                // Token 包含 userId 字段
-                assertEquals("Field userId exists", jsonResponse.get("message").asText());
-                log.info("@RequireField passed - userId field exists in token");
-            } else if (status == 403) {
-                // Token 不包含 userId 字段
-                assertEquals("Forbidden", jsonResponse.get("error").asText());
-                assertTrue(jsonResponse.get("message").asText().contains("userId"));
-                log.info("@RequireField correctly rejected - userId field missing in token");
-            } else {
-                fail("Unexpected status code: " + status);
-            }
-        } catch (Exception e) {
-            log.error("Test failed", e);
-            throw e;
-        }
+        assertEquals("Forbidden", jsonResponse.get("error").asText());
+        assertTrue(jsonResponse.get("message").asText().contains("userId"));
+        log.info("@RequireField correctly rejected - userId field missing in token");
     }
 
     // ==================== @RequireFieldValue 测试 ====================
@@ -140,8 +125,7 @@ public class AnnotationIntegrationTest {
     /**
      * 测试 @RequireFieldValue - 检查 clientType 字段值
      * <p>
-     * 注意：这个测试依赖于 aksk-server 返回的 token 中 client_type 的值
-     * 如果值不是 "service"，测试会失败（这是预期行为）
+     * client_credentials 令牌的 clientType 不等于 "service"，@RequireFieldValue 应拒绝访问返回 403
      */
     @Test
     @DisplayName("测试 @RequireFieldValue - 检查 clientType 字段值")
@@ -150,32 +134,16 @@ public class AnnotationIntegrationTest {
         log.info("测试 @RequireFieldValue - 检查 clientType 字段值");
         log.info("======================================");
 
-        try {
-            MvcResult result = mockMvc.perform(get("/test/require-field-value")
-                            .header("Authorization", "Bearer " + validToken))
-                    .andReturn();
+        MvcResult result = mockMvc.perform(get("/test/require-field-value")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isForbidden())
+                .andReturn();
 
-            int status = result.getResponse().getStatus();
-            String responseBody = result.getResponse().getContentAsString();
-            JsonNode jsonResponse = objectMapper.readTree(responseBody);
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
-            if (status == 200) {
-                // Token 的 clientType 字段值为 "service"
-                assertEquals("Client type is service", jsonResponse.get("message").asText());
-                assertEquals("service", jsonResponse.get("clientType").asText());
-                log.info("@RequireFieldValue passed - clientType is 'service'");
-            } else if (status == 403) {
-                // Token 的 clientType 字段值不是 "service" 或字段不存在
-                assertEquals("Forbidden", jsonResponse.get("error").asText());
-                log.info("@RequireFieldValue correctly rejected - clientType mismatch or missing");
-                log.info("Error message: {}", jsonResponse.get("message").asText());
-            } else {
-                fail("Unexpected status code: " + status);
-            }
-        } catch (Exception e) {
-            log.error("Test failed", e);
-            throw e;
-        }
+        assertEquals("Forbidden", jsonResponse.get("error").asText());
+        log.info("@RequireFieldValue correctly rejected - clientType mismatch or missing");
     }
 
     // ==================== @RequireExpression 测试 ====================
@@ -184,6 +152,7 @@ public class AnnotationIntegrationTest {
      * 测试 @RequireExpression - SpEL 表达式校验
      * <p>
      * 表达式：#context['userId'] != null && #context['userId'].length() > 0
+     * client_credentials 令牌不包含 userId，表达式求值为 false，应返回 403
      */
     @Test
     @DisplayName("测试 @RequireExpression - SpEL 表达式校验")
@@ -192,31 +161,16 @@ public class AnnotationIntegrationTest {
         log.info("测试 @RequireExpression - SpEL 表达式校验");
         log.info("======================================");
 
-        try {
-            MvcResult result = mockMvc.perform(get("/test/require-expression")
-                            .header("Authorization", "Bearer " + validToken))
-                    .andReturn();
+        MvcResult result = mockMvc.perform(get("/test/require-expression")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isForbidden())
+                .andReturn();
 
-            int status = result.getResponse().getStatus();
-            String responseBody = result.getResponse().getContentAsString();
-            JsonNode jsonResponse = objectMapper.readTree(responseBody);
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
-            if (status == 200) {
-                // 表达式通过
-                assertEquals("Expression passed", jsonResponse.get("message").asText());
-                log.info("@RequireExpression passed - userId exists and not empty");
-            } else if (status == 403) {
-                // 表达式失败
-                assertEquals("Forbidden", jsonResponse.get("error").asText());
-                log.info("@RequireExpression correctly rejected - expression evaluated to false");
-                log.info("Error message: {}", jsonResponse.get("message").asText());
-            } else {
-                fail("Unexpected status code: " + status);
-            }
-        } catch (Exception e) {
-            log.error("Test failed", e);
-            throw e;
-        }
+        assertEquals("Forbidden", jsonResponse.get("error").asText());
+        log.info("@RequireExpression correctly rejected - expression evaluated to false");
     }
 
     // ==================== 实际业务场景测试 ====================
@@ -225,6 +179,7 @@ public class AnnotationIntegrationTest {
      * 测试管理员接口 - 检查 scope 是否包含 admin
      * <p>
      * 表达式：#context['scope'] != null && #context['scope'].contains('admin')
+     * client_credentials 令牌的 scope 不包含 admin，应返回 403
      */
     @Test
     @DisplayName("测试管理员接口 - 检查 scope 是否包含 admin")
@@ -233,39 +188,23 @@ public class AnnotationIntegrationTest {
         log.info("测试管理员接口 - 检查 scope 是否包含 admin");
         log.info("======================================");
 
-        try {
-            MvcResult result = mockMvc.perform(get("/test/admin/dashboard")
-                            .header("Authorization", "Bearer " + validToken))
-                    .andReturn();
+        MvcResult result = mockMvc.perform(get("/test/admin/dashboard")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isForbidden())
+                .andReturn();
 
-            int status = result.getResponse().getStatus();
-            String responseBody = result.getResponse().getContentAsString();
-            JsonNode jsonResponse = objectMapper.readTree(responseBody);
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
-            if (status == 200) {
-                // Token 的 scope 包含 admin
-                assertEquals("Welcome to admin dashboard", jsonResponse.get("message").asText());
-                String scope = jsonResponse.get("scope").asText();
-                assertTrue(scope.contains("admin"), "Scope should contain 'admin'");
-                log.info("Admin dashboard access granted - scope contains 'admin'");
-            } else if (status == 403) {
-                // Token 的 scope 不包含 admin
-                assertEquals("Forbidden", jsonResponse.get("error").asText());
-                log.info("Admin dashboard access denied - scope does not contain 'admin'");
-                log.info("This is expected if the test client doesn't have admin scope");
-            } else {
-                fail("Unexpected status code: " + status);
-            }
-        } catch (Exception e) {
-            log.error("Test failed", e);
-            throw e;
-        }
+        assertEquals("Forbidden", jsonResponse.get("error").asText());
+        log.info("Admin dashboard access denied - scope does not contain 'admin'");
     }
 
     /**
      * 测试多租户接口 - 检查 tenantId 是否存在
      * <p>
      * 表达式：#context['tenantId'] != null && #context['tenantId'].length() > 0
+     * client_credentials 令牌不包含 tenantId，应返回 403
      */
     @Test
     @DisplayName("测试多租户接口 - 检查 tenantId 是否存在")
@@ -274,33 +213,16 @@ public class AnnotationIntegrationTest {
         log.info("测试多租户接口 - 检查 tenantId 是否存在");
         log.info("======================================");
 
-        try {
-            MvcResult result = mockMvc.perform(get("/test/tenant/data")
-                            .header("Authorization", "Bearer " + validToken))
-                    .andReturn();
+        MvcResult result = mockMvc.perform(get("/test/tenant/data")
+                        .header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isForbidden())
+                .andReturn();
 
-            int status = result.getResponse().getStatus();
-            String responseBody = result.getResponse().getContentAsString();
-            JsonNode jsonResponse = objectMapper.readTree(responseBody);
+        String responseBody = result.getResponse().getContentAsString();
+        JsonNode jsonResponse = objectMapper.readTree(responseBody);
 
-            if (status == 200) {
-                // Token 包含 tenantId
-                assertEquals("Tenant data access", jsonResponse.get("message").asText());
-                assertNotNull(jsonResponse.get("tenantId"));
-                log.info("Tenant data access granted - tenantId exists");
-                log.info("Tenant ID: {}", jsonResponse.get("tenantId").asText());
-            } else if (status == 403) {
-                // Token 不包含 tenantId
-                assertEquals("Forbidden", jsonResponse.get("error").asText());
-                log.info("Tenant data access denied - tenantId missing");
-                log.info("This is expected if the test client doesn't have tenantId claim");
-            } else {
-                fail("Unexpected status code: " + status);
-            }
-        } catch (Exception e) {
-            log.error("Test failed", e);
-            throw e;
-        }
+        assertEquals("Forbidden", jsonResponse.get("error").asText());
+        log.info("Tenant data access denied - tenantId missing");
     }
 
     // ==================== 无效 Token 测试 ====================

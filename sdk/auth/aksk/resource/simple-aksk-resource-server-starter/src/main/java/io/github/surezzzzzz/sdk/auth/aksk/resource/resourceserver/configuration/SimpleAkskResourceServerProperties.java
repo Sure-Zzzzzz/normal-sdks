@@ -24,10 +24,10 @@ public class SimpleAkskResourceServerProperties {
 
     /**
      * Token 验证模式
-     * JWT（默认）：本地验签，性能最好，不支持即时撤销感知
-     * INTROSPECT：调 introspect 端点验证，支持即时撤销感知，每次请求多一次 HTTP 调用
+     * INTROSPECT（默认）：调 introspect 端点验证，支持即时撤销感知
+     * JWT：本地验签，性能最好，不支持即时撤销感知
      */
-    private VerificationMode verificationMode = VerificationMode.JWT;
+    private VerificationMode verificationMode = VerificationMode.INTROSPECT;
 
     /**
      * JWT 配置（verificationMode=JWT 时使用）
@@ -84,7 +84,7 @@ public class SimpleAkskResourceServerProperties {
         private String clientSecret;
 
         /**
-         * 本地缓存配置（可选，启用后减少 HTTP 往返）
+         * 本地缓存配置
          */
         private LocalCacheConfig localCache = new LocalCacheConfig();
 
@@ -105,6 +105,37 @@ public class SimpleAkskResourceServerProperties {
              * 最大缓存条目数，默认 10000
              */
             private int maxSize = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_MAX_SIZE;
+
+            /**
+             * 统计日志打印间隔（秒），每次 cache miss 时判断是否到达间隔，默认 60s
+             */
+            private int statsLogIntervalSeconds = SimpleAkskResourceServerConstant.DEFAULT_STATS_LOG_INTERVAL_SECONDS;
+
+            /**
+             * 兜底缓存配置（端点不可用时的降级策略）
+             */
+            private FallbackConfig fallback = new FallbackConfig();
+
+            @Data
+            public static class FallbackConfig {
+
+                /**
+                 * 是否启用兜底降级，默认 false，需显式开启
+                 * 开启后端点不可用时使用兜底缓存放行，接受安全与可用性的权衡
+                 */
+                private boolean enabled = SimpleAkskResourceServerConstant.DEFAULT_FALLBACK_ENABLED;
+
+                /**
+                 * 兜底缓存 TTL 倍数：兜底 TTL = expire-seconds × 此值，默认 10
+                 * 建议范围 [2, 100]，超出范围打 WARN 提示风险
+                 */
+                private int staleTtlMultiplier = SimpleAkskResourceServerConstant.DEFAULT_STALE_TTL_MULTIPLIER;
+
+                /**
+                 * 兜底缓存最大条目数，默认 10000
+                 */
+                private int staleMaxSize = SimpleAkskResourceServerConstant.DEFAULT_STALE_MAX_SIZE;
+            }
         }
     }
 

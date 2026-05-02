@@ -117,7 +117,7 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 | `simple-aksk-feign-redis-client-starter` | 1.0.1 | 客户端 | Feign + Redis Token 管理 |
 | `simple-aksk-resttemplate-redis-client-starter` | 1.0.0 | 客户端 | RestTemplate + Redis Token 管理 |
 | `simple-aksk-resource-core` | 1.0.2 | 资源端核心 | 权限注解、安全上下文工具 |
-| `simple-aksk-resource-server-starter` | 1.0.2 | 资源端 | Introspect/JWT 验证（推荐 Introspect） |
+| `simple-aksk-resource-server-starter` | 1.0.4 | 资源端 | Introspect/JWT 验证（默认 Introspect，支持兜底降级） |
 | `simple-aksk-security-context-starter` | 1.0.2 | 资源端 | Header 解析（已有 API 网关场景） |
 
 ---
@@ -407,22 +407,22 @@ String clientType = SimpleAkskSecurityContextHelper.getClientType();
 
 ### 6.2 simple-aksk-resource-server-starter
 
-资源端验证 starter，支持 Introspect 和 JWT 两种模式。
+资源端验证 starter，支持 Introspect（默认）和 JWT 两种模式。
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.2'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.4'
 ```
 
 支持两种验证模式：
 
 | 模式 | `verification-mode` | 验证方式 | 撤销感知 | 性能 |
 |------|------|----------|----------|------|
-| **INTROSPECT**（推荐） | `INTROSPECT` | 调用 `/oauth2/introspect` | 即时感知撤销 | 启用 L1 缓存后热路径无 IO |
+| **INTROSPECT**（默认，推荐） | `INTROSPECT` | 调用 `/oauth2/introspect` | 即时感知撤销 | 启用 L1 缓存后热路径无 IO |
 | JWT | `JWT` | 本地验证 JWT 签名 | 无法感知撤销 | 最快，无网络 IO |
 
 > **推荐 INTROSPECT 模式**：服务端启用 L1+L2 两级缓存后，introspect 热路径命中 L1 本地缓存，无 Redis IO、无 HTTP 回调，性能与 JWT 本地验签相当，同时支持即时撤销感知。
 
-**INTROSPECT 模式配置**（推荐）：
+**INTROSPECT 模式配置**（默认，推荐）：
 
 ```yaml
 io:
@@ -434,11 +434,17 @@ io:
             resource:
               server:
                 enabled: true
-                verification-mode: INTROSPECT
+                # verification-mode 默认为 INTROSPECT，可省略
                 introspect:
                   endpoint: http://localhost:8080/oauth2/introspect
                   client-id: AKP1234567890abcdefgh      # 留空则不鉴权（需服务端设置 require-authentication=false）
                   client-secret: SK1234567890abcdefgh...
+                  local-cache:
+                    enabled: true          # 默认开启，TTL 3s
+                    expire-seconds: 3
+                    fallback:
+                      enabled: false       # 兜底降级，默认关闭，开启后端点故障时用历史缓存放行
+                      stale-ttl-multiplier: 10
                 security:
                   protected-paths:
                     - /api/**
@@ -456,7 +462,7 @@ io:
             resource:
               server:
                 enabled: true
-                verification-mode: JWT  # 默认值，可省略
+                verification-mode: JWT  # 需显式指定，默认为 INTROSPECT
                 jwt:
                   issuer-uri: http://localhost:8080  # 自动发现 JWKS
                   # public-key: classpath:keys/public.pem  # 备选，无 issuer-uri 时使用
@@ -473,13 +479,20 @@ io:
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
 | `enabled` | `true` | 是否启用 |
-| `verification-mode` | `JWT` | 验证模式：`JWT` 或 `INTROSPECT`（推荐 `INTROSPECT`） |
+| `verification-mode` | `INTROSPECT` | 验证模式：`INTROSPECT`（推荐）或 `JWT` |
 | `jwt.issuer-uri` | - | 授权服务器地址（自动发现 JWKS） |
 | `jwt.public-key` | - | RSA 公钥（PEM 或 Base64，无 issuer-uri 时使用） |
 | `jwt.public-key-location` | - | RSA 公钥文件路径（支持 `classpath:` 和 `file:` 前缀） |
 | `introspect.endpoint` | - | Introspect 端点 URL |
 | `introspect.client-id` | - | Introspect 调用的客户端 ID |
 | `introspect.client-secret` | - | Introspect 调用的客户端 Secret |
+| `introspect.local-cache.enabled` | `true` | 是否启用本地缓存 |
+| `introspect.local-cache.expire-seconds` | `3` | 本地缓存 TTL（秒），撤销感知延迟 = TTL |
+| `introspect.local-cache.max-size` | `10000` | 本地缓存最大条目数 |
+| `introspect.local-cache.stats-log-interval-seconds` | `60` | 统计日志打印间隔（秒） |
+| `introspect.local-cache.fallback.enabled` | `false` | 是否启用兜底降级 |
+| `introspect.local-cache.fallback.stale-ttl-multiplier` | `10` | 兜底 TTL 倍数（兜底 TTL = expire-seconds × 此值） |
+| `introspect.local-cache.fallback.stale-max-size` | `10000` | 兜底缓存最大条目数 |
 | `security.protected-paths` | `/api/**` | 需要认证的路径 |
 | `security.permit-all-paths` | - | 白名单路径 |
 
@@ -662,7 +675,7 @@ public interface MyServiceClient {
 ### 8.3 保护资源服务（推荐 Introspect 模式）
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.2'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.4'
 ```
 
 ```yaml
@@ -675,7 +688,7 @@ io:
             resource:
               server:
                 enabled: true
-                verification-mode: INTROSPECT
+                # verification-mode 默认为 INTROSPECT，可省略
                 introspect:
                   endpoint: http://localhost:8080/oauth2/introspect
                   client-id: AKP1234567890abcdefgh
@@ -810,3 +823,13 @@ logging:
 | 1.0.3 | 2026-04-16 | 修复 L2 空值序列化、Java 8 时间类型序列化、Pub/Sub 反序列化失败 |
 | 1.0.2 | - | 新增 `keyFormat` 配置，支持自定义 Redis key 格式 |
 | 1.0.1 | - | 初始版本 |
+
+### simple-aksk-resource-server-starter
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1.0.4 | 2026-05-02 | 兜底缓存降级策略、缓存统计日志、默认模式改为 INTROSPECT、代码重构 |
+| 1.0.3 | 2026-04-25 | Introspect 本地缓存（默认开启，TTL 3s） |
+| 1.0.2 | 2026-04-13 | 新增 Introspect 验证模式，修复 scope claim 解析 |
+| 1.0.1 | - | 初始功能完善 |
+| 1.0.0 | - | 初始版本 |

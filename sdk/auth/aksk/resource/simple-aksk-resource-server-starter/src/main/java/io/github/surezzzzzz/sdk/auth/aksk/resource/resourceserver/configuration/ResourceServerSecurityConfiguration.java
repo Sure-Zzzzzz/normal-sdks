@@ -82,7 +82,7 @@ public class ResourceServerSecurityConfiguration {
                     )
             );
         } else {
-            // JWT 模式（默认）
+            // JWT 模式
             http.oauth2ResourceServer(oauth2 -> oauth2
                     .jwt(jwt -> jwt
                             .jwtAuthenticationConverter(new AkskJwtAuthenticationConverter(eventPublisher))
@@ -96,9 +96,12 @@ public class ResourceServerSecurityConfiguration {
 
     @Bean
     public JwtDecoder jwtDecoder() throws Exception {
-        // introspect 模式下不需要 JwtDecoder，但 bean 仍需存在避免自动配置报错
+        // INTROSPECT 模式下不需要 JwtDecoder，返回占位实现避免自动配置报错
         if (VerificationMode.INTROSPECT.equals(properties.getVerificationMode())) {
-            log.info("Introspect mode enabled, JwtDecoder not used for token verification");
+            log.info("Introspect mode enabled, JwtDecoder is not used for token verification");
+            return token -> {
+                throw new UnsupportedOperationException("JwtDecoder is not used in INTROSPECT mode");
+            };
         }
 
         String issuerUri = properties.getJwt().getIssuerUri();
@@ -126,6 +129,12 @@ public class ResourceServerSecurityConfiguration {
                     "introspect.endpoint must be configured when verificationMode=INTROSPECT");
         }
 
+        // 启动时校验 fallback 与 local-cache 的依赖关系
+        SimpleAkskResourceServerProperties.Introspect.LocalCacheConfig localCache = config.getLocalCache();
+        if (localCache.getFallback().isEnabled() && !localCache.isEnabled()) {
+            log.warn("introspect.local-cache.fallback.enabled=true but local-cache.enabled=false, fallback will not take effect");
+        }
+
         OpaqueTokenIntrospector delegate;
         if (StringUtils.hasText(clientId) && StringUtils.hasText(clientSecret)) {
             log.info("Configuring OpaqueTokenIntrospector with credentials: endpoint={}", endpoint);
@@ -133,13 +142,11 @@ public class ResourceServerSecurityConfiguration {
         } else {
             log.warn("Configuring OpaqueTokenIntrospector without credentials: endpoint={}", endpoint);
             log.warn("Make sure server introspect.require-authentication=false is configured");
-            // 不带认证，使用自定义 RestTemplate
             org.springframework.web.client.RestTemplate restTemplate =
                     new org.springframework.web.client.RestTemplate();
             delegate = new NimbusOpaqueTokenIntrospector(endpoint, restTemplate);
         }
 
-        // 用 AkskIntrospectionAuthenticationConverter 包装，注入上下文并发布事件
         return new AkskIntrospectionAuthenticationConverter(delegate, eventPublisher, introspectLocalCacheHelper);
     }
 
