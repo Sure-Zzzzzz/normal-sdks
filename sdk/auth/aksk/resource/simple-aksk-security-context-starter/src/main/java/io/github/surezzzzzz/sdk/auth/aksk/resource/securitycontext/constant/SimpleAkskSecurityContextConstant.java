@@ -5,14 +5,14 @@ import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResou
 /**
  * Simple AKSK Security Context 常量
  *
- * <p>定义 Security Context Starter 使用的常量。
- *
- * <p>字段名常量直接引用 {@link SimpleAkskResourceConstant}，避免重复定义。
+ * <p>仅包含 security-context-starter 专属常量。
+ * 通用常量（ACCESS_SOURCE_HEADER、FIELD_TRACE_ID、HEADER_USER_AGENT 等）已统一定义在
+ * {@link SimpleAkskResourceConstant}。
  *
  * @author surezzzzzz
  * @since 1.0.0
  */
-public class SimpleAkskSecurityContextConstant {
+public final class SimpleAkskSecurityContextConstant {
 
     /**
      * 配置前缀
@@ -30,7 +30,6 @@ public class SimpleAkskSecurityContextConstant {
     public static final String DEFAULT_HEADER_PREFIX = SimpleAkskResourceConstant.DEFAULT_HEADER_PREFIX;
 
     private SimpleAkskSecurityContextConstant() {
-        throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
+        throw new UnsupportedOperationException("Utility class");
     }
 }
-

@@ -1,6 +1,6 @@
 # Simple AKSK Security Context Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 资源服务器端安全上下文解析器，从 HTTP Header 自动提取用户信息并提供便捷的 API 访问。
@@ -111,7 +111,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.3'
 }
 ```
 
@@ -436,6 +436,10 @@ public void deleteUser(@PathVariable String id) {
 ```
 
 ## 版本历史
+
+### 1.0.3 (2026-05-02)
+
+升级 core 至 1.0.3，常量和工具方法迁移到 core，消除模块间重复代码。详见 [CHANGELOG.1.0.3.md](CHANGELOG.1.0.3.md)
 
 ### 1.0.1 (2026-01-28)
 

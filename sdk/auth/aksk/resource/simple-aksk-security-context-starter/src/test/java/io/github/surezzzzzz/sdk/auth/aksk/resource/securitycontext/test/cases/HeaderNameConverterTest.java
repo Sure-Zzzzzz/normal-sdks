@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.support.HeaderNameConverter;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.support.HeaderNameConverter;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.constant.SimpleAkskSecurityContextConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.securitycontext.test.SimpleAkskSecurityContextTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,8 +14,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -85,7 +87,7 @@ public class EventPublishEndToEndTest {
         assertNotNull(event.getContext(), "Event context should not be null");
 
         // 验证：source 类型
-        assertEquals("header", event.getSource(), "Source should be 'header'");
+        assertEquals(SimpleAkskResourceConstant.ACCESS_SOURCE_HEADER, event.getSource(), "Source should be 'header'");
 
         // 验证：请求信息
         assertEquals("/test/basic", event.getRequestUri(), "Request URI should match");
@@ -113,8 +115,8 @@ public class EventPublishEndToEndTest {
 
     @Test
     public void testMultipleEventsPublish() throws Exception {
-        // 准备：重置监听器
-        testEventListener.reset();
+        // 准备：重置监听器（期望3个事件）
+        testEventListener.reset(3);
 
         // 执行多次请求
         for (int i = 0; i < 3; i++) {
@@ -125,14 +127,15 @@ public class EventPublishEndToEndTest {
         }
 
         // 等待所有事件处理
-        Thread.sleep(1000);
+        boolean allReceived = testEventListener.eventLatch.await(5, TimeUnit.SECONDS);
+        assertTrue(allReceived, "Should receive all 3 events within timeout");
 
         // 验证：收到3个事件
         assertEquals(3, testEventListener.events.size(), "Should receive 3 events");
 
         // 验证：所有事件的 source 都是 "header"
         for (AkskAccessEvent event : testEventListener.events) {
-            assertEquals("header", event.getSource(), "All events should have source='header'");
+            assertEquals(SimpleAkskResourceConstant.ACCESS_SOURCE_HEADER, event.getSource(), "All events should have source='header'");
         }
 
         log.info("Multiple events test passed: received {} events", testEventListener.events.size());
@@ -195,7 +198,7 @@ public class EventPublishEndToEndTest {
     @Slf4j
     public static class TestEventListener {
 
-        public final List<AkskAccessEvent> events = new ArrayList<AkskAccessEvent>();
+        public final List<AkskAccessEvent> events = new CopyOnWriteArrayList<AkskAccessEvent>();
         public CountDownLatch eventLatch = new CountDownLatch(1);
 
         @EventListener
@@ -212,8 +215,12 @@ public class EventPublishEndToEndTest {
         }
 
         public void reset() {
+            reset(1);
+        }
+
+        public void reset(int count) {
             events.clear();
-            eventLatch = new CountDownLatch(1);
+            eventLatch = new CountDownLatch(count);
         }
     }
 }
