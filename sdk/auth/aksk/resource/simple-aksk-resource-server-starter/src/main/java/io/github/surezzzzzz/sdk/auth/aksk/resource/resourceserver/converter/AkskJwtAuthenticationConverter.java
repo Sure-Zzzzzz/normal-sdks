@@ -2,7 +2,6 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.ConverterHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,7 +53,7 @@ public class AkskJwtAuthenticationConverter implements Converter<Jwt, AbstractAu
 
             try {
                 AkskAccessEvent event = ConverterHelper.buildAccessEvent(
-                        this, SimpleAkskResourceServerConstant.ACCESS_SOURCE_JWT, context, request);
+                        this, SimpleAkskResourceConstant.ACCESS_SOURCE_JWT, context, request);
                 eventPublisher.publishEvent(event);
             } catch (Exception e) {
                 log.warn("Failed to publish AkskAccessEvent", e);

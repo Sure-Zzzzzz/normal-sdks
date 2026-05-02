@@ -2,7 +2,6 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.model.IntrospectResult;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.ConverterHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.IntrospectLocalCacheHelper;
@@ -58,7 +57,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
 
             // 写主缓存 + 兜底缓存（含 active=false，使撤销信息尽快传播到兜底层）
             if (cacheHelper.isEnabled()) {
-                Object activeObj = attributes.get(SimpleAkskResourceServerConstant.INTROSPECT_CLAIM_ACTIVE);
+                Object activeObj = attributes.get(SimpleAkskResourceConstant.INTROSPECT_CLAIM_ACTIVE);
                 boolean active = activeObj instanceof Boolean
                         ? (Boolean) activeObj
                         : Boolean.parseBoolean(String.valueOf(activeObj));
@@ -93,7 +92,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
 
             try {
                 AkskAccessEvent event = ConverterHelper.buildAccessEvent(
-                        this, SimpleAkskResourceServerConstant.ACCESS_SOURCE_INTROSPECT, context, request);
+                        this, SimpleAkskResourceConstant.ACCESS_SOURCE_INTROSPECT, context, request);
                 eventPublisher.publishEvent(event);
             } catch (Exception e) {
                 log.warn("Failed to publish AkskAccessEvent", e);
@@ -104,7 +103,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
                 context.get(SimpleAkskResourceConstant.FIELD_SCOPE));
 
         return new DefaultOAuth2AuthenticatedPrincipal(
-                (String) attributes.get(SimpleAkskResourceServerConstant.JWT_CLAIM_SUB), attributes, authorities);
+                (String) attributes.get(SimpleAkskResourceConstant.JWT_CLAIM_SUB), attributes, authorities);
     }
 
     private Map<String, String> extractContext(Map<String, Object> attributes) {

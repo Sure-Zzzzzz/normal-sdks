@@ -1,6 +1,6 @@
 # Simple AKSK Resource Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 资源服务器端 Token 验证器，支持 Introspect 和 JWT 两种模式，提供便捷的安全上下文 API（适用于无网关场景）。
@@ -10,7 +10,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.4'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.5'
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.security:spring-security-oauth2-resource-server'
@@ -188,6 +188,10 @@ public void onAkskAccess(AkskAccessEvent event) {
 ---
 
 ## 版本历史
+
+### 1.0.5 (2026-05-02)
+
+升级 core 至 1.0.3，常量和工具方法迁移到 core，消除模块间重复代码。详见 [CHANGELOG.1.0.5.md](CHANGELOG.1.0.5.md)
 
 ### 1.0.4 (2026-05-02)
 

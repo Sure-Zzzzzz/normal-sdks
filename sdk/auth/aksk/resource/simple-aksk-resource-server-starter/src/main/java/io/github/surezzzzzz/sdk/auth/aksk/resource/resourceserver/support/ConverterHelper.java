@@ -2,15 +2,15 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.support.AkskContextHelper;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.web.context.request.RequestAttributes;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -18,7 +18,10 @@ import java.util.stream.Collectors;
  *
  * <p>供 {@link io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskJwtAuthenticationConverter}
  * 和 {@link io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskIntrospectionAuthenticationConverter}
- * 共用，消除重复代码。
+ * 共用。
+ *
+ * <p>通用方法（buildAccessEvent、getCurrentRequest、claimValueToString）委托给
+ * {@link AkskContextHelper}；resource-server-starter 专属方法（extractAuthorities）保留在此。
  *
  * @author surezzzzzz
  */
@@ -29,45 +32,26 @@ public final class ConverterHelper {
     }
 
     /**
-     * 构建 AkskAccessEvent
+     * 构建 AkskAccessEvent，委托给 AkskContextHelper
      *
+     * @param caller  事件发布者（this）
      * @param source  验证来源（jwt / introspect）
      * @param context 安全上下文 Map
      * @param request 当前 HTTP 请求
-     * @param caller  事件发布者（this）
      * @return AkskAccessEvent
      */
     public static AkskAccessEvent buildAccessEvent(
             Object caller, String source, Map<String, String> context, HttpServletRequest request) {
-        return new AkskAccessEvent(
-                caller,
-                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_ID),
-                context.get(SimpleAkskResourceConstant.FIELD_CLIENT_TYPE),
-                context.get(SimpleAkskResourceConstant.FIELD_USER_ID),
-                context.get(SimpleAkskResourceConstant.FIELD_USERNAME),
-                context.get(SimpleAkskResourceConstant.FIELD_ROLES),
-                context.get(SimpleAkskResourceConstant.FIELD_SCOPE),
-                request.getRequestURI(),
-                request.getMethod(),
-                request.getRemoteAddr(),
-                request.getHeader(SimpleAkskResourceServerConstant.HEADER_USER_AGENT),
-                source,
-                context.get(SimpleAkskResourceServerConstant.FIELD_TRACE_ID),
-                context
-        );
+        return AkskContextHelper.buildAccessEvent(caller, source, context, request);
     }
 
     /**
-     * 获取当前 HTTP 请求
+     * 获取当前 HTTP 请求，委托给 AkskContextHelper
      *
      * @return 当前 HttpServletRequest，不在请求上下文中时返回 null
      */
     public static HttpServletRequest getCurrentRequest() {
-        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
-        if (attrs instanceof ServletRequestAttributes) {
-            return ((ServletRequestAttributes) attrs).getRequest();
-        }
-        return null;
+        return AkskContextHelper.getCurrentRequest();
     }
 
     /**
@@ -82,23 +66,17 @@ public final class ConverterHelper {
         }
         return Arrays.stream(scope.split(" "))
                 .filter(s -> !s.isEmpty())
-                .map(s -> new SimpleGrantedAuthority(SimpleAkskResourceServerConstant.AUTHORITY_SCOPE_PREFIX + s))
+                .map(s -> new SimpleGrantedAuthority(SimpleAkskResourceConstant.AUTHORITY_SCOPE_PREFIX + s))
                 .collect(Collectors.toList());
     }
 
     /**
-     * 将 claim 值转换为字符串
-     *
-     * <p>List 类型（如 scope）用空格拼接，其他类型直接 toString。
+     * 将 claim 值转换为字符串，委托给 AkskContextHelper
      *
      * @param value claim 值
      * @return 字符串表示
      */
-    @SuppressWarnings("unchecked")
     public static String claimValueToString(Object value) {
-        if (value instanceof List) {
-            return String.join(" ", (List<String>) value);
-        }
-        return value.toString();
+        return AkskContextHelper.claimValueToString(value);
     }
 }

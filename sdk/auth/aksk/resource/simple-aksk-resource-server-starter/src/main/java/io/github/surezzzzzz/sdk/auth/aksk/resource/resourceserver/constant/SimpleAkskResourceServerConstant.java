@@ -3,6 +3,10 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant;
 /**
  * Simple AKSK Resource Server Constants
  *
+ * <p>仅包含 resource-server-starter 专属常量。
+ * 通用常量（ACCESS_SOURCE_*、FIELD_TRACE_ID、HEADER_USER_AGENT 等）已统一定义在
+ * {@link io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant}。
+ *
  * @author surezzzzzz
  * @since 1.0.0
  */
@@ -92,43 +96,6 @@ public final class SimpleAkskResourceServerConstant {
      * stale-ttl-multiplier 建议最大值，超过此值打 WARN 提示安全风险
      */
     public static final int WARN_STALE_TTL_MULTIPLIER_MAX = 100;
-
-    // ==================== Introspect / JWT 字段常量 ====================
-
-    /**
-     * Introspect 响应中表示 token 是否有效的字段名
-     */
-    public static final String INTROSPECT_CLAIM_ACTIVE = "active";
-
-    /**
-     * JWT subject claim 名
-     */
-    public static final String JWT_CLAIM_SUB = "sub";
-
-    /**
-     * Spring Security 权限前缀
-     */
-    public static final String AUTHORITY_SCOPE_PREFIX = "SCOPE_";
-
-    /**
-     * HTTP User-Agent 请求头名
-     */
-    public static final String HEADER_USER_AGENT = "User-Agent";
-
-    /**
-     * AkskAccessEvent source 标识：introspect 验证
-     */
-    public static final String ACCESS_SOURCE_INTROSPECT = "introspect";
-
-    /**
-     * AkskAccessEvent source 标识：JWT 验证
-     */
-    public static final String ACCESS_SOURCE_JWT = "jwt";
-
-    /**
-     * 链路追踪 ID 字段名
-     */
-    public static final String FIELD_TRACE_ID = "traceId";
 
     private SimpleAkskResourceServerConstant() {
         throw new UnsupportedOperationException("Utility class");
