@@ -20,7 +20,6 @@ class SimpleAkskExpressionExceptionTest {
         String expression = "#context['invalid']";
         SimpleAkskExpressionException exception = new SimpleAkskExpressionException(message, expression);
 
-        assertNotNull(exception);
         assertEquals(message, exception.getMessage());
         assertEquals(expression, exception.getExpression());
         assertNull(exception.getCause());
@@ -33,7 +32,6 @@ class SimpleAkskExpressionExceptionTest {
         Throwable cause = new RuntimeException("Root cause");
         SimpleAkskExpressionException exception = new SimpleAkskExpressionException(message, expression, cause);
 
-        assertNotNull(exception);
         assertEquals(message, exception.getMessage());
         assertEquals(expression, exception.getExpression());
         assertEquals(cause, exception.getCause());

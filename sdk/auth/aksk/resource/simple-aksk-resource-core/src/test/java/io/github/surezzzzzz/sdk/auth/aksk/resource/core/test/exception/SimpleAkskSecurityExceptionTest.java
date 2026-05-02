@@ -18,7 +18,6 @@ class SimpleAkskSecurityExceptionTest {
         String message = "Security check failed";
         SimpleAkskSecurityException exception = new SimpleAkskSecurityException(message);
 
-        assertNotNull(exception);
         assertEquals(message, exception.getMessage());
         assertNull(exception.getCause());
     }
@@ -29,7 +28,6 @@ class SimpleAkskSecurityExceptionTest {
         Throwable cause = new RuntimeException("Root cause");
         SimpleAkskSecurityException exception = new SimpleAkskSecurityException(message, cause);
 
-        assertNotNull(exception);
         assertEquals(message, exception.getMessage());
         assertEquals(cause, exception.getCause());
         assertEquals("Root cause", exception.getCause().getMessage());

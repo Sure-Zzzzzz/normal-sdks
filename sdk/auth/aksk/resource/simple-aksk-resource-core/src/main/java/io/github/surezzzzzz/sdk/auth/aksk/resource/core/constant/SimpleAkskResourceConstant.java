@@ -96,6 +96,11 @@ public class SimpleAkskResourceConstant {
      */
     public static final String FIELD_SCOPE = "scope";
 
+    /**
+     * 链路追踪 ID 字段名
+     */
+    public static final String FIELD_TRACE_ID = "traceId";
+
     // ==================== JWT Claim Names ====================
 
     /**
@@ -127,6 +132,16 @@ public class SimpleAkskResourceConstant {
      * JWT Claim: scope
      */
     public static final String JWT_CLAIM_SCOPE = "scope";
+
+    /**
+     * JWT subject claim 名
+     */
+    public static final String JWT_CLAIM_SUB = "sub";
+
+    /**
+     * Introspect 响应中表示 token 是否有效的字段名
+     */
+    public static final String INTROSPECT_CLAIM_ACTIVE = "active";
 
     // ==================== HTTP Header Names ====================
 
@@ -169,6 +184,35 @@ public class SimpleAkskResourceConstant {
      * HTTP Header: x-sure-auth-aksk-scope
      */
     public static final String HEADER_SCOPE = DEFAULT_HEADER_PREFIX + "scope";
+
+    /**
+     * HTTP User-Agent 请求头名
+     */
+    public static final String HEADER_USER_AGENT = "User-Agent";
+
+    // ==================== AkskAccessEvent source 标识 ====================
+
+    /**
+     * AkskAccessEvent source：JWT 验证
+     */
+    public static final String ACCESS_SOURCE_JWT = "jwt";
+
+    /**
+     * AkskAccessEvent source：Introspect 验证
+     */
+    public static final String ACCESS_SOURCE_INTROSPECT = "introspect";
+
+    /**
+     * AkskAccessEvent source：Header 解析（网关场景）
+     */
+    public static final String ACCESS_SOURCE_HEADER = "header";
+
+    // ==================== Spring Security ====================
+
+    /**
+     * Spring Security 权限前缀
+     */
+    public static final String AUTHORITY_SCOPE_PREFIX = "SCOPE_";
 
     // ==================== Field Name to JWT Claim Mapping ====================
 
