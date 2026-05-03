@@ -1,9 +1,9 @@
 dependencies {
     // 依赖 client-core 模块
-    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.1'
 
-    // 依赖 simple-redis-lock-starter@1.0.0
-    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.0'
+    // 依赖 simple-redis-lock-starter@1.0.1
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.1'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

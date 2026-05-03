@@ -285,15 +285,19 @@ class RedisTokenManagerConcurrencyTest {
 
         // 验证：所有获取 Token 的线程都应该成功
         assertTrue(tokenMap.size() > 0, "至少应有线程成功获取 Token");
-        tokenMap.values().forEach(token ->
-                assertNotNull(token, "获取的 Token 不应为 null"));
+
+        // 验证每个获取 Token 的线程都得到了非 null 的有效 Token
+        for (String token : tokenMap.values()) {
+            assertNotNull(token, "获取的 Token 不应为 null");
+            assertTrue(token.startsWith("eyJ"), "获取的 Token 应为 JWT 格式");
+        }
 
         log.info("验证通过：并发清除和获取场景下没有异常");
         log.info("======================================");
     }
 
     @Test
-    @DisplayName("测试不同 security_context 并发获取 Token - 验证多用户隔离")
+    @DisplayName("测试相同 security_context 并发获取 Token - 验证并发安全性（注意：当前所有用户共享同一 SecurityContext）")
     void testConcurrentGetTokenWithDifferentSecurityContexts() throws InterruptedException {
         log.info("======================================");
         log.info("测试不同 security_context 并发获取 Token - 验证多用户隔离");
@@ -302,6 +306,10 @@ class RedisTokenManagerConcurrencyTest {
         // 注意：由于 SecurityContextProvider 是 Spring Bean，默认返回 null
         // 这个测试验证在相同 security_context (null) 下，多个线程获取相同的 Token
         // 如果需要测试不同的 security_context，需要自定义 SecurityContextProvider
+        //
+        // 限制说明：当前测试中所有"用户"实际上共享同一个 SecurityContext (null)，
+        // 因此无法验证真正的多用户 Token 隔离。要测试真正的多用户隔离，
+        // 需要为每个用户组注入不同的 SecurityContextProvider 实现。
 
         log.info("当前 SecurityContextProvider 返回的 security_context: {}",
                 securityContextProvider.getSecurityContext());

@@ -62,7 +62,7 @@ public class RedisTokenCacheStrategy implements TokenCacheStrategy {
             }
             return value;
         } catch (Exception e) {
-            log.error("Failed to get token from Redis, key: , fallback to re-fetch", cacheKey, e);
+            log.error("Failed to get token from Redis, key: {}, fallback to re-fetch", cacheKey, e);
             return null;  // 降级：返回 null，触发重新换 Token
         }
     }
@@ -70,13 +70,11 @@ public class RedisTokenCacheStrategy implements TokenCacheStrategy {
     @Override
     public void put(String cacheKey, String token, long expiresInSeconds) {
         try {
-            // 提前 30 秒过期（避免边界情况）
-            long ttl = Math.max(expiresInSeconds - 30, 60);
+            long ttl = calculateTtl(expiresInSeconds);
             stringRedisTemplate.opsForValue().set(cacheKey, token, ttl, TimeUnit.SECONDS);
             log.debug("Token cached in Redis: key={}, ttl={}s", cacheKey, ttl);
         } catch (Exception e) {
             log.error("Failed to put token to Redis, key: {}", cacheKey, e);
-            // 不抛异常，继续执行（Token 仍然可用，只是没有缓存）
         }
     }
 
