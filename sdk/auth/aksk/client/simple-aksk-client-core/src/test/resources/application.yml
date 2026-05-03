@@ -15,7 +15,6 @@ io:
               # client-id 和 client-secret 请在 application-local.yml 中配置
               token:
                 refresh-before-expire: 300
-                retry-on-401: true
 
 logging:
   level:

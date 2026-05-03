@@ -70,4 +70,45 @@ public final class SimpleAkskClientCoreConstant {
      * Session 中存储 Token 过期时间的 Key
      */
     public static final String SESSION_TOKEN_EXPIRY_KEY = "simple_aksk_token_expiry";
+
+    // ==================== Token 缓存相关 ====================
+
+    /**
+     * Token 提前过期缓冲（秒），避免边界情况
+     */
+    public static final int TOKEN_EARLY_EXPIRY_SECONDS = 30;
+
+    /**
+     * Token 最小缓存 TTL（秒）
+     */
+    public static final int TOKEN_MIN_TTL_SECONDS = 60;
+
+    // ==================== HTTP 超时默认值 ====================
+
+    /**
+     * 默认连接超时（毫秒）
+     */
+    public static final int DEFAULT_CONNECT_TIMEOUT_MS = 5000;
+
+    /**
+     * 默认读取超时（毫秒）
+     */
+    public static final int DEFAULT_READ_TIMEOUT_MS = 15000;
+
+    // ==================== 分布式锁 ====================
+
+    /**
+     * 分布式锁默认超时（秒）
+     */
+    public static final int DEFAULT_LOCK_TIMEOUT_SECONDS = 10;
+
+    /**
+     * 锁等待重试间隔（毫秒）
+     */
+    public static final int LOCK_RETRY_SLEEP_MS = 100;
+
+    /**
+     * 锁等待最大重试次数（50 × 100ms = 5s）
+     */
+    public static final int LOCK_MAX_RETRY_TIMES = 50;
 }

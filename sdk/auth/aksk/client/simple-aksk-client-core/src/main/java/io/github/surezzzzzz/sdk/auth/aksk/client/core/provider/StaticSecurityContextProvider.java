@@ -1,18 +1,16 @@
 package io.github.surezzzzzz.sdk.auth.aksk.client.core.provider;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
 /**
  * 静态的 SecurityContextProvider 实现
- * <p>
- * 返回固定的安全上下文，适用于测试或简单场景
+ *
+ * <p>返回固定的安全上下文，适用于测试或简单场景
  *
  * @author surezzzzzz
  */
-@Getter
-@Setter
+@Data
 @AllArgsConstructor
 public class StaticSecurityContextProvider implements SecurityContextProvider {
 

@@ -45,11 +45,29 @@ public class SimpleAkskClientCoreProperties {
      */
     private TokenConfig token = new TokenConfig();
 
+    /**
+     * HTTP 请求配置
+     */
+    private HttpConfig http = new HttpConfig();
+
     @Data
     public static class TokenConfig {
         /**
          * Token 过期前多少秒刷新（默认 300 秒）
          */
         private int refreshBeforeExpire = SimpleAkskClientCoreConstant.DEFAULT_REFRESH_BEFORE_EXPIRE;
+    }
+
+    @Data
+    public static class HttpConfig {
+        /**
+         * 连接超时（毫秒），默认 5000
+         */
+        private int connectTimeoutMs = SimpleAkskClientCoreConstant.DEFAULT_CONNECT_TIMEOUT_MS;
+
+        /**
+         * 读取超时（毫秒），默认 15000
+         */
+        private int readTimeoutMs = SimpleAkskClientCoreConstant.DEFAULT_READ_TIMEOUT_MS;
     }
 }
