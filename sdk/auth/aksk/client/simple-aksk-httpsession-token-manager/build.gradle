@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 client-core 模块
-    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.1'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

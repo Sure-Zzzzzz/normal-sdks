@@ -44,17 +44,14 @@ public class HttpSessionTokenCacheStrategy implements TokenCacheStrategy {
         private final String token;
         private final long expireTime;
 
-        public CachedToken(String token, long expiresInSeconds) {
+        public CachedToken(String token, long ttlSeconds) {
             this.token = token;
-            // 提前 30 秒过期（避免边界情况）
-            long ttl = Math.max(expiresInSeconds - 30, 60);
-            this.expireTime = System.currentTimeMillis() + ttl * 1000;
+            this.expireTime = System.currentTimeMillis() + ttlSeconds * 1000;
         }
 
         public boolean isExpired() {
             return System.currentTimeMillis() >= expireTime;
         }
-
     }
 
     @Override
@@ -107,10 +104,9 @@ public class HttpSessionTokenCacheStrategy implements TokenCacheStrategy {
             return;
         }
 
+        long ttl = calculateTtl(expiresInSeconds);
         HttpSession session = request.getSession(true);
-        session.setAttribute(cacheKey, new CachedToken(token, expiresInSeconds));
-
-        long ttl = Math.max(expiresInSeconds - 30, 60);
+        session.setAttribute(cacheKey, new CachedToken(token, ttl));
         log.debug("Token cached in session: key={}, ttl={}s", cacheKey, ttl);
     }
 

@@ -49,7 +49,6 @@ class HttpSessionTokenManagerTest {
 
         log.info("获取的 Token: {}", token);
         assertNotNull(token, "Token 不应为 null");
-        assertTrue(token.length() > 0, "Token 不应为空字符串");
         assertTrue(token.startsWith("eyJ"), "Token 应该是 JWT 格式（以 eyJ 开头）");
 
         log.info("======================================");
@@ -71,9 +70,10 @@ class HttpSessionTokenManagerTest {
         log.info("第二次获取的 Token: {}", secondToken);
 
         assertNotNull(firstToken, "第一次获取的 Token 不应为 null");
+        assertTrue(firstToken.startsWith("eyJ"), "第一次 Token 应该是 JWT 格式");
         assertNotNull(secondToken, "第二次获取的 Token 不应为 null");
-        // 注意：因为没有 HttpSession，每次都会重新获取 Token
-        // 服务器可能返回相同或不同的 Token
+        assertTrue(secondToken.startsWith("eyJ"), "第二次 Token 应该是 JWT 格式");
+        // 注意：因为没有 HttpSession，每次都会重新获取 Token，服务器可能返回相同或不同的 Token
 
         log.info("======================================");
     }

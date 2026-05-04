@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,41 +96,50 @@ class HttpSessionTokenManagerConcurrencyTest {
         int threadCount = 50;
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
         CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(threadCount);
-        AtomicInteger successCount = new AtomicInteger(0);
+        List<Future<String>> futures = new ArrayList<>();
         AtomicInteger failCount = new AtomicInteger(0);
 
         for (int i = 0; i < threadCount; i++) {
             final int threadId = i;
-            executor.submit(() -> {
+            futures.add(executor.submit(() -> {
                 try {
                     startLatch.await();
                     String token = tokenManager.getToken();
-                    assertNotNull(token);
-                    successCount.incrementAndGet();
                     if (threadId % 10 == 0) {
                         log.info("Thread-{} 获取 Token 成功", threadId);
                     }
+                    return token;
                 } catch (Exception e) {
                     failCount.incrementAndGet();
                     log.error("Thread-{} 获取 Token 失败", threadId, e);
-                } finally {
-                    endLatch.countDown();
+                    throw e;
                 }
-            });
+            }));
         }
 
         startLatch.countDown();
-        boolean finished = endLatch.await(120, TimeUnit.SECONDS);
         executor.shutdown();
+        boolean terminated = executor.awaitTermination(120, TimeUnit.SECONDS);
+
+        // Collect results and assert on the main thread
+        List<String> tokens = new ArrayList<>();
+        for (Future<String> future : futures) {
+            try {
+                String token = future.get();
+                assertNotNull(token, "Token 不应为 null");
+                tokens.add(token);
+            } catch (ExecutionException e) {
+                // already counted in failCount
+            }
+        }
 
         log.info("======================================");
         log.info("高并发测试结果：");
-        log.info("成功: {}, 失败: {}", successCount.get(), failCount.get());
+        log.info("成功: {}, 失败: {}", tokens.size(), failCount.get());
         log.info("======================================");
 
-        assertTrue(finished, "所有线程应在 120 秒内完成");
-        assertEquals(threadCount, successCount.get(), "所有线程都应成功");
+        assertTrue(terminated, "所有线程应在 120 秒内完成");
+        assertEquals(threadCount, tokens.size(), "所有线程都应成功");
         assertEquals(0, failCount.get(), "不应有失败");
     }
 
@@ -146,26 +156,23 @@ class HttpSessionTokenManagerConcurrencyTest {
 
         ExecutorService executor = Executors.newFixedThreadPool(totalThreads);
         CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch endLatch = new CountDownLatch(totalThreads);
-        AtomicInteger getSuccessCount = new AtomicInteger(0);
+        List<Future<String>> getFutures = new ArrayList<>();
         AtomicInteger clearCount = new AtomicInteger(0);
 
         // 启动获取 Token 的线程
         for (int i = 0; i < getThreadCount; i++) {
             final int threadId = i;
-            executor.submit(() -> {
+            getFutures.add(executor.submit(() -> {
                 try {
                     startLatch.await();
                     String token = tokenManager.getToken();
-                    assertNotNull(token);
-                    getSuccessCount.incrementAndGet();
                     log.debug("Get Thread-{} 获取 Token 成功", threadId);
+                    return token;
                 } catch (Exception e) {
                     log.error("Get Thread-{} 失败", threadId, e);
-                } finally {
-                    endLatch.countDown();
+                    throw e;
                 }
-            });
+            }));
         }
 
         // 启动清除 Token 的线程
@@ -180,22 +187,32 @@ class HttpSessionTokenManagerConcurrencyTest {
                     log.debug("Clear Thread-{} 清除 Token 成功", threadId);
                 } catch (Exception e) {
                     log.error("Clear Thread-{} 失败", threadId, e);
-                } finally {
-                    endLatch.countDown();
                 }
             });
         }
 
         startLatch.countDown();
-        boolean finished = endLatch.await(90, TimeUnit.SECONDS);
         executor.shutdown();
+        boolean terminated = executor.awaitTermination(90, TimeUnit.SECONDS);
+
+        // Collect results and assert on the main thread
+        List<String> tokens = new ArrayList<>();
+        for (Future<String> future : getFutures) {
+            try {
+                String token = future.get();
+                assertNotNull(token, "获取的 Token 不应为 null");
+                tokens.add(token);
+            } catch (ExecutionException e) {
+                // get thread failed
+            }
+        }
 
         log.info("======================================");
         log.info("并发获取和清除测试结果：");
-        log.info("成功获取: {}, 清除次数: {}", getSuccessCount.get(), clearCount.get());
+        log.info("成功获取: {}, 清除次数: {}", tokens.size(), clearCount.get());
         log.info("======================================");
 
-        assertTrue(finished, "所有线程应在 90 秒内完成");
-        assertTrue(getSuccessCount.get() > 0, "应有成功获取 Token 的线程");
+        assertTrue(terminated, "所有线程应在 90 秒内完成");
+        assertTrue(tokens.size() > 0, "应有成功获取 Token 的线程");
     }
 }
