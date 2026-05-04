@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.constant.SimpleAkskRestTemplateConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -12,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @since 1.0.0
  */
 @Data
-@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate")
+@ConfigurationProperties(prefix = SimpleAkskRestTemplateConstant.CONFIG_PREFIX)
 public class SimpleAkskRestTemplateProperties {
 
     /**
@@ -23,20 +24,20 @@ public class SimpleAkskRestTemplateProperties {
     /**
      * 最大连接数
      */
-    private int maxTotal = 100;
+    private int maxTotal = SimpleAkskRestTemplateConstant.DEFAULT_MAX_TOTAL;
 
     /**
      * 每个路由的最大连接数
      */
-    private int maxPerRoute = 20;
+    private int maxPerRoute = SimpleAkskRestTemplateConstant.DEFAULT_MAX_PER_ROUTE;
 
     /**
      * 连接超时（毫秒）
      */
-    private int connectTimeout = 5000;
+    private int connectTimeout = SimpleAkskRestTemplateConstant.DEFAULT_CONNECT_TIMEOUT_MS;
 
     /**
      * 读取超时（毫秒）
      */
-    private int readTimeout = 30000;
+    private int readTimeout = SimpleAkskRestTemplateConstant.DEFAULT_READ_TIMEOUT_MS;
 }

@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 simple-aksk-redis-token-manager（提供 TokenManager Bean）
-    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:1.0.1'
 
     // Spring Boot Web（compileOnly，用户自行引入）
     compileOnly 'org.springframework.boot:spring-boot-starter-web'

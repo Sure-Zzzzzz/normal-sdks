@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -149,22 +150,18 @@ class RestTemplateEndToEndTest {
     void testRestTemplateCallWithInvalidCredentialsShouldReturn401() {
         log.info("========== 测试：无效凭证应该返回 401 ==========");
 
-        // Given
+        // Given - Use a plain RestTemplate without AKSK interceptor
         String url = serverBaseUrl + "/api/token/statistics";
-
-        // Manually set invalid token
+        RestTemplate plainRestTemplate = new RestTemplate();
         tokenManager.clearToken();
 
-        // Simulate invalid credentials by directly calling an endpoint without valid token
-        // Note: This test assumes we can somehow inject an invalid token
-        // In real scenario, the interceptor will handle 401 and retry once
-
-        // When & Then
-        // This is a bit tricky to test because the interceptor will retry
-        // We can't easily test the retry mechanism without mocking
-        // So we skip this test or test it differently
-        assertTrue(true, "This test requires manual verification");
-        log.info("测试跳过：需要手动验证\n");
+        // When & Then - Calling without AKSK credentials should return 401
+        HttpClientErrorException exception = assertThrows(HttpClientErrorException.class,
+                () -> plainRestTemplate.getForEntity(url, String.class),
+                "Request without AKSK credentials should return 401");
+        assertEquals(HttpStatus.UNAUTHORIZED, exception.getStatusCode(),
+                "Response status should be 401 Unauthorized");
+        log.info("测试通过：无效凭证返回 401\n");
     }
 
     @Test

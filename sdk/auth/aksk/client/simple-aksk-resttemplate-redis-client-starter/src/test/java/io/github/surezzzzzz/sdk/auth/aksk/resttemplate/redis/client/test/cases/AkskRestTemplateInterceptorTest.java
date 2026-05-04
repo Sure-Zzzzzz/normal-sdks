@@ -18,6 +18,7 @@ import java.net.URI;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 /**
@@ -124,5 +125,63 @@ class AkskRestTemplateInterceptorTest {
         verify(tokenManager, times(1)).getToken();
         verify(execution, times(1)).execute(request, body);
         log.info("测试通过：未添加 Authorization 头\n");
+    }
+
+    @Test
+    void testInterceptWhenTokenManagerThrowsExceptionShouldPropagateException() throws IOException {
+        log.info("========== 测试：TokenManager 抛异常时应该向上传播 ==========");
+
+        // Given
+        when(tokenManager.getToken()).thenThrow(new RuntimeException("Token fetch failed"));
+        log.info("Given: tokenManager.getToken() 抛出 RuntimeException");
+
+        // When / Then
+        byte[] body = new byte[0];
+        assertThrows(RuntimeException.class, () -> interceptor.intercept(request, body, execution),
+                "TokenManager 抛异常时应该向上传播，不能被吞掉");
+        verify(execution, never()).execute(any(), any());
+        log.info("测试通过：异常正确向上传播，execution 未被调用\n");
+    }
+
+    @Test
+    void testInterceptWhenExecutionThrowsIOExceptionShouldPropagateException() throws IOException {
+        log.info("========== 测试：execution 抛 IOException 时应该向上传播 ==========");
+
+        // Given
+        String token = "test-token-123";
+        when(tokenManager.getToken()).thenReturn(token);
+        when(execution.execute(any(), any())).thenThrow(new IOException("Network error"));
+        log.info("Given: execution.execute() 抛出 IOException");
+
+        // When / Then
+        byte[] body = new byte[0];
+        assertThrows(IOException.class, () -> interceptor.intercept(request, body, execution),
+                "execution 抛 IOException 时应该向上传播");
+        String authHeader = request.getHeaders().getFirst("Authorization");
+        assertEquals("Bearer test-token-123", authHeader, "Authorization 头应已设置（异常发生在 execute 时）");
+        log.info("测试通过：IOException 正确向上传播\n");
+    }
+
+    @Test
+    void testInterceptShouldOverwriteExistingAuthorizationHeader() throws IOException {
+        log.info("========== 测试：已有 Authorization 头时应该覆盖 ==========");
+
+        // Given
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Authorization", "Bearer old-token");
+        when(request.getHeaders()).thenReturn(headers);
+        when(tokenManager.getToken()).thenReturn("new-token-456");
+        when(execution.execute(any(), any())).thenReturn(response);
+        log.info("Given: 请求已有 Authorization: Bearer old-token，新 token = new-token-456");
+
+        // When
+        byte[] body = new byte[0];
+        interceptor.intercept(request, body, execution);
+
+        // Then
+        String authHeader = request.getHeaders().getFirst("Authorization");
+        log.info("Then: Authorization header = {}", authHeader);
+        assertEquals("Bearer new-token-456", authHeader, "应覆盖旧的 Authorization 头");
+        log.info("测试通过：旧 Authorization 头已被覆盖\n");
     }
 }
