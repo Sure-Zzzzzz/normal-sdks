@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.stats.CacheStats;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
@@ -235,18 +235,14 @@ public class SmartCacheManagerTest extends BaseSmartCacheTest {
         log.info("获取统计信息: {}", stats);
 
         // Then
-        if (stats != null) {
-            assertNotNull(stats);
-            assertEquals(1, stats.getTotalRequests(), "总请求数应该是1");
-            assertEquals(1, stats.getL1HitCount(), "L1命中次数应该是1");
-            assertEquals(0, stats.getL2HitCount(), "L2命中次数应该是0");
-            assertEquals(0, stats.getMissCount(), "未命中次数应该是0");
-            assertEquals(100.0, stats.getHitRate(), 0.01, "命中率应该是100%");
-            assertTrue(stats.getCacheSize() >= 1, "缓存大小应该至少是1");
-            log.info("验证通过：统计信息精确匹配");
-        } else {
-            log.info("统计功能未启用");
-        }
+        assertNotNull(stats, "统计功能已启用，stats 不应为 null");
+        assertEquals(1, stats.getTotalRequests(), "总请求数应该是1");
+        assertEquals(1, stats.getL1HitCount(), "L1命中次数应该是1");
+        assertEquals(0, stats.getL2HitCount(), "L2命中次数应该是0");
+        assertEquals(0, stats.getMissCount(), "未命中次数应该是0");
+        assertEquals(100.0, stats.getHitRate(), 0.01, "命中率应该是100%");
+        assertTrue(stats.getCacheSize() >= 1, "缓存大小应该至少是1");
+        log.info("验证通过：统计信息精确匹配");
         log.info("测试通过");
     }
 

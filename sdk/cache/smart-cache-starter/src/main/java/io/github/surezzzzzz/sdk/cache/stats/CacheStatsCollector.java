@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.cache.stats;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
-import io.github.surezzzzzz.sdk.cache.cache.L2Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

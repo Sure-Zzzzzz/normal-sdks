@@ -2,10 +2,10 @@ package io.github.surezzzzzz.sdk.cache.warmup;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheWarmUp;
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
-import io.github.surezzzzzz.sdk.cache.cache.L2Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
@@ -69,7 +69,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
             return;
         }
 
-        log.info("开始执行缓存预热...");
+        log.info("Starting cache warm-up...");
 
         List<WarmUpTask> tasks = new ArrayList<>();
 
@@ -89,7 +89,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
         }
 
         if (tasks.isEmpty()) {
-            log.info("未找到需要预热的缓存方法");
+            log.info("No warm-up methods found, skipping");
             return;
         }
 
@@ -112,7 +112,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                 int order = entry.getKey();
                 List<WarmUpTask> orderTasks = entry.getValue();
 
-                log.info("开始执行 order={} 的预热任务，共 {} 个", order, orderTasks.size());
+                log.info("Executing warm-up tasks with order={}, count={}", order, orderTasks.size());
 
                 // 同order的任务并行执行
                 List<CompletableFuture<Void>> futures = orderTasks.stream()
@@ -122,7 +122,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                 // 等待当前order的所有任务完成后，再执行下一个order
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-                log.info("order={} 的预热任务执行完成", order);
+                log.info("Warm-up tasks with order={} completed", order);
             }
         } finally {
             // 关闭线程池
@@ -137,7 +137,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
             }
         }
 
-        log.info("缓存预热完成，共执行 {} 个预热任务", tasks.size());
+        log.info("Cache warm-up completed, {} tasks executed", tasks.size());
     }
 
     private void executeWarmUpTask(WarmUpTask task) {
@@ -151,7 +151,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
         boolean locked = false;
 
         try {
-            log.info("执行预热任务: {}.{}, cacheName={}, order={}",
+            log.info("Executing warm-up task: {}.{}, cacheName={}, order={}",
                     task.bean.getClass().getSimpleName(),
                     task.method.getName(),
                     cacheName,
@@ -162,19 +162,19 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                 try {
                     locked = redisLock.tryLock(lockKey, requestId, SmartCacheConstant.WARMUP_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                     if (locked) {
-                        log.info("获取预热锁成功，开始执行预热方法");
+                        log.info("Acquired warm-up lock, executing warm-up method");
                         // 执行预热方法并写入 L2
                         Map<String, Object> data = executeWarmUpMethod(task);
                         if (data != null && !data.isEmpty()) {
                             // 写入 L2 (Redis) 和 L1 (Caffeine)
                             cacheManager.putAll(cacheName, data);
-                            log.info("预热成功: {} 个缓存项已写入 L2 (Redis) 和 L1 (Caffeine)", data.size());
+                            log.info("Warm-up succeeded: {} entries written to L2 (Redis) and L1 (Caffeine)", data.size());
 
                             // 保存预热的 key 列表，供其他实例使用
                             List<String> keys = new ArrayList<>(data.keySet());
                             int ttlSeconds = properties != null && properties.getWarmUp() != null
                                     ? properties.getWarmUp().getCompletionMarkTtlSeconds()
-                                    : SmartCacheConstant.WARMUP_COMPLETE_MARK_TTL_SECONDS;
+                                    : SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS;
                             redisTemplate.opsForValue().set(
                                     warmupKeysKey,
                                     keys,
@@ -189,34 +189,34 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                                     ttlSeconds,
                                     TimeUnit.SECONDS
                             );
-                            log.info("设置预热完成标记: {}", warmupCompleteKey);
+                            log.info("Warm-up completion mark set: {}", warmupCompleteKey);
                         }
                     } else {
-                        log.info("未获取到预热锁，等待其他实例完成预热");
+                        log.info("Warm-up lock not acquired, waiting for another instance to complete warm-up");
                         // 等待预热完成标记
                         if (waitForWarmupComplete(warmupCompleteKey)) {
-                            log.info("检测到预热完成标记，开始从 L2 加载数据到 L1");
+                            log.info("Warm-up completion mark detected, loading data from L2 to L1");
                             // 从 L2 加载预热数据到 L1
                             loadWarmupDataToL1(warmupKeysKey, cacheName);
                         } else {
-                            log.warn("等待预热完成超时，L1 将在后续访问时自动从 L2 加载");
+                            log.warn("Timed out waiting for warm-up completion, L1 will be populated on first access");
                         }
                     }
                 } catch (Exception e) {
-                    log.error("预热过程异常", e);
+                    log.error("Warm-up process error", e);
                 }
             } else {
                 // 没有分布式锁或 L2，直接执行
-                log.info("无分布式锁或 L2，直接执行预热方法");
+                log.info("No distributed lock or L2, executing warm-up directly");
                 Map<String, Object> data = executeWarmUpMethod(task);
                 if (data != null && !data.isEmpty()) {
                     cacheManager.putAll(cacheName, data);
-                    log.info("预热成功: {} 个缓存项已写入缓存", data.size());
+                    log.info("Warm-up succeeded: {} entries written to cache", data.size());
                 }
             }
 
         } catch (Exception e) {
-            log.error("执行预热任务失败: {}.{}",
+            log.error("Warm-up task failed: {}.{}",
                     task.bean.getClass().getSimpleName(),
                     task.method.getName(), e);
         } finally {
@@ -224,9 +224,9 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
             if (locked && redisLock != null) {
                 try {
                     redisLock.unlock(lockKey, requestId);
-                    log.debug("释放预热锁成功");
+                    log.debug("Warm-up lock released");
                 } catch (Exception e) {
-                    log.error("释放预热锁失败", e);
+                    log.error("Failed to release warm-up lock", e);
                 }
             }
         }
@@ -251,7 +251,7 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                 }
                 Thread.sleep(SmartCacheConstant.WARMUP_POLL_INTERVAL_MILLIS);
             } catch (Exception e) {
-                log.error("检查预热完成标记失败", e);
+                log.error("Failed to check warm-up completion mark", e);
                 return false;
             }
         }
@@ -278,12 +278,12 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
                         l1Cache.put(cacheName, key, value);
                     }
                 }
-                log.info("L1 预热完成: {} 个缓存项已从 L2 加载到 L1", keys.size());
+                log.info("L1 warm-up completed: {} entries loaded from L2 to L1", keys.size());
             } else {
-                log.warn("未找到预热 key 列表");
+                log.warn("Warm-up key list not found");
             }
         } catch (Exception e) {
-            log.error("L1 预热失败", e);
+            log.error("L1 warm-up failed", e);
         }
     }
 
@@ -300,20 +300,20 @@ public class SmartCacheWarmUpProcessor implements ApplicationListener<ContextRef
         Object result = task.method.invoke(task.bean);
 
         if (result == null) {
-            log.warn("预热方法返回null");
+            log.warn("Warm-up method returned null");
             return null;
         }
 
-        log.info("预热方法返回结果类型: {}", result.getClass().getName());
+        log.info("Warm-up method result type: {}", result.getClass().getName());
         if (result instanceof Map) {
             Map<String, Object> map = (Map<String, Object>) result;
-            log.info("准备写入 {} 个缓存项", map.size());
+            log.info("Preparing to write {} entries to cache", map.size());
             return map;
         } else if (result instanceof List) {
-            log.warn("预热方法返回List类型暂不支持，请返回Map<String, Object>类型");
+            log.warn("Warm-up method returned List, which is not supported. Please return Map<String, Object>");
             return null;
         } else {
-            log.warn("预热方法返回类型不支持: {}", result.getClass().getName());
+            log.warn("Unsupported warm-up method return type: {}", result.getClass().getName());
             return null;
         }
     }

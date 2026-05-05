@@ -8,7 +8,7 @@ package io.github.surezzzzzz.sdk.cache.constant;
  *
  * @author Sure
  */
-public class SmartCacheConstant {
+public final class SmartCacheConstant {
 
     /**
      * Redis Key 前缀
@@ -115,12 +115,6 @@ public class SmartCacheConstant {
     public static final int WARMUP_WAIT_TIMEOUT_SECONDS = 60;
 
     /**
-     * 预热完成标记 TTL（秒）
-     * 必须大于 WARMUP_WAIT_TIMEOUT_SECONDS，确保等待期间标记不会过期
-     */
-    public static final int WARMUP_COMPLETE_MARK_TTL_SECONDS = 120;
-
-    /**
      * 预热完成标记轮询间隔（毫秒）
      */
     public static final int WARMUP_POLL_INTERVAL_MILLIS = 500;
@@ -134,6 +128,97 @@ public class SmartCacheConstant {
      * Pub/Sub 频道后缀（用于缓存失效通知）
      */
     public static final String PUBSUB_CHANNEL_SUFFIX = "-cache-invalidation";
+
+    /**
+     * L2 预刷新分布式锁 key 后缀
+     */
+    public static final String PRELOAD_LOCK_KEY_SUFFIX = ":preload-lock:";
+
+    /**
+     * L2 预刷新重试次数
+     */
+    public static final int PRELOAD_MAX_RETRIES = 6;
+
+    /**
+     * L2 预刷新重试退避倍数
+     */
+    public static final double PRELOAD_RETRY_BACKOFF_RATIO = 1.5;
+
+    /**
+     * L2 异步续期默认提前量（秒）
+     */
+    public static final int DEFAULT_L2_PRELOAD_BEFORE_EXPIRE_SECONDS = 300;
+
+    // ==================== L1 缓存默认值 ====================
+
+    /**
+     * L1 默认最大容量
+     */
+    public static final int DEFAULT_L1_MAX_SIZE = 10000;
+
+    /**
+     * L1 默认过期时间（秒）
+     */
+    public static final int DEFAULT_L1_EXPIRE_SECONDS = 300;
+
+    /**
+     * L1 默认刷新时间（秒）
+     */
+    public static final int DEFAULT_L1_REFRESH_SECONDS = 270;
+
+    /**
+     * L1 刷新时间最小值（秒）
+     */
+    public static final int MIN_L1_REFRESH_SECONDS = 10;
+
+    /**
+     * L1 刷新时间调整时距过期时间的保留缓冲（秒）
+     * 当 refreshSeconds >= expireSeconds 时，自动调整为 expireSeconds - 此值
+     */
+    public static final int L1_REFRESH_EXPIRE_BUFFER_SECONDS = 30;
+
+    /**
+     * L1 最大容量上限
+     */
+    public static final int MAX_L1_MAX_SIZE = 1000000;
+
+    // ==================== L2 缓存默认值 ====================
+
+    /**
+     * L2 默认过期时间（秒）
+     */
+    public static final int DEFAULT_L2_EXPIRE_SECONDS = 3600;
+
+    /**
+     * L2 默认 TTL 随机偏移比例
+     */
+    public static final double DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO = 0.1;
+
+    // ==================== 预热默认值 ====================
+
+    /**
+     * 预热完成标记默认 TTL（秒）
+     */
+    public static final int DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS = 600;
+
+    /**
+     * 预热完成标记 TTL 范围
+     */
+    public static final int MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS = 60;
+    public static final int MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS = 3600;
+
+    // ==================== 分布式锁默认值 ====================
+
+    /**
+     * 分布式锁默认超时（秒）
+     */
+    public static final int DEFAULT_LOCK_TIMEOUT_SECONDS = 30;
+
+    /**
+     * 分布式锁超时范围
+     */
+    public static final int MIN_LOCK_TIMEOUT_SECONDS = 5;
+    public static final int MAX_LOCK_TIMEOUT_SECONDS = 300;
 
     private SmartCacheConstant() {
         throw new UnsupportedOperationException("Constant class cannot be instantiated");

@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.cache.cache;
+package io.github.surezzzzzz.sdk.cache.layer;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
@@ -63,34 +63,32 @@ public class L2Cache {
      * 构建 Redis Key（使用配置的 keyFormat）
      */
     private String buildKey(String cacheName, String key) {
-        String keyPrefix = properties != null && properties.getKeyPrefix() != null
-                ? properties.getKeyPrefix()
-                : SmartCacheConstant.REDIS_KEY_PREFIX;
-        String me = properties != null && properties.getMe() != null
-                ? properties.getMe()
-                : SmartCacheConstant.DEFAULT_INSTANCE_ID;
-        String keyFormat = properties != null && properties.getL2() != null && properties.getL2().getKeyFormat() != null
-                ? properties.getL2().getKeyFormat()
-                : "{keyPrefix}:{cacheName}:{me}::{key}";
-
-        return KeyHelper.buildCacheKey(keyFormat, keyPrefix, cacheName, me, key);
+        return KeyHelper.buildCacheKey(getKeyFormat(), getKeyPrefix(), cacheName, getMe(), key);
     }
 
     /**
      * 构建 Redis Key 匹配模式（用于 SCAN）
      */
     private String buildKeyPattern(String cacheName) {
-        String keyPrefix = properties != null && properties.getKeyPrefix() != null
+        return KeyHelper.buildCacheKeyPattern(getKeyFormat(), getKeyPrefix(), cacheName, getMe());
+    }
+
+    private String getKeyPrefix() {
+        return properties != null && properties.getKeyPrefix() != null
                 ? properties.getKeyPrefix()
                 : SmartCacheConstant.REDIS_KEY_PREFIX;
-        String me = properties != null && properties.getMe() != null
+    }
+
+    private String getMe() {
+        return properties != null && properties.getMe() != null
                 ? properties.getMe()
                 : SmartCacheConstant.DEFAULT_INSTANCE_ID;
-        String keyFormat = properties != null && properties.getL2() != null && properties.getL2().getKeyFormat() != null
+    }
+
+    private String getKeyFormat() {
+        return properties != null && properties.getL2() != null && properties.getL2().getKeyFormat() != null
                 ? properties.getL2().getKeyFormat()
                 : "{keyPrefix}:{cacheName}:{me}::{key}";
-
-        return KeyHelper.buildCacheKeyPattern(keyFormat, keyPrefix, cacheName, me);
     }
 
     /**
@@ -356,6 +354,24 @@ public class L2Cache {
             log.error("L2 cache getAll error, cacheName: {}", cacheName, e);
         }
         return result;
+    }
+
+    /**
+     * 获取指定 key 的剩余 TTL（秒）
+     *
+     * @param cacheName 缓存名称
+     * @param key       缓存 key
+     * @return 剩余秒数，-1 表示 key 不存在或无 TTL
+     */
+    public long getTtl(String cacheName, String key) {
+        try {
+            String redisKey = buildKey(cacheName, key);
+            Long ttl = redisTemplate.getExpire(redisKey, TimeUnit.SECONDS);
+            return ttl != null ? ttl : -1;
+        } catch (Exception e) {
+            log.warn("L2 cache getTtl failed, cacheName: {}, key: {}", cacheName, key, e);
+            return -1;
+        }
     }
 
     /**

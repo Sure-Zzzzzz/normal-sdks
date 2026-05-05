@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
 import io.github.surezzzzzz.sdk.cache.test.SmartCacheTestApplication;

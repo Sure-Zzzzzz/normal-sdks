@@ -1,12 +1,13 @@
 package io.github.surezzzzzz.sdk.cache.manager;
 
+import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
-import io.github.surezzzzzz.sdk.cache.cache.L2Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.exception.CacheLoadException;
 import io.github.surezzzzzz.sdk.cache.exception.SmartCacheException;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationListener;
 import io.github.surezzzzzz.sdk.cache.stats.CacheStats;
 import io.github.surezzzzzz.sdk.cache.stats.CacheStatsCollector;
@@ -18,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -53,6 +55,9 @@ public class SmartCacheManager {
 
     @Autowired(required = false)
     private TaskRetryExecutor retryExecutor;
+
+    @Autowired(required = false)
+    private List<CachePreloadHandler> preloadHandlers;
 
     /**
      * 使用 ThreadLocal 记录当前线程正在加载的 key，用于循环依赖检测
@@ -94,11 +99,9 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
             if (value != null) {
-                // 检查是否为空值占位符
                 if (isNullPlaceholder(value)) {
                     return null;
                 }
-                // 记录 L1 命中
                 if (statsCollector != null) {
                     statsCollector.recordL1Hit(cacheName);
                 }
@@ -110,27 +113,10 @@ public class SmartCacheManager {
         if (l2Cache != null) {
             T value = l2Cache.get(cacheName, key);
             if (value != null) {
-                // 检查是否为空值占位符
-                if (isNullPlaceholder(value)) {
-                    // 回写 L1（空值也要回写）
-                    if (l1Cache != null) {
-                        l1Cache.put(cacheName, key, value);
-                    }
-                    return null;
-                }
-                // 记录 L2 命中
-                if (statsCollector != null) {
-                    statsCollector.recordL2Hit(cacheName);
-                }
-                // 回写 L1
-                if (l1Cache != null) {
-                    l1Cache.put(cacheName, key, value);
-                }
-                return value;
+                return handleL2Hit(cacheName, key, value);
             }
         }
 
-        // 记录未命中
         if (statsCollector != null) {
             statsCollector.recordMiss(cacheName);
         }
@@ -160,10 +146,7 @@ public class SmartCacheManager {
             loadingKeys.add(fullKey);
             return doGet(cacheName, key, loader);
         } finally {
-            // 关键：无论成功、异常、还是循环依赖，都必须清理
             loadingKeys.remove(fullKey);
-
-            // 如果 Set 为空，彻底移除 ThreadLocal（防止内存泄漏）
             if (loadingKeys.isEmpty()) {
                 LOADING_KEYS.remove();
             }
@@ -178,11 +161,9 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
             if (value != null) {
-                // 检查是否为空值占位符
                 if (isNullPlaceholder(value)) {
                     return null;
                 }
-                // 记录 L1 命中
                 if (statsCollector != null) {
                     statsCollector.recordL1Hit(cacheName);
                 }
@@ -194,23 +175,7 @@ public class SmartCacheManager {
         if (l2Cache != null) {
             T value = l2Cache.get(cacheName, key);
             if (value != null) {
-                // 检查是否为空值占位符
-                if (isNullPlaceholder(value)) {
-                    // 回写 L1（空值也要回写）
-                    if (l1Cache != null) {
-                        l1Cache.put(cacheName, key, value);
-                    }
-                    return null;
-                }
-                // 记录 L2 命中
-                if (statsCollector != null) {
-                    statsCollector.recordL2Hit(cacheName);
-                }
-                // 回写 L1
-                if (l1Cache != null) {
-                    l1Cache.put(cacheName, key, value);
-                }
-                return value;
+                return handleL2Hit(cacheName, key, value);
             }
         }
 
@@ -242,26 +207,14 @@ public class SmartCacheManager {
         try {
             int lockTimeout = properties != null && properties.getLock() != null
                     ? properties.getLock().getTimeoutSeconds()
-                    : 30;
+                    : SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
             locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
             if (locked) {
                 // 获取锁成功，双重检查
                 if (l2Cache != null) {
                     T value = l2Cache.get(cacheName, key);
                     if (value != null) {
-                        // 检查是否为空值占位符
-                        if (isNullPlaceholder(value)) {
-                            // 回写 L1
-                            if (l1Cache != null) {
-                                l1Cache.put(cacheName, key, value);
-                            }
-                            return null;
-                        }
-                        // 回写 L1
-                        if (l1Cache != null) {
-                            l1Cache.put(cacheName, key, value);
-                        }
-                        return value;
+                        return handleL2Hit(cacheName, key, value);
                     }
                 }
 
@@ -276,31 +229,10 @@ public class SmartCacheManager {
                             if (v != null) {
                                 return v;
                             }
-                            // 如果还没有值，抛出异常继续重试
                             throw new RuntimeException("Cache not ready yet");
-                        }, 5, 1); // 重试 5 次，每次间隔 1 秒
+                        }, lockTimeout / 5, 1);
 
-                        // 检查是否为空值占位符
-                        if (isNullPlaceholder(value)) {
-                            // 回写 L1
-                            if (l1Cache != null) {
-                                l1Cache.put(cacheName, key, value);
-                            }
-                            // 记录 L2 命中
-                            if (statsCollector != null) {
-                                statsCollector.recordL2Hit(cacheName);
-                            }
-                            return null;
-                        }
-                        // 回写 L1
-                        if (l1Cache != null) {
-                            l1Cache.put(cacheName, key, value);
-                        }
-                        // 记录 L2 命中
-                        if (statsCollector != null) {
-                            statsCollector.recordL2Hit(cacheName);
-                        }
-                        return value;
+                        return handleL2Hit(cacheName, key, value);
                     } catch (Exception e) {
                         // 重试多次后还是没有，使用本地锁兜底（避免同一实例内缓存击穿）
                         log.warn("Failed to get cache after retries, using local lock as fallback");
@@ -554,7 +486,128 @@ public class SmartCacheManager {
      * @return 如果是空值占位符返回true，否则返回false
      */
     private boolean isNullPlaceholder(Object value) {
-        // 使用对象引用比较，性能优于字符串比较
         return value == SmartCacheConstant.NULL_PLACEHOLDER;
+    }
+
+    /**
+     * L2 命中后的统一处理：回写 L1、记录统计、触发 preload
+     *
+     * <p>空值占位符也回写 L1，避免下次请求再穿透到 L2。
+     */
+    @SuppressWarnings("unchecked")
+    private <T> T handleL2Hit(String cacheName, String key, Object rawValue) {
+        if (isNullPlaceholder(rawValue)) {
+            if (l1Cache != null) {
+                l1Cache.put(cacheName, key, rawValue);
+            }
+            return null;
+        }
+        if (statsCollector != null) {
+            statsCollector.recordL2Hit(cacheName);
+        }
+        if (l1Cache != null) {
+            l1Cache.put(cacheName, key, rawValue);
+        }
+        // 检查是否需要异步续期
+        CachePreloadHandler handler = findHandler(cacheName);
+        if (handler != null) {
+            boolean doPreload = handler.needPreload(cacheName, key, rawValue)
+                    .orElseGet(() -> shouldPreload(cacheName, key));
+            if (doPreload) {
+                asyncPreload(cacheName, key, handler);
+            }
+        }
+        return (T) rawValue;
+    }
+
+    /**
+     * 异步触发 L2 续期
+     *
+     * <p>使用分布式锁防止多实例重复触发同一 key 的 preload。
+     * 抢到锁的实例执行 reload（带指数退避重试），其他实例跳过。
+     *
+     * <p>重试策略：固定 {@link SmartCacheConstant#PRELOAD_MAX_RETRIES} 次，
+     * 初始间隔由 before-expire-seconds 反推，保证总等待时间不超过预刷新窗口：
+     * <pre>
+     *   initialInterval = beforeExpireSeconds * (ratio - 1) / (ratio^n - 1)
+     * </pre>
+     */
+    private void asyncPreload(String cacheName, String key, CachePreloadHandler handler) {
+        if (redisLock == null) {
+            log.debug("L2 preload skipped: no distributed lock available for key={}", key);
+            return;
+        }
+        String keyPrefix = properties != null ? properties.getKeyPrefix() : SmartCacheConstant.REDIS_KEY_PREFIX;
+        String lockKey = keyPrefix + SmartCacheConstant.PRELOAD_LOCK_KEY_SUFFIX
+                + cacheName + SmartCacheConstant.KEY_SEPARATOR + key;
+        String lockValue = UUID.randomUUID().toString();
+
+        int lockTimeout = properties != null && properties.getLock() != null
+                ? properties.getLock().getTimeoutSeconds()
+                : SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
+        if (!redisLock.tryLock(lockKey, lockValue, lockTimeout, TimeUnit.SECONDS)) {
+            log.debug("L2 preload skipped: another instance is preloading key={}", key);
+            return;
+        }
+
+        // 根据 before-expire-seconds 反推初始重试间隔，保证总等待时间 <= beforeExpireSeconds
+        int beforeExpireSeconds = properties != null
+                ? properties.getL2().getPreload().getBeforeExpireSeconds()
+                : SmartCacheConstant.DEFAULT_L2_PRELOAD_BEFORE_EXPIRE_SECONDS;
+        double ratio = SmartCacheConstant.PRELOAD_RETRY_BACKOFF_RATIO;
+        int maxRetries = SmartCacheConstant.PRELOAD_MAX_RETRIES;
+        int initialIntervalSeconds = (int) Math.max(1L,
+                (long) (beforeExpireSeconds * (ratio - 1) / (Math.pow(ratio, maxRetries) - 1)));
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                log.debug("L2 preload triggered: cacheName={}, key={}, maxRetries={}, initialInterval={}s",
+                        cacheName, key, maxRetries, initialIntervalSeconds);
+                Object newValue = retryExecutor != null
+                        ? retryExecutor.executeWithRetry(
+                        () -> handler.reload(cacheName, key),
+                        maxRetries,
+                        initialIntervalSeconds,
+                        ratio,
+                        (long) beforeExpireSeconds)
+                        : handler.reload(cacheName, key);
+                if (newValue != null) {
+                    put(cacheName, key, newValue);
+                    log.debug("L2 preload completed: cacheName={}, key={}", cacheName, key);
+                }
+            } catch (Exception e) {
+                log.warn("L2 preload failed after {} retries: cacheName={}, key={}", maxRetries, cacheName, key, e);
+            } finally {
+                redisLock.unlock(lockKey, lockValue);
+            }
+        });
+    }
+
+    private CachePreloadHandler findHandler(String cacheName) {
+        if (preloadHandlers == null || preloadHandlers.isEmpty()) {
+            return null;
+        }
+        return preloadHandlers.stream()
+                .filter(h -> h.support(cacheName))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * 查 L2 TTL 判断是否进入预刷新窗口
+     *
+     * <p>TTL ≤ 0 时不触发——key 不存在（如被淘汰）或无 TTL 时，
+     * 大不了下次 miss 重新加载，这是 smart-cache 的默认行为。
+     */
+    private boolean shouldPreload(String cacheName, String key) {
+        if (properties == null || l2Cache == null) {
+            return false;
+        }
+        SmartCacheProperties.L2Config.PreloadConfig preload = properties.getL2().getPreload();
+        if (!preload.isEnabled()) {
+            return false;
+        }
+        long ttl = l2Cache.getTtl(cacheName, key);
+        return ttl > 0 && ttl <= preload.getBeforeExpireSeconds();
     }
 }

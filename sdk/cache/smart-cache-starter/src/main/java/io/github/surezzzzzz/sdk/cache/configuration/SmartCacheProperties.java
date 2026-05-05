@@ -1,9 +1,8 @@
 package io.github.surezzzzzz.sdk.cache.configuration;
 
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -18,8 +17,7 @@ import javax.annotation.PostConstruct;
  * @author Sure
  */
 @Slf4j
-@Getter
-@Setter
+@Data
 @NoArgsConstructor
 @ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.cache")
 public class SmartCacheProperties {
@@ -93,37 +91,52 @@ public class SmartCacheProperties {
         }
 
         // 校验 L1 配置
-        if (l1.maxSize < 1 || l1.maxSize > 1000000) {
-            log.warn("L1 maxSize {} is out of range [1, 1000000], using default 10000", l1.maxSize);
-            l1.maxSize = 10000;
+        if (l1.maxSize < 1 || l1.maxSize > SmartCacheConstant.MAX_L1_MAX_SIZE) {
+            log.warn("L1 maxSize {} is out of range [1, {}], using default {}",
+                    l1.maxSize, SmartCacheConstant.MAX_L1_MAX_SIZE, SmartCacheConstant.DEFAULT_L1_MAX_SIZE);
+            l1.maxSize = SmartCacheConstant.DEFAULT_L1_MAX_SIZE;
         }
         if (l1.expireSeconds < 1) {
-            log.warn("L1 expireSeconds {} is invalid, using default 300", l1.expireSeconds);
-            l1.expireSeconds = 300;
+            log.warn("L1 expireSeconds {} is invalid, using default {}", l1.expireSeconds, SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS);
+            l1.expireSeconds = SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS;
         }
         if (l1.refreshSeconds < 1) {
-            log.warn("L1 refreshSeconds {} is invalid, using default 270", l1.refreshSeconds);
-            l1.refreshSeconds = 270;
+            log.warn("L1 refreshSeconds {} is invalid, using default {}", l1.refreshSeconds, SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS);
+            l1.refreshSeconds = SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS;
         }
-        // 确保 refreshSeconds 至少为 10 秒，避免过于频繁的刷新
-        if (l1.refreshSeconds < 10) {
-            log.warn("L1 refreshSeconds {} is too small (< 10s), adjusting to 10", l1.refreshSeconds);
-            l1.refreshSeconds = 10;
+        if (l1.refreshSeconds < SmartCacheConstant.MIN_L1_REFRESH_SECONDS) {
+            log.warn("L1 refreshSeconds {} is too small (< {}s), adjusting to {}",
+                    l1.refreshSeconds, SmartCacheConstant.MIN_L1_REFRESH_SECONDS, SmartCacheConstant.MIN_L1_REFRESH_SECONDS);
+            l1.refreshSeconds = SmartCacheConstant.MIN_L1_REFRESH_SECONDS;
         }
         if (l1.refreshSeconds >= l1.expireSeconds) {
-            log.warn("L1 refreshSeconds {} should be less than expireSeconds {}, adjusting to expireSeconds - 30",
+            log.warn("L1 refreshSeconds {} should be less than expireSeconds {}, adjusting",
                     l1.refreshSeconds, l1.expireSeconds);
-            l1.refreshSeconds = Math.max(10, l1.expireSeconds - 30);
+            l1.refreshSeconds = Math.max(SmartCacheConstant.MIN_L1_REFRESH_SECONDS, l1.expireSeconds - SmartCacheConstant.L1_REFRESH_EXPIRE_BUFFER_SECONDS);
         }
 
         // 校验 L2 配置
         if (l2.expireSeconds < 1) {
-            log.warn("L2 expireSeconds {} is invalid, using default 3600", l2.expireSeconds);
-            l2.expireSeconds = 3600;
+            log.warn("L2 expireSeconds {} is invalid, using default {}", l2.expireSeconds, SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS);
+            l2.expireSeconds = SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS;
         }
         if (l2.ttlRandomOffsetRatio < 0 || l2.ttlRandomOffsetRatio > 1) {
-            log.warn("L2 ttlRandomOffsetRatio {} is out of range [0, 1], using default 0.1", l2.ttlRandomOffsetRatio);
-            l2.ttlRandomOffsetRatio = 0.1;
+            log.warn("L2 ttlRandomOffsetRatio {} is out of range [0, 1], using default {}",
+                    l2.ttlRandomOffsetRatio, SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO);
+            l2.ttlRandomOffsetRatio = SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO;
+        }
+
+        // 校验 L2 preload 配置
+        if (l2.preload.enabled) {
+            if (l2.preload.beforeExpireSeconds <= 0) {
+                log.warn("L2 preload.before-expire-seconds {} is invalid (must be > 0), disabling preload",
+                        l2.preload.beforeExpireSeconds);
+                l2.preload.enabled = false;
+            } else if (l2.preload.beforeExpireSeconds >= l2.expireSeconds) {
+                log.warn("L2 preload.before-expire-seconds {} must be < expire-seconds {}, disabling preload",
+                        l2.preload.beforeExpireSeconds, l2.expireSeconds);
+                l2.preload.enabled = false;
+            }
         }
 
         // 校验一致性模式
@@ -141,23 +154,31 @@ public class SmartCacheProperties {
         }
 
         // 校验预热配置
-        if (warmUp.completionMarkTtlSeconds < 60 || warmUp.completionMarkTtlSeconds > 3600) {
-            log.warn("WarmUp completionMarkTtlSeconds {} is out of range [60, 3600], using default 600",
-                    warmUp.completionMarkTtlSeconds);
-            warmUp.completionMarkTtlSeconds = 600;
+        if (warmUp.completionMarkTtlSeconds < SmartCacheConstant.MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS
+                || warmUp.completionMarkTtlSeconds > SmartCacheConstant.MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS) {
+            log.warn("WarmUp completionMarkTtlSeconds {} is out of range [{}, {}], using default {}",
+                    warmUp.completionMarkTtlSeconds,
+                    SmartCacheConstant.MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS,
+                    SmartCacheConstant.MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS,
+                    SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS);
+            warmUp.completionMarkTtlSeconds = SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS;
         }
 
         // 校验分布式锁配置
-        if (lock.timeoutSeconds < 5 || lock.timeoutSeconds > 300) {
-            log.warn("Lock timeoutSeconds {} is out of range [5, 300], using default 30", lock.timeoutSeconds);
-            lock.timeoutSeconds = 30;
+        if (lock.timeoutSeconds < SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS
+                || lock.timeoutSeconds > SmartCacheConstant.MAX_LOCK_TIMEOUT_SECONDS) {
+            log.warn("Lock timeoutSeconds {} is out of range [{}, {}], using default {}",
+                    lock.timeoutSeconds,
+                    SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS,
+                    SmartCacheConstant.MAX_LOCK_TIMEOUT_SECONDS,
+                    SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS);
+            lock.timeoutSeconds = SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
         }
 
         log.info("Smart Cache Properties validated successfully");
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class L1Config {
         /**
@@ -168,21 +189,20 @@ public class SmartCacheProperties {
         /**
          * 最大容量
          */
-        private int maxSize = 10000;
+        private int maxSize = SmartCacheConstant.DEFAULT_L1_MAX_SIZE;
 
         /**
          * 过期时间（秒）
          */
-        private int expireSeconds = 300;
+        private int expireSeconds = SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS;
 
         /**
          * 刷新时间（秒），用于异步刷新
          */
-        private int refreshSeconds = 270;
+        private int refreshSeconds = SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS;
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class L2Config {
         /**
@@ -193,12 +213,12 @@ public class SmartCacheProperties {
         /**
          * 过期时间（秒）
          */
-        private int expireSeconds = 3600;
+        private int expireSeconds = SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS;
 
         /**
          * TTL 随机偏移比例（0-1），用于防止缓存雪崩
          */
-        private double ttlRandomOffsetRatio = 0.1;
+        private double ttlRandomOffsetRatio = SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO;
 
         /**
          * Redis Key 前缀（已废弃，请使用 keyFormat）
@@ -226,6 +246,29 @@ public class SmartCacheProperties {
          * </ul>
          */
         private String keyFormat = "{keyPrefix}:{cacheName}:{me}::{key}";
+
+        /**
+         * L2 异步续期配置
+         * <p>
+         * L2 条目剩余 TTL &lt; before-expire-seconds 时，异步触发 loader 提前续期，
+         * 当前请求返回旧值，续期完成后写回 L2（同时更新 L1）。
+         * 目的：在 L2 TTL 到期前提供容错窗口，避免 loader 失败时请求直接失败。
+         */
+        private PreloadConfig preload = new PreloadConfig();
+
+        @Data
+        @NoArgsConstructor
+        public static class PreloadConfig {
+            /**
+             * 是否启用异步续期，默认关闭
+             */
+            private boolean enabled = false;
+
+            /**
+             * 提前多少秒触发续期，需 &lt; l2.expire-seconds
+             */
+            private int beforeExpireSeconds = SmartCacheConstant.DEFAULT_L2_PRELOAD_BEFORE_EXPIRE_SECONDS;
+        }
     }
 
     /**
@@ -244,8 +287,7 @@ public class SmartCacheProperties {
         return keyPrefix + SmartCacheConstant.PUBSUB_CHANNEL_SUFFIX;
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class ConsistencyConfig {
         /**
@@ -261,8 +303,7 @@ public class SmartCacheProperties {
         private String pubsubChannelPrefix;
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class StatsConfig {
         /**
@@ -271,25 +312,23 @@ public class SmartCacheProperties {
         private boolean enabled = true;
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class WarmUpConfig {
         /**
          * 预热完成标记 TTL（秒）
          * 用于防止滚动发布时重复预热
          */
-        private int completionMarkTtlSeconds = 600;
+        private int completionMarkTtlSeconds = SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS;
     }
 
-    @Getter
-    @Setter
+    @Data
     @NoArgsConstructor
     public static class LockConfig {
         /**
          * 分布式锁超时时间（秒）
          * 用于防止缓存击穿时的并发加载
          */
-        private int timeoutSeconds = 30;
+        private int timeoutSeconds = SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
     }
 }

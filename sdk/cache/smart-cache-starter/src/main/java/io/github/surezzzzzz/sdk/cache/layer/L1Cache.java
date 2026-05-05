@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.cache.cache;
+package io.github.surezzzzzz.sdk.cache.layer;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

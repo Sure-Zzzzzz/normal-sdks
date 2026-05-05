@@ -69,26 +69,17 @@ public class SpELExpressionHelper {
      * 使用 SimpleEvaluationContext 替代 StandardEvaluationContext，防止 SpEL 注入攻击
      */
     private static EvaluationContext createEvaluationContext(Method method, Object[] args, Object result) {
-        SimpleEvaluationContext.Builder builder = SimpleEvaluationContext.forReadOnlyDataBinding();
+        SimpleEvaluationContext context = SimpleEvaluationContext.forReadOnlyDataBinding().build();
 
-        // 设置方法参数
+        // 将方法参数绑定为 SpEL 变量（#paramName）
         String[] parameterNames = NAME_DISCOVERER.getParameterNames(method);
-        if (parameterNames != null && args != null && parameterNames.length == args.length) {
-            for (int i = 0; i < parameterNames.length; i++) {
-                builder.withRootObject(args[i]);
-            }
-        }
-
-        SimpleEvaluationContext context = builder.build();
-
-        // 设置变量
         if (parameterNames != null && args != null && parameterNames.length == args.length) {
             for (int i = 0; i < parameterNames.length; i++) {
                 context.setVariable(parameterNames[i], args[i]);
             }
         }
 
-        // 设置返回值
+        // 将方法返回值绑定为 #result
         if (result != null) {
             context.setVariable(SmartCacheConstant.SPEL_RESULT_VARIABLE, result);
         }

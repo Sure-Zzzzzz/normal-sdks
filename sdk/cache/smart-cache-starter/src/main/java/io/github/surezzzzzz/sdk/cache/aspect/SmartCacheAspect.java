@@ -1,10 +1,12 @@
-package io.github.surezzzzzz.sdk.cache.support;
+package io.github.surezzzzzz.sdk.cache.aspect;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheEvict;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCachePut;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheable;
+import io.github.surezzzzzz.sdk.cache.exception.SmartCacheException;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -71,14 +73,12 @@ public class SmartCacheAspect {
         return cacheManager.get(cacheName, key, () -> {
             try {
                 return joinPoint.proceed();
-            } catch (io.github.surezzzzzz.sdk.cache.exception.SmartCacheException e) {
-                // 已经是 SmartCacheException，直接抛出
+            } catch (SmartCacheException e) {
                 throw e;
             } catch (Throwable e) {
-                // 包装其他异常，保留原始异常类型信息
-                throw new io.github.surezzzzzz.sdk.cache.exception.SmartCacheException(
+                throw new SmartCacheException(
                         "Cache operation failed: " + method.getDeclaringClass().getSimpleName() + "." + method.getName()
-                                + " (原始异常: " + e.getClass().getSimpleName() + ")",
+                                + " (caused by: " + e.getClass().getSimpleName() + ")",
                         e
                 );
             }
@@ -147,7 +147,6 @@ public class SmartCacheAspect {
         // 如果 beforeInvocation=true，在方法执行前删除缓存
         if (annotation.beforeInvocation()) {
             evictCache(annotation, cacheName, method, args, null);
-            // 执行方法
             return joinPoint.proceed();
         }
 
@@ -162,7 +161,6 @@ public class SmartCacheAspect {
             }
         }
 
-        // 删除缓存
         evictCache(annotation, cacheName, method, args, result);
 
         return result;

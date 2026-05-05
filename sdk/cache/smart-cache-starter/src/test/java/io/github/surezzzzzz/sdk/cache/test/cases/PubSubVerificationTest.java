@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
-import io.github.surezzzzzz.sdk.cache.cache.L1Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationListener;
 import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationMessage;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
