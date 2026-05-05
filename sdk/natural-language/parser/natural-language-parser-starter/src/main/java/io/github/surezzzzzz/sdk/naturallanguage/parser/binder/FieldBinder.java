@@ -18,7 +18,7 @@ public interface FieldBinder {
      * @param dataSource 数据源标识（索引名、表名、集合名等）
      * @return 实际的字段名，如果找不到返回 null
      */
-    String bindField(String fieldHint, String dataSource);
+    String bind(String fieldHint, String dataSource);
 
     /**
      * 获取数据源的所有可用字段

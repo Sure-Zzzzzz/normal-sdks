@@ -10,8 +10,6 @@ import java.util.Map;
 
 /**
  * 转换上下文
- * <p>
- * 包含转换过程中需要的上下文信息
  *
  * @author surezzzzzz
  */
@@ -27,40 +25,57 @@ public class TranslateContext {
     private String dataSource;
 
     /**
-     * 额外参数（扩展用）
+     * 字段绑定器
      */
-    private Map<String, Object> parameters;
+    private FieldBinder fieldBinder;
+
+    /**
+     * 扩展参数
+     */
+    private Map<String, Object> extra;
 
     /**
      * 添加参数
+     *
+     * @param key   键
+     * @param value 值
      */
     public void addParameter(String key, Object value) {
-        if (parameters == null) {
-            parameters = new HashMap<>();
+        if (extra == null) {
+            extra = new HashMap<>();
         }
-        parameters.put(key, value);
+        extra.put(key, value);
     }
 
     /**
      * 获取参数
+     *
+     * @param key 键
+     * @param <T> 值类型
+     * @return 值
      */
     @SuppressWarnings("unchecked")
     public <T> T getParameter(String key) {
-        if (parameters == null) {
+        if (extra == null) {
             return null;
         }
-        return (T) parameters.get(key);
+        return (T) extra.get(key);
     }
 
     /**
      * 获取参数（带默认值）
+     *
+     * @param key          键
+     * @param defaultValue 默认值
+     * @param <T>          值类型
+     * @return 值
      */
     @SuppressWarnings("unchecked")
     public <T> T getParameter(String key, T defaultValue) {
-        if (parameters == null) {
+        if (extra == null) {
             return defaultValue;
         }
-        Object value = parameters.get(key);
+        Object value = extra.get(key);
         return value != null ? (T) value : defaultValue;
     }
 }

@@ -1,5 +1,6 @@
-package io.github.surezzzzzz.sdk.naturallanguage.parser.binder;
+package io.github.surezzzzzz.sdk.naturallanguage.parser.translator;
 
+import io.github.surezzzzzz.sdk.naturallanguage.parser.binder.TranslateContext;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.Intent;
 
 /**
@@ -8,9 +9,6 @@ import io.github.surezzzzzz.sdk.naturallanguage.parser.model.Intent;
  * 将通用的 Intent 转换为具体的查询对象
  *
  * @param <T> 目标查询类型
- *           - Elasticsearch: QueryCondition
- *           - MySQL: String (SQL WHERE子句) 或自定义Query对象
- *           - MongoDB: Document
  * @author surezzzzzz
  */
 public interface IntentTranslator<T> {
@@ -18,7 +16,7 @@ public interface IntentTranslator<T> {
     /**
      * 转换意图为具体查询对象
      *
-     * @param intent 通用意图
+     * @param intent  通用意图
      * @param context 转换上下文
      * @return 具体的查询对象
      */

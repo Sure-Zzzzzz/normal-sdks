@@ -3,27 +3,72 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.constant;
 import lombok.Getter;
 
 /**
- * 意图类型枚举
+ * 时间范围枚举
  *
  * @author surezzzzzz
  */
 @Getter
-public enum IntentType {
+public enum TimeRange {
 
     /**
-     * 查询意图
+     * 近5分钟
      */
-    QUERY("query", "查询意图"),
+    LAST_5_MINUTES("last_5_minutes", "近5分钟"),
 
     /**
-     * 聚合分析意图
+     * 近1小时
      */
-    ANALYTICS("analytics", "聚合分析意图");
+    LAST_HOUR("last_hour", "近1小时"),
+
+    /**
+     * 近24小时
+     */
+    LAST_24_HOURS("last_24_hours", "近24小时"),
+
+    /**
+     * 近7天
+     */
+    LAST_7_DAYS("last_7_days", "近7天"),
+
+    /**
+     * 近30天
+     */
+    LAST_30_DAYS("last_30_days", "近30天"),
+
+    /**
+     * 近3个月
+     */
+    LAST_3_MONTHS("last_3_months", "近3个月"),
+
+    /**
+     * 近一年
+     */
+    LAST_YEAR("last_year", "近一年"),
+
+    /**
+     * 今天
+     */
+    TODAY("today", "今天"),
+
+    /**
+     * 昨天
+     */
+    YESTERDAY("yesterday", "昨天"),
+
+    /**
+     * 本周
+     */
+    THIS_WEEK("this_week", "本周"),
+
+    /**
+     * 本月
+     */
+    THIS_MONTH("this_month", "本月");
 
     private final String code;
     private final String description;
 
-    IntentType(String code, String description) {
+    TimeRange(String code, String description) {
         this.code = code;
         this.description = description;
     }
@@ -34,11 +79,11 @@ public enum IntentType {
      * @param code 类型代码
      * @return 枚举，如果不存在返回 null
      */
-    public static IntentType fromCode(String code) {
+    public static TimeRange fromCode(String code) {
         if (code == null) {
             return null;
         }
-        for (IntentType type : values()) {
+        for (TimeRange type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
@@ -62,7 +107,7 @@ public enum IntentType {
      * @return 类型代码数组
      */
     public static String[] getAllCodes() {
-        IntentType[] types = values();
+        TimeRange[] types = values();
         String[] codes = new String[types.length];
         for (int i = 0; i < types.length; i++) {
             codes[i] = types[i].code;

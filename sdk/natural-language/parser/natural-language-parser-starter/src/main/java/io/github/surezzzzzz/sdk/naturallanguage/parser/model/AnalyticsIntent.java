@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 分析/聚合意图
+ * 聚合分析意图
  *
  * @author surezzzzzz
  */
@@ -15,47 +15,39 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @Builder
+@AllArgsConstructor
 public class AnalyticsIntent extends Intent {
 
     /**
-     * 过滤条件（可选）
+     * 过滤条件
      */
     private ConditionIntent condition;
 
     /**
-     * 聚合定义
+     * 聚合定义列表
      */
     @Builder.Default
     private List<AggregationIntent> aggregations = new ArrayList<>();
 
+    public AnalyticsIntent() {
+        super(IntentType.ANALYTICS);
+    }
+
     /**
-     * 是否包含过滤条件
+     * 是否有过滤条件
+     *
+     * @return true 有，false 无
      */
     public boolean hasCondition() {
         return condition != null;
     }
 
     /**
-     * 是否包含聚合
+     * 是否有聚合
+     *
+     * @return true 有，false 无
      */
     public boolean hasAggregation() {
         return aggregations != null && !aggregations.isEmpty();
-    }
-
-    /**
-     * 初始化
-     */
-    public AnalyticsIntent() {
-        super(IntentType.ANALYTICS);
-        this.aggregations = new ArrayList<>();
-    }
-
-    /**
-     * 构造函数
-     */
-    public AnalyticsIntent(ConditionIntent condition, List<AggregationIntent> aggregations) {
-        super(IntentType.ANALYTICS);
-        this.condition = condition;
-        this.aggregations = aggregations != null ? aggregations : new ArrayList<>();
     }
 }

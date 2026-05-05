@@ -3,27 +3,32 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.constant;
 import lombok.Getter;
 
 /**
- * 意图类型枚举
+ * search_after 模式枚举
  *
  * @author surezzzzzz
  */
 @Getter
-public enum IntentType {
+public enum SearchAfterMode {
 
     /**
-     * 查询意图
+     * 追加 _id 排序
      */
-    QUERY("query", "查询意图"),
+    TIEBREAKER("tiebreaker", "追加 _id 排序"),
 
     /**
-     * 聚合分析意图
+     * Point In Time
      */
-    ANALYTICS("analytics", "聚合分析意图");
+    PIT("pit", "Point In Time"),
+
+    /**
+     * 不追加
+     */
+    NONE("none", "不追加");
 
     private final String code;
     private final String description;
 
-    IntentType(String code, String description) {
+    SearchAfterMode(String code, String description) {
         this.code = code;
         this.description = description;
     }
@@ -34,11 +39,11 @@ public enum IntentType {
      * @param code 类型代码
      * @return 枚举，如果不存在返回 null
      */
-    public static IntentType fromCode(String code) {
+    public static SearchAfterMode fromCode(String code) {
         if (code == null) {
             return null;
         }
-        for (IntentType type : values()) {
+        for (SearchAfterMode type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
@@ -62,7 +67,7 @@ public enum IntentType {
      * @return 类型代码数组
      */
     public static String[] getAllCodes() {
-        IntentType[] types = values();
+        SearchAfterMode[] types = values();
         String[] codes = new String[types.length];
         for (int i = 0; i < types.length; i++) {
             codes[i] = types[i].code;

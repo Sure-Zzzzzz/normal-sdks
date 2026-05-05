@@ -1,9 +1,6 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.strategy;
 
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.AggKeywords;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.LogicKeywords;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.OperatorKeywords;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.SortKeywords;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 
 import java.util.ArrayList;
@@ -26,28 +23,48 @@ public class LogicKeywordSplitStrategy implements TokenSplitStrategy {
             "和", "且", "并", "或"
     };
 
+    private final KeywordRegistry keywordRegistry;
+
+    public LogicKeywordSplitStrategy(KeywordRegistry keywordRegistry) {
+        this.keywordRegistry = keywordRegistry;
+    }
+
     @Override
     public boolean canHandle(String word) {
         // 如果整个词就是逻辑关键词，不需要拆分
-        if (LogicKeywords.fromKeyword(word) != null) {
+        if (keywordRegistry.resolveLogic(word) != null) {
             return false;
         }
 
-        // 如果整个词是其他类型的关键词（操作符、聚合、排序），不拆分
-        if (OperatorKeywords.fromKeyword(word) != null ||
-                AggKeywords.fromKeyword(word) != null ||
-                SortKeywords.fromKeyword(word) != null) {
+        // 如果整个词是其他类型的关键词，不拆分
+        if (keywordRegistry.resolveOperator(word) != null ||
+                keywordRegistry.resolveAggType(word) != null ||
+                keywordRegistry.resolveSortOrder(word) != null) {
             return false;
         }
 
-        // 检查是否包含逻辑关键词
+        // 检查是否包含逻辑关键词（且该关键词不是嵌入在标识符中）
         for (String keyword : LOGIC_KEYWORDS) {
-            if (word.contains(keyword)) {
-                return true;
+            int index = word.indexOf(keyword);
+            if (index >= 0) {
+                boolean leftBoundary = (index == 0) || !isAsciiIdentifierChar(word.charAt(index - 1));
+                boolean rightBoundary = (index + keyword.length() == word.length())
+                        || !isAsciiIdentifierChar(word.charAt(index + keyword.length()));
+                if (leftBoundary && rightBoundary) {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /**
+     * 判断字符是否为 ASCII 标识符字符（字母、数字、下划线）
+     * 注意：中文字符不在此范围内，因此 "张或李" 中的 "或" 仍会被正确拆分
+     */
+    private boolean isAsciiIdentifierChar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
     }
 
     @Override

@@ -1,15 +1,16 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.test.cases;
 
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.PaginationType;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SearchAfterMode;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.Intent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.PaginationIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.QueryIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.support.NLParser;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.test.NaturalLanguageParserTestApplication;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.NLTokenizer;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -23,12 +24,8 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = NaturalLanguageParserTestApplication.class)
 public class PaginationParseTest {
 
+    @Autowired
     private NLParser parser;
-
-    @BeforeEach
-    public void setUp() {
-        parser = new NLParser(new NLTokenizer());
-    }
 
     @Test
     @DisplayName("测试1: 基础limit - 返回前10条")
@@ -46,11 +43,10 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
+        assertEquals(10, pagination.getSize());
         assertNull(pagination.getOffset());
         assertNull(pagination.getPage());
-        assertNull(pagination.getSize());
-        assertNull(pagination.getContinueSearch());
+        assertNull(pagination.getSearchAfterMode());
     }
 
     @Test
@@ -69,10 +65,9 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertEquals(20, pagination.getOffset());
+        assertEquals(10, pagination.getSize());
+        assertEquals(20L, pagination.getOffset());
         assertNull(pagination.getPage());
-        assertNull(pagination.getSize());
     }
 
     @Test
@@ -93,8 +88,7 @@ public class PaginationParseTest {
         assertNotNull(pagination);
         assertEquals(3, pagination.getPage());
         assertEquals(10, pagination.getSize());
-        assertEquals(20, pagination.getOffset()); // 第3页 = 跳过前20条
-        assertEquals(10, pagination.getLimit()); // size也作为limit
+        assertEquals(20L, pagination.getOffset());
     }
 
     @Test
@@ -113,10 +107,9 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertEquals(20, pagination.getOffset()); // 从第21条 = 跳过前20条
+        assertEquals(10, pagination.getSize());
+        assertEquals(20L, pagination.getOffset());
         assertNull(pagination.getPage());
-        assertNull(pagination.getSize());
     }
 
     @Test
@@ -135,10 +128,9 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(20, pagination.getOffset()); // 第21条 = 跳过前20条
-        assertEquals(10, pagination.getLimit()); // 30-21+1 = 10条
+        assertEquals(20L, pagination.getOffset());
+        assertEquals(10, pagination.getSize());
         assertNull(pagination.getPage());
-        assertNull(pagination.getSize());
     }
 
     @Test
@@ -157,8 +149,9 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertTrue(pagination.getContinueSearch());
+        assertEquals(10, pagination.getSize());
+        assertEquals(PaginationType.SEARCH_AFTER, pagination.getType());
+        assertEquals(SearchAfterMode.TIEBREAKER, pagination.getSearchAfterMode());
         assertNull(pagination.getOffset());
         assertNull(pagination.getPage());
     }
@@ -179,8 +172,8 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertEquals(20, pagination.getOffset());
+        assertEquals(10, pagination.getSize());
+        assertEquals(20L, pagination.getOffset());
     }
 
     @Test
@@ -199,8 +192,8 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertEquals(20, pagination.getOffset());
+        assertEquals(10, pagination.getSize());
+        assertEquals(20L, pagination.getOffset());
     }
 
     @Test
@@ -221,8 +214,7 @@ public class PaginationParseTest {
         assertNotNull(pagination);
         assertEquals(3, pagination.getPage());
         assertEquals(10, pagination.getSize());
-        assertEquals(20, pagination.getOffset());
-        assertEquals(10, pagination.getLimit());
+        assertEquals(20L, pagination.getOffset());
     }
 
     @Test
@@ -241,8 +233,8 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(20, pagination.getOffset());
-        assertEquals(10, pagination.getLimit());
+        assertEquals(20L, pagination.getOffset());
+        assertEquals(10, pagination.getSize());
     }
 
     @Test
@@ -261,8 +253,8 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertEquals(10, pagination.getLimit());
-        assertTrue(pagination.getContinueSearch());
+        assertEquals(10, pagination.getSize());
+        assertEquals(SearchAfterMode.TIEBREAKER, pagination.getSearchAfterMode());
     }
 
     @Test
@@ -281,6 +273,7 @@ public class PaginationParseTest {
         log.info("========================================\n");
 
         assertNotNull(pagination);
-        assertTrue(pagination.getContinueSearch());
+        assertEquals(PaginationType.SEARCH_AFTER, pagination.getType());
+        assertEquals(SearchAfterMode.TIEBREAKER, pagination.getSearchAfterMode());
     }
 }

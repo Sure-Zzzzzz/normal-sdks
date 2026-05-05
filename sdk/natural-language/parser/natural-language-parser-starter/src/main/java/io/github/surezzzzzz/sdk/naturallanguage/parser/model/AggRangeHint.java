@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 import lombok.*;
 
 /**
- * 日期范围意图
+ * 聚合范围提示
  *
  * @author surezzzzzz
  */
@@ -11,20 +11,20 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DateRangeIntent {
+public class AggRangeHint {
 
     /**
-     * 起始时间
+     * 起始值
      */
-    private String from;
+    private Object from;
 
     /**
-     * 结束时间
+     * 结束值
      */
-    private String to;
+    private Object to;
 
     /**
-     * 原始关键字，如 "近7天"
+     * 范围名称
      */
-    private String relativeKeyword;
+    private String key;
 }

@@ -1,7 +1,10 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.support;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.annotation.NaturalLanguageParserComponent;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.configuration.NLParserProperties;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.IntentType;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseException;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.*;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.parser.*;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.NLTokenizer;
@@ -11,24 +14,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
 /**
- * 自然语言解析器（门面/协调者）
+ * 自然语言解析器（门面）
  * <p>
- * 职责：
- * 1. 协调各个专门的parser
- * 2. 分词（委托给tokenizer）
- * 3. 组装最终的Intent对象
- * <p>
- * 架构模式：
- * - 门面模式（Facade Pattern）：为子系统提供统一接口
- * - 组合模式（Composition Pattern）：组合多个parser
- * - 策略模式（Strategy Pattern）：各parser独立实现解析策略
- * <p>
- * 线程安全：
- * 本类是线程安全的，因为：
- * 1. tokenizer是final的不可变引用
- * 2. 各个parser都是无状态的线程安全实例
- * 3. parse方法中所有状态都是方法局部变量
- * 4. 无共享可变状态
+ * 协调分词器、关键字注册表、解析器插件，将自然语言解析为 Intent 对象
  *
  * @author surezzzzzz
  */
@@ -36,62 +24,25 @@ import java.util.List;
 @NaturalLanguageParserComponent
 public class NLParser {
 
-    // ========== 依赖组件 ==========
-
-    /**
-     * 分词器
-     */
     private final NLTokenizer tokenizer;
-
-    /**
-     * 索引提取器
-     */
-    private final IndexExtractor indexExtractor;
-
-    /**
-     * 条件解析器
-     */
-    private final ConditionParser conditionParser;
-
-    /**
-     * 聚合解析器
-     */
-    private final AggregationParser aggregationParser;
-
-    /**
-     * 排序解析器
-     */
-    private final SortParser sortParser;
-
-    /**
-     * 分页解析器
-     */
-    private final PaginationParser paginationParser;
-
-    /**
-     * 时间范围解析器
-     */
-    private final DateRangeParser dateRangeParser;
+    private final KeywordRegistry keywordRegistry;
+    private final NLParserProperties properties;
+    private final List<NLParserPlugin> plugins;
 
     /**
      * 构造函数
      *
-     * @param tokenizer 分词器实例（必须非null）
-     * @throws IllegalArgumentException 如果tokenizer为null
+     * @param tokenizer       分词器
+     * @param keywordRegistry 关键字注册表
+     * @param properties      配置
+     * @param plugins         解析器插件列表
      */
-    public NLParser(NLTokenizer tokenizer) {
-        if (tokenizer == null) {
-            throw new IllegalArgumentException("tokenizer不能为null");
-        }
+    public NLParser(NLTokenizer tokenizer, KeywordRegistry keywordRegistry,
+                    NLParserProperties properties, List<NLParserPlugin> plugins) {
         this.tokenizer = tokenizer;
-
-        // 初始化各个parser（无状态，可以复用）
-        this.indexExtractor = new IndexExtractor();
-        this.conditionParser = new ConditionParser();
-        this.aggregationParser = new AggregationParser();
-        this.sortParser = new SortParser();
-        this.paginationParser = new PaginationParser();
-        this.dateRangeParser = new DateRangeParser();
+        this.keywordRegistry = keywordRegistry;
+        this.properties = properties;
+        this.plugins = plugins != null ? plugins : java.util.Collections.<NLParserPlugin>emptyList();
     }
 
     /**
@@ -99,119 +50,80 @@ public class NLParser {
      *
      * @param naturalLanguage 自然语言查询
      * @return 解析后的意图
-     * @throws IllegalArgumentException 如果输入为空或只包含停用词
-     * @throws NLParseException         如果解析过程中遇到语法错误
      */
     public Intent parse(String naturalLanguage) {
-        try {
-            // 1. 分词
-            List<Token> tokens = tokenizer.tokenize(naturalLanguage);
-
-            if (tokens == null || tokens.isEmpty()) {
-                throw NLParseException.emptyQuery(naturalLanguage);
-            }
-
-            // 打印token化结果（用于调试）
-            logTokenizationResult(tokens);
-
-            // 2. 提取索引/表名（会修改tokens列表，移除已识别的索引相关token）
-            String indexHint = indexExtractor.extractAndRemove(tokens);
-
-            // 3. 解析时间范围（必须在ConditionParser之前，避免重复解析）
-            DateRangeIntent dateRange = dateRangeParser.parse(tokens);
-
-            // 4. 解析其他组件
-            List<AggregationIntent> aggregations = aggregationParser.parse(tokens);
-            ConditionIntent condition = conditionParser.parse(tokens);
-            List<SortIntent> sorts = sortParser.parse(tokens);
-            PaginationIntent pagination = paginationParser.parse(tokens);
-
-            // 4. 根据是否有聚合决定返回类型
-            Intent intent;
-            if (!aggregations.isEmpty()) {
-                // 有聚合 → 返回 AnalyticsIntent
-                intent = AnalyticsIntent.builder()
-                        .condition(condition)
-                        .aggregations(aggregations)
-                        .build();
-            } else {
-                // 普通查询 → 返回 QueryIntent
-                intent = QueryIntent.builder()
-                        .condition(condition)
-                        .sorts(sorts)
-                        .pagination(pagination)
-                        .dateRange(dateRange)
-                        .build();
-            }
-
-            // 5. 设置索引提示
-            if (indexHint != null) {
-                intent.setIndexHint(indexHint);
-            }
-
-            return intent;
-        } catch (NLParseException e) {
-            // 如果异常中没有查询文本，添加上去
-            if (e.getQuery() == null) {
-                throw enrichExceptionWithQuery(e, naturalLanguage);
-            }
-            throw e;
+        if (naturalLanguage == null || naturalLanguage.trim().isEmpty()) {
+            throw NLParseException.emptyQuery(naturalLanguage);
         }
+
+        // 1. 分词
+        List<Token> tokens = tokenizer.tokenize(naturalLanguage, keywordRegistry);
+
+        if (tokens == null || tokens.isEmpty()) {
+            throw NLParseException.emptyQuery(naturalLanguage);
+        }
+
+        // 2. 判断意图类型
+        boolean hasAgg = false;
+        for (Token token : tokens) {
+            if (token.getType() == io.github.surezzzzzz.sdk.naturallanguage.parser.constant.TokenType.AGGREGATION) {
+                hasAgg = true;
+                break;
+            }
+        }
+        IntentType intentType = hasAgg ? IntentType.ANALYTICS : IntentType.QUERY;
+
+        // 3. 使用 Plugin 链解析
+        Intent intent = parseWithPlugins(tokens, intentType);
+
+        return intent;
     }
 
     /**
-     * 为异常添加原始查询文本上下文
+     * 使用 Plugin 链解析
      */
-    private NLParseException enrichExceptionWithQuery(NLParseException e, String query) {
-        return NLParseException.builder(e.getErrorType())
-                .query(query)
-                .position(e.getPosition())
-                .parseState(e.getParseState())
-                .suggestion(e.getSuggestion())
-                .relatedToken(e.getRelatedToken())
-                .message(e.getMessage().split("\n")[0])  // 只保留第一行消息
-                .build();
+    private Intent parseWithPlugins(List<Token> tokens, IntentType intentType) {
+        ParseResult result = new ParseResult();
+        for (NLParserPlugin plugin : plugins) {
+            if (plugin.supports(intentType)) {
+                plugin.parse(tokens, keywordRegistry, properties, result);
+            }
+        }
+        return buildIntent(intentType, result);
     }
 
     /**
-     * 打印Token化结果（用于调试和查看）
-     *
-     * @param tokens token列表
+     * 从 ParseResult 组装 Intent
      */
-    private void logTokenizationResult(List<Token> tokens) {
-        if (!log.isDebugEnabled()) {
-            return;
+    private Intent buildIntent(IntentType intentType, ParseResult result) {
+        Intent intent;
+        if (intentType == IntentType.ANALYTICS) {
+            intent = AnalyticsIntent.builder()
+                    .condition(result.getCondition())
+                    .aggregations(result.getAggregations())
+                    .build();
+        } else {
+            intent = QueryIntent.builder()
+                    .condition(result.getCondition())
+                    .sorts(result.getSorts())
+                    .pagination(result.getPagination())
+                    .dateRange(result.getDateRange())
+                    .collapse(result.getCollapse())
+                    .fieldProjections(result.getFieldProjections())
+                    .build();
         }
 
-        log.debug("\n【Token化结果】共{}个token:", tokens.size());
-        for (int i = 0; i < tokens.size(); i++) {
-            Token token = tokens.get(i);
-            StringBuilder tokenInfo = new StringBuilder();
-            tokenInfo.append(String.format("  [%d] 类型=%-15s 文本='%s'", i, token.getType(), token.getText()));
-
-            // 根据类型打印额外信息
-            switch (token.getType()) {
-                case OPERATOR:
-                    tokenInfo.append(String.format(" → 操作符=%s", token.getOperatorType()));
-                    break;
-                case LOGIC:
-                    tokenInfo.append(String.format(" → 逻辑=%s", token.getLogicType()));
-                    break;
-                case AGGREGATION:
-                    tokenInfo.append(String.format(" → 聚合=%s", token.getAggType()));
-                    break;
-                case SORT:
-                    tokenInfo.append(String.format(" → 排序=%s", token.getSortOrder()));
-                    break;
-                case NUMBER:
-                    tokenInfo.append(String.format(" → 数值=%s", token.getValue()));
-                    break;
-                default:
-                    // 其他类型不打印额外信息
-                    break;
-            }
-            log.debug(tokenInfo.toString());
+        // 设置索引提示
+        if (result.getIndexHint() != null) {
+            intent.setIndexHint(result.getIndexHint());
         }
-        log.debug("");
+        intent.setType(intentType);
+
+        // 透传扩展数据
+        if (result.getExt() != null && !result.getExt().isEmpty()) {
+            intent.setExt(result.getExt());
+        }
+
+        return intent;
     }
 }

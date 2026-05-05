@@ -1,9 +1,8 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.PaginationType;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SearchAfterMode;
+import lombok.*;
 
 import java.util.List;
 
@@ -19,7 +18,12 @@ import java.util.List;
 public class PaginationIntent {
 
     /**
-     * 页码（从 1 开始）
+     * 分页类型
+     */
+    private PaginationType type;
+
+    /**
+     * 页码（从1开始，offset 分页使用）
      */
     private Integer page;
 
@@ -31,23 +35,25 @@ public class PaginationIntent {
     /**
      * 偏移量
      */
-    private Integer offset;
+    private Long offset;
 
     /**
-     * 限制数量
-     */
-    private Integer limit;
-
-    /**
-     * search_after 游标值（用于ES深度分页）
-     * 通常是一个List，对应排序字段的值
-     * 例如：["2024-01-01T12:00:00", "user_123"]
+     * search_after 值
      */
     private List<Object> searchAfter;
 
     /**
-     * 是否为续查请求（配合searchAfter使用）
-     * true表示"继续上次查询"
+     * PIT ID
      */
-    private Boolean continueSearch;
+    private String pitId;
+
+    /**
+     * PIT 保持活跃时间
+     */
+    private String pitKeepAlive;
+
+    /**
+     * search_after 模式
+     */
+    private SearchAfterMode searchAfterMode;
 }

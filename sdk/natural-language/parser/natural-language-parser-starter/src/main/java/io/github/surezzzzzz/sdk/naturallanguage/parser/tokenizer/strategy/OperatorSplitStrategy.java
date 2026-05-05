@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.strategy;
 
+import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 
 import java.util.ArrayList;
@@ -18,6 +19,12 @@ public class OperatorSplitStrategy implements TokenSplitStrategy {
     private static final Pattern OPERATOR_PATTERN = Pattern.compile(".*[><!=].*");
     private static final String OPERATOR_CHARS = "><=!";
     private static final String COMPOUND_OPERATORS = ">=<=!=";
+
+    private final KeywordRegistry keywordRegistry;
+
+    public OperatorSplitStrategy(KeywordRegistry keywordRegistry) {
+        this.keywordRegistry = keywordRegistry;
+    }
 
     @Override
     public boolean canHandle(String word) {

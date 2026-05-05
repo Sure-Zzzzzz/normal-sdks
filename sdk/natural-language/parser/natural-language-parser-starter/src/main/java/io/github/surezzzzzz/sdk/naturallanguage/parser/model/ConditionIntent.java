@@ -2,16 +2,13 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.LogicType;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.OperatorType;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 条件意图（抽象的查询条件，不依赖具体数据源）
+ * 查询条件意图
  *
  * @author surezzzzzz
  */
@@ -22,8 +19,7 @@ import java.util.List;
 public class ConditionIntent {
 
     /**
-     * 字段提示（用户输入的，可能是中文、拼音、英文）
-     * 例如："年龄", "nianling", "age"
+     * 字段提示
      */
     private String fieldHint;
 
@@ -33,31 +29,50 @@ public class ConditionIntent {
     private OperatorType operator;
 
     /**
-     * 值（单值）
+     * 值
      */
     private Object value;
 
     /**
-     * 值列表（用于 IN、NOT_IN、BETWEEN）
+     * 多值列表（用于 IN、NOT_IN、BETWEEN）
      */
-    @Builder.Default
-    private List<Object> values = new ArrayList<>();
+    private List<Object> values;
 
     /**
-     * 逻辑运算符
+     * 逻辑类型（AND / OR / NOT）
      */
     private LogicType logic;
 
     /**
-     * 嵌套条件
+     * 子条件列表（用于逻辑组合）
      */
     @Builder.Default
     private List<ConditionIntent> children = new ArrayList<>();
 
     /**
      * 是否为逻辑组合条件
+     *
+     * @return true 逻辑组合，false 简单条件
      */
     public boolean isLogicCondition() {
-        return children != null && !children.isEmpty();
+        return logic != null;
+    }
+
+    /**
+     * 是否为简单条件
+     *
+     * @return true 简单条件，false 逻辑组合
+     */
+    public boolean isSimpleCondition() {
+        return logic == null;
+    }
+
+    /**
+     * 获取操作符代码
+     *
+     * @return 操作符代码
+     */
+    public String getOperatorCode() {
+        return operator != null ? operator.getCode() : null;
     }
 }

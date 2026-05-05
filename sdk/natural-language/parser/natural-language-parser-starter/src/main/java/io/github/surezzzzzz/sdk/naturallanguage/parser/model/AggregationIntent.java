@@ -1,13 +1,12 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.AggType;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SortOrder;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 聚合意图
@@ -21,9 +20,9 @@ import java.util.List;
 public class AggregationIntent {
 
     /**
-     * 聚合名称（别名）
+     * 聚合名称提示
      */
-    private String name;
+    private String nameHint;
 
     /**
      * 聚合类型
@@ -31,42 +30,82 @@ public class AggregationIntent {
     private AggType type;
 
     /**
-     * 字段提示（用户输入的）
+     * 字段提示
      */
     private String fieldHint;
 
     /**
-     * 分组字段提示（对于 TERMS 等桶聚合）
+     * 分组字段提示（用于 terms 等桶聚合）
      */
     private String groupByFieldHint;
 
     /**
-     * 区间大小（用于 HISTOGRAM, DATE_HISTOGRAM）
-     */
-    private String interval;
-
-    /**
-     * 桶大小（用于 TERMS）
+     * 桶大小（用于 terms 聚合）
      */
     private Integer size;
 
     /**
-     * 嵌套聚合
+     * 时间间隔（用于 date_histogram）
+     */
+    private String interval;
+
+    /**
+     * 范围列表（用于 range 聚合）
+     */
+    private List<AggRangeHint> ranges;
+
+    /**
+     * 百分位列表（用于 percentiles 聚合）
+     */
+    private List<Double> percents;
+
+    /**
+     * 百分位排名值列表（用于 percentile_ranks 聚合）
+     */
+    private List<Double> percentileValues;
+
+    /**
+     * 过滤条件（用于 filter 聚合）
+     */
+    private ConditionIntent filterCondition;
+
+    /**
+     * 多命名过滤器（用于 filters 聚合）
+     * key：bucket 名称，value：对应的过滤条件
+     */
+    private Map<String, ConditionIntent> namedFilters;
+
+    /**
+     * 是否使用 composite 聚合
+     */
+    private Boolean useComposite;
+
+    /**
+     * composite 聚合排序方向
+     */
+    private SortOrder compositeOrder;
+
+    /**
+     * 嵌套子聚合
      */
     @Builder.Default
-    private List<AggregationIntent> children = new ArrayList<>();
+    private List<AggregationIntent> subAggs = new ArrayList<>();
 
     /**
-     * 是否为桶聚合
+     * Pipeline 聚合列表
      */
-    public boolean isBucketAgg() {
-        return type != null && type.isBucket();
-    }
+    @Builder.Default
+    private List<PipelineAggIntent> pipelineAggs = new ArrayList<>();
 
     /**
-     * 是否为指标聚合
+     * 获取字段提示（优先使用 groupByFieldHint）
+     *
+     * @return 字段提示
      */
-    public boolean isMetricAgg() {
-        return type != null && type.isMetric();
+    public String getFieldHint() {
+        if (groupByFieldHint != null) {
+            return groupByFieldHint;
+        }
+        return fieldHint;
     }
 }

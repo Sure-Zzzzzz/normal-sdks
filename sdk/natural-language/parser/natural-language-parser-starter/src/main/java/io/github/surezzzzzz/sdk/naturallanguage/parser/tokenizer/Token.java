@@ -58,6 +58,11 @@ public class Token {
     private SortOrder sortOrder;
 
     /**
+     * 时间范围（如果是时间范围词）
+     */
+    private TimeRange timeRange;
+
+    /**
      * 创建操作符 Token
      */
     public static Token operator(String text, OperatorType operatorType, int position) {
@@ -101,6 +106,51 @@ public class Token {
                 .type(TokenType.SORT)
                 .text(text)
                 .sortOrder(sortOrder)
+                .position(position)
+                .build();
+    }
+
+    /**
+     * 创建折叠词 Token
+     */
+    public static Token collapse(String text, int position) {
+        return Token.builder()
+                .type(TokenType.COLLAPSE)
+                .text(text)
+                .position(position)
+                .build();
+    }
+
+    /**
+     * 创建时间范围 Token
+     */
+    public static Token timeRange(String text, TimeRange timeRange, int position) {
+        return Token.builder()
+                .type(TokenType.TIME_RANGE)
+                .text(text)
+                .timeRange(timeRange)
+                .position(position)
+                .build();
+    }
+
+    /**
+     * 创建分页 Token
+     */
+    public static Token pagination(String text, int position) {
+        return Token.builder()
+                .type(TokenType.PAGINATION)
+                .text(text)
+                .position(position)
+                .build();
+    }
+
+    /**
+     * 创建介词 Token
+     */
+    public static Token preposition(String text, int position) {
+        return Token.builder()
+                .type(TokenType.PREPOSITION)
+                .text(text)
                 .position(position)
                 .build();
     }

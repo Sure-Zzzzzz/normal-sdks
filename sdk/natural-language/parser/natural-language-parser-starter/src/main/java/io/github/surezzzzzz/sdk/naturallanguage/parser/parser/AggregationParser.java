@@ -1,68 +1,103 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.parser;
 
+import io.github.surezzzzzz.sdk.naturallanguage.parser.annotation.NaturalLanguageParserComponent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.AggType;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.IntentType;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.NLParserConstant;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.TokenType;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.AggKeywords;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.SortKeywords;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.configuration.NLParserProperties;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.AggregationIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
+import org.springframework.core.annotation.Order;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * 聚合解析器
- * <p>
- * 支持的功能：
- * - 简单指标聚合：统计平均年龄
- * - 桶聚合：按城市分组
- * - 嵌套聚合：按城市分组统计平均年龄
- * - 多个并行聚合：按城市分组，同时按创建时间每天统计
- * - 参数：前10个、每天
- * <p>
- * 线程安全：无状态，线程安全
+ * 聚合解析插件
  *
  * @author surezzzzzz
  */
-public class AggregationParser {
+@NaturalLanguageParserComponent
+@Order(15)
+public class AggregationParser implements NLParserPlugin {
 
-    // ==================== 常量定义 ====================
+    // 聚合分隔词（parser 内部实现细节）
+    private static final Set<String> AGG_SEPARATORS = new HashSet<>(Arrays.asList(
+            "同时", "并且", "还有", "以及", "和", "另外", "再", "且", "及", ",", "，"
+    ));
 
-    /**
-     * 聚合字段向前查找的最大距离
-     */
-    private static final int MAX_FIELD_LOOKAHEAD_DISTANCE = 5;
+    // 桶聚合前缀词
+    private static final Set<String> BUCKET_PREFIXES = new HashSet<>(Arrays.asList("按", "每", "by"));
 
-    /**
-     * 排序模式检测的向前查找距离
-     */
-    private static final int SORT_PATTERN_LOOKAHEAD = 4;
+    // TERMS 前缀词
+    private static final Set<String> TERMS_PREFIXES = new HashSet<>(Arrays.asList("按", "by"));
 
-    // ==================== 公共方法 ====================
+    // DATE_HISTOGRAM 前缀词
+    private static final Set<String> DATE_HISTOGRAM_PREFIXES = new HashSet<>(Arrays.asList("每"));
 
-    /**
-     * 解析聚合表达式
-     *
-     * @param tokens token列表
-     * @return 聚合意图列表，如果没有聚合则返回空列表
-     */
-    public List<AggregationIntent> parse(List<Token> tokens) {
-        // 参数验证
+    // 嵌套指示词
+    private static final Set<String> NESTED_INDICATORS = new HashSet<>(Arrays.asList(
+            "统计", "计算", "求", "每组", "各个", "各", "的"
+    ));
+
+    // 时间间隔映射
+    private static final Map<String, String> INTERVAL_MAP = new HashMap<>();
+
+    // size 参数模式
+    private static final Pattern SIZE_PATTERN = Pattern.compile("(前|限制|最多|取前|top)\\s*(\\d+)\\s*(个|条)?");
+
+    static {
+        INTERVAL_MAP.put("每天", "1d");
+        INTERVAL_MAP.put("每日", "1d");
+        INTERVAL_MAP.put("按天", "1d");
+        INTERVAL_MAP.put("天", "1d");
+        INTERVAL_MAP.put("每小时", "1h");
+        INTERVAL_MAP.put("每时", "1h");
+        INTERVAL_MAP.put("按小时", "1h");
+        INTERVAL_MAP.put("小时", "1h");
+        INTERVAL_MAP.put("每周", "1w");
+        INTERVAL_MAP.put("周", "1w");
+        INTERVAL_MAP.put("每月", "1M");
+        INTERVAL_MAP.put("月", "1M");
+        INTERVAL_MAP.put("每年", "1y");
+        INTERVAL_MAP.put("年", "1y");
+        INTERVAL_MAP.put("1d", "1d");
+        INTERVAL_MAP.put("1h", "1h");
+        INTERVAL_MAP.put("1w", "1w");
+        INTERVAL_MAP.put("1M", "1M");
+        INTERVAL_MAP.put("1y", "1y");
+    }
+
+    @Override
+    public boolean supports(IntentType intentType) {
+        return intentType == IntentType.ANALYTICS;
+    }
+
+    @Override
+    public void parse(List<Token> tokens, KeywordRegistry keywordRegistry,
+                      NLParserProperties properties, ParseResult result) {
+        List<AggregationIntent> aggregations = doParse(tokens, keywordRegistry);
+        if (aggregations != null && !aggregations.isEmpty()) {
+            result.setAggregations(aggregations);
+        }
+    }
+
+    private List<AggregationIntent> doParse(List<Token> tokens, KeywordRegistry keywordRegistry) {
         if (tokens == null || tokens.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // Step 1: 按分隔词分段
         List<AggSegment> segments = segmentByDelimiters(tokens);
         if (segments.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // Step 2: 解析每个段
         List<AggregationIntent> aggregations = new ArrayList<>();
         for (AggSegment segment : segments) {
-            AggregationIntent agg = parseSegment(segment);
+            AggregationIntent agg = parseSegment(segment, keywordRegistry);
             if (agg != null) {
                 aggregations.add(agg);
             }
@@ -73,25 +108,19 @@ public class AggregationParser {
 
     // ==================== 分段逻辑 ====================
 
-    /**
-     * 将tokens按聚合分隔词分段
-     * 分隔词：同时、并且、还有等
-     */
     private List<AggSegment> segmentByDelimiters(List<Token> tokens) {
         List<AggSegment> segments = new ArrayList<>();
         int startIndex = 0;
 
         for (int i = 0; i < tokens.size(); i++) {
             if (isAggregationDelimiter(tokens.get(i))) {
-                // 找到分隔词，切出前一段
                 if (i > startIndex) {
                     segments.add(new AggSegment(tokens, startIndex, i));
                 }
-                startIndex = i + 1; // 下一段从分隔词后开始
+                startIndex = i + 1;
             }
         }
 
-        // 添加最后一段
         if (startIndex < tokens.size()) {
             segments.add(new AggSegment(tokens, startIndex, tokens.size()));
         }
@@ -99,43 +128,29 @@ public class AggregationParser {
         return segments;
     }
 
-    /**
-     * 判断token是否为聚合分隔词
-     */
     private boolean isAggregationDelimiter(Token token) {
-        return token != null && AggKeywords.isAggSeparator(token.getText());
+        return token != null && AGG_SEPARATORS.contains(token.getText());
     }
 
     // ==================== 段解析 ====================
 
-    /**
-     * 解析单个聚合段
-     */
-    private AggregationIntent parseSegment(AggSegment segment) {
+    private AggregationIntent parseSegment(AggSegment segment, KeywordRegistry keywordRegistry) {
         if (segment == null || !segment.isValid()) {
             return null;
         }
 
-        // 识别桶聚合和指标聚合
-        BucketAggInfo bucketInfo = identifyBucketAgg(segment);
-        MetricAggInfo metricInfo = identifyMetricAgg(segment);
+        BucketAggInfo bucketInfo = identifyBucketAgg(segment, keywordRegistry);
+        MetricAggInfo metricInfo = identifyMetricAgg(segment, keywordRegistry);
 
-        // 根据识别结果构建聚合
         return buildAggregation(bucketInfo, metricInfo);
     }
 
-    /**
-     * 根据桶聚合和指标聚合信息构建聚合意图
-     */
     private AggregationIntent buildAggregation(BucketAggInfo bucketInfo, MetricAggInfo metricInfo) {
         if (bucketInfo != null && metricInfo != null) {
-            // 桶聚合 + 嵌套指标聚合
             return buildNestedAggregation(bucketInfo, metricInfo);
         } else if (bucketInfo != null) {
-            // 纯桶聚合
             return buildBucketAggregation(bucketInfo);
         } else if (metricInfo != null) {
-            // 纯指标聚合
             return buildMetricAggregation(metricInfo);
         }
         return null;
@@ -143,39 +158,29 @@ public class AggregationParser {
 
     // ==================== 桶聚合识别 ====================
 
-    /**
-     * 识别桶聚合信息
-     * 优先级：DATE_HISTOGRAM > TERMS > 前缀形式
-     */
-    private BucketAggInfo identifyBucketAgg(AggSegment segment) {
-        // 优先识别 DATE_HISTOGRAM（更具体）
+    private BucketAggInfo identifyBucketAgg(AggSegment segment, KeywordRegistry keywordRegistry) {
         BucketAggInfo dateHistogram = identifyDateHistogram(segment);
         if (dateHistogram != null) {
             return dateHistogram;
         }
 
-        // 识别其他桶聚合类型
         BucketAggInfo bucketAgg = identifyTypedBucketAgg(segment);
         if (bucketAgg != null) {
             return bucketAgg;
         }
 
-        // 识别前缀形式的桶聚合
-        return identifyPrefixBucketAgg(segment);
+        return identifyPrefixBucketAgg(segment, keywordRegistry);
     }
 
-    /**
-     * 识别 DATE_HISTOGRAM 聚合（"每天"、"每小时"等）
-     */
     private BucketAggInfo identifyDateHistogram(AggSegment segment) {
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             String text = segment.tokens.get(i).getText();
 
-            if (AggKeywords.isIntervalKeyword(text)) {
+            if (isIntervalKeyword(text)) {
                 BucketAggInfo info = new BucketAggInfo();
                 info.type = AggType.DATE_HISTOGRAM;
                 info.tokenIndex = i;
-                info.interval = AggKeywords.getInterval(text);
+                info.interval = getInterval(text);
                 info.groupByField = findFieldBeforeToken(segment, i);
                 return info;
             }
@@ -183,9 +188,6 @@ public class AggregationParser {
         return null;
     }
 
-    /**
-     * 识别已标记的桶聚合类型（TOKEN类型为AGGREGATION且是桶类型）
-     */
     private BucketAggInfo identifyTypedBucketAgg(AggSegment segment) {
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             Token token = segment.tokens.get(i);
@@ -206,18 +208,16 @@ public class AggregationParser {
         return null;
     }
 
-    /**
-     * 识别前缀形式的桶聚合（"按X分组"、"每天"）
-     */
-    private BucketAggInfo identifyPrefixBucketAgg(AggSegment segment) {
+    private BucketAggInfo identifyPrefixBucketAgg(AggSegment segment, KeywordRegistry keywordRegistry) {
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             Token token = segment.tokens.get(i);
             String text = token.getText();
 
-            // 检查TERMS前缀词（"按"、"by"）
-            if (AggKeywords.isTermsPrefix(text)) {
-                // 排除排序模式
-                if (isSortPattern(segment, i)) {
+            if (TERMS_PREFIXES.contains(text)) {
+                if (isSortPattern(segment, i, keywordRegistry)) {
+                    continue;
+                }
+                if (isCollapsePattern(segment, i, keywordRegistry)) {
                     continue;
                 }
 
@@ -227,8 +227,7 @@ public class AggregationParser {
                 }
             }
 
-            // 检查DATE_HISTOGRAM前缀词（"每"）
-            if (AggKeywords.isDateHistogramPrefix(text)) {
+            if (DATE_HISTOGRAM_PREFIXES.contains(text)) {
                 BucketAggInfo info = parseDateHistogramBucketAgg(segment, i);
                 if (info != null) {
                     return info;
@@ -238,9 +237,6 @@ public class AggregationParser {
         return null;
     }
 
-    /**
-     * 解析TERMS类型的桶聚合（"按X分组"）
-     */
     private BucketAggInfo parseTermsBucketAgg(AggSegment segment, int prefixIndex) {
         BucketAggInfo info = new BucketAggInfo();
         info.type = AggType.TERMS;
@@ -250,11 +246,7 @@ public class AggregationParser {
         return info.groupByField != null ? info : null;
     }
 
-    /**
-     * 解析DATE_HISTOGRAM类型的桶聚合（"每天"、"每小时"）
-     */
     private BucketAggInfo parseDateHistogramBucketAgg(AggSegment segment, int prefixIndex) {
-        // 检查下一个token是否为时间单位
         if (prefixIndex + 1 >= segment.endIndex) {
             return null;
         }
@@ -262,7 +254,7 @@ public class AggregationParser {
         String prefix = segment.tokens.get(prefixIndex).getText();
         String timeUnit = segment.tokens.get(prefixIndex + 1).getText();
         String combinedText = prefix + timeUnit;
-        String interval = AggKeywords.getInterval(combinedText);
+        String interval = getInterval(combinedText);
 
         if (interval == null) {
             return null;
@@ -276,16 +268,34 @@ public class AggregationParser {
         return info;
     }
 
-    /**
-     * 检查是否为排序模式（"按...降序/升序"）
-     */
-    private boolean isSortPattern(AggSegment segment, int prefixIndex) {
-        int endIndex = Math.min(segment.endIndex, prefixIndex + SORT_PATTERN_LOOKAHEAD);
+    private boolean isSortPattern(AggSegment segment, int prefixIndex, KeywordRegistry keywordRegistry) {
+        int endIndex = Math.min(segment.endIndex, prefixIndex + NLParserConstant.SORT_PATTERN_LOOKAHEAD);
 
         for (int j = prefixIndex + 1; j < endIndex; j++) {
             String text = segment.tokens.get(j).getText();
-            if (SortKeywords.isSortKeyword(text)) {
+            if (keywordRegistry.resolveSortOrder(text) != null) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isCollapsePattern(AggSegment segment, int prefixIndex, KeywordRegistry keywordRegistry) {
+        int endIndex = Math.min(segment.endIndex, prefixIndex + NLParserConstant.SORT_PATTERN_LOOKAHEAD + 1);
+
+        for (int j = prefixIndex + 1; j < endIndex; j++) {
+            String text = segment.tokens.get(j).getText();
+
+            if (keywordRegistry.isCollapseKeyword(text)) {
+                return true;
+            }
+
+            if (j + 1 < segment.endIndex) {
+                String combined = text + segment.tokens.get(j + 1).getText();
+                if (keywordRegistry.isCollapseKeyword(combined)) {
+                    return true;
+                }
             }
         }
 
@@ -294,16 +304,22 @@ public class AggregationParser {
 
     // ==================== 指标聚合识别 ====================
 
-    /**
-     * 识别指标聚合信息（"统计平均年龄"、"求和金额"）
-     */
-    private MetricAggInfo identifyMetricAgg(AggSegment segment) {
+    private MetricAggInfo identifyMetricAgg(AggSegment segment, KeywordRegistry keywordRegistry) {
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             Token token = segment.tokens.get(i);
 
             if (token.getType() == TokenType.AGGREGATION) {
                 AggType aggType = token.getAggType();
                 if (aggType != null && aggType.isMetric()) {
+                    if (keywordRegistry.isCollapseKeyword(token.getText())) {
+                        continue;
+                    }
+
+                    // "统计"等通用前缀词：如果后面紧跟更具体的指标聚合，跳过 COUNT
+                    if (aggType == AggType.COUNT && hasMoreSpecificMetricAfter(segment, i)) {
+                        continue;
+                    }
+
                     MetricAggInfo info = new MetricAggInfo();
                     info.type = aggType;
                     info.tokenIndex = i;
@@ -316,66 +332,58 @@ public class AggregationParser {
     }
 
     /**
-     * 查找指标聚合的字段（双向查找）
-     * 优先向后查找（标准模式："统计平均年龄"）
-     * 如果未找到，向前查找（变体模式："计算年龄平均值"）
+     * 判断指定位置之后是否还有更具体的指标聚合（AVG/SUM/MAX/MIN/CARDINALITY等）
      */
+    private boolean hasMoreSpecificMetricAfter(AggSegment segment, int currentIndex) {
+        for (int j = currentIndex + 1; j < segment.endIndex; j++) {
+            Token nextToken = segment.tokens.get(j);
+            if (nextToken.getType() == TokenType.AGGREGATION) {
+                AggType nextType = nextToken.getAggType();
+                if (nextType != null && nextType.isMetric() && nextType != AggType.COUNT) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private String findMetricField(AggSegment segment, int aggTokenIndex) {
-        // 优先向后查找
-        String forwardField = findFieldAfterToken(segment, aggTokenIndex, MAX_FIELD_LOOKAHEAD_DISTANCE);
+        String forwardField = findFieldAfterToken(segment, aggTokenIndex, NLParserConstant.MAX_FIELD_LOOKAHEAD_DISTANCE);
         if (forwardField != null) {
             return forwardField;
         }
-
-        // 向前查找
         return findFieldBeforeToken(segment, aggTokenIndex);
     }
 
     // ==================== 字段查找逻辑 ====================
 
-    /**
-     * 查找分组字段（双向查找）
-     */
     private String findGroupByField(AggSegment segment, int aggTokenIndex) {
-        // 优先向前查找
         String backwardField = findFieldBeforeToken(segment, aggTokenIndex);
         if (backwardField != null) {
             return backwardField;
         }
-
-        // 向后查找
         return findFieldAfterToken(segment, aggTokenIndex);
     }
 
-    /**
-     * 在指定位置之前查找字段
-     * 支持合并连续的字段候选tokens
-     */
     private String findFieldBeforeToken(AggSegment segment, int tokenIndex) {
         List<String> fieldParts = new ArrayList<>();
 
         for (int j = tokenIndex - 1; j >= segment.startIndex; j--) {
             Token token = segment.tokens.get(j);
             if (isFieldCandidate(token)) {
-                fieldParts.add(0, token.getText()); // 插入到开头保持顺序
+                fieldParts.add(0, token.getText());
             } else {
-                break; // 遇到非字段候选，停止
+                break;
             }
         }
 
         return fieldParts.isEmpty() ? null : String.join("", fieldParts);
     }
 
-    /**
-     * 在指定位置之后查找字段（使用默认距离）
-     */
     private String findFieldAfterToken(AggSegment segment, int tokenIndex) {
         return findFieldAfterToken(segment, tokenIndex, segment.endIndex - tokenIndex - 1);
     }
 
-    /**
-     * 在指定位置之后查找字段（指定最大距离）
-     */
     private String findFieldAfterToken(AggSegment segment, int tokenIndex, int maxDistance) {
         int endIndex = Math.min(segment.endIndex, tokenIndex + maxDistance + 1);
 
@@ -384,7 +392,6 @@ public class AggregationParser {
             if (isFieldCandidate(token)) {
                 return token.getText();
             }
-            // 遇到聚合关键词，停止查找
             if (isAggregationKeyword(token)) {
                 break;
             }
@@ -393,9 +400,6 @@ public class AggregationParser {
         return null;
     }
 
-    /**
-     * 判断token是否可能是字段名
-     */
     private boolean isFieldCandidate(Token token) {
         if (token == null) {
             return false;
@@ -408,55 +412,46 @@ public class AggregationParser {
 
         if (type == TokenType.UNKNOWN) {
             String text = token.getText();
-            // 排除各种关键词
-            return !AggKeywords.isAggKeyword(text) &&
-                    !AggKeywords.isBucketPrefix(text) &&
-                    !AggKeywords.isAggSeparator(text) &&
-                    !AggKeywords.isNestedIndicator(text);
+            return !isAggKeyword(text) &&
+                    !BUCKET_PREFIXES.contains(text) &&
+                    !AGG_SEPARATORS.contains(text) &&
+                    !NESTED_INDICATORS.contains(text);
         }
 
         return false;
     }
 
-    /**
-     * 判断token是否为聚合关键词
-     */
     private boolean isAggregationKeyword(Token token) {
-        return token != null && AggKeywords.isAggKeyword(token.getText());
+        return token != null && isAggKeyword(token.getText());
+    }
+
+    private boolean isAggKeyword(String text) {
+        return text != null && (AGG_SEPARATORS.contains(text) || BUCKET_PREFIXES.contains(text) ||
+                NESTED_INDICATORS.contains(text));
     }
 
     // ==================== 参数提取 ====================
 
-    /**
-     * 提取size参数（"前10个"、"top 5"）
-     */
     private Integer extractSizeParam(AggSegment segment) {
-        // 合并segment的所有文本
         StringBuilder textBuilder = new StringBuilder();
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             textBuilder.append(segment.tokens.get(i).getText());
         }
-
-        return AggKeywords.extractSize(textBuilder.toString());
+        return extractSize(textBuilder.toString());
     }
 
-    /**
-     * 提取interval参数（"每天"、"1d"）
-     */
     private String extractIntervalParam(AggSegment segment) {
-        // 检查单个token
         for (int i = segment.startIndex; i < segment.endIndex; i++) {
             String text = segment.tokens.get(i).getText();
-            String interval = AggKeywords.getInterval(text);
+            String interval = getInterval(text);
             if (interval != null) {
                 return interval;
             }
 
-            // 检查组合token（"每" + "天"）
             if (i + 1 < segment.endIndex) {
                 String nextText = segment.tokens.get(i + 1).getText();
                 String combined = text + nextText;
-                interval = AggKeywords.getInterval(combined);
+                interval = getInterval(combined);
                 if (interval != null) {
                     return interval;
                 }
@@ -466,25 +461,47 @@ public class AggregationParser {
         return null;
     }
 
+    // ==================== interval / size 辅助 ====================
+
+    private boolean isIntervalKeyword(String keyword) {
+        return getInterval(keyword) != null;
+    }
+
+    private String getInterval(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        return INTERVAL_MAP.get(keyword);
+    }
+
+    private Integer extractSize(String text) {
+        if (text == null) {
+            return null;
+        }
+        Matcher matcher = SIZE_PATTERN.matcher(text);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(2));
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
     // ==================== 聚合构建 ====================
 
-    /**
-     * 构建嵌套聚合（桶+指标）
-     */
     private AggregationIntent buildNestedAggregation(BucketAggInfo bucketInfo, MetricAggInfo metricInfo) {
         AggregationIntent bucketAgg = buildBucketAggregation(bucketInfo);
         AggregationIntent metricAgg = buildMetricAggregation(metricInfo);
 
         if (bucketAgg != null && metricAgg != null) {
-            bucketAgg.setChildren(Collections.singletonList(metricAgg));
+            bucketAgg.setSubAggs(Collections.singletonList(metricAgg));
         }
 
         return bucketAgg;
     }
 
-    /**
-     * 构建桶聚合
-     */
     private AggregationIntent buildBucketAggregation(BucketAggInfo info) {
         if (info == null || info.type == null) {
             return null;
@@ -496,13 +513,10 @@ public class AggregationParser {
                 .fieldHint(info.groupByField)
                 .size(info.size)
                 .interval(info.interval)
-                .name(generateAggName(info.type, info.groupByField))
+                .nameHint(generateAggName(info.type, info.groupByField))
                 .build();
     }
 
-    /**
-     * 构建指标聚合
-     */
     private AggregationIntent buildMetricAggregation(MetricAggInfo info) {
         if (info == null || info.type == null) {
             return null;
@@ -511,31 +525,23 @@ public class AggregationParser {
         return AggregationIntent.builder()
                 .type(info.type)
                 .fieldHint(info.field)
-                .name(generateAggName(info.type, info.field))
+                .nameHint(generateAggName(info.type, info.field))
                 .build();
     }
 
-    /**
-     * 生成聚合名称
-     */
     private String generateAggName(AggType type, String field) {
         if (type == null) {
             return "agg";
         }
-
         String typeName = type.getCode();
         if (field != null && !field.isEmpty()) {
             return typeName + "_" + field;
         }
-
         return typeName;
     }
 
     // ==================== 内部类 ====================
 
-    /**
-     * 聚合段
-     */
     private static class AggSegment {
         final List<Token> tokens;
         final int startIndex;
@@ -552,23 +558,17 @@ public class AggregationParser {
         }
     }
 
-    /**
-     * 桶聚合信息
-     */
     private static class BucketAggInfo {
-        AggType type;           // 聚合类型（TERMS、DATE_HISTOGRAM等）
-        int tokenIndex;         // 关键词位置
-        String groupByField;    // 分组字段
-        Integer size;           // size参数
-        String interval;        // interval参数
+        AggType type;
+        int tokenIndex;
+        String groupByField;
+        Integer size;
+        String interval;
     }
 
-    /**
-     * 指标聚合信息
-     */
     private static class MetricAggInfo {
-        AggType type;      // 聚合类型（AVG、SUM等）
-        int tokenIndex;    // 关键词位置
-        String field;      // 聚合字段
+        AggType type;
+        int tokenIndex;
+        String field;
     }
 }

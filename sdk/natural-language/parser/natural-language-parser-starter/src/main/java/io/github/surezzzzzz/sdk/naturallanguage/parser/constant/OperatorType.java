@@ -1,10 +1,13 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.constant;
 
+import lombok.Getter;
+
 /**
- * 操作符类型
+ * 操作符类型枚举
  *
  * @author surezzzzzz
  */
+@Getter
 public enum OperatorType {
 
     /**
@@ -50,12 +53,17 @@ public enum OperatorType {
     /**
      * 范围查询（需要两个值: from 和 to）
      */
-    BETWEEN("between", "范围查询"),
+    BETWEEN("between", "在范围内"),
 
     /**
      * 模糊匹配
      */
     LIKE("like", "模糊匹配"),
+
+    /**
+     * 模糊不匹配
+     */
+    NOT_LIKE("not_like", "模糊不匹配"),
 
     /**
      * 前缀匹配
@@ -66,6 +74,11 @@ public enum OperatorType {
      * 后缀匹配
      */
     SUFFIX("suffix", "后缀匹配"),
+
+    /**
+     * 正则表达式匹配
+     */
+    REGEX("regex", "正则匹配"),
 
     /**
      * 字段存在
@@ -85,12 +98,7 @@ public enum OperatorType {
     /**
      * 字段不为 null
      */
-    IS_NOT_NULL("is_not_null", "不为空"),
-
-    /**
-     * 正则表达式匹配
-     */
-    REGEX("regex", "正则匹配");
+    IS_NOT_NULL("is_not_null", "不为空");
 
     private final String code;
     private final String description;
@@ -100,16 +108,52 @@ public enum OperatorType {
         this.description = description;
     }
 
-    public String getCode() {
-        return code;
+    /**
+     * 根据代码获取枚举
+     *
+     * @param code 类型代码
+     * @return 枚举，如果不存在返回 null
+     */
+    public static OperatorType fromCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (OperatorType type : values()) {
+            if (type.code.equalsIgnoreCase(code)) {
+                return type;
+            }
+        }
+        return null;
     }
 
-    public String getDescription() {
-        return description;
+    /**
+     * 判断类型代码是否有效
+     *
+     * @param code 类型代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        return fromCode(code) != null;
+    }
+
+    /**
+     * 获取所有有效的类型代码
+     *
+     * @return 类型代码数组
+     */
+    public static String[] getAllCodes() {
+        OperatorType[] types = values();
+        String[] codes = new String[types.length];
+        for (int i = 0; i < types.length; i++) {
+            codes[i] = types[i].code;
+        }
+        return codes;
     }
 
     /**
      * 是否需要值
+     *
+     * @return true 需要，false 不需要
      */
     public boolean needsValue() {
         return this != EXISTS && this != NOT_EXISTS && this != IS_NULL && this != IS_NOT_NULL;
@@ -117,8 +161,15 @@ public enum OperatorType {
 
     /**
      * 是否需要多个值
+     *
+     * @return true 需要，false 不需要
      */
     public boolean needsMultipleValues() {
         return this == IN || this == NOT_IN || this == BETWEEN;
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }

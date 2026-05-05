@@ -1,10 +1,7 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.IntentType;
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +15,7 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
 @Builder
+@AllArgsConstructor
 public class QueryIntent extends Intent {
 
     /**
@@ -37,77 +35,67 @@ public class QueryIntent extends Intent {
     private PaginationIntent pagination;
 
     /**
-     * 时间范围过滤
+     * 日期范围
      */
     private DateRangeIntent dateRange;
 
     /**
-     * 字段投影（只返回指定字段）
+     * 字段折叠（去重）
      */
-    @Builder.Default
-    private List<String> fieldHints = new ArrayList<>();
+    private CollapseIntent collapse;
 
     /**
-     * 是否包含条件
+     * 字段投影（只返回哪些字段）
+     */
+    @Builder.Default
+    private List<String> fieldProjections = new ArrayList<>();
+
+    public QueryIntent() {
+        super(IntentType.QUERY);
+    }
+
+    /**
+     * 是否有查询条件
+     *
+     * @return true 有，false 无
      */
     public boolean hasCondition() {
         return condition != null;
     }
 
     /**
-     * 是否包含排序
+     * 是否有日期范围
+     *
+     * @return true 有，false 无
+     */
+    public boolean hasDateRange() {
+        return dateRange != null;
+    }
+
+    /**
+     * 是否有折叠
+     *
+     * @return true 有，false 无
+     */
+    public boolean hasCollapse() {
+        return collapse != null;
+    }
+
+    /**
+     * 是否有排序
+     *
+     * @return true 有，false 无
      */
     public boolean hasSort() {
         return sorts != null && !sorts.isEmpty();
     }
 
     /**
-     * 是否包含分页
+     * 是否有分页
+     *
+     * @return true 有，false 无
      */
     public boolean hasPagination() {
         return pagination != null;
-    }
-
-    /**
-     * 是否包含时间范围过滤
-     */
-    public boolean hasDateRange() {
-        return dateRange != null && dateRange.isValid();
-    }
-
-    /**
-     * 初始化
-     */
-    public QueryIntent() {
-        super(IntentType.QUERY);
-        this.sorts = new ArrayList<>();
-        this.fieldHints = new ArrayList<>();
-    }
-
-    /**
-     * 构造函数
-     */
-    public QueryIntent(ConditionIntent condition, List<SortIntent> sorts,
-                       PaginationIntent pagination, List<String> fieldHints) {
-        super(IntentType.QUERY);
-        this.condition = condition;
-        this.sorts = sorts != null ? sorts : new ArrayList<>();
-        this.pagination = pagination;
-        this.dateRange = null;
-        this.fieldHints = fieldHints != null ? fieldHints : new ArrayList<>();
-    }
-
-    /**
-     * 完整构造函数（包含dateRange）
-     */
-    public QueryIntent(ConditionIntent condition, List<SortIntent> sorts,
-                       PaginationIntent pagination, DateRangeIntent dateRange,
-                       List<String> fieldHints) {
-        super(IntentType.QUERY);
-        this.condition = condition;
-        this.sorts = sorts != null ? sorts : new ArrayList<>();
-        this.pagination = pagination;
-        this.dateRange = dateRange;
-        this.fieldHints = fieldHints != null ? fieldHints : new ArrayList<>();
     }
 }

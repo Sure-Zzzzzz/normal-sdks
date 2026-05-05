@@ -81,21 +81,21 @@ class AggregationEnhancementTest {
         AggregationIntent cityAgg = analyticsIntent.getAggregations().get(0);
         log.info("第一个聚合: type={}, groupByField={}, size={}, children={}",
                 cityAgg.getType(), cityAgg.getGroupByFieldHint(), cityAgg.getSize(),
-                cityAgg.getChildren().size());
+                cityAgg.getSubAggs().size());
 
         assertEquals(AggType.TERMS, cityAgg.getType(), "第一个聚合类型应该是TERMS");
         assertEquals("城市", cityAgg.getGroupByFieldHint(), "分组字段应该是'城市'");
         assertEquals(10, cityAgg.getSize(), "size应该是10");
-        assertNotNull(cityAgg.getName(), "应该有聚合名称");
+        assertNotNull(cityAgg.getNameHint(), "应该有聚合名称");
 
         // 验证嵌套的AVG聚合
-        assertEquals(1, cityAgg.getChildren().size(), "应该有1个嵌套聚合");
-        AggregationIntent avgAgg = cityAgg.getChildren().get(0);
+        assertEquals(1, cityAgg.getSubAggs().size(), "应该有1个嵌套聚合");
+        AggregationIntent avgAgg = cityAgg.getSubAggs().get(0);
         log.info("嵌套聚合: type={}, field={}", avgAgg.getType(), avgAgg.getFieldHint());
 
         assertEquals(AggType.AVG, avgAgg.getType(), "嵌套聚合类型应该是AVG");
         assertEquals("年龄", avgAgg.getFieldHint(), "聚合字段应该是'年龄'");
-        assertNotNull(avgAgg.getName(), "嵌套聚合应该有名称");
+        assertNotNull(avgAgg.getNameHint(), "嵌套聚合应该有名称");
 
         // 验证第二个聚合：daily_stats (DATE_HISTOGRAM + interval)
         AggregationIntent dailyAgg = analyticsIntent.getAggregations().get(1);
@@ -105,7 +105,7 @@ class AggregationEnhancementTest {
         assertEquals(AggType.DATE_HISTOGRAM, dailyAgg.getType(), "第二个聚合类型应该是DATE_HISTOGRAM");
         assertEquals("创建时间", dailyAgg.getFieldHint(), "字段应该是'创建时间'");
         assertEquals("1d", dailyAgg.getInterval(), "interval应该是'1d'");
-        assertNotNull(dailyAgg.getName(), "应该有聚合名称");
+        assertNotNull(dailyAgg.getNameHint(), "应该有聚合名称");
 
         log.info("========== ✓ API 2完整聚合结构测试通过 ==========");
         log.info("成功生成的DSL结构:");

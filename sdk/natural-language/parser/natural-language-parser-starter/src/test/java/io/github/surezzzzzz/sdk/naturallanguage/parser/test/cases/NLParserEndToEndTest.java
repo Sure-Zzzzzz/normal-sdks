@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.test.cases;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.AggType;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.LogicType;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.OperatorType;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SearchAfterMode;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SortOrder;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.AnalyticsIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.ConditionIntent;
@@ -30,9 +31,12 @@ class NLParserEndToEndTest {
     @Autowired
     private NLParser nlParser;
 
-    // ==================== 辅助方法 ====================
-
     private QueryIntent asQueryIntent(Intent intent) {
+        log.info("解析得到的Intent类型: {}", intent != null ? intent.getClass().getSimpleName() : "null");
+        if (intent instanceof AnalyticsIntent) {
+            AnalyticsIntent ai = (AnalyticsIntent) intent;
+            log.info("AnalyticsIntent内容: aggregations={}", ai.getAggregations());
+        }
         assertTrue(intent instanceof QueryIntent, "Intent应该是QueryIntent类型");
         return (QueryIntent) intent;
     }
@@ -67,7 +71,7 @@ class NLParserEndToEndTest {
         QueryIntent q1 = asQueryIntent(nlParser.parse(query1));
         log.info("解析结果: {}", q1);
         assertTrue(q1.hasCondition() && q1.hasSort() && q1.hasPagination());
-        assertEquals(10, q1.getPagination().getLimit());
+        assertEquals(10, q1.getPagination().getSize());
         assertEquals(SortOrder.DESC, q1.getSorts().get(0).getOrder());
         log.info("✓ 场景1通过：复杂查询解析正确");
 
@@ -121,7 +125,7 @@ class NLParserEndToEndTest {
         assertEquals(AggType.AVG, asAnalyticsIntent(nlParser.parse("avg age")).getAggregations().get(0).getType());
         log.info("✓ 场景7通过：英文关键词解析正确");
 
-        // 场景8: 自然语言查询（口语化） - 停用词过滤 + 隐式AND + 顿号分隔
+        // 场景8: 自然语言查询（口语化）
         log.info("\n【场景8】自然语言查询（口语化）");
         String query8 = "帮我查一下年龄大于等于18小于60，城市在北京、上海、深圳并且名字包含张或李，按创建时间降序，返回前10条数据就行";
         log.info("查询: {}", query8);
@@ -130,7 +134,7 @@ class NLParserEndToEndTest {
         assertTrue(q8.hasCondition() && q8.hasSort() && q8.hasPagination());
         assertTrue(findValueInCondition(q8.getCondition(), 18L) && findValueInCondition(q8.getCondition(), 60L));
         assertTrue(findOperatorInCondition(q8.getCondition(), OperatorType.IN));
-        assertEquals(10, q8.getPagination().getLimit());
+        assertEquals(10, q8.getPagination().getSize());
         log.info("✓ 场景8通过：自然语言查询（口语化）解析正确");
 
         // 场景9: 索引/表名提取
@@ -151,8 +155,8 @@ class NLParserEndToEndTest {
         QueryIntent q10 = asQueryIntent(nlParser.parse(query10));
         log.info("解析结果: {}", q10);
         assertNotNull(q10.getPagination());
-        assertEquals(20, q10.getPagination().getOffset());
-        assertEquals(10, q10.getPagination().getLimit());
+        assertEquals(20L, q10.getPagination().getOffset());
+        assertEquals(10, q10.getPagination().getSize());
         log.info("✓ 场景10通过：offset + limit 分页解析正确");
 
         // 场景11: 页码分页 - page + size（自动计算offset）
@@ -164,8 +168,7 @@ class NLParserEndToEndTest {
         assertNotNull(q11.getPagination());
         assertEquals(3, q11.getPagination().getPage());
         assertEquals(10, q11.getPagination().getSize());
-        assertEquals(20, q11.getPagination().getOffset()); // 第3页 = 跳过前20条
-        assertEquals(10, q11.getPagination().getLimit());
+        assertEquals(20L, q11.getPagination().getOffset());
         log.info("✓ 场景11通过：page + size 分页解析正确，自动计算offset");
 
         // 场景12: 范围分页 - "返回第21到30条"
@@ -175,23 +178,23 @@ class NLParserEndToEndTest {
         QueryIntent q12 = asQueryIntent(nlParser.parse(query12));
         log.info("解析结果: {}", q12);
         assertNotNull(q12.getPagination());
-        assertEquals(20, q12.getPagination().getOffset()); // 第21条 = 跳过前20条
-        assertEquals(10, q12.getPagination().getLimit()); // 30-21+1 = 10条
-        log.info("✓ 场景12通过：范围分页解析正确，自动计算offset和limit");
+        assertEquals(20L, q12.getPagination().getOffset());
+        assertEquals(10, q12.getPagination().getSize());
+        log.info("✓ 场景12通过：范围分页解析正确，自动计算offset和size");
 
-        // 场景13: ES search_after 续查
-        log.info("\n【场景13】ES search_after 续查");
+        // 场景13: search_after 续查
+        log.info("\n【场景13】search_after 续查");
         String query13 = "年龄大于18，继续查询，返回10条";
         log.info("查询: {}", query13);
         QueryIntent q13 = asQueryIntent(nlParser.parse(query13));
         log.info("解析结果: {}", q13);
         assertNotNull(q13.getPagination());
-        assertTrue(q13.getPagination().getContinueSearch());
-        assertEquals(10, q13.getPagination().getLimit());
-        assertNull(q13.getPagination().getOffset()); // search_after不使用offset
+        assertEquals(SearchAfterMode.TIEBREAKER, q13.getPagination().getSearchAfterMode());
+        assertEquals(10, q13.getPagination().getSize());
+        assertNull(q13.getPagination().getOffset());
         log.info("✓ 场景13通过：search_after 续查解析正确");
 
-        // 场景14: 终极复杂场景 - 索引 + 多条件 + IN + OR + BETWEEN + 排序 + 分页
+        // 场景14: 终极复杂场景
         log.info("\n【场景14】终极复杂场景 - 全功能综合测试");
         String query14 = "帮我查一下user_profile这个索引，年龄大于等于18并且年龄小于等于60，" +
                 "城市在北京、上海、深圳、广州，" +
@@ -203,10 +206,7 @@ class NLParserEndToEndTest {
         QueryIntent q14 = asQueryIntent(nlParser.parse(query14));
         log.info("解析结果: {}", q14);
 
-        // 验证索引
         assertEquals("user_profile", q14.getIndexHint());
-
-        // 验证条件
         assertTrue(q14.hasCondition());
         ConditionIntent c14 = q14.getCondition();
         assertEquals(LogicType.AND, c14.getLogic());
@@ -216,7 +216,6 @@ class NLParserEndToEndTest {
         assertTrue(findOperatorInCondition(c14, OperatorType.LIKE));
         assertTrue(findOperatorInCondition(c14, OperatorType.BETWEEN));
 
-        // 验证排序（多字段排序）
         assertTrue(q14.hasSort());
         assertEquals(2, q14.getSorts().size());
         assertEquals("创建时间", q14.getSorts().get(0).getFieldHint());
@@ -224,24 +223,59 @@ class NLParserEndToEndTest {
         assertEquals("年龄", q14.getSorts().get(1).getFieldHint());
         assertEquals(SortOrder.ASC, q14.getSorts().get(1).getOrder());
 
-        // 验证分页
         assertTrue(q14.hasPagination());
-        assertEquals(50, q14.getPagination().getOffset());
-        assertEquals(20, q14.getPagination().getLimit());
+        assertEquals(50L, q14.getPagination().getOffset());
+        assertEquals(20, q14.getPagination().getSize());
 
         log.info("✓ 场景14通过：终极复杂场景全功能解析正确");
-
         log.info("\n========== ✓ 超级端到端测试全部通过 (14个场景) ==========");
+    }
 
-        String query15 = "帮我查一下user_behavior这个索引，年龄大于等于18并且年龄小于等于60，" +
-                "城市在北京、上海、深圳、广州，" +
-                "名字包含张或李或王，" +
-                "积分介于100,1000，" +
-                "按创建时间降序，按年龄升序，" +
-                "跳过50条，取20条";
-        log.info("查询: {}", query15);
-        QueryIntent q15 = asQueryIntent(nlParser.parse(query15));
-        log.info("解析结果: {}", q15);
+    // ==================== 字段折叠(Collapse)测试 ====================
+
+    @Test
+    @Order(2)
+    @DisplayName("字段折叠(去重)测试")
+    void testCollapseFeature() {
+        log.info("========== 字段折叠(去重)测试 ==========");
+
+        String query1 = "按源IP去重";
+        QueryIntent q1 = asQueryIntent(nlParser.parse(query1));
+        assertTrue(q1.hasCollapse());
+        assertEquals("源IP", q1.getCollapse().getFieldHint());
+        log.info("✓ 场景1通过：按字段去重解析正确");
+
+        String query2 = "源IP去重";
+        QueryIntent q2 = asQueryIntent(nlParser.parse(query2));
+        assertTrue(q2.hasCollapse());
+        assertEquals("源IP", q2.getCollapse().getFieldHint());
+        log.info("✓ 场景2通过：字段在前解析正确");
+
+        String query3 = "去重源IP";
+        QueryIntent q3 = asQueryIntent(nlParser.parse(query3));
+        assertTrue(q3.hasCollapse());
+        assertEquals("源IP", q3.getCollapse().getFieldHint());
+        log.info("✓ 场景3通过：去重在前解析正确");
+
+        String query4 = "用户名唯一";
+        QueryIntent q4 = asQueryIntent(nlParser.parse(query4));
+        assertTrue(q4.hasCollapse());
+        assertEquals("用户名", q4.getCollapse().getFieldHint());
+        log.info("✓ 场景4通过：唯一关键词解析正确");
+
+        String query5 = "年龄大于18按用户名去重按创建时间降序返回100条";
+        QueryIntent q5 = asQueryIntent(nlParser.parse(query5));
+        assertTrue(q5.hasCondition());
+        assertTrue(q5.hasCollapse());
+        assertTrue(q5.hasSort());
+        assertTrue(q5.hasPagination());
+        assertEquals("用户名", q5.getCollapse().getFieldHint());
+        assertEquals("创建时间", q5.getSorts().get(0).getFieldHint());
+        assertEquals(SortOrder.DESC, q5.getSorts().get(0).getOrder());
+        assertEquals(100, q5.getPagination().getSize());
+        log.info("✓ 场景5通过：组合查询解析正确");
+
+        log.info("\n========== ✓ 字段折叠(去重)测试全部通过 (5个场景) ==========");
     }
 
     // ==================== 错误处理测试 ====================
@@ -250,75 +284,49 @@ class NLParserEndToEndTest {
     @Order(10)
     @DisplayName("错误处理 - 空查询")
     void testEmptyQuery() {
-        log.info("========== 测试：空查询 ==========");
         assertThrows(io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseException.class, () -> {
             nlParser.parse("");
         });
-        log.info("✓ 空查询异常处理正确");
     }
 
     @Test
     @Order(11)
     @DisplayName("错误处理 - null查询")
     void testNullQuery() {
-        log.info("========== 测试：null查询 ==========");
         assertThrows(io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseException.class, () -> {
             nlParser.parse(null);
         });
-        log.info("✓ null查询异常处理正确");
     }
 
     @Test
     @Order(12)
     @DisplayName("错误处理 - 只有停用词")
     void testOnlyStopWords() {
-        log.info("========== 测试：只有停用词 ==========");
         assertThrows(io.github.surezzzzzz.sdk.naturallanguage.parser.exception.NLParseException.class, () -> {
-            nlParser.parse("查一下");
+            nlParser.parse("的呢吧");
         });
-        log.info("✓ 只有停用词异常处理正确");
     }
 
     // ==================== 辅助方法 ====================
 
-    /**
-     * 递归查找条件树中是否包含指定操作符
-     */
     private boolean findOperatorInCondition(ConditionIntent condition, OperatorType operator) {
-        if (condition == null) {
-            return false;
-        }
-        if (condition.getOperator() == operator) {
-            return true;
-        }
+        if (condition == null) return false;
+        if (condition.getOperator() == operator) return true;
         if (condition.getChildren() != null) {
             for (ConditionIntent child : condition.getChildren()) {
-                if (findOperatorInCondition(child, operator)) {
-                    return true;
-                }
+                if (findOperatorInCondition(child, operator)) return true;
             }
         }
         return false;
     }
 
-    /**
-     * 递归查找条件树中是否包含指定值
-     */
     private boolean findValueInCondition(ConditionIntent condition, Object value) {
-        if (condition == null) {
-            return false;
-        }
-        if (value.equals(condition.getValue())) {
-            return true;
-        }
-        if (condition.getValues() != null && condition.getValues().contains(value)) {
-            return true;
-        }
+        if (condition == null) return false;
+        if (value.equals(condition.getValue())) return true;
+        if (condition.getValues() != null && condition.getValues().contains(value)) return true;
         if (condition.getChildren() != null) {
             for (ConditionIntent child : condition.getChildren()) {
-                if (findValueInCondition(child, value)) {
-                    return true;
-                }
+                if (findValueInCondition(child, value)) return true;
             }
         }
         return false;

@@ -11,3 +11,4 @@ io:
 logging:
   level:
     root: info
+    io.github.surezzzzzz.sdk.naturallanguage.parser.support.NLParser: debug

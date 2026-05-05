@@ -72,7 +72,7 @@ class AggregationParserTest {
         AggregationIntent agg = intent.getAggregations().get(0);
         assertEquals(AggType.TERMS, agg.getType(), "聚合类型应该是TERMS");
         assertEquals("城市", agg.getGroupByFieldHint(), "分组字段应该是'城市'");
-        assertNotNull(agg.getName(), "聚合名称不应为null");
+        assertNotNull(agg.getNameHint(), "聚合名称不应为null");
 
         log.info("✓ 简单桶聚合测试通过");
     }
@@ -172,10 +172,10 @@ class AggregationParserTest {
         assertEquals("城市", bucketAgg.getGroupByFieldHint(), "分组字段应该是'城市'");
 
         // 验证嵌套的指标聚合
-        assertNotNull(bucketAgg.getChildren(), "应该有嵌套聚合");
-        assertEquals(1, bucketAgg.getChildren().size(), "应该有1个嵌套聚合");
+        assertNotNull(bucketAgg.getSubAggs(), "应该有嵌套聚合");
+        assertEquals(1, bucketAgg.getSubAggs().size(), "应该有1个嵌套聚合");
 
-        AggregationIntent metricAgg = bucketAgg.getChildren().get(0);
+        AggregationIntent metricAgg = bucketAgg.getSubAggs().get(0);
         assertEquals(AggType.AVG, metricAgg.getType(), "嵌套聚合类型应该是AVG");
         assertEquals("年龄", metricAgg.getFieldHint(), "聚合字段应该是'年龄'");
 
@@ -200,8 +200,8 @@ class AggregationParserTest {
         assertEquals(10, bucketAgg.getSize(), "size应该是10");
 
         // 验证嵌套聚合
-        assertEquals(1, bucketAgg.getChildren().size(), "应该有1个嵌套聚合");
-        AggregationIntent metricAgg = bucketAgg.getChildren().get(0);
+        assertEquals(1, bucketAgg.getSubAggs().size(), "应该有1个嵌套聚合");
+        AggregationIntent metricAgg = bucketAgg.getSubAggs().get(0);
         assertEquals(AggType.AVG, metricAgg.getType(), "嵌套聚合类型应该是AVG");
         assertEquals("年龄", metricAgg.getFieldHint(), "聚合字段应该是'年龄'");
 
@@ -218,7 +218,7 @@ class AggregationParserTest {
         String query1 = "按城市分组求和金额";
         log.info("查询1: {}", query1);
         AnalyticsIntent intent1 = asAnalyticsIntent(nlParser.parse(query1));
-        AggregationIntent nested1 = intent1.getAggregations().get(0).getChildren().get(0);
+        AggregationIntent nested1 = intent1.getAggregations().get(0).getSubAggs().get(0);
         assertEquals(AggType.SUM, nested1.getType(), "应该是SUM");
         assertEquals("金额", nested1.getFieldHint(), "字段应该是'金额'");
         log.info("✓ SUM聚合解析正确");
@@ -227,7 +227,7 @@ class AggregationParserTest {
         String query2 = "按城市分组最大年龄";
         log.info("查询2: {}", query2);
         AnalyticsIntent intent2 = asAnalyticsIntent(nlParser.parse(query2));
-        AggregationIntent nested2 = intent2.getAggregations().get(0).getChildren().get(0);
+        AggregationIntent nested2 = intent2.getAggregations().get(0).getSubAggs().get(0);
         assertEquals(AggType.MAX, nested2.getType(), "应该是MAX");
         assertEquals("年龄", nested2.getFieldHint(), "字段应该是'年龄'");
         log.info("✓ MAX聚合解析正确");
@@ -236,7 +236,7 @@ class AggregationParserTest {
         String query3 = "按城市分组最小年龄";
         log.info("查询3: {}", query3);
         AnalyticsIntent intent3 = asAnalyticsIntent(nlParser.parse(query3));
-        AggregationIntent nested3 = intent3.getAggregations().get(0).getChildren().get(0);
+        AggregationIntent nested3 = intent3.getAggregations().get(0).getSubAggs().get(0);
         assertEquals(AggType.MIN, nested3.getType(), "应该是MIN");
         assertEquals("年龄", nested3.getFieldHint(), "字段应该是'年龄'");
         log.info("✓ MIN聚合解析正确");
@@ -373,9 +373,9 @@ class AggregationParserTest {
         AggregationIntent agg1 = intent.getAggregations().get(0);
         assertEquals(AggType.TERMS, agg1.getType(), "第一个聚合应该是TERMS");
         assertEquals("城市", agg1.getGroupByFieldHint(), "分组字段应该是'城市'");
-        assertEquals(1, agg1.getChildren().size(), "应该有1个嵌套聚合");
-        assertEquals(AggType.AVG, agg1.getChildren().get(0).getType(), "嵌套聚合应该是AVG");
-        assertEquals("年龄", agg1.getChildren().get(0).getFieldHint(), "聚合字段应该是'年龄'");
+        assertEquals(1, agg1.getSubAggs().size(), "应该有1个嵌套聚合");
+        assertEquals(AggType.AVG, agg1.getSubAggs().get(0).getType(), "嵌套聚合应该是AVG");
+        assertEquals("年龄", agg1.getSubAggs().get(0).getFieldHint(), "聚合字段应该是'年龄'");
 
         // 验证第二个聚合（DATE_HISTOGRAM）
         AggregationIntent agg2 = intent.getAggregations().get(1);
@@ -437,8 +437,8 @@ class AggregationParserTest {
         assertEquals(AggType.TERMS, agg1.getType(), "第一个聚合应该是TERMS");
         assertEquals("城市", agg1.getGroupByFieldHint(), "分组字段应该是'城市'");
         assertEquals(10, agg1.getSize(), "size应该是10");
-        assertEquals(1, agg1.getChildren().size(), "应该有1个嵌套聚合");
-        assertEquals(AggType.AVG, agg1.getChildren().get(0).getType(), "嵌套聚合应该是AVG");
+        assertEquals(1, agg1.getSubAggs().size(), "应该有1个嵌套聚合");
+        assertEquals(AggType.AVG, agg1.getSubAggs().get(0).getType(), "嵌套聚合应该是AVG");
 
         // 验证第二个聚合（DATE_HISTOGRAM）
         AggregationIntent agg2 = intent.getAggregations().get(1);
@@ -478,9 +478,9 @@ class AggregationParserTest {
         assertEquals(AggType.TERMS, cityAgg.getType(), "应该是TERMS");
         assertEquals("城市", cityAgg.getGroupByFieldHint(), "字段应该是'城市'");
         assertEquals(10, cityAgg.getSize(), "size应该是10");
-        assertEquals(1, cityAgg.getChildren().size(), "应该有1个嵌套聚合");
-        assertEquals(AggType.AVG, cityAgg.getChildren().get(0).getType(), "嵌套聚合应该是AVG");
-        assertEquals("年龄", cityAgg.getChildren().get(0).getFieldHint(), "聚合字段应该是'年龄'");
+        assertEquals(1, cityAgg.getSubAggs().size(), "应该有1个嵌套聚合");
+        assertEquals(AggType.AVG, cityAgg.getSubAggs().get(0).getType(), "嵌套聚合应该是AVG");
+        assertEquals("年龄", cityAgg.getSubAggs().get(0).getFieldHint(), "聚合字段应该是'年龄'");
 
         // 验证第二个聚合（daily_stats）
         AggregationIntent dailyAgg = intent.getAggregations().get(1);
@@ -542,9 +542,9 @@ class AggregationParserTest {
         assertEquals(AggType.TERMS, cityAgg.getType(), "TERMS聚合");
         assertEquals("城市", cityAgg.getGroupByFieldHint(), "分组字段是'城市'");
         assertEquals(10, cityAgg.getSize(), "size=10");
-        assertEquals(1, cityAgg.getChildren().size(), "有1个嵌套聚合");
-        assertEquals(AggType.AVG, cityAgg.getChildren().get(0).getType(), "嵌套聚合是AVG");
-        assertEquals("年龄", cityAgg.getChildren().get(0).getFieldHint(), "聚合字段是'年龄'");
+        assertEquals(1, cityAgg.getSubAggs().size(), "有1个嵌套聚合");
+        assertEquals(AggType.AVG, cityAgg.getSubAggs().get(0).getType(), "嵌套聚合是AVG");
+        assertEquals("年龄", cityAgg.getSubAggs().get(0).getFieldHint(), "聚合字段是'年龄'");
 
         // 第二个聚合：时间聚合
         AggregationIntent dailyAgg = intent.getAggregations().get(1);

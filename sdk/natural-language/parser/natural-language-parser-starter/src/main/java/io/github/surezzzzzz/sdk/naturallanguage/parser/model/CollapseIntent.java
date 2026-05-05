@@ -1,10 +1,9 @@
 package io.github.surezzzzzz.sdk.naturallanguage.parser.model;
 
-import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.SortOrder;
 import lombok.*;
 
 /**
- * 排序意图
+ * 字段折叠意图
  *
  * @author surezzzzzz
  */
@@ -12,7 +11,7 @@ import lombok.*;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SortIntent {
+public class CollapseIntent {
 
     /**
      * 字段提示
@@ -20,7 +19,7 @@ public class SortIntent {
     private String fieldHint;
 
     /**
-     * 排序方向
+     * 最大并发组搜索数
      */
-    private SortOrder order;
+    private Integer maxConcurrentGroupSearches;
 }

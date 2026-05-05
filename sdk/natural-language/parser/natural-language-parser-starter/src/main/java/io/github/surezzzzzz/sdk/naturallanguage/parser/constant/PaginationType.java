@@ -3,27 +3,27 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.constant;
 import lombok.Getter;
 
 /**
- * 意图类型枚举
+ * 分页类型枚举
  *
  * @author surezzzzzz
  */
 @Getter
-public enum IntentType {
+public enum PaginationType {
 
     /**
-     * 查询意图
+     * 偏移分页
      */
-    QUERY("query", "查询意图"),
+    OFFSET("offset", "偏移分页"),
 
     /**
-     * 聚合分析意图
+     * 游标分页
      */
-    ANALYTICS("analytics", "聚合分析意图");
+    SEARCH_AFTER("search_after", "游标分页");
 
     private final String code;
     private final String description;
 
-    IntentType(String code, String description) {
+    PaginationType(String code, String description) {
         this.code = code;
         this.description = description;
     }
@@ -34,11 +34,11 @@ public enum IntentType {
      * @param code 类型代码
      * @return 枚举，如果不存在返回 null
      */
-    public static IntentType fromCode(String code) {
+    public static PaginationType fromCode(String code) {
         if (code == null) {
             return null;
         }
-        for (IntentType type : values()) {
+        for (PaginationType type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
@@ -62,7 +62,7 @@ public enum IntentType {
      * @return 类型代码数组
      */
     public static String[] getAllCodes() {
-        IntentType[] types = values();
+        PaginationType[] types = values();
         String[] codes = new String[types.length];
         for (int i = 0; i < types.length; i++) {
             codes[i] = types[i].code;
