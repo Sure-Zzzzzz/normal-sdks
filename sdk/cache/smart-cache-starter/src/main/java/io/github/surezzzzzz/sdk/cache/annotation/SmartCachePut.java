@@ -31,4 +31,9 @@ public @interface SmartCachePut {
      * 条件（支持 SpEL 表达式）
      */
     String condition() default "";
+
+    /**
+     * L2 缓存过期时间（秒），0 表示使用全局配置 {@code l2.expire-seconds}
+     */
+    int l2TtlSeconds() default 0;
 }

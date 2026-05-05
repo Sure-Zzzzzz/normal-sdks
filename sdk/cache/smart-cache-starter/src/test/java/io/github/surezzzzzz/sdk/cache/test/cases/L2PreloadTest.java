@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
 import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
+import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
 import io.github.surezzzzzz.sdk.cache.test.SmartCacheTestApplication;
@@ -19,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * L2 异步续期（Preload）测试
@@ -49,6 +51,9 @@ class L2PreloadTest extends BaseSmartCacheTest {
 
     @Autowired
     private SmartCacheManager cacheManager;
+
+    @Autowired
+    private L2Cache l2Cache;
 
     @Autowired
     private TestCachePreloadHandler testHandler;
@@ -177,6 +182,83 @@ class L2PreloadTest extends BaseSmartCacheTest {
         log.info("✓ handler 失败时旧值正常返回（容错窗口生效）");
     }
 
+    @Test
+    @DisplayName("getReloadTtlSeconds >0 时续期后 L2 TTL 应接近指定值")
+    void testPreloadWithCustomReloadTtl() throws Exception {
+        log.info("========== 测试：getReloadTtlSeconds >0 时续期 TTL ==========");
+
+        if (shouldSkipRedisTest("testPreloadWithCustomReloadTtl")) return;
+
+        String key = "reload-ttl-key";
+        int reloadTtl = 60;
+        testHandler.setNextValue("reloaded-value");
+        testHandler.setReloadTtlSeconds(reloadTtl);
+
+        // 写入，等待进入 preload 窗口
+        cacheManager.get(CACHE_NAME, key, () -> "original-value");
+        Thread.sleep(6000);
+
+        // 触发 preload
+        cacheManager.get(CACHE_NAME, key, () -> "original-value");
+
+        // 等待异步续期完成（带重试）
+        for (int i = 0; i < 10; i++) {
+            if (testHandler.getReloadCount() >= 1) break;
+            Thread.sleep(500);
+        }
+
+        assertEquals(1, testHandler.getReloadCount(), "应触发一次 reload");
+
+        long actualTtl = l2Cache.getTtl(CACHE_NAME, key);
+        // reloadTtl=60, offset=60*0.1=6, 范围 [54, 66]，但 L2 expire-seconds=10，
+        // 所以续期用 60s 写入
+        log.info("getReloadTtlSeconds={} 续期后 L2 TTL={}", reloadTtl, actualTtl);
+        assertTrue(actualTtl > 0, "TTL 应大于 0");
+        // 范围 [54, 66]，给点余量
+        assertTrue(actualTtl >= 50 && actualTtl <= 70,
+                "TTL 应接近 " + reloadTtl + "s，实际: " + actualTtl);
+
+        testHandler.setReloadTtlSeconds(0); // reset
+        log.info("✓ getReloadTtlSeconds >0 时续期后 TTL 正确");
+    }
+
+    @Test
+    @DisplayName("getReloadTtlSeconds=0 时续期后 L2 TTL 应与全局配置一致")
+    void testPreloadWithDefaultReloadTtl() throws Exception {
+        log.info("========== 测试：getReloadTtlSeconds=0 时续期 TTL ==========");
+
+        if (shouldSkipRedisTest("testPreloadWithDefaultReloadTtl")) return;
+
+        String key = "reload-default-ttl-key";
+        // getReloadTtlSeconds 默认 0，使用全局配置（10s）
+        testHandler.setNextValue("reloaded-value-2");
+
+        cacheManager.get(CACHE_NAME, key, () -> "original-value-2");
+        Thread.sleep(6000);
+
+        cacheManager.get(CACHE_NAME, key, () -> "original-value-2");
+
+        // 等待异步续期完成（带重试）
+        for (int i = 0; i < 10; i++) {
+            if (testHandler.getReloadCount() >= 1) break;
+            Thread.sleep(500);
+        }
+
+        assertEquals(1, testHandler.getReloadCount(), "应触发一次 reload");
+
+        // 等待异步写入完成
+        Thread.sleep(500);
+
+        long actualTtl = l2Cache.getTtl(CACHE_NAME, key);
+        // 全局 expire-seconds=10, offset=10*0.1=1, 范围 [9, 11]，给点余量
+        log.info("getReloadTtlSeconds=0 续期后 L2 TTL={}", actualTtl);
+        assertTrue(actualTtl > 0, "TTL 应大于 0");
+        assertTrue(actualTtl >= 7 && actualTtl <= 12,
+                "TTL 应接近全局配置 10s，实际: " + actualTtl);
+
+        log.info("✓ getReloadTtlSeconds=0 时续期后 TTL 与全局配置一致");
+    }
+
     /**
      * 测试用 CachePreloadHandler 配置
      */
@@ -197,6 +279,7 @@ class L2PreloadTest extends BaseSmartCacheTest {
         private final AtomicReference<String> nextValue = new AtomicReference<>("new-value");
         private volatile boolean throwOnReload = false;
         private volatile Optional<Boolean> needPreloadResult = Optional.empty();
+        private volatile int reloadTtlSeconds = 0;
 
         @Override
         public boolean support(String cacheName) {
@@ -217,6 +300,11 @@ class L2PreloadTest extends BaseSmartCacheTest {
             return needPreloadResult;
         }
 
+        @Override
+        public int getReloadTtlSeconds(String cacheName, String key) {
+            return reloadTtlSeconds;
+        }
+
         public int getReloadCount() {
             return reloadCount.get();
         }
@@ -233,11 +321,16 @@ class L2PreloadTest extends BaseSmartCacheTest {
             this.needPreloadResult = result;
         }
 
+        public void setReloadTtlSeconds(int ttl) {
+            this.reloadTtlSeconds = ttl;
+        }
+
         public void reset() {
             reloadCount.set(0);
             nextValue.set("new-value");
             throwOnReload = false;
             needPreloadResult = Optional.empty();
+            reloadTtlSeconds = 0;
         }
     }
 }

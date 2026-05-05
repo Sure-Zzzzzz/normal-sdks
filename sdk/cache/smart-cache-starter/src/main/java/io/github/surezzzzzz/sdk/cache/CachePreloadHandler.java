@@ -65,4 +65,27 @@ public interface CachePreloadHandler {
     default Optional<Boolean> needPreload(String cacheName, String key, Object cachedValue) {
         return Optional.empty();
     }
+
+    /**
+     * 续期时写 L2 的 TTL（秒）（可选覆盖）
+     *
+     * <p>返回 0（默认）表示使用全局配置 {@code l2.expire-seconds}，
+     * 返回 >0 表示业务侧覆盖，与 {@code l2TtlSeconds} 语义一致。
+     *
+     * <p>适用场景：业务侧通过 {@code l2TtlSeconds} 指定了非全局 TTL，
+     * preload 续期后希望保持相同 TTL 而非回退到全局配置：
+     * <pre>{@code
+     * @Override
+     * public int getReloadTtlSeconds(String cacheName, String key) {
+     *     return 60;  // 验证码续期后仍保持 60s TTL
+     * }
+     * }</pre>
+     *
+     * @param cacheName 缓存名称
+     * @param key       缓存 key
+     * @return TTL 秒数，0 表示使用全局配置
+     */
+    default int getReloadTtlSeconds(String cacheName, String key) {
+        return 0;
+    }
 }

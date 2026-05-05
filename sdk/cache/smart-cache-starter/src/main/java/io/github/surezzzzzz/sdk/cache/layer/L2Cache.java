@@ -99,14 +99,17 @@ public class L2Cache {
         if (baseTtl <= 0) {
             return baseTtl;
         }
-        SmartCacheProperties.L2Config l2Config = properties.getL2();
-        double offsetRatio = l2Config.getTtlRandomOffsetRatio();
-        int offset = (int) (baseTtl * offsetRatio);
+        if (properties == null || properties.getL2() == null) {
+            return baseTtl;
+        }
+        double offsetRatio = properties.getL2().getTtlRandomOffsetRatio();
+        long offset = (long) (baseTtl * offsetRatio);
         if (offset <= 0) {
             return baseTtl;
         }
-        // 使用 ThreadLocalRandom 避免多线程竞争，确保结果 >= 1
-        long result = baseTtl + ThreadLocalRandom.current().nextInt(offset * 2 + 1) - offset;
+        // 使用 long 运算防溢出，ThreadLocalRandom 避免多线程竞争，确保结果 >= 1
+        long range = offset * 2 + 1;
+        long result = baseTtl + ThreadLocalRandom.current().nextLong(range) - offset;
         return Math.max(1, result);
     }
 
@@ -145,21 +148,17 @@ public class L2Cache {
 
     /**
      * 设置缓存值（指定 TTL，秒）
+     *
+     * <p>业务侧指定的 TTL 也会加随机偏移，与全局配置路径行为一致，防止缓存雪崩。
      */
     public void put(String cacheName, String key, Object value, int ttlSeconds) {
-        put(cacheName, key, value, ttlSeconds, TimeUnit.SECONDS);
-    }
-
-    /**
-     * 设置缓存值（指定 TTL）
-     */
-    public void put(String cacheName, String key, Object value, long ttl, TimeUnit timeUnit) {
         if (value == null) {
             return;
         }
         try {
             String redisKey = buildKey(cacheName, key);
-            redisTemplate.opsForValue().set(redisKey, value, ttl, timeUnit);
+            long actualTtl = calculateActualTtl(ttlSeconds);
+            redisTemplate.opsForValue().set(redisKey, value, actualTtl, TimeUnit.SECONDS);
         } catch (Exception e) {
             log.warn("L2 cache put failed, cacheName: {}, key: {}, continue with L1 only. Error: {}",
                     cacheName, key, e.getMessage());

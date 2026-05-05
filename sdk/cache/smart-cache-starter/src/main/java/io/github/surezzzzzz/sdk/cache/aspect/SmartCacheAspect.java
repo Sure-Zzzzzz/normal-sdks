@@ -82,7 +82,7 @@ public class SmartCacheAspect {
                         e
                 );
             }
-        });
+        }, annotation.l2TtlSeconds());
     }
 
     /**
@@ -122,7 +122,7 @@ public class SmartCacheAspect {
         }
 
         // 更新缓存
-        cacheManager.put(cacheName, key, result);
+        cacheManager.put(cacheName, key, result, annotation.l2TtlSeconds());
 
         return result;
     }
