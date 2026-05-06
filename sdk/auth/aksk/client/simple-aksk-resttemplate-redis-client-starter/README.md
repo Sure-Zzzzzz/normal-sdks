@@ -1,6 +1,6 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
@@ -86,13 +86,29 @@ io:
                 refresh-before-expire: 300  # 提前5分钟刷新
               redis:
                 token:
-                  me: my-app  # 应用标识
+                  cache-name: aksk-client-token
               resttemplate:
                 enable: true  # 启用 akskClientRestTemplate Bean（默认：false）
                 max-total: 100  # 连接池最大连接数（默认：100）
                 max-per-route: 20  # 每个路由的最大连接数（默认：20）
                 connect-timeout: 5000  # 连接超时（毫秒，默认：5000）
                 read-timeout: 30000  # 读取超时（毫秒，默认：30000）
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: my-app  # 应用标识（用于 Redis key 命名空间和 Pub/Sub 隔离）
+          l1:
+            enabled: true
+            expire-seconds: 2       # L1 本地缓存 TTL（秒），建议 2~5s
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600    # 与 jwt.expires-in 保持一致
+            preload:
+              enabled: true
+              before-expire-seconds: 300  # 与 token.refresh-before-expire 保持一致
+          consistency:
+            mode: strong            # 多实例 L1 一致性（Pub/Sub 广播）
 ```
 
 ## 使用方式
@@ -101,7 +117,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.1.0'
 }
 ```
 
@@ -355,6 +371,10 @@ io:
 ```
 
 ## 版本历史
+
+### 1.1.0 (2026-05-06)
+
+- 升级 simple-aksk-redis-token-manager 1.0.1 → 1.1.0（L1+L2 两级缓存、Token 预刷新、多实例 L1 一致性）
 
 ### 1.0.0 (2026-01-26)
 

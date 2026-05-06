@@ -26,7 +26,7 @@ io:
                 refresh-before-expire: 300
               redis:
                 token:
-                  me: resttemplate-test-app
+                  cache-name: aksk-client-token
               resttemplate:
                 enable: true
                 max-total: 100
@@ -34,7 +34,25 @@ io:
                 connect-timeout: 5000
                 read-timeout: 30000
 
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: resttemplate-test-app
+          l1:
+            enabled: true
+            expire-seconds: 2
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            preload:
+              enabled: true
+              before-expire-seconds: 300
+          consistency:
+            mode: strong
+
 # 日志配置
 logging:
   level:
     io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    io.github.surezzzzzz.sdk.cache: DEBUG
