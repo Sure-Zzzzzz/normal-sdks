@@ -87,6 +87,7 @@ io:
                 header-prefix: x-sure-auth-aksk-
               server:
                 enabled: true
+                verification-mode: JWT
                 jwt:
                   issuer-uri: http://localhost:8080
                 security:

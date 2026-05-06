@@ -5,7 +5,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-audit-listener-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-audit-listener-starter:1.0.1'
 ```
 
 前提：项目中已引入 `simple-elasticsearch-search-starter`，它负责发布 `EsQueryEvent` 和 `EsAggEvent`。
