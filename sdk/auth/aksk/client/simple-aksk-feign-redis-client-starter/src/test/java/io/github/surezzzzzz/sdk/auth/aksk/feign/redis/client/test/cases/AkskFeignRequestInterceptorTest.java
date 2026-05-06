@@ -104,4 +104,41 @@ class AkskFeignRequestInterceptorTest {
         log.info("验证通过：Authorization 头未添加");
         log.info("测试通过");
     }
+
+    @Test
+    void testInterceptorShouldPropagateExceptionWhenTokenManagerThrows() {
+        log.info("========== 测试：TokenManager 抛异常时应该向上传播 ==========");
+
+        // Given
+        when(tokenManager.getToken()).thenThrow(new RuntimeException("Token fetch failed"));
+        RequestTemplate template = new RequestTemplate();
+        log.info("模拟 TokenManager 抛出 RuntimeException");
+
+        // When / Then
+        assertThrows(RuntimeException.class, () -> interceptor.apply(template),
+                "TokenManager 抛异常时应该向上传播，不能被吞掉");
+        assertFalse(template.headers().containsKey("Authorization"), "异常时不应添加 Authorization 头");
+        log.info("测试通过：异常正确向上传播");
+    }
+
+    @Test
+    void testInterceptorShouldOverwriteExistingAuthorizationHeader() {
+        log.info("========== 测试：已有 Authorization 头时应该覆盖 ==========");
+
+        // Given
+        RequestTemplate template = new RequestTemplate();
+        template.header("Authorization", "Bearer old-token");
+        when(tokenManager.getToken()).thenReturn("new-token-456");
+        log.info("模拟已有 Authorization: Bearer old-token，新 token = new-token-456");
+
+        // When
+        interceptor.apply(template);
+
+        // Then
+        Collection<String> authHeaders = template.headers().get("Authorization");
+        assertNotNull(authHeaders);
+        assertEquals(1, authHeaders.size(), "应只有一个 Authorization 头");
+        assertTrue(authHeaders.contains("Bearer new-token-456"), "应覆盖旧的 Authorization 头");
+        log.info("测试通过：旧 Authorization 头已被覆盖，值: {}", authHeaders);
+    }
 }

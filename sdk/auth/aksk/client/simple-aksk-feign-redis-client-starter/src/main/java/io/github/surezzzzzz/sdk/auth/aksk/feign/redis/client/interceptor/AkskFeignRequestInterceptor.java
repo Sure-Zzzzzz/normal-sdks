@@ -56,8 +56,9 @@ public class AkskFeignRequestInterceptor implements RequestInterceptor {
         if (token == null || token.isEmpty()) {
             log.warn("No token available, proceeding without Authorization header");
         } else {
-            // 添加 Authorization 头
+            // 覆盖 Authorization 头（先移除旧值再写入，避免重复）
             String authorizationValue = String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE, token);
+            template.removeHeader(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
             template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION, authorizationValue);
             log.debug("Added Authorization header to request: {}", template.url());
         }

@@ -22,7 +22,24 @@ io:
                 refresh-before-expire: 300
               redis:
                 token:
-                  me: feign-test-app
+                  cache-name: aksk-client-token
+
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: feign-test-app
+          l1:
+            enabled: true
+            expire-seconds: 2
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            preload:
+              enabled: true
+              before-expire-seconds: 300
+          consistency:
+            mode: strong
 
 # Feign 配置
 feign:
@@ -36,3 +53,4 @@ feign:
 logging:
   level:
     io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    io.github.surezzzzzz.sdk.cache: DEBUG

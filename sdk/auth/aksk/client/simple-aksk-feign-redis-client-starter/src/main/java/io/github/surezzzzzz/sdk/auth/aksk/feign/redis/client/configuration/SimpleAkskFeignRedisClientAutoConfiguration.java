@@ -70,6 +70,11 @@ public class SimpleAkskFeignRedisClientAutoConfiguration {
     /**
      * 创建 AKSK Feign Request Interceptor Bean
      *
+     * <p>注册到父上下文，{@link AkskFeignConfiguration} 通过 {@code @Autowired} 从父上下文继承此 Bean，
+     * 再注册为 Feign 子上下文的 {@code RequestInterceptor}。
+     * 此处使用 {@code @Bean} 方法而非自定义注解 + ComponentScan，
+     * 是为了避免依赖 Feign 子上下文继承行为的不确定性。
+     *
      * @param tokenManager Token Manager
      * @return AkskFeignRequestInterceptor
      */
