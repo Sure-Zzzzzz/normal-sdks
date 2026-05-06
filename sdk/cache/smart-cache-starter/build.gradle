@@ -15,7 +15,7 @@ dependencies {
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.1'
-    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.0'
+    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.1'
 
     // 测试依赖
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
