@@ -1,10 +1,26 @@
 # simple-aksk-client-demo
 
-验证 `simple-aksk-feign-redis-client-starter` 和 `simple-aksk-resttemplate-redis-client-starter` 同时引用时互不冲突。
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+
+验证 `simple-aksk-feign-redis-client-starter` 和 `simple-aksk-resttemplate-redis-client-starter` 同时引用时互不冲突，共享同一个 `TokenManager`。
 
 > 本模块只有测试代码，不发布到 Maven Central。
 
----
+## 依赖引入
+
+```gradle
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.1.0'
+
+    // 运行时依赖（compileOnly 不传递，需自行引入）
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
+    implementation 'io.github.openfeign:feign-httpclient:11.10'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+}
+```
 
 ## 前置条件
 
@@ -26,6 +42,50 @@ io:
             client:
               client-id: YOUR_CLIENT_ID
               client-secret: YOUR_CLIENT_SECRET
+```
+
+完整配置示例（`application.yml`）：
+
+```yaml
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://localhost:8080
+              token-endpoint: /oauth2/token
+              token:
+                refresh-before-expire: 300
+              redis:
+                token:
+                  cache-name: aksk-client-token
+              resttemplate:
+                enable: true
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: my-app
+          l1:
+            enabled: true
+            expire-seconds: 2
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            preload:
+              enabled: true
+              before-expire-seconds: 300
+          consistency:
+            mode: strong
 ```
 
 ## 测试场景
@@ -60,3 +120,14 @@ io:
 ## 结论
 
 两个 starter 可以同时引用，共享同一个 `TokenManager`（token 缓存不重复），各自的拦截器独立工作，互不干扰。通常情况下按需选一个即可，有同时使用两种 HTTP 客户端的场景时可以放心共存。
+
+## 版本历史
+
+### 1.1.0 (2026-05-06)
+
+- 升级 feign-redis-client-starter、resttemplate-redis-client-starter 至 1.1.0
+- 更新配置：`redis.token.me` → `redis.token.cache-name`，新增 smart-cache 配置块
+
+### 1.0.0 (2026-01-27)
+
+- 初始版本，验证 Feign 和 RestTemplate 两个 starter 共存场景

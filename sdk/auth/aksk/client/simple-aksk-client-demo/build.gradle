@@ -4,9 +4,11 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.0.1'
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.1.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.1.0'
 
     testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
     testImplementation 'io.github.openfeign:feign-httpclient:11.10'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 }

@@ -98,7 +98,6 @@ class BothClientsCoexistTest {
 
         // RestTemplate 调用
         log.info("RestTemplate 调用 /api/token/statistics...");
-        String url = "${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}/api/token/statistics";
         ResponseEntity<String> restResponse = akskClientRestTemplate.getForEntity(
                 "http://localhost:8080/api/token/statistics", String.class);
         assertEquals(HttpStatus.OK, restResponse.getStatusCode(), "RestTemplate 响应应该是 200");
