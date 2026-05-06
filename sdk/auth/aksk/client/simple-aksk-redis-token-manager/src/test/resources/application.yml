@@ -21,11 +21,29 @@ io:
                 refresh-before-expire: 300
               redis:
                 token:
-                  me: redis-token-manager-test
+                  cache-name: aksk-client-token
+
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: redis-token-manager-test
+          l1:
+            enabled: true
+            expire-seconds: 2
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            preload:
+              enabled: true
+              before-expire-seconds: 300
+          consistency:
+            mode: strong
 
 logging:
   level:
     io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    io.github.surezzzzzz.sdk.cache: DEBUG
 
 # 本地测试配置: 请复制 application-local.yml.example 为 application-local.yml 并填入真实配置
 # Spring Boot 会自动加载 application-local.yml (如果存在)

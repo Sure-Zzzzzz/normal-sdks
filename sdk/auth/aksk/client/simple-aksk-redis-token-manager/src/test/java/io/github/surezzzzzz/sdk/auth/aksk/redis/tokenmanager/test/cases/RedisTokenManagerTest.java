@@ -2,16 +2,20 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
-import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.strategy.RedisTokenCacheStrategy;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
+import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
+import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.util.StringUtils;
 
 import java.util.Set;
 
@@ -19,8 +23,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * RedisTokenManager 集成测试
- * <p>
- * 测试 RedisTokenManager 的核心功能
  *
  * @author surezzzzzz
  */
@@ -32,85 +34,80 @@ class RedisTokenManagerTest {
     private RedisTokenManager tokenManager;
 
     @Autowired
-    private RedisTokenCacheStrategy tokenCacheStrategy;
-
-    @Autowired
     private SecurityContextProvider securityContextProvider;
 
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
+    @Autowired
+    private SmartCacheManager cacheManager;
+
+    @Autowired
+    private L1Cache l1Cache;
+
+    @Autowired
+    private L2Cache l2Cache;
+
+    @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.redis.token.cache-name:aksk-client-token}")
+    private String cacheName;
+
     @BeforeEach
     void setUp() {
-        log.info("======================================");
-        log.info("清理 Redis 测试数据");
-        log.info("======================================");
-        // 只删除测试相关的 key（基于 me 标识）
+        cacheManager.clear(cacheName); // 同时清 L1（Caffeine）和 L2（Redis）
         cleanupTestKeys();
     }
 
     @AfterEach
     void tearDown() {
-        log.info("======================================");
-        log.info("测试结束，清理 Redis 测试数据");
-        log.info("======================================");
-        // 清理测试数据
+        cacheManager.clear(cacheName);
         cleanupTestKeys();
     }
 
-    /**
-     * 清理测试相关的 Redis Key
-     * <p>
-     * 只删除 sure-auth-aksk-client:redis-token-manager-test:* 的 key
-     */
     private void cleanupTestKeys() {
-        String pattern = "sure-auth-aksk-client:redis-token-manager-test:*";
-        Set<String> keys = stringRedisTemplate.keys(pattern);
+        Set<String> keys = stringRedisTemplate.keys("sure-auth-aksk-client:*");
         if (keys != null && !keys.isEmpty()) {
-            log.info("删除测试 Key: {}", keys);
             stringRedisTemplate.delete(keys);
         }
+    }
+
+    private String generateCacheKey(String securityContext) {
+        return StringUtils.hasText(securityContext)
+                ? String.valueOf(securityContext.hashCode())
+                : "default";
     }
 
     @Test
     @DisplayName("测试首次获取 Token - 缓存为空")
     void testGetTokenFirstTime() {
-        log.info("======================================");
-        log.info("测试首次获取 Token - 缓存为空");
-        log.info("======================================");
+        log.info("========== 测试首次获取 Token - 缓存为空 ==========");
 
-        log.info("开始获取 Token（缓存为空，应从服务器获取）...");
         String token = tokenManager.getToken();
 
         log.info("获取的 Token: {}", token);
         assertNotNull(token, "Token 不应为 null");
-        assertTrue(token.length() > 0, "Token 不应为空字符串");
+        assertTrue(token.startsWith("eyJ"), "Token 应该是 JWT 格式");
+        assertEquals(3, token.split("\\.").length, "JWT 应该有 3 个部分");
 
-        // 验证 Token 被缓存到 Redis
-        String securityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = tokenCacheStrategy.generateCacheKey(securityContext);
-        String cachedToken = stringRedisTemplate.opsForValue().get(cacheKey);
-
-        log.info("缓存 Key: {}", cacheKey);
-        log.info("缓存的 Token: {}", cachedToken);
-        assertNotNull(cachedToken, "Token 应被缓存到 Redis");
-        assertEquals(token, cachedToken, "获取的 Token 应与缓存的 Token 一致");
+        // 验证 token 已写入 L2，TTL 在 [expire-seconds*(1-ratio), expire-seconds*(1+ratio)] 范围内
+        // expire-seconds=3600, ratio=0.1, offset=360, 范围 [3240, 3960]
+        String cacheKey = generateCacheKey(securityContextProvider.getSecurityContext());
+        long l2Ttl = l2Cache.getTtl(cacheName, cacheKey);
+        assertTrue(l2Ttl > 0, "getToken 后 L2 应有 token，TTL 应大于 0");
+        assertTrue(l2Ttl <= 3960, "L2 TTL 不应超过 3960（expire-seconds=3600 + 10% jitter）");
+        assertTrue(l2Ttl >= 3240, "L2 TTL 不应低于 3240（expire-seconds=3600 - 10% jitter）");
+        log.info("L2 TTL: {}s", l2Ttl);
 
         log.info("======================================");
     }
 
     @Test
-    @DisplayName("测试从缓存获取 Token")
+    @DisplayName("测试从缓存获取 Token - 两次获取应相同")
     void testGetTokenFromCache() {
-        log.info("======================================");
-        log.info("测试从缓存获取 Token");
-        log.info("======================================");
+        log.info("========== 测试从缓存获取 Token ==========");
 
-        log.info("第一次获取 Token...");
         String firstToken = tokenManager.getToken();
         log.info("第一次获取的 Token: {}", firstToken);
 
-        log.info("第二次获取 Token（应从缓存）...");
         String secondToken = tokenManager.getToken();
         log.info("第二次获取的 Token: {}", secondToken);
 
@@ -120,79 +117,68 @@ class RedisTokenManagerTest {
     }
 
     @Test
-    @DisplayName("测试清除 Token")
+    @DisplayName("测试清除 Token - clearToken 后 L1 和 L2 均立即清除")
     void testClearToken() {
-        log.info("======================================");
-        log.info("测试清除 Token");
-        log.info("======================================");
+        log.info("========== 测试清除 Token ==========");
 
-        log.info("先获取 Token...");
         String firstToken = tokenManager.getToken();
         log.info("第一次获取的 Token: {}", firstToken);
+        assertNotNull(firstToken, "第一次 Token 不应为 null");
 
-        String securityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = tokenCacheStrategy.generateCacheKey(securityContext);
-
-        // 验证缓存存在
-        String cachedBeforeClear = stringRedisTemplate.opsForValue().get(cacheKey);
-        assertNotNull(cachedBeforeClear, "清除前缓存应存在");
-
-        log.info("清除 Token...");
         tokenManager.clearToken();
+        log.info("Token 已清除");
 
-        // 验证缓存已清除
-        String cachedAfterClear = stringRedisTemplate.opsForValue().get(cacheKey);
-        log.info("清除后的缓存: {}", cachedAfterClear);
-        assertNull(cachedAfterClear, "清除后缓存应为 null");
+        // 验证 L1 已清除
+        String cacheKey = generateCacheKey(securityContextProvider.getSecurityContext());
+        Object l1Value = l1Cache.get(cacheName, cacheKey);
+        assertNull(l1Value, "clearToken 后 L1 应为 null");
+        log.info("L1 已清除");
 
-        log.info("再次获取 Token（应从服务器重新获取）...");
+        // 验证 L2 也已清除
+        long l2Ttl = l2Cache.getTtl(cacheName, cacheKey);
+        assertTrue(l2Ttl <= 0, "clearToken 后 L2 应为 null，实际 TTL=" + l2Ttl);
+        log.info("L2 已清除");
+
         String secondToken = tokenManager.getToken();
         log.info("第二次获取的 Token: {}", secondToken);
-
-        assertNotNull(secondToken, "第二次获取的 Token 不应为 null");
-        // 注意：新 Token 可能与旧 Token 相同或不同，取决于服务器实现
+        assertNotNull(secondToken, "第二次 Token 不应为 null");
+        assertTrue(secondToken.startsWith("eyJ"), "第二次 Token 应该是 JWT 格式");
 
         log.info("======================================");
     }
 
     @Test
-    @DisplayName("测试带 security_context 获取 Token")
-    void testGetTokenWithSecurityContext() {
-        log.info("======================================");
-        log.info("测试带 security_context 获取 Token");
-        log.info("======================================");
+    @DisplayName("测试无 security_context 时使用 default cache key")
+    void testGetTokenWithDefaultCacheKey() {
+        log.info("========== 测试无 security_context 时使用 default cache key ==========");
 
-        // 注意：默认的 SecurityContextProvider 返回 null
-        // 这个测试验证在无 security_context 的场景下能正常工作
-        String token = tokenManager.getToken();
-
-        log.info("获取的 Token: {}", token);
-        assertNotNull(token, "Token 不应为 null");
-
-        // 验证使用了默认 Key
         String securityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = tokenCacheStrategy.generateCacheKey(securityContext);
-        log.info("缓存 Key: {}", cacheKey);
-        assertTrue(cacheKey.contains("default"), "无 security_context 时应使用 default Key");
+        String cacheKey = generateCacheKey(securityContext);
+
+        log.info("securityContext={}, cacheKey={}", securityContext, cacheKey);
+        assertEquals("default", cacheKey, "无 security_context 时 cacheKey 应为 'default'");
+
+        String token = tokenManager.getToken();
+        assertNotNull(token, "Token 不应为 null");
+        assertTrue(token.startsWith("eyJ"), "Token 应该是 JWT 格式");
+        assertEquals(3, token.split("\\.").length, "JWT 应该有 3 个部分");
 
         log.info("======================================");
     }
 
     @Test
-    @DisplayName("测试检查 Token 状态 - 有效 Token")
-    void testCheckTokenStatusValidToken() {
-        log.info("======================================");
-        log.info("测试检查 Token 状态 - 有效 Token");
-        log.info("======================================");
+    @DisplayName("测试 Token 是有效的 JWT 格式")
+    void testTokenIsValidJwt() {
+        log.info("========== 测试 Token 是有效的 JWT 格式 ==========");
 
-        log.info("先获取一个新 Token...");
         String token = tokenManager.getToken();
         log.info("获取的 Token: {}", token);
 
-        // 创建 TokenRefreshExecutor 检查状态
-        // 注意：这里直接使用 tokenManager 内部的逻辑会更好，但为了测试我们手动检查
         assertNotNull(token, "Token 不应为 null");
         assertTrue(token.startsWith("eyJ"), "Token 应该是 JWT 格式（以 eyJ 开头）");
+
+        String[] parts = token.split("\\.");
+        assertEquals(3, parts.length, "JWT 应该有 3 个部分（header.payload.signature）");
 
         log.info("======================================");
     }

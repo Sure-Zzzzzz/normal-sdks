@@ -1,109 +1,84 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager;
 
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.configuration.SimpleAkskClientCoreProperties;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenLockException;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor.TokenStatus;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.AbstractTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.strategy.TokenCacheStrategy;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
-import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.RedisKeyHelper;
-import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
-import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerProperties;
+import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
+import org.springframework.util.StringUtils;
 
 /**
  * Redis Token Manager
  *
- * <p>基于 Redis 的分布式 Token 管理器，继承 {@link AbstractTokenManager} 复用通用流程，
- * 实现 {@link #fetchTokenWithLock} 提供分布式锁策略。
+ * <p>基于 {@link SmartCacheManager} 的分布式 Token 管理器。
  *
  * <p>特性：
  * <ul>
- *   <li>使用分布式锁避免多实例并发获取 Token</li>
- *   <li>锁等待改为循环重试，最多 {@link SimpleAkskClientCoreConstant#LOCK_MAX_RETRY_TIMES} 次，避免栈溢出</li>
- *   <li>支持多实例共享 Token 缓存</li>
+ *   <li><b>L1 缓存</b>：JVM 本地缓存（Caffeine），TTL 短（默认 2s），减少 Redis IO</li>
+ *   <li><b>L2 缓存</b>：Redis 分布式缓存，多实例共享 token</li>
+ *   <li><b>分布式锁</b>：SmartCacheManager 内置，防止多实例并发打 OAuth2 Server</li>
+ *   <li><b>多实例 L1 一致性</b>：clearToken() 通过 Pub/Sub 广播 L1 失效，各实例同步清除</li>
+ *   <li><b>L2 预刷新</b>：由 {@link io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.preload.TokenCachePreloadHandler} 处理</li>
  * </ul>
+ *
+ * <p>缓存流程：查 L1 → 查 L2 → 加锁换 token → 写回 L1+L2
  *
  * @author surezzzzzz
  */
 @SimpleAkskRedisTokenManagerComponent
 @Slf4j
-public class RedisTokenManager extends AbstractTokenManager {
+public class RedisTokenManager implements TokenManager {
 
-    private final SimpleRedisLock simpleRedisLock;
-    private final RedisKeyHelper redisKeyHelper;
+    private final SecurityContextProvider securityContextProvider;
+    private final SmartCacheManager cacheManager;
+    private final SimpleAkskRedisTokenManagerProperties properties;
+    private final TokenRefreshExecutor tokenRefreshExecutor;
 
     public RedisTokenManager(
-            SimpleAkskClientCoreProperties coreProperties,
-            TokenCacheStrategy tokenCacheStrategy,
             SecurityContextProvider securityContextProvider,
-            TaskRetryExecutor retryExecutor,
-            SimpleRedisLock simpleRedisLock,
-            RedisKeyHelper redisKeyHelper
-    ) {
-        super(coreProperties, tokenCacheStrategy, securityContextProvider, retryExecutor);
-        this.simpleRedisLock = simpleRedisLock;
-        this.redisKeyHelper = redisKeyHelper;
+            SmartCacheManager cacheManager,
+            SimpleAkskRedisTokenManagerProperties properties,
+            TokenRefreshExecutor tokenRefreshExecutor) {
+        this.securityContextProvider = securityContextProvider;
+        this.cacheManager = cacheManager;
+        this.properties = properties;
+        this.tokenRefreshExecutor = tokenRefreshExecutor;
+    }
+
+    @Override
+    public String getToken() {
+        String securityContext = securityContextProvider.getSecurityContext();
+        String cacheKey = generateCacheKey(securityContext);
+        String cacheName = properties.getRedis().getToken().getCacheName();
+
+        return cacheManager.get(cacheName, cacheKey, () -> {
+            log.debug("Token cache miss, fetching from OAuth2 Server: key={}", cacheKey);
+            return tokenRefreshExecutor.fetchTokenFromServer(securityContext, null);
+        });
+    }
+
+    @Override
+    public void clearToken() {
+        String securityContext = securityContextProvider.getSecurityContext();
+        String cacheKey = generateCacheKey(securityContext);
+        String cacheName = properties.getRedis().getToken().getCacheName();
+        // strong 模式下 evict 会通过 Pub/Sub 广播，各实例同步清除 L1
+        cacheManager.evict(cacheName, cacheKey);
+        log.debug("Token cleared: key={}", cacheKey);
     }
 
     /**
-     * 使用分布式锁获取 Token
+     * 生成缓存 Key
      *
-     * <p>策略：循环尝试抢锁，最多 {@link SimpleAkskClientCoreConstant#LOCK_MAX_RETRY_TIMES} 次：
-     * <ul>
-     *   <li>抢到锁：double-check 缓存，缓存有效则直接返回，否则从 OAuth2 Server 获取</li>
-     *   <li>没抢到锁：等待 {@link SimpleAkskClientCoreConstant#LOCK_RETRY_SLEEP_MS} ms 后检查缓存，有则返回，无则继续循环</li>
-     *   <li>超过最大重试次数：抛出 {@link TokenLockException}</li>
-     * </ul>
+     * @param securityContext 安全上下文（JSON 字符串或 null）
+     * @return 缓存 Key
      */
-    @Override
-    protected String fetchTokenWithLock(String cacheKey, String securityContext) {
-        String lockKey = redisKeyHelper.buildTokenLockKey(cacheKey);
-
-        try {
-            for (int retry = 0; retry < SimpleAkskClientCoreConstant.LOCK_MAX_RETRY_TIMES; retry++) {
-                String lockValue = UUID.randomUUID().toString();
-                boolean locked = simpleRedisLock.tryLock(lockKey, lockValue,
-                        SimpleAkskClientCoreConstant.DEFAULT_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
-                if (!locked) {
-                    log.debug("Failed to acquire lock (retry={}), waiting: key={}", retry, cacheKey);
-                    Thread.sleep(SimpleAkskClientCoreConstant.LOCK_RETRY_SLEEP_MS);
-                    String cached = tokenCacheStrategy.get(cacheKey);
-                    if (cached != null) {
-                        log.debug("Token fetched from cache after waiting: key={}", cacheKey);
-                        return cached;
-                    }
-                    continue;
-                }
-
-                try {
-                    // double-check 缓存
-                    String token = tokenCacheStrategy.get(cacheKey);
-                    if (token != null && tokenRefreshExecutor.checkTokenStatus(token) == TokenStatus.VALID) {
-                        return token;
-                    }
-                    return fetchTokenFromServer(cacheKey, securityContext);
-                } finally {
-                    simpleRedisLock.unlock(lockKey, lockValue);
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new TokenLockException(
-                    ClientErrorCode.TOKEN_LOCK_INTERRUPTED,
-                    ClientErrorMessage.TOKEN_LOCK_INTERRUPTED, e);
-        }
-
-        throw new TokenLockException(
-                ClientErrorCode.TOKEN_LOCK_FAILED,
-                ClientErrorMessage.TOKEN_LOCK_FAILED);
+    private String generateCacheKey(String securityContext) {
+        return StringUtils.hasText(securityContext)
+                ? String.valueOf(securityContext.hashCode())
+                : "default";
     }
 }
+

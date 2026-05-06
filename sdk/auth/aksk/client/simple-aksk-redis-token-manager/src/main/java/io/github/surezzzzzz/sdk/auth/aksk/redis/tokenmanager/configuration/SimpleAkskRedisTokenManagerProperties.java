@@ -1,28 +1,26 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration;
 
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Simple AKSK Redis Token Manager Properties
- * <p>
- * Redis TokenManager 的专属配置
+ *
+ * <p>Redis TokenManager 的专属配置。
+ *
+ * <p>注意：应用标识（me）由 {@code io.github.surezzzzzz.sdk.cache.me} 统一管理。
  *
  * @author surezzzzzz
  */
 @Data
-@ConfigurationProperties(SimpleAkskClientCoreConstant.CONFIG_PREFIX)
+@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.auth.aksk.client")
 public class SimpleAkskRedisTokenManagerProperties {
 
     /**
-     * Redis 配置
+     * Redis Token 缓存配置
      */
     private RedisConfig redis = new RedisConfig();
 
-    /**
-     * Redis Configuration
-     */
     @Data
     public static class RedisConfig {
 
@@ -31,19 +29,17 @@ public class SimpleAkskRedisTokenManagerProperties {
          */
         private TokenCacheConfig token = new TokenCacheConfig();
 
-        /**
-         * Token Cache Configuration
-         */
         @Data
         public static class TokenCacheConfig {
+
             /**
-             * 应用标识，用于区分多个 Client 实例共用 Redis 的场景
+             * SmartCache cacheName，用于隔离 token 缓存
              * <p>
-             * 最终 Redis Key 格式: sure-auth-aksk-client:{me}:token::{hash}
+             * 最终 Redis Key 格式：{keyPrefix}:{cacheName}:{me}::{cacheKey}
              * <p>
-             * 默认值: default
+             * 默认值：aksk-client-token
              */
-            private String me = "default";
+            private String cacheName = "aksk-client-token";
         }
     }
 }
