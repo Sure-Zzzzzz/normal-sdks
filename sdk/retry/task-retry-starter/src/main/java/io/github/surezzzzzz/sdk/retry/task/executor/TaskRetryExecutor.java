@@ -30,17 +30,17 @@ public class TaskRetryExecutor {
             } catch (Exception e) {
                 lastException = e;
 
-                if (attempt < retryTimes) {
+                if (attempt < totalAttempts) {
                     long delay = (long) (retryInterval * Math.pow(backoffMultiplier, attempt - 1));
                     long actualDelay = Math.min(delay, maxDelaySeconds);
 
                     log.warn("Attempt {}/{} failed, retrying in {} seconds...",
-                            attempt, retryTimes, actualDelay);
+                            attempt, totalAttempts, actualDelay);
                     log.debug("Exception details: ", e);
 
                     TimeUnit.SECONDS.sleep(actualDelay);
                 } else {
-                    log.warn("Attempt {}/{} failed, no more retries", attempt, retryTimes);
+                    log.warn("Attempt {}/{} failed, no more retries", attempt, totalAttempts);
                     log.debug("Final exception details: ", e);
                 }
             }
