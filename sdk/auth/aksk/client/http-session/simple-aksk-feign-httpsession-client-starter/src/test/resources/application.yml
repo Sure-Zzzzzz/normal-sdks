@@ -1,0 +1,28 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://localhost:8080
+              token-endpoint: /oauth2/token
+              # client-id 和 client-secret 请在 application-local.yml 中配置
+              token:
+                refresh-before-expire: 300
+
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 30000
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG

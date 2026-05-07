@@ -1,0 +1,12 @@
+# 本地测试配置示例
+# 请复制此文件为 application-local.yml 并填入真实的 AKSK 配置
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              client-id: AKPhzWfoDsIgAVuE4KP8bww
+              client-secret: SK9KXkxEolAJ3A7yqZZerWt7JjIWx1HhVwV16AtImC
