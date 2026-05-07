@@ -1,6 +1,6 @@
 # Simple AKSK Feign HttpSession Client Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 HttpSession 的 AKSK Feign 客户端 Starter，集成 HttpSession Token Manager，提供开箱即用的 Feign 客户端和 AKSK 认证拦截。
@@ -102,6 +102,10 @@ public interface MyServiceClient {
 | 适用场景 | 单实例、轻量 | 多实例、生产级 |
 
 ## 版本历史
+
+### 1.0.1 (2026-05-06)
+
+- 重构类名，去掉冗余前缀（SimpleAksk → Aksk/AkskHttpSession）
 
 ### 1.0.0 (2026-05-06)
 

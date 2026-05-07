@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.surezzzzzz.sdk.auth.aksk.feign.httpsession.client.configuration.SimpleAkskFeignHttpSessionClientAutoConfiguration
+io.github.surezzzzzz.sdk.auth.aksk.feign.httpsession.client.configuration.AkskFeignHttpSessionClientAutoConfiguration
