@@ -36,6 +36,8 @@ include(
         ':sdk:lock:redis:simple-redis-lock-starter',
         ':sdk:limiter:redis:simple-redis-limiter-starter',
         ':sdk:limiter:redis:smart-redis-limiter-starter',
+        ':sdk:limiter:redis:smart-redis-limiter-core',
+        ':sdk:audit:limiter:smart-redis-limiter-audit-listener-starter',
 //        ':sdk:curl:daydaymap:daydaymap-client-starter',
 //        ':sdk:curl:daydaymap:ipfusion:daydaymap-ipfusion-client-starter',
 //        ':sdk:curl:opsalert:opsalert-client-starter',
