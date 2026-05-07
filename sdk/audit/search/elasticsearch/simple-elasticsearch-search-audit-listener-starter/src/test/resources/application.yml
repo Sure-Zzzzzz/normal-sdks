@@ -52,6 +52,14 @@ io:
                 lazy-load: true
               - name: "audit_jwt_log_1"
                 lazy-load: true
+              - name: "audit_introspect_user"
+                lazy-load: true
+              - name: "audit_introspect_order"
+                lazy-load: true
+              - name: "audit_introspect_log_0"
+                lazy-load: true
+              - name: "audit_introspect_log_1"
+                lazy-load: true
               - name: "aksk_event_header_user"
                 lazy-load: true
               - name: "aksk_event_header_order"

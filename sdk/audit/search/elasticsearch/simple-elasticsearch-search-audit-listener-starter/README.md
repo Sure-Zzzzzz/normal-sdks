@@ -73,7 +73,7 @@ public class MyEsAuditTraceIdProvider implements EsAuditTraceIdProvider {
 
 ## EsAuditUserProvider 参考实现
 
-`EsAuditUserProvider` 的实现取决于你的认证方式，以下是三种常见场景的参考。
+`EsAuditUserProvider` 的实现取决于你的认证方式，以下是四种常见场景的参考。
 
 ### 场景一：AKSK Header 认证
 
@@ -150,7 +150,7 @@ public class JwtEsAuditUserProvider implements EsAuditUserProvider {
 
 ### 场景三：AkskAccessEvent + ThreadLocal
 
-同时兼容 Header 和 JWT 两种认证方式。监听 `AkskAccessEvent`（两种认证方式都会发布），存入 ThreadLocal，ES 查询时读取。
+同时兼容 Header、JWT 和 INTROSPECT 三种认证方式。监听 `AkskAccessEvent`（所有认证方式都会发布），存入 ThreadLocal，ES 查询时读取。
 
 需要同时注册清理拦截器，防止线程池复用导致数据污染。
 
@@ -204,6 +204,43 @@ public class AkskContextClearConfig implements WebMvcConfigurer {
                 AkskContextEsAuditUserProvider.clear();
             }
         }).addPathPatterns("/**");
+    }
+}
+```
+
+### 场景四：INTROSPECT 认证
+
+配合 `simple-aksk-resource-server-starter` 的 INTROSPECT 模式使用，从 Spring Security 的 `OAuth2AuthenticatedPrincipal` 中解析。
+
+```java
+@Component
+public class IntrospectEsAuditUserProvider implements EsAuditUserProvider {
+
+    @Override
+    public String getClientId() {
+        return getClaim("client_id");
+    }
+
+    @Override
+    public String getClientType() {
+        return getClaim("client_type");
+    }
+
+    @Override
+    public String getUserId() {
+        return getClaim("user_id");
+    }
+
+    @Override
+    public String getUsername() {
+        return getClaim("username");
+    }
+
+    private String getClaim(String claimName) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof OAuth2AuthenticatedPrincipal)) return null;
+        Object value = ((OAuth2AuthenticatedPrincipal) auth).getAttribute(claimName);
+        return value != null ? value.toString() : null;
     }
 }
 ```
