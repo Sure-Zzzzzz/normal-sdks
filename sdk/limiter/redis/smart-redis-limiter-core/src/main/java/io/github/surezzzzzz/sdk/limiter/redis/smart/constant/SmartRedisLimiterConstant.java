@@ -87,6 +87,25 @@ public interface SmartRedisLimiterConstant {
      */
     String SUFFIX_DAYS = "d";
 
+    // ==================== 限流算法 ====================
+
+    /**
+     * 算法：固定窗口
+     */
+    String ALGORITHM_FIXED = "fixed";
+
+    /**
+     * 算法：滑动窗口
+     */
+    String ALGORITHM_SLIDING = "sliding";
+
+    // ==================== 错误码 ====================
+
+    /**
+     * 错误码：限流超限
+     */
+    String ERROR_CODE_RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED";
+
     // ==================== 异常消息 ====================
 
     /**

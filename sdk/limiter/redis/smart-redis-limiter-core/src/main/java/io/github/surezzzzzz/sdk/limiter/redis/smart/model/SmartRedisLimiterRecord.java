@@ -51,9 +51,14 @@ public class SmartRedisLimiterRecord {
     private String limitKey;
 
     /**
-     * 限流策略代码
+     * 限流策略代码（Key生成策略：method/path/ip/path-pattern）
      */
     private String keyStrategy;
+
+    /**
+     * 限流算法类型（fixed/sliding）
+     */
+    private String algorithm;
 
     /**
      * 限流规则（JSON 字符串）

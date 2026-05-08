@@ -31,9 +31,14 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
     private final String limitKey;
 
     /**
-     * 限流策略代码
+     * 限流策略代码（Key生成策略：method/path/ip/path-pattern）
      */
     private final String keyStrategy;
+
+    /**
+     * 限流算法类型（fixed/sliding）
+     */
+    private final String algorithm;
 
     /**
      * 限流规则（JSON 字符串，用于记录）
@@ -85,7 +90,7 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
      */
     private final Map<String, Object> attributes;
 
-    public SmartRedisLimiterEvent(Object source, String limitKey, String keyStrategy,
+    public SmartRedisLimiterEvent(Object source, String limitKey, String keyStrategy, String algorithm,
                                   String limitRules, boolean passed, String sourceType,
                                   String requestUri, String httpMethod, String clientIp, String matchedPathPattern,
                                   String methodName, String methodQualifiedName,
@@ -93,6 +98,7 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
         super(source);
         this.limitKey = limitKey;
         this.keyStrategy = keyStrategy;
+        this.algorithm = algorithm;
         this.limitRules = limitRules;
         this.passed = passed;
         this.source = sourceType;
