@@ -8,7 +8,6 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.annotation.PostConstruct;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -50,18 +49,6 @@ public class SmartRedisLimiterWebMvcConfigurer implements WebMvcConfigurer {
     }
 
     private List<String> getExcludePatterns() {
-        List<String> patterns = new ArrayList<>();
-
-        patterns.add("/actuator/**");
-        patterns.add("/actuator");
-        patterns.add("/health");
-        patterns.add("/health/**");
-
-        List<String> userExcludes = properties.getInterceptor().getExcludePatterns();
-        if (userExcludes != null && !userExcludes.isEmpty()) {
-            patterns.addAll(userExcludes);
-        }
-
-        return patterns;
+        return properties.getInterceptor().getExcludePatterns();
     }
 }

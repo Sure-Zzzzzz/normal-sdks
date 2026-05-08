@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -66,6 +68,11 @@ public class SmartRedisLimiterProperties {
      * 管理接口配置
      */
     private ManagementConfig management = new ManagementConfig();
+
+    /**
+     * 审计配置
+     */
+    private AuditConfig audit = new AuditConfig();
 
     @PostConstruct
     public void init() {
@@ -364,7 +371,7 @@ public class SmartRedisLimiterProperties {
         private String defaultKeyStrategy = SmartRedisLimiterKeyStrategy.METHOD.getCode();
         private List<SmartLimitRule> defaultLimits = new ArrayList<>();
         private List<SmartInterceptorRule> rules = new ArrayList<>();
-        private List<String> excludePatterns = new ArrayList<>();
+        private List<String> excludePatterns = Arrays.asList("/actuator/**", "/actuator", "/health", "/health/**");
         private String defaultFallback;  // 不设置则使用全局fallback
     }
 
@@ -412,13 +419,13 @@ public class SmartRedisLimiterProperties {
         private String formatTimeUnit(TimeUnit unit) {
             switch (unit) {
                 case SECONDS:
-                    return "s";
+                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_SECONDS;
                 case MINUTES:
-                    return "m";
+                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_MINUTES;
                 case HOURS:
-                    return "h";
+                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_HOURS;
                 case DAYS:
-                    return "d";
+                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_DAYS;
                 default:
                     return unit.name().toLowerCase();
             }
@@ -452,5 +459,22 @@ public class SmartRedisLimiterProperties {
     @Setter
     public static class ManagementConfig {
         private Boolean enableDefaultExceptionHandler = true;
+    }
+
+    /**
+     * 审计配置
+     */
+    @Getter
+    @Setter
+    public static class AuditConfig {
+        /**
+         * 是否启用限流审计（默认 false）
+         */
+        private Boolean enabled = false;
+
+        /**
+         * 限流通过时是否发布事件（默认 false）
+         */
+        private Boolean logOnPass = false;
     }
 }

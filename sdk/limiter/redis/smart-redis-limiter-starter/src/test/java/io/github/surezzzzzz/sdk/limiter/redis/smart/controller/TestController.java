@@ -45,6 +45,28 @@ public class TestController {
     }
 
     /**
+     * 审计测试接口（拦截器限流，用于触发限流事件）
+     */
+    @GetMapping("/public/audit-test")
+    public Map<String, Object> auditTestEndpoint() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "audit test endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 审计通过测试接口（拦截器限流，用于验证通过时不发布事件）
+     */
+    @GetMapping("/public/audit-pass")
+    public Map<String, Object> auditPassEndpoint() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "audit pass endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
      * 用户查询接口（GET，各用户独立限流）
      */
     @GetMapping("/user/{userId}")

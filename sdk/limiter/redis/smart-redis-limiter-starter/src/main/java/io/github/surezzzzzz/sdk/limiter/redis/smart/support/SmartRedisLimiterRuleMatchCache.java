@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterHttpMethod;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,7 +114,7 @@ public class SmartRedisLimiterRuleMatchCache {
      * 构建缓存Key
      */
     private String buildCacheKey(String method, String uri) {
-        return method + ":" + uri;
+        return method + SmartRedisLimiterConstant.CACHE_KEY_SEPARATOR + uri;
     }
 
     /**

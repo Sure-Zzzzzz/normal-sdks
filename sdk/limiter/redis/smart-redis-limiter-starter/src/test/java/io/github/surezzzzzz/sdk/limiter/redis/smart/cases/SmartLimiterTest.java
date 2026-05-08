@@ -11,12 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ContextConfiguration;
-import redis.embedded.RedisServer;
 
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -35,85 +32,9 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SmartRedisLimiterApplication.class)
-@ContextConfiguration(initializers = SmartLimiterTest.RedisInitializer.class)
 public class SmartLimiterTest {
 
-    private static RedisServer redisServer;
-
-    public static class RedisInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-
-        @Override
-        public void initialize(ConfigurableApplicationContext applicationContext) {
-            int maxRetries = 3;
-            Exception lastException = null;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    int redisPort = findAvailablePort();
-                    log.info("=== 尝试启动 Embedded Redis (第{}次)，端口: {} ===", attempt, redisPort);
-
-                    redisServer = RedisServer.builder()
-                            .port(redisPort)
-                            .setting("maxheap 128mb")
-                            .setting("bind 127.0.0.1")
-                            .build();
-
-                    redisServer.start();
-                    log.info("Embedded Redis 启动成功");
-
-                    System.setProperty("spring.redis.host", "localhost");
-                    System.setProperty("spring.redis.port", String.valueOf(redisPort));
-                    System.setProperty("io.github.surezzzzzz.sdk.limiter.redis.smart.enable", "true");
-
-                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                        if (redisServer != null && redisServer.isActive()) {
-                            try {
-                                log.info("=== 关闭 Embedded Redis ===");
-                                redisServer.stop();
-                                log.info("Embedded Redis 关闭成功");
-                            } catch (Exception e) {
-                                log.warn("Redis 关闭时出现异常（可忽略）", e);
-                            }
-                        }
-                    }));
-
-                    return;
-
-                } catch (Exception e) {
-                    lastException = e;
-                    log.warn("启动 Embedded Redis 失败 (第{}次): {}", attempt, e.getMessage());
-
-                    if (redisServer != null) {
-                        try {
-                            redisServer.stop();
-                        } catch (Exception ignored) {
-                        }
-                        redisServer = null;
-                    }
-
-                    if (attempt < maxRetries) {
-                        try {
-                            log.info("等待2秒后重试...");
-                            Thread.sleep(2000);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-            }
-
-            log.error("启动 Embedded Redis 失败，已重试{}次", maxRetries);
-            throw new RuntimeException("无法启动 Embedded Redis", lastException);
-        }
-
-        private static int findAvailablePort() {
-            try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-                return socket.getLocalPort();
-            } catch (Exception e) {
-                return 6380 + (int) (Math.random() * 1000);
-            }
-        }
-    }
+    private RedisConnectionFactory originalFactory;
 
     @Autowired
     private TestService testService;
@@ -126,11 +47,6 @@ public class SmartLimiterTest {
     public void setup() throws Exception {
         log.info("=== 测试前准备 ===");
 
-        // 确保Redis启动
-        if (redisServer != null && !redisServer.isActive()) {
-            startRedisAndInitConnection();
-        }
-
         // 清理数据
         Set<String> keys = smartRedisLimiterRedisTemplate.keys(SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*");
         if (keys != null && !keys.isEmpty()) {
@@ -141,6 +57,11 @@ public class SmartLimiterTest {
 
     @AfterEach
     public void cleanup() {
+        // 确保每个测试后都恢复正常连接
+        if (originalFactory != null) {
+            smartRedisLimiterRedisTemplate.setConnectionFactory(originalFactory);
+            originalFactory = null;
+        }
         Set<String> keys = smartRedisLimiterRedisTemplate.keys(SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*");
         if (keys != null && !keys.isEmpty()) {
             smartRedisLimiterRedisTemplate.delete(keys);
@@ -239,7 +160,9 @@ public class SmartLimiterTest {
         log.info("multiWindowMethod相关的keys: {}", multiWindowKeys);
         assertFalse(multiWindowKeys.isEmpty(), "应该有multiWindowMethod的限流key");
 
+        boolean has1sKey = multiWindowKeys.stream().anyMatch(k -> k.contains(":1s"));
         boolean has60sKey = multiWindowKeys.stream().anyMatch(k -> k.contains(":60s"));
+        assertTrue(has1sKey, "应该有1秒窗口的key");
         assertTrue(has60sKey, "应该有60秒窗口的key");
 
         for (String key : multiWindowKeys) {
@@ -252,112 +175,75 @@ public class SmartLimiterTest {
     }
 
     /**
-     * ✅ 测试3：查询方法（fallback=allow）- Redis异常时放行
+     * 测试3：查询方法（fallback=allow）- Redis异常时放行
      */
-//    @Test
-//    public void testQueryMethodFallbackAllow() throws Exception {
-//        log.info("=== 测试查询方法降级策略ALLOW ===");
-//
-//        // 停止Redis
-//        stopRedisAndCloseConnection();
-//
-//        // Redis异常时应该全部放行
-//        for (int i = 0; i < 20; i++) {
-//            String result = testService.queryMethod("fallback-" + i);
-//            assertEquals("query_success", result);
-//        }
-//
-//        log.info("=== 查询方法降级ALLOW测试通过 ===");
-//    }
+    @Test
+    public void testQueryMethodFallbackAllow() throws Exception {
+        log.info("=== 测试查询方法降级策略ALLOW ===");
 
-    /**
-     * ✅ 测试4：创建订单方法（fallback=deny）- Redis异常时拒绝
-     */
-//    @Test
-//    public void testCreateOrderFallbackDeny() throws Exception {
-//        log.info("=== 测试创建订单降级策略DENY ===");
-//
-//        // 停止Redis
-//        stopRedisAndCloseConnection();
-//
-//        // Redis异常时应该全部拒绝
-//        assertThrows(SmartRedisLimitExceededException.class, () -> {
-//            testService.createOrder("fallback-order");
-//        });
-//
-//        log.info("=== 创建订单降级DENY测试通过 ===");
-//    }
+        stopRedisAndCloseConnection();
 
-    /**
-     * ✅ 测试5：支付方法（fallback=deny）- Redis异常时拒绝
-     */
-//    @Test
-//    public void testPaymentFallbackDeny() throws Exception {
-//        log.info("=== 测试支付方法降级策略DENY ===");
-//
-//        // 停止Redis
-//        stopRedisAndCloseConnection();
-//
-//        // Redis异常时应该全部拒绝
-//        assertThrows(SmartRedisLimitExceededException.class, () -> {
-//            testService.payment("payment-1");
-//        });
-//
-//        log.info("=== 支付方法降级DENY测试通过 ===");
-//    }
-
-    /**
-     * ✅ 测试6：使用注解模式默认降级策略（allow）
-     */
-//    @Test
-//    public void testDefaultFallbackAllow() throws Exception {
-//        log.info("=== 测试注解模式默认降级策略 ===");
-//
-//        // 停止Redis
-//        stopRedisAndCloseConnection();
-//
-//        // 没有设置fallback，应该使用annotation.default-fallback=allow
-//        for (int i = 0; i < 20; i++) {
-//            String result = testService.defaultFallbackMethod("default-" + i);
-//            assertEquals("default_success", result);
-//        }
-//
-//        log.info("=== 注解模式默认降级测试通过 ===");
-//    }
-
-    /**
-     * 停止Redis并关闭连接
-     */
-    private void stopRedisAndCloseConnection() throws Exception {
-        log.info("停止Redis并关闭连接...");
-
-        if (redisServer != null && redisServer.isActive()) {
-            redisServer.stop();
+        for (int i = 0; i < 20; i++) {
+            String result = testService.queryMethod("fallback-" + i);
+            assertEquals("query_success", result);
         }
 
-        LettuceConnectionFactory factory = (LettuceConnectionFactory) smartRedisLimiterRedisTemplate.getConnectionFactory();
-        if (factory != null) {
-            factory.resetConnection();
-        }
-
-        Thread.sleep(3500);
+        log.info("=== 查询方法降级ALLOW测试通过 ===");
     }
 
     /**
-     * 启动Redis并重新初始化连接
+     * 测试4：创建订单方法（fallback=deny）- Redis异常时拒绝
      */
-    private void startRedisAndInitConnection() throws Exception {
-        log.info("启动Redis并重新初始化连接...");
+    @Test
+    public void testCreateOrderFallbackDeny() throws Exception {
+        log.info("=== 测试创建订单降级策略DENY ===");
 
-        if (redisServer != null && !redisServer.isActive()) {
-            redisServer.start();
+        stopRedisAndCloseConnection();
+
+        assertThrows(SmartRedisLimitExceededException.class, () ->
+                testService.createOrder("fallback-order"));
+
+        log.info("=== 创建订单降级DENY测试通过 ===");
+    }
+
+    /**
+     * 测试5：支付方法（fallback=deny）- Redis异常时拒绝
+     */
+    @Test
+    public void testPaymentFallbackDeny() throws Exception {
+        log.info("=== 测试支付方法降级策略DENY ===");
+
+        stopRedisAndCloseConnection();
+
+        assertThrows(SmartRedisLimitExceededException.class, () ->
+                testService.payment("payment-1"));
+
+        log.info("=== 支付方法降级DENY测试通过 ===");
+    }
+
+    /**
+     * 测试6：注解模式默认降级策略（allow）- Redis异常时放行
+     */
+    @Test
+    public void testDefaultFallbackAllow() throws Exception {
+        log.info("=== 测试注解模式默认降级策略 ===");
+
+        stopRedisAndCloseConnection();
+
+        for (int i = 0; i < 20; i++) {
+            String result = testService.defaultFallbackMethod("default-" + i);
+            assertEquals("default_success", result);
         }
 
-        LettuceConnectionFactory factory = (LettuceConnectionFactory) smartRedisLimiterRedisTemplate.getConnectionFactory();
-        if (factory != null) {
-            factory.afterPropertiesSet();
-        }
+        log.info("=== 注解模式默认降级测试通过 ===");
+    }
 
-        Thread.sleep(2000);
+    private void stopRedisAndCloseConnection() throws Exception {
+        log.info("模拟Redis不可用：切换到不存在的端口 16379...");
+        originalFactory = smartRedisLimiterRedisTemplate.getConnectionFactory();
+        LettuceConnectionFactory brokenFactory = new LettuceConnectionFactory("localhost", 16379);
+        brokenFactory.afterPropertiesSet();
+        smartRedisLimiterRedisTemplate.setConnectionFactory(brokenFactory);
+        Thread.sleep(200);
     }
 }

@@ -12,13 +12,14 @@
 - **集群支持**：支持Redis集群模式
 - **管理接口**：提供限流状态管理接口
 - **高性能**：基于Lua脚本的原子操作
+- **事件审计**：支持事件驱动审计，可与外部系统集成
 
 ## 快速开始
 
 ### 1. 添加依赖
 
 ```gradle
-    implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.0.0'
+    implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.0.3'
     // 必须显式引入以下依赖
     implementation "org.springframework.boot:spring-boot-starter-data-redis"
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -116,7 +117,6 @@ io:
 logging:
   level:
     io.github.surezzzzzz.sdk.limiter.redis.smart: DEBUG
-    redis.embedded: WARN
     org.springframework: WARN
 
 ```
@@ -193,6 +193,99 @@ redis:
 ```yaml
 management:
   enable-default-exception-handler: true
+```
+
+### 5. 事件审计
+
+支持通过 Spring `ApplicationEvent` 机制发布限流事件，便于与外部审计系统（Kafka、Elasticsearch、数据库等）集成。
+
+**核心接口：**
+
+| 接口 | 说明 |
+|------|------|
+| `SmartRedisLimiterUserProvider` | 用户信息提供者，从请求上下文提取用户身份 |
+| `SmartRedisLimiterTraceIdProvider` | 链路追踪ID提供者，从请求上下文提取 traceId |
+
+**事件发布时机：**
+
+- 限流触发时（`passed=false`）：始终发布
+- 限流通过时（`passed=true`）：仅当 `audit.log-on-pass=true` 时发布
+
+**使用示例：**
+
+1. 注册 Provider 实现（可选）：
+```java
+@Component
+public class MyUserProvider implements SmartRedisLimiterUserProvider {
+    @Override
+    public String getClientId() {
+        return SecurityContext.getClientId();
+    }
+    @Override
+    public String getClientType() {
+        return SecurityContext.getClientType();
+    }
+    @Override
+    public String getUserId() {
+        return SecurityContext.getUserId();
+    }
+    @Override
+    public String getUsername() {
+        return SecurityContext.getUsername();
+    }
+}
+
+@Component
+public class MyTraceIdProvider implements SmartRedisLimiterTraceIdProvider {
+    @Override
+    public String getTraceId() {
+        return MDC.get("traceId");
+    }
+}
+```
+
+2. 订阅限流事件：
+```java
+@Component
+public class MyAuditListener {
+    @Autowired
+    private MyUserProvider userProvider;
+    @Autowired
+    private MyTraceIdProvider traceIdProvider;
+
+    @EventListener
+    public void onLimitEvent(SmartRedisLimiterEvent event) {
+        SmartRedisLimiterRecord record = SmartRedisLimiterRecord.builder()
+                .clientId(userProvider.getClientId())
+                .clientType(userProvider.getClientType())
+                .userId(userProvider.getUserId())
+                .username(userProvider.getUsername())
+                .traceId(traceIdProvider.getTraceId())
+                .limitKey(event.getLimitKey())
+                .keyStrategy(event.getKeyStrategy())
+                .limitRules(event.getLimitRules())
+                .passed(event.isPassed())
+                .source(event.getSource())
+                .requestUri(event.getRequestUri())
+                .httpMethod(event.getHttpMethod())
+                .clientIp(event.getClientIp())
+                .matchedPathPattern(event.getMatchedPathPattern())
+                .methodName(event.getMethodName())
+                .methodQualifiedName(event.getMethodQualifiedName())
+                .timestamp(event.getTimestamp())
+                .build();
+
+        // 发送到 Kafka / Elasticsearch / 数据库等
+    }
+}
+```
+
+**配置项：**
+
+```yaml
+audit:
+  enabled: true       # 启用审计（事件始终发布，实际启用由外部 Listener 决定）
+  log-on-pass: false  # 限流通过时也发布事件，默认 false
 ```
 
 ## 性能优化

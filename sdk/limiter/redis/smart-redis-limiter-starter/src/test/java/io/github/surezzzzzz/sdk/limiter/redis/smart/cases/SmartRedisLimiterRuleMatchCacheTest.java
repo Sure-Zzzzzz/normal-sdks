@@ -11,9 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
-import redis.embedded.RedisServer;
 
 import java.util.Set;
 
@@ -31,10 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Slf4j
 @SpringBootTest(classes = SmartRedisLimiterApplication.class)
 @AutoConfigureMockMvc
-@ContextConfiguration(initializers = SmartLimiterWebTest.RedisInitializer.class)
 public class SmartRedisLimiterRuleMatchCacheTest {
-
-    private static RedisServer redisServer;
 
     @Autowired
     private MockMvc mockMvc;

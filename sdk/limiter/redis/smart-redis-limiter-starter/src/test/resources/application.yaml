@@ -1,6 +1,9 @@
 spring:
   application:
     name: smart-limiter-test
+  redis:
+    host: localhost
+    port: 6379
 
 # 智能限流器配置
 io:
@@ -87,6 +90,11 @@ io:
               # 异常处理
               management:
                 enable-default-exception-handler: true
+
+              # 审计配置
+              audit:
+                enabled: true
+                log-on-pass: false
 
 # 日志配置
 logging:

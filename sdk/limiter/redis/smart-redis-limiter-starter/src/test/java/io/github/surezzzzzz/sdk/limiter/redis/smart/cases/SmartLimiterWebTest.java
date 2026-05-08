@@ -9,12 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
-import redis.embedded.RedisServer;
 
 import java.util.Set;
 
@@ -33,85 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Slf4j
 @SpringBootTest(classes = SmartRedisLimiterApplication.class)
 @AutoConfigureMockMvc
-@ContextConfiguration(initializers = SmartLimiterWebTest.RedisInitializer.class)
 public class SmartLimiterWebTest {
-
-    public static class RedisInitializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
-
-        private static RedisServer redisServer;
-
-        @Override
-        public void initialize(ConfigurableApplicationContext applicationContext) {
-            int maxRetries = 3;
-            Exception lastException = null;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    int redisPort = findAvailablePort();
-                    log.info("=== 尝试启动 Embedded Redis (第{}次)，端口: {} ===", attempt, redisPort);
-
-                    redisServer = RedisServer.builder()
-                            .port(redisPort)
-                            .setting("maxheap 128mb")
-                            .setting("bind 127.0.0.1")
-                            .build();
-
-                    redisServer.start();
-                    log.info("Embedded Redis 启动成功");
-
-                    System.setProperty("spring.redis.host", "localhost");
-                    System.setProperty("spring.redis.port", String.valueOf(redisPort));
-                    System.setProperty("io.github.surezzzzzz.sdk.limiter.redis.smart.enable", "true");
-
-                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                        if (redisServer != null) {
-                            try {
-                                log.info("=== 关闭 Embedded Redis ===");
-                                redisServer.stop();
-                                log.info("Embedded Redis 关闭成功");
-                            } catch (Exception e) {
-                                log.warn("Redis 关闭时出现异常（可忽略）", e);
-                            }
-                        }
-                    }));
-
-                    return;
-
-                } catch (Exception e) {
-                    lastException = e;
-                    log.warn("启动 Embedded Redis 失败 (第{}次): {}", attempt, e.getMessage());
-
-                    if (redisServer != null) {
-                        try {
-                            redisServer.stop();
-                        } catch (Exception ignored) {
-                        }
-                        redisServer = null;
-                    }
-
-                    if (attempt < maxRetries) {
-                        try {
-                            log.info("等待2秒后重试...");
-                            Thread.sleep(2000);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-            }
-
-            log.error("启动 Embedded Redis 失败，已重试{}次", maxRetries);
-            throw new RuntimeException("无法启动 Embedded Redis", lastException);
-        }
-
-        private static int findAvailablePort() {
-            try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-                return socket.getLocalPort();
-            } catch (Exception e) {
-                return 6380 + (int) (Math.random() * 1000);
-            }
-        }
-    }
 
     @Autowired
     private MockMvc mockMvc;

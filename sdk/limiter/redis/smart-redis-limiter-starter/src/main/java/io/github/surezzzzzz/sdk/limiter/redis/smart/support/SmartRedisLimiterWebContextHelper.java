@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
 
@@ -45,11 +46,11 @@ public class SmartRedisLimiterWebContextHelper {
      * 获取客户端真实IP
      */
     private static String getClientIp(HttpServletRequest request) {
-        String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
+        String ip = request.getHeader(SmartRedisLimiterConstant.HEADER_X_FORWARDED_FOR);
+        if (ip == null || ip.isEmpty() || SmartRedisLimiterConstant.IP_UNKNOWN.equalsIgnoreCase(ip)) {
+            ip = request.getHeader(SmartRedisLimiterConstant.HEADER_X_REAL_IP);
         }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+        if (ip == null || ip.isEmpty() || SmartRedisLimiterConstant.IP_UNKNOWN.equalsIgnoreCase(ip)) {
             ip = request.getRemoteAddr();
         }
 

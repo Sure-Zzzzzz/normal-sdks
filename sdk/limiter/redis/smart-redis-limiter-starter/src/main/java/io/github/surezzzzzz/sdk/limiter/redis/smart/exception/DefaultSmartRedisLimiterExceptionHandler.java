@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.exception;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -37,13 +38,13 @@ public class DefaultSmartRedisLimiterExceptionHandler implements SmartRedisLimit
         log.warn("SmartRedisLimiter 限流触发: key={}, retryAfter={}", ex.getKey(), ex.getRetryAfter());
 
         Map<String, Object> body = new HashMap<>();
-        body.put("code", 429);
-        body.put("message", "Too Many Requests");
+        body.put("code", SmartRedisLimiterConstant.HTTP_STATUS_TOO_MANY_REQUESTS);
+        body.put("message", SmartRedisLimiterConstant.HTTP_MESSAGE_TOO_MANY_REQUESTS);
         body.put("retryAfter", ex.getRetryAfter());
 
         return ResponseEntity
                 .status(HttpStatus.TOO_MANY_REQUESTS)
-                .header("Retry-After", String.valueOf(ex.getRetryAfter()))
+                .header(SmartRedisLimiterConstant.HEADER_RETRY_AFTER, String.valueOf(ex.getRetryAfter()))
                 .body(body);
     }
 }

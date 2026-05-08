@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.exception;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import lombok.Getter;
 
 /**
@@ -21,7 +22,7 @@ public class SmartRedisLimitExceededException extends RuntimeException {
     private final long retryAfter;
 
     public SmartRedisLimitExceededException(String key, long retryAfter) {
-        super(String.format("Rate limit exceeded for key: %s, retry after %d seconds", key, retryAfter));
+        super(String.format(SmartRedisLimiterConstant.MSG_RATE_LIMIT_EXCEEDED, key, retryAfter));
         this.key = key;
         this.retryAfter = retryAfter;
     }

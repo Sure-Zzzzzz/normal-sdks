@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
@@ -244,7 +245,7 @@ public class SmartRedisLimiterExecutor {
             return applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
         } catch (Exception e) {
             log.error("SmartRedisLimiter 无法获取KeyGenerator: {}", beanName, e);
-            throw new IllegalArgumentException("未找到KeyGenerator: " + beanName);
+            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_KEY_GENERATOR_NOT_FOUND + beanName);
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.strategy;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
@@ -17,7 +18,7 @@ public class SmartRedisLimiterIpKeyGenerator implements SmartRedisLimiterKeyGene
     public String generate(SmartRedisLimiterContext context) {
         String clientIp = context.getClientIp();
         if (clientIp == null) {
-            throw new IllegalArgumentException("ClientIp不能为null");
+            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_CLIENT_IP_NULL);
         }
 
         // 从枚举获取前缀

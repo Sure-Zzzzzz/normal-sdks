@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.strategy;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
@@ -19,7 +20,7 @@ public class SmartRedisLimiterMethodKeyGenerator implements SmartRedisLimiterKey
     public String generate(SmartRedisLimiterContext context) {
         Method method = context.getMethod();
         if (method == null) {
-            throw new IllegalArgumentException("Method不能为null");
+            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_METHOD_NULL);
         }
 
         String className = method.getDeclaringClass().getSimpleName();

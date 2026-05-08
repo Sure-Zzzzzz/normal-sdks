@@ -2,16 +2,19 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.interceptor;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCache;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterKeyGenerator;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterExecutor;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCache;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterWebContextHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.annotation.PostConstruct;
@@ -37,6 +40,12 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
     @Autowired
     private SmartRedisLimiterRuleMatchCache smartRedisLimiterRuleMatchCache;
+
+    @Autowired
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     @PostConstruct
     public void init() {
@@ -71,13 +80,11 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
             limitRules = matchedRule.getLimits().isEmpty() ?
                     properties.getInterceptor().getDefaultLimits() :
                     matchedRule.getLimits();
-            // ✅ 新增：获取降级策略
             fallbackStrategy = determineFallbackStrategy(matchedRule);
         } else {
             log.debug("使用默认规则, URI: {}", requestUri);
             keyStrategy = properties.getInterceptor().getDefaultKeyStrategy();
             limitRules = properties.getInterceptor().getDefaultLimits();
-            // ✅ 新增：使用默认降级策略
             fallbackStrategy = determineFallbackStrategy(null);
         }
 
@@ -96,8 +103,13 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
         SmartRedisLimiterContext context = builder.build();
 
-        // ✅ 传递降级策略
         boolean passed = executor.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
+
+        if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
+            if (!passed || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
+                publishLimitEvent(context, limitRules, keyStrategy, passed);
+            }
+        }
 
         if (!passed) {
             long retryAfter = limitRules.stream()
@@ -113,8 +125,66 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         return true;
     }
 
+    private void publishLimitEvent(SmartRedisLimiterContext context,
+                                   List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                                   String keyStrategy, boolean passed) {
+        try {
+            String limitKey = buildLimitKey(context, keyStrategy);
+            SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
+                    this,
+                    limitKey,
+                    keyStrategy,
+                    serializeLimitRules(limitRules),
+                    passed,
+                    SmartRedisLimiterConstant.SOURCE_INTERCEPTOR,
+                    context.getRequestPath(),
+                    context.getRequestMethod(),
+                    context.getClientIp(),
+                    context.getMatchedPathPattern(),
+                    null,
+                    null,
+                    context.getAttributes());
+            applicationEventPublisher.publishEvent(event);
+        } catch (Exception e) {
+            log.warn("发布限流事件失败", e);
+        }
+    }
+
+    private String buildLimitKey(SmartRedisLimiterContext context, String keyStrategy) {
+        try {
+            String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
+            SmartRedisLimiterKeyGenerator generator = applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
+            String keyPart = generator.generate(context);
+            return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX
+                    + properties.getMe()
+                    + SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR
+                    + keyPart;
+        } catch (Exception e) {
+            log.warn("构建限流Key失败, keyStrategy={}", keyStrategy, e);
+            return null;
+        }
+    }
+
+    private String serializeLimitRules(List<SmartRedisLimiterProperties.SmartLimitRule> limitRules) {
+        if (limitRules == null || limitRules.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < limitRules.size(); i++) {
+            if (i > 0) {
+                sb.append(",");
+            }
+            SmartRedisLimiterProperties.SmartLimitRule rule = limitRules.get(i);
+            sb.append(rule.getCount())
+                    .append("/")
+                    .append(rule.getWindow())
+                    .append(rule.getUnit().name().toLowerCase());
+        }
+        return sb.toString();
+    }
+
     /**
-     * ✅ 新增：确定降级策略
+     * 确定降级策略
      * 优先级：规则级别 > 拦截器默认 > 全局默认
      */
     private String determineFallbackStrategy(SmartRedisLimiterProperties.SmartInterceptorRule rule) {

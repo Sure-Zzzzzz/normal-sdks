@@ -31,4 +31,19 @@ public interface SmartRedisLimiterRedisKeyConstant {
      * 秒单位后缀
      */
     String SUFFIX_SECONDS = "s";
+
+    /**
+     * 分单位后缀
+     */
+    String SUFFIX_MINUTES = "m";
+
+    /**
+     * 时单位后缀
+     */
+    String SUFFIX_HOURS = "h";
+
+    /**
+     * 天单位后缀
+     */
+    String SUFFIX_DAYS = "d";
 }

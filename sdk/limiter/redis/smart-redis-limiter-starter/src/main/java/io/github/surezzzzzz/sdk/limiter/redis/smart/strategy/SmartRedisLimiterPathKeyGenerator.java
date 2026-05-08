@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.strategy;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
@@ -17,7 +18,7 @@ public class SmartRedisLimiterPathKeyGenerator implements SmartRedisLimiterKeyGe
     public String generate(SmartRedisLimiterContext context) {
         String path = context.getRequestPath();
         if (path == null) {
-            throw new IllegalArgumentException("RequestPath不能为null");
+            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_REQUEST_PATH_NULL);
         }
 
         // 从枚举获取前缀
