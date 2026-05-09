@@ -59,4 +59,11 @@ public interface SmartRedisLimiterRedisKeyConstant {
      * 滑动窗口算法标识
      */
     String SUFFIX_SLIDING_WINDOW = "sw";
+
+    // ==================== 时间换算 ====================
+
+    /**
+     * 每秒纳秒数（滑动窗口算法使用纳秒精度）
+     */
+    long NANOSECONDS_PER_SECOND = 1_000_000_000L;
 }
