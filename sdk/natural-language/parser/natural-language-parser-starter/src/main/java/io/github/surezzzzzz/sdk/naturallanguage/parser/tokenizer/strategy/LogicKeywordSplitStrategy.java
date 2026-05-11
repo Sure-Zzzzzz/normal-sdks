@@ -60,11 +60,11 @@ public class LogicKeywordSplitStrategy implements TokenSplitStrategy {
     }
 
     /**
-     * 判断字符是否为 ASCII 标识符字符（字母、数字、下划线）
-     * 注意：中文字符不在此范围内，因此 "张或李" 中的 "或" 仍会被正确拆分
+     * 判断字符是否为 ASCII 标识符字符（字母、下划线，不含数字）
+     * 注意：数字不应作为边界，否则 "25或城市" 中的 "或" 无法被识别
      */
     private boolean isAsciiIdentifierChar(char c) {
-        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
     }
 
     @Override

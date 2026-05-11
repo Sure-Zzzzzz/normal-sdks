@@ -278,6 +278,90 @@ class NLParserEndToEndTest {
         log.info("\n========== ✓ 字段折叠(去重)测试全部通过 (5个场景) ==========");
     }
 
+    // ==================== Bug修复测试 ====================
+
+    /**
+     * Bug1: OR条件字段错乱
+     * 输入："年龄小于25或城市等于深圳"
+     * 期望：age < 25 OR city = "深圳"（两个condition，logic=or）
+     */
+    @Test
+    @Order(5)
+    @DisplayName("Bug1修复：跨字段OR（数字+或+中文）")
+    void testCrossFieldOrWithDigit() {
+        log.info("========== Bug1修复测试 ==========");
+
+        String query = "年龄小于25或城市等于深圳";
+        log.info("查询: {}", query);
+        ConditionIntent cond = asQueryIntent(nlParser.parse(query)).getCondition();
+        log.info("解析结果: {}", cond);
+
+        assertEquals(LogicType.OR, cond.getLogic(), "逻辑应为OR");
+        assertFalse(cond.getChildren().isEmpty(), "应有子条件");
+        assertEquals(2, cond.getChildren().size(), "应有2个子条件");
+
+        // 第一个子条件: age < 25
+        ConditionIntent c1 = cond.getChildren().get(0);
+        assertEquals("年龄", c1.getFieldHint());
+        assertEquals(OperatorType.LT, c1.getOperator());
+        assertEquals(25L, c1.getValue());
+
+        // 第二个子条件: city = "深圳"
+        ConditionIntent c2 = cond.getChildren().get(1);
+        assertEquals("城市", c2.getFieldHint());
+        assertEquals(OperatorType.EQ, c2.getOperator());
+        assertEquals("深圳", c2.getValue());
+
+        log.info("✓ Bug1修复验证通过");
+    }
+
+    /**
+     * Bug1变体：积分+或+城市
+     */
+    @Test
+    @Order(6)
+    @DisplayName("Bug1修复：积分大于100或城市等于北京")
+    void testCrossFieldOrWithDigitVariant() {
+        String query = "积分大于100或城市等于北京";
+        log.info("查询: {}", query);
+        ConditionIntent cond = asQueryIntent(nlParser.parse(query)).getCondition();
+
+        assertEquals(LogicType.OR, cond.getLogic());
+        assertEquals(2, cond.getChildren().size());
+        assertEquals("积分", cond.getChildren().get(0).getFieldHint());
+        assertEquals(100L, cond.getChildren().get(0).getValue());
+        assertEquals("城市", cond.getChildren().get(1).getFieldHint());
+        assertEquals("北京", cond.getChildren().get(1).getValue());
+        log.info("✓ Bug1变体验证通过");
+    }
+
+    /**
+     * Bug2: IN列表多含"中"
+     * 输入："城市在北京、上海、深圳中"
+     * 期望：city IN ["北京", "上海", "深圳"]
+     */
+    @Test
+    @Order(7)
+    @DisplayName("Bug2修复：IN列表末尾的「中」应被忽略")
+    void testInWithTrailingZhong() {
+        log.info("========== Bug2修复测试 ==========");
+
+        String query = "城市在北京、上海、深圳中";
+        log.info("查询: {}", query);
+        ConditionIntent cond = asQueryIntent(nlParser.parse(query)).getCondition();
+        log.info("解析结果: {}", cond);
+
+        assertEquals(OperatorType.IN, cond.getOperator());
+        assertEquals("城市", cond.getFieldHint());
+        assertNotNull(cond.getValues());
+        assertEquals(3, cond.getValues().size(), "IN列表应有3个值，不含末尾的'中'");
+        assertEquals("北京", cond.getValues().get(0));
+        assertEquals("上海", cond.getValues().get(1));
+        assertEquals("深圳", cond.getValues().get(2));
+
+        log.info("✓ Bug2修复验证通过");
+    }
+
     // ==================== 错误处理测试 ====================
 
     @Test

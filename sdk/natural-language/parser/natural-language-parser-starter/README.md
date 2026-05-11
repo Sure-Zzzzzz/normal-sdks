@@ -24,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.1'
 }
 ```
 
@@ -399,6 +399,14 @@ io:
 - HanLP portable 1.8.6
 
 ## 版本历史
+
+### v1.1.1 (2026-05-11)
+
+Bug Fix Release。详见 [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)
+
+- 修复 OR 条件字段错乱（同字段 OR "名字包含张或李"、跨字段 OR "年龄小于25或城市等于深圳"）
+- 修复 IN 列表多含"中"（"城市在北京、上海、深圳中"）
+- ConditionParser 状态模式重构，if-else 最大嵌套从 4 层降至 1 层
 
 ### v1.1.0 (2026-05-04)
 
