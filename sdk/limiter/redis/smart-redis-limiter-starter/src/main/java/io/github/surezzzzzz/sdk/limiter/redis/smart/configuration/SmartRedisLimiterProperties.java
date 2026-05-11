@@ -1,9 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author: Sure.
  * @description 智能Redis限流器配置属性
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Getter
 @Setter
@@ -208,6 +206,11 @@ public class SmartRedisLimiterProperties {
                 validateKeyStrategy(rule.getKeyStrategy(), rulePrefix + ".keyStrategy");
             }
 
+            // 验证算法
+            if (rule.getAlgorithm() != null && !rule.getAlgorithm().isEmpty()) {
+                validateAlgorithm(rule.getAlgorithm(), rulePrefix + ".algorithm");
+            }
+
             // 验证限流规则
             if (rule.getLimits() != null && !rule.getLimits().isEmpty()) {
                 validateLimitRules(rule.getLimits(), rulePrefix + ".limits");
@@ -263,6 +266,17 @@ public class SmartRedisLimiterProperties {
             if (windowSeconds > 86400) {
                 log.warn("{} 时间窗口过长（{}秒），可能导致Redis内存占用过高", rulePrefix, windowSeconds);
             }
+        }
+    }
+
+    /**
+     * 验证限流算法
+     */
+    private void validateAlgorithm(String algorithm, String configPath) {
+        if (!SmartRedisLimiterConstant.ALGORITHM_FIXED.equalsIgnoreCase(algorithm)
+                && !SmartRedisLimiterConstant.ALGORITHM_SLIDING.equalsIgnoreCase(algorithm)) {
+            throw new IllegalArgumentException(
+                    configPath + " 值非法：" + algorithm + "，有效值：fixed, sliding");
         }
     }
 
@@ -384,6 +398,7 @@ public class SmartRedisLimiterProperties {
         private String pathPattern;
         private String method;
         private String keyStrategy;
+        private String algorithm;
         private List<SmartLimitRule> limits = new ArrayList<>();
         private String fallback;  // 不设置则使用defaultFallback
 

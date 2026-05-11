@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.cases;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.SmartRedisLimiterApplication;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCache;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCacheHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +35,7 @@ public class SmartRedisLimiterRuleMatchCacheTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private SmartRedisLimiterRuleMatchCache smartRedisLimiterRuleMatchCache;
+    private SmartRedisLimiterRuleMatchCacheHelper smartRedisLimiterRuleMatchCache;
 
     @Autowired
     private RedisTemplate<String, String> smartRedisLimiterRedisTemplate;

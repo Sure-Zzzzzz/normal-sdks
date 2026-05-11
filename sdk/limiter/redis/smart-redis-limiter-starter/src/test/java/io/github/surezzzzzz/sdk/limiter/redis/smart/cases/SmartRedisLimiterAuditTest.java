@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRe
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.service.TestService;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.TestAuditEventListener;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,14 +14,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,42 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Slf4j
 @SpringBootTest(classes = SmartRedisLimiterApplication.class)
 @AutoConfigureMockMvc
-@Import(SmartRedisLimiterAuditTest.TestAuditEventListener.class)
 public class SmartRedisLimiterAuditTest {
-
-    /**
-     * 测试用事件监听器，捕获所有 SmartRedisLimiterEvent
-     */
-    @Slf4j
-    public static class TestAuditEventListener {
-        private final List<SmartRedisLimiterEvent> events = new CopyOnWriteArrayList<>();
-
-        @EventListener
-        public void onLimitEvent(SmartRedisLimiterEvent event) {
-            log.info("[AuditTestListener] 捕获事件: source={}, passed={}, limitKey={}",
-                    event.getSource(), event.isPassed(), event.getLimitKey());
-            events.add(event);
-        }
-
-        public List<SmartRedisLimiterEvent> getEvents() {
-            return events;
-        }
-
-        public void clear() {
-            events.clear();
-        }
-
-        public SmartRedisLimiterEvent findFirst() {
-            return events.isEmpty() ? null : events.get(0);
-        }
-
-        public SmartRedisLimiterEvent findFirstBySource(String source) {
-            return events.stream()
-                    .filter(e -> source.equals(e.getSource()))
-                    .findFirst()
-                    .orElse(null);
-        }
-    }
 
     @Autowired
     private MockMvc mockMvc;

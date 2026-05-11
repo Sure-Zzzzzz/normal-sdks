@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.annotation;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -8,7 +10,7 @@ import java.lang.annotation.Target;
 /**
  * @author: Sure.
  * @description 智能限流注解
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -23,6 +25,11 @@ public @interface SmartRedisLimiter {
      * Key生成策略
      */
     String keyStrategy() default "";
+
+    /**
+     * 限流算法
+     */
+    String algorithm() default SmartRedisLimiterConstant.ALGORITHM_FIXED;
 
     /**
      * 注解级别降级策略

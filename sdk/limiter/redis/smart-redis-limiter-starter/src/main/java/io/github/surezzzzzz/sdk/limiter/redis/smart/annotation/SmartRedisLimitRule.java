@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author: Sure.
  * @description 限流规则注解
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Retention(RetentionPolicy.RUNTIME)
 public @interface SmartRedisLimitRule {

@@ -1,20 +1,14 @@
-package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
+package io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterKeyGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.ApplicationContext;
-import org.springframework.data.redis.connection.RedisClusterConnection;
-import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
@@ -25,14 +19,15 @@ import java.util.List;
 import java.util.concurrent.*;
 
 /**
- * @author: Sure.
- * @description 智能Redis限流执行器（带超时控制）
- * @Date: 2024/12/XX XX:XX
+ * 固定窗口限流算法实现
+ *
+ * @author Sure.
+ * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
 @ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
 @Slf4j
-public class SmartRedisLimiterExecutor {
+public class SmartRedisLimiterFixedWindowAlgorithm implements SmartRedisLimiterAlgorithm {
 
     private static final String LIMITER_SCRIPT =
             "local key_count = #KEYS\n" +
@@ -58,7 +53,7 @@ public class SmartRedisLimiterExecutor {
 
     @Autowired
     @Qualifier("smartRedisLimiterRedisTemplate")
-    private RedisTemplate<String, String> smartRedisLimiterRedisTemplate;
+    private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
     private SmartRedisLimiterProperties properties;
@@ -93,6 +88,31 @@ public class SmartRedisLimiterExecutor {
                 properties.getRedis().getCommandTimeout());
     }
 
+    @Override
+    public String getAlgorithm() {
+        return SmartRedisLimiterConstant.ALGORITHM_FIXED;
+    }
+
+    @Override
+    public DefaultRedisScript<Long> getScript() {
+        return limiterScript;
+    }
+
+    @Override
+    public RedisTemplate<String, String> getRedisTemplate() {
+        return redisTemplate;
+    }
+
+    @Override
+    public SmartRedisLimiterProperties getProperties() {
+        return properties;
+    }
+
+    @Override
+    public ApplicationContext getApplicationContext() {
+        return applicationContext;
+    }
+
     @PreDestroy
     public void destroy() {
         if (timeoutScheduler != null) {
@@ -101,45 +121,14 @@ public class SmartRedisLimiterExecutor {
         }
     }
 
-    /**
-     * 检测Redis是否为集群模式
-     */
-    private boolean detectClusterMode() {
-        try {
-            RedisConnectionFactory connectionFactory = smartRedisLimiterRedisTemplate.getConnectionFactory();
-            if (connectionFactory == null) {
-                return false;
-            }
-
-            try (RedisClusterConnection clusterConnection = connectionFactory.getClusterConnection()) {
-                return clusterConnection != null;
-            } catch (Exception e) {
-                return false;
-            }
-        } catch (Exception e) {
-            log.debug("检测Redis集群模式失败，默认为单机模式", e);
-            return false;
-        }
-    }
-
-    /**
-     * 执行限流检查（带超时控制）- 向后兼容版本
-     */
+    @Override
     public boolean tryAcquire(SmartRedisLimiterContext context,
                               List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
                               String keyStrategy) {
         return tryAcquire(context, limitRules, keyStrategy, null);
     }
 
-    /**
-     * 执行限流检查（带超时控制和降级策略）
-     *
-     * @param context          限流上下文
-     * @param limitRules       限流规则列表
-     * @param keyStrategy      Key生成策略
-     * @param fallbackStrategy 降级策略（可选，为null时使用全局配置）
-     * @return true-允许通过，false-触发限流
-     */
+    @Override
     public boolean tryAcquire(SmartRedisLimiterContext context,
                               List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
                               String keyStrategy,
@@ -178,17 +167,12 @@ public class SmartRedisLimiterExecutor {
     }
 
     /**
-     * 实际执行Redis限流检查的逻辑
+     * 实际执行Redis限流检查
      */
     private boolean executeRedisLimit(SmartRedisLimiterContext context,
                                       List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
                                       String keyStrategy) {
-        SmartRedisLimiterKeyGenerator keyGenerator = getKeyGenerator(keyStrategy);
-        String keyPart = keyGenerator.generate(context);
-        String baseKey = SmartRedisLimiterRedisKeyConstant.KEY_PREFIX +
-                properties.getMe() +
-                SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR +
-                keyPart;
+        String baseKey = buildBaseKey(context, keyStrategy);
 
         List<String> keys = new ArrayList<>();
         List<String> args = new ArrayList<>();
@@ -200,7 +184,7 @@ public class SmartRedisLimiterExecutor {
             args.add(String.valueOf(rule.getWindowSeconds()));
         }
 
-        Long result = smartRedisLimiterRedisTemplate.execute(limiterScript, keys, args.toArray());
+        Long result = redisTemplate.execute(limiterScript, keys, args.toArray());
 
         boolean passed = result != null && result == 1L;
 
@@ -216,7 +200,7 @@ public class SmartRedisLimiterExecutor {
     /**
      * 构建窗口Key
      */
-    private String buildWindowKey(String baseKey, long windowSeconds) {
+    String buildWindowKey(String baseKey, long windowSeconds) {
         String windowSuffix = SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR +
                 windowSeconds +
                 SmartRedisLimiterRedisKeyConstant.SUFFIX_SECONDS;
@@ -228,51 +212,6 @@ public class SmartRedisLimiterExecutor {
                     windowSuffix;
         } else {
             return baseKey + windowSuffix;
-        }
-    }
-
-    /**
-     * 获取Key生成器
-     */
-    private SmartRedisLimiterKeyGenerator getKeyGenerator(String strategyCode) {
-        if (strategyCode == null || strategyCode.isEmpty()) {
-            strategyCode = SmartRedisLimiterKeyStrategy.METHOD.getCode();
-        }
-
-        String beanName = SmartRedisLimiterKeyStrategy.getBeanName(strategyCode);
-
-        try {
-            return applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
-        } catch (Exception e) {
-            log.error("SmartRedisLimiter 无法获取KeyGenerator: {}", beanName, e);
-            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_KEY_GENERATOR_NOT_FOUND + beanName);
-        }
-    }
-
-    /**
-     * 降级处理（支持传入策略）
-     *
-     * @param e                异常信息
-     * @param fallbackStrategy 降级策略（可选）
-     * @return true-放行，false-拒绝
-     */
-    private boolean handleFallback(Exception e, String fallbackStrategy) {
-        // 确定使用的降级策略
-        String strategy = fallbackStrategy;
-
-        if (strategy == null || strategy.isEmpty()) {
-            strategy = properties.getFallback().getOnRedisError();
-        }
-
-        SmartRedisLimiterFallbackStrategy fallback =
-                SmartRedisLimiterFallbackStrategy.fromCode(strategy);
-
-        if (fallback == SmartRedisLimiterFallbackStrategy.DENY) {
-            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 拒绝请求", fallback.getDesc());
-            return false;
-        } else {
-            log.warn("SmartRedisLimiter Redis异常，降级策略: {} - 放行请求", fallback.getDesc());
-            return true;
         }
     }
 }

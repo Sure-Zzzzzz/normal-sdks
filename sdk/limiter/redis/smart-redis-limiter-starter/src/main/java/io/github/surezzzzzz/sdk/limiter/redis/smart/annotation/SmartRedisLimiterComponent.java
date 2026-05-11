@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
+package io.github.surezzzzzz.sdk.limiter.redis.smart.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 /**
  * @author: Sure.
  * @description 组件扫描标记注解
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

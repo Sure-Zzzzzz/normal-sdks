@@ -1,14 +1,12 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.cases;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.SmartRedisLimiterApplication;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.audit.SmartRedisLimiterTraceIdProvider;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.audit.SmartRedisLimiterUserProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterRecord;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.service.TestService;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.TestEventListener;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,16 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -48,11 +40,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Slf4j
 @SpringBootTest(classes = SmartRedisLimiterApplication.class)
 @AutoConfigureMockMvc
-@Import({
-        SmartRedisLimiterEndToEndTest.TestUserProvider.class,
-        SmartRedisLimiterEndToEndTest.TestTraceIdProvider.class,
-        SmartRedisLimiterEndToEndTest.TestEventListener.class
-})
 public class SmartRedisLimiterEndToEndTest {
 
     @Autowired
@@ -214,98 +201,5 @@ public class SmartRedisLimiterEndToEndTest {
         }
 
         log.info("=== 多事件捕获测试通过，共收到 {} 条 Record ===", testEventListener.records.size());
-    }
-
-    // ==================== 测试用 Provider / Listener ====================
-
-    /**
-     * 测试用 UserProvider：返回固定用户信息
-     */
-    @Component
-    public static class TestUserProvider implements SmartRedisLimiterUserProvider {
-        @Override
-        public String getClientId() {
-            return "test-client-id";
-        }
-
-        @Override
-        public String getClientType() {
-            return "test-client-type";
-        }
-
-        @Override
-        public String getUserId() {
-            return "test-user-id";
-        }
-
-        @Override
-        public String getUsername() {
-            return "test-username";
-        }
-    }
-
-    /**
-     * 测试用 TraceIdProvider：返回固定 traceId
-     */
-    @Component
-    public static class TestTraceIdProvider implements SmartRedisLimiterTraceIdProvider {
-        @Override
-        public String getTraceId() {
-            return "test-trace-id-12345";
-        }
-    }
-
-    /**
-     * 测试用 Listener：接收事件，模拟 audit-listener-starter 的转换逻辑，捕获 Record
-     */
-    @Slf4j
-    @Component
-    public static class TestEventListener {
-
-        public final List<SmartRedisLimiterRecord> records = new ArrayList<>();
-        public CountDownLatch limitEventLatch = new CountDownLatch(1);
-
-        @Autowired
-        private TestUserProvider userProvider;
-        @Autowired
-        private TestTraceIdProvider traceIdProvider;
-
-        @EventListener
-        public void onLimitEvent(SmartRedisLimiterEvent event) {
-            log.info("[TestEventListener] 收到事件: source={}, passed={}, limitKey={}",
-                    event.getSource(), event.isPassed(), event.getLimitKey());
-
-            SmartRedisLimiterRecord record = SmartRedisLimiterRecord.builder()
-                    .clientId(userProvider.getClientId())
-                    .clientType(userProvider.getClientType())
-                    .userId(userProvider.getUserId())
-                    .username(userProvider.getUsername())
-                    .traceId(traceIdProvider.getTraceId())
-                    .limitKey(event.getLimitKey())
-                    .keyStrategy(event.getKeyStrategy())
-                    .limitRules(event.getLimitRules())
-                    .passed(event.isPassed())
-                    .source(event.getSource())
-                    .requestUri(event.getRequestUri())
-                    .httpMethod(event.getHttpMethod())
-                    .clientIp(event.getClientIp())
-                    .matchedPathPattern(event.getMatchedPathPattern())
-                    .methodName(event.getMethodName())
-                    .methodQualifiedName(event.getMethodQualifiedName())
-                    .timestamp(event.getTimestamp())
-                    .build();
-
-            records.add(record);
-            limitEventLatch.countDown();
-        }
-
-        public void reset() {
-            reset(1);
-        }
-
-        public void reset(int expectedCount) {
-            records.clear();
-            limitEventLatch = new CountDownLatch(expectedCount);
-        }
     }
 }

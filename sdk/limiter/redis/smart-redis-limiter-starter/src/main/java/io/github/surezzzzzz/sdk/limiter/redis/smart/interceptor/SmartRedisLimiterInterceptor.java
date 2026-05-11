@@ -1,14 +1,15 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.interceptor;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithm;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithmFactory;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterKeyGenerator;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterExecutor;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCache;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCacheHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterWebContextHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +26,7 @@ import java.util.List;
 /**
  * @author: Sure.
  * @description 智能限流拦截器
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
 @Slf4j
@@ -33,13 +34,13 @@ import java.util.List;
 public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
     @Autowired
-    private SmartRedisLimiterExecutor executor;
+    private SmartRedisLimiterAlgorithmFactory algorithmFactory;
 
     @Autowired
     private SmartRedisLimiterProperties properties;
 
     @Autowired
-    private SmartRedisLimiterRuleMatchCache smartRedisLimiterRuleMatchCache;
+    private SmartRedisLimiterRuleMatchCacheHelper smartRedisLimiterRuleMatchCache;
 
     @Autowired
     private ApplicationEventPublisher applicationEventPublisher;
@@ -55,7 +56,7 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        String requestUri = getRequestUri(request);
+        String requestUri = SmartRedisLimiterWebContextHelper.getRequestPath(request);
         String requestMethod = request.getMethod();
 
         log.debug("SmartRedisLimiterInterceptor 处理请求: {} {}", requestMethod, requestUri);
@@ -103,11 +104,13 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
         SmartRedisLimiterContext context = builder.build();
 
-        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
+        String algorithm = determineAlgorithmStrategy(matchedRule);
+        SmartRedisLimiterAlgorithm algorithmInstance = algorithmFactory.getAlgorithm(algorithm);
+        boolean passed = algorithmInstance.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
 
         if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
             if (!passed || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, passed);
+                publishLimitEvent(context, limitRules, keyStrategy, algorithm, passed);
             }
         }
 
@@ -127,14 +130,16 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
     private void publishLimitEvent(SmartRedisLimiterContext context,
                                    List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                   String keyStrategy, boolean passed) {
+                                   String keyStrategy, String algorithm, boolean passed) {
         try {
-            String limitKey = buildLimitKey(context, keyStrategy);
+            String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
+                    context, keyStrategy, properties.getMe(), applicationContext);
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
                     limitKey,
                     keyStrategy,
-                    serializeLimitRules(limitRules),
+                    algorithm,
+                    SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
                     passed,
                     SmartRedisLimiterConstant.SOURCE_INTERCEPTOR,
                     context.getRequestPath(),
@@ -150,37 +155,20 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         }
     }
 
-    private String buildLimitKey(SmartRedisLimiterContext context, String keyStrategy) {
-        try {
-            String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
-            SmartRedisLimiterKeyGenerator generator = applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
-            String keyPart = generator.generate(context);
-            return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX
-                    + properties.getMe()
-                    + SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR
-                    + keyPart;
-        } catch (Exception e) {
-            log.warn("构建限流Key失败, keyStrategy={}", keyStrategy, e);
-            return null;
+    /**
+     * 确定算法策略
+     * 优先级：规则级别 > 拦截器默认
+     */
+    private String determineAlgorithmStrategy(SmartRedisLimiterProperties.SmartInterceptorRule rule) {
+        // 1. 规则级别
+        if (rule != null && rule.getAlgorithm() != null && !rule.getAlgorithm().isEmpty()) {
+            log.debug("使用规则级别算法策略: {}", rule.getAlgorithm());
+            return rule.getAlgorithm();
         }
-    }
 
-    private String serializeLimitRules(List<SmartRedisLimiterProperties.SmartLimitRule> limitRules) {
-        if (limitRules == null || limitRules.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < limitRules.size(); i++) {
-            if (i > 0) {
-                sb.append(",");
-            }
-            SmartRedisLimiterProperties.SmartLimitRule rule = limitRules.get(i);
-            sb.append(rule.getCount())
-                    .append("/")
-                    .append(rule.getWindow())
-                    .append(rule.getUnit().name().toLowerCase());
-        }
-        return sb.toString();
+        // 2. 拦截器模式默认值（默认固定窗口）
+        log.debug("使用拦截器默认算法策略: {}", SmartRedisLimiterConstant.ALGORITHM_FIXED);
+        return SmartRedisLimiterConstant.ALGORITHM_FIXED;
     }
 
     /**
@@ -210,17 +198,7 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         if (!properties.getEnable()) {
             return false;
         }
-
         SmartRedisLimiterMode mode = SmartRedisLimiterMode.fromCode(properties.getMode());
         return mode.isInterceptorEnabled();
-    }
-
-    private String getRequestUri(HttpServletRequest request) {
-        String uri = request.getRequestURI();
-        String contextPath = request.getContextPath();
-        if (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)) {
-            uri = uri.substring(contextPath.length());
-        }
-        return uri;
     }
 }

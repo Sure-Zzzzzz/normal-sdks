@@ -110,6 +110,7 @@ public class SmartLimiterTest {
         log.info("成功次数: {}, 失败次数: {}", successCount.get(), failCount.get());
         assertEquals(limit, successCount.get(), "成功次数应该等于限流阈值");
         assertEquals(concurrentRequests - limit, failCount.get(), "失败次数应该等于超出限流的请求数");
+        assertEquals(concurrentRequests, successCount.get() + failCount.get(), "所有请求都应被计数（无未捕获异常）");
 
         log.info("=== 并发限流测试通过 ===");
     }

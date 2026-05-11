@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterHttpMethod;
@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @SmartRedisLimiterComponent
 @ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
-public class SmartRedisLimiterRuleMatchCache {
+public class SmartRedisLimiterRuleMatchCacheHelper {
 
     @Autowired
     private SmartRedisLimiterProperties properties;
@@ -89,19 +89,21 @@ public class SmartRedisLimiterRuleMatchCache {
             }
         }
 
-        // 优先级2: 模式路径 + 精确方法
+        // 优先级2: 模式路径 + 精确方法（非空方法，精确方法优先于通配）
         for (SmartRedisLimiterProperties.SmartInterceptorRule rule : rules) {
-            if (pathMatcher.match(rule.getPathPattern(), requestUri) && matchMethod(rule, requestMethod)) {
-                log.debug("匹配到模式规则: {}", rule);
+            if (rule.getMethod() != null && !rule.getMethod().isEmpty()
+                    && pathMatcher.match(rule.getPathPattern(), requestUri)
+                    && matchMethod(rule, requestMethod)) {
+                log.debug("匹配到模式规则（精确方法）: {}", rule);
                 return rule;
             }
         }
 
-        // 优先级3: 模式路径 + 任意方法
+        // 优先级3: 模式路径 + 任意方法（method 为空，通配所有方法）
         for (SmartRedisLimiterProperties.SmartInterceptorRule rule : rules) {
-            if (pathMatcher.match(rule.getPathPattern(), requestUri) &&
-                    (rule.getMethod() == null || rule.getMethod().isEmpty())) {
-                log.debug("匹配到默认规则: {}", rule);
+            if ((rule.getMethod() == null || rule.getMethod().isEmpty())
+                    && pathMatcher.match(rule.getPathPattern(), requestUri)) {
+                log.debug("匹配到模式规则（通配方法）: {}", rule);
                 return rule;
             }
         }

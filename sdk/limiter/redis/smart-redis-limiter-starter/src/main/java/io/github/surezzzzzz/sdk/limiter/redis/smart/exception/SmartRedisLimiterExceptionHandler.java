@@ -5,7 +5,7 @@ import org.springframework.http.ResponseEntity;
 /**
  * @author: Sure.
  * @description 智能限流异常处理器接口
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 public interface SmartRedisLimiterExceptionHandler {
 

@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.limiter.redis.smart.strategy;
+package io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import lombok.Data;
@@ -10,7 +10,7 @@ import java.util.Map;
 /**
  * @author: Sure.
  * @description 智能Redis限流器上下文
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Data
 public class SmartRedisLimiterContext {

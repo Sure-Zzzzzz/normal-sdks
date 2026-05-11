@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.exception;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * @author: Sure.
  * @description 默认限流异常处理器（可选，需要显式开启）
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @RestControllerAdvice
 @SmartRedisLimiterComponent

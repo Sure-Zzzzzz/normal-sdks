@@ -1,15 +1,15 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
 
 import javax.servlet.http.HttpServletRequest;
 
 /**
  * @author: Sure.
  * @description Web上下文辅助类（纯工具类）
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 public class SmartRedisLimiterWebContextHelper {
 
@@ -31,9 +31,9 @@ public class SmartRedisLimiterWebContextHelper {
     }
 
     /**
-     * 获取请求路径（去掉contextPath）
+     * 获取请求路径（去掉 contextPath）
      */
-    private static String getRequestPath(HttpServletRequest request) {
+    public static String getRequestPath(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
         if (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)) {

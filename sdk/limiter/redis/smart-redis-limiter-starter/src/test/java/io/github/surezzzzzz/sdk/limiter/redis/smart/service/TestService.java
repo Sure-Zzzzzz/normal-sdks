@@ -45,7 +45,7 @@ public class TestService {
     }
 
     /**
-     * ✅ 查询方法（fallback=allow）
+     * 查询方法（fallback=allow）
      */
     @SmartRedisLimiter(
             rules = {
@@ -59,7 +59,7 @@ public class TestService {
     }
 
     /**
-     * ✅ 创建订单（fallback=deny）
+     * 创建订单（fallback=deny）
      */
     @SmartRedisLimiter(
             rules = {
@@ -73,7 +73,7 @@ public class TestService {
     }
 
     /**
-     * ✅ 支付方法（fallback=deny）
+     * 支付方法（fallback=deny）
      */
     @SmartRedisLimiter(
             rules = {
@@ -87,7 +87,7 @@ public class TestService {
     }
 
     /**
-     * ✅ 不配置降级策略（使用注解模式默认值）
+     * 不配置降级策略（使用注解模式默认值）
      */
     @SmartRedisLimiter(
             rules = {
@@ -98,5 +98,48 @@ public class TestService {
     public String defaultFallbackMethod(String param) {
         log.info("执行 defaultFallbackMethod: {}", param);
         return "default_success";
+    }
+
+    /**
+     * 滑动窗口多时间窗口限流（3次/1秒 + 10次/1分钟）
+     */
+    @SmartRedisLimiter(
+            rules = {
+                    @SmartRedisLimitRule(count = 3, window = 1, unit = TimeUnit.SECONDS),
+                    @SmartRedisLimitRule(count = 10, window = 1, unit = TimeUnit.MINUTES)
+            },
+            algorithm = "sliding"
+    )
+    public String slidingWindowMultiWindowMethod(String param) {
+        log.debug("执行滑动窗口多窗口限流方法，参数: {}", param);
+        return "sliding_multi_success";
+    }
+
+    /**
+     * 固定窗口限流（与滑动窗口对比用，相同参数：5次/1秒）
+     */
+    @SmartRedisLimiter(
+            rules = {
+                    @SmartRedisLimitRule(count = 5, window = 1, unit = TimeUnit.SECONDS)
+            },
+            algorithm = "fixed"
+    )
+    public String fixedWindowMethod(String param) {
+        log.debug("执行固定窗口限流方法，参数: {}", param);
+        return "fixed_success";
+    }
+
+    /**
+     * 滑动窗口限流
+     */
+    @SmartRedisLimiter(
+            rules = {
+                    @SmartRedisLimitRule(count = 5, window = 1, unit = TimeUnit.SECONDS)
+            },
+            algorithm = "sliding"
+    )
+    public String slidingWindowMethod(String param) {
+        log.debug("执行滑动窗口限流方法，参数: {}", param);
+        return "sliding_success";
     }
 }

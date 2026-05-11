@@ -1,18 +1,17 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.aop;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithm;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithmFactory;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimitRule;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterContext;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.strategy.SmartRedisLimiterKeyGenerator;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterExecutor;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -30,7 +29,7 @@ import java.util.List;
 /**
  * @author: Sure.
  * @description 智能限流AOP切面
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Aspect
 @SmartRedisLimiterComponent
@@ -39,7 +38,7 @@ import java.util.List;
 public class SmartRedisLimiterAspect {
 
     @Autowired
-    private SmartRedisLimiterExecutor executor;
+    private SmartRedisLimiterAlgorithmFactory algorithmFactory;
 
     @Autowired
     private SmartRedisLimiterProperties properties;
@@ -83,12 +82,13 @@ public class SmartRedisLimiterAspect {
         }
 
         String fallbackStrategy = determineFallbackStrategy(limiter);
+        SmartRedisLimiterAlgorithm algorithm = selectAlgorithm(limiter);
 
-        boolean passed = executor.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
+        boolean passed = algorithm.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
 
         if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
             if (!passed || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, passed, method);
+                publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), passed, method);
             }
         }
 
@@ -108,14 +108,16 @@ public class SmartRedisLimiterAspect {
 
     private void publishLimitEvent(SmartRedisLimiterContext context,
                                    List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                   String keyStrategy, boolean passed, Method method) {
+                                   String keyStrategy, String algorithm, boolean passed, Method method) {
         try {
-            String limitKey = buildLimitKey(context, keyStrategy);
+            String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
+                    context, keyStrategy, properties.getMe(), applicationContext);
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
                     limitKey,
                     keyStrategy,
-                    serializeLimitRules(limitRules),
+                    algorithm,
+                    SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
                     passed,
                     SmartRedisLimiterConstant.SOURCE_ASPECT,
                     null,
@@ -129,39 +131,6 @@ public class SmartRedisLimiterAspect {
         } catch (Exception e) {
             log.warn("发布限流事件失败", e);
         }
-    }
-
-    private String buildLimitKey(SmartRedisLimiterContext context, String keyStrategy) {
-        try {
-            String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
-            SmartRedisLimiterKeyGenerator generator = applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
-            String keyPart = generator.generate(context);
-            return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX
-                    + properties.getMe()
-                    + SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR
-                    + keyPart;
-        } catch (Exception e) {
-            log.warn("构建限流Key失败, keyStrategy={}", keyStrategy, e);
-            return null;
-        }
-    }
-
-    private String serializeLimitRules(List<SmartRedisLimiterProperties.SmartLimitRule> limitRules) {
-        if (limitRules == null || limitRules.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < limitRules.size(); i++) {
-            if (i > 0) {
-                sb.append(",");
-            }
-            SmartRedisLimiterProperties.SmartLimitRule rule = limitRules.get(i);
-            sb.append(rule.getCount())
-                    .append("/")
-                    .append(rule.getWindow())
-                    .append(rule.getUnit().name().toLowerCase());
-        }
-        return sb.toString();
     }
 
     /**
@@ -194,6 +163,10 @@ public class SmartRedisLimiterAspect {
 
         SmartRedisLimiterMode mode = SmartRedisLimiterMode.fromCode(properties.getMode());
         return mode.isAnnotationEnabled();
+    }
+
+    private SmartRedisLimiterAlgorithm selectAlgorithm(SmartRedisLimiter limiter) {
+        return algorithmFactory.getAlgorithm(limiter.algorithm());
     }
 
     private List<SmartRedisLimiterProperties.SmartLimitRule> parseLimitRules(SmartRedisLimiter limiter) {

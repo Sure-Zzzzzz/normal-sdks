@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -114,6 +115,58 @@ public class TestController {
         return result;
     }
 
+    // ==================== 滑动窗口测试接口（拦截器模式） ====================
+
+    /**
+     * 滑动窗口GET接口（拦截器限流，algorithm=sliding，fallback=allow）
+     */
+    @GetMapping("/sliding/{id}")
+    public Map<String, Object> slidingWindowGet(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "sliding window GET");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 滑动窗口POST接口（拦截器限流，algorithm=sliding，fallback=deny）
+     */
+    @PostMapping("/sliding/{id}")
+    public Map<String, Object> slidingWindowPost(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "sliding window POST");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    // ==================== 混用算法测试接口（拦截器模式） ====================
+
+    /**
+     * 混用算法GET接口（algorithm=sliding，fallback=allow）
+     */
+    @GetMapping("/mixed/{id}")
+    public Map<String, Object> mixedAlgorithmGet(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "mixed algorithm GET");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 混用算法POST接口（algorithm=fixed，fallback=deny）
+     */
+    @PostMapping("/mixed/{id}")
+    public Map<String, Object> mixedAlgorithmPost(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "mixed algorithm POST");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
     /**
      * 健康检查接口（排除限流）
      */
@@ -121,6 +174,19 @@ public class TestController {
     public Map<String, Object> health() {
         Map<String, Object> result = new HashMap<>();
         result.put("status", "UP");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * IP获取测试接口（排除限流）
+     */
+    @GetMapping("/ip")
+    public Map<String, Object> ipEndpoint(HttpServletRequest request) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("x-forwarded-for", request.getHeader("X-Forwarded-For"));
+        result.put("x-real-ip", request.getHeader("X-Real-IP"));
+        result.put("remote-addr", request.getRemoteAddr());
         result.put("timestamp", System.currentTimeMillis());
         return result;
     }

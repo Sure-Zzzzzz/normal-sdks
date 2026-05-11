@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.interceptor.SmartRedisLimiterInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +14,7 @@ import java.util.List;
 /**
  * @author: Sure.
  * @description 拦截器注册配置
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
 @Slf4j

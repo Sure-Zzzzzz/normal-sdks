@@ -43,6 +43,49 @@ io:
                   - /api/health
 
                 rules:
+                  # 规则0：滑动窗口测试接口，路径模式共享限流
+                  - path-pattern: /api/sliding/**
+                    method: GET
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 1
+                        unit: seconds
+
+                  # 规则0b：滑动窗口写操作，Redis异常时拒绝
+                  - path-pattern: /api/sliding/**
+                    method: POST
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 1
+                        unit: seconds
+
+                  # 规则0c：混用算法测试接口，GET用滑动窗口，POST用固定窗口
+                  - path-pattern: /api/mixed/**
+                    method: GET
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 1
+                        unit: seconds
+
+                  - path-pattern: /api/mixed/**
+                    method: POST
+                    key-strategy: path-pattern
+                    algorithm: fixed
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 1
+                        unit: seconds
+
                   # 规则1：/api/public/** GET请求，每个路径独立限流
                   - path-pattern: /api/public/**
                     method: GET

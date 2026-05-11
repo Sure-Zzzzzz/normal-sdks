@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.SmartRedisLimiterPackage;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,7 +19,7 @@ import javax.annotation.PostConstruct;
 /**
  * @author: Sure.
  * @description 智能Redis限流器自动配置
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 @Configuration
 @ConditionalOnProperty(

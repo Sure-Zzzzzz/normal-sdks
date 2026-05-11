@@ -1,9 +1,11 @@
-package io.github.surezzzzzz.sdk.limiter.redis.smart.strategy;
+package io.github.surezzzzzz.sdk.limiter.redis.smart.generator;
+
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 
 /**
  * @author: Sure.
  * @description 限流Key生成策略接口
- * @Date: 2024/12/XX XX:XX
+ * @Date: 2026-05-08
  */
 public interface SmartRedisLimiterKeyGenerator {
 
