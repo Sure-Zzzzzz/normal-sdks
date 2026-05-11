@@ -59,6 +59,20 @@ public interface SmartRedisLimiterAlgorithm {
                        String keyStrategy,
                        String fallbackStrategy);
 
+    /**
+     * 执行限流检查并返回详细结果（用于响应头等场景）
+     *
+     * @param context          限流上下文
+     * @param limitRules       限流规则列表
+     * @param keyStrategy      Key生成策略
+     * @param fallbackStrategy 降级策略（可选，为null时使用全局配置）
+     * @return 限流检查结果（包含 passed / limit / remaining / resetAt）
+     */
+    SmartRedisLimiterResult tryAcquireWithResult(SmartRedisLimiterContext context,
+                                                 List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                                                 String keyStrategy,
+                                                 String fallbackStrategy);
+
     // ==================== Accessors (implements must provide) ====================
 
     /**
@@ -66,7 +80,7 @@ public interface SmartRedisLimiterAlgorithm {
      *
      * @return Lua 脚本
      */
-    DefaultRedisScript<Long> getScript();
+    DefaultRedisScript<List> getScript();
 
     /**
      * 获取 RedisTemplate

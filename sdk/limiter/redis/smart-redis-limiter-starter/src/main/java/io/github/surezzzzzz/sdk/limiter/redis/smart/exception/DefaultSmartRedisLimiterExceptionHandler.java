@@ -42,9 +42,21 @@ public class DefaultSmartRedisLimiterExceptionHandler implements SmartRedisLimit
         body.put("message", SmartRedisLimiterConstant.HTTP_MESSAGE_TOO_MANY_REQUESTS);
         body.put("retryAfter", ex.getRetryAfter());
 
-        return ResponseEntity
+        ResponseEntity.BodyBuilder builder = ResponseEntity
                 .status(HttpStatus.TOO_MANY_REQUESTS)
-                .header(SmartRedisLimiterConstant.HEADER_RETRY_AFTER, String.valueOf(ex.getRetryAfter()))
-                .body(body);
+                .header(SmartRedisLimiterConstant.HEADER_RETRY_AFTER, String.valueOf(ex.getRetryAfter()));
+
+        // 写入限流详情响应头（异常中携带了详情时）
+        if (ex.getLimit() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT, String.valueOf(ex.getLimit()));
+        }
+        if (ex.getRemaining() >= 0 && ex.getLimit() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING, String.valueOf(ex.getRemaining()));
+        }
+        if (ex.getResetAt() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_RESET, String.valueOf(ex.getResetAt()));
+        }
+
+        return builder.body(body);
     }
 }

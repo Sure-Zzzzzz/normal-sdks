@@ -18,6 +18,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -527,6 +528,88 @@ public class SmartRedisLimiterInterceptorAlgorithmTest {
         log.info("无代理头时事件ClientIP={}", record.getClientIp());
 
         log.info("=== RemoteAddr fallback测试通过 ===");
+    }
+
+    // ==================== 响应头测试 ====================
+
+    /**
+     * 测试14：拦截器限流时响应包含 X-RateLimit-* 头（通过请求）
+     */
+    @Test
+    public void testRateLimitHeadersOnPass() throws Exception {
+        log.info("=== 测试限流通过时的响应头 ===");
+
+        // 第一个请求，通过
+        MvcResult result = mockMvc.perform(get("/api/sliding/header-pass"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String limitHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT);
+        String remainingHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING);
+        String resetHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_RESET);
+
+        log.info("通过请求响应头: limit={}, remaining={}, reset={}", limitHeader, remainingHeader, resetHeader);
+        assertNotNull(limitHeader, "X-RateLimit-Limit 不应为空");
+        assertEquals("5", limitHeader, "limit 应为 5");
+        assertNotNull(remainingHeader, "X-RateLimit-Remaining 不应为空");
+        assertNotNull(resetHeader, "X-RateLimit-Reset 不应为空");
+
+        log.info("=== 限流通过响应头测试通过 ===");
+    }
+
+    /**
+     * 测试15：拦截器限流时响应包含 X-RateLimit-* 头（拒绝请求）
+     */
+    @Test
+    public void testRateLimitHeadersOnReject() throws Exception {
+        log.info("=== 测试限流拒绝时的响应头 ===");
+
+        // 耗尽配额
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(get("/api/sliding/header-reject-" + i))
+                    .andExpect(status().isOk());
+        }
+
+        // 第6次被限流，检查响应头
+        MvcResult result = mockMvc.perform(get("/api/sliding/header-reject-6"))
+                .andExpect(status().isTooManyRequests())
+                .andReturn();
+
+        String limitHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT);
+        String remainingHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING);
+        String resetHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_RESET);
+        String retryAfterHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_RETRY_AFTER);
+
+        log.info("拒绝请求响应头: limit={}, remaining={}, reset={}, retryAfter={}",
+                limitHeader, remainingHeader, resetHeader, retryAfterHeader);
+
+        assertEquals("5", limitHeader, "limit 应为 5");
+        assertEquals("0", remainingHeader, "remaining 应为 0");
+        assertNotNull(resetHeader, "reset 不应为空");
+        assertNotNull(retryAfterHeader, "Retry-After 不应为空");
+
+        log.info("=== 限流拒绝响应头测试通过 ===");
+    }
+
+    /**
+     * 测试16：固定窗口限流响应头
+     */
+    @Test
+    public void testFixedWindowRateLimitHeaders() throws Exception {
+        log.info("=== 测试固定窗口限流响应头 ===");
+
+        // 第一个请求，通过
+        MvcResult result = mockMvc.perform(get("/api/public/fixed-header"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String limitHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT);
+        String remainingHeader = result.getResponse().getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING);
+
+        log.info("固定窗口通过请求响应头: limit={}, remaining={}", limitHeader, remainingHeader);
+        assertEquals("5", limitHeader, "固定窗口 limit 应为 5");
+
+        log.info("=== 固定窗口限流响应头测试通过 ===");
     }
 
     // ==================== 辅助方法 ====================

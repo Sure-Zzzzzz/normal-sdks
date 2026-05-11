@@ -13,13 +13,14 @@
 - **集群支持**：自动检测 Redis 集群模式，使用 Hash Tag 保证 Lua 脚本原子性
 - **事件审计**：限流触发/通过时发布 Spring 事件，支持与外部系统集成
 - **ClientIP 解析**：拦截器模式自动解析客户端真实 IP（支持多级代理）
+- **标准响应头**：限流检查后写入 `X-RateLimit-Limit/Remaining/Reset`，客户端可据此实现重试
 
 ## 快速开始
 
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.0'
+implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.1'
 // 必须显式引入以下依赖
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -316,6 +317,32 @@ audit:
   enabled: true        # 启用审计事件发布
   log-on-pass: false   # 是否在限流通过时也发布事件（默认 false，仅限流触发时发布）
 ```
+
+### 限流响应头
+
+限流检查后自动写入以下标准响应头（无论通过还是拒绝），便于客户端实现重试逻辑：
+
+| 响应头 | 说明 | 示例 |
+|-------|------|------|
+| `X-RateLimit-Limit` | 时间窗口内的限流阈值 | `5` |
+| `X-RateLimit-Remaining` | 当前窗口剩余配额 | `0` |
+| `X-RateLimit-Reset` | 窗口重置的 Unix 时间戳（秒） | `1715635200` |
+| `Retry-After` | 被限流时建议重试等待时间（秒） | `1` |
+
+被限流时的 HTTP 响应示例：
+
+```
+HTTP/1.1 429 Too Many Requests
+X-RateLimit-Limit: 5
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1715635200
+Retry-After: 1
+Content-Type: application/json
+
+{"code":429,"message":"Rate limit exceeded","data":{"limit":5,"remaining":0,"resetAt":1715635200}}
+```
+
+> 注意：注解模式和拦截器模式均会写入响应头。被限流时抛出的 `SmartRedisLimitExceededException` 也携带限流详情，可供自定义 `ExceptionHandler` 使用。
 
 ## Redis Key 结构
 

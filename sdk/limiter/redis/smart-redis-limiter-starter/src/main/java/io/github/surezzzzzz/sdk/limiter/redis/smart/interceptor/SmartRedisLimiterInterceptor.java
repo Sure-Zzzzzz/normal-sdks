@@ -3,9 +3,12 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.interceptor;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithm;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithmFactory;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
@@ -106,15 +109,18 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
         String algorithm = determineAlgorithmStrategy(matchedRule);
         SmartRedisLimiterAlgorithm algorithmInstance = algorithmFactory.getAlgorithm(algorithm);
-        boolean passed = algorithmInstance.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
+        SmartRedisLimiterResult result = algorithmInstance.tryAcquireWithResult(context, limitRules, keyStrategy, fallbackStrategy);
+
+        // 写入限流响应头
+        writeRateLimitHeaders(response, result);
 
         if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
-            if (!passed || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, algorithm, passed);
+            if (!result.isPassed() || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
+                publishLimitEvent(context, limitRules, keyStrategy, algorithm, result.isPassed());
             }
         }
 
-        if (!passed) {
+        if (!result.isPassed()) {
             long retryAfter = limitRules.stream()
                     .mapToLong(SmartRedisLimiterProperties.SmartLimitRule::getWindowSeconds)
                     .min()
@@ -122,7 +128,8 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
             log.warn("拦截器限流触发: {} {}, rules={}, retryAfter={}s",
                     requestMethod, requestUri, limitRules, retryAfter);
-            throw new SmartRedisLimitExceededException(requestUri, retryAfter);
+            throw new SmartRedisLimitExceededException(requestUri, retryAfter,
+                    result.getLimit(), result.getRemaining(), result.getResetAt());
         }
 
         return true;
@@ -200,5 +207,27 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         }
         SmartRedisLimiterMode mode = SmartRedisLimiterMode.fromCode(properties.getMode());
         return mode.isInterceptorEnabled();
+    }
+
+    /**
+     * 写入标准限流响应头
+     */
+    private void writeRateLimitHeaders(HttpServletResponse response, SmartRedisLimiterResult result) {
+        try {
+            if (result.getLimit() > 0) {
+                response.setHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT,
+                        String.valueOf(result.getLimit()));
+            }
+            if (result.getRemaining() >= 0 && result.getLimit() > 0) {
+                response.setHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING,
+                        String.valueOf(result.getRemaining()));
+            }
+            if (result.getResetAt() > 0) {
+                response.setHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_RESET,
+                        String.valueOf(result.getResetAt()));
+            }
+        } catch (Exception e) {
+            log.debug("写入限流响应头失败", e);
+        }
     }
 }

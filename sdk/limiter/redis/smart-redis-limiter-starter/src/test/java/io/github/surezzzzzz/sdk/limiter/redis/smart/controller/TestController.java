@@ -190,4 +190,38 @@ public class TestController {
         result.put("timestamp", System.currentTimeMillis());
         return result;
     }
+
+    /**
+     * 响应头测试接口（滑动窗口）
+     */
+    @GetMapping("/sliding/header-pass")
+    public Map<String, Object> slidingHeaderPass() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "sliding header test pass");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 响应头测试接口（滑动窗口，拒绝）
+     */
+    @GetMapping("/sliding/header-reject-{id}")
+    public Map<String, Object> slidingHeaderReject(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "sliding header test reject");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 响应头测试接口（固定窗口）
+     */
+    @GetMapping("/public/fixed-header")
+    public Map<String, Object> fixedHeaderEndpoint() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "fixed header test");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
 }

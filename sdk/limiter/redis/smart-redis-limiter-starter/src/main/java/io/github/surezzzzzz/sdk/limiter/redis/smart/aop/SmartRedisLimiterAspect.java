@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.aop;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithm;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterAlgorithmFactory;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimitRule;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
@@ -84,15 +85,15 @@ public class SmartRedisLimiterAspect {
         String fallbackStrategy = determineFallbackStrategy(limiter);
         SmartRedisLimiterAlgorithm algorithm = selectAlgorithm(limiter);
 
-        boolean passed = algorithm.tryAcquire(context, limitRules, keyStrategy, fallbackStrategy);
+        SmartRedisLimiterResult result = algorithm.tryAcquireWithResult(context, limitRules, keyStrategy, fallbackStrategy);
 
         if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
-            if (!passed || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), passed, method);
+            if (!result.isPassed() || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
+                publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), result.isPassed(), method);
             }
         }
 
-        if (!passed) {
+        if (!result.isPassed()) {
             long retryAfter = limitRules.stream()
                     .mapToLong(SmartRedisLimiterProperties.SmartLimitRule::getWindowSeconds)
                     .min()
@@ -100,7 +101,8 @@ public class SmartRedisLimiterAspect {
 
             log.warn("注解限流触发: method={}, rules={}, retryAfter={}s",
                     method.getName(), limitRules, retryAfter);
-            throw new SmartRedisLimitExceededException(method.getName(), retryAfter);
+            throw new SmartRedisLimitExceededException(method.getName(), retryAfter,
+                    result.getLimit(), result.getRemaining(), result.getResetAt());
         }
 
         return joinPoint.proceed();
