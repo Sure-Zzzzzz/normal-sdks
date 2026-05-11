@@ -20,7 +20,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.1'
+implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.2'
 // 必须显式引入以下依赖
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework.boot:spring-boot-starter-aop'

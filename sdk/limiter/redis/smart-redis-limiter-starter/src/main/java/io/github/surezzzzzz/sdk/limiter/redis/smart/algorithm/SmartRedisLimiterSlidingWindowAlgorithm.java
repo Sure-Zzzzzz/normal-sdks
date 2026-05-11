@@ -33,6 +33,7 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
             "local key_count = #KEYS\n" +
                     "local current_time = tonumber(ARGV[#ARGV - 1])\n" +
                     "local current_time_sec = tonumber(ARGV[#ARGV])\n" +
+                    "local NANOSECONDS_PER_SECOND = " + SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND + "\n" +
                     "local min_remaining = nil\n" +
                     "local min_limit = nil\n" +
                     "local min_reset = nil\n" +
@@ -41,12 +42,21 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
                     "    local window_key = KEYS[i]\n" +
                     "    local limit = tonumber(ARGV[i * 2 - 1])\n" +
                     "    local window = tonumber(ARGV[i * 2])\n" +
-                    "    local window_start = current_time - window\n" +
-                    "    redis.call('ZREMRANGEBYSCORE', window_key, '-inf', window_start)\n" +
+                    "    local window_sec = math.ceil(window / NANOSECONDS_PER_SECOND)\n" +
+                    "    local reset_at = current_time_sec + window_sec\n" +
+                    "\n" +
+                    "    -- 优化：先只读计数，不清理\n" +
                     "    local current_count = redis.call('ZCARD', window_key)\n" +
                     "    local remaining = limit - current_count\n" +
-                    "    local window_sec = math.ceil(window / " + SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND + ")\n" +
-                    "    local reset_at = current_time_sec + window_sec\n" +
+                    "\n" +
+                    "    -- 配额用尽或已达阈值才触发过期数据清理\n" +
+                    "    if remaining <= 0 then\n" +
+                    "        local window_start = current_time - window\n" +
+                    "        redis.call('ZREMRANGEBYSCORE', window_key, '-inf', window_start)\n" +
+                    "        current_count = redis.call('ZCARD', window_key)\n" +
+                    "        remaining = limit - current_count\n" +
+                    "    end\n" +
+                    "\n" +
                     "    if min_remaining == nil or remaining < min_remaining then\n" +
                     "        min_remaining = remaining\n" +
                     "        min_limit = limit\n" +
@@ -62,7 +72,7 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
                     "        local window = tonumber(ARGV[i * 2])\n" +
                     "        local member = ARGV[key_count * 2 + i]\n" +
                     "        redis.call('ZADD', window_key, current_time, member)\n" +
-                    "        redis.call('EXPIRE', window_key, math.ceil(window / " + SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND + ") + 1)\n" +
+                    "        redis.call('EXPIRE', window_key, math.ceil(window / NANOSECONDS_PER_SECOND) + 1)\n" +
                     "    end\n" +
                     "    return {1, min_limit, min_remaining, min_reset}\n" +
                     "end\n" +

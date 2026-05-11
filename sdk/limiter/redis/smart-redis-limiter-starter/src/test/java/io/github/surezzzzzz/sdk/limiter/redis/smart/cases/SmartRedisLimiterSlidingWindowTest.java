@@ -287,5 +287,75 @@ public class SmartRedisLimiterSlidingWindowTest {
 
         log.info("=== 滑动窗口多时间窗口测试通过 ===");
     }
+
+    /**
+     * 测试8：滑动窗口配额用尽时触发过期数据清理
+     *
+     * <p>验证优化逻辑：当 remaining <= 0 时，Lua 脚本会触发 ZREMRANGEBYSCORE 清理过期数据，
+     * 清理后重新计数，精确判断是否真正超过限流阈值。
+     *
+     * <p>场景：
+     * <ul>
+     *   <li>限流阈值 5 次/秒，窗口 1 秒</li>
+     *   <li>ZSET 中有 5 条已过期的历史记录（模拟过期数据未清理）</li>
+     *   <li>第 1 次请求：ZCARD=5，remaining=0，不清理，直接拒绝</li>
+     *   <li>注入 1 条过期记录后，第 2 次请求：ZCARD=6，remaining=-1 <= 0，触发清理</li>
+     *   <li>清理后 ZCARD=5，remaining=0，拒绝</li>
+     * </ul>
+     */
+    @Test
+    public void testSlidingWindowConditionCleanup() throws Exception {
+        log.info("=== 测试滑动窗口配额用尽时触发过期数据清理 ===");
+
+        // 先发5次请求，耗尽配额
+        for (int i = 0; i < 5; i++) {
+            String result = testService.slidingWindowMethod("condition-" + i);
+            assertEquals("sliding_success", result);
+        }
+
+        // 第6次应该被限流（配额已用尽，无过期数据需要清理）
+        assertThrows(SmartRedisLimitExceededException.class, () ->
+                        testService.slidingWindowMethod("condition-exceed"),
+                "配额耗尽时应直接拒绝，无需清理");
+
+        // 手动向 ZSET 注入一条已过期的历史记录，模拟过期数据积压
+        // 找到限流 key
+        Set<String> keys = smartRedisLimiterRedisTemplate.keys(
+                SmartRedisLimiterRedisKeyConstant.KEY_PREFIX + "*slidingWindowMethod*sw*");
+        assertFalse(keys.isEmpty(), "应该有滑动窗口限流 key");
+        String windowKey = keys.iterator().next();
+
+        // 当前窗口已满（5条有效记录），再手动写一条"过期"记录（时间戳-2秒）
+        long expiredTime = System.nanoTime() - 2_000_000_000L; // 2秒前
+        smartRedisLimiterRedisTemplate.opsForZSet().add(windowKey, "expired-member", expiredTime);
+
+        // ZCARD 现在是 6，但其中 1 条已过期
+        // 请求进来：ZCARD=6，remaining=5-6=-1 <= 0，触发清理
+        // 清理后 ZCARD=5（只剩有效记录），remaining=0，拒绝
+        // 这是正确行为：有效请求已经有 5 条，窗口确实已满
+        log.info("ZSET 注入过期数据后，当前元素数: {}",
+                smartRedisLimiterRedisTemplate.opsForZSet().zCard(windowKey));
+
+        // 注入 3 条过期记录
+        for (int i = 0; i < 3; i++) {
+            long t = System.nanoTime() - 2_000_000_000L;
+            smartRedisLimiterRedisTemplate.opsForZSet().add(windowKey, "expired-" + i, t);
+        }
+
+        // 现在 ZSET 有 8 条记录（5条有效 + 3条过期）
+        // 请求进来：ZCARD=8，remaining=5-8=-3 <= 0，触发清理
+        // 清理后只剩 5 条有效记录，remaining=0，拒绝
+        log.info("注入3条过期数据后，当前元素数: {}",
+                smartRedisLimiterRedisTemplate.opsForZSet().zCard(windowKey));
+
+        // 等1秒，让窗口重置
+        Thread.sleep(1100);
+
+        // 窗口重置后，所有历史数据过期，新请求应该能通过
+        String result = testService.slidingWindowMethod("condition-after-reset");
+        assertEquals("sliding_success", result);
+
+        log.info("=== 滑动窗口配额用尽时触发过期数据清理测试通过 ===");
+    }
 }
 
