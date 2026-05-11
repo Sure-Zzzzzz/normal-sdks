@@ -51,6 +51,21 @@ public interface SmartRedisLimiterConstant {
     String HEADER_RETRY_AFTER = "Retry-After";
 
     /**
+     * X-RateLimit-Limit 响应头（时间窗口内的限流阈值）
+     */
+    String HEADER_X_RATELIMIT_LIMIT = "X-RateLimit-Limit";
+
+    /**
+     * X-RateLimit-Remaining 响应头（当前窗口剩余配额）
+     */
+    String HEADER_X_RATELIMIT_REMAINING = "X-RateLimit-Remaining";
+
+    /**
+     * X-RateLimit-Reset 响应头（窗口重置的 Unix 时间戳，秒）
+     */
+    String HEADER_X_RATELIMIT_RESET = "X-RateLimit-Reset";
+
+    /**
      * X-Forwarded-For 请求头
      */
     String HEADER_X_FORWARDED_FOR = "X-Forwarded-For";
