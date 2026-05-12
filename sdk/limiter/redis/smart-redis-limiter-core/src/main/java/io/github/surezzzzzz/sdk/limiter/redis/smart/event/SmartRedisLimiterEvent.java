@@ -90,11 +90,32 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
      */
     private final Map<String, Object> attributes;
 
+    /**
+     * 限流阈值
+     */
+    private final long limit;
+
+    /**
+     * 剩余配额
+     */
+    private final long remaining;
+
+    /**
+     * 窗口重置时间（Unix 秒）
+     */
+    private final long resetAt;
+
+    /**
+     * 限流检查耗时（纳秒）
+     */
+    private final long durationNanos;
+
     public SmartRedisLimiterEvent(Object source, String limitKey, String keyStrategy, String algorithm,
                                   String limitRules, boolean passed, String sourceType,
                                   String requestUri, String httpMethod, String clientIp, String matchedPathPattern,
                                   String methodName, String methodQualifiedName,
-                                  Map<String, Object> attributes) {
+                                  Map<String, Object> attributes,
+                                  long limit, long remaining, long resetAt, long durationNanos) {
         super(source);
         this.limitKey = limitKey;
         this.keyStrategy = keyStrategy;
@@ -109,5 +130,9 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
         this.methodName = methodName;
         this.methodQualifiedName = methodQualifiedName;
         this.attributes = attributes;
+        this.limit = limit;
+        this.remaining = remaining;
+        this.resetAt = resetAt;
+        this.durationNanos = durationNanos;
     }
 }

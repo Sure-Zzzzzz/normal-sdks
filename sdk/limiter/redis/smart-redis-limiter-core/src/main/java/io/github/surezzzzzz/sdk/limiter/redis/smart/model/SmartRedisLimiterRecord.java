@@ -111,6 +111,28 @@ public class SmartRedisLimiterRecord {
      */
     private String methodQualifiedName;
 
+    // ==================== 限流详情 ====================
+
+    /**
+     * 限流阈值
+     */
+    private long limit;
+
+    /**
+     * 剩余配额
+     */
+    private long remaining;
+
+    /**
+     * 窗口重置时间（Unix 秒）
+     */
+    private long resetAt;
+
+    /**
+     * 限流检查耗时（纳秒）
+     */
+    private long durationNanos;
+
     // ==================== 元数据 ====================
 
     /**
