@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.route.validator.SimpleElasticsearchRouteValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 配置验证功能单元测试
- * 测试 SimpleElasticsearchRouteProperties 的配置验证逻辑
+ * 测试 SimpleElasticsearchRouteValidator 的配置验证逻辑
  *
  * @author Sure
  * @since 1.0.2
@@ -34,7 +35,7 @@ public class ConfigValidationTest {
         SimpleElasticsearchRouteProperties properties = createValidProperties();
 
         // 应该不抛异常
-        assertDoesNotThrow(() -> properties.init());
+        assertDoesNotThrow(() -> new SimpleElasticsearchRouteValidator(properties).init());
 
         log.info("=== 正常配置验证通过 ===");
     }
@@ -51,7 +52,7 @@ public class ConfigValidationTest {
         properties.setSources(new HashMap<>());
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -75,7 +76,7 @@ public class ConfigValidationTest {
         properties.setDefaultSource("nonexistent");
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -103,7 +104,7 @@ public class ConfigValidationTest {
         properties.getSources().put("test", config);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -127,7 +128,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setConnectTimeout(0);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -151,7 +152,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setSocketTimeout(-1);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -176,7 +177,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setMaxConnPerRoute(20);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -201,7 +202,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setProxyHost(null);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -225,7 +226,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setKeepAliveStrategy(0);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -250,7 +251,7 @@ public class ConfigValidationTest {
         properties.getSources().get("primary").setUrls("http1111://invalid url with spaces");
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -281,7 +282,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -312,7 +313,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -343,7 +344,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -375,7 +376,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -407,7 +408,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息
@@ -447,7 +448,7 @@ public class ConfigValidationTest {
         properties.getRules().add(rule2);
 
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
-            properties.init();
+            new SimpleElasticsearchRouteValidator(properties).init();
         });
 
         // 检查异常的cause消息

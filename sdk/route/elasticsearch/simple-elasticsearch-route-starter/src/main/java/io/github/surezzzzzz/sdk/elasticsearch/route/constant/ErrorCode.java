@@ -52,6 +52,6 @@ public class ErrorCode {
     public static final String OTHER_URL_EMPTY = "OTHER_005";
 
     private ErrorCode() {
-        // 私有构造函数，防止实例化
+        throw new UnsupportedOperationException("Utility class");
     }
 }

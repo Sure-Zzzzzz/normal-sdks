@@ -63,4 +63,23 @@ public enum RouteMatchType {
     public static boolean isValid(String code) {
         return fromCode(code) != null;
     }
+
+    /**
+     * 获取所有有效的类型代码
+     *
+     * @return 类型代码数组
+     */
+    public static String[] getAllCodes() {
+        RouteMatchType[] types = values();
+        String[] codes = new String[types.length];
+        for (int i = 0; i < types.length; i++) {
+            codes[i] = types[i].code;
+        }
+        return codes;
+    }
+
+    @Override
+    public String toString() {
+        return code;
+    }
 }

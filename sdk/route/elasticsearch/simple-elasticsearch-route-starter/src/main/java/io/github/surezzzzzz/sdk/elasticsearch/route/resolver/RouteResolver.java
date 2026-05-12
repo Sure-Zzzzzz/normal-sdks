@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.resolver;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
+import io.github.surezzzzzz.sdk.elasticsearch.route.matcher.RoutePatternMatcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.CollectionUtils;

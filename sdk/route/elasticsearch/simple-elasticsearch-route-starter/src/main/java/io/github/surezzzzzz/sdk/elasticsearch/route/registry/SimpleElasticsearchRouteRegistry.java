@@ -2,10 +2,9 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.registry;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ConfigConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.RouteException;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.VersionException;
@@ -56,7 +55,7 @@ import java.util.regex.Pattern;
 public class SimpleElasticsearchRouteRegistry {
 
     private static final Pattern VERSION_NUMBER_PATTERN =
-            Pattern.compile(ElasticsearchApiConstant.VERSION_NUMBER_PATTERN_REGEX, Pattern.DOTALL);
+            Pattern.compile(SimpleElasticsearchRouteConstant.VERSION_NUMBER_PATTERN_REGEX, Pattern.DOTALL);
 
     private final SimpleElasticsearchRouteProperties properties;
     private final RouteResolver routeResolver;
@@ -73,7 +72,7 @@ public class SimpleElasticsearchRouteRegistry {
         log.info("Initializing SimpleElasticsearchRouteRegistry...");
         createAllClients();
         initClusterInfoAndDetect();
-        log.info("✅ SimpleElasticsearchRouteRegistry initialized: datasources={}", clientsMap.keySet());
+        log.info("SimpleElasticsearchRouteRegistry initialized: datasources={}", clientsMap.keySet());
     }
 
     @PreDestroy
@@ -248,11 +247,11 @@ public class SimpleElasticsearchRouteRegistry {
             RestHighLevelClient client = new RestHighLevelClient(restClientBuilder);
             ElasticsearchRestTemplate template = new ElasticsearchRestTemplate(client);
 
-            log.info("✅ Elasticsearch datasource [{}] initialized successfully - urls: {}", key, urls);
+            log.info("Elasticsearch datasource [{}] initialized successfully - urls: {}", key, urls);
             return new DataSourceClients(client, template);
 
         } catch (Exception e) {
-            log.error("❌ Failed to create Elasticsearch client for datasource [{}]", key, e);
+            log.error("Failed to create Elasticsearch client for datasource [{}]", key, e);
             throw new ConfigurationException(ErrorCode.OTHER_DATASOURCE_INIT_FAILED,
                     String.format(ErrorMessage.OTHER_DATASOURCE_INIT_FAILED, key), e);
         }
@@ -277,11 +276,11 @@ public class SimpleElasticsearchRouteRegistry {
             return;
         }
 
-        int threads = Math.min(ConfigConstant.VERSION_DETECT_THREAD_POOL_MAX,
-                Math.max(ConfigConstant.VERSION_DETECT_THREAD_POOL_MIN, properties.getSources().size()));
+        int threads = Math.min(SimpleElasticsearchRouteConstant.VERSION_DETECT_THREAD_POOL_MAX,
+                Math.max(SimpleElasticsearchRouteConstant.VERSION_DETECT_THREAD_POOL_MIN, properties.getSources().size()));
         versionDetectExecutor = Executors.newFixedThreadPool(threads, runnable -> {
             Thread t = new Thread(runnable);
-            t.setName(ConfigConstant.VERSION_DETECT_THREAD_NAME);
+            t.setName(SimpleElasticsearchRouteConstant.VERSION_DETECT_THREAD_NAME);
             t.setDaemon(true);
             return t;
         });
@@ -361,8 +360,8 @@ public class SimpleElasticsearchRouteRegistry {
             RestClientBuilder builder = buildRestClientBuilder(datasourceKey, hosts, dsConfig, connectTimeout, socketTimeout);
             probeClient = builder.build();
 
-            Request request = new Request(ElasticsearchApiConstant.HTTP_METHOD_GET,
-                    ElasticsearchApiConstant.ENDPOINT_ROOT);
+            Request request = new Request(SimpleElasticsearchRouteConstant.HTTP_METHOD_GET,
+                    SimpleElasticsearchRouteConstant.ENDPOINT_ROOT);
             Response response = probeClient.performRequest(request);
             String body = readEntity(response.getEntity());
 
@@ -451,7 +450,7 @@ public class SimpleElasticsearchRouteRegistry {
                 try {
                     SSLContext sslContext;
                     if (config.isSkipSslValidation()) {
-                        log.warn("⚠️  Datasource [{}] is configured to skip SSL validation - DO NOT use in production!", datasourceKey);
+                        log.warn("Datasource [{}] is configured to skip SSL validation - DO NOT use in production!", datasourceKey);
                         sslContext = SSLContextBuilder.create()
                                 .loadTrustMaterial((chain, authType) -> true)
                                 .build();
@@ -508,9 +507,9 @@ public class SimpleElasticsearchRouteRegistry {
                 int port = url.getPort();
 
                 if (port == -1) {
-                    port = ConfigConstant.PROTOCOL_HTTPS.equals(scheme)
-                            ? ConfigConstant.DEFAULT_HTTPS_PORT
-                            : ConfigConstant.DEFAULT_HTTP_PORT;
+                    port = SimpleElasticsearchRouteConstant.PROTOCOL_HTTPS.equals(scheme)
+                            ? SimpleElasticsearchRouteConstant.DEFAULT_HTTPS_PORT
+                            : SimpleElasticsearchRouteConstant.DEFAULT_HTTP_PORT;
                 }
 
                 httpHosts[i] = new HttpHost(hostname, port, scheme);

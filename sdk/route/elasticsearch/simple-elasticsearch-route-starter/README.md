@@ -17,7 +17,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.7'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.9'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -248,20 +248,24 @@ elasticsearchTemplate.save(order); // 索引: orders -> 路由到 cluster3
 
 route-starter 使用 CGLIB 动态代理创建 `ElasticsearchRestTemplate`，在不同 Spring Boot 版本下行为如下：
 
-| Spring Boot 版本 | 单数据源 | 多数据源 |
-|-----------------|---------|---------|
-| 2.7.x+（推荐） | ✅ 路由代理正常 | ✅ 路由代理正常 |
-| 2.4.x | ✅ 自动降级到简单 template（路由无意义） | ❌ 启动失败，需升级版本 |
+| Spring Boot 版本 | ES Client | 单数据源 | 多数据源 |
+|-----------------|-----------|---------|---------|
+| 2.2.5 | 6.5.x | ✅ 降级简单 template | ❌ 启动失败，需升级版本 |
+| 2.3.12 | 6.8.x | ✅ 降级简单 template | ❌ 启动失败，需升级版本 |
+| 2.4.x | 7.9+ | ✅ CGLIB 降级 | ❌ 启动失败，需升级版本 |
+| 2.7.x+（推荐） | 7.17+ | ✅ CGLIB 代理，路由正常 | ✅ 路由正常 |
 
-**Spring Boot 2.4.x 多数据源说明：**
+**单数据源降级说明：**
 
-CGLIB 在 2.4.x 下无法访问 `AbstractElasticsearchTemplate` 的 protected 成员，代理创建失败。多数据源场景下路由失效会导致数据写入错误的集群，因此 route-starter 会在启动时直接报错，而不是静默失败。
+`SimpleElasticsearchRouteConfiguration` 中使用 CGLIB 创建代理，依赖 ES Client 7.x 类链路。Spring Boot 2.2.5 / 2.3.12 使用 ES Client 6.5.x / 6.8.x，`org.elasticsearch.client.core.MainResponse` 在 6.x 中不存在，JVM 加载时报 `BootstrapMethodError`。route-starter 会在启动时自动检测并降级为简单 template，路由功能在单数据源场景下失效（无实际影响，因为只有单一数据源）。
 
-如果你的业务**不使用 `ElasticsearchRestTemplate`**（例如只通过 `registry.getHighLevelClient()` 操作 ES），多数据源在 2.4.x 下实际上是可以工作的——`ElasticsearchRestTemplate` 这个 bean 只是给 Spring Data Repository 用的，直接使用原生客户端的场景不受影响。
+**多数据源说明：**
 
-**建议：** 新项目使用 Spring Boot 2.7.x+，存量 2.4.x 项目如需多数据源请升级。
+CGLIB 在 2.2.x / 2.3.x / 2.4.x 下无法访问 `AbstractElasticsearchTemplate` 的 protected 成员，代理创建失败。多数据源场景下路由失效会导致数据写入错误的集群，因此 route-starter 会在启动时直接报错，而不是静默失败。
 
+如果你的业务**不使用 `ElasticsearchRestTemplate`**（例如只通过 `registry.getHighLevelClient()` 操作 ES），多数据源在低版本下实际上是可以工作的——`ElasticsearchRestTemplate` 这个 bean 只是给 Spring Data Repository 用的，直接使用原生客户端的场景不受影响。
 
+**建议：** 新项目使用 Spring Boot 2.7.x+，存量项目如需多数据源请升级。
 
 ### route-starter 的版本屏蔽职责边界
 
@@ -298,9 +302,9 @@ GetSettingsResponse response = client.indices().getSettings(request, RequestOpti
 route-starter 提供了 4 个自定义异常类，支持更精确的异常捕获：
 
 ```java
-// 1. 配置异常
+// 1. 配置异常（启动时由 SimpleElasticsearchRouteValidator 抛出）
 try {
-    properties.init();
+    // 配置错误会在应用启动时自动检测并抛出详细错误
 } catch (ConfigurationException e) {
     String errorCode = e.getErrorCode();  // 如：CONFIG_001
     String message = e.getCause().getMessage();  // 原始错误消息

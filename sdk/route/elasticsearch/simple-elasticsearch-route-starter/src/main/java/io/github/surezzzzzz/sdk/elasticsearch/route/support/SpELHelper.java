@@ -10,13 +10,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Spring EL 表达式解析器
+ * Spring EL 表达式解析工具
  * 用于解析 @Document 注解中的 SpEL 表达式
  *
  * @author surezzzzzz
  */
 @Slf4j
-public class SpELResolver {
+public class SpELHelper {
 
     private static final ExpressionParser PARSER = new SpelExpressionParser();
     /**
@@ -50,7 +50,7 @@ public class SpELResolver {
 
         try {
             // 从缓存获取或编译 Expression（仅编译过程被缓存）
-            Expression compiledExpr = SPEL_CACHE.computeIfAbsent(expression, SpELResolver::compileExpression);
+            Expression compiledExpr = SPEL_CACHE.computeIfAbsent(expression, SpELHelper::compileExpression);
 
             // 每次都重新执行表达式求值（以支持运行时上下文）
             Object value = compiledExpr.getValue(new StandardEvaluationContext());

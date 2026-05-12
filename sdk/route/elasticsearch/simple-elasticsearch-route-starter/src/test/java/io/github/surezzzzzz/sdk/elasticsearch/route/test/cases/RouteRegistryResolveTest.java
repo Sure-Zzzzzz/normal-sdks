@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.RouteException;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RoutePatternMatcher;
+import io.github.surezzzzzz.sdk.elasticsearch.route.matcher.RoutePatternMatcher;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;

@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.extractor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.SpELResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.SpELHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.elasticsearch.annotations.Document;
@@ -59,8 +59,8 @@ public class EntityObjectExtractor implements IndexNameExtractor {
             String indexName = doc.indexName();
 
             // 解析 SpEL 表达式
-            if (SpELResolver.isSpEL(indexName)) {
-                String resolved = SpELResolver.resolve(indexName);
+            if (SpELHelper.isSpEL(indexName)) {
+                String resolved = SpELHelper.resolve(indexName);
                 log.trace("Resolved SpEL index name from [{}] to [{}]", indexName, resolved);
                 return resolved;
             }
