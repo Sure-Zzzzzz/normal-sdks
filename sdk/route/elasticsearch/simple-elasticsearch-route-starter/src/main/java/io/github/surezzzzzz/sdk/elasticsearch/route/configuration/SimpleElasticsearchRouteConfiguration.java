@@ -48,12 +48,12 @@ public class SimpleElasticsearchRouteConfiguration {
     private static final boolean ES_CLIENT_7X_AVAILABLE;
 
     static {
-        boolean available;
+        boolean available = false;
         try {
             Class.forName(SimpleElasticsearchRouteConstant.ES_CLIENT_7X_MARKER_CLASS);
             available = true;
-        } catch (ClassNotFoundException e) {
-            available = false;
+        } catch (ClassNotFoundException ignored) {
+            // ES Client 6.8.x
         }
         ES_CLIENT_7X_AVAILABLE = available;
     }
@@ -83,6 +83,22 @@ public class SimpleElasticsearchRouteConfiguration {
 
         Map<String, ElasticsearchRestTemplate> templatesMap = routeRegistry.getTemplates();
         String defaultKey = properties.getDefaultSource();
+
+        // ES Client 6.8.x（Spring Boot 2.3.x）前置检测，避免触发 BootstrapMethodError
+        if (!ES_CLIENT_7X_AVAILABLE) {
+            int datasourceCount = properties.getSources().size();
+            if (datasourceCount > 1) {
+                log.error(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
+                throw new BeanCreationException("elasticsearchRestTemplate",
+                        SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
+            } else {
+                log.warn(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_SINGLE);
+                // ES Client 6.8.x 下 template 可能为 null（见 Registry.createDataSourceClients），
+                // 此时直接返回 null，让 Spring 放弃注册此 bean，避免后续调用 getTemplate 抛 ROUTE_004。
+                return null;
+            }
+        }
+
         ElasticsearchRestTemplate defaultTemplate = routeRegistry.getTemplate(defaultKey);
         RestHighLevelClient defaultClient = routeRegistry.getHighLevelClient(defaultKey);
 
@@ -94,19 +110,6 @@ public class SimpleElasticsearchRouteConfiguration {
                         .map(e -> e.getClass().getSimpleName())
                         .toArray());
         log.info("Default Elasticsearch datasource set to: [{}]", defaultKey);
-
-        // ES Client 6.8.x（Spring Boot 2.3.x）前置检测，避免触发 BootstrapMethodError
-        if (!ES_CLIENT_7X_AVAILABLE) {
-            int datasourceCount = properties.getSources().size();
-            if (datasourceCount > 1) {
-                log.error(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
-                throw new BeanCreationException("elasticsearchRestTemplate",
-                        SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
-            } else {
-                log.warn(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_SINGLE);
-                return defaultTemplate;
-            }
-        }
 
         try {
             ElasticsearchRestTemplate proxy = RouteTemplateProxy.createProxy(

@@ -42,6 +42,7 @@ public class ErrorCode {
     public static final String ROUTE_DATASOURCE_NOT_FOUND = "ROUTE_001";
     public static final String ROUTE_CROSS_DATASOURCE = "ROUTE_002";
     public static final String ROUTE_NO_DATASOURCE = "ROUTE_003";
+    public static final String ROUTE_TEMPLATE_UNAVAILABLE = "ROUTE_004";
 
     // ========== 其他 (OTHER_xxx) ==========
 

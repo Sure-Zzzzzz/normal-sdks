@@ -42,6 +42,7 @@ public class ErrorMessage {
     public static final String ROUTE_DATASOURCE_NOT_FOUND = "Datasource [%s] not found, available: %s";
     public static final String ROUTE_CROSS_DATASOURCE = "Cross datasource query is not supported, datasources=%s, indices=%s";
     public static final String ROUTE_NO_DATASOURCE = "No Elasticsearch datasource initialized!";
+    public static final String ROUTE_TEMPLATE_UNAVAILABLE = "ElasticsearchRestTemplate unavailable for datasource [%s] (ES Client 6.8.x detected, Spring Data 4.x incompatible), use getHighLevelClient() instead";
 
     // ========== 其他 ==========
 

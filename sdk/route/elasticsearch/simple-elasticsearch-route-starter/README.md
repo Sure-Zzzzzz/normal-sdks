@@ -17,7 +17,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.9'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.10'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -618,8 +618,8 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
-- [CHANGELOG 1.0.7](./CHANGELOG.1.0.7.md) - **最新版本**
-- [CHANGELOG 1.0.6](./CHANGELOG.1.0.6.md)
+- [CHANGELOG 1.0.10](./CHANGELOG.1.0.10.md) - **最新版本**
+- [CHANGELOG 1.0.9](./CHANGELOG.1.0.9.md)
 - [CHANGELOG 1.0.5](./CHANGELOG.1.0.5.md)
 - [CHANGELOG 1.0.4](./CHANGELOG.1.0.4.md)
 - [CHANGELOG 1.0.3](./CHANGELOG.1.0.3.md)

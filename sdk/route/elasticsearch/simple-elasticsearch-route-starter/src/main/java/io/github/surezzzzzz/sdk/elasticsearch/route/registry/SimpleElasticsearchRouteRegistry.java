@@ -111,7 +111,12 @@ public class SimpleElasticsearchRouteRegistry {
      */
     public ElasticsearchRestTemplate getTemplate(String datasourceKey) {
         DataSourceClients clients = getClients(datasourceKey);
-        return clients.getTemplate();
+        ElasticsearchRestTemplate t = clients.getTemplate();
+        if (t == null) {
+            throw new RouteException(ErrorCode.ROUTE_TEMPLATE_UNAVAILABLE,
+                    String.format(ErrorMessage.ROUTE_TEMPLATE_UNAVAILABLE, datasourceKey));
+        }
+        return t;
     }
 
     /**
@@ -218,7 +223,10 @@ public class SimpleElasticsearchRouteRegistry {
         properties.getSources().forEach((key, config) -> {
             DataSourceClients clients = createDataSourceClients(key, config);
             clientsMap.put(key, clients);
-            templates.put(key, clients.getTemplate());
+            ElasticsearchRestTemplate t = clients.getTemplate();
+            if (t != null) {
+                templates.put(key, t);
+            }
         });
 
         if (clientsMap.isEmpty()) {
@@ -238,23 +246,30 @@ public class SimpleElasticsearchRouteRegistry {
     }
 
     private DataSourceClients createDataSourceClients(String key, SimpleElasticsearchRouteProperties.DataSourceConfig config) {
+        List<String> urls = config.getResolvedUrls();
+        HttpHost[] hosts = parseUrls(urls);
+
+        RestClientBuilder restClientBuilder = buildRestClientBuilder(key, hosts, config, config.getConnectTimeout(), config.getSocketTimeout());
+        RestHighLevelClient client = new RestHighLevelClient(restClientBuilder);
+
+        // Spring Data Elasticsearch 4.0.x（Spring Boot 2.3.x）的 ElasticsearchRestTemplate 构造函数
+        // 依赖 org.elasticsearch.client.core.MainResponse，该类在 ES Client 6.8.x 中不存在，
+        // 直接 new ElasticsearchRestTemplate(client) 会抛出 BootstrapMethodError: NoClassDefFoundError。
+        // 此处兜底 catch，确保 RestHighLevelClient 创建成功后 template 失败不会导致整体启动失败。
+        ElasticsearchRestTemplate template;
         try {
-            List<String> urls = config.getResolvedUrls();
-            HttpHost[] hosts = parseUrls(urls);
-
-            RestClientBuilder restClientBuilder = buildRestClientBuilder(key, hosts, config, config.getConnectTimeout(), config.getSocketTimeout());
-
-            RestHighLevelClient client = new RestHighLevelClient(restClientBuilder);
-            ElasticsearchRestTemplate template = new ElasticsearchRestTemplate(client);
-
-            log.info("Elasticsearch datasource [{}] initialized successfully - urls: {}", key, urls);
-            return new DataSourceClients(client, template);
-
-        } catch (Exception e) {
-            log.error("Failed to create Elasticsearch client for datasource [{}]", key, e);
-            throw new ConfigurationException(ErrorCode.OTHER_DATASOURCE_INIT_FAILED,
-                    String.format(ErrorMessage.OTHER_DATASOURCE_INIT_FAILED, key), e);
+            template = new ElasticsearchRestTemplate(client);
+        } catch (BootstrapMethodError | ExceptionInInitializerError e) {
+            log.warn("Failed to create ElasticsearchRestTemplate for datasource [{}] (ES Client 6.8.x?): {}. " +
+                            "This datasource will not be available via ElasticsearchRestTemplate. " +
+                            "Use SimpleElasticsearchRouteRegistry.getHighLevelClient() instead.",
+                    key, e.getMessage());
+            template = null;
         }
+
+        log.info("Elasticsearch datasource [{}] initialized - urls: {}, template: {}",
+                key, urls, template != null ? "available" : "unavailable");
+        return new DataSourceClients(client, template);
     }
 
     private void initClusterInfoAndDetect() {
