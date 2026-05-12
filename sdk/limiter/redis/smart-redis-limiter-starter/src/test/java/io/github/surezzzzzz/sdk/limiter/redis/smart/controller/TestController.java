@@ -68,6 +68,28 @@ public class TestController {
     }
 
     /**
+     * 审计详情测试接口（拦截器限流，用于验证Event携带限流详情字段）
+     */
+    @GetMapping("/public/audit-detail")
+    public Map<String, Object> auditDetailEndpoint() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "audit detail endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 审计始终发布测试接口（拦截器限流，用于验证Event始终发布）
+     */
+    @GetMapping("/public/audit-always")
+    public Map<String, Object> auditAlwaysEndpoint() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "audit always endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
      * 用户查询接口（GET，各用户独立限流）
      */
     @GetMapping("/user/{userId}")

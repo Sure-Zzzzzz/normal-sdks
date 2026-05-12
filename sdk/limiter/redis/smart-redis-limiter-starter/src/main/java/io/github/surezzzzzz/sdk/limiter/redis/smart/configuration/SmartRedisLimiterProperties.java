@@ -2,8 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,22 +14,22 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @author: Sure.
- * @description 智能Redis限流器配置属性
+ * 智能Redis限流器配置属性
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
-@Getter
-@Setter
+@Data
 @SmartRedisLimiterComponent
-@ConfigurationProperties("io.github.surezzzzzz.sdk.limiter.redis.smart")
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConfigurationProperties(SmartRedisLimiterConstant.CONFIG_PREFIX)
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 @Slf4j
 public class SmartRedisLimiterProperties {
 
     /**
      * 是否启用
      */
-    private Boolean enable = false;
+    private Boolean enable = SmartRedisLimiterConstant.DEFAULT_ENABLE;
 
     /**
      * 服务标识（必填）
@@ -68,9 +67,9 @@ public class SmartRedisLimiterProperties {
     private ManagementConfig management = new ManagementConfig();
 
     /**
-     * 审计配置
+     * 限流通过时是否发布事件
      */
-    private AuditConfig audit = new AuditConfig();
+    private Boolean logOnPass = SmartRedisLimiterConstant.DEFAULT_LOG_ON_PASS;
 
     @PostConstruct
     public void init() {
@@ -91,19 +90,10 @@ public class SmartRedisLimiterProperties {
      * 验证配置
      */
     private void validateConfiguration() {
-        // 1. 验证基础配置
         validateBasicConfig();
-
-        // 2. 验证注解模式配置
         validateAnnotationConfig();
-
-        // 3. 验证拦截器模式配置
         validateInterceptorConfig();
-
-        // 4. 验证Redis配置
         validateRedisConfig();
-
-        // 5. 验证降级配置
         validateFallbackConfig();
     }
 
@@ -111,30 +101,22 @@ public class SmartRedisLimiterProperties {
      * 验证基础配置
      */
     private void validateBasicConfig() {
-        // 验证服务标识
         if (me == null || me.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "配置项 'io.github.surezzzzzz.sdk.limiter.redis.smart.me' 不能为空，请设置服务标识（如：user-service）");
+                    String.format("配置项 '%s.me' 不能为空，请设置服务标识（如：user-service）",
+                            SmartRedisLimiterConstant.CONFIG_PREFIX));
         }
 
-        if (me.length() > 50) {
+        if (me.length() > SmartRedisLimiterConstant.MAX_ME_LENGTH) {
             throw new IllegalArgumentException(
-                    "配置项 'me' 长度不能超过50个字符，当前长度：" + me.length());
+                    String.format("配置项 'me' 长度不能超过%d个字符，当前长度：%d",
+                            SmartRedisLimiterConstant.MAX_ME_LENGTH, me.length()));
         }
 
-        // 验证模式
-        if (mode != null && !mode.isEmpty()) {
-            boolean validMode = false;
-            for (SmartRedisLimiterMode modeEnum : SmartRedisLimiterMode.values()) {
-                if (modeEnum.getCode().equalsIgnoreCase(mode)) {
-                    validMode = true;
-                    break;
-                }
-            }
-            if (!validMode) {
-                throw new IllegalArgumentException(
-                        "配置项 'mode' 值非法：" + mode + "，有效值：annotation, interceptor, both");
-            }
+        if (mode != null && !mode.isEmpty() && !SmartRedisLimiterMode.isValid(mode)) {
+            throw new IllegalArgumentException(
+                    String.format("配置项 'mode' 值非法：%s，有效值：%s", mode,
+                            Arrays.toString(SmartRedisLimiterMode.getAllCodes())));
         }
     }
 
@@ -147,13 +129,9 @@ public class SmartRedisLimiterProperties {
             return;
         }
 
-        // 验证默认Key策略
         validateKeyStrategy(annotation.getDefaultKeyStrategy(), "annotation.defaultKeyStrategy");
-
-        // 验证默认限流规则
         validateLimitRules(annotation.getDefaultLimits(), "annotation.defaultLimits");
 
-        // 验证降级策略
         if (annotation.getDefaultFallback() != null && !annotation.getDefaultFallback().isEmpty()) {
             validateFallbackStrategy(annotation.getDefaultFallback(), "annotation.defaultFallback");
         }
@@ -168,18 +146,13 @@ public class SmartRedisLimiterProperties {
             return;
         }
 
-        // 验证默认Key策略
         validateKeyStrategy(interceptor.getDefaultKeyStrategy(), "interceptor.defaultKeyStrategy");
-
-        // 验证默认限流规则
         validateLimitRules(interceptor.getDefaultLimits(), "interceptor.defaultLimits");
 
-        // 验证降级策略
         if (interceptor.getDefaultFallback() != null && !interceptor.getDefaultFallback().isEmpty()) {
             validateFallbackStrategy(interceptor.getDefaultFallback(), "interceptor.defaultFallback");
         }
 
-        // 验证拦截器规则
         validateInterceptorRules(interceptor.getRules());
     }
 
@@ -196,27 +169,22 @@ public class SmartRedisLimiterProperties {
             SmartInterceptorRule rule = rules.get(i);
             String rulePrefix = "interceptor.rules[" + i + "]";
 
-            // 验证路径模式
             if (rule.getPathPattern() == null || rule.getPathPattern().trim().isEmpty()) {
                 throw new IllegalArgumentException(rulePrefix + ".pathPattern 不能为空");
             }
 
-            // 验证Key策略
             if (rule.getKeyStrategy() != null && !rule.getKeyStrategy().isEmpty()) {
                 validateKeyStrategy(rule.getKeyStrategy(), rulePrefix + ".keyStrategy");
             }
 
-            // 验证算法
             if (rule.getAlgorithm() != null && !rule.getAlgorithm().isEmpty()) {
                 validateAlgorithm(rule.getAlgorithm(), rulePrefix + ".algorithm");
             }
 
-            // 验证限流规则
             if (rule.getLimits() != null && !rule.getLimits().isEmpty()) {
                 validateLimitRules(rule.getLimits(), rulePrefix + ".limits");
             }
 
-            // 验证降级策略
             if (rule.getFallback() != null && !rule.getFallback().isEmpty()) {
                 validateFallbackStrategy(rule.getFallback(), rulePrefix + ".fallback");
             }
@@ -235,35 +203,31 @@ public class SmartRedisLimiterProperties {
             SmartLimitRule rule = rules.get(i);
             String rulePrefix = configPath + "[" + i + "]";
 
-            // 验证count
             if (rule.getCount() == null) {
                 throw new IllegalArgumentException(rulePrefix + ".count 不能为空");
             }
             if (rule.getCount() <= 0) {
                 throw new IllegalArgumentException(
-                        rulePrefix + ".count 必须大于0，当前值：" + rule.getCount());
+                        String.format("%s.count 必须大于0，当前值：%d", rulePrefix, rule.getCount()));
             }
-            if (rule.getCount() > 1000000) {
+            if (rule.getCount() > SmartRedisLimiterConstant.MAX_COUNT_WARNING) {
                 log.warn("{}.count 值过大（{}），可能导致Redis内存压力", rulePrefix, rule.getCount());
             }
 
-            // 验证window
             if (rule.getWindow() == null) {
                 throw new IllegalArgumentException(rulePrefix + ".window 不能为空");
             }
             if (rule.getWindow() <= 0) {
                 throw new IllegalArgumentException(
-                        rulePrefix + ".window 必须大于0，当前值：" + rule.getWindow());
+                        String.format("%s.window 必须大于0，当前值：%d", rulePrefix, rule.getWindow()));
             }
 
-            // 验证时间单位
             if (rule.getUnit() == null) {
                 throw new IllegalArgumentException(rulePrefix + ".unit 不能为空");
             }
 
-            // 检查时间窗口是否过长
             long windowSeconds = rule.getWindowSeconds();
-            if (windowSeconds > 86400) {
+            if (windowSeconds > SmartRedisLimiterConstant.MAX_WINDOW_SECONDS_WARNING) {
                 log.warn("{} 时间窗口过长（{}秒），可能导致Redis内存占用过高", rulePrefix, windowSeconds);
             }
         }
@@ -276,7 +240,10 @@ public class SmartRedisLimiterProperties {
         if (!SmartRedisLimiterConstant.ALGORITHM_FIXED.equalsIgnoreCase(algorithm)
                 && !SmartRedisLimiterConstant.ALGORITHM_SLIDING.equalsIgnoreCase(algorithm)) {
             throw new IllegalArgumentException(
-                    configPath + " 值非法：" + algorithm + "，有效值：fixed, sliding");
+                    String.format("%s 值非法：%s，有效值：%s, %s",
+                            configPath, algorithm,
+                            SmartRedisLimiterConstant.ALGORITHM_FIXED,
+                            SmartRedisLimiterConstant.ALGORITHM_SLIDING));
         }
     }
 
@@ -288,11 +255,11 @@ public class SmartRedisLimiterProperties {
             throw new IllegalArgumentException(configPath + " 不能为空");
         }
 
-        // fromCode() 对于无效值返回 null
-        SmartRedisLimiterKeyStrategy result = SmartRedisLimiterKeyStrategy.fromCode(strategy);
-        if (result == null) {
+        if (!SmartRedisLimiterKeyStrategy.isValid(strategy)) {
             throw new IllegalArgumentException(
-                    configPath + " 值非法：" + strategy + "，有效值：method, path, path-pattern, ip");
+                    String.format("%s 值非法：%s，有效值：%s",
+                            configPath, strategy,
+                            Arrays.toString(SmartRedisLimiterKeyStrategy.getAllCodes())));
         }
     }
 
@@ -304,17 +271,11 @@ public class SmartRedisLimiterProperties {
             return;
         }
 
-        // fromCode() 对于无效值返回默认值 ALLOW，需要手动检查
-        boolean validFallback = false;
-        for (SmartRedisLimiterFallbackStrategy fallbackEnum : SmartRedisLimiterFallbackStrategy.values()) {
-            if (fallbackEnum.getCode().equalsIgnoreCase(strategy)) {
-                validFallback = true;
-                break;
-            }
-        }
-        if (!validFallback) {
+        if (!SmartRedisLimiterFallbackStrategy.isValid(strategy)) {
             throw new IllegalArgumentException(
-                    configPath + " 值非法：" + strategy + "，有效值：allow, deny");
+                    String.format("%s 值非法：%s，有效值：%s",
+                            configPath, strategy,
+                            Arrays.toString(SmartRedisLimiterFallbackStrategy.getAllCodes())));
         }
     }
 
@@ -328,14 +289,14 @@ public class SmartRedisLimiterProperties {
 
         if (redis.getCommandTimeout() <= 0) {
             throw new IllegalArgumentException(
-                    "redis.commandTimeout 必须大于0，当前值：" + redis.getCommandTimeout());
+                    String.format("redis.commandTimeout 必须大于0，当前值：%d", redis.getCommandTimeout()));
         }
 
-        if (redis.getCommandTimeout() < 100) {
+        if (redis.getCommandTimeout() < SmartRedisLimiterConstant.COMMAND_TIMEOUT_MIN_WARNING) {
             log.warn("redis.commandTimeout 值过小（{}ms），可能导致频繁超时", redis.getCommandTimeout());
         }
 
-        if (redis.getCommandTimeout() > 10000) {
+        if (redis.getCommandTimeout() > SmartRedisLimiterConstant.COMMAND_TIMEOUT_MAX_WARNING) {
             log.warn("redis.commandTimeout 值过大（{}ms），可能影响系统响应速度", redis.getCommandTimeout());
         }
     }
@@ -367,129 +328,156 @@ public class SmartRedisLimiterProperties {
     /**
      * 注解模式配置
      */
-    @Getter
-    @Setter
+    @Data
     public static class AnnotationConfig {
+        /**
+         * 默认Key策略
+         */
         private String defaultKeyStrategy = SmartRedisLimiterKeyStrategy.METHOD.getCode();
+
+        /**
+         * 默认限流规则
+         */
         private List<SmartLimitRule> defaultLimits = new ArrayList<>();
-        private String defaultFallback;  // 不设置则使用全局fallback
+
+        /**
+         * 默认降级策略（不设置则使用全局fallback）
+         */
+        private String defaultFallback;
     }
 
     /**
      * 拦截器模式配置
      */
-    @Getter
-    @Setter
+    @Data
     public static class InterceptorConfig {
-        private Boolean enabled = true;
+        /**
+         * 是否启用拦截器模式
+         */
+        private Boolean enabled = SmartRedisLimiterConstant.DEFAULT_INTERCEPTOR_ENABLED;
+
+        /**
+         * 默认Key策略
+         */
         private String defaultKeyStrategy = SmartRedisLimiterKeyStrategy.METHOD.getCode();
+
+        /**
+         * 默认限流规则
+         */
         private List<SmartLimitRule> defaultLimits = new ArrayList<>();
+
+        /**
+         * 拦截器规则列表
+         */
         private List<SmartInterceptorRule> rules = new ArrayList<>();
-        private List<String> excludePatterns = Arrays.asList("/actuator/**", "/actuator", "/health", "/health/**");
-        private String defaultFallback;  // 不设置则使用全局fallback
+
+        /**
+         * 排除路径模式
+         */
+        private List<String> excludePatterns = Arrays.asList(SmartRedisLimiterConstant.DEFAULT_EXCLUDE_PATTERNS);
+
+        /**
+         * 默认降级策略（不设置则使用全局fallback）
+         */
+        private String defaultFallback;
     }
 
     /**
      * 拦截器规则
      */
-    @Getter
-    @Setter
+    @Data
     public static class SmartInterceptorRule {
+        /**
+         * 路径模式
+         */
         private String pathPattern;
-        private String method;
-        private String keyStrategy;
-        private String algorithm;
-        private List<SmartLimitRule> limits = new ArrayList<>();
-        private String fallback;  // 不设置则使用defaultFallback
 
-        @Override
-        public String toString() {
-            return String.format("[%s %s -> %s, fallback=%s]",
-                    method != null ? method : "*",
-                    pathPattern,
-                    limits,
-                    fallback != null ? fallback : "default");
-        }
+        /**
+         * HTTP方法
+         */
+        private String method;
+
+        /**
+         * Key策略
+         */
+        private String keyStrategy;
+
+        /**
+         * 限流算法
+         */
+        private String algorithm;
+
+        /**
+         * 限流规则列表
+         */
+        private List<SmartLimitRule> limits = new ArrayList<>();
+
+        /**
+         * 降级策略（不设置则使用defaultFallback）
+         */
+        private String fallback;
     }
 
     /**
      * 限流规则
      */
-    @Getter
-    @Setter
+    @Data
     public static class SmartLimitRule {
+        /**
+         * 限流阈值
+         */
         private Integer count;
+
+        /**
+         * 时间窗口
+         */
         private Integer window;
+
+        /**
+         * 时间单位
+         */
         private TimeUnit unit = TimeUnit.SECONDS;
 
+        /**
+         * 获取时间窗口秒数
+         *
+         * @return 窗口秒数
+         */
         public long getWindowSeconds() {
             return unit.toSeconds(window);
         }
-
-        @Override
-        public String toString() {
-            return String.format("%d requests/%d%s", count, window, formatTimeUnit(unit));
-        }
-
-        private String formatTimeUnit(TimeUnit unit) {
-            switch (unit) {
-                case SECONDS:
-                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_SECONDS;
-                case MINUTES:
-                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_MINUTES;
-                case HOURS:
-                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_HOURS;
-                case DAYS:
-                    return SmartRedisLimiterRedisKeyConstant.SUFFIX_DAYS;
-                default:
-                    return unit.name().toLowerCase();
-            }
-        }
     }
 
-    @Getter
-    @Setter
+    /**
+     * Redis配置
+     */
+    @Data
     public static class RedisConfig {
-
         /**
          * 限流器专用命令超时时间（毫秒）
          */
-        private Long commandTimeout = 3000L;
-
+        private Long commandTimeout = SmartRedisLimiterConstant.DEFAULT_COMMAND_TIMEOUT;
     }
 
     /**
      * 降级配置
      */
-    @Getter
-    @Setter
+    @Data
     public static class FallbackConfig {
+        /**
+         * Redis异常时的降级策略
+         */
         private String onRedisError = SmartRedisLimiterFallbackStrategy.ALLOW.getCode();
     }
 
     /**
      * 管理接口配置
      */
-    @Getter
-    @Setter
+    @Data
     public static class ManagementConfig {
-        private Boolean enableDefaultExceptionHandler = true;
-    }
-
-    /**
-     * 审计配置
-     */
-    @Getter
-    @Setter
-    public static class AuditConfig {
         /**
-         * 是否启用限流审计（默认 false）
+         * 是否启用默认异常处理器
          */
-        private Boolean enabled = false;
-
-        /**
-         * 限流通过时是否发布事件（默认 false）
-         */
-        private Boolean logOnPass = false;
+        private Boolean enableDefaultExceptionHandler = SmartRedisLimiterConstant.DEFAULT_EXCEPTION_HANDLER_ENABLED;
     }
 }

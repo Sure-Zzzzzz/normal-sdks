@@ -20,7 +20,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.2'
+implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.3'
 // 必须显式引入以下依赖
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -313,9 +313,7 @@ public class MyAuditListener {
 审计配置：
 
 ```yaml
-audit:
-  enabled: true        # 启用审计事件发布
-  log-on-pass: false   # 是否在限流通过时也发布事件（默认 false，仅限流触发时发布）
+log-on-pass: false   # 是否在限流通过时也发布事件（默认 false，仅限流触发时发布）
 ```
 
 ### 限流响应头

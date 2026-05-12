@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,6 +117,7 @@ public abstract class AbstractSmartRedisLimiterAlgorithm implements SmartRedisLi
                                                         String keyStrategy,
                                                         String fallbackStrategy) {
         long timeout = properties.getRedis().getCommandTimeout();
+        long startTime = System.nanoTime();
 
         FutureTask<SmartRedisLimiterResult> task = new FutureTask<>(() ->
                 doExecuteWithResult(context, limitRules, keyStrategy)
@@ -124,18 +126,23 @@ public abstract class AbstractSmartRedisLimiterAlgorithm implements SmartRedisLi
         timeoutScheduler.execute(task);
 
         try {
-            return task.get(timeout, TimeUnit.MILLISECONDS);
+            SmartRedisLimiterResult result = task.get(timeout, TimeUnit.MILLISECONDS);
+            context.setAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS,
+                    System.nanoTime() - startTime);
+            return result;
 
         } catch (TimeoutException e) {
             task.cancel(true);
             log.warn("SmartRedisLimiter {} Redis操作超时({}ms)，触发降级策略", getAlgorithm(), timeout);
             boolean passed = handleFallback(e, fallbackStrategy);
+            recordFallbackContext(context, startTime, fallbackStrategy);
             return buildFallbackResult(passed, limitRules);
 
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             log.error("SmartRedisLimiter {} 执行异常", getAlgorithm(), cause != null ? cause : e);
             boolean passed = handleFallback(cause != null ? (Exception) cause : e, fallbackStrategy);
+            recordFallbackContext(context, startTime, fallbackStrategy);
             return buildFallbackResult(passed, limitRules);
 
         } catch (InterruptedException e) {
@@ -143,13 +150,25 @@ public abstract class AbstractSmartRedisLimiterAlgorithm implements SmartRedisLi
             Thread.currentThread().interrupt();
             log.error("SmartRedisLimiter {} 执行被中断", getAlgorithm(), e);
             boolean passed = handleFallback(e, fallbackStrategy);
+            recordFallbackContext(context, startTime, fallbackStrategy);
             return buildFallbackResult(passed, limitRules);
 
         } catch (Exception e) {
             log.error("SmartRedisLimiter {} 执行异常", getAlgorithm(), e);
             boolean passed = handleFallback(e, fallbackStrategy);
+            recordFallbackContext(context, startTime, fallbackStrategy);
             return buildFallbackResult(passed, limitRules);
         }
+    }
+
+    /**
+     * 记录降级信息到 Context
+     */
+    private void recordFallbackContext(SmartRedisLimiterContext context, long startTime, String fallbackStrategy) {
+        context.setAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS,
+                System.nanoTime() - startTime);
+        context.setAttribute(SmartRedisLimiterContextAttribute.FALLBACK, true);
+        context.setAttribute(SmartRedisLimiterContextAttribute.FALLBACK_STRATEGY, fallbackStrategy);
     }
 
     /**

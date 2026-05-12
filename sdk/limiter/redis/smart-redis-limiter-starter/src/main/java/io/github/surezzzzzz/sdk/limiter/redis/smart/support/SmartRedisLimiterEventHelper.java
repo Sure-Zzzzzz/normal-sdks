@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.generator.SmartRedisLimiterKeyGenerator;
@@ -20,13 +21,20 @@ import java.util.List;
  */
 public class SmartRedisLimiterEventHelper {
 
-    private static final Logger log = LoggerFactory.getLogger(SmartRedisLimiterEventHelper.class);
-
     private SmartRedisLimiterEventHelper() {
+        throw new UnsupportedOperationException("Utility class");
     }
 
+    private static final Logger log = LoggerFactory.getLogger(SmartRedisLimiterEventHelper.class);
+
     /**
-     * 构建限流 Key（用于审计事件）
+     * 构建限流 Key（用于事件发布）
+     *
+     * @param context             限流上下文
+     * @param keyStrategy         Key策略
+     * @param me                  服务标识
+     * @param applicationContext  Spring上下文
+     * @return 限流Key
      */
     public static String buildLimitKey(SmartRedisLimiterContext context,
                                        String keyStrategy,
@@ -48,7 +56,10 @@ public class SmartRedisLimiterEventHelper {
     }
 
     /**
-     * 将限流规则列表序列化为字符串（用于审计事件）
+     * 将限流规则列表序列化为字符串（用于事件发布）
+     *
+     * @param limitRules 限流规则列表
+     * @return 序列化后的字符串
      */
     public static String serializeLimitRules(List<SmartRedisLimiterProperties.SmartLimitRule> limitRules) {
         if (limitRules == null || limitRules.isEmpty()) {
@@ -57,13 +68,11 @@ public class SmartRedisLimiterEventHelper {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < limitRules.size(); i++) {
             if (i > 0) {
-                sb.append(",");
+                sb.append(SmartRedisLimiterConstant.RULE_SEPARATOR);
             }
             SmartRedisLimiterProperties.SmartLimitRule rule = limitRules.get(i);
-            sb.append(rule.getCount())
-                    .append("/")
-                    .append(rule.getWindow())
-                    .append(rule.getUnit().name().toLowerCase());
+            sb.append(String.format(SmartRedisLimiterConstant.TEMPLATE_RULE_FORMAT,
+                    rule.getCount(), rule.getWindow(), rule.getUnit().name().toLowerCase()));
         }
         return sb.toString();
     }

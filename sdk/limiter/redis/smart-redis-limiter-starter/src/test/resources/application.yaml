@@ -134,10 +134,8 @@ io:
               management:
                 enable-default-exception-handler: true
 
-              # 审计配置
-              audit:
-                enabled: true
-                log-on-pass: false
+              # 限流通过时是否发布事件
+              log-on-pass: false
 
 # 日志配置
 logging:

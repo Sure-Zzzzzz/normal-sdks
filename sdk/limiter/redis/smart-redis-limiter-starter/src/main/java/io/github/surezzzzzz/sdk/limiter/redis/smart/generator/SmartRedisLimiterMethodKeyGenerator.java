@@ -9,12 +9,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import java.lang.reflect.Method;
 
 /**
- * @author: Sure.
- * @description 方法级别Key生成器
+ * 方法级别Key生成器
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterMethodKeyGenerator implements SmartRedisLimiterKeyGenerator {
 
     @Override
@@ -27,8 +28,7 @@ public class SmartRedisLimiterMethodKeyGenerator implements SmartRedisLimiterKey
         String className = method.getDeclaringClass().getSimpleName();
         String methodName = method.getName();
 
-        // 从枚举获取前缀
         String prefix = SmartRedisLimiterKeyStrategy.METHOD.getCode();
-        return prefix + ":" + className + "." + methodName;
+        return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_METHOD, prefix, className, methodName);
     }
 }

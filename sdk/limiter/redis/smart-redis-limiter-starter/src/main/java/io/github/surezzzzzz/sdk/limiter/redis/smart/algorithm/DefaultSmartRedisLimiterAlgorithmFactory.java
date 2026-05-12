@@ -13,7 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 @Slf4j
 public class DefaultSmartRedisLimiterAlgorithmFactory implements SmartRedisLimiterAlgorithmFactory {
 

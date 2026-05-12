@@ -25,7 +25,7 @@ import java.util.List;
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 @Slf4j
 public class SmartRedisLimiterFixedWindowAlgorithm extends AbstractSmartRedisLimiterAlgorithm {
 
@@ -93,7 +93,7 @@ public class SmartRedisLimiterFixedWindowAlgorithm extends AbstractSmartRedisLim
         }
 
         // current_time（Unix 秒）放在末尾，供 Lua 计算 resetAt
-        args.add(String.valueOf(System.currentTimeMillis() / 1000));
+        args.add(String.valueOf(System.currentTimeMillis() / SmartRedisLimiterConstant.MILLIS_PER_SECOND));
 
         List<?> result = getRedisTemplate().execute(getScript(), keys, args.toArray());
 

@@ -8,8 +8,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * @author: Sure.
- * @description 智能Redis限流器上下文
+ * 智能Redis限流器上下文
+ * <p>承载限流检查所需的全部上下文信息，支持注解模式和拦截器模式</p>
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @Data
@@ -37,17 +39,24 @@ public class SmartRedisLimiterContext {
 
     /**
      * 获取属性
+     *
+     * @param attribute 属性键
+     * @param <T>      属性类型
+     * @return 属性值
      */
     @SuppressWarnings("unchecked")
     public <T> T getAttribute(SmartRedisLimiterContextAttribute attribute) {
-        return (T) attributes.get(attribute.getKey());
+        return (T) attributes.get(attribute.getCode());
     }
 
     /**
      * 设置属性
+     *
+     * @param attribute 属性键
+     * @param value     属性值
      */
     public void setAttribute(SmartRedisLimiterContextAttribute attribute, Object value) {
-        attributes.put(attribute.getKey(), value);
+        attributes.put(attribute.getCode(), value);
     }
 
     /**
@@ -91,26 +100,57 @@ public class SmartRedisLimiterContext {
     public static class SmartRedisLimiterContextBuilder {
         private final SmartRedisLimiterContext context = new SmartRedisLimiterContext();
 
+        /**
+         * 设置方法信息
+         *
+         * @param method 方法
+         * @return builder
+         */
         public SmartRedisLimiterContextBuilder method(Method method) {
             context.method = method;
             return this;
         }
 
+        /**
+         * 设置方法参数
+         *
+         * @param args 方法参数
+         * @return builder
+         */
         public SmartRedisLimiterContextBuilder args(Object[] args) {
             context.args = args;
             return this;
         }
 
+        /**
+         * 设置目标对象
+         *
+         * @param target 目标对象
+         * @return builder
+         */
         public SmartRedisLimiterContextBuilder target(Object target) {
             context.target = target;
             return this;
         }
 
+        /**
+         * 设置上下文属性
+         *
+         * @param attribute 属性键
+         * @param value     属性值
+         * @return builder
+         */
         public SmartRedisLimiterContextBuilder attribute(SmartRedisLimiterContextAttribute attribute, Object value) {
-            context.attributes.put(attribute.getKey(), value);
+            context.attributes.put(attribute.getCode(), value);
             return this;
         }
 
+        /**
+         * 设置多个上下文属性
+         *
+         * @param attributes 属性映射
+         * @return builder
+         */
         public SmartRedisLimiterContextBuilder attributes(Map<String, Object> attributes) {
             if (attributes != null) {
                 context.attributes.putAll(attributes);
@@ -118,6 +158,11 @@ public class SmartRedisLimiterContext {
             return this;
         }
 
+        /**
+         * 构建上下文对象
+         *
+         * @return 上下文对象
+         */
         public SmartRedisLimiterContext build() {
             return context;
         }

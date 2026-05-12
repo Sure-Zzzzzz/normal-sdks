@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterRuleMatchCacheHelper {
 
     @Autowired
@@ -124,7 +124,7 @@ public class SmartRedisLimiterRuleMatchCacheHelper {
      */
     private boolean matchMethod(SmartRedisLimiterProperties.SmartInterceptorRule rule, String requestMethod) {
         String ruleMethod = rule.getMethod();
-        SmartRedisLimiterHttpMethod httpMethod = SmartRedisLimiterHttpMethod.fromMethod(ruleMethod);
+        SmartRedisLimiterHttpMethod httpMethod = SmartRedisLimiterHttpMethod.fromCode(ruleMethod);
         return httpMethod.matches(requestMethod);
     }
 

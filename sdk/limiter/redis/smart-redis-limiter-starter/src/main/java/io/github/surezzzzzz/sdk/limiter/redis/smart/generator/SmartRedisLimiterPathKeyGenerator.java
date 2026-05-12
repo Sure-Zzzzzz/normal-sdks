@@ -7,12 +7,13 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKe
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
- * @author: Sure.
- * @description 路径级别Key生成器（独立限流）
+ * 路径级别Key生成器（独立限流）
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterPathKeyGenerator implements SmartRedisLimiterKeyGenerator {
 
     @Override
@@ -22,15 +23,13 @@ public class SmartRedisLimiterPathKeyGenerator implements SmartRedisLimiterKeyGe
             throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_REQUEST_PATH_NULL);
         }
 
-        // 从枚举获取前缀
         String prefix = SmartRedisLimiterKeyStrategy.PATH.getCode();
 
-        // 支持包含HTTP方法
-        String method = context.getRequestMethod();
-        if (method != null && !method.isEmpty()) {
-            return prefix + ":" + path + ":" + method;
+        String httpMethod = context.getRequestMethod();
+        if (httpMethod != null && !httpMethod.isEmpty()) {
+            return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_PATH_WITH_METHOD, prefix, path, httpMethod);
         }
 
-        return prefix + ":" + path;
+        return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_PATH, prefix, path);
     }
 }

@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
@@ -28,28 +29,49 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * @author: Sure.
- * @description 智能限流AOP切面
+ * 智能限流AOP切面
+ * <p>处理 @SmartRedisLimiter 注解标记的方法，执行限流检查并发布事件</p>
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @Aspect
 @SmartRedisLimiterComponent
 @Slf4j
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterAspect {
 
+    /**
+     * 限流算法工厂
+     */
     @Autowired
     private SmartRedisLimiterAlgorithmFactory algorithmFactory;
 
+    /**
+     * 限流器配置
+     */
     @Autowired
     private SmartRedisLimiterProperties properties;
 
+    /**
+     * 事件发布器
+     */
     @Autowired
     private ApplicationEventPublisher applicationEventPublisher;
 
+    /**
+     * Spring上下文
+     */
     @Autowired
     private ApplicationContext applicationContext;
 
+    /**
+     * 环绕通知：拦截 @SmartRedisLimiter 注解标记的方法
+     *
+     * @param joinPoint 切点
+     * @return 方法执行结果
+     * @throws Throwable 方法执行异常或限流超限异常
+     */
     @Around("@annotation(" + SmartRedisLimiterConstant.ANNOTATION_CLASS_NAME + ")")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         if (!isAnnotationModeEnabled()) {
@@ -87,10 +109,9 @@ public class SmartRedisLimiterAspect {
 
         SmartRedisLimiterResult result = algorithm.tryAcquireWithResult(context, limitRules, keyStrategy, fallbackStrategy);
 
-        if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
-            if (!result.isPassed() || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), result.isPassed(), method);
-            }
+        // 始终发布事件，由监听器侧决定是否处理
+        if (!result.isPassed() || Boolean.TRUE.equals(properties.getLogOnPass())) {
+            publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), result);
         }
 
         if (!result.isPassed()) {
@@ -108,27 +129,36 @@ public class SmartRedisLimiterAspect {
         return joinPoint.proceed();
     }
 
+    /**
+     * 发布限流事件
+     */
     private void publishLimitEvent(SmartRedisLimiterContext context,
                                    List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                   String keyStrategy, String algorithm, boolean passed, Method method) {
+                                   String keyStrategy, String algorithm, SmartRedisLimiterResult result) {
         try {
             String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
                     context, keyStrategy, properties.getMe(), applicationContext);
+            long durationNanos = context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) != null
+                    ? (long) context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) : 0L;
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
                     limitKey,
                     keyStrategy,
                     algorithm,
                     SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
-                    passed,
+                    result.isPassed(),
                     SmartRedisLimiterConstant.SOURCE_ASPECT,
                     null,
                     null,
                     null,
                     null,
-                    method.getName(),
-                    method.toGenericString(),
-                    context.getAttributes());
+                    context.getMethod().getName(),
+                    context.getMethod().toGenericString(),
+                    context.getAttributes(),
+                    result.getLimit(),
+                    result.getRemaining(),
+                    result.getResetAt(),
+                    durationNanos);
             applicationEventPublisher.publishEvent(event);
         } catch (Exception e) {
             log.warn("发布限流事件失败", e);
@@ -140,24 +170,24 @@ public class SmartRedisLimiterAspect {
      * 优先级：注解级别 > 注解模式默认 > 全局默认
      */
     private String determineFallbackStrategy(SmartRedisLimiter limiter) {
-        // 1. 注解级别
         if (limiter.fallback() != null && !limiter.fallback().isEmpty()) {
             log.debug("使用注解级别降级策略: {}", limiter.fallback());
             return limiter.fallback();
         }
 
-        // 2. 注解模式默认值
         if (properties.getAnnotation().getDefaultFallback() != null &&
                 !properties.getAnnotation().getDefaultFallback().isEmpty()) {
             log.debug("使用注解模式默认降级策略: {}", properties.getAnnotation().getDefaultFallback());
             return properties.getAnnotation().getDefaultFallback();
         }
 
-        // 3. 全局默认值
         log.debug("使用全局降级策略: {}", properties.getFallback().getOnRedisError());
         return properties.getFallback().getOnRedisError();
     }
 
+    /**
+     * 判断注解模式是否启用
+     */
     private boolean isAnnotationModeEnabled() {
         if (!properties.getEnable()) {
             return false;
@@ -167,10 +197,16 @@ public class SmartRedisLimiterAspect {
         return mode.isAnnotationEnabled();
     }
 
+    /**
+     * 选择限流算法
+     */
     private SmartRedisLimiterAlgorithm selectAlgorithm(SmartRedisLimiter limiter) {
         return algorithmFactory.getAlgorithm(limiter.algorithm());
     }
 
+    /**
+     * 解析注解中的限流规则
+     */
     private List<SmartRedisLimiterProperties.SmartLimitRule> parseLimitRules(SmartRedisLimiter limiter) {
         List<SmartRedisLimiterProperties.SmartLimitRule> rules = new ArrayList<>();
 

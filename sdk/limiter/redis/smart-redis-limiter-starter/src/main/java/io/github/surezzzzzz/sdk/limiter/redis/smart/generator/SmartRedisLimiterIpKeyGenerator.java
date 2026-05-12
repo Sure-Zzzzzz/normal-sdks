@@ -7,12 +7,13 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKe
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
- * @author: Sure.
- * @description IP级别Key生成器
+ * IP级别Key生成器
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterIpKeyGenerator implements SmartRedisLimiterKeyGenerator {
 
     @Override
@@ -22,8 +23,7 @@ public class SmartRedisLimiterIpKeyGenerator implements SmartRedisLimiterKeyGene
             throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_CLIENT_IP_NULL);
         }
 
-        // 从枚举获取前缀
         String prefix = SmartRedisLimiterKeyStrategy.IP.getCode();
-        return prefix + ":" + clientIp;
+        return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_IP, prefix, clientIp);
     }
 }

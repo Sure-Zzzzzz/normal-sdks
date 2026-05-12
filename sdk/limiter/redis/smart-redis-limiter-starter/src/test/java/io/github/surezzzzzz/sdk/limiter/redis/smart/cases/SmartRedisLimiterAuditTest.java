@@ -170,4 +170,94 @@ public class SmartRedisLimiterAuditTest {
 
         log.info("=== Aspect 通过不发布测试通过 ===");
     }
+
+    // ========== Event 限流详情字段测试 ==========
+
+    /**
+     * 测试 Event 携带限流详情：limit / remaining / resetAt / durationNanos
+     */
+    @Test
+    public void testEventContainsRateLimitDetails() throws Exception {
+        log.info("=== 测试 Event 携带限流详情字段 ===");
+
+        // 触发限流（拦截器规则：5次/10秒）
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(get("/api/public/audit-detail"))
+                    .andExpect(status().isOk());
+        }
+        // 第6次触发限流
+        mockMvc.perform(get("/api/public/audit-detail"))
+                .andExpect(status().isTooManyRequests());
+
+        SmartRedisLimiterEvent event = eventListener.findFirstBySource(
+                SmartRedisLimiterConstant.SOURCE_INTERCEPTOR);
+
+        assertNotNull(event, "应发布 INTERCEPTOR 事件");
+        assertFalse(event.isPassed(), "应为拒绝事件");
+        assertEquals(5, event.getLimit(), "limit 应为 5");
+        assertEquals(0, event.getRemaining(), "拒绝时 remaining 应为 0");
+        assertTrue(event.getResetAt() > 0, "resetAt 应大于 0");
+        assertTrue(event.getDurationNanos() > 0, "durationNanos 应大于 0");
+
+        log.info("=== Event 限流详情字段测试通过: limit={}, remaining={}, resetAt={}, durationNanos={} ===",
+                event.getLimit(), event.getRemaining(), event.getResetAt(), event.getDurationNanos());
+    }
+
+    /**
+     * 测试 Event 始终发布（限流拒绝时始终发布事件）
+     */
+    @Test
+    public void testEventAlwaysPublishedRegardlessOfAuditEnabled() throws Exception {
+        log.info("=== 测试 Event 始终发布 ===");
+
+        // 触发限流
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(get("/api/public/audit-always"))
+                    .andExpect(status().isOk());
+        }
+        mockMvc.perform(get("/api/public/audit-always"))
+                .andExpect(status().isTooManyRequests());
+
+        SmartRedisLimiterEvent event = eventListener.findFirstBySource(
+                SmartRedisLimiterConstant.SOURCE_INTERCEPTOR);
+
+        assertNotNull(event, "限流触发时应发布事件");
+        assertFalse(event.isPassed(), "应为拒绝事件");
+        // 验证新字段有值
+        assertTrue(event.getLimit() > 0, "limit 应大于 0");
+        assertTrue(event.getDurationNanos() > 0, "durationNanos 应大于 0");
+
+        log.info("=== Event 始终发布测试通过 ===");
+    }
+
+    /**
+     * 测试 Aspect 模式 Event 携带限流详情
+     */
+    @Test
+    public void testAspectEventContainsRateLimitDetails() throws Exception {
+        log.info("=== 测试 Aspect 模式 Event 携带限流详情 ===");
+
+        // 触发限流（注解规则：10次/秒）
+        for (int i = 0; i < 10; i++) {
+            testService.limitedMethod("detail-test-" + i);
+        }
+        try {
+            testService.limitedMethod("detail-test-10");
+        } catch (SmartRedisLimitExceededException e) {
+            // 预期
+        }
+
+        SmartRedisLimiterEvent event = eventListener.findFirstBySource(
+                SmartRedisLimiterConstant.SOURCE_ASPECT);
+
+        assertNotNull(event, "应发布 ASPECT 事件");
+        assertFalse(event.isPassed(), "应为拒绝事件");
+        assertEquals(10, event.getLimit(), "limit 应为 10");
+        assertEquals(0, event.getRemaining(), "拒绝时 remaining 应为 0");
+        assertTrue(event.getResetAt() > 0, "resetAt 应大于 0");
+        assertTrue(event.getDurationNanos() > 0, "durationNanos 应大于 0");
+
+        log.info("=== Aspect Event 限流详情测试通过: limit={}, remaining={}, resetAt={}, durationNanos={} ===",
+                event.getLimit(), event.getRemaining(), event.getResetAt(), event.getDurationNanos());
+    }
 }

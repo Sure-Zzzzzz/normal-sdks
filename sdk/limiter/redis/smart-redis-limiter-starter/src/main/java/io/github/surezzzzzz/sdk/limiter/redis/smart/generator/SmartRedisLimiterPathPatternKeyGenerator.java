@@ -7,20 +7,19 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKe
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
- * @author: Sure.
- * @description 路径模式级别Key生成器（共享限流）
+ * 路径模式级别Key生成器（共享限流）
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterPathPatternKeyGenerator implements SmartRedisLimiterKeyGenerator {
 
     @Override
     public String generate(SmartRedisLimiterContext context) {
-        // 优先使用匹配到的路径模式
         String pattern = context.getMatchedPathPattern();
         if (pattern == null) {
-            // 如果没有匹配到路径模式，降级使用实际路径
             String path = context.getRequestPath();
             if (path == null) {
                 throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_PATH_PATTERN_NULL);
@@ -28,15 +27,13 @@ public class SmartRedisLimiterPathPatternKeyGenerator implements SmartRedisLimit
             pattern = path;
         }
 
-        // 从枚举获取前缀
         String prefix = SmartRedisLimiterKeyStrategy.PATH_PATTERN.getCode();
 
-        // 支持包含HTTP方法
-        String method = context.getRequestMethod();
-        if (method != null && !method.isEmpty()) {
-            return prefix + ":" + pattern + ":" + method;
+        String httpMethod = context.getRequestMethod();
+        if (httpMethod != null && !httpMethod.isEmpty()) {
+            return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_PATH_PATTERN_WITH_METHOD, prefix, pattern, httpMethod);
         }
 
-        return prefix + ":" + pattern;
+        return String.format(SmartRedisLimiterConstant.TEMPLATE_KEY_PATH_PATTERN, prefix, pattern);
     }
 }

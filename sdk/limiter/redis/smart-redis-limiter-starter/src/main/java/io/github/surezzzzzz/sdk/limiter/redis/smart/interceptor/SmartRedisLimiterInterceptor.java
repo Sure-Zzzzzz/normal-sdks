@@ -27,36 +27,64 @@ import javax.servlet.http.HttpServletResponse;
 import java.util.List;
 
 /**
- * @author: Sure.
- * @description 智能限流拦截器
+ * 智能限流拦截器
+ * <p>拦截 HTTP 请求，根据配置的规则执行限流检查并发布事件</p>
+ *
+ * @author Sure.
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
 @Slf4j
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
+    /**
+     * 限流算法工厂
+     */
     @Autowired
     private SmartRedisLimiterAlgorithmFactory algorithmFactory;
 
+    /**
+     * 限流器配置
+     */
     @Autowired
     private SmartRedisLimiterProperties properties;
 
+    /**
+     * 规则匹配缓存
+     */
     @Autowired
     private SmartRedisLimiterRuleMatchCacheHelper smartRedisLimiterRuleMatchCache;
 
+    /**
+     * 事件发布器
+     */
     @Autowired
     private ApplicationEventPublisher applicationEventPublisher;
 
+    /**
+     * Spring上下文
+     */
     @Autowired
     private ApplicationContext applicationContext;
 
+    /**
+     * 初始化
+     */
     @PostConstruct
     public void init() {
         log.info("SmartRedisLimiterInterceptor 初始化完成, mode={}, enabled={}",
                 properties.getMode(), properties.getEnable());
     }
 
+    /**
+     * 请求预处理：执行限流检查
+     *
+     * @param request  HTTP请求
+     * @param response HTTP响应
+     * @param handler  处理器
+     * @return true 放行，false 拒绝
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String requestUri = SmartRedisLimiterWebContextHelper.getRequestPath(request);
@@ -114,10 +142,9 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         // 写入限流响应头
         writeRateLimitHeaders(response, result);
 
-        if (Boolean.TRUE.equals(properties.getAudit().getEnabled())) {
-            if (!result.isPassed() || Boolean.TRUE.equals(properties.getAudit().getLogOnPass())) {
-                publishLimitEvent(context, limitRules, keyStrategy, algorithm, result.isPassed());
-            }
+        // 始终发布事件，由监听器侧决定是否处理
+        if (!result.isPassed() || Boolean.TRUE.equals(properties.getLogOnPass())) {
+            publishLimitEvent(context, limitRules, keyStrategy, algorithm, result, matchedRule);
         }
 
         if (!result.isPassed()) {
@@ -137,17 +164,20 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
 
     private void publishLimitEvent(SmartRedisLimiterContext context,
                                    List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                   String keyStrategy, String algorithm, boolean passed) {
+                                   String keyStrategy, String algorithm, SmartRedisLimiterResult result,
+                                   SmartRedisLimiterProperties.SmartInterceptorRule matchedRule) {
         try {
             String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
                     context, keyStrategy, properties.getMe(), applicationContext);
+            long durationNanos = context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) != null
+                    ? (long) context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) : 0L;
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
                     limitKey,
                     keyStrategy,
                     algorithm,
                     SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
-                    passed,
+                    result.isPassed(),
                     SmartRedisLimiterConstant.SOURCE_INTERCEPTOR,
                     context.getRequestPath(),
                     context.getRequestMethod(),
@@ -155,7 +185,11 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
                     context.getMatchedPathPattern(),
                     null,
                     null,
-                    context.getAttributes());
+                    context.getAttributes(),
+                    result.getLimit(),
+                    result.getRemaining(),
+                    result.getResetAt(),
+                    durationNanos);
             applicationEventPublisher.publishEvent(event);
         } catch (Exception e) {
             log.warn("发布限流事件失败", e);
@@ -201,6 +235,9 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         return properties.getFallback().getOnRedisError();
     }
 
+    /**
+     * 判断拦截器模式是否启用
+     */
     private boolean isInterceptorModeEnabled() {
         if (!properties.getEnable()) {
             return false;

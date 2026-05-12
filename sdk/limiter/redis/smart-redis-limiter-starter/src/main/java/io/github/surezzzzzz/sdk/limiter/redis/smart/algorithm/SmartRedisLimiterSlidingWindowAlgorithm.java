@@ -25,7 +25,7 @@ import java.util.List;
  * @Date: 2026-05-08
  */
 @SmartRedisLimiterComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart", name = "enable", havingValue = "true")
+@ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 @Slf4j
 public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisLimiterAlgorithm {
 
@@ -105,12 +105,13 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
             args.add(String.valueOf(rule.getWindowSeconds() * SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND));
         }
 
-        String member = "m-" + Thread.currentThread().getId() + "-" + currentTimeNano;
+        String member = String.format(SmartRedisLimiterConstant.TEMPLATE_SLIDING_WINDOW_MEMBER,
+                Thread.currentThread().getId(), currentTimeNano);
         args.add(member);
 
         // current_time（纳秒）和 current_time_sec（Unix秒）放在末尾
         args.add(String.valueOf(currentTimeNano));
-        args.add(String.valueOf(System.currentTimeMillis() / 1000));
+        args.add(String.valueOf(System.currentTimeMillis() / SmartRedisLimiterConstant.MILLIS_PER_SECOND));
 
         List<?> result = getRedisTemplate().execute(getScript(), keys, args.toArray(new Object[0]));
 

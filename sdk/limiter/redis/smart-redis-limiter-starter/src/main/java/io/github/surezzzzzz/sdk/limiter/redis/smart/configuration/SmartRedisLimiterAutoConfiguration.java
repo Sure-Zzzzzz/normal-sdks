@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.SmartRedisLimiterPackage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -23,7 +24,7 @@ import javax.annotation.PostConstruct;
  */
 @Configuration
 @ConditionalOnProperty(
-        prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart",
+        prefix = SmartRedisLimiterConstant.CONFIG_PREFIX,
         name = "enable",
         havingValue = "true"
 )
