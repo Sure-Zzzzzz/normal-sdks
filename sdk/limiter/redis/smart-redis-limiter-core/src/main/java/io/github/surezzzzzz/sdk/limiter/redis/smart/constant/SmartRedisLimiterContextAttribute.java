@@ -47,6 +47,53 @@ public enum SmartRedisLimiterContextAttribute {
      */
     FALLBACK_STRATEGY("fallbackStrategy", "降级策略");
 
-    private final String key;
+    private final String code;
     private final String desc;
+
+    /**
+     * 根据代码获取枚举
+     *
+     * @param code 属性键代码
+     * @return 枚举，如果不存在返回 null
+     */
+    public static SmartRedisLimiterContextAttribute fromCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (SmartRedisLimiterContextAttribute attr : values()) {
+            if (attr.code.equals(code)) {
+                return attr;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 判断代码是否有效
+     *
+     * @param code 属性键代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        return fromCode(code) != null;
+    }
+
+    /**
+     * 获取所有有效的代码
+     *
+     * @return 代码数组
+     */
+    public static String[] getAllCodes() {
+        SmartRedisLimiterContextAttribute[] attrs = values();
+        String[] codes = new String[attrs.length];
+        for (int i = 0; i < attrs.length; i++) {
+            codes[i] = attrs[i].code;
+        }
+        return codes;
+    }
+
+    @Override
+    public String toString() {
+        return code;
+    }
 }

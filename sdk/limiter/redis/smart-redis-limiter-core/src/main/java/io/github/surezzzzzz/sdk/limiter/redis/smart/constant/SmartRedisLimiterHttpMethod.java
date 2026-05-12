@@ -52,24 +52,51 @@ public enum SmartRedisLimiterHttpMethod {
      */
     OPTIONS("OPTIONS", "获取支持的方法");
 
-    private final String method;
+    private final String code;
     private final String desc;
 
     /**
-     * 根据方法名获取枚举
+     * 根据代码获取枚举
+     *
+     * @param code HTTP方法代码
+     * @return 枚举，如果不存在返回 ALL
      */
-    public static SmartRedisLimiterHttpMethod fromMethod(String method) {
-        if (method == null || method.isEmpty() || "*".equals(method)) {
+    public static SmartRedisLimiterHttpMethod fromCode(String code) {
+        if (code == null || code.isEmpty() || "*".equals(code)) {
             return ALL;
         }
 
         for (SmartRedisLimiterHttpMethod httpMethod : values()) {
-            if (httpMethod.method.equalsIgnoreCase(method)) {
+            if (httpMethod.code.equalsIgnoreCase(code)) {
                 return httpMethod;
             }
         }
 
         return ALL;
+    }
+
+    /**
+     * 判断代码是否有效
+     *
+     * @param code HTTP方法代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        return fromCode(code) != ALL || "*".equals(code);
+    }
+
+    /**
+     * 获取所有有效的代码
+     *
+     * @return 代码数组
+     */
+    public static String[] getAllCodes() {
+        SmartRedisLimiterHttpMethod[] methods = values();
+        String[] codes = new String[methods.length];
+        for (int i = 0; i < methods.length; i++) {
+            codes[i] = methods[i].code;
+        }
+        return codes;
     }
 
     /**
@@ -79,6 +106,11 @@ public enum SmartRedisLimiterHttpMethod {
         if (this == ALL) {
             return true;
         }
-        return this.method.equalsIgnoreCase(requestMethod);
+        return this.code.equalsIgnoreCase(requestMethod);
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }

@@ -49,6 +49,9 @@ public enum SmartRedisLimiterKeyStrategy {
 
     /**
      * 根据代码获取策略
+     *
+     * @param code 策略代码
+     * @return 枚举，如果不存在返回 null
      */
     public static SmartRedisLimiterKeyStrategy fromCode(String code) {
         if (code == null || code.isEmpty()) {
@@ -63,10 +66,39 @@ public enum SmartRedisLimiterKeyStrategy {
     }
 
     /**
+     * 判断代码是否有效
+     *
+     * @param code 策略代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        return fromCode(code) != null;
+    }
+
+    /**
+     * 获取所有有效的代码
+     *
+     * @return 代码数组
+     */
+    public static String[] getAllCodes() {
+        SmartRedisLimiterKeyStrategy[] strategies = values();
+        String[] codes = new String[strategies.length];
+        for (int i = 0; i < strategies.length; i++) {
+            codes[i] = strategies[i].code;
+        }
+        return codes;
+    }
+
+    /**
      * 获取Bean名称（支持自定义）
      */
     public static String getBeanName(String code) {
         SmartRedisLimiterKeyStrategy strategy = fromCode(code);
         return strategy != null ? strategy.beanName : code;
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }

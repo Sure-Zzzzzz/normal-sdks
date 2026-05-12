@@ -26,11 +26,11 @@ public enum SmartRedisLimiterFallbackStrategy {
     private final String desc;
 
     /**
-     * 常量：用于注解，避免硬编码
+     * 根据代码获取枚举
+     *
+     * @param code 策略代码
+     * @return 枚举，如果不存在返回 ALLOW
      */
-    public static final String ALLOW_CODE = "allow";
-    public static final String DENY_CODE = "deny";
-
     public static SmartRedisLimiterFallbackStrategy fromCode(String code) {
         if (code == null) {
             return ALLOW;
@@ -41,5 +41,39 @@ public enum SmartRedisLimiterFallbackStrategy {
             }
         }
         return ALLOW;
+    }
+
+    /**
+     * 判断代码是否有效
+     *
+     * @param code 策略代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        for (SmartRedisLimiterFallbackStrategy strategy : values()) {
+            if (strategy.code.equalsIgnoreCase(code)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取所有有效的代码
+     *
+     * @return 代码数组
+     */
+    public static String[] getAllCodes() {
+        SmartRedisLimiterFallbackStrategy[] strategies = values();
+        String[] codes = new String[strategies.length];
+        for (int i = 0; i < strategies.length; i++) {
+            codes[i] = strategies[i].code;
+        }
+        return codes;
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }

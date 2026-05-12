@@ -30,6 +30,12 @@ public enum SmartRedisLimiterMode {
     private final String code;
     private final String desc;
 
+    /**
+     * 根据代码获取枚举
+     *
+     * @param code 模式代码
+     * @return 枚举，如果不存在返回 BOTH
+     */
     public static SmartRedisLimiterMode fromCode(String code) {
         if (code == null) {
             return BOTH;
@@ -40,6 +46,35 @@ public enum SmartRedisLimiterMode {
             }
         }
         return BOTH;
+    }
+
+    /**
+     * 判断代码是否有效
+     *
+     * @param code 模式代码
+     * @return true 有效，false 无效
+     */
+    public static boolean isValid(String code) {
+        for (SmartRedisLimiterMode mode : values()) {
+            if (mode.code.equalsIgnoreCase(code)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取所有有效的代码
+     *
+     * @return 代码数组
+     */
+    public static String[] getAllCodes() {
+        SmartRedisLimiterMode[] modes = values();
+        String[] codes = new String[modes.length];
+        for (int i = 0; i < modes.length; i++) {
+            codes[i] = modes[i].code;
+        }
+        return codes;
     }
 
     /**
@@ -54,5 +89,10 @@ public enum SmartRedisLimiterMode {
      */
     public boolean isInterceptorEnabled() {
         return this == INTERCEPTOR || this == BOTH;
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }
