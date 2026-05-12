@@ -391,6 +391,69 @@ class NLParserEndToEndTest {
         });
     }
 
+    // ==================== Search 集成测试覆盖 ====================
+
+    /**
+     * 覆盖 search-starter NLIntegrationTest 的全部场景
+     * 确保解析结果能被 IntentTranslator 正确翻译
+     */
+    @Test
+    @Order(8)
+    @DisplayName("Search 集成场景覆盖")
+    void testSearchIntegrationScenarios() {
+        log.info("========== Search 集成场景覆盖 ==========");
+
+        // 2.1 多条件AND
+        ConditionIntent c1 = asQueryIntent(nlParser.parse("状态等于active并且年龄大于等于25")).getCondition();
+        log.info("2.1: {}", c1);
+        assertNotNull(c1);
+        assertEquals(LogicType.AND, c1.getLogic());
+
+        // 2.2 三条件AND
+        ConditionIntent c2 = asQueryIntent(nlParser.parse("城市等于北京并且状态等于active并且积分大于100")).getCondition();
+        log.info("2.2: {}", c2);
+        assertNotNull(c2);
+
+        // 3.1 IN + trailing "中"
+        ConditionIntent c3 = asQueryIntent(nlParser.parse("城市在北京、上海、深圳中")).getCondition();
+        log.info("3.1: {}", c3);
+        assertNotNull(c3);
+        assertEquals(OperatorType.IN, c3.getOperator());
+        assertEquals(3, c3.getValues().size());
+
+        // 3.2 IN + AND
+        ConditionIntent c4 = asQueryIntent(nlParser.parse("城市在北京、上海、深圳中并且年龄大于25")).getCondition();
+        log.info("3.2: {}", c4);
+        assertNotNull(c4);
+        assertTrue(findOperatorInCondition(c4, OperatorType.IN));
+
+        // 4.1 跨字段 OR
+        ConditionIntent c5 = asQueryIntent(nlParser.parse("年龄小于25或城市等于深圳")).getCondition();
+        log.info("4.1: {}", c5);
+        assertNotNull(c5);
+        assertEquals(LogicType.OR, c5.getLogic());
+
+        // 4.2 复杂嵌套 OR
+        ConditionIntent c6 = asQueryIntent(nlParser.parse("状态等于active并且年龄大于30或者状态等于active并且城市等于北京")).getCondition();
+        log.info("4.2: {}", c6);
+        assertNotNull(c6);
+
+        // 10.1 BETWEEN "在...到...之间"
+        ConditionIntent c7 = asQueryIntent(nlParser.parse("年龄在18到30之间")).getCondition();
+        log.info("10.1: {}", c7);
+        assertNotNull(c7, "BETWEEN '在...到...之间' 应产生条件");
+        assertTrue(findOperatorInCondition(c7, OperatorType.BETWEEN),
+                "应包含 BETWEEN 操作符，实际: " + (c7.getOperator() != null ? c7.getOperator() : "null"));
+
+        // 9.1 字段绑定
+        ConditionIntent c8 = asQueryIntent(nlParser.parse("年龄大于25")).getCondition();
+        log.info("9.1: {}", c8);
+        assertNotNull(c8);
+        assertEquals(OperatorType.GT, c8.getOperator());
+
+        log.info("========== Search 集成场景覆盖全部通过 ==========");
+    }
+
     // ==================== 辅助方法 ====================
 
     private boolean findOperatorInCondition(ConditionIntent condition, OperatorType operator) {

@@ -24,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.2'
 }
 ```
 
@@ -400,9 +400,16 @@ io:
 
 ## 版本历史
 
+### v1.1.2 (2026-05-12)
+
+Bug Fix。详见 [CHANGELOG.1.1.2.md](CHANGELOG.1.1.2.md)
+
+- 修复 EXPECT_LOGIC_OR_END 中 `sameFieldOrMode` 误触发导致 BETWEEN 等场景解析异常
+- 修复 BETWEEN "在X到Y之间" 解析返回 null（如 `"年龄在18到30之间"`）
+
 ### v1.1.1 (2026-05-11)
 
-Bug Fix Release。详见 [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)
+Bug Fix + 重构 Release。详见 [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)
 
 - 修复 OR 条件字段错乱（同字段 OR "名字包含张或李"、跨字段 OR "年龄小于25或城市等于深圳"）
 - 修复 IN 列表多含"中"（"城市在北京、上海、深圳中"）

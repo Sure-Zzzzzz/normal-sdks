@@ -226,8 +226,6 @@ public class ConditionParser implements NLParserPlugin {
         if (ctx.is(TokenType.LOGIC)) {
             ctx.builder.setLogic(ctx.token().getLogicType());
             ctx.lastField = null;
-            // OR 后下一个 token 可能是同字段值，也可能新字段
-            if (ctx.token().getLogicType() == LogicType.OR) ctx.sameFieldOrMode = true;
             ctx.to(ParseState.EXPECT_FIELD);
             return;
         }
@@ -260,14 +258,16 @@ public class ConditionParser implements NLParserPlugin {
     }
 
     // ──────────────────────────────────────────────
-    // Token 预处理：拆分嵌入式逻辑关键词
+    // Token 预处理：拆分嵌入式逻辑关键词 + 归一化 BETWEEN 模式
     // ──────────────────────────────────────────────
 
     /**
-     * 预处理管道：扫描 UNKNOWN / FIELD_CANDIDATE token，
-     * 若包含逻辑关键词则拆分为独立 token，parser 无需处理嵌入式逻辑。
+     * 预处理管道：
+     * 1. 拆分嵌入式逻辑关键词
+     * 2. 归一化 "在X到/至Y之间" → BETWEEN 操作符
      *
      * <p>例：["25或城市"] → ["25"(NUMBER), "或"(LOGIC), "城市"(UNKNOWN)]
+     * <p>例：["年龄", "在", 18, "到", 30, "之间"] → ["年龄", BETWEEN, 18, 30]
      */
     private static List<Token> normalizeTokens(List<Token> tokens, KeywordRegistry registry) {
         if (registry == null) return tokens;
@@ -295,7 +295,54 @@ public class ConditionParser implements NLParserPlugin {
             result.add(Token.logic(logicWord, logic, pos));
             if (remaining != null && !remaining.isEmpty()) result.add(Token.unknown(remaining, pos));
         }
+        return normalizeBetweenPattern(result);
+    }
+
+    /**
+     * 将 "在X到/至Y之间" 模式归一化为 BETWEEN 操作符 + 两个数值 token。
+     * "到"/"至" 和 "之间" 被移除，与 "介于X,Y" 走相同的解析路径。
+     */
+    private static List<Token> normalizeBetweenPattern(List<Token> tokens) {
+        boolean hasBetween = false;
+        for (int i = 0; i < tokens.size(); i++) {
+            if (isBetweenStart(tokens, i)) {
+                hasBetween = true;
+                break;
+            }
+        }
+        if (!hasBetween) return tokens;
+
+        List<Token> result = new ArrayList<>();
+        for (int i = 0; i < tokens.size(); ) {
+            if (isBetweenStart(tokens, i)) {
+                result.add(Token.operator("在...之间", OperatorType.BETWEEN, tokens.get(i).getPosition()));
+                result.add(tokens.get(i + 1));
+                result.add(tokens.get(i + 3));
+                i += 4;
+                if (i < tokens.size() && tokens.get(i).getType() == TokenType.UNKNOWN
+                        && "之间".equals(tokens.get(i).getText())) {
+                    i++;
+                }
+            } else {
+                result.add(tokens.get(i));
+                i++;
+            }
+        }
         return result;
+    }
+
+    /**
+     * 检查位置 i 是否为 BETWEEN 模式起点：UNKNOWN("在") + NUMBER + UNKNOWN("到"/"至") + NUMBER
+     */
+    private static boolean isBetweenStart(List<Token> tokens, int i) {
+        if (i + 3 >= tokens.size()) return false;
+        if (tokens.get(i).getType() != TokenType.UNKNOWN
+                || !"在".equals(tokens.get(i).getText())) return false;
+        if (tokens.get(i + 1).getType() != TokenType.NUMBER) return false;
+        Token rangeToken = tokens.get(i + 2);
+        if (rangeToken.getType() != TokenType.UNKNOWN) return false;
+        if (!"到".equals(rangeToken.getText()) && !"至".equals(rangeToken.getText())) return false;
+        return tokens.get(i + 3).getType() == TokenType.NUMBER;
     }
 
     /**
