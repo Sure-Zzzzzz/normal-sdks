@@ -22,6 +22,16 @@ public enum SmartRedisLimiterFallbackStrategy {
      */
     DENY("deny", "Redis异常时拒绝请求");
 
+    /**
+     * 常量：用于注解，避免硬编码
+     */
+    public static final String ALLOW_CODE = "allow";
+
+    /**
+     * 常量：用于注解，避免硬编码
+     */
+    public static final String DENY_CODE = "deny";
+
     private final String code;
     private final String desc;
 

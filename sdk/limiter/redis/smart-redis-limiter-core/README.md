@@ -1,6 +1,6 @@
 # SmartRedisLimiter Core
 
-[![Version](https://img.shields.io/badge/version-1.1.5-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 `smart-redis-limiter-core` 是 `smart-redis-limiter-starter` 的核心抽象层，定义了限流事件、审计记录模型、扩展接口和统一常量，供限流主模块和审计模块使用。
