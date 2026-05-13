@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
@@ -275,7 +275,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
         // 使用低级 API 调用 scroll 接口（兼容 ES 6.x）
         org.elasticsearch.client.Request scrollRequest = new org.elasticsearch.client.Request(
-                ElasticsearchApiConstant.HTTP_METHOD_POST,
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_POST,
                 SimpleElasticsearchSearchConstant.ES_API_SCROLL);
         scrollRequest.setJsonEntity(String.format(
                 SimpleElasticsearchSearchConstant.ES_SCROLL_CONTINUE_TEMPLATE,
@@ -290,7 +290,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
             String datasourceKey = routeResolver.resolveDataSource(index);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
             org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request(
-                    ElasticsearchApiConstant.HTTP_METHOD_DELETE,
+                    SimpleElasticsearchRouteConstant.HTTP_METHOD_DELETE,
                     SimpleElasticsearchSearchConstant.ES_API_SCROLL);
             closeRequest.setJsonEntity(String.format(
                     SimpleElasticsearchSearchConstant.ES_SCROLL_DELETE_TEMPLATE, scrollId));

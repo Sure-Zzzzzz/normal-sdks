@@ -2,9 +2,9 @@ dependencies {
     // 依赖 core（包含事件定义和 model）
     api "${group}:simple-elasticsearch-search-core:1.0.8"
     // 依赖 route-starter
-    api "${group}:simple-elasticsearch-route-starter:1.0.8"
+    api "${group}:simple-elasticsearch-route-starter:1.0.10"
     // 依赖 nl-parser
-    api "${group}:natural-language-parser-starter:1.0.6"
+    api "${group}:natural-language-parser-starter:1.1.3"
     api "${group}:log-truncate-starter:1.0.0"
     // 依赖 condition-expression-parser
     api "${group}:condition-expression-parser-starter:1.0.3"

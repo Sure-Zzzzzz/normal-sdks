@@ -9,6 +9,25 @@ io:
 
             # 索引配置
             indices:
+              # NL集成测试索引
+              - name: "test_nl_user_index"
+                date-split: false
+                cache-mapping: true
+                lazy-load: false
+                field-mapping:
+                  name:
+                    - 姓名
+                  age:
+                    - 年龄
+                  city:
+                    - 城市
+                  status:
+                    - 状态
+                  points:
+                    - 积分
+                  createTime:
+                    - 创建时间
+
               # 普通索引（无标识符，直接使用索引名）
               - name: "test_order_index"
                 lazy-load: true

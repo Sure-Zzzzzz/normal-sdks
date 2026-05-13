@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.metadata;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
@@ -294,9 +294,9 @@ public class MappingManager {
                                                          String indexName,
                                                          boolean ignoreUnavailable) throws IOException {
         org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
-        String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + indexName + ElasticsearchApiConstant.ENDPOINT_MAPPING;
+        String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + indexName + SimpleElasticsearchRouteConstant.ENDPOINT_MAPPING;
         org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
-                ElasticsearchApiConstant.HTTP_METHOD_GET, endpoint);
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_GET, endpoint);
         if (ignoreUnavailable) {
             request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_IGNORE_UNAVAILABLE,
                     SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);

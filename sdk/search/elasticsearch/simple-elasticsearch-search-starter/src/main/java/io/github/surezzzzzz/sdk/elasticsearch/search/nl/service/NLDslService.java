@@ -1,8 +1,10 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.nl.service;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.binder.FieldBinder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.NLDslTranslationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.nl.translator.SimpleElasticsearchIntentTranslator;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.binder.TranslateContext;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.AnalyticsIntent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.Intent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.QueryIntent;
@@ -32,6 +34,9 @@ public class NLDslService {
     @Autowired
     private SimpleElasticsearchIntentTranslator translator;
 
+    @Autowired(required = false)
+    private FieldBinder fieldBinder;
+
     /**
      * 将自然语言转换为DSL Request对象
      *
@@ -51,12 +56,18 @@ public class NLDslService {
         // 2. 确定最终使用的索引
         String finalIndex = determineFinalIndex(intent, indexOverride);
 
-        // 3. 根据Intent类型转换为对应的Request
+        // 3. 构建 TranslateContext
+        TranslateContext context = TranslateContext.builder()
+                .fieldBinder(fieldBinder)
+                .dataSource(finalIndex)
+                .build();
+
+        // 4. 根据Intent类型转换为对应的Request
         Object request;
         if (intent instanceof QueryIntent) {
-            request = translator.translate((QueryIntent) intent, finalIndex);
+            request = translator.translate((QueryIntent) intent, context);
         } else if (intent instanceof AnalyticsIntent) {
-            request = translator.translate((AnalyticsIntent) intent, finalIndex);
+            request = translator.translate((AnalyticsIntent) intent, context);
         } else {
             throw new NLDslTranslationException("不支持的Intent类型: " + intent.getClass().getSimpleName());
         }

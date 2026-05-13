@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.support;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
@@ -136,7 +136,7 @@ public class ElasticsearchCompatibilityHelper {
         org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
 
         String indices = String.join(",", searchRequest.indices());
-        String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + indices + ElasticsearchApiConstant.ENDPOINT_SEARCH;
+        String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + indices + SimpleElasticsearchRouteConstant.ENDPOINT_SEARCH;
 
         // scroll 参数追加到 URL（ES 6.x 低级 API 需要通过 query param 传递）
         if (searchRequest.scroll() != null && searchRequest.scroll().keepAlive() != null) {
@@ -145,7 +145,7 @@ public class ElasticsearchCompatibilityHelper {
         }
 
         org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
-                ElasticsearchApiConstant.HTTP_METHOD_POST, endpoint);
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint);
 
         if (searchRequest.source() != null) {
             String dsl = DslCompatibilityHelper.removeEs7OnlyCompositeFields(searchRequest.source().toString());

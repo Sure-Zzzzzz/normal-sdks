@@ -3,15 +3,16 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.nl.translator;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.binder.FieldBinder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.NLDslTranslationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.binder.IntentTranslator;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.binder.TranslateContext;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.model.*;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.translator.IntentTranslator;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ import java.util.List;
 /**
  * Simple Elasticsearch Intent转换器
  * <p>
- * 职责：纯粹的数据结构转换，将natural-language-parser的Intent对象转换为search-starter的Request对象
+ * 职责：纯粹的数据结构转换，将 natural-language-parser 的 Intent 对象转换为 search-starter 的 Request 对象
  * 不包含业务逻辑，不调用外部服务
  *
  * @author surezzzzzz
@@ -30,17 +31,22 @@ import java.util.List;
 public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Object> {
 
     private final SimpleElasticsearchSearchProperties properties;
+    private final FieldBinder fieldBinder;
 
-    public SimpleElasticsearchIntentTranslator(SimpleElasticsearchSearchProperties properties) {
+    public SimpleElasticsearchIntentTranslator(
+            SimpleElasticsearchSearchProperties properties,
+            FieldBinder fieldBinder) {
         this.properties = properties;
+        this.fieldBinder = fieldBinder;
     }
 
     @Override
     public Object translate(Intent intent, TranslateContext context) {
+        String index = context.getDataSource();
         if (intent instanceof QueryIntent) {
-            return translate((QueryIntent) intent, context.getDataSource());
+            return translateQuery((QueryIntent) intent, index);
         } else if (intent instanceof AnalyticsIntent) {
-            return translate((AnalyticsIntent) intent, context.getDataSource());
+            return translateAnalytics((AnalyticsIntent) intent, index);
         } else {
             throw new NLDslTranslationException("不支持的Intent类型: " + intent.getClass().getSimpleName());
         }
@@ -51,20 +57,26 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
         return "elasticsearch";
     }
 
-    /**
-     * 转换QueryIntent为QueryRequest
-     *
-     * @param queryIntent 查询意图
-     * @param index       索引名
-     * @return QueryRequest
-     */
-    public QueryRequest translate(QueryIntent queryIntent, String index) {
+    // ==================== 字段绑定 ====================
+
+    private String bindField(String fieldHint, String index) {
+        return fieldBinder != null ? fieldBinder.bind(fieldHint, index) : fieldHint;
+    }
+
+    // ==================== 查询转换 ====================
+
+    private QueryRequest translateQuery(QueryIntent queryIntent, String index) {
         QueryRequest.QueryRequestBuilder builder = QueryRequest.builder()
                 .index(index);
 
         // 转换查询条件
         if (queryIntent.hasCondition()) {
-            builder.query(translateCondition(queryIntent.getCondition()));
+            builder.query(translateCondition(queryIntent.getCondition(), index));
+        }
+
+        // 转换字段折叠
+        if (queryIntent.hasCollapse()) {
+            builder.collapse(translateCollapse(queryIntent.getCollapse(), index));
         }
 
         // 转换日期范围
@@ -72,33 +84,75 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
             builder.dateRange(translateDateRange(queryIntent.getDateRange()));
         }
 
-        // 转换分页信息（总是添加，即使Intent没有pagination，也会生成默认值）
-        builder.pagination(translatePagination(queryIntent.getPagination(), queryIntent.getSorts()));
+        // 转换分页信息（总是添加，即使 Intent 没有 pagination，也会生成默认值）
+        builder.pagination(translatePagination(queryIntent.getPagination(), queryIntent.getSorts(), index));
 
         return builder.build();
     }
 
     /**
-     * 转换AnalyticsIntent为AggRequest
-     *
-     * @param analyticsIntent 分析意图
-     * @param index           索引名
-     * @return AggRequest
+     * 转换 ConditionIntent 为 QueryCondition
+     * <p>
+     * 字段绑定：通过 FieldBinder 将 fieldHint 映射为实际的 ES 字段名
+     * 逻辑条件：递归转换子条件，不额外添加父条件（避免产生 null field 的无效子条件）
      */
-    public AggRequest translate(AnalyticsIntent analyticsIntent, String index) {
+    private QueryCondition translateCondition(ConditionIntent conditionIntent, String index) {
+        if (conditionIntent == null) {
+            return null;
+        }
+
+        if (conditionIntent.isLogicCondition()) {
+            // 逻辑组合（AND/OR）：递归转换所有子条件，不添加父节点
+            List<QueryCondition> childConditions = new ArrayList<>();
+            for (ConditionIntent child : conditionIntent.getChildren()) {
+                childConditions.add(translateCondition(child, index));
+            }
+            return QueryCondition.builder()
+                    .logic(conditionIntent.getLogic().getCode())
+                    .conditions(childConditions)
+                    .build();
+        } else {
+            // 叶子条件：通过 FieldBinder 绑定字段名
+            String fieldHint = conditionIntent.getFieldHint();
+            String boundField = bindField(fieldHint, index);
+            return QueryCondition.builder()
+                    .field(boundField)
+                    .op(conditionIntent.getOperator().getCode())
+                    .value(conditionIntent.getValue())
+                    .values(conditionIntent.getValues())
+                    .build();
+        }
+    }
+
+    private QueryRequest.CollapseField translateCollapse(CollapseIntent collapse, String index) {
+        String field = bindField(collapse.getFieldHint(), index);
+
+        QueryRequest.CollapseField.CollapseFieldBuilder builder = QueryRequest.CollapseField.builder()
+                .field(field);
+
+        if (collapse.getMaxConcurrentGroupSearches() != null) {
+            builder.maxConcurrentGroupSearches(collapse.getMaxConcurrentGroupSearches());
+        }
+
+        return builder.build();
+    }
+
+    // ==================== 聚合转换 ====================
+
+    private AggRequest translateAnalytics(AnalyticsIntent analyticsIntent, String index) {
         AggRequest.AggRequestBuilder builder = AggRequest.builder()
                 .index(index);
 
         // 转换查询条件（过滤条件）
         if (analyticsIntent.hasCondition()) {
-            builder.query(translateCondition(analyticsIntent.getCondition()));
+            builder.query(translateCondition(analyticsIntent.getCondition(), index));
         }
 
         // 转换聚合定义
         if (analyticsIntent.hasAggregation()) {
             List<AggDefinition> aggDefinitions = new ArrayList<>();
             for (AggregationIntent aggIntent : analyticsIntent.getAggregations()) {
-                aggDefinitions.add(translateAggregation(aggIntent));
+                aggDefinitions.add(translateAggregation(aggIntent, index));
             }
             builder.aggs(aggDefinitions);
         }
@@ -107,76 +161,42 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
     }
 
     /**
-     * 转换ConditionIntent为QueryCondition
+     * 转换 AggregationIntent 为 AggDefinition
+     * <p>
+     * nl-parser 1.1.0 API：
+     * - getName() → getNameHint()
+     * - getChildren() → getSubAggs()
+     * - getLimit() → getSize()
+     * - FieldBinder 应用到 fieldHint 和 groupByFieldHint
      */
-    private QueryCondition translateCondition(ConditionIntent conditionIntent) {
-        if (conditionIntent == null) {
-            return null;
-        }
-
-        // 如果是逻辑组合条件
-        if (conditionIntent.isLogicCondition()) {
-            QueryCondition.QueryConditionBuilder builder = QueryCondition.builder();
-            builder.logic(conditionIntent.getLogic().name().toLowerCase());
-
-            List<QueryCondition> childConditions = new ArrayList<>();
-
-            // 把当前条件本身作为第一个子条件
-            QueryCondition currentCondition = QueryCondition.builder()
-                    .field(conditionIntent.getFieldHint())
-                    .op(conditionIntent.getOperator().getCode())
-                    .value(conditionIntent.getValue())
-                    .values(conditionIntent.getValues())
-                    .build();
-            childConditions.add(currentCondition);
-
-            // 转换所有子条件
-            for (ConditionIntent child : conditionIntent.getChildren()) {
-                childConditions.add(translateCondition(child));
-            }
-
-            builder.conditions(childConditions);
-            return builder.build();
-        } else {
-            // 简单条件
-            return QueryCondition.builder()
-                    .field(conditionIntent.getFieldHint())
-                    .op(conditionIntent.getOperator().getCode())
-                    .value(conditionIntent.getValue())
-                    .values(conditionIntent.getValues())
-                    .build();
-        }
-    }
-
-    /**
-     * 转换AggregationIntent为AggDefinition
-     */
-    private AggDefinition translateAggregation(AggregationIntent aggIntent) {
-        AggDefinition.AggDefinitionBuilder builder = AggDefinition.builder()
-                .name(aggIntent.getName() != null ? aggIntent.getName() : generateAggName(aggIntent))
-                .type(aggIntent.getType().getCode());
-
-        // 设置字段 - 优先使用groupByFieldHint（用于terms等桶聚合），否则使用fieldHint
-        String field = aggIntent.getGroupByFieldHint() != null
+    private AggDefinition translateAggregation(AggregationIntent aggIntent, String index) {
+        // 字段绑定：优先使用 groupByFieldHint（用于 terms 等桶聚合），否则使用 fieldHint
+        String fieldHint = aggIntent.getGroupByFieldHint() != null
                 ? aggIntent.getGroupByFieldHint()
                 : aggIntent.getFieldHint();
-        builder.field(field);
+        String boundField = bindField(fieldHint, index);
 
-        // 设置size（用于terms聚合）
+        AggDefinition.AggDefinitionBuilder builder = AggDefinition.builder()
+                // 聚合名称：优先使用 nl-parser 返回的 nameHint，否则自动生成
+                .name(aggIntent.getNameHint() != null ? aggIntent.getNameHint() : generateAggName(aggIntent))
+                .type(aggIntent.getType().getCode())
+                .field(boundField);
+
+        // 设置 size（用于 terms 聚合）
         if (aggIntent.getSize() != null) {
             builder.size(aggIntent.getSize());
         }
 
-        // 设置interval（用于histogram/date_histogram）
+        // 设置 interval（用于 histogram/date_histogram）
         if (aggIntent.getInterval() != null) {
             builder.interval(aggIntent.getInterval());
         }
 
-        // 转换嵌套聚合
-        if (aggIntent.getChildren() != null && !aggIntent.getChildren().isEmpty()) {
+        // 转换嵌套聚合（nl-parser 1.1.0: getChildren() → getSubAggs()）
+        if (aggIntent.getSubAggs() != null && !aggIntent.getSubAggs().isEmpty()) {
             List<AggDefinition> childAggs = new ArrayList<>();
-            for (AggregationIntent childIntent : aggIntent.getChildren()) {
-                childAggs.add(translateAggregation(childIntent));
+            for (AggregationIntent childIntent : aggIntent.getSubAggs()) {
+                childAggs.add(translateAggregation(childIntent, index));
             }
             builder.aggs(childAggs);
         }
@@ -185,58 +205,58 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
     }
 
     /**
-     * 生成聚合名称
-     * 例如：AVG(年龄) -> avg_年龄
+     * 自动生成聚合名称
+     * 例如：AVG(年龄) → avg_年龄
      */
     private String generateAggName(AggregationIntent aggIntent) {
         return aggIntent.getType().getCode() + "_" + aggIntent.getFieldHint();
     }
 
-    /**
-     * 转换PaginationIntent为PaginationInfo
-     */
-    private PaginationInfo translatePagination(PaginationIntent paginationIntent, List<SortIntent> sorts) {
+    // ==================== 分页、排序、日期范围转换 ====================
+
+    private PaginationInfo translatePagination(PaginationIntent paginationIntent, List<SortIntent> sorts, String index) {
         PaginationInfo.PaginationInfoBuilder builder = PaginationInfo.builder();
 
-        // 从配置中获取默认分页大小
         final int defaultPageSize = properties.getQueryLimits().getDefaultSize();
         final int DEFAULT_PAGE_NUMBER = 1;
 
-        // 判断分页类型
+        // search_after 分页
         if (paginationIntent != null && paginationIntent.getSearchAfter() != null && !paginationIntent.getSearchAfter().isEmpty()) {
-            // search_after分页
             builder.type(SimpleElasticsearchSearchConstant.PAGINATION_TYPE_SEARCH_AFTER)
                     .searchAfter(paginationIntent.getSearchAfter())
-                    .size(paginationIntent.getLimit() != null ? paginationIntent.getLimit() : defaultPageSize);
+                    // nl-parser 1.1.0: getLimit() → getSize()
+                    .size(paginationIntent.getSize() != null ? paginationIntent.getSize() : defaultPageSize);
         } else {
-            // offset分页
+            // offset 分页
             builder.type(SimpleElasticsearchSearchConstant.PAGINATION_TYPE_OFFSET);
 
-            // 优先使用page/size，否则使用offset/limit
+            // 优先使用 page/size（nl-parser 1.1.0 使用 getPage()/getSize()）
             if (paginationIntent != null && paginationIntent.getPage() != null && paginationIntent.getSize() != null) {
                 builder.page(paginationIntent.getPage())
                         .size(paginationIntent.getSize());
-            } else if (paginationIntent != null && paginationIntent.getOffset() != null && paginationIntent.getLimit() != null) {
-                // 将offset/limit转换为page/size
-                int page = (paginationIntent.getOffset() / paginationIntent.getLimit()) + 1;
-                builder.page(page)
-                        .size(paginationIntent.getLimit());
-            } else if (paginationIntent != null && paginationIntent.getLimit() != null) {
-                // 只有limit，默认第一页
-                builder.page(DEFAULT_PAGE_NUMBER)
-                        .size(paginationIntent.getLimit());
+            } else if (paginationIntent != null && paginationIntent.getOffset() != null && paginationIntent.getSize() != null) {
+                // 将 offset/size 转换为 page/size
+                int page = (int) (paginationIntent.getOffset() / paginationIntent.getSize()) + 1;
+                builder.page(page).size(paginationIntent.getSize());
+            } else if (paginationIntent != null && paginationIntent.getSize() != null) {
+                // 只有 size，默认第一页
+                builder.page(DEFAULT_PAGE_NUMBER).size(paginationIntent.getSize());
             } else {
-                // 使用默认分页（paginationIntent为null或没有任何分页信息）
-                builder.page(DEFAULT_PAGE_NUMBER)
-                        .size(defaultPageSize);
+                // 使用默认值
+                builder.page(DEFAULT_PAGE_NUMBER).size(defaultPageSize);
             }
         }
 
-        // 添加排序信息
+        // 转换排序字段（通过 FieldBinder 绑定）
         if (sorts != null && !sorts.isEmpty()) {
             List<PaginationInfo.SortField> sortFields = new ArrayList<>();
             for (SortIntent sortIntent : sorts) {
-                sortFields.add(translateSort(sortIntent));
+                String sortFieldHint = sortIntent.getFieldHint();
+                String boundSortField = bindField(sortFieldHint, index);
+                sortFields.add(PaginationInfo.SortField.builder()
+                        .field(boundSortField)
+                        .order(sortIntent.getOrder().getCode())
+                        .build());
             }
             builder.sort(sortFields);
         }
@@ -244,24 +264,10 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
         return builder.build();
     }
 
-    /**
-     * 转换SortIntent为SortField
-     */
-    private PaginationInfo.SortField translateSort(SortIntent sortIntent) {
-        return PaginationInfo.SortField.builder()
-                .field(sortIntent.getFieldHint())
-                .order(sortIntent.getOrder().name().toLowerCase())
-                .build();
-    }
-
-    /**
-     * 转换DateRangeIntent为DateRange
-     */
     private QueryRequest.DateRange translateDateRange(DateRangeIntent dateRangeIntent) {
         if (dateRangeIntent == null) {
             return null;
         }
-
         return QueryRequest.DateRange.builder()
                 .from(dateRangeIntent.getFrom())
                 .to(dateRangeIntent.getTo())

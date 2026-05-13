@@ -21,7 +21,7 @@
 | **scroll 全量遍历** | **快照一致性遍历，适合数据导出/全量迁移，兼容 ES 1.x+** | **v1.5.8+** |
 | 日期分割索引 | 按年/月/日分割，自动路由 + 智能降级 | v1.0.0+ |
 | 敏感字段保护 | 支持字段禁止访问和脱敏 | v1.0.0+ |
-| 自然语言查询 | 中文自然语言转 ES DSL | v1.1.0+ |
+| 自然语言查询 | 中文自然语言转 ES DSL，FieldBinder 字段绑定 | v1.1.0+ |
 | 查询事件发布 | 查询/聚合后发布 Spring 事件，支持审计扩展 | v1.2.0+ |
 
 ---
@@ -32,7 +32,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.8'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.0'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"

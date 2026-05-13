@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ElasticsearchApiConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
@@ -202,11 +202,11 @@ public class PitPaginationStrategy implements PaginationStrategy {
             String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
             String keepAlive = pagination.getPitKeepAlive();
-            String endpoint = ElasticsearchApiConstant.ENDPOINT_ROOT + request.getIndex()
+            String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + request.getIndex()
                     + SimpleElasticsearchSearchConstant.ES_API_PIT
                     + SimpleElasticsearchSearchConstant.ES_PIT_KEEP_ALIVE_PARAM + keepAlive;
             org.elasticsearch.client.Request pitRequest = new org.elasticsearch.client.Request(
-                    ElasticsearchApiConstant.HTTP_METHOD_POST, endpoint);
+                    SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint);
             org.elasticsearch.client.Response pitResponse = client.getLowLevelClient().performRequest(pitRequest);
             InputStream inputStream = pitResponse.getEntity().getContent();
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -231,7 +231,7 @@ public class PitPaginationStrategy implements PaginationStrategy {
             String datasourceKey = routeResolver.resolveDataSource(index);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
             org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request(
-                    ElasticsearchApiConstant.HTTP_METHOD_DELETE,
+                    SimpleElasticsearchRouteConstant.HTTP_METHOD_DELETE,
                     SimpleElasticsearchSearchConstant.ES_API_PIT);
             closeRequest.setJsonEntity(String.format(
                     SimpleElasticsearchSearchConstant.ES_PIT_CLOSE_TEMPLATE, pitId));
