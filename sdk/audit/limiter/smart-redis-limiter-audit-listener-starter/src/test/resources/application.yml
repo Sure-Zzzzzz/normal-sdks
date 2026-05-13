@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: limiter-audit-listener-test
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        audit:
+          limiter:
+            listener:
+              handler:
+                log:
+                  enabled: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.limiter: DEBUG
