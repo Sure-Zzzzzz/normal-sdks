@@ -24,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.2'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.3'
 }
 ```
 
@@ -399,6 +399,12 @@ io:
 - HanLP portable 1.8.6
 
 ## 版本历史
+
+### v1.1.3 (2026-05-13)
+
+Bug Fix。详见 [CHANGELOG.1.1.3.md](CHANGELOG.1.1.3.md)
+
+- 修复 IndexExtractorPlugin 无法提取通配符索引名（如 `app_access_log-*`）
 
 ### v1.1.2 (2026-05-12)
 

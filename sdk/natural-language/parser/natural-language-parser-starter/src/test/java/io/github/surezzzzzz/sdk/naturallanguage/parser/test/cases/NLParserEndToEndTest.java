@@ -31,6 +31,12 @@ class NLParserEndToEndTest {
     @Autowired
     private NLParser nlParser;
 
+    @Autowired
+    private io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.NLTokenizer tokenizer;
+
+    @Autowired
+    private io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry keywordRegistry;
+
     private QueryIntent asQueryIntent(Intent intent) {
         log.info("解析得到的Intent类型: {}", intent != null ? intent.getClass().getSimpleName() : "null");
         if (intent instanceof AnalyticsIntent) {
@@ -452,6 +458,37 @@ class NLParserEndToEndTest {
         assertEquals(OperatorType.GT, c8.getOperator());
 
         log.info("========== Search 集成场景覆盖全部通过 ==========");
+    }
+
+    // ==================== 索引提取测试 ====================
+
+    @Test
+    @Order(9)
+    @DisplayName("索引提取 - app_access_log-*索引")
+    void testIndexExtraction() {
+        log.info("========== 索引提取测试 ==========");
+
+        // 简单索引名
+        String query1 = "查询user_profile这个索引，年龄大于18";
+        QueryIntent q1 = asQueryIntent(nlParser.parse(query1));
+        log.info("查询: {}, indexHint: {}", query1, q1.getIndexHint());
+        assertEquals("user_profile", q1.getIndexHint());
+
+        // 带通配符的索引名
+        String query2 = "查询app_access_log-*索引，clientIP等于192.168.1.1";
+        // 先看 token 流
+        java.util.List<io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token> tokens2 =
+                tokenizer.tokenize(query2, keywordRegistry);
+        for (int i = 0; i < tokens2.size(); i++) {
+            io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token t = tokens2.get(i);
+            log.info("  token[{}]: type={}, text='{}', value={}", i, t.getType(), t.getText(), t.getValue());
+        }
+        QueryIntent q2 = asQueryIntent(nlParser.parse(query2));
+        log.info("查询: {}, indexHint: {}", query2, q2.getIndexHint());
+        assertNotNull(q2.getIndexHint(), "应提取出索引名，实际: null");
+        assertTrue(q2.getIndexHint().startsWith("app_access_log"), "索引名应以 app_access_log 开头");
+
+        log.info("✓ 索引提取测试通过");
     }
 
     // ==================== 辅助方法 ====================

@@ -2,18 +2,13 @@ package io.github.surezzzzzz.sdk.naturallanguage.parser.parser;
 
 import io.github.surezzzzzz.sdk.naturallanguage.parser.annotation.NaturalLanguageParserComponent;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.IntentType;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.NLParserConstant;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.constant.TokenType;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.keyword.KeywordRegistry;
-import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 import io.github.surezzzzzz.sdk.naturallanguage.parser.support.TokenHelper;
+import io.github.surezzzzzz.sdk.naturallanguage.parser.tokenizer.Token;
 import org.springframework.core.annotation.Order;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 索引/表名提取插件
@@ -78,7 +73,7 @@ public class IndexExtractorPlugin implements NLParserPlugin {
     }
 
     private IndexExtractionResult extractIndexName(List<Token> tokens, int indicatorIndex,
-                                                    KeywordRegistry keywordRegistry) {
+                                                   KeywordRegistry keywordRegistry) {
         IndexExtractionResult backwardResult = searchBackwardForIndexName(tokens, indicatorIndex, keywordRegistry);
         if (backwardResult != null) {
             return backwardResult;
@@ -87,7 +82,7 @@ public class IndexExtractorPlugin implements NLParserPlugin {
     }
 
     private IndexExtractionResult searchBackwardForIndexName(List<Token> tokens, int indicatorIndex,
-                                                              KeywordRegistry keywordRegistry) {
+                                                             KeywordRegistry keywordRegistry) {
         if (indicatorIndex <= 0) {
             return null;
         }
@@ -226,7 +221,7 @@ public class IndexExtractorPlugin implements NLParserPlugin {
         // UNKNOWN 类型：只有看起来像索引名片段的才有效（含英文字母、数字、下划线、中划线、点号）
         if (type == TokenType.UNKNOWN) {
             String text = token.getText();
-            return text.matches(".*[a-zA-Z0-9_.\\-].*");
+            return text.matches(".*[a-zA-Z0-9_.\\-\\*\\?].*");
         }
         // LOGIC/OPERATOR 类型可能是索引名中的保留字（罕见），允许
         if (type == TokenType.LOGIC || type == TokenType.OPERATOR) {
