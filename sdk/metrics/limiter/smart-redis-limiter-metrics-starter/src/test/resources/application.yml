@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: limiter-metrics-test
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        metrics:
+          limiter:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.metrics.limiter: DEBUG
