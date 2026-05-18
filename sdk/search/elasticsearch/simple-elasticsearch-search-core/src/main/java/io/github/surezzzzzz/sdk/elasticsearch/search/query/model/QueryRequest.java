@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -51,6 +52,13 @@ public class QueryRequest {
      * 按指定字段折叠，每个唯一值只返回一条文档
      */
     private CollapseField collapse;
+
+    /**
+     * 来源类型，由 starter 端点在调用 executor 前设置，不参与 JSON 序列化
+     * 取值参考 starter 中的 SourceType 常量类
+     */
+    @JsonIgnore
+    private String sourceType;
 
     /**
      * 日期范围

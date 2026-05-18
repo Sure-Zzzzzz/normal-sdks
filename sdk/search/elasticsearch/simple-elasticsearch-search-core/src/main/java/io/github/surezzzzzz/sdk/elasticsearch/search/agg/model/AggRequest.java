@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -34,6 +36,12 @@ public class AggRequest {
     private QueryCondition query;
 
     /**
+     * 日期范围（仅日期分割索引）
+     * 优先级高于从 query 条件中推断的日期范围
+     */
+    private QueryRequest.DateRange dateRange;
+
+    /**
      * 聚合定义列表
      */
     private List<AggDefinition> aggs;
@@ -47,6 +55,13 @@ public class AggRequest {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Map<String, Map<String, Object>> after;
+
+    /**
+     * 来源类型，由 starter 端点在调用 executor 前设置，不参与 JSON 序列化
+     * 取值参考 starter 中的 SourceType 常量类
+     */
+    @JsonIgnore
+    private String sourceType;
 
     /**
      * 初始化集合
