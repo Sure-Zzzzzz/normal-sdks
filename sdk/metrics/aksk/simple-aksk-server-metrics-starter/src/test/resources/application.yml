@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: aksk-server-metrics-test
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        metrics:
+          aksk:
+            server:
+              enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.metrics.aksk.server: DEBUG

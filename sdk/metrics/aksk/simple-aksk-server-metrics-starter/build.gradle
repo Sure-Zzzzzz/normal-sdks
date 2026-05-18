@@ -1,0 +1,10 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:1.0.4'
+    compileOnly 'io.micrometer:micrometer-core'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    testImplementation 'io.micrometer:micrometer-core:1.9.17'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
