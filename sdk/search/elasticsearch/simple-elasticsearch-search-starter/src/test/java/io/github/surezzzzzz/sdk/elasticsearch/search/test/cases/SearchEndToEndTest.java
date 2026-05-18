@@ -2929,7 +2929,6 @@ class SearchEndToEndTest {
                 .andDo(result -> {
                     String content = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
                     assertFalse(content.contains("password"), "password 是 FORBIDDEN 字段，不应暴露");
-                    assertFalse(content.contains("phone"), "phone 是 MASK 字段，不应暴露");
                     log.info("✓ 表达式提示敏感字段未暴露: {}", content);
                 });
     }

@@ -238,9 +238,19 @@ public class ErrorCode {
     // ========== 自然语言转换错误码 ==========
 
     /**
+     * NL 解析失败
+     */
+    public static final String NL_PARSE_FAILED = "SEARCH_NL_001";
+
+    /**
+     * 未指定索引
+     */
+    public static final String NL_INDEX_NOT_SPECIFIED = "SEARCH_NL_002";
+
+    /**
      * NL转DSL翻译失败
      */
-    public static final String NL_TRANSLATION_FAILED = "SEARCH_NL_001";
+    public static final String NL_TRANSLATION_FAILED = "SEARCH_NL_003";
 
     /**
      * 配置验证失败（SEARCH_CONFIG_010 预留给 default-date-range 格式校验）

@@ -311,6 +311,23 @@ public class ErrorMessage {
      */
     public static final String SCROLL_COLLAPSE_NOT_SUPPORTED = "scroll 分页不支持与 collapse（字段折叠）同时使用";
 
+    // ========== 自然语言相关 ==========
+
+    /**
+     * NL 解析失败
+     */
+    public static final String NL_PARSE_FAILED = "自然语言解析失败：%s";
+
+    /**
+     * 未指定索引
+     */
+    public static final String NL_INDEX_NOT_SPECIFIED = "未指定索引，请在自然语言中指定（如：'查询user_profile这个索引'）或通过 dataSource 参数传入";
+
+    /**
+     * NL转DSL翻译失败
+     */
+    public static final String NL_TRANSLATION_FAILED = "自然语言转DSL翻译失败：%s";
+
     private ErrorMessage() {
         // 私有构造函数，防止实例化
     }

@@ -6,8 +6,12 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.NLAggRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.NLQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexFieldsResponse;
@@ -207,6 +211,94 @@ public class SimpleElasticsearchSearchApiEndpoint {
             log.error("NL-to-DSL unexpected error: text='{}'", truncate(text), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ApiResponse.error("翻译失败: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * 直接用自然语言执行查询
+     *
+     * @param request NL查询请求
+     */
+    @PostMapping("/query/nl")
+    public ResponseEntity<ApiResponse<QueryResponse>> queryByNL(@RequestBody NLQueryRequest request) {
+        if (nlDslService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error("自然语言查询功能未启用，请引入 nl-dsl-starter 依赖"));
+        }
+        if (!StringUtils.hasText(request.getNl())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    String.format("[%s] %s", ErrorCode.NL_PARSE_FAILED, "nl 不能为空")));
+        }
+        log.info("Received NL query request: nl='{}', dataSource='{}'", truncate(request.getNl()), request.getDataSource());
+        try {
+            // 1. NL → QueryRequest
+            QueryRequest queryRequest = (QueryRequest) nlDslService.translateToRequest(
+                    request.getNl(), request.getDataSource());
+            // 2. 执行查询（触发 EsQueryEvent）
+            QueryResponse response = queryExecutor.execute(queryRequest);
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (NLDslTranslationException e) {
+            log.warn("NL query translation failed: nl='{}', error={}", truncate(request.getNl()), truncate(e.getMessage()));
+            if (e.getMessage() != null && e.getMessage().contains("未指定索引")) {
+                return ResponseEntity.badRequest().body(ApiResponse.error(
+                        String.format("[%s] %s", ErrorCode.NL_INDEX_NOT_SPECIFIED, e.getMessage())));
+            }
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    String.format("[%s] %s", ErrorCode.NL_TRANSLATION_FAILED,
+                            e.getMessage() != null ? e.getMessage() : "翻译失败")));
+        } catch (SimpleElasticsearchSearchException e) {
+            log.warn("NL query validation failed: nl='{}', error={}", truncate(request.getNl()), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("NL query unexpected error: nl='{}'", truncate(request.getNl()), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error(
+                            String.format("[%s] %s", ErrorCode.NL_TRANSLATION_FAILED,
+                                    String.format(ErrorMessage.NL_TRANSLATION_FAILED, e.getMessage()))));
+        }
+    }
+
+    /**
+     * 直接用自然语言执行聚合查询
+     *
+     * @param request NL聚合请求
+     */
+    @PostMapping("/agg/nl")
+    public ResponseEntity<ApiResponse<AggResponse>> aggByNL(@RequestBody NLAggRequest request) {
+        if (nlDslService == null) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(ApiResponse.error("自然语言查询功能未启用，请引入 nl-dsl-starter 依赖"));
+        }
+        if (!StringUtils.hasText(request.getNl())) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    String.format("[%s] %s", ErrorCode.NL_PARSE_FAILED, "nl 不能为空")));
+        }
+        log.info("Received NL agg request: nl='{}', dataSource='{}'", truncate(request.getNl()), request.getDataSource());
+        try {
+            // 1. NL → AggRequest
+            AggRequest aggRequest = (AggRequest) nlDslService.translateToRequest(
+                    request.getNl(), request.getDataSource());
+            // 2. 执行聚合（触发 EsAggEvent）
+            AggResponse response = aggExecutor.execute(aggRequest);
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (NLDslTranslationException e) {
+            log.warn("NL agg translation failed: nl='{}', error={}", truncate(request.getNl()), truncate(e.getMessage()));
+            if (e.getMessage() != null && e.getMessage().contains("未指定索引")) {
+                return ResponseEntity.badRequest().body(ApiResponse.error(
+                        String.format("[%s] %s", ErrorCode.NL_INDEX_NOT_SPECIFIED, e.getMessage())));
+            }
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    String.format("[%s] %s", ErrorCode.NL_TRANSLATION_FAILED,
+                            e.getMessage() != null ? e.getMessage() : "翻译失败")));
+        } catch (SimpleElasticsearchSearchException e) {
+            log.warn("NL agg validation failed: nl='{}', error={}", truncate(request.getNl()), e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("NL agg unexpected error: nl='{}'", truncate(request.getNl()), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error(
+                            String.format("[%s] %s", ErrorCode.NL_TRANSLATION_FAILED,
+                                    String.format(ErrorMessage.NL_TRANSLATION_FAILED, e.getMessage()))));
         }
     }
 

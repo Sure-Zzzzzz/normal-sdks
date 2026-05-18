@@ -102,8 +102,23 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
         }
 
         if (conditionIntent.isLogicCondition()) {
-            // 逻辑组合（AND/OR）：递归转换所有子条件，不添加父节点
+            // 逻辑组合（AND/OR）：递归转换所有子条件
             List<QueryCondition> childConditions = new ArrayList<>();
+            // nl-parser 1.x 将第一个叶子条件复用为逻辑节点（field/op/value 保留在父节点上）
+            // 若父节点自身携带 field+operator+value，将其作为第一个子条件加入（AND 场景）
+            // OR 场景下父节点 value=null，不重复添加（子条件已包含完整数据）
+            if (conditionIntent.getFieldHint() != null && conditionIntent.getOperator() != null
+                    && (conditionIntent.getValue() != null
+                        || (conditionIntent.getValues() != null && !conditionIntent.getValues().isEmpty()))) {
+                String fieldHint = conditionIntent.getFieldHint();
+                String boundField = bindField(fieldHint, index);
+                childConditions.add(QueryCondition.builder()
+                        .field(boundField)
+                        .op(conditionIntent.getOperator().getCode())
+                        .value(conditionIntent.getValue())
+                        .values(conditionIntent.getValues())
+                        .build());
+            }
             for (ConditionIntent child : conditionIntent.getChildren()) {
                 childConditions.add(translateCondition(child, index));
             }
@@ -178,7 +193,7 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
 
         AggDefinition.AggDefinitionBuilder builder = AggDefinition.builder()
                 // 聚合名称：优先使用 nl-parser 返回的 nameHint，否则自动生成
-                .name(aggIntent.getNameHint() != null ? aggIntent.getNameHint() : generateAggName(aggIntent))
+                .name(generateAggName(aggIntent, index))
                 .type(aggIntent.getType().getCode())
                 .field(boundField);
 
@@ -206,10 +221,13 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
 
     /**
      * 自动生成聚合名称
-     * 例如：AVG(年龄) → avg_年龄
+     * 使用绑定后的字段名，例如：AVG(age) → avg_age
      */
-    private String generateAggName(AggregationIntent aggIntent) {
-        return aggIntent.getType().getCode() + "_" + aggIntent.getFieldHint();
+    private String generateAggName(AggregationIntent aggIntent, String index) {
+        String fieldHint = aggIntent.getFieldHint();
+        String boundField = bindField(fieldHint, index);
+        log.debug("generateAggName: fieldHint={}, boundField={}, type={}", fieldHint, boundField, aggIntent.getType().getCode());
+        return aggIntent.getType().getCode() + "_" + boundField;
     }
 
     // ==================== 分页、排序、日期范围转换 ====================
