@@ -58,16 +58,24 @@ io.github.surezzzzzz.sdk.elasticsearch.search
 | `downgradeLevel` | `int` | 降级级别（0 = 未降级） |
 | `sourceType` | `String` | 来源类型（QUERY_API / NL_API / EXPRESSION_API） |
 
-### EsQueryErrorEvent / EsAggErrorEvent（v1.0.9+）
+### EsQueryErrorEvent / EsAggErrorEvent（v1.0.9+，v1.0.10 补齐 sourceType）
 
 查询/聚合执行失败时发布，仅在 executor 执行阶段失败时触发（不含端点层 400 校验失败）。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `request` | `QueryRequest` / `AggRequest` | 原始请求 |
+| `error` | `Throwable` | 异常信息 |
+| `datasource` | `String` | 路由到的数据源 |
+| `sourceType` | `String` | 请求来源（QUERY_API / NL_API / EXPRESSION_API），v1.0.10 新增 |
 
 ```java
 @EventListener
 public void onQueryError(EsQueryErrorEvent event) {
-    log.error("查询失败: index={}, datasource={}, error={}",
+    log.error("查询失败: index={}, datasource={}, sourceType={}, error={}",
         event.getRequest().getIndex(),
         event.getDatasource(),
+        event.getSourceType(),
         event.getError().getMessage());
 }
 ```
@@ -121,6 +129,7 @@ public void onQueryError(EsQueryErrorEvent event) {
 - `1.0.5` ~ `1.0.7`：兼容性修复
 - `1.0.8`：`PaginationType` 新增 `SCROLL`，`PaginationInfo` 新增 `scrollId`/`scrollTtl`
 - `1.0.9`：`ExecutionContext` 基类，Error Events，`AggRequest.dateRange` Bug Fix，`sourceType` 透传
+- `1.0.10`：Error Events 补齐 `sourceType` 字段
 
 ## 注意事项
 

@@ -24,11 +24,17 @@ public class EsAggErrorEvent extends ApplicationEvent {
      */
     private final String datasource;
 
+    /**
+     * 请求来源类型（QUERY_API / NL_API / EXPRESSION_API），取自 AggRequest.sourceType
+     */
+    private final String sourceType;
+
     public EsAggErrorEvent(Object source, AggRequest request,
                            Throwable error, String datasource) {
         super(source);
         this.request = request;
         this.error = error;
         this.datasource = datasource;
+        this.sourceType = request != null ? request.getSourceType() : null;
     }
 }

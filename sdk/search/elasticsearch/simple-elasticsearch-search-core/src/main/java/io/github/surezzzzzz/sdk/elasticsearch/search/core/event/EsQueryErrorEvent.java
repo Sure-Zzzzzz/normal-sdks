@@ -24,11 +24,17 @@ public class EsQueryErrorEvent extends ApplicationEvent {
      */
     private final String datasource;
 
+    /**
+     * 请求来源类型（QUERY_API / NL_API / EXPRESSION_API），取自 QueryRequest.sourceType
+     */
+    private final String sourceType;
+
     public EsQueryErrorEvent(Object source, QueryRequest request,
                              Throwable error, String datasource) {
         super(source);
         this.request = request;
         this.error = error;
         this.datasource = datasource;
+        this.sourceType = request != null ? request.getSourceType() : null;
     }
 }
