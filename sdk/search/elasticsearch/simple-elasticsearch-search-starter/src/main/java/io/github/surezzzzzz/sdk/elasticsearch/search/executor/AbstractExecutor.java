@@ -69,6 +69,10 @@ public abstract class AbstractExecutor<Req, Resp> {
             log.error("Execution failed: index={}", getIndex(request), e);
             onExecutionError(request, e);
             throw wrapIoException(e);
+        } catch (DowngradeFailedException e) {
+            log.error("Execution failed after all downgrade levels: index={}", getIndex(request), e);
+            onExecutionError(request, e);
+            throw e;
         }
     }
 
@@ -115,7 +119,7 @@ public abstract class AbstractExecutor<Req, Resp> {
      * 子类可覆盖以发布 Error Event 等
      *
      * @param request 原始请求
-     * @param error   异常（仅 IOException，不含参数校验失败）
+     * @param error   异常（IOException 或 DowngradeFailedException，不含参数校验失败）
      */
     protected void onExecutionError(Req request, Throwable error) {
         // 默认空实现
