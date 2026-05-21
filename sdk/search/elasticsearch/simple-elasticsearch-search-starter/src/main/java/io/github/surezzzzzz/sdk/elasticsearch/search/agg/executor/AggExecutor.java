@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.validator.AggRequestValidatorChain;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.AggExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationException;
@@ -84,7 +85,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
 
     @Override
     protected boolean needsDowngradeRetry(AggRequest request, IndexMetadata metadata) {
-        QueryRequest.DateRange dateRange = extractDateRangeFromQuery(request.getQuery(), metadata);
+        QueryRequest.DateRange dateRange = resolveDateRange(request, metadata);
         return properties.getDowngrade().isEnabled()
                 && metadata.isDateSplit()
                 && dateRange != null;
@@ -93,7 +94,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
     @Override
     protected AggResponse executeOnce(AggRequest request, IndexMetadata metadata,
                                       long startTime, DowngradeLevel level) throws IOException {
-        QueryRequest.DateRange dateRange = extractDateRangeFromQuery(request.getQuery(), metadata);
+        QueryRequest.DateRange dateRange = resolveDateRange(request, metadata);
         SearchRequest searchRequest = buildSearchRequest(request, metadata, dateRange, level);
 
         log.debug("Executing aggregation: indices={}, dsl={}",
@@ -131,6 +132,8 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             AggExecutionContext context = AggExecutionContext.builder()
                     .actualIndices(searchRequest.indices())
                     .datasource(datasourceKey)
+                    .downgradeLevel(level.ordinal())
+                    .sourceType(request.getSourceType())
                     .build();
             eventPublisher.publishEvent(new EsAggEvent(this, request, response, context));
         } catch (Exception e) {
@@ -150,6 +153,20 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         return new AggregationException(ErrorCode.AGG_EXECUTION_FAILED, ErrorMessage.AGG_EXECUTION_FAILED, e);
     }
 
+    @Override
+    protected void onExecutionError(AggRequest request, Throwable error) {
+        try {
+            String datasource = null;
+            try {
+                datasource = routeResolver.resolveDataSource(request.getIndex());
+            } catch (Exception ignored) {
+            }
+            eventPublisher.publishEvent(new EsAggErrorEvent(this, request, error, datasource));
+        } catch (Exception e) {
+            log.warn("Failed to publish EsAggErrorEvent", e);
+        }
+    }
+
     // ==================== 钩子方法覆盖 ====================
 
     @Override
@@ -157,7 +174,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         if (!properties.getDowngrade().isEnableEstimate()) {
             return DowngradeLevel.LEVEL_0;
         }
-        QueryRequest.DateRange dateRange = extractDateRangeFromQuery(request.getQuery(), metadata);
+        QueryRequest.DateRange dateRange = resolveDateRange(request, metadata);
         if (dateRange == null) {
             return DowngradeLevel.LEVEL_0;
         }
@@ -218,6 +235,14 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         sourceBuilder.size(SimpleElasticsearchSearchConstant.AGG_NO_DOCS_SIZE);
         searchRequest.source(sourceBuilder);
         return searchRequest;
+    }
+
+    private QueryRequest.DateRange resolveDateRange(AggRequest request, IndexMetadata metadata) {
+        // 显式 dateRange 优先，fallback 到从 query 条件推断
+        if (request.getDateRange() != null) {
+            return request.getDateRange();
+        }
+        return extractDateRangeFromQuery(request.getQuery(), metadata);
     }
 
     private QueryRequest.DateRange extractDateRangeFromQuery(QueryCondition query, IndexMetadata metadata) {

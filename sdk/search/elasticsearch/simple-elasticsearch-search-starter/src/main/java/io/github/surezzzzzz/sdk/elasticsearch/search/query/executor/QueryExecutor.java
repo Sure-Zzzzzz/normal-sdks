@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.QueryExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
@@ -99,6 +100,8 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
                 QueryExecutionContext context = QueryExecutionContext.builder()
                         .actualIndices(new String[]{request.getIndex()})
                         .datasource(datasourceKey)
+                        .downgradeLevel(0)
+                        .sourceType(request.getSourceType())
                         .build();
                 eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
             } catch (Exception e) {
@@ -139,6 +142,8 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
             QueryExecutionContext context = QueryExecutionContext.builder()
                     .actualIndices(searchRequest.indices())
                     .datasource(datasourceKey)
+                    .downgradeLevel(level.ordinal())
+                    .sourceType(request.getSourceType())
                     .build();
             eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
         } catch (Exception e) {
@@ -156,6 +161,20 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     @Override
     protected RuntimeException wrapIoException(IOException e) {
         return new QueryException(ErrorCode.QUERY_EXECUTION_FAILED, ErrorMessage.QUERY_EXECUTION_FAILED, e);
+    }
+
+    @Override
+    protected void onExecutionError(QueryRequest request, Throwable error) {
+        try {
+            String datasource = null;
+            try {
+                datasource = routeResolver.resolveDataSource(request.getIndex());
+            } catch (Exception ignored) {
+            }
+            eventPublisher.publishEvent(new EsQueryErrorEvent(this, request, error, datasource));
+        } catch (Exception e) {
+            log.warn("Failed to publish EsQueryErrorEvent", e);
+        }
     }
 
     // ==================== 钩子方法覆盖 ====================

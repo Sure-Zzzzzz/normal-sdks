@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElastic
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ApiMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SourceType;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.NLAggRequest;
@@ -79,6 +80,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<QueryResponse>> query(@RequestBody QueryRequest request) {
         try {
             log.debug("Received query request: index={}", request.getIndex());
+            request.setSourceType(SourceType.QUERY_API);
             return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
@@ -96,6 +98,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<AggResponse>> aggregate(@RequestBody AggRequest request) {
         try {
             log.debug("Received aggregation request: index={}", request.getIndex());
+            request.setSourceType(SourceType.QUERY_API);
             return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Aggregation validation failed: index={}, error={}", request.getIndex(), e.getMessage());
@@ -225,16 +228,36 @@ public class SimpleElasticsearchSearchApiEndpoint {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(ApiResponse.error("自然语言查询功能未启用，请引入 nl-dsl-starter 依赖"));
         }
-        if (!StringUtils.hasText(request.getNl())) {
+
+        boolean isScrollContinuation = request.getPagination() != null
+                && StringUtils.hasText(request.getPagination().getScrollId());
+
+        // scroll 续页时 nl 可为空；其他情况 nl 必填
+        if (!isScrollContinuation && !StringUtils.hasText(request.getNl())) {
             return ResponseEntity.badRequest().body(ApiResponse.error(
                     String.format("[%s] %s", ErrorCode.NL_PARSE_FAILED, "nl 不能为空")));
         }
+
         log.info("Received NL query request: nl='{}', dataSource='{}'", truncate(request.getNl()), request.getDataSource());
         try {
-            // 1. NL → QueryRequest
-            QueryRequest queryRequest = (QueryRequest) nlDslService.translateToRequest(
-                    request.getNl(), request.getDataSource());
-            // 2. 执行查询（触发 EsQueryEvent）
+            QueryRequest queryRequest;
+            if (isScrollContinuation) {
+                // scroll 续页：跳过 NL 解析，直接构建最小 QueryRequest
+                queryRequest = QueryRequest.builder()
+                        .index(request.getDataSource())
+                        .pagination(request.getPagination())
+                        .build();
+            } else {
+                // 正常流程：NL → QueryRequest
+                queryRequest = (QueryRequest) nlDslService.translateToRequest(
+                        request.getNl(), request.getDataSource());
+                // 覆盖可选参数
+                if (request.getPagination() != null) queryRequest.setPagination(request.getPagination());
+                if (request.getDateRange() != null) queryRequest.setDateRange(request.getDateRange());
+                if (request.getFields() != null && !request.getFields().isEmpty()) queryRequest.setFields(request.getFields());
+                if (request.getCollapse() != null) queryRequest.setCollapse(request.getCollapse());
+            }
+            queryRequest.setSourceType(SourceType.NL_API);
             QueryResponse response = queryExecutor.execute(queryRequest);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (NLDslTranslationException e) {
@@ -275,10 +298,13 @@ public class SimpleElasticsearchSearchApiEndpoint {
         }
         log.info("Received NL agg request: nl='{}', dataSource='{}'", truncate(request.getNl()), request.getDataSource());
         try {
-            // 1. NL → AggRequest
+            // NL → AggRequest
             AggRequest aggRequest = (AggRequest) nlDslService.translateToRequest(
                     request.getNl(), request.getDataSource());
-            // 2. 执行聚合（触发 EsAggEvent）
+            // 覆盖可选参数
+            if (request.getDateRange() != null) aggRequest.setDateRange(request.getDateRange());
+            if (request.getAfter() != null) aggRequest.setAfter(request.getAfter());
+            aggRequest.setSourceType(SourceType.NL_API);
             AggResponse response = aggExecutor.execute(aggRequest);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (NLDslTranslationException e) {
@@ -324,6 +350,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .pagination(request.getPagination())
                     .fields(request.getFields())
                     .dateRange(request.getDateRange())
+                    .sourceType(SourceType.EXPRESSION_API)
                     .build();
             return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(queryRequest)));
         } catch (SimpleElasticsearchSearchException e) {
@@ -391,6 +418,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .query(condition)
                     .aggs(request.getAggs())
                     .after(request.getAfter())
+                    .sourceType(SourceType.EXPRESSION_API)
                     .build();
             return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(aggRequest)));
         } catch (SimpleElasticsearchSearchException e) {

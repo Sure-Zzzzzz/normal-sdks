@@ -5,7 +5,9 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.executor.AggExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.QueryExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
@@ -185,10 +187,14 @@ public class EventPublishEndToEndTest {
         assertNotNull(event.getContext().getActualIndices(), "Actual indices should not be null");
         assertNotNull(event.getContext().getDatasource(), "Datasource should not be null");
         assertTrue(event.getContext().getActualIndices().length > 0, "Should have at least one actual index");
+        assertEquals(0, event.getContext().getDowngradeLevel(), "Downgrade level should be 0 for simple query");
+        // sourceType 由 executor 直接调用时为 null（未经过 endpoint 设置）
 
-        log.info("Query event test passed: index={}, datasource={}, total={}, took={}ms",
+        log.info("Query event test passed: index={}, datasource={}, downgradeLevel={}, sourceType={}, total={}, took={}ms",
                 event.getRequest().getIndex(),
                 event.getContext().getDatasource(),
+                event.getContext().getDowngradeLevel(),
+                event.getContext().getSourceType(),
                 event.getResponse().getTotal(),
                 event.getResponse().getTook());
     }
@@ -240,10 +246,12 @@ public class EventPublishEndToEndTest {
         assertNotNull(event.getContext().getActualIndices(), "Actual indices should not be null");
         assertNotNull(event.getContext().getDatasource(), "Datasource should not be null");
         assertTrue(event.getContext().getActualIndices().length > 0, "Should have at least one actual index");
+        assertEquals(0, event.getContext().getDowngradeLevel(), "Downgrade level should be 0");
 
-        log.info("Agg event test passed: index={}, datasource={}, took={}ms",
+        log.info("Agg event test passed: index={}, datasource={}, downgradeLevel={}, took={}ms",
                 event.getRequest().getIndex(),
                 event.getContext().getDatasource(),
+                event.getContext().getDowngradeLevel(),
                 event.getResponse().getTook());
     }
 
@@ -283,15 +291,20 @@ public class EventPublishEndToEndTest {
 
         public final List<EsQueryEvent> queryEvents = new ArrayList<>();
         public final List<EsAggEvent> aggEvents = new ArrayList<>();
+        public final List<EsQueryErrorEvent> queryErrorEvents = new ArrayList<>();
+        public final List<EsAggErrorEvent> aggErrorEvents = new ArrayList<>();
         public CountDownLatch queryEventLatch = new CountDownLatch(1);
         public CountDownLatch aggEventLatch = new CountDownLatch(1);
+        public CountDownLatch queryErrorEventLatch = new CountDownLatch(1);
 
         @EventListener
         public void onEsQueryEvent(EsQueryEvent event) {
-            log.info("Received EsQueryEvent: index={}, total={}, datasource={}",
+            log.info("Received EsQueryEvent: index={}, total={}, datasource={}, downgradeLevel={}, sourceType={}",
                     event.getRequest().getIndex(),
                     event.getResponse().getTotal(),
-                    event.getContext().getDatasource());
+                    event.getContext().getDatasource(),
+                    event.getContext().getDowngradeLevel(),
+                    event.getContext().getSourceType());
 
             queryEvents.add(event);
             queryEventLatch.countDown();
@@ -299,19 +312,44 @@ public class EventPublishEndToEndTest {
 
         @EventListener
         public void onEsAggEvent(EsAggEvent event) {
-            log.info("Received EsAggEvent: index={}, datasource={}",
+            log.info("Received EsAggEvent: index={}, datasource={}, downgradeLevel={}",
                     event.getRequest().getIndex(),
-                    event.getContext().getDatasource());
+                    event.getContext().getDatasource(),
+                    event.getContext().getDowngradeLevel());
 
             aggEvents.add(event);
             aggEventLatch.countDown();
         }
 
+        @EventListener
+        public void onEsQueryErrorEvent(EsQueryErrorEvent event) {
+            log.info("Received EsQueryErrorEvent: index={}, datasource={}, error={}",
+                    event.getRequest().getIndex(),
+                    event.getDatasource(),
+                    event.getError().getMessage());
+
+            queryErrorEvents.add(event);
+            queryErrorEventLatch.countDown();
+        }
+
+        @EventListener
+        public void onEsAggErrorEvent(EsAggErrorEvent event) {
+            log.info("Received EsAggErrorEvent: index={}, datasource={}, error={}",
+                    event.getRequest().getIndex(),
+                    event.getDatasource(),
+                    event.getError().getMessage());
+
+            aggErrorEvents.add(event);
+        }
+
         public void reset() {
             queryEvents.clear();
             aggEvents.clear();
+            queryErrorEvents.clear();
+            aggErrorEvents.clear();
             queryEventLatch = new CountDownLatch(1);
             aggEventLatch = new CountDownLatch(1);
+            queryErrorEventLatch = new CountDownLatch(1);
         }
     }
 }

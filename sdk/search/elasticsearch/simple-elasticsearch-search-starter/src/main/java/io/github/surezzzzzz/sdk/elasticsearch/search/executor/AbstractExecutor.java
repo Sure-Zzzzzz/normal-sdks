@@ -67,6 +67,7 @@ public abstract class AbstractExecutor<Req, Resp> {
             return executeOnce(request, metadata, startTime, DowngradeLevel.LEVEL_0);
         } catch (IOException e) {
             log.error("Execution failed: index={}", getIndex(request), e);
+            onExecutionError(request, e);
             throw wrapIoException(e);
         }
     }
@@ -107,6 +108,17 @@ public abstract class AbstractExecutor<Req, Resp> {
      */
     protected DowngradeLevel estimateDowngradeLevel(Req request, IndexMetadata metadata) {
         return DowngradeLevel.LEVEL_0;
+    }
+
+    /**
+     * 执行失败时的回调，默认空实现
+     * 子类可覆盖以发布 Error Event 等
+     *
+     * @param request 原始请求
+     * @param error   异常（仅 IOException，不含参数校验失败）
+     */
+    protected void onExecutionError(Req request, Throwable error) {
+        // 默认空实现
     }
 
     // ==================== 内部通用逻辑 ====================
