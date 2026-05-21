@@ -95,6 +95,11 @@ public final class SimpleAkskServerConstant {
      */
     public static final String SCOPE_DELIMITER = ",";
 
+    /**
+     * OAuth2标准Scope空格分隔符（用于token响应和introspect响应）
+     */
+    public static final String SCOPE_SEPARATOR_SPACE = " ";
+
     // ==================== JWT密钥相关常量 ====================
 
     /**
@@ -196,6 +201,36 @@ public final class SimpleAkskServerConstant {
      */
     public static final String OAUTH2_PARAM_SECURITY_CONTEXT = "security_context";
 
+    /**
+     * OAuth2 Token请求参数名: grant_type
+     */
+    public static final String OAUTH2_PARAM_GRANT_TYPE = "grant_type";
+
+    /**
+     * OAuth2 Token请求参数名: scope
+     */
+    public static final String OAUTH2_PARAM_SCOPE = "scope";
+
+    /**
+     * OAuth2 Revoke/Introspect请求参数名: token
+     */
+    public static final String OAUTH2_PARAM_TOKEN = "token";
+
+    /**
+     * OAuth2 Token响应字段: access_token
+     */
+    public static final String OAUTH2_RESPONSE_ACCESS_TOKEN = "access_token";
+
+    /**
+     * OAuth2 Token响应字段: token_type
+     */
+    public static final String OAUTH2_RESPONSE_TOKEN_TYPE = "token_type";
+
+    /**
+     * OAuth2 Token响应字段: expires_in
+     */
+    public static final String OAUTH2_RESPONSE_EXPIRES_IN = "expires_in";
+
     // ==================== JWE 算法常量 ====================
 
     /**
@@ -219,12 +254,73 @@ public final class SimpleAkskServerConstant {
     public static final int AES_256_KEY_LENGTH = 32;
 
     /**
-     * AES 密钥环境变量名
+     * JWE Content-Type header value for JWT
      */
-    public static final String AES_KEY_ENV_NAME = "AKS_AES_256_KEY";
+    public static final String JWE_CONTENT_TYPE_JWT = "JWT";
+
+    // ==================== Token数据源常量 ====================
 
     /**
-     * 默认 AES-256 密钥配置路径（环境变量引用格式）
+     * Token数据源: MySQL
      */
-    public static final String DEFAULT_ENCRYPTION_KEY_EXPRESSION = "${" + AES_KEY_ENV_NAME + "}";
+    public static final String TOKEN_SOURCE_MYSQL = "mysql";
+
+    /**
+     * Token数据源: Redis
+     */
+    public static final String TOKEN_SOURCE_REDIS = "redis";
+
+    // ==================== Spring属性常量 ====================
+
+    /**
+     * Spring属性: server.port
+     */
+    public static final String SPRING_PROPERTY_SERVER_PORT = "server.port";
+
+    /**
+     * 默认服务端口
+     */
+    public static final String DEFAULT_SERVER_PORT = "8080";
+
+    // ==================== HTTP认证常量 ====================
+
+    /**
+     * HTTP Basic认证前缀
+     */
+    public static final String HTTP_BASIC_AUTH_PREFIX = "Basic ";
+
+    // ==================== OAuth2错误码常量 ====================
+
+    /**
+     * OAuth2错误码: invalid_scope
+     */
+    public static final String OAUTH2_ERROR_INVALID_SCOPE = "invalid_scope";
+
+    /**
+     * OAuth2错误码: security_context_too_large
+     */
+    public static final String OAUTH2_ERROR_SECURITY_CONTEXT_TOO_LARGE = "security_context_too_large";
+
+    // ==================== Admin API响应字段常量 ====================
+
+    /**
+     * Admin API响应字段: success
+     */
+    public static final String ADMIN_RESPONSE_SUCCESS = "success";
+
+    /**
+     * Admin API响应字段: status
+     */
+    public static final String ADMIN_RESPONSE_STATUS = "status";
+
+    /**
+     * Admin API响应字段: message
+     */
+    public static final String ADMIN_RESPONSE_MESSAGE = "message";
+
+    /**
+     * Admin API响应字段: deletedCount
+     */
+    public static final String ADMIN_RESPONSE_DELETED_COUNT = "deletedCount";
+
 }

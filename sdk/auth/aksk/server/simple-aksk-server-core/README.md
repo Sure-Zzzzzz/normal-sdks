@@ -18,7 +18,7 @@
 
 `SimpleAkskServerConstant` — 服务端常量，包括配置前缀、默认值、JWT Claim 名称、JWE 算法常量等。
 
-`SimpleAkskServerProperties.JwtConfig.encryptionKey` — AES-256 密钥配置项，通过流水线注入环境变量 `AKS_AES_256_KEY`。
+`SimpleAkskServerProperties.JwtConfig.encryptionKey` — AES-256 密钥配置项，通过配置文件注入。
 
 ### JWE 加密常量
 
@@ -28,8 +28,8 @@
 |------|----|------|
 | `JWE_KEY_ENCRYPTION_ALGORITHM` | `A256GCMKW` | AES-256 Key Wrap |
 | `JWE_CONTENT_ENCRYPTION_ALGORITHM` | `A256GCM` | AES-256 Galois/Counter Mode |
+| `JWE_CONTENT_TYPE_JWT` | `JWT` | JWE header cty 字段值 |
 | `AES_256_KEY_LENGTH` | `32` | AES-256 密钥字节数 |
-| `AES_KEY_ENV_NAME` | `AKS_AES_256_KEY` | AES 密钥环境变量名 |
 
 ### Redis Key 工具
 
