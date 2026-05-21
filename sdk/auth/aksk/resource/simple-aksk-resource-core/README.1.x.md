@@ -1,6 +1,6 @@
 # Simple AKSK Resource Core
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK 资源保护核心模块，提供统一的安全上下文抽象和权限注解支持。
@@ -204,7 +204,7 @@ public class SimpleAkskSecurityException extends RuntimeException {
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.4'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.0'
 }
 ```
 
