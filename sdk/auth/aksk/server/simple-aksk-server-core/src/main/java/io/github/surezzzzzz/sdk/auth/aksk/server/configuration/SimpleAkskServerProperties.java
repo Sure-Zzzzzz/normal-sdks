@@ -50,6 +50,12 @@ public class SimpleAkskServerProperties {
         private String privateKey;
 
         private Integer securityContextMaxSize = SimpleAkskServerConstant.DEFAULT_SECURITY_CONTEXT_MAX_SIZE;
+
+        /**
+         * AES-256 密钥，用于 JWE 加密（通过流水线注入环境变量 AKS_AES_256_KEY）
+         * 支持格式：Base64 编码的 32 字节密钥
+         */
+        private String encryptionKey;
     }
 
     @Data

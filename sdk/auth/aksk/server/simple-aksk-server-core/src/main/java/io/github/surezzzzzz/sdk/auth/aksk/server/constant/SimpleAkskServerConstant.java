@@ -195,4 +195,36 @@ public final class SimpleAkskServerConstant {
      * OAuth2 Token请求参数名: security_context
      */
     public static final String OAUTH2_PARAM_SECURITY_CONTEXT = "security_context";
+
+    // ==================== JWE 算法常量 ====================
+
+    /**
+     * JWE Key Encryption Algorithm: AES-256 Key Wrap
+     */
+    public static final String JWE_KEY_ENCRYPTION_ALGORITHM = "A256GCMKW";
+
+    /**
+     * JWE Content Encryption Algorithm: AES-256 Galois/Counter Mode
+     */
+    public static final String JWE_CONTENT_ENCRYPTION_ALGORITHM = "A256GCM";
+
+    /**
+     * JWE Algorithm for JWT header "alg" field
+     */
+    public static final String JWE_ALGORITHM_HEADER_VALUE = "A256GCMKW";
+
+    /**
+     * AES-256 密钥长度（字节）
+     */
+    public static final int AES_256_KEY_LENGTH = 32;
+
+    /**
+     * AES 密钥环境变量名
+     */
+    public static final String AES_KEY_ENV_NAME = "AKS_AES_256_KEY";
+
+    /**
+     * 默认 AES-256 密钥配置路径（环境变量引用格式）
+     */
+    public static final String DEFAULT_ENCRYPTION_KEY_EXPRESSION = "${" + AES_KEY_ENV_NAME + "}";
 }
