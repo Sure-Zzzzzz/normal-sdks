@@ -16,7 +16,7 @@ import java.util.Map;
  * @author surezzzzzz
  * @since 1.0.0
  */
-public class AkskJwtContextProvider implements SimpleAkskSecurityContextProvider {
+public class AkskUserContextProvider implements SimpleAkskSecurityContextProvider {
 
     @Override
     public Map<String, String> getAll() {

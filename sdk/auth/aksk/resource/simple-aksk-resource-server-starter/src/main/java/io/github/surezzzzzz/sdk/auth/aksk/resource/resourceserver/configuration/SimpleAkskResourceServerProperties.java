@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.SimpleAkskResourceServerConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.VerificationMode;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -23,19 +22,7 @@ public class SimpleAkskResourceServerProperties {
     private boolean enabled = true;
 
     /**
-     * Token 验证模式
-     * INTROSPECT（默认）：调 introspect 端点验证，支持即时撤销感知
-     * JWT：本地验签，性能最好，不支持即时撤销感知
-     */
-    private VerificationMode verificationMode = VerificationMode.INTROSPECT;
-
-    /**
-     * JWT 配置（verificationMode=JWT 时使用）
-     */
-    private Jwt jwt = new Jwt();
-
-    /**
-     * Introspect 配置（verificationMode=INTROSPECT 时使用）
+     * Introspect 配置（调 /oauth2/introspect 验证 token）
      */
     private Introspect introspect = new Introspect();
 
@@ -43,25 +30,6 @@ public class SimpleAkskResourceServerProperties {
      * 安全配置
      */
     private Security security = new Security();
-
-    @Data
-    public static class Jwt {
-
-        /**
-         * OAuth2 授权服务器的 Issuer URI（推荐方式）
-         */
-        private String issuerUri;
-
-        /**
-         * JWT 公钥（PEM 格式字符串），仅在未配置 issuer-uri 时使用
-         */
-        private String publicKey;
-
-        /**
-         * JWT 公钥文件路径（支持 classpath: 和 file: 前缀），仅在未配置 issuer-uri 时使用
-         */
-        private String publicKeyLocation;
-    }
 
     @Data
     public static class Introspect {

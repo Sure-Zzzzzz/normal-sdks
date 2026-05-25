@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 resource-core（提供权限注解、切面、异常等）
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.3'
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

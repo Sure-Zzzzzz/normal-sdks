@@ -14,9 +14,6 @@ io:
             resource:
               server:
                 enabled: true
-                jwt:
-                  # 使用 issuer-uri 自动从 aksk-server 获取 JWKS
-                  issuer-uri: http://localhost:8080
                 introspect:
                   endpoint: http://localhost:8080/oauth2/introspect
                   # client-id 和 client-secret 在 application-local.yml 中配置

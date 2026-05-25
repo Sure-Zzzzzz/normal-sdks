@@ -42,7 +42,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(
         classes = SimpleAkskResourceServerTestApplication.class,
         properties = {
-                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.verification-mode=INTROSPECT"
+                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled=true"
         }
 )
 @AutoConfigureMockMvc
