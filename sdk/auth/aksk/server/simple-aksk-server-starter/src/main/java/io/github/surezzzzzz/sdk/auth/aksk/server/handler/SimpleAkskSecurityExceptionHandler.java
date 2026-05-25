@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.handler;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.exception.SimpleAkskSecurityException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;

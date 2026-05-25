@@ -1,7 +1,6 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-core:1.0.2'
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:1.0.4'
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.1'
 
     // SmartCache
     api 'io.github.sure-zzzzzz:smart-cache-starter:1.0.4'

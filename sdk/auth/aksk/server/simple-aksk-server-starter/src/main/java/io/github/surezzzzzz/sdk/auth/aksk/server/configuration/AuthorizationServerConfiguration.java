@@ -4,12 +4,13 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.EnabledAwareRegisteredClientRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.AuditableOAuth2AuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2AuthorizationService;
-import io.github.surezzzzzz.sdk.auth.aksk.server.support.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweOAuth2TokenGenerator;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,11 +19,15 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
+import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 
 /**
  * Authorization Server Configuration
@@ -91,5 +96,12 @@ public class AuthorizationServerConfiguration {
         log.info("Auditable OAuth2 authorization service initialized");
 
         return service;
+    }
+
+    @Bean
+    public OAuth2TokenGenerator<? extends OAuth2Token> jweOAuth2TokenGenerator(
+            JWKSource<SecurityContext> jwkSource,
+            OAuth2TokenCustomizer<JwtEncodingContext> tokenCustomizer) {
+        return new JweOAuth2TokenGenerator(properties, jwkSource, tokenCustomizer);
     }
 }

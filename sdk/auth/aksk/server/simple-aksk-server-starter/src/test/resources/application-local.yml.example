@@ -17,3 +17,5 @@ io:
             server:
               admin:
                 password: your_admin_password_here
+              jwt:
+                encryption-key: <base64-encoded-32-byte-aes-key>  # openssl rand -base64 32

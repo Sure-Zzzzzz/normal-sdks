@@ -1,5 +1,6 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.converter;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -74,8 +75,8 @@ public class DefaultScopeAuthenticationConverter implements AuthenticationConver
             // 如果数据库中也没有scope，抛出异常（数据完整性问题）
             if (requestedScopes.isEmpty()) {
                 log.error("No scopes found in database for client: {}, this indicates data integrity issue", clientId);
-                throw new OAuth2AuthenticationException(new OAuth2Error("invalid_scope",
-                        "Client has no registered scopes in database", null));
+                throw new OAuth2AuthenticationException(new OAuth2Error(SimpleAkskServerConstant.OAUTH2_ERROR_INVALID_SCOPE,
+                        ServerErrorMessage.OAUTH2_CLIENT_NO_SCOPES, null));
             }
         }
 

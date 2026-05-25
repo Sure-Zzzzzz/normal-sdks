@@ -1,8 +1,10 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
@@ -140,14 +142,14 @@ public class AdminController {
         try {
             // 后端验证：检查scopes是否包含换行符
             if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
-                redirectAttributes.addFlashAttribute("error", "权限范围不允许包含换行符，请使用逗号分隔");
+                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_NEWLINE_NOT_ALLOWED);
                 return "redirect:/admin/create-platform";
             }
 
             // 解析 scopes
             List<String> scopeList = null;
             if (scopes != null && !scopes.trim().isEmpty()) {
-                scopeList = java.util.Arrays.stream(scopes.split(","))
+                scopeList = java.util.Arrays.stream(scopes.split(SimpleAkskServerConstant.SCOPE_DELIMITER))
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
                         .collect(java.util.stream.Collectors.toList());
@@ -204,14 +206,14 @@ public class AdminController {
         try {
             // 后端验证：检查scopes是否包含换行符
             if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
-                redirectAttributes.addFlashAttribute("error", "权限范围不允许包含换行符，请使用逗号分隔");
+                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_NEWLINE_NOT_ALLOWED);
                 return "redirect:/admin/create-user";
             }
 
             // 解析 scopes
             List<String> scopeList = null;
             if (scopes != null && !scopes.trim().isEmpty()) {
-                scopeList = java.util.Arrays.stream(scopes.split(","))
+                scopeList = java.util.Arrays.stream(scopes.split(SimpleAkskServerConstant.SCOPE_DELIMITER))
                         .map(String::trim)
                         .filter(s -> !s.isEmpty())
                         .collect(java.util.stream.Collectors.toList());
@@ -270,13 +272,13 @@ public class AdminController {
             // 处理 scopes 字段
             if (request.getScopes() != null) {
                 clientManagementService.updateClientScopes(clientId, request.getScopes());
-                return ResponseEntity.ok(new ApiResponse("权限范围更新成功"));
+                return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_SCOPES_UPDATE_SUCCESS));
             }
 
             // 处理 name 字段
             if (request.getName() != null) {
                 clientManagementService.updateClientName(clientId, request.getName());
-                return ResponseEntity.ok(new ApiResponse("名称更新成功"));
+                return ResponseEntity.ok(new ApiResponse(ServerErrorMessage.ADMIN_NAME_UPDATE_SUCCESS));
             }
 
             // 处理 ownerUserId 字段（仅用户级AKSK）
@@ -292,7 +294,7 @@ public class AdminController {
         } catch (Exception e) {
             log.error("Failed to update client: {}", clientId, e);
             return ResponseEntity.status(500)
-                    .body(new ApiResponse("更新失败：" + e.getMessage()));
+                    .body(new ApiResponse(String.format(ServerErrorMessage.ADMIN_UPDATE_FAILED, e.getMessage())));
         }
     }
 
@@ -312,7 +314,7 @@ public class AdminController {
         try {
             // 使用分页查询获取用户的所有Client（传入一个很大的size来获取所有数据）
             PageResponse<ClientInfoResponse> pageResponse = clientManagementService.listClients(
-                    userId, "user", 1, Integer.MAX_VALUE);
+                    userId, ClientType.USER.getValue(), 1, Integer.MAX_VALUE);
 
             // 按创建时间降序排序
             List<ClientInfoResponse> sortedClients = pageResponse.getData().stream()
@@ -352,7 +354,7 @@ public class AdminController {
      * 支持MySQL和Redis两个数据源切换
      */
     @GetMapping("/token")
-    public String tokenList(@RequestParam(required = false, defaultValue = "mysql") String source,
+    public String tokenList(@RequestParam(required = false, defaultValue = SimpleAkskServerConstant.TOKEN_SOURCE_MYSQL) String source,
                             @RequestParam(required = false) String clientId,
                             @RequestParam(required = false) Integer clientType,
                             @RequestParam(required = false) TokenInfo.TokenStatus status,
@@ -363,7 +365,7 @@ public class AdminController {
 
         PageResponse<TokenInfoResponse> pageResponse;
 
-        if ("redis".equals(source)) {
+        if (SimpleAkskServerConstant.TOKEN_SOURCE_REDIS.equals(source)) {
             // 查询Redis Token（只支持状态过滤和分页）
             pageResponse = tokenManagementService.queryRedisTokens(status, page, size);
         } else {
@@ -421,14 +423,14 @@ public class AdminController {
         try {
             TokenInfoResponse tokenInfo = tokenManagementService.getTokenById(id);
             if (tokenInfo == null) {
-                model.addAttribute("error", "Token不存在");
+                model.addAttribute("error", ServerErrorMessage.ADMIN_TOKEN_NOT_FOUND);
                 return "redirect:/admin/token";
             }
             model.addAttribute("token", tokenInfo);
             return "admin/token-detail";
         } catch (Exception e) {
             log.error("Failed to get token detail: {}", id, e);
-            model.addAttribute("error", String.format("查询Token详情失败: %s", e.getMessage()));
+            model.addAttribute("error", String.format(ServerErrorMessage.ADMIN_TOKEN_QUERY_FAILED, e.getMessage()));
             return "redirect:/admin/token";
         }
     }
@@ -455,10 +457,10 @@ public class AdminController {
                     .build();
 
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("grant_type", "client_credentials");
+            body.add(SimpleAkskServerConstant.OAUTH2_PARAM_GRANT_TYPE, SimpleAkskServerConstant.AUTHORIZATION_GRANT_TYPE);
             // 只有当scope不为空时才添加到请求中
             if (scope != null && !scope.trim().isEmpty()) {
-                body.add("scope", scope);
+                body.add(SimpleAkskServerConstant.OAUTH2_PARAM_SCOPE, scope);
             }
 
             HttpHeaders headers = new HttpHeaders();
@@ -466,7 +468,7 @@ public class AdminController {
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-            String port = environment.getProperty("server.port", "8080");
+            String port = environment.getProperty(SimpleAkskServerConstant.SPRING_PROPERTY_SERVER_PORT, SimpleAkskServerConstant.DEFAULT_SERVER_PORT);
             String tokenUrl = "http://localhost:" + port + "/oauth2/token";
 
             ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -478,20 +480,20 @@ public class AdminController {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> tokenResponse = response.getBody();
                 model.addAttribute("success", true);
-                model.addAttribute("accessToken", tokenResponse.get("access_token"));
-                model.addAttribute("tokenType", tokenResponse.get("token_type"));
-                model.addAttribute("expiresIn", tokenResponse.get("expires_in"));
-                model.addAttribute("returnedScope", tokenResponse.get("scope"));
+                model.addAttribute("accessToken", tokenResponse.get(SimpleAkskServerConstant.OAUTH2_RESPONSE_ACCESS_TOKEN));
+                model.addAttribute("tokenType", tokenResponse.get(SimpleAkskServerConstant.OAUTH2_RESPONSE_TOKEN_TYPE));
+                model.addAttribute("expiresIn", tokenResponse.get(SimpleAkskServerConstant.OAUTH2_RESPONSE_EXPIRES_IN));
+                model.addAttribute("returnedScope", tokenResponse.get(SimpleAkskServerConstant.OAUTH2_PARAM_SCOPE));
                 model.addAttribute("savedClientSecret", clientSecret);
             } else {
-                model.addAttribute("error", "Token请求失败: " + response.getStatusCode());
+                model.addAttribute("error", String.format(ServerErrorMessage.ADMIN_TOKEN_REQUEST_FAILED, response.getStatusCode()));
             }
         } catch (HttpClientErrorException e) {
             log.error("Token request failed with client error", e);
-            model.addAttribute("error", "认证失败: " + e.getStatusCode() + " - " + e.getResponseBodyAsString());
+            model.addAttribute("error", String.format(ServerErrorMessage.ADMIN_TOKEN_AUTH_FAILED, e.getStatusCode(), e.getResponseBodyAsString()));
         } catch (Exception e) {
             log.error("Token request failed", e);
-            model.addAttribute("error", "换Token失败: " + e.getMessage());
+            model.addAttribute("error", String.format(ServerErrorMessage.ADMIN_TOKEN_EXCHANGE_FAILED, e.getMessage()));
         }
 
         model.addAttribute("clientId", clientId);
@@ -531,8 +533,8 @@ public class AdminController {
         int deletedCount = tokenManagementService.deleteExpiredTokens();
 
         Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("deletedCount", deletedCount);
-        result.put("message", deletedCount > 0 ? "清理成功" : "没有过期Token需要清理");
+        result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_DELETED_COUNT, deletedCount);
+        result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, deletedCount > 0 ? ServerErrorMessage.ADMIN_TOKEN_CLEANUP_SUCCESS : ServerErrorMessage.ADMIN_TOKEN_CLEANUP_NONE);
 
         return ResponseEntity.ok(result);
     }
@@ -552,27 +554,27 @@ public class AdminController {
                     .build();
 
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("token", token);
+            body.add(SimpleAkskServerConstant.OAUTH2_PARAM_TOKEN, token);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-            String port = environment.getProperty("server.port", "8080");
+            String port = environment.getProperty(SimpleAkskServerConstant.SPRING_PROPERTY_SERVER_PORT, SimpleAkskServerConstant.DEFAULT_SERVER_PORT);
             String revokeUrl = "http://localhost:" + port + "/oauth2/revoke";
 
             ResponseEntity<Void> response = restTemplate.postForEntity(
                     revokeUrl, new HttpEntity<>(body, headers), Void.class);
 
-            result.put("success", true);
-            result.put("status", response.getStatusCode().value());
-            result.put("message", "Token 撤销成功");
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, true);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_STATUS, response.getStatusCode().value());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, ServerErrorMessage.ADMIN_TOKEN_REVOKE_SUCCESS);
         } catch (HttpClientErrorException e) {
-            result.put("success", false);
-            result.put("status", e.getStatusCode().value());
-            result.put("message", "撤销失败: " + e.getResponseBodyAsString());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, false);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_STATUS, e.getStatusCode().value());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, String.format(ServerErrorMessage.ADMIN_TOKEN_REVOKE_FAILED, e.getResponseBodyAsString()));
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("message", "撤销失败: " + e.getMessage());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, false);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, String.format(ServerErrorMessage.ADMIN_TOKEN_REVOKE_FAILED, e.getMessage()));
         }
         return result;
     }
@@ -592,27 +594,27 @@ public class AdminController {
                     .build();
 
             MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("token", token);
+            body.add(SimpleAkskServerConstant.OAUTH2_PARAM_TOKEN, token);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
-            String port = environment.getProperty("server.port", "8080");
+            String port = environment.getProperty(SimpleAkskServerConstant.SPRING_PROPERTY_SERVER_PORT, SimpleAkskServerConstant.DEFAULT_SERVER_PORT);
             String introspectUrl = "http://localhost:" + port + "/oauth2/introspect";
 
             ResponseEntity<Map> response = restTemplate.postForEntity(
                     introspectUrl, new HttpEntity<>(body, headers), Map.class);
 
-            result.put("success", true);
-            result.put("status", response.getStatusCode().value());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, true);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_STATUS, response.getStatusCode().value());
             result.putAll(response.getBody());
         } catch (HttpClientErrorException e) {
-            result.put("success", false);
-            result.put("status", e.getStatusCode().value());
-            result.put("message", "Introspect 失败: " + e.getResponseBodyAsString());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, false);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_STATUS, e.getStatusCode().value());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, String.format(ServerErrorMessage.ADMIN_TOKEN_INTROSPECT_FAILED, e.getResponseBodyAsString()));
         } catch (Exception e) {
-            result.put("success", false);
-            result.put("message", "Introspect 失败: " + e.getMessage());
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_SUCCESS, false);
+            result.put(SimpleAkskServerConstant.ADMIN_RESPONSE_MESSAGE, String.format(ServerErrorMessage.ADMIN_TOKEN_INTROSPECT_FAILED, e.getMessage()));
         }
         return result;
     }

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.RequireExpression;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.CreateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
@@ -157,7 +158,7 @@ public class ClientManagementController {
         SyncScopesResponse response = new SyncScopesResponse();
         response.setOwnerUserId(userId);
         response.setUpdatedCount(updatedCount);
-        response.setMessage(updatedCount > 0 ? "权限同步成功" : "未找到需要更新的AKSK");
+        response.setMessage(updatedCount > 0 ? ServerErrorMessage.SYNC_SCOPES_SUCCESS : ServerErrorMessage.SYNC_SCOPES_NOT_FOUND);
 
         return ResponseEntity.ok(response);
     }

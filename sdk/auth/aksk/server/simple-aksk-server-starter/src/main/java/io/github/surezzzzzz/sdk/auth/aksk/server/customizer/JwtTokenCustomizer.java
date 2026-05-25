@@ -1,8 +1,9 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.customizer;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -99,8 +100,8 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
                             if (contextStr.length() > maxSize) {
                                 log.warn("security_context 超过大小限制: clientId={}, size={}, maxSize={}",
                                         clientId, contextStr.length(), maxSize);
-                                throw new OAuth2AuthenticationException(new OAuth2Error("security_context_too_large",
-                                        "security_context 不能超过 " + maxSize + " 字节", null));
+                                throw new OAuth2AuthenticationException(new OAuth2Error(SimpleAkskServerConstant.OAUTH2_ERROR_SECURITY_CONTEXT_TOO_LARGE,
+                                        String.format(ServerErrorMessage.SECURITY_CONTEXT_TOO_LARGE, maxSize), null));
                             }
                         }
                         context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_SECURITY_CONTEXT, securityContext);

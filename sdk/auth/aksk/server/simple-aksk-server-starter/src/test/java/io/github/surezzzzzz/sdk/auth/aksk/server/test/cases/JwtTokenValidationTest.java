@@ -1,11 +1,14 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jwt.JWT;
+import com.nimbusds.jose.JWEObject;
+import com.nimbusds.jose.crypto.AESDecrypter;
+import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.JWTParser;
 import com.nimbusds.jwt.SignedJWT;
+import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
@@ -21,6 +24,7 @@ import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
+import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 import java.util.Set;
@@ -28,9 +32,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * JWT Token验证测试
- * <p>
- * 测试JWT token的生成、格式和内容是否正确
+ * JWT Token验证测试（2.0.0 JWE 格式）
  *
  * @author surezzzzzz
  */
@@ -56,162 +58,154 @@ class JwtTokenValidationTest {
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
-    /**
-     * 每个测试方法执行后清理数据
-     */
+    @Autowired
+    private SimpleAkskServerProperties properties;
+
+    @Autowired
+    private JwtKeyProvider jwtKeyProvider;
+
     @AfterEach
     void cleanupData() {
         log.info("清理测试数据...");
-
-        // 清理客户端数据
-        clientRepository.findAll().forEach(client -> {
-            log.info("删除客户端: id={}, clientId={}", client.getId(), client.getClientId());
-        });
         clientRepository.deleteAll();
-
-        // 清理Redis中的测试数据
         Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
         if (keys != null && !keys.isEmpty()) {
-            keys.forEach(key -> {
-                log.info("删除Redis key: {}", key);
-            });
             redisTemplate.delete(keys);
             log.info("清理Redis测试数据: {} 条", keys.size());
         }
-
         log.info("测试数据清理完成");
     }
 
     @Test
-    void testJwtTokenFormat() throws Exception {
-        log.info("测试JWT token格式");
+    void testJweTokenFormat() throws Exception {
+        log.info("测试 JWE token 格式");
 
-        // Step 1: 创建AKSK并获取token
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Format Test Client");
         String accessToken = getAccessToken(clientInfo);
 
-        log.info("获取到Access Token: {}", accessToken.substring(0, Math.min(50, accessToken.length())) + "...");
+        log.info("获取到 Access Token: {}...", accessToken.substring(0, 30));
 
-        // Step 2: 解析JWT token（parse失败会抛ParseException，不需要assertNotNull）
-        JWT jwt = JWTParser.parse(accessToken);
-        log.info("JWT解析成功: type={}", jwt.getClass().getSimpleName());
+        // JWE 格式：5段，用"."分隔
+        String[] parts = accessToken.split("\\.");
+        assertEquals(5, parts.length, "JWE token 应该有 5 段（用 . 分隔）");
 
-        // Step 3: 验证JWT是SignedJWT
-        boolean isSignedJWT = jwt instanceof SignedJWT;
-        log.info("JWT是否为SignedJWT: {}", isSignedJWT);
-        assertTrue(isSignedJWT, "JWT token应该是SignedJWT");
-        SignedJWT signedJWT = (SignedJWT) jwt;
+        // 解析 JWE
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        log.info("JWE 解析成功，Header: {}", jweObject.getHeader().toJSONObject());
 
-        // Step 4: 验证JWT header
-        log.info("JWT Header - Algorithm: {}, KeyID: {}",
-                signedJWT.getHeader().getAlgorithm(),
-                signedJWT.getHeader().getKeyID());
-        assertEquals(JWSAlgorithm.RS256, signedJWT.getHeader().getAlgorithm(), "JWT应该使用RS256算法");
-        assertNotNull(signedJWT.getHeader().getKeyID(), "JWT header应该包含kid");
+        // 验证 JWE header
+        assertEquals("A256GCMKW", jweObject.getHeader().getAlgorithm().toString());
+        assertEquals("A256GCM", jweObject.getHeader().getEncryptionMethod().toString());
+        assertEquals("JWT", jweObject.getHeader().getContentType());
 
-        log.info("JWT token格式验证通过");
+        log.info("JWE token 格式验证通过");
     }
 
     @Test
-    void testJwtTokenClaims() throws Exception {
-        log.info("测试JWT token claims");
+    void testJweTokenDecrypt() throws Exception {
+        log.info("测试 JWE token 解密");
 
-        // Step 1: 创建AKSK并获取token
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Decrypt Test Client");
+        String accessToken = getAccessToken(clientInfo);
+
+        // 解密 JWE → JWS
+        byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
+        OctetSequenceKey aesKey = new OctetSequenceKey.Builder(aesKeyBytes).build();
+
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        jweObject.decrypt(new AESDecrypter(aesKey));
+
+        String jwsCompact = jweObject.getPayload().toString();
+        log.info("JWE 解密成功，JWS: {}...", jwsCompact.substring(0, 50));
+
+        // 验证 JWS（用 RSA 公钥验签）
+        SignedJWT signedJWT = SignedJWT.parse(jwsCompact);
+        RSASSAVerifier verifier = new RSASSAVerifier(jwtKeyProvider.getPublicKey());
+        boolean verified = signedJWT.verify(verifier);
+        assertTrue(verified, "JWS 签名应该验证通过");
+
+        log.info("JWE token 解密验证通过");
+    }
+
+    @Test
+    void testJweTokenClaims() throws Exception {
+        log.info("测试 JWE token claims");
+
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Claims Test Client");
         String accessToken = getAccessToken(clientInfo);
 
-        // Step 2: 解析JWT token
-        SignedJWT signedJWT = SignedJWT.parse(accessToken);
+        // 解密 JWE → JWS → claims
+        byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        jweObject.decrypt(new AESDecrypter(new OctetSequenceKey.Builder(aesKeyBytes).build()));
+
+        SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
         JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-        log.info("JWT Claims完整内容: {}", claims.toJSONObject());
+        log.info("JWT Claims: {}", claims.toJSONObject());
 
-        // Step 3: 验证必需的claims
-        log.info("JWT Claims - sub: {}, expected: {}", claims.getSubject(), clientInfo.getClientId());
-        assertNotNull(claims.getSubject(), "JWT应该包含sub claim");
-        assertEquals(clientInfo.getClientId(), claims.getSubject(), "sub claim应该是clientId");
+        // 验证基础 claims
+        assertNotNull(claims.getSubject());
+        assertEquals(clientInfo.getClientId(), claims.getSubject());
+        assertNotNull(claims.getIssuer());
+        assertNotNull(claims.getExpirationTime());
+        assertNotNull(claims.getIssueTime());
+        assertTrue(claims.getExpirationTime().after(new Date()));
 
-        log.info("JWT Claims - iss: {}", claims.getIssuer());
-        assertNotNull(claims.getIssuer(), "JWT应该包含iss claim");
-
-        log.info("JWT Claims - exp: {}", claims.getExpirationTime());
-        assertNotNull(claims.getExpirationTime(), "JWT应该包含exp claim");
-
-        log.info("JWT Claims - iat: {}", claims.getIssueTime());
-        assertNotNull(claims.getIssueTime(), "JWT应该包含iat claim");
-
-        // Step 4: 验证exp时间在未来
-        Date now = new Date();
-        log.info("当前时间: {}, exp时间: {}, exp是否在未来: {}",
-                now, claims.getExpirationTime(), claims.getExpirationTime().after(now));
-        assertTrue(claims.getExpirationTime().after(now), "JWT的exp时间应该在未来");
-
-        // Step 5: 验证scope
+        // 验证 scope
         Object scopeClaim = claims.getClaim("scope");
-        log.info("JWT Claims - scope: {}", scopeClaim);
-        assertNotNull(scopeClaim, "JWT应该包含scope claim");
+        assertNotNull(scopeClaim, "JWT 应该包含 scope claim");
 
-        // Step 6: 验证client_type
+        // 验证 client_type
         String clientType = claims.getStringClaim("client_type");
-        log.info("JWT Claims - client_type: {}", clientType);
-        assertNotNull(clientType, "JWT应该包含client_type claim");
-        assertEquals("platform", clientType, "平台级AKSK的client_type应该是platform");
+        assertNotNull(clientType);
+        assertEquals("platform", clientType);
 
-        log.info("JWT token claims验证通过");
+        log.info("JWE token claims 验证通过");
     }
 
     @Test
-    void testUserLevelAkskJwtClaims() throws Exception {
-        log.info("测试用户级AKSK的JWT token claims");
+    void testUserLevelAkskJweClaims() throws Exception {
+        log.info("测试用户级 AKSK 的 JWE token claims");
 
-        // Step 1: 创建用户级AKSK并获取token
         String userId = "10086";
         String username = "zhangsan";
         ClientInfoResponse clientInfo = clientManagementService.createUserClient(userId, username, "User JWT Test Client");
         String accessToken = getAccessToken(clientInfo);
 
-        // Step 2: 解析JWT token
-        SignedJWT signedJWT = SignedJWT.parse(accessToken);
+        byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        jweObject.decrypt(new AESDecrypter(new OctetSequenceKey.Builder(aesKeyBytes).build()));
+
+        SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
         JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-        log.info("用户级AKSK JWT Claims完整内容: {}", claims.toJSONObject());
+        log.info("用户级 AKSK JWT Claims: {}", claims.toJSONObject());
 
-        // Step 3: 验证client_type
+        // 验证 client_type = user
         String clientType = claims.getStringClaim("client_type");
-        log.info("JWT Claims - client_type: {}", clientType);
-        assertNotNull(clientType, "JWT应该包含client_type claim");
-        assertEquals("user", clientType, "用户级AKSK的client_type应该是user");
+        assertEquals("user", clientType);
 
-        // Step 4: 验证user_id
+        // 验证 user_id
         String userIdClaim = claims.getStringClaim("user_id");
-        log.info("JWT Claims - user_id: {}", userIdClaim);
-        assertNotNull(userIdClaim, "用户级AKSK的JWT应该包含user_id claim");
-        assertEquals(userId, userIdClaim, "user_id应该匹配创建时的userId");
+        assertEquals(userId, userIdClaim);
 
-        // Step 5: 验证username
+        // 验证 username
         String usernameClaim = claims.getStringClaim("username");
-        log.info("JWT Claims - username: {}", usernameClaim);
-        assertNotNull(usernameClaim, "用户级AKSK的JWT应该包含username claim");
-        assertEquals(username, usernameClaim, "username应该匹配创建时的username");
+        assertEquals(username, usernameClaim);
 
-        log.info("用户级AKSK的JWT token claims验证通过");
+        log.info("用户级 AKSK 的 JWE token claims 验证通过");
     }
 
     @Test
-    void testSecurityContextInJwtClaims() throws Exception {
-        log.info("测试security_context在JWT token claims中");
+    void testSecurityContextInJweClaims() throws Exception {
+        log.info("测试 security_context 在 JWE token claims 中");
 
-        // Step 1: 创建平台级AKSK
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Security Context Test Client");
-        log.info("创建AKSK成功 - ClientId: {}", clientInfo.getClientId());
 
-        // Step 2: 构建security_context JSON
         String securityContext = "{\"user_id\":\"10086\",\"tenant_id\":\"tenant-123\"}";
-        log.info("构建security_context: {}", securityContext);
 
-        // Step 3: 在token请求中传递security_context参数
         String tokenUrl = "http://localhost:" + port + "/oauth2/token";
-
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
         headers.setBasicAuth(clientInfo.getClientId(), clientInfo.getClientSecret());
@@ -219,42 +213,108 @@ class JwtTokenValidationTest {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", "client_credentials");
         body.add("scope", "read write");
-        body.add("security_context", securityContext); // 添加security_context参数
+        body.add("security_context", securityContext);
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
-        log.info("请求Token - URL: {}, ClientId: {}, security_context: {}",
-                tokenUrl, clientInfo.getClientId(), securityContext);
-
         ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
 
-        log.info("Token响应 - Status: {}, Body: {}", response.getStatusCode(), response.getBody());
-
-        // Step 4: 验证Token响应成功
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-
         String accessToken = (String) response.getBody().get("access_token");
-        assertNotNull(accessToken, "access_token不应为空");
 
-        // Step 5: 解析JWT并验证security_context claim
-        SignedJWT signedJWT = SignedJWT.parse(accessToken);
+        // 解密 JWE
+        byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        jweObject.decrypt(new AESDecrypter(new OctetSequenceKey.Builder(aesKeyBytes).build()));
+
+        SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
         JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-        log.info("JWT Claims完整内容: {}", claims.toJSONObject());
+        // 验证 security_context
+        String scClaim = claims.getStringClaim("security_context");
+        assertNotNull(scClaim);
+        assertEquals(securityContext, scClaim);
 
-        // Step 6: 验证security_context claim存在且值正确
-        String securityContextClaim = claims.getStringClaim("security_context");
-        log.info("JWT Claims - security_context: {}", securityContextClaim);
+        log.info("security_context 在 JWE token claims 中验证通过");
+    }
 
-        assertNotNull(securityContextClaim, "JWT应该包含security_context claim");
-        assertEquals(securityContext, securityContextClaim, "security_context值应该匹配");
+    @Test
+    void testTamperedJweTokenIsRejected() throws Exception {
+        log.info("测试篡改 JWE token 后 /api 接口返回 401");
 
-        log.info("security_context在JWT token claims中验证通过");
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Tamper Test Client");
+        // 先获取一个有效 token 用于创建 /api/client scope 的 token
+        String validToken = getAccessToken(clientInfo);
+
+        // 篡改：把 JWE 第三段（加密密钥）替换为随机字符串
+        String[] parts = validToken.split("\\.");
+        String tampered = parts[0] + "." + parts[1] + ".AAAAAAAAAAAAAAAA." + parts[3] + "." + parts[4];
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(tampered);
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/client?type=platform",
+                HttpMethod.GET, request, String.class
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode(),
+                "篡改的 JWE token 应返回 401");
+
+        log.info("✓ 篡改 JWE token 被正确拒绝");
+    }
+
+    @Test
+    void testSecurityContextTooLargeReturns400() {
+        log.info("测试 security_context 超过大小限制时返回 400");
+
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Security Context Size Test Client");
+
+        // 构造超过 4096 字节的 security_context
+        String largeContext = "{\"data\":\"" + "x".repeat(4200) + "\"}";
+
+        String tokenUrl = "http://localhost:" + port + "/oauth2/token";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBasicAuth(clientInfo.getClientId(), clientInfo.getClientSecret());
+
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "client_credentials");
+        body.add("security_context", largeContext);
+
+        ResponseEntity<Map> response = restTemplate.postForEntity(
+                tokenUrl, new HttpEntity<>(body, headers), Map.class);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode(),
+                "security_context 超限应返回 400");
+        assertNotNull(response.getBody());
+        assertEquals("security_context_too_large", response.getBody().get("error"),
+                "error 字段应为 security_context_too_large");
+
+        log.info("✓ security_context 超限正确返回 400");
+    }
+
+    @Test
+    void testInvalidJweTokenReturns401OnApiAccess() {
+        log.info("测试使用完全无效的 JWE token 访问 /api 返回 401");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth("this.is.not.a.valid.jwe.token");
+        HttpEntity<Void> request = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/client?type=platform",
+                HttpMethod.GET, request, String.class
+        );
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode(),
+                "无效 JWE token 应返回 401");
+
+        log.info("✓ 无效 JWE token 正确返回 401");
     }
 
     /**
-     * 辅助方法：获取access token
+     * 辅助方法：获取 access token
      */
     private String getAccessToken(ClientInfoResponse clientInfo) {
         String tokenUrl = "http://localhost:" + port + "/oauth2/token";
@@ -268,7 +328,6 @@ class JwtTokenValidationTest {
         body.add("scope", "read write");
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
-
         ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());

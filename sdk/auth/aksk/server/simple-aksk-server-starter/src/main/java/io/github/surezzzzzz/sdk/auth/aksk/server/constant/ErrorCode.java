@@ -58,6 +58,18 @@ public final class ErrorCode {
     public static final String CLIENT_UPDATE_FAILED = "CLIENT_005";
 
 
+    // ==================== JWE Token 错误 ====================
+
+    /**
+     * JWE Token 生成失败
+     */
+    public static final String JWE_GENERATE_FAILED = "JWE_001";
+
+    /**
+     * JWE Token 解析失败
+     */
+    public static final String JWE_DECODE_FAILED = "JWE_002";
+
     // ==================== Token管理错误 ====================
 
     /**

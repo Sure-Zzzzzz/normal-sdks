@@ -1,9 +1,10 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNames;
@@ -37,9 +38,6 @@ import java.util.Map;
 public class AnonymousIntrospectionFilter extends OncePerRequestFilter {
 
     private static final String INTROSPECT_ENDPOINT = "/oauth2/introspect";
-    private static final String PARAM_TOKEN = "token";
-    private static final String HEADER_AUTHORIZATION = "Authorization";
-    private static final String BASIC_PREFIX = "Basic ";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OAuth2AuthorizationService authorizationService;
@@ -53,13 +51,13 @@ public class AnonymousIntrospectionFilter extends OncePerRequestFilter {
             return;
         }
 
-        String authHeader = request.getHeader(HEADER_AUTHORIZATION);
-        if (authHeader != null && authHeader.startsWith(BASIC_PREFIX)) {
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authHeader != null && authHeader.startsWith(SimpleAkskServerConstant.HTTP_BASIC_AUTH_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = request.getParameter(PARAM_TOKEN);
+        String token = request.getParameter(SimpleAkskServerConstant.OAUTH2_PARAM_TOKEN);
         if (token == null || token.isEmpty()) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             return;
@@ -83,7 +81,7 @@ public class AnonymousIntrospectionFilter extends OncePerRequestFilter {
                 result.put(OAuth2TokenIntrospectionClaimNames.SUB, authorization.getPrincipalName());
                 result.put(OAuth2TokenIntrospectionClaimNames.CLIENT_ID, authorization.getPrincipalName());
                 result.put(OAuth2TokenIntrospectionClaimNames.SCOPE,
-                        String.join(" ", authorization.getAuthorizedScopes()));
+                        String.join(SimpleAkskServerConstant.SCOPE_SEPARATOR_SPACE, authorization.getAuthorizedScopes()));
                 if (accessToken.getToken().getIssuedAt() != null) {
                     result.put(OAuth2TokenClaimNames.IAT,
                             accessToken.getToken().getIssuedAt().getEpochSecond());

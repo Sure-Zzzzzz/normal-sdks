@@ -51,6 +51,8 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String INVALIDATED_KEY = "metadata.token.invalidated";
+    private static final String JSON_FIELD_TOKEN_VALUE = "tokenValue";
+    private static final java.nio.charset.Charset UTF_8 = java.nio.charset.StandardCharsets.UTF_8;
 
     private final OAuth2AuthorizationRepository mysqlRepository;
     private final OAuth2AuthorizationEntityRepository authorizationEntityRepository;
@@ -245,7 +247,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     private boolean isAlreadyRevoked(byte[] metadataBytes) {
         if (metadataBytes == null || metadataBytes.length == 0) return false;
         try {
-            JsonNode root = OBJECT_MAPPER.readTree(new String(metadataBytes, java.nio.charset.StandardCharsets.UTF_8));
+            JsonNode root = OBJECT_MAPPER.readTree(new String(metadataBytes, UTF_8));
             JsonNode invalidated = root.get(INVALIDATED_KEY);
             return invalidated != null && invalidated.asBoolean(false);
         } catch (Exception e) {
@@ -259,7 +261,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             ObjectNode root;
             if (metadataBytes != null && metadataBytes.length > 0) {
                 root = (ObjectNode) OBJECT_MAPPER.readTree(
-                        new String(metadataBytes, java.nio.charset.StandardCharsets.UTF_8));
+                        new String(metadataBytes, UTF_8));
             } else {
                 root = OBJECT_MAPPER.createObjectNode();
             }
@@ -306,9 +308,9 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     private String deserializeTokenValue(byte[] bytes) {
         if (bytes == null || bytes.length == 0) return null;
         try {
-            String json = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            String json = new String(bytes, UTF_8);
             JsonNode root = OBJECT_MAPPER.readTree(json);
-            JsonNode tokenValue = root.get("tokenValue");
+            JsonNode tokenValue = root.get(JSON_FIELD_TOKEN_VALUE);
             return tokenValue != null ? tokenValue.asText() : null;
         } catch (Exception e) {
             log.debug("Failed to deserialize token value", e);

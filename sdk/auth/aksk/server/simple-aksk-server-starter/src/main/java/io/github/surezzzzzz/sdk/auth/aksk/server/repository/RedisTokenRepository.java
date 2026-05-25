@@ -43,6 +43,19 @@ public class RedisTokenRepository {
     private final RedisKeyHelper redisKeyHelper;
     private static final ObjectMapper PLAIN_MAPPER = new ObjectMapper();
 
+    // Spring OAuth2Authorization JSON field names (internal serialization format)
+    private static final String JSON_FIELD_ID = "id";
+    private static final String JSON_FIELD_REGISTERED_CLIENT_ID = "registeredClientId";
+    private static final String JSON_FIELD_PRINCIPAL_NAME = "principalName";
+    private static final String JSON_FIELD_ACCESS_TOKEN = "accessToken";
+    private static final String JSON_FIELD_TOKEN = "token";
+    private static final String JSON_FIELD_TOKEN_VALUE = "tokenValue";
+    private static final String JSON_FIELD_ISSUED_AT = "issuedAt";
+    private static final String JSON_FIELD_EXPIRES_AT = "expiresAt";
+    private static final String JSON_FIELD_METADATA = "metadata";
+    private static final String JSON_FIELD_SCOPES = "scopes";
+    private static final String JSON_PATH_TOKEN_INVALIDATED = "metadata.token.invalidated";
+
     public RedisTokenRepository(
             @Qualifier("smartCacheRedisTemplate") RedisTemplate<String, Object> redisTemplate,
             RedisKeyHelper redisKeyHelper) {
@@ -122,34 +135,34 @@ public class RedisTokenRepository {
 
     private TokenInfo convertFromJsonNode(JsonNode obj) {
         TokenInfo tokenInfo = new TokenInfo();
-        tokenInfo.setId(text(obj, "id"));
-        tokenInfo.setRegisteredClientId(text(obj, "registeredClientId"));
-        tokenInfo.setClientId(text(obj, "principalName"));
+        tokenInfo.setId(text(obj, JSON_FIELD_ID));
+        tokenInfo.setRegisteredClientId(text(obj, JSON_FIELD_REGISTERED_CLIENT_ID));
+        tokenInfo.setClientId(text(obj, JSON_FIELD_PRINCIPAL_NAME));
 
-        JsonNode accessTokenNode = obj.get("accessToken");
+        JsonNode accessTokenNode = obj.get(JSON_FIELD_ACCESS_TOKEN);
         // DefaultTyping 数组格式：["@class", {actual}]
         if (accessTokenNode != null && accessTokenNode.isArray() && accessTokenNode.size() == 2) {
             accessTokenNode = accessTokenNode.get(1);
         }
         if (accessTokenNode != null && !accessTokenNode.isNull()) {
-            JsonNode tokenNode = accessTokenNode.get("token");
+            JsonNode tokenNode = accessTokenNode.get(JSON_FIELD_TOKEN);
             if (tokenNode != null && tokenNode.isArray() && tokenNode.size() == 2) {
                 tokenNode = tokenNode.get(1);
             }
             if (tokenNode != null) {
-                tokenInfo.setTokenValue(text(tokenNode, "tokenValue"));
-                tokenInfo.setIssuedAt(parseInstant(tokenNode.get("issuedAt")));
-                tokenInfo.setExpiresAt(parseInstant(tokenNode.get("expiresAt")));
+                tokenInfo.setTokenValue(text(tokenNode, JSON_FIELD_TOKEN_VALUE));
+                tokenInfo.setIssuedAt(parseInstant(tokenNode.get(JSON_FIELD_ISSUED_AT)));
+                tokenInfo.setExpiresAt(parseInstant(tokenNode.get(JSON_FIELD_EXPIRES_AT)));
             }
-            JsonNode metadata = accessTokenNode.get("metadata");
+            JsonNode metadata = accessTokenNode.get(JSON_FIELD_METADATA);
             if (metadata != null && metadata.isArray() && metadata.size() == 2) {
                 metadata = metadata.get(1);
             }
             boolean invalidated = metadata != null
-                    && metadata.path("metadata.token.invalidated").asBoolean(false);
+                    && metadata.path(JSON_PATH_TOKEN_INVALIDATED).asBoolean(false);
             tokenInfo.setStatus(computeStatus(invalidated, tokenInfo.getExpiresAt()));
 
-            JsonNode scopes = tokenNode != null ? tokenNode.get("scopes") : null;
+            JsonNode scopes = tokenNode != null ? tokenNode.get(JSON_FIELD_SCOPES) : null;
             if (scopes != null && scopes.isArray() && scopes.size() == 2) {
                 scopes = scopes.get(1);
             }

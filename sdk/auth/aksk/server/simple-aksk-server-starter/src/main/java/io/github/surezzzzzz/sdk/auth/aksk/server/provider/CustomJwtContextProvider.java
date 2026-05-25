@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.provider;
 
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.provider.SimpleAkskSecurityContextProvider;

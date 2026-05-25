@@ -55,7 +55,7 @@
 
                 <div class="mb-3">
                     <label for="scope" class="form-label">Scope</label>
-                    <input type="text" class="form-control" id="scope" name="scope" value="read write">
+                    <input type="text" class="form-control" id="scope" name="scope" placeholder="留空则使用 Client 默认 scope">
                 </div>
 
                 <button type="submit" class="btn btn-primary">换取Token</button>
@@ -67,23 +67,29 @@
     <!-- 步骤2: Token结果和JWT解析 -->
     <div id="tokenResultSection" class="card mb-4" style="display:none;">
         <div class="card-header bg-success text-white">
-            <h5>步骤2: Token结果 & JWT解析</h5>
+            <h5>步骤2: Token结果 & Claims解析</h5>
         </div>
         <div class="card-body">
             <!-- Access Token -->
             <div class="mb-4">
-                <label class="form-label"><strong>Access Token (JWT):</strong></label>
+                <label class="form-label"><strong>Access Token (JWE):</strong></label>
                 <div class="input-group">
                     <textarea class="form-control" id="accessToken" rows="4" readonly></textarea>
                     <button class="btn btn-outline-secondary" type="button" onclick="copyAccessToken()">复制</button>
                 </div>
+                <small class="text-muted">2.0.0 起 token 格式为 JWE（5段），payload 已加密，无法在客户端直接解析。</small>
             </div>
 
-            <!-- JWT解析结果 -->
+            <!-- JWE 解密过程说明 -->
             <div class="mb-4">
-                <h6><strong>JWT Payload解析:</strong></h6>
-                <div class="card">
+                <h6><strong>JWE → JWS → Claims 解析过程:</strong></h6>
+                <div class="card border-info">
                     <div class="card-body bg-light">
+                        <ol class="mb-2 small text-muted">
+                            <li>调用 <code>/admin/token/introspect</code>，server 侧用 AES-256 密钥解密 JWE → JWS</li>
+                            <li>用 RSA 公钥验签 JWS，提取 claims</li>
+                            <li>返回完整 claims（含 security_context）</li>
+                        </ol>
                         <pre id="jwtPayload" class="mb-0" style="max-height: 400px; overflow-y: auto;"></pre>
                     </div>
                 </div>
@@ -175,7 +181,8 @@ String tenantId = (String) securityContext.get("tenantId");
         };
     })();
 </script>
-<script>
+<script th:inline="javascript">
+/*<![CDATA[*/
     const csrfToken = /*[[${_csrf.token}]]*/ '';
     const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
 
@@ -223,8 +230,8 @@ String tenantId = (String) securityContext.get("tenantId");
             document.getElementById('expiresIn').textContent = data.expires_in || 3600;
             document.getElementById('returnedScope').textContent = data.scope || scope;
 
-            // 解析JWT
-            parseAndDisplayJWT(data.access_token);
+            // 解析JWT claims（通过 introspect 端点，兼容 JWE）
+            await parseAndDisplayJWT(data.access_token, clientId, clientSecret);
 
             // 显示结果区域
             document.getElementById('tokenResultSection').style.display = 'block';
@@ -237,31 +244,52 @@ String tenantId = (String) securityContext.get("tenantId");
         }
     });
 
-    function parseAndDisplayJWT(jwt) {
+    async function parseAndDisplayJWT(token, clientId, clientSecret) {
         try {
-            // JWT格式: header.payload.signature
-            const parts = jwt.split('.');
-            if (parts.length !== 3) {
-                throw new Error('无效的JWT格式');
+            // 通过 introspect 端点获取 claims，兼容 JWE 格式
+            const params = new URLSearchParams();
+            params.append('clientId', clientId);
+            params.append('clientSecret', clientSecret);
+            params.append('token', token);
+
+            const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+            if (csrfHeader) headers[csrfHeader] = csrfToken;
+            console.log('csrf header:', csrfHeader, 'csrf token:', csrfToken);
+
+            const response = await fetch('/admin/token/introspect', {
+                method: 'POST',
+                headers: headers,
+                body: params
+            });
+
+            const result = await response.json();
+            console.log('introspect result:', JSON.stringify(result));
+
+            if (!result.success && result.active === undefined) {
+                document.getElementById('jwtPayload').textContent = 'Claims 获取失败: ' + (result.message || '未知错误');
+                return;
             }
 
-            // Base64URL解码payload
-            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            // 格式化显示完整 claims
+            const claims = Object.fromEntries(
+                Object.entries(result).filter(([k]) => k !== 'success' && k !== 'status')
+            );
+            document.getElementById('jwtPayload').textContent = JSON.stringify(claims, null, 2);
 
-            // 格式化显示完整payload
-            document.getElementById('jwtPayload').textContent = JSON.stringify(payload, null, 2);
-
-            // 提取并高亮显示security_context
-            if (payload.security_context) {
+            // 提取并高亮显示 security_context
+            if (claims.security_context) {
+                const sc = typeof claims.security_context === 'string'
+                    ? JSON.parse(claims.security_context)
+                    : claims.security_context;
                 document.getElementById('extractedSecurityContext').textContent =
-                    JSON.stringify(payload.security_context, null, 2);
+                    JSON.stringify(sc, null, 2);
                 document.getElementById('securityContextDisplay').style.display = 'block';
             } else {
                 document.getElementById('securityContextDisplay').style.display = 'none';
             }
 
         } catch (error) {
-            document.getElementById('jwtPayload').textContent = 'JWT解析失败: ' + error.message;
+            document.getElementById('jwtPayload').textContent = 'Claims 获取失败: ' + error.message;
         }
     }
 
@@ -271,6 +299,7 @@ String tenantId = (String) securityContext.get("tenantId");
         document.execCommand('copy');
         alert('Access Token已复制到剪贴板');
     }
+/*]]>*/
 </script>
 </body>
 </html>

@@ -1,12 +1,14 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.1.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
+> **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
+
 基于 Spring Authorization Server 的 AKSK（Access Key / Secret Key）认证服务器 Starter，支持平台级和用户级 AKSK 管理，提供完整的
-OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
+OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全生命周期管理与审计。
 
 ---
 
@@ -14,7 +16,7 @@ OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 - ✅ **双层级 AKSK 管理**：平台级（AKP）和用户级（AKU）两种类型
 - ✅ **OAuth2 标准协议**：基于 Spring Authorization Server 0.4.1，完全符合 OAuth2 规范
-- ✅ **JWT Token 签发**：RSA 算法签发，支持自定义公私钥和 `auth_server_id`
+- ✅ **JWE Token 签发**：JWE（A256GCMKW）加密，payload 密文不可读
 - ✅ **Token 即时撤销**：`/oauth2/revoke` 撤销后 introspect 立即返回 `active=false`
 - ✅ **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件，无论是否启用 Redis 均发布
 - ✅ **L1+L2 两级缓存**：Caffeine 本地缓存 + Redis 分布式缓存，introspect 热路径命中 L1 无需访问 Redis
@@ -32,7 +34,7 @@ OAuth2 Client Credentials 授权流程、Token 全生命周期管理与审计。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:1.1.3'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:2.0.0'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -70,6 +72,7 @@ io:
                 expires-in: 3600
                 public-key: classpath:keys/public.pem
                 private-key: classpath:keys/private.pem
+                encryption-key: <Base64 AES-256 密钥>
               admin:
                 enabled: true
                 username: admin
@@ -91,6 +94,7 @@ io:
                 expires-in: 3600
                 public-key: classpath:keys/public.pem
                 private-key: classpath:keys/private.pem
+                encryption-key: <Base64 AES-256 密钥>
               redis:
                 enabled: true
                 token:
@@ -151,19 +155,82 @@ curl -X POST http://localhost:8080/oauth2/token \
 
 ```json
 {
-  "access_token": "eyJraWQiOiJzdXJlLWF1dGgtYWtzay0yMDI2IiwiYWxnIjoiUlMyNTYifQ...",
+  "access_token": "<JWE 5段 Base64URL 字符串>",
   "token_type": "Bearer",
   "expires_in": 3600,
   "scope": "read write"
 }
 ```
 
-### Scope 说明
+> JWE Token 结构为 5 段（`Header.EncryptedKey.IV.Ciphertext.Tag`），payload 已加密，无法在客户端直接解析。
+
+### 权限模型：Scope 与 Security Context
+
+AKSK 的权限体系由两层组成：
+
+| 层级 | 载体 | 生命周期 | 谁决定 | 不可覆盖 |
+|------|------|---------|--------|---------|
+| AKSK 权限 | **scope** | AKSK 创建时 | 签发方 | ✅ 不可被运行时覆盖 |
+| 业务上下文 | **security_context** | 每次请求 token 时 | 使用方 | ❌ 可动态传入 |
+
+**Scope**：AKSK 签发时确定的所有权限集合，包括接口权限和数据权限。写入后不可被运行时参数覆盖，是 AKSK 的能力边界。
+
+**Security Context**：业务方自定义的运行时上下文，补充 scope 之外的动态信息（如当前租户、请求来源等）。由使用方在请求 token 时传入，不属于 AKSK 的固有能力。
+
+> **设计原则**：scope 和 security_context 职责不重叠。如果出现字段冲突，说明权限设计有问题，应调整 scope 或 security_context 的字段划分。
+
+#### Scope 请求方式
 
 | 请求方式     | 说明                        |
 |----------|---------------------------|
 | 不传 scope | 使用 Client 注册时配置的所有 scope  |
 | 指定 scope | 必须在 Client 授权范围内，可缩小但不能扩大 |
+
+#### 最佳实践
+
+**1. Scope 承载固定权限**
+
+接口权限和数据权限统一写在 scope 中，AKSK 创建时确定，运行时不可变：
+
+```
+scope: "read:order write:order region:华东 level:3"
+```
+
+资源侧通过 `@RequireExpression` 鉴权表达式判断：
+
+```java
+@RequireExpression("#context['scope'] != null && (' ' + #context['scope'] + ' ').contains(' region:华东 ')")
+public Order getOrder(String orderId) { ... }
+```
+
+**2. Security Context 承载动态上下文**
+
+运行时变化的业务信息放在 security_context 中，每次请求 token 时传入：
+
+```bash
+curl -X POST /oauth2/token \
+  -u "AKP...:SK..." \
+  -d "grant_type=client_credentials&security_context={\"tenant_id\":\"t123\",\"request_source\":\"mobile\"}"
+```
+
+资源侧通过 `SimpleAkskSecurityContextProvider` 读取：
+
+```java
+@Autowired
+private SimpleAkskSecurityContextProvider contextProvider;
+
+String tenantId = contextProvider.get("tenant_id");
+```
+
+**3. 不要在 Security Context 中重复 Scope 已有的字段**
+
+```
+❌ scope 包含 region:华东，security_context 又传 region:华南
+   → 字段冲突，说明权限设计有问题
+
+✅ scope 包含 region:华东（数据权限，固定），security_context 传 request_source:mobile（动态上下文）
+   → 职责清晰，互不重叠
+```
 
 ### 撤销 Token
 
@@ -210,7 +277,7 @@ curl -X POST http://localhost:8080/oauth2/token \
   -d "grant_type=client_credentials&security_context={\"tenant_id\":\"t123\"}"
 ```
 
-生成的 JWT 中会包含 `security_context` claim。
+生成的 JWE Token 中会包含 `security_context` claim（introspect 返回的 claims 中可见）。
 
 ### introspect 端点匿名访问（可选）
 
@@ -253,10 +320,12 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 
 ### APISIX 集成建议
 
-| 方式            | 插件             | 优点              | 缺点                           |
-|---------------|----------------|-----------------|------------------------------|
-| 本地验签          | jwt-auth       | 性能最好，无额外 IO     | 无法感知 token 撤销                |
+| 方式       | 插件             | 优点          | 缺点                        |
+|-----------|----------------|-------------|---------------------------|
+| 本地验签     | jwt-auth       | 性能最好，无额外 IO | 需配置 AES-256 密钥才能解密 JWE payload |
 | introspect 验证 | openid-connect | 可即时感知撤销，L1 缓存加速 | 每次请求多一次 HTTP 调用（命中 L1 时极低延迟） |
+
+> **本地验签说明**：2.0.0 Token 为 JWE 格式，需要 APISIX 配置 AES-256 密钥才能解密 payload、提取 claims。建议生产环境优先使用 introspect 模式。
 
 ---
 
@@ -301,6 +370,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `jwt.expires-in`                | Token 过期时间（秒）               | 3600                |
 | `jwt.public-key`                | RSA 公钥（支持文件路径/PEM内容/Base64） | -                   |
 | `jwt.private-key`               | RSA 私钥                      | -                   |
+| `jwt.encryption-key`             | AES-256 密钥（Base64 编码，32 字节）  | - **必填**           |
 | `jwt.security-context-max-size` | Security Context 最大大小（字节）   | 4096                |
 
 ### Redis 配置
@@ -360,22 +430,28 @@ openssl genrsa -out private.pem 2048
 openssl rsa -in private.pem -pubout -out public.pem
 ```
 
-### 2. 如何禁用 Admin 管理页面？
+### 2. 如何生成 AES-256 密钥？
+
+```bash
+openssl rand -base64 32
+```
+
+### 3. 如何禁用 Admin 管理页面？
 
 ```yaml
 io.github.surezzzzzz.sdk.auth.aksk.server.admin.enabled: false
 ```
 
-### 3. Redis 是否必需？
+### 4. Redis 是否必需？
 
 不是。Redis 仅用于缓存提升性能，默认使用 MySQL 存储。不配置 Redis 时自动降级为纯数据库模式。
 
-### 4. 多实例部署时缓存如何保持一致？
+### 5. 多实例部署时缓存如何保持一致？
 
 `consistency.mode=strong` 时，任意实例 revoke token 后会通过 Redis Pub/Sub 广播缓存失效消息，其他实例的 L1
 缓存立即清除。每个实例启动时生成唯一 UUID 作为实例标识，不会误忽略其他实例的消息。
 
-### 5. token 撤销后 introspect 仍返回 active=true？
+### 6. Token 撤销后 introspect 仍返回 active=true？
 
 检查以下几点：
 
@@ -383,7 +459,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server.admin.enabled: false
 - `cache.consistency.mode` 是否为 `strong`
 - Redis Pub/Sub 连接是否正常（查看启动日志中 `Cache invalidation listener initialized` 是否出现）
 
-### 6. 启动时出现 `Cannot load module CasJackson2Module` 警告
+### 7. 启动时出现 `Cannot load module CasJackson2Module` 警告
 
 无害警告，如需屏蔽：
 

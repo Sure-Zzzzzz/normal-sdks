@@ -1,9 +1,10 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.converter.DefaultScopeAuthenticationConverter;
+import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AnonymousIntrospectionFilter;
+import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
-import io.github.surezzzzzz.sdk.auth.aksk.server.support.AnonymousIntrospectionFilter;
-import io.github.surezzzzzz.sdk.auth.aksk.server.support.DefaultScopeAuthenticationConverter;
-import io.github.surezzzzzz.sdk.auth.aksk.server.support.JwtKeyProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,8 +14,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
@@ -33,6 +36,7 @@ public class OAuth2SecurityConfiguration {
     private final JwtKeyProvider jwtKeyProvider;
     private final OAuth2RegisteredClientEntityRepository entityRepository;
     private final SimpleAkskServerProperties properties;
+    private final JweJwtDecoder jweJwtDecoder;
 
     @Autowired(required = false)
     private OAuth2AuthorizationService authorizationService;
@@ -100,6 +104,22 @@ public class OAuth2SecurityConfiguration {
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withPublicKey(jwtKeyProvider.getPublicKey()).build();
+        return token -> {
+            try {
+                com.nimbusds.jwt.JWTClaimsSet claims = jweJwtDecoder.decode(token);
+                java.time.Instant issuedAt = claims.getIssueTime() != null
+                        ? claims.getIssueTime().toInstant() : null;
+                java.time.Instant expiresAt = claims.getExpirationTime() != null
+                        ? claims.getExpirationTime().toInstant() : null;
+                return Jwt.withTokenValue(token)
+                        .headers(h -> h.put("alg", "A256GCMKW"))
+                        .claims(c -> c.putAll(claims.getClaims()))
+                        .issuedAt(issuedAt)
+                        .expiresAt(expiresAt)
+                        .build();
+            } catch (Exception e) {
+                throw new InvalidBearerTokenException("Invalid JWE token: " + e.getMessage(), e);
+            }
+        };
     }
 }

@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.auth.aksk.server.support;
+package io.github.surezzzzzz.sdk.auth.aksk.server.provider;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
