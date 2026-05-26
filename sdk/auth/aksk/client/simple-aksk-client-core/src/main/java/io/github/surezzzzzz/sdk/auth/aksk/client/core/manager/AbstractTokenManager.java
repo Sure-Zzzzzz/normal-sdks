@@ -2,7 +2,6 @@ package io.github.surezzzzzz.sdk.auth.aksk.client.core.manager;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.configuration.SimpleAkskClientCoreProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor;
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor.TokenStatus;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.strategy.TokenCacheStrategy;
 import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
@@ -15,9 +14,8 @@ import lombok.extern.slf4j.Slf4j;
  * <ol>
  *   <li>获取 securityContext</li>
  *   <li>生成 cacheKey</li>
- *   <li>查缓存：命中则检查状态</li>
- *   <li>VALID → 直接返回；EXPIRING_SOON → 异步刷新后返回当前 token；EXPIRED/UNPARSABLE → 同步获取</li>
- *   <li>缓存未命中 → 同步获取</li>
+ *   <li>查缓存：命中则直接返回</li>
+ *   <li>缓存未命中 → 加锁同步获取新 Token</li>
  * </ol>
  *
  * <p>子类只需实现 {@link #fetchTokenWithLock} 提供各自的加锁策略：
@@ -25,6 +23,9 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>{@code RedisTokenManager}：分布式锁（适合多实例部署）</li>
  *   <li>{@code HttpSessionTokenManager}：JVM 本地锁（适合单实例部署）</li>
  * </ul>
+ *
+ * <p>Token 有效性由缓存 TTL 保证（{@link TokenCacheStrategy#calculateTtl} 提前过期），
+ * 不依赖解析 Token 内容，兼容 JWE 加密格式。
  *
  * @author surezzzzzz
  */
@@ -50,6 +51,10 @@ public abstract class AbstractTokenManager implements TokenManager {
     /**
      * 获取 Token（Template Method，子类不可覆盖）
      *
+     * <p>缓存命中直接返回；缓存未命中时同步获取。
+     * Token 有效性由缓存 TTL 保证（{@link TokenCacheStrategy#calculateTtl} 提前过期），
+     * 不依赖解析 Token 内容，兼容 JWE 加密格式。
+     *
      * @return Access Token
      */
     @Override
@@ -59,22 +64,11 @@ public abstract class AbstractTokenManager implements TokenManager {
         String cachedToken = tokenCacheStrategy.get(cacheKey);
 
         if (cachedToken != null) {
-            TokenStatus status = tokenRefreshExecutor.checkTokenStatus(cachedToken);
-            switch (status) {
-                case VALID:
-                    log.debug("Token cache hit (valid): key={}", cacheKey);
-                    return cachedToken;
-                case EXPIRING_SOON:
-                    log.debug("Token expiring soon, triggering async refresh: key={}", cacheKey);
-                    tokenRefreshExecutor.asyncRefreshToken(() -> fetchTokenWithLock(cacheKey, securityContext));
-                    return cachedToken;
-                case EXPIRED:
-                case UNPARSABLE:
-                    log.debug("Token {} (status={}), refreshing: key={}", status, status, cacheKey);
-                    break;
-            }
+            log.debug("Token cache hit: key={}", cacheKey);
+            return cachedToken;
         }
 
+        log.debug("Token cache miss, fetching: key={}", cacheKey);
         return fetchTokenWithLock(cacheKey, securityContext);
     }
 

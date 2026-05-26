@@ -41,22 +41,9 @@ public class SimpleAkskClientCoreProperties {
     private String clientSecret;
 
     /**
-     * Token 管理配置
-     */
-    private TokenConfig token = new TokenConfig();
-
-    /**
      * HTTP 请求配置
      */
     private HttpConfig http = new HttpConfig();
-
-    @Data
-    public static class TokenConfig {
-        /**
-         * Token 过期前多少秒刷新（默认 300 秒）
-         */
-        private int refreshBeforeExpire = SimpleAkskClientCoreConstant.DEFAULT_REFRESH_BEFORE_EXPIRE;
-    }
 
     @Data
     public static class HttpConfig {

@@ -1,7 +1,5 @@
 package io.github.surezzzzzz.sdk.auth.aksk.client.core.strategy;
 
-import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
-
 /**
  * Token Cache Strategy Interface
  *
@@ -46,16 +44,12 @@ public interface TokenCacheStrategy {
     /**
      * 计算实际缓存 TTL（秒）
      *
-     * <p>提前 {@link SimpleAkskClientCoreConstant#TOKEN_EARLY_EXPIRY_SECONDS} 秒过期，
-     * 且不低于 {@link SimpleAkskClientCoreConstant#TOKEN_MIN_TTL_SECONDS}，避免边界情况。
+     * <p>提前 30 秒过期，且不低于 60 秒，避免边界情况。
      *
      * @param expiresInSeconds 服务端返回的过期时间（秒）
      * @return 实际缓存 TTL（秒）
      */
     default long calculateTtl(long expiresInSeconds) {
-        return Math.max(
-                expiresInSeconds - SimpleAkskClientCoreConstant.TOKEN_EARLY_EXPIRY_SECONDS,
-                SimpleAkskClientCoreConstant.TOKEN_MIN_TTL_SECONDS
-        );
+        return Math.max(expiresInSeconds - 30, 60);
     }
 }

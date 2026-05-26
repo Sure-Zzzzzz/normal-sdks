@@ -25,11 +25,6 @@ public final class SimpleAkskClientCoreConstant {
      */
     public static final String DEFAULT_TOKEN_ENDPOINT = "/oauth2/token";
 
-    /**
-     * 默认 Token 过期前刷新时间（秒）
-     */
-    public static final int DEFAULT_REFRESH_BEFORE_EXPIRE = 300;
-
     // ==================== OAuth2 相关常量 ====================
 
     /**
@@ -65,23 +60,6 @@ public final class SimpleAkskClientCoreConstant {
      * Session 中存储 Token 的 Key
      */
     public static final String SESSION_TOKEN_KEY = "simple_aksk_access_token";
-
-    /**
-     * Session 中存储 Token 过期时间的 Key
-     */
-    public static final String SESSION_TOKEN_EXPIRY_KEY = "simple_aksk_token_expiry";
-
-    // ==================== Token 缓存相关 ====================
-
-    /**
-     * Token 提前过期缓冲（秒），避免边界情况
-     */
-    public static final int TOKEN_EARLY_EXPIRY_SECONDS = 30;
-
-    /**
-     * Token 最小缓存 TTL（秒）
-     */
-    public static final int TOKEN_MIN_TTL_SECONDS = 60;
 
     // ==================== HTTP 超时默认值 ====================
 

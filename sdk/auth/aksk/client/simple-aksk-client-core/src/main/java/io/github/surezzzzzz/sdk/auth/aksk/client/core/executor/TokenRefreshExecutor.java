@@ -1,7 +1,5 @@
 package io.github.surezzzzzz.sdk.auth.aksk.client.core.executor;
 
-import com.nimbusds.jwt.JWT;
-import com.nimbusds.jwt.JWTParser;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.configuration.SimpleAkskClientCoreProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
@@ -18,21 +16,20 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Date;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 
 /**
  * Token Refresh Executor
  *
- * <p>Token 刷新执行器，封装 Token 状态检查、获取、异步刷新等通用逻辑。
+ * <p>Token 刷新执行器，封装 Token 获取通用逻辑。
  *
  * <p>设计原则：
  * <ul>
  *   <li>不作为 Spring Bean，由 {@link io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.AbstractTokenManager} 在构造时创建</li>
  *   <li>提供通用的 Token 刷新逻辑，由 RedisTokenManager 和 HttpSessionTokenManager 复用</li>
  *   <li>使用 TaskRetryExecutor 进行重试</li>
- *   <li>RestTemplate 为实例变量，超时参数从 properties 读取，不再静态单例</li>
+ *   <li>RestTemplate 为实例变量，超时参数从 properties 读取</li>
+ *   <li>Token 有效性由缓存 TTL 保证，不再解析 Token 内容（兼容 JWE 加密格式）</li>
  * </ul>
  *
  * @author surezzzzzz
@@ -40,30 +37,10 @@ import java.util.function.BiConsumer;
 @Slf4j
 public class TokenRefreshExecutor {
 
-    /**
-     * Token 状态枚举
-     */
-    public enum TokenStatus {
-        /** 已过期 */
-        EXPIRED,
-        /** 即将过期 */
-        EXPIRING_SOON,
-        /** 正常 */
-        VALID,
-        /** 无法解析 */
-        UNPARSABLE
-    }
-
     private final SimpleAkskClientCoreProperties coreProperties;
     private final TaskRetryExecutor retryExecutor;
     private final RestTemplate restTemplate;
 
-    /**
-     * 构造函数，根据 properties 初始化 RestTemplate
-     *
-     * @param coreProperties 配置属性
-     * @param retryExecutor  重试执行器
-     */
     public TokenRefreshExecutor(SimpleAkskClientCoreProperties coreProperties, TaskRetryExecutor retryExecutor) {
         this.coreProperties = coreProperties;
         this.retryExecutor = retryExecutor;
@@ -71,39 +48,6 @@ public class TokenRefreshExecutor {
         factory.setConnectTimeout(coreProperties.getHttp().getConnectTimeoutMs());
         factory.setReadTimeout(coreProperties.getHttp().getReadTimeoutMs());
         this.restTemplate = new RestTemplate(factory);
-    }
-
-    /**
-     * 检查 Token 状态
-     *
-     * @param token JWT Token
-     * @return Token 状态
-     */
-    public TokenStatus checkTokenStatus(String token) {
-        try {
-            JWT jwt = JWTParser.parse(token);
-            Date expirationTime = jwt.getJWTClaimsSet().getExpirationTime();
-
-            if (expirationTime == null) {
-                log.warn("Token has no expiration time, treating as unparsable");
-                return TokenStatus.UNPARSABLE;
-            }
-
-            long now = System.currentTimeMillis();
-            long expireTime = expirationTime.getTime();
-            long refreshBeforeExpire = coreProperties.getToken().getRefreshBeforeExpire() * 1000L;
-
-            if (expireTime <= now) {
-                return TokenStatus.EXPIRED;
-            } else if ((expireTime - now) <= refreshBeforeExpire) {
-                return TokenStatus.EXPIRING_SOON;
-            } else {
-                return TokenStatus.VALID;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to parse JWT token, treating as unparsable", e);
-            return TokenStatus.UNPARSABLE;
-        }
     }
 
     /**
@@ -159,18 +103,4 @@ public class TokenRefreshExecutor {
         }
     }
 
-    /**
-     * 异步刷新 Token
-     *
-     * @param refreshTask 刷新任务
-     */
-    public void asyncRefreshToken(Runnable refreshTask) {
-        CompletableFuture.runAsync(() -> {
-            try {
-                refreshTask.run();
-            } catch (Exception e) {
-                log.error("Failed to refresh token asynchronously", e);
-            }
-        });
-    }
 }
