@@ -3,8 +3,6 @@ spring:
     name: simple-aksk-audit-listener-test
   profiles:
     active: local
-  main:
-    allow-bean-definition-overriding: true  # 允许Bean覆盖（security-context和resource-server可能有冲突）
 
 io:
   github:
@@ -19,20 +17,15 @@ io:
         auth:
           aksk:
             resource:
-              security-context:
-                enable: true  # 启用Header认证
-                header-prefix: x-sure-auth-aksk-  # Header前缀
               server:
-                enabled: true  # 启用JWT认证
-                jwt:
-                  # 使用 issuer-uri 自动从 aksk-server 获取 JWKS
-                  issuer-uri: http://localhost:8080
+                enabled: true
+                introspect:
+                  endpoint: http://localhost:8080/oauth2/introspect
+                  # client-id 和 client-secret 在 application-local.yml 中配置
                 security:
-                  # 需要保护的路径
                   protected-paths:
                     - /api/**
                     - /test/**
-                  # 白名单路径（不需要认证）
                   permit-all-paths:
                     - /actuator/health
                     - /public/**

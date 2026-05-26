@@ -1,16 +1,16 @@
 # simple-aksk-resource-audit-listener-starter
 
+> **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
+
 监听 AKSK Resource 端访问事件，生成审计记录并分发给业务处理器。
 
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-audit-listener-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-audit-listener-starter:2.0.0'
 ```
 
-前提：项目中已引入以下任一认证模块，它们负责发布 `AkskAccessEvent` 事件：
-- `simple-aksk-security-context-starter`（Header 认证）
-- `simple-aksk-resource-server-starter`（JWT 认证）
+前提：项目中已引入 `simple-aksk-resource-server-starter`，它负责发布 `AkskAccessEvent` 事件（INTROSPECT 模式）。
 
 ---
 
@@ -91,7 +91,7 @@ public class MyAkskAuditTraceIdProvider implements AkskAuditTraceIdProvider {
 | `remoteAddr` | `String` | 来源 IP |
 | `userAgent` | `String` | User-Agent |
 | `timestamp` | `Long` | 时间戳 |
-| `source` | `String` | 来源类型：header / jwt |
+| `source` | `String` | 来源类型：introspect |
 | `traceId` | `String` | 链路追踪 ID |
 | `context` | `Map<String, String>` | 完整上下文 |
 
@@ -115,6 +115,10 @@ public class MyAkskAuditTraceIdProvider implements AkskAuditTraceIdProvider {
 ---
 
 ## 版本历史
+
+### 2.0.0
+
+升级依赖至 resource-core 2.0.0、resource-server-starter 2.0.0；移除 security-context-starter 依赖；移除 Header 认证支持，仅支持 INTROSPECT 模式。
 
 ### 1.0.0
 - 初始版本

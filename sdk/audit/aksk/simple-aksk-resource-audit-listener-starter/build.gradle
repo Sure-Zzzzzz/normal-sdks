@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 resource-core（提供 AkskAccessEvent）
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
@@ -13,10 +13,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 
     // 集成测试依赖：测试真实的认证流程
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.2'  // Header认证
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.1'   // JWT认证
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'   // INTROSPECT认证
     testImplementation 'org.springframework.boot:spring-boot-starter-security'              // Spring Security
-    testImplementation 'org.springframework.security:spring-security-oauth2-jose'           // JWT解码器
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'           // OAuth2 Jose
     testImplementation 'org.springframework.security:spring-security-oauth2-resource-server' // OAuth2 Resource Server
     testImplementation 'org.springframework.security:spring-security-test'                  // Security测试支持
 }
