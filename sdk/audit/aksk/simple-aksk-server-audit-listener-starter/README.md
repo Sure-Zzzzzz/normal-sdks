@@ -1,11 +1,13 @@
 # simple-aksk-server-audit-listener-starter
 
+> **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
+
 监听 AKSK Server 端 Token 生命周期事件，生成审计记录并分发给业务处理器。
 
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:2.0.0'
 ```
 
 前提：项目中已引入 `simple-aksk-server-starter`，它负责发布 Token 生命周期事件。
@@ -100,6 +102,10 @@ io:
 ---
 
 ## 版本历史
+
+### 2.0.0
+
+升级依赖至 server-core 2.0.1、server-starter 2.0.0。
 
 ### 1.0.0
 - 初始版本
