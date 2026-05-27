@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -78,6 +79,7 @@ class RedisTokenManagerPubSubTest {
      * 方案B：直接发布 invalidation 消息，验证本实例 L1 被清除
      */
     @Test
+    @DisplayName("Pub/Sub 消息接收 -> 本实例 L1 清除")
     void testPubSubMessageClearsL1() throws InterruptedException {
         log.info("========== 方案B：Pub/Sub 消息接收 -> L1 清除 ==========");
 
@@ -116,20 +118,19 @@ class RedisTokenManagerPubSubTest {
      * 方案B：SmartCacheManager.evict 触发 Pub/Sub，验证本实例 L1 立即清除
      */
     @Test
+    @DisplayName("clearToken -> evict -> 本实例 L1 立即清除")
     void testClearTokenEvictsCacheAndClearsL1() {
         log.info("========== 方案B：clearToken -> evict -> L1 立即清除 ==========");
 
-        String cacheKey = "default";
+        // 直接用 L1.put 写入，绕过 getToken()（不需要连 token server）
         String fakeToken = "fake-token-evict-test";
+        l1Cache.put(cacheName, "default", fakeToken);
+        assertNotNull(l1Cache.get(cacheName, "default"), "L1 应该有值");
 
-        // 写入 L1
-        l1Cache.put(cacheName, cacheKey, fakeToken);
-        assertNotNull(l1Cache.get(cacheName, cacheKey), "L1 应该有值");
-
-        // clearToken 内部调 cacheManager.evict，同步清除 L1
+        // clearToken 使用 securityContextProvider.getSecurityContext() -> null -> "default"
         tokenManager.clearToken();
 
-        assertNull(l1Cache.get(cacheName, cacheKey), "clearToken 后 L1 应立即清除");
+        assertNull(l1Cache.get(cacheName, "default"), "clearToken 后 L1 应立即清除");
         log.info("✓ clearToken 后 L1 立即清除");
     }
 
@@ -138,6 +139,7 @@ class RedisTokenManagerPubSubTest {
      * 实例1 clearToken()，验证实例2 的 L1 通过 Pub/Sub 被清除
      */
     @Test
+    @DisplayName("双 Context Pub/Sub -> 实例2 L1 通过 Pub/Sub 清除（多实例一致性）")
     void testPubSubClearsL1OnAnotherInstance() throws Exception {
         log.info("========== 方案A：双 Context Pub/Sub 多实例测试 ==========");
 

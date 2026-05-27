@@ -1,6 +1,8 @@
 spring:
   profiles:
     active: local
+  config:
+    import: optional:classpath:application-local.yml
   redis:
     host: localhost
     port: 6379
@@ -17,8 +19,6 @@ io:
               server-url: http://localhost:8080
               token-endpoint: /oauth2/token
               # client-id 和 client-secret 请在 application-local.yml 中配置
-              token:
-                refresh-before-expire: 300
               redis:
                 token:
                   cache-name: aksk-client-token
@@ -36,7 +36,7 @@ io:
             expire-seconds: 3600
             preload:
               enabled: true
-              before-expire-seconds: 300
+              before-expire-seconds: 60
           consistency:
             mode: strong
 

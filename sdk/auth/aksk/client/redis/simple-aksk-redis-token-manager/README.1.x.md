@@ -1,4 +1,7 @@
-# Simple AKSK Redis Token Manager
+# Simple AKSK Redis Token Manager (1.x)
+
+> **这是 1.x 版本的冻结文档，不再维护。**
+> 2.0.0 版本请查看 [README.md](./README.md)
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -6,9 +9,9 @@
 
 - **L1 缓存（Caffeine）**：JVM 本地缓存，TTL 短（默认 2s），减少 Redis IO
 - **L2 缓存（Redis）**：分布式缓存，多实例共享 token
-- **分布式锁**：防止多实例并发打 OAuth2 Server
+- **分布式锁**：SmartCacheManager 内置，防止多实例并发打 OAuth2 Server
 - **多实例 L1 一致性**：`clearToken()` 通过 Pub/Sub 广播 L1 失效，各实例同步清除
-- **L2 预刷新**：Redis TTL <= 60s 时触发，异步换 token，当前请求返回旧值不阻塞
+- **L2 预刷新**：`TokenCachePreloadHandler` 解析 JWT 判断 EXPIRING_SOON，异步换 token，当前请求返回旧值不阻塞
 
 ---
 
@@ -17,7 +20,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:1.1.0'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -45,6 +48,8 @@ io:
               server-url: http://localhost:8080
               client-id: AKP...
               client-secret: SK...
+              token:
+                refresh-before-expire: 300  # 提前 300s 触发预刷新（默认）
 
         cache:
           enabled: true
@@ -56,10 +61,10 @@ io:
             max-size: 1000
           l2:
             enabled: true
-            expire-seconds: 3600            # TTL 兜底（server 未返回 expiresIn 时使用）
+            expire-seconds: 3600            # 与 jwt.expires-in 对齐
             preload:
               enabled: true                 # 启用 L2 预刷新
-              before-expire-seconds: 60      # 预刷新窗口（Redis TTL <= 60s 时触发）
+              before-expire-seconds: 300    # 与 refresh-before-expire 对齐
           consistency:
             mode: strong                    # Pub/Sub 多实例 L1 一致
 ```
@@ -85,24 +90,26 @@ tokenManager.clearToken();
 缓存流程：L1 → L2 → 抢分布式锁 → fetch → 写回 L1 + L2
 
 L1: Caffeine（2s），减少 Redis IO
-L2: Redis（server 返回的 expiresIn 秒），多实例共享
-分布式锁: 防止缓存击穿
-L2 预刷新: Redis TTL <= 60s 时触发（smart-cache 内置机制）
+L2: Redis（expiresIn 秒），多实例共享
+分布式锁: SmartCacheManager 内置，防止缓存击穿
+L2 预刷新: JWT 剩余 <= refresh-before-expire 时触发（通过 nimbus-jose-jwt 解析 JWT）
 ```
 
-### TokenWithExpiry 模型
+### Token 状态判断
 
-Token 存储结构包含 `{ token, expiresAt, securityContext }`：
+- **VALID**：token 剩余有效期 > `refresh-before-expire`
+- **EXPIRING_SOON**：token 剩余有效期 <= `refresh-before-expire`
+- **EXPIRED**：token 已过期
 
-- `token`：OAuth2 access_token
-- `expiresAt`：绝对过期时间（epoch 秒），由 fetchTime + server返回的expiresIn 计算得出
-- `securityContext`：用户上下文，用于 reload() 时保证分布式一致性
+### L2 预刷新机制
 
-### TTL 策略
-
-- **Redis TTL**：使用 server 返回的 `expiresIn` 秒数，框架通过 Redis `TTL` 命令检测是否进入 preload 窗口
-- **兜底**：`l2.expireSeconds`（当 server 未返回 expiresIn 时）
-- **preload 触发**：`TTL(key) <= beforeExpireSeconds` 时框架自动触发 reload，新 token 写回后 TTL 重新从 expiresIn 算起
+```
+Redis TTL 剩余 before-expire-seconds 时触发异步 reload
+├── needPreload() 通过 JWT 解析判断（完全替代框架 TTL 查询）
+├── reload() 调用 TokenRefreshExecutor 异步换 token
+├── 当前请求返回旧值不阻塞
+└── preload 失败时指数退避重试，旧值在容错窗口内仍可返回
+```
 
 ---
 
@@ -141,22 +148,13 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 |------|----------|------|
 | `simple-aksk-client-core` | `api` | 客户端核心，自动传递 |
 | `smart-cache-starter` | `api` | L1+L2 缓存、分布式锁、Pub/Sub，自动传递 |
+| `nimbus-jose-jwt` | `api` | JWT 解析，用于 needPreload() 判断 |
 | `spring-boot-starter-data-redis` | `compileOnly` | Redis 操作，**使用方必须自行引入** |
 | `spring-web` | `compileOnly` | RestTemplate，**使用方必须自行引入** |
 
 ---
 
 ## 版本历史
-
-### 2.0.0
-
-- **Breaking Change**：移除 JWT 解析，Token 有效性完全由 Redis TTL 保证
-  - 不再依赖 `nimbus-jose-jwt`
-  - 移除 `checkTokenStatus()`、`TokenStatus` 枚举
-  - 移除 `TokenCacheStrategy`、`AbstractTokenManager` 继承
-- 新增 `TokenWithExpiry` 模型，存储 `token` + `expiresIn` + `securityContext`
-- L2 预刷新由框架 TTL 机制驱动，不再手动解析 JWT
-- 分布式锁直接注入，防止击穿
 
 ### 1.1.0
 
@@ -174,6 +172,27 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 ### 1.0.0
 
 - 初始版本，基于 Redis 分布式锁的 Token 管理
+
+---
+
+## 2.0.0 升级指南
+
+### Breaking Changes
+
+- **移除 JWT 解析**：不再依赖 `nimbus-jose-jwt`，Token 有效性完全由 Redis TTL 保证
+- **配置简化**：移除 `token.refresh-before-expire`，L2 预刷新由框架 TTL 机制驱动
+- **TTL 动态化**：优先使用 server 返回的 `expiresIn`，无需手动对齐配置
+
+### 配置变更
+
+```yaml
+# 1.x 配置（废弃）
+io.github.surezzzzzz.sdk.auth.aksk.client.token.refresh-before-expire: 300
+io.github.surezzzzzz.sdk.cache.l2.preload.before-expire-seconds: 300
+
+# 2.0 配置（简化）
+io.github.surezzzzzz.sdk.cache.l2.preload.before-expire-seconds: 60
+```
 
 ---
 

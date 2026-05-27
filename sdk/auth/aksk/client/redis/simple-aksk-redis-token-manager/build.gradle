@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 client-core 模块
-    api 'io.github.sure-zzzzzz:simple-aksk-client-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core:2.0.0'
 
     // 依赖 smart-cache-starter（提供 L1+L2 两级缓存、分布式锁、Pub/Sub 一致性、L2 预刷新）
     // simple-redis-lock-starter 已由 smart-cache-starter 传递依赖，无需重复声明
