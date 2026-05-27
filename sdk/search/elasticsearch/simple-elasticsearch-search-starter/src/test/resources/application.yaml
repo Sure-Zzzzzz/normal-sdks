@@ -27,6 +27,8 @@ io:
                     - 积分
                   createTime:
                     - 创建时间
+                  orderId:
+                    - 订单ID
 
               # 普通索引（无标识符，直接使用索引名）
               - name: "test_order_index"

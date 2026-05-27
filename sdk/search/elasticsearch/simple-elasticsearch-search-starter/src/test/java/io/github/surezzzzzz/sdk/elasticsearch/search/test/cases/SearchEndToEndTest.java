@@ -2872,7 +2872,8 @@ class SearchEndToEndTest {
     @DisplayName("表达式校验 - 合法表达式")
     void testExpressionValidateValid() throws Exception {
         mockMvc.perform(get("/api/expression/validate")
-                        .param("expression", "status = \"completed\" AND amount > 1000"))
+                        .param("expression", "status = \"completed\" AND amount > 1000")
+                        .param("index", ORDER_INDEX))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(true))
                 .andExpect(jsonPath("$.data.errorMessage").doesNotExist())
@@ -2884,7 +2885,8 @@ class SearchEndToEndTest {
     @DisplayName("表达式校验 - 语法错误")
     void testExpressionValidateInvalid() throws Exception {
         mockMvc.perform(get("/api/expression/validate")
-                        .param("expression", "status = \"completed\" AND amount >="))
+                        .param("expression", "status = \"completed\" AND amount >=")
+                        .param("index", ORDER_INDEX))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.valid").value(false))
                 .andExpect(jsonPath("$.data.errorMessage").isString())

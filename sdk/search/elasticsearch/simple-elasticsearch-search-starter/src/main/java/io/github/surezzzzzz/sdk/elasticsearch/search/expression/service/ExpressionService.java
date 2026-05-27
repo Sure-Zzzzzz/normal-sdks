@@ -16,10 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -50,7 +47,7 @@ public class ExpressionService {
         validateLength(expression);
         log.debug("Translating expression: index={}", index);
         try {
-            Expression ast = expressionParser.parse(expression);
+            Expression ast = parseExpression(expression, index);
             QueryCondition condition = ast.accept(visitorRegistry.resolve(index));
             log.debug("Expression translated successfully");
             return condition;
@@ -65,11 +62,12 @@ public class ExpressionService {
      * 校验表达式语法，不抛异常
      *
      * @param expression 表达式字符串
+     * @param index      索引别名，用于查找字段名映射
      * @return 校验结果
      */
-    public ExpressionValidationResult validate(String expression) {
+    public ExpressionValidationResult validate(String expression, String index) {
         try {
-            expressionParser.parse(expression);
+            Expression ast = parseExpression(expression, index);
             return ExpressionValidationResult.builder()
                     .valid(true)
                     .errorPosition(-1)
@@ -163,5 +161,49 @@ public class ExpressionService {
             throw new ExpressionParseException(
                     String.format(ErrorMessage.EXPRESSION_TOO_LONG, maxLength, expression.length()));
         }
+    }
+
+    /**
+     * 解析表达式，统一处理 label 预替换
+     * translate 和 validate 共用此方法，保证表达式处理逻辑一致
+     *
+     * @param expression 原始表达式
+     * @param index      索引别名
+     * @return 解析后的 AST
+     */
+    private Expression parseExpression(String expression, String index) {
+        String normalized = normalizeFieldNames(expression, index);
+        return expressionParser.parse(normalized);
+    }
+
+    /**
+     * 解析前将表达式中的中文 label 预替换为英文字段名
+     * 按长度降序排列确保长 label 优先匹配（如 "订单ID" 先于 "订单"）
+     *
+     * @param expression 原始表达式
+     * @param index      索引别名
+     * @return 替换后的表达式
+     */
+    private String normalizeFieldNames(String expression, String index) {
+        Map<String, List<String>> labelMap = visitorRegistry.resolveLabelMap(index);
+        if (labelMap == null || labelMap.isEmpty()) {
+            return expression;
+        }
+
+        // 展开为 label→fieldName，并按长度降序（防止 "订单" 先匹配）
+        List<Map.Entry<String, String>> labels = labelMap.entrySet().stream()
+                .flatMap(e -> e.getValue().stream().map(label -> new AbstractMap.SimpleEntry<String, String>(label, e.getKey())))
+                .sorted((a, b) -> Integer.compare(b.getKey().length(), a.getKey().length()))
+                .collect(Collectors.toList());
+
+        if (labels.isEmpty()) {
+            return expression;
+        }
+
+        String result = expression;
+        for (Map.Entry<String, String> entry : labels) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+        return result;
     }
 }

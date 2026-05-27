@@ -72,7 +72,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.2'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.4'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -378,11 +378,13 @@ POST /api/query/expression
 
 ---
 
-### GET /api/expression/validate — 校验表达式语法（v1.5.2+）
+### GET /api/expression/validate — 校验表达式语法（v1.5.2+，v1.6.4 index 必填）
 
 ```bash
-GET /api/expression/validate?expression=status = "paid" AND amount >= 100
+GET /api/expression/validate?expression=订单ID = 'xxx' AND 状态 = '已完成'&index=order
 ```
+
+`index` 参数从 v1.6.4 起必填，用于 label 预替换时查找字段映射。语法正确时：
 
 ```json
 {"data": {"valid": true, "errorMessage": null, "errorPosition": -1}}

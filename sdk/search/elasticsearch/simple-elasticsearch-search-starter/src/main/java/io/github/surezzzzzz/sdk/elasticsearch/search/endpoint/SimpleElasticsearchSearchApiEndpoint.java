@@ -382,17 +382,19 @@ public class SimpleElasticsearchSearchApiEndpoint {
     }
 
     /**
-     * 校验条件表达式语法
+     * 校验条件表达式语法（支持中文 label）
      *
      * @param expression 表达式字符串
+     * @param index      索引别名，用于 label 预替换
      */
     @GetMapping("/expression/validate")
     public ResponseEntity<ApiResponse<ExpressionValidationResult>> validateExpression(
-            @RequestParam String expression) {
+            @RequestParam String expression,
+            @RequestParam String index) {
         if (expressionService == null) {
             return unavailableExpression();
         }
-        return ResponseEntity.ok(ApiResponse.success(expressionService.validate(expression)));
+        return ResponseEntity.ok(ApiResponse.success(expressionService.validate(expression, index)));
     }
 
     /**

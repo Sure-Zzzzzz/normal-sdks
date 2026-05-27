@@ -258,8 +258,9 @@ class ExpressionTest {
     @Test
     @DisplayName("validate - 合法表达式")
     void testValidateValid() {
+        // 必须传 index，normalize 后解析成功
         ExpressionValidationResult result = expressionService.validate(
-                "威胁类型 = \"木马\" AND 攻击次数 >= 10");
+                "威胁类型 = \"木马\" AND 攻击次数 >= 10", "test_nl_user_index");
         log.info("validate valid: {}", result);
         assertTrue(result.isValid());
         assertNull(result.getErrorMessage());
@@ -270,7 +271,7 @@ class ExpressionTest {
     @DisplayName("validate - 语法错误")
     void testValidateInvalid() {
         ExpressionValidationResult result = expressionService.validate(
-                "威胁类型 = \"木马\" AND 攻击次数 >=");
+                "威胁类型 = \"木马\" AND 攻击次数 >=", "test_nl_user_index");
         log.info("validate invalid: {}", result);
         assertFalse(result.isValid());
         assertNotNull(result.getErrorMessage());
@@ -280,10 +281,38 @@ class ExpressionTest {
     @Test
     @DisplayName("validate - 空表达式")
     void testValidateEmpty() {
-        ExpressionValidationResult result = expressionService.validate("");
+        ExpressionValidationResult result = expressionService.validate("", "test_nl_user_index");
         log.info("validate empty: {}", result);
         assertFalse(result.isValid());
         assertNotNull(result.getErrorMessage());
+    }
+
+    @Test
+    @DisplayName("validate - 支持中文 label")
+    void testValidateWithChineseLabel() {
+        log.info("========== 测试：validate 支持中文 label ==========");
+
+        // 订单ID 替换后解析成功
+        ExpressionValidationResult result = expressionService.validate(
+                "订单ID = 'xxx'", "test_order_index");
+        log.info("result: {}", result);
+        assertTrue(result.isValid());
+        assertNull(result.getErrorMessage());
+
+        log.info("✓ validate 支持中文 label 测试通过");
+    }
+
+    @Test
+    @DisplayName("validate - 中文 label + 中文运算符")
+    void testValidateWithChineseLabelAndOperator() {
+        log.info("========== 测试：validate 中文 label + 中文运算符 ==========");
+
+        ExpressionValidationResult result = expressionService.validate(
+                "订单ID等于'xxx' 且 城市大于'北京'", "test_nl_user_index");
+        log.info("result: {}", result);
+        assertTrue(result.isValid());
+
+        log.info("✓ validate 中文 label + 运算符测试通过");
     }
 
     // ==================== translate - 异常 ====================
@@ -501,5 +530,266 @@ class ExpressionTest {
         assertEquals("emp_id", result2.getField());
 
         log.info("✓ 混合配置索引翻译测试通过");
+    }
+
+    // ==================== v1.6.4 label 预替换测试 ====================
+
+    @Test
+    @DisplayName("translate - 中英混合 label（订单ID）预替换为英文字段名")
+    void testTranslateMixedChineseEnglishLabel() {
+        log.info("========== 测试：中英混合 label 预替换 ==========");
+
+        // test_order_index: 订单ID → order_id
+        QueryCondition result = expressionService.translate(
+                "订单ID = 'xxx'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("order_id", result.getField());
+        assertEquals("eq", result.getOp());
+        assertEquals("xxx", result.getValue());
+
+        log.info("✓ 中英混合 label 预替换测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 中英混合 label + 纯中文 label 组合")
+    void testTranslateMixedAndPureChineseLabels() {
+        log.info("========== 测试：中英混合 + 纯中文 label 组合 ==========");
+
+        // test_nl_user_index 配置了 orderId→订单ID 和 status→状态
+        // 订单ID（混合）AND 状态（纯中文）
+        QueryCondition result = expressionService.translate(
+                "订单ID = 'xxx' AND 状态 = '已完成'", "test_nl_user_index");
+        log.info("result: {}", result);
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size());
+
+        QueryCondition left = result.getConditions().get(0);
+        QueryCondition right = result.getConditions().get(1);
+        assertEquals("orderId", left.getField());
+        assertEquals("status", right.getField());
+
+        log.info("✓ 中英混合 + 纯中文 label 组合测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 多个中英混合 label 组合")
+    void testTranslateMultipleMixedLabels() {
+        log.info("========== 测试：多个中英混合 label 组合 ==========");
+
+        // 订单ID = 'xxx' AND 订单号 = 'yyy'
+        QueryCondition result = expressionService.translate(
+                "订单ID = 'xxx' AND 订单号 = 'yyy'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size());
+
+        QueryCondition left = result.getConditions().get(0);
+        QueryCondition right = result.getConditions().get(1);
+        assertEquals("order_id", left.getField());
+        assertEquals("order_id", right.getField());
+
+        log.info("✓ 多个中英混合 label 组合测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 同一字段多个 label 映射（订单号/订单ID → order_id）")
+    void testTranslateSameFieldMultipleLabels() {
+        log.info("========== 测试：同一字段多个 label 映射 ==========");
+
+        // 订单号 → order_id
+        QueryCondition r1 = expressionService.translate(
+                "订单号 = 'xxx'", "test_order_index");
+        log.info("订单号: {}", r1);
+        assertEquals("order_id", r1.getField());
+
+        // 订单ID → order_id
+        QueryCondition r2 = expressionService.translate(
+                "订单ID = 'xxx'", "test_order_index");
+        log.info("订单ID: {}", r2);
+        assertEquals("order_id", r2.getField());
+
+        // 两个 label 混用在同一表达式中
+        QueryCondition r3 = expressionService.translate(
+                "订单号 = 'xxx' AND 订单ID = 'yyy'", "test_order_index");
+        log.info("混用: {}", r3);
+        assertEquals("and", r3.getLogic());
+
+        log.info("✓ 同一字段多个 label 映射测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 同一 label 在表达式中多次出现")
+    void testTranslateLabelAppearsMultipleTimes() {
+        log.info("========== 测试：同一 label 多次出现 ==========");
+
+        // 订单ID 出现两次，两处都被替换
+        QueryCondition result = expressionService.translate(
+                "订单ID = 'xxx' AND 订单ID = 'yyy'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size());
+
+        QueryCondition left = result.getConditions().get(0);
+        QueryCondition right = result.getConditions().get(1);
+        assertEquals("order_id", left.getField());
+        assertEquals("order_id", right.getField());
+
+        log.info("✓ 同一 label 多次出现测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 纯中文 label 不受影响")
+    void testTranslatePureChineseLabelUnaffected() {
+        log.info("========== 测试：纯中文 label 不受影响 ==========");
+
+        // 状态 = '已完成' → status = '已完成'
+        QueryCondition result = expressionService.translate(
+                "状态 = '已完成'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("status", result.getField());
+        assertEquals("eq", result.getOp());
+        assertEquals("已完成", result.getValue());
+
+        log.info("✓ 纯中文 label 不受影响测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 纯英文字段名不替换（不在 labelMap 中）")
+    void testTranslatePureEnglishFieldNoReplace() {
+        log.info("========== 测试：纯英文字段名不替换 ==========");
+
+        // order_id = 'xxx' → order_id = 'xxx'（不在 labelMap 中，不替换）
+        QueryCondition result = expressionService.translate(
+                "order_id = 'xxx'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("order_id", result.getField());
+        assertEquals("eq", result.getOp());
+        assertEquals("xxx", result.getValue());
+
+        log.info("✓ 纯英文字段名不替换测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 长短 label 同时存在时长 label 优先（订单ID vs 订单）")
+    void testTranslateLabelPriority() {
+        log.info("========== 测试：长短 label 优先级 ==========");
+
+        // test_employee 配置了 员工ID → emp_id，姓名 → emp_name
+        // 员工ID 是长 label（3字符），工号 → emp_id（2个label）
+        // 替换后 visitor 用 reverse mapping 反查英文字段名
+        QueryCondition result = expressionService.translate(
+                "工号 = 'E001'", "test_employee");
+        log.info("result: {}", result);
+        assertEquals("emp_id", result.getField());
+
+        log.info("✓ 长短 label 优先级测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - label 不在 fieldMapping 中则不替换")
+    void testTranslateLabelNotInMapping() {
+        log.info("========== 测试：label 不在 fieldMapping 中 ==========");
+
+        // "未知标签" 不在 test_order_index 的 field-mapping 中，原样传递
+        QueryCondition result = expressionService.translate(
+                "未知标签 = 'xxx'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("未知标签", result.getField());
+
+        log.info("✓ label 不在 fieldMapping 中测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 无 field-mapping 的索引不替换")
+    void testTranslateNoFieldMapping() {
+        log.info("========== 测试：无 field-mapping 索引 ==========");
+
+        // test_log_* 无 field-mapping，原样传递
+        QueryCondition result = expressionService.translate(
+                "城市 = '北京'", "test_log_*");
+        log.info("result: {}", result);
+        assertEquals("城市", result.getField());
+
+        log.info("✓ 无 field-mapping 索引测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - STRING 值中的 label 不会被替换")
+    void testTranslateStringValueNotReplaced() {
+        log.info("========== 测试：STRING 值中 label 不被替换 ==========");
+
+        // 订单号 = 'hello' → order_id = 'hello'
+        // STRING 值 'hello' 不是任何 label，不会被 replace 误伤
+        QueryCondition result = expressionService.translate(
+                "订单号 = 'hello'", "test_order_index");
+        log.info("result: {}", result);
+        assertEquals("order_id", result.getField());
+        assertEquals("hello", result.getValue());
+
+        log.info("✓ STRING 值中 label 不被替换测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 中文比较运算符（等于/大于）在 label 替换后仍正常解析")
+    void testTranslateChineseOperatorAfterLabelReplace() {
+        log.info("========== 测试：中文比较运算符在 label 替换后仍正常 ==========");
+
+        // 订单ID 等于 'xxx' → orderId 等于 'xxx' → orderId = 'xxx'
+        QueryCondition result = expressionService.translate(
+                "订单ID 等于 'xxx'", "test_nl_user_index");
+        log.info("result: {}", result);
+        assertEquals("orderId", result.getField());
+        assertEquals("eq", result.getOp());
+        assertEquals("xxx", result.getValue());
+
+        // 城市 大于 '上海' → city 大于 '上海' → city > '上海'
+        QueryCondition result2 = expressionService.translate(
+                "城市 大于 '上海'", "test_nl_user_index");
+        log.info("result2: {}", result2);
+        assertEquals("city", result2.getField());
+        assertEquals("gt", result2.getOp());
+
+        log.info("✓ 中文比较运算符正常解析测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 中文逻辑运算符（且/或/非）在 label 替换后仍正常解析")
+    void testTranslateChineseLogicalOperatorAfterLabelReplace() {
+        log.info("========== 测试：中文逻辑运算符在 label 替换后仍正常 ==========");
+
+        // 订单ID='xxx' 且 状态='已完成' → orderId='xxx' 且 status='已完成'
+        QueryCondition result = expressionService.translate(
+                "订单ID='xxx' 且 状态='已完成'", "test_nl_user_index");
+        log.info("result: {}", result);
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size());
+
+        QueryCondition left = result.getConditions().get(0);
+        QueryCondition right = result.getConditions().get(1);
+        assertEquals("orderId", left.getField());
+        assertEquals("status", right.getField());
+
+        log.info("✓ 中文逻辑运算符正常解析测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 复杂表达式（中英混合 label + 纯中文 label + 中文运算符）")
+    void testTranslateComplexExpressionMixedLabels() {
+        log.info("========== 测试：复杂表达式混合场景 ==========");
+
+        // 订单ID='xxx' 且 城市='北京'
+        // 解析为 (订单ID='xxx' 且 城市='北京')，顶层 getConditions()=2
+        QueryCondition result = expressionService.translate(
+                "订单ID='xxx' 且 城市='北京'", "test_nl_user_index");
+        log.info("result: {}", result);
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size());
+
+        QueryCondition left = result.getConditions().get(0);
+        QueryCondition right = result.getConditions().get(1);
+        assertEquals("orderId", left.getField());
+        assertEquals("city", right.getField());
+
+        log.info("✓ 复杂表达式混合场景测试通过");
     }
 }
