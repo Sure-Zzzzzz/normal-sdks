@@ -50,6 +50,8 @@ import java.util.stream.Collectors;
 public class TokenManagementServiceImpl implements TokenManagementService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final String JWT_TOKEN_PREFIX = "eyJ";
+    private static final String PROP_ACCESS_TOKEN_ISSUED_AT = "accessTokenIssuedAt";
     private static final String INVALIDATED_KEY = "metadata.token.invalidated";
     private static final String JSON_FIELD_TOKEN_VALUE = "tokenValue";
     private static final java.nio.charset.Charset UTF_8 = java.nio.charset.StandardCharsets.UTF_8;
@@ -84,7 +86,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         // 创建分页参数 (Spring Data JPA的页码从0开始，所以需要-1)
         int currentPage = Math.max(1, request.getPage());
         int pageSize = Math.max(1, request.getSize());
-        Sort sort = Sort.by(Sort.Direction.DESC, "accessTokenIssuedAt");
+        Sort sort = Sort.by(Sort.Direction.DESC, PROP_ACCESS_TOKEN_ISSUED_AT);
         Pageable pageable = PageRequest.of(currentPage - 1, pageSize, sort);
 
         // 使用Repository的通用查询方法（纯数据库分页和过滤）
@@ -308,8 +310,13 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     private String deserializeTokenValue(byte[] bytes) {
         if (bytes == null || bytes.length == 0) return null;
         try {
-            String json = new String(bytes, UTF_8);
-            JsonNode root = OBJECT_MAPPER.readTree(json);
+            String tokenStr = new String(bytes, UTF_8);
+            // 2.0.0 JWE token 以 eyJ 开头，直接返回原始 token
+            if (tokenStr.startsWith(JWT_TOKEN_PREFIX)) {
+                return tokenStr;
+            }
+            // 1.x 旧数据，token 包装在 JSON 中
+            JsonNode root = OBJECT_MAPPER.readTree(tokenStr);
             JsonNode tokenValue = root.get(JSON_FIELD_TOKEN_VALUE);
             return tokenValue != null ? tokenValue.asText() : null;
         } catch (Exception e) {

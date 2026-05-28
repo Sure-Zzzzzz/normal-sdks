@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)

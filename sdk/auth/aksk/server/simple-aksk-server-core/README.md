@@ -1,5 +1,7 @@
 # simple-aksk-server-core
 
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+
 `simple-aksk-server-starter` 和扩展模块共享的核心库，提供服务端公共配置、常量和 Token 审计事件定义。
 
 > 本模块是纯共享库，不包含 Spring Boot 自动配置，不能单独使用。
@@ -66,7 +68,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.1'
 ```
 
 通常不需要直接引用，`simple-aksk-server-starter` 会通过 `api` 传递依赖。
