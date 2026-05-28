@@ -1,9 +1,13 @@
 # Simple AKSK Feign Redis Client Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter,集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
+基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
+
+> **1.x 版本文档**（已冻结，不再维护）
+>
+> **当前稳定版本为 [2.0.0](../CHANGELOG.2.0.0.md)**，移除了 JWT 解析，接入 smart-cache L2 预刷新机制。
 
 ## 核心能力
 
@@ -81,25 +85,11 @@ io:
               client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234
               server-url: http://localhost:8080
               token-endpoint: /oauth2/token
+              token:
+                refresh-before-expire: 300  # 提前5分钟刷新
               redis:
                 token:
                   cache-name: aksk-client-token
-        cache:
-          enabled: true
-          key-prefix: sure-auth-aksk-client
-          me: my-app  # 应用标识（用于 Redis key 命名空间和 Pub/Sub 隔离）
-          l1:
-            enabled: true
-            expire-seconds: 2       # L1 本地缓存 TTL（秒），建议 2~5s
-            max-size: 1000
-          l2:
-            enabled: true
-            expire-seconds: 3600    # 与 jwt.expires-in 保持一致
-            preload:
-              enabled: true
-              before-expire-seconds: 60   # L2 预刷新窗口，Redis TTL <= 此值时触发 preload
-          consistency:
-            mode: strong            # 多实例 L1 一致性（Pub/Sub 广播）
 ```
 
 ## 使用方式
@@ -108,7 +98,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:2.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.1.0'
 }
 ```
 
@@ -195,10 +185,10 @@ public class MyService {
 ```
 
 **特点**：
-- ✅ 自动添加 `Authorization: Bearer {token}` 请求头
-- ✅ Token 由 RedisTokenManager 自动管理和刷新
-- ✅ 无需手动管理 Token
-- ✅ 声明式编程，代码简洁
+- 自动添加 `Authorization: Bearer {token}` 请求头
+- Token 由 RedisTokenManager 自动管理和刷新
+- 无需手动管理 Token
+- 声明式编程，代码简洁
 
 ### 4. 使用场景 2：显式配置 Feign 客户端
 
@@ -218,9 +208,9 @@ public interface MyServiceClient {
 ```
 
 **特点**：
-- ✅ 完全控制 Feign 配置
-- ✅ 可以添加其他配置类
-- ✅ 复用 AKSK 认证逻辑
+- 完全控制 Feign 配置
+- 可以添加其他配置类
+- 复用 AKSK 认证逻辑
 
 ### 5. 使用场景 3：只使用 TokenManager
 
@@ -248,9 +238,9 @@ public class MyService {
 ```
 
 **特点**：
-- ✅ 灵活控制 HTTP 请求
-- ✅ 可以使用任何 HTTP 客户端
-- ✅ Token 自动缓存和刷新
+- 灵活控制 HTTP 请求
+- 可以使用任何 HTTP 客户端
+- Token 自动缓存和刷新
 
 ### 6. 多用户场景
 
@@ -295,30 +285,6 @@ AkskFeignRequestInterceptor 拦截请求
 - **Token 缓存**：Token 由 `RedisTokenManager` 缓存在 Redis 中
 - **Token 刷新**：`RedisTokenManager` 会在 Token 过期前自动刷新
 - **无 Token 处理**：如果 Token 为空，拦截器会记录警告并继续请求（不添加 Authorization 头）
-
-## 测试覆盖
-
-✅ **拦截器测试**（AkskFeignRequestInterceptorTest）
-- 拦截器应该添加 Authorization 请求头
-- 当 token 为 null 时应该不添加 Authorization 头
-- 当 token 为空字符串时应该不添加 Authorization 头
-- TokenManager 抛异常时应该向上传播
-- 已有 Authorization 头时应该覆盖（不重复追加）
-
-✅ **集成测试**（FeignIntegrationTest）
-- TokenManager Bean 是否存在
-- AkskFeignRequestInterceptor Bean 是否存在
-- 拦截器是否可以访问 TokenManager
-
-✅ **端到端测试**（FeignEndToEndTest）
-- TokenManager 应该存在
-- TestFeignClient 应该存在
-- 获取 Token 应该成功
-- 使用 Token 调用 FeignClient 应该成功
-- ExplicitConfigFeignClient 应该存在
-- 使用显式配置的 FeignClient 调用应该成功
-
-**总计：14 个测试，100% 通过**
 
 ## 常见问题
 
@@ -426,9 +392,9 @@ feign:
 | 特性 | Feign 版本 | RestTemplate 版本 |
 |------|-----------|------------------|
 | 编程风格 | 声明式（接口） | 命令式（方法调用） |
-| 代码简洁度 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| 代码简洁度 | 高 | 中 |
 | 学习曲线 | 平缓 | 平缓 |
-| 灵活性 | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| 灵活性 | 中 | 高 |
 | 适用场景 | 微服务间调用 | 通用 HTTP 调用 |
 | 推荐度 | 推荐 | 推荐 |
 
@@ -439,10 +405,6 @@ feign:
 
 ## 版本历史
 
-### 2.0.0 (2026-05-27)
-
-- 升级 simple-aksk-redis-token-manager 1.1.0 → 2.0.0（JWE 支持、Token 有效性改由 Redis TTL 保证）
-
 ### 1.1.0 (2026-05-06)
 
 - 升级 simple-aksk-redis-token-manager 1.0.1 → 1.1.0（L1+L2 两级缓存、Token 预刷新、多实例 L1 一致性）
@@ -450,17 +412,17 @@ feign:
 
 ### 1.0.1 (2026-04-08)
 
-- 🐛 修复 `AkskFeignConfiguration` 加了 `@Configuration` 导致所有 Feign 客户端都携带 AKSK token 的问题
+- 修复 `AkskFeignConfiguration` 加了 `@Configuration` 导致所有 Feign 客户端都携带 AKSK token 的问题
 
 ### 1.0.0 (2026-01-27)
 
 初始版本发布：
-- ✅ 实现基于 Spring Cloud OpenFeign 的 AKSK 客户端
-- ✅ 集成 Redis Token Manager
-- ✅ 支持自动添加 Authorization 请求头
-- ✅ 提供 @AkskClientFeignClient 注解（推荐）
-- ✅ 支持显式配置 AkskFeignConfiguration
-- ✅ 完整的测试覆盖（拦截器、集成、端到端）
+- 实现基于 Spring Cloud OpenFeign 的 AKSK 客户端
+- 集成 Redis Token Manager
+- 支持自动添加 Authorization 请求头
+- 提供 @AkskClientFeignClient 注解（推荐）
+- 支持显式配置 AkskFeignConfiguration
+- 完整的测试覆盖（拦截器、集成、端到端）
 
 ## 许可证
 

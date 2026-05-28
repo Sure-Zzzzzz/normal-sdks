@@ -107,7 +107,6 @@ class FeignEndToEndTest {
         // Then
         assertNotNull(token, "Token should not be null");
         assertFalse(token.isEmpty(), "Token should not be empty");
-        assertTrue(token.startsWith("eyJ"), "Token should be a JWT (starts with 'eyJ')");
         log.info("测试通过：Token 获取成功，长度: {}", token.length());
     }
 
