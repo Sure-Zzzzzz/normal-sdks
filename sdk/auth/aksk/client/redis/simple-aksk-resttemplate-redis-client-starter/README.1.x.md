@@ -1,9 +1,13 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
+
+> **1.x 版本文档**（已冻结，不再维护）
+>
+> **当前稳定版本为 [2.0.0](../CHANGELOG.2.0.0.md)**，移除了 JWT 解析，接入 smart-cache L2 预刷新机制。
 
 ## 核心能力
 
@@ -82,6 +86,8 @@ io:
               client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234
               server-url: http://localhost:8080
               token-endpoint: /oauth2/token
+              token:
+                refresh-before-expire: 300  # 提前5分钟刷新
               redis:
                 token:
                   cache-name: aksk-client-token
@@ -91,22 +97,6 @@ io:
                 max-per-route: 20  # 每个路由的最大连接数（默认：20）
                 connect-timeout: 5000  # 连接超时（毫秒，默认：5000）
                 read-timeout: 30000  # 读取超时（毫秒，默认：30000）
-        cache:
-          enabled: true
-          key-prefix: sure-auth-aksk-client
-          me: my-app  # 应用标识（用于 Redis key 命名空间和 Pub/Sub 隔离）
-          l1:
-            enabled: true
-            expire-seconds: 2       # L1 本地缓存 TTL（秒），建议 2~5s
-            max-size: 1000
-          l2:
-            enabled: true
-            expire-seconds: 3600    # 与 jwt.expires-in 保持一致
-            preload:
-              enabled: true
-              before-expire-seconds: 60   # L2 预刷新窗口，Redis TTL <= 此值时触发 preload
-          consistency:
-            mode: strong            # 多实例 L1 一致性（Pub/Sub 广播）
 ```
 
 ## 使用方式
@@ -115,7 +105,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:2.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.1.0'
 }
 ```
 
@@ -162,9 +152,9 @@ public class MyService {
 ```
 
 **特点**：
-- ✅ 自动添加 `Authorization: Bearer {token}` 请求头
-- ✅ Token 由 RedisTokenManager 自动管理和刷新
-- ✅ 无需手动管理 Token
+- 自动添加 `Authorization: Bearer {token}` 请求头
+- Token 由 RedisTokenManager 自动管理和刷新
+- 无需手动管理 Token
 
 ### 3. 使用场景 2：只使用 TokenManager
 
@@ -192,9 +182,9 @@ public class MyService {
 ```
 
 **特点**：
-- ✅ 灵活控制 HTTP 请求
-- ✅ 可以使用任何 HTTP 客户端
-- ✅ Token 自动缓存和刷新
+- 灵活控制 HTTP 请求
+- 可以使用任何 HTTP 客户端
+- Token 自动缓存和刷新
 
 ### 4. 使用场景 3：自定义 RestTemplate
 
@@ -231,9 +221,9 @@ public class RestTemplateConfig {
 ```
 
 **特点**：
-- ✅ 完全控制 RestTemplate 配置
-- ✅ 复用 AKSK 认证逻辑
-- ✅ 可以添加其他拦截器
+- 完全控制 RestTemplate 配置
+- 复用 AKSK 认证逻辑
+- 可以添加其他拦截器
 
 ### 5. 多用户场景
 
@@ -278,30 +268,6 @@ AkskRestTemplateInterceptor 拦截请求
 - **Token 缓存**：Token 由 `RedisTokenManager` 缓存在 Redis 中
 - **Token 刷新**：`RedisTokenManager` 会在 Token 过期前自动刷新
 - **无 Token 处理**：如果 Token 为空，拦截器会记录警告并继续请求（不添加 Authorization 头）
-
-## 测试覆盖
-
-✅ **拦截器测试**（AkskRestTemplateInterceptorTest）
-- 拦截器应该添加 Authorization 请求头
-- 当 token 为 null 时应该不添加 Authorization 头
-- 当 token 为空字符串时应该不添加 Authorization 头
-
-✅ **集成测试**（RestTemplateIntegrationTest）
-- TokenManager Bean 是否存在
-- AkskRestTemplateInterceptor Bean 是否存在
-- RestTemplate Bean 是否存在
-- RestTemplate 是否包含 AkskRestTemplateInterceptor
-- 拦截器是否可以访问 TokenManager
-
-✅ **端到端测试**（RestTemplateEndToEndTest）
-- 获取 Token 应该成功
-- 使用 Token 调用 akskClientRestTemplate 应该成功
-- 没有 Token 时应该自动添加 Token
-- Token 过期时应该自动刷新
-- 无效凭证应该返回 401
-- 多次请求应该复用 Token
-
-**总计：17 个测试，100% 通过**
 
 ## 常见问题
 
@@ -370,10 +336,6 @@ io:
 
 ## 版本历史
 
-### 2.0.0 (2026-05-27)
-
-- 升级 simple-aksk-redis-token-manager 1.1.0 → 2.0.0（JWE 支持、Token 有效性改由 Redis TTL 保证）
-
 ### 1.1.0 (2026-05-06)
 
 - 升级 simple-aksk-redis-token-manager 1.0.1 → 1.1.0（L1+L2 两级缓存、Token 预刷新、多实例 L1 一致性）
@@ -381,11 +343,11 @@ io:
 ### 1.0.0 (2026-01-26)
 
 初始版本发布：
-- ✅ 实现基于 RestTemplate 的 AKSK 客户端
-- ✅ 集成 Redis Token Manager
-- ✅ 支持自动添加 Authorization 请求头
-- ✅ 提供灵活的组件选择（TokenManager、RestTemplate、Interceptor）
-- ✅ 完整的测试覆盖（拦截器、集成、端到端）
+- 实现基于 RestTemplate 的 AKSK 客户端
+- 集成 Redis Token Manager
+- 支持自动添加 Authorization 请求头
+- 提供灵活的组件选择（TokenManager、RestTemplate、Interceptor）
+- 完整的测试覆盖（拦截器、集成、端到端）
 
 ## 许可证
 
