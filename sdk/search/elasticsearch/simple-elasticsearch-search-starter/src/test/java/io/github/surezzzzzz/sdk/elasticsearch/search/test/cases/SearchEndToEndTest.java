@@ -71,6 +71,7 @@ class SearchEndToEndTest {
     private ObjectMapper objectMapper;
 
     private static final String USER_INDEX = "test_user_index";
+    private static final String NL_USER_INDEX = "test_nl_user_index";
     private static final String ORDER_INDEX = "test_order_index";
     private static final String LOG_INDEX_PREFIX = "test_log_";
     private static final String SECONDARY_INDEX = "test_index_b.secondary";  // 路由到 secondary 数据源的索引
@@ -96,6 +97,9 @@ class SearchEndToEndTest {
 
         // 2. 创建 user 索引（primary 数据源）
         createUserIndex(primaryClient);
+
+        // 2.5 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
+        createNlUserIndex(primaryClient);
 
         // 3. 创建多天的 log 索引（模拟日期分割，primary 数据源）
         createMultipleDateLogIndices(primaryClient);
@@ -184,6 +188,7 @@ class SearchEndToEndTest {
             RestHighLevelClient primaryClient = registry.getHighLevelClient(DEFAULT_DATASOURCE);
             deleteIndexIfExists(primaryClient, ORDER_INDEX);
             deleteIndexIfExists(primaryClient, USER_INDEX);
+            deleteIndexIfExists(primaryClient, NL_USER_INDEX);
 
             // 删除所有 test_log_* 索引
             LocalDateTime baseDate = LocalDateTime.now();
@@ -1150,6 +1155,71 @@ class SearchEndToEndTest {
 
         Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
+    }
+
+    /**
+     * 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
+     */
+    private static void createNlUserIndex(RestHighLevelClient client) throws Exception {
+        if (client.indices().exists(new GetIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT)) {
+            client.indices().delete(new DeleteIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT);
+        }
+
+        CreateIndexRequest request = new CreateIndexRequest(NL_USER_INDEX);
+        request.mapping(
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"name\": {" +
+                        "      \"type\": \"text\"," +
+                        "      \"fields\": {" +
+                        "        \"keyword\": {" +
+                        "          \"type\": \"keyword\"" +
+                        "        }" +
+                        "      }" +
+                        "    }," +
+                        "    \"age\": {\"type\": \"long\"}," +
+                        "    \"city\": {\"type\": \"keyword\"}," +
+                        "    \"status\": {\"type\": \"keyword\"}," +
+                        "    \"points\": {\"type\": \"long\"}," +
+                        "    \"createTime\": {\"type\": \"date\"}," +
+                        "    \"orderId\": {\"type\": \"keyword\"}" +
+                        "  }" +
+                        "}",
+                org.elasticsearch.xcontent.XContentType.JSON
+        );
+        client.indices().create(request, RequestOptions.DEFAULT);
+        log.info("✓ 已创建索引: {}", NL_USER_INDEX);
+
+        // 插入测试数据
+        // Alice: age=25, points=500  → 命中 name='Alice' AND age>=18 AND points<=1000
+        // Bob:   age=16, points=200  → age<18，不命中
+        // Carol: age=30, points=1500 → points>1000，不命中
+        // Dave:  age=20, points=800  → 命中 name='Alice' AND age>=18 AND points<=1000 时不命中（name不对）
+        List<Map<String, Object>> users = Arrays.asList(
+                createNlUser("Alice", 25, "北京", "active", 500L),
+                createNlUser("Bob",   16, "上海", "active", 200L),
+                createNlUser("Carol", 30, "广州", "active", 1500L),
+                createNlUser("Dave",  20, "深圳", "active", 800L)
+        );
+        for (int i = 0; i < users.size(); i++) {
+            IndexRequest indexRequest = new IndexRequest(NL_USER_INDEX)
+                    .id("nl-" + (i + 1))
+                    .source(users.get(i));
+            client.index(indexRequest, RequestOptions.DEFAULT);
+        }
+
+        Thread.sleep(2000);
+        log.info("✓ NL 用户索引创建完成，已插入 {} 条数据", users.size());
+    }
+
+    private static Map<String, Object> createNlUser(String name, int age, String city, String status, long points) {
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("name", name);
+        doc.put("age", age);
+        doc.put("city", city);
+        doc.put("status", status);
+        doc.put("points", points);
+        return doc;
     }
 
     @Test
@@ -4295,6 +4365,54 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.data.pagination.scrollId").isString())
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
                 .andDo(result -> log.info("✓ scrollTtl=maxTtl 边界值通过"));
+    }
+
+    // ==================== v1.6.5 表达式三条件 AND 扁平化端到端测试 ====================
+
+    @Test
+    @Order(260)
+    @DisplayName("v1.6.5 表达式三条件 AND - 扁平 DSL 查询结果正确")
+    void testExpressionThreeAndFlatQuery() throws Exception {
+        log.info("========== 测试：表达式三条件 AND 扁平化端到端 ==========");
+
+        // name='Alice' AND age>=18 AND points<=1000
+        // 预期命中：Alice(age=25, points=500)
+        // 不命中：Bob(age=16), Carol(points=1500), Dave(name不对)
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"name = 'Alice' AND age >= 18 AND points <= 1000\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("Alice"))
+                .andExpect(jsonPath("$.data.items[0].age").value(25))
+                .andExpect(jsonPath("$.data.items[0].points").value(500))
+                .andDo(result -> log.info("✓ 三条件 AND 扁平查询: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(261)
+    @DisplayName("v1.6.5 表达式三条件 OR - 扁平 DSL 查询结果正确")
+    void testExpressionThreeOrFlatQuery() throws Exception {
+        log.info("========== 测试：表达式三条件 OR 扁平化端到端 ==========");
+
+        // name='Alice' OR name='Bob' OR name='Carol'
+        // 预期命中：Alice, Bob, Carol（3条）
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"name = 'Alice' OR name = 'Bob' OR name = 'Carol'\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Alice", "Bob", "Carol")))
+                .andDo(result -> log.info("✓ 三条件 OR 扁平查询: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 }
 

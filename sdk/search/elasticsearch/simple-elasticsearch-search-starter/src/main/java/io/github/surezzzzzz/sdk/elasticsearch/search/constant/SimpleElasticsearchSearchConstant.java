@@ -282,6 +282,19 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String ES_DEFAULT_DOC_TYPE = "_doc";
 
+    // ========== 子字段相关 ==========
+
+    /**
+     * 子字段名：keyword（text 字段的精确匹配子字段）
+     */
+    public static final String SUB_FIELD_KEYWORD = "keyword";
+
+    /**
+     * 模板：keyword 子字段路径
+     * 参数: 字段名
+     */
+    public static final String TEMPLATE_KEYWORD_SUB_FIELD = "%s." + SUB_FIELD_KEYWORD;
+
     // ========== ES API 参数名 ==========
 
     /**

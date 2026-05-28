@@ -39,6 +39,7 @@
 | + 条件表达式查询（类 SQL） | **1.5.8** | 1.0.8 | 表达式在 1.5.2 引入，1.5.8 稳定 |
 | + NL 转 DSL（`/api/nl/dsl`） | **1.6.2** | 1.0.10 | NL 翻译器 AND 条件 / 聚合名称 bug 在 1.6.1 修复 |
 | + NL 直接查询（`/api/query/nl`） | **1.6.2** | 1.0.10 | + pagination/dateRange/fields/collapse 覆盖、scroll 续页 |
+| + 表达式 TEXT 字段精确匹配 / AND-OR 扁平化 | **1.6.5** | 1.0.10 | Bug Fix：`=` 操作符自动使用 `.keyword` 子字段；多条件 AND/OR 生成单层 bool |
 
 ### route-starter 各版本能力
 
@@ -72,7 +73,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.4'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.5'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"

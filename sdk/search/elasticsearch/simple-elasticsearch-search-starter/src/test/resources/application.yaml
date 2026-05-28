@@ -9,11 +9,11 @@ io:
 
             # 索引配置
             indices:
-              # NL集成测试索引
+              # NL集成测试索引（lazy-load，SearchEndToEndTest 启动时创建）
               - name: "test_nl_user_index"
                 date-split: false
                 cache-mapping: true
-                lazy-load: false
+                lazy-load: true
                 field-mapping:
                   name:
                     - 姓名

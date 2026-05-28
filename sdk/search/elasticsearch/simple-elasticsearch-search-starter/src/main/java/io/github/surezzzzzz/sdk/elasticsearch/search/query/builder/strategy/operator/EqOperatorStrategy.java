@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.strategy.ope
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.strategy.OperatorStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
@@ -26,6 +27,13 @@ public class EqOperatorStrategy implements OperatorStrategy {
      * 构建相等查询，供 NE 策略复用
      */
     public QueryBuilder buildEqualQuery(String fieldName, Object value, FieldMetadata fieldMetadata) {
+        // 优先用 keyword sub-field 做精确匹配
+        if (fieldMetadata.getSubFields() != null
+                && fieldMetadata.getSubFields().containsKey(SimpleElasticsearchSearchConstant.SUB_FIELD_KEYWORD)) {
+            return QueryBuilders.termQuery(
+                    String.format(SimpleElasticsearchSearchConstant.TEMPLATE_KEYWORD_SUB_FIELD, fieldName),
+                    value);
+        }
         if (fieldMetadata.getType() == FieldType.TEXT) {
             return QueryBuilders.matchQuery(fieldName, value);
         }

@@ -1,15 +1,27 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionToQueryConditionVisitor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionVisitorRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
+import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.client.indices.CreateIndexRequest;
+import org.elasticsearch.client.indices.GetIndexRequest;
+import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,11 +40,42 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 class ExpressionTest {
 
+    private static final String NL_USER_INDEX = "test_nl_user_index";
+
+    @BeforeAll
+    static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
+        RestHighLevelClient client = registry.getHighLevelClient("primary");
+        if (client.indices().exists(new GetIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT)) {
+            client.indices().delete(new DeleteIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT);
+        }
+        CreateIndexRequest request = new CreateIndexRequest(NL_USER_INDEX);
+        request.mapping(
+                "{\"properties\":{" +
+                        "\"name\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\"}}}," +
+                        "\"age\":{\"type\":\"long\"}," +
+                        "\"city\":{\"type\":\"keyword\"}," +
+                        "\"status\":{\"type\":\"keyword\"}," +
+                        "\"points\":{\"type\":\"long\"}," +
+                        "\"createTime\":{\"type\":\"date\"}," +
+                        "\"orderId\":{\"type\":\"keyword\"}" +
+                        "}}",
+                org.elasticsearch.xcontent.XContentType.JSON
+        );
+        client.indices().create(request, RequestOptions.DEFAULT);
+        log.info("✓ ExpressionTest: 已创建索引 {}", NL_USER_INDEX);
+    }
+
     @Autowired
     private ExpressionService expressionService;
 
     @Autowired
     private ExpressionVisitorRegistry visitorRegistry;
+
+    @Autowired
+    private MappingManager mappingManager;
+
+    @Autowired
+    private QueryDslBuilder queryDslBuilder;
 
     // ==================== ExpressionVisitorRegistry ====================
 
@@ -791,5 +834,75 @@ class ExpressionTest {
         assertEquals("city", right.getField());
 
         log.info("✓ 复杂表达式混合场景测试通过");
+    }
+
+    // ==================== v1.6.5 DSL 扁平化测试 ====================
+
+    @Test
+    @DisplayName("translate - 三个 AND 条件生成扁平 QueryCondition")
+    void testThreeAndExpressionFlatten() {
+        log.info("========== 测试：三个 AND 条件扁平 ==========");
+
+        QueryCondition result = expressionService.translate(
+                "name = 'Alice' AND age >= 18 AND points <= 1000",
+                "test_nl_user_index");
+        log.info("result: {}", result);
+
+        assertEquals("and", result.getLogic());
+        assertEquals(2, result.getConditions().size(),
+                "A AND B AND C → left-associative: AND(AND(A, B), C)");
+        // 内层 AND(A, B) 在 get(0)，有 2 个叶子条件
+        QueryCondition innerAnd = result.getConditions().get(0);
+        assertEquals(2, innerAnd.getConditions().size(),
+                "内层 AND(A, B) 有 2 个条件");
+
+        log.info("✓ 三个 AND 条件扁平测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 三个 OR 条件生成扁平 QueryCondition")
+    void testThreeOrExpressionFlatten() {
+        log.info("========== 测试：三个 OR 条件扁平 ==========");
+
+        QueryCondition result = expressionService.translate(
+                "name = 'Alice' OR name = 'Bob' OR name = 'Carol'",
+                "test_nl_user_index");
+        log.info("result: {}", result);
+
+        assertEquals("or", result.getLogic());
+        assertEquals(2, result.getConditions().size(),
+                "A OR B OR C → left-associative: OR(OR(A, B), C)");
+        // 内层 OR(A, B) 在 get(0)，有 2 个叶子条件
+        QueryCondition innerOr = result.getConditions().get(0);
+        assertEquals(2, innerOr.getConditions().size(),
+                "内层 OR(A, B) 有 2 个条件");
+
+        log.info("✓ 三个 OR 条件扁平测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 三个 AND 条件端到端 DSL 无嵌套")
+    void testThreeAndExpressionEndToEnd() {
+        log.info("========== 测试：三个 AND 条件端到端 DSL 扁平 ==========");
+
+        // 端到端：expression → QueryCondition → QueryDslBuilder.build() → DSL
+        QueryCondition condition = expressionService.translate(
+                "name = 'Alice' AND age >= 18 AND points <= 1000",
+                "test_nl_user_index");
+        IndexMetadata metadata = mappingManager.getMetadata("test_nl_user_index");
+        QueryBuilder query = queryDslBuilder.build(metadata, condition);
+        String dsl = query.toString();
+
+        log.info("DSL: {}", dsl);
+
+        assertTrue(query instanceof BoolQueryBuilder,
+                "结果应为 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) query;
+        assertEquals(3, boolQuery.must().size(),
+                "must 中应有 3 个条件，无嵌套");
+        assertEquals(0, boolQuery.should().size(),
+                "should 应为空");
+
+        log.info("✓ 三个 AND 条件端到端测试通过");
     }
 }
