@@ -6,7 +6,9 @@ import io.github.surezzzzzz.sdk.audit.search.elasticsearch.handler.EsAuditHandle
 import io.github.surezzzzzz.sdk.audit.search.elasticsearch.model.EsAuditRecord;
 import io.github.surezzzzzz.sdk.audit.search.elasticsearch.provider.EsAuditTraceIdProvider;
 import io.github.surezzzzzz.sdk.audit.search.elasticsearch.provider.EsAuditUserProvider;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +22,9 @@ import java.util.concurrent.Executor;
 /**
  * ES Audit Event Listener
  *
- * <p>Listens to {@link EsQueryEvent} and {@link EsAggEvent}, converts them to
- * {@link EsAuditRecord} and dispatches to registered handlers.
+ * <p>Listens to {@link EsQueryEvent}, {@link EsAggEvent}, {@link EsQueryErrorEvent} and
+ * {@link EsAggErrorEvent}, converts them to {@link EsAuditRecord} and dispatches to
+ * registered handlers.
  *
  * <p>User info is collected synchronously in the request thread (before async dispatch),
  * so that {@link EsAuditUserProvider} can safely access request-scoped context.
@@ -74,6 +77,26 @@ public class EsAuditEventListener {
         }
     }
 
+    @EventListener
+    public void onEsQueryErrorEvent(EsQueryErrorEvent event) {
+        try {
+            EsAuditRecord record = buildQueryErrorRecord(event);
+            executor.execute(() -> invokeHandlers(record));
+        } catch (Exception e) {
+            log.error("Failed to handle EsQueryErrorEvent", e);
+        }
+    }
+
+    @EventListener
+    public void onEsAggErrorEvent(EsAggErrorEvent event) {
+        try {
+            EsAuditRecord record = buildAggErrorRecord(event);
+            executor.execute(() -> invokeHandlers(record));
+        } catch (Exception e) {
+            log.error("Failed to handle EsAggErrorEvent", e);
+        }
+    }
+
     private void invokeHandlers(EsAuditRecord record) {
         for (EsAuditHandler handler : auditHandlers) {
             try {
@@ -86,10 +109,10 @@ public class EsAuditEventListener {
 
     private EsAuditRecord buildQueryRecord(EsQueryEvent event) {
         return EsAuditRecord.builder()
-                .clientId(safeGet(() -> userProvider.getClientId()))
-                .clientType(safeGet(() -> userProvider.getClientType()))
-                .userId(safeGet(() -> userProvider.getUserId()))
-                .username(safeGet(() -> userProvider.getUsername()))
+                .clientId(userProvider != null ? safeGet(() -> userProvider.getClientId()) : null)
+                .clientType(userProvider != null ? safeGet(() -> userProvider.getClientType()) : null)
+                .userId(userProvider != null ? safeGet(() -> userProvider.getUserId()) : null)
+                .username(userProvider != null ? safeGet(() -> userProvider.getUsername()) : null)
                 .indexAlias(event.getRequest().getIndex())
                 .actualIndices(event.getContext().getActualIndices())
                 .datasource(event.getContext().getDatasource())
@@ -97,17 +120,20 @@ public class EsAuditEventListener {
                 .total(event.getResponse().getTotal())
                 .returnedSize(event.getResponse().getItems() != null ? event.getResponse().getItems().size() : 0)
                 .took(event.getResponse().getTook())
+                .result("success")
+                .downgradeLevel(event.getContext().getDowngradeLevel())
+                .sourceType(event.getContext().getSourceType())
                 .timestamp(event.getTimestamp())
-                .traceId(safeGet(() -> traceIdProvider.getTraceId()))
+                .traceId(traceIdProvider != null ? safeGet(() -> traceIdProvider.getTraceId()) : null)
                 .build();
     }
 
     private EsAuditRecord buildAggRecord(EsAggEvent event) {
         return EsAuditRecord.builder()
-                .clientId(safeGet(() -> userProvider.getClientId()))
-                .clientType(safeGet(() -> userProvider.getClientType()))
-                .userId(safeGet(() -> userProvider.getUserId()))
-                .username(safeGet(() -> userProvider.getUsername()))
+                .clientId(userProvider != null ? safeGet(() -> userProvider.getClientId()) : null)
+                .clientType(userProvider != null ? safeGet(() -> userProvider.getClientType()) : null)
+                .userId(userProvider != null ? safeGet(() -> userProvider.getUserId()) : null)
+                .username(userProvider != null ? safeGet(() -> userProvider.getUsername()) : null)
                 .indexAlias(event.getRequest().getIndex())
                 .actualIndices(event.getContext().getActualIndices())
                 .datasource(event.getContext().getDatasource())
@@ -115,8 +141,55 @@ public class EsAuditEventListener {
                 .total(null)
                 .returnedSize(event.getResponse().getAggregations() != null ? event.getResponse().getAggregations().size() : 0)
                 .took(event.getResponse().getTook())
+                .result("success")
+                .downgradeLevel(event.getContext().getDowngradeLevel())
+                .sourceType(event.getContext().getSourceType())
                 .timestamp(event.getTimestamp())
-                .traceId(safeGet(() -> traceIdProvider.getTraceId()))
+                .traceId(traceIdProvider != null ? safeGet(() -> traceIdProvider.getTraceId()) : null)
+                .build();
+    }
+
+    private EsAuditRecord buildQueryErrorRecord(EsQueryErrorEvent event) {
+        return EsAuditRecord.builder()
+                .clientId(userProvider != null ? safeGet(() -> userProvider.getClientId()) : null)
+                .clientType(userProvider != null ? safeGet(() -> userProvider.getClientType()) : null)
+                .userId(userProvider != null ? safeGet(() -> userProvider.getUserId()) : null)
+                .username(userProvider != null ? safeGet(() -> userProvider.getUsername()) : null)
+                .indexAlias(event.getRequest().getIndex())
+                .actualIndices(null)
+                .datasource(event.getDatasource())
+                .queryCondition(event.getRequest().getQuery() != null ? event.getRequest().getQuery().toString() : null)
+                .total(null)
+                .returnedSize(null)
+                .took(null)
+                .result("failure")
+                .downgradeLevel(0)
+                .sourceType(event.getSourceType())
+                .errorMessage(event.getError() != null ? event.getError().getMessage() : null)
+                .timestamp(event.getTimestamp())
+                .traceId(traceIdProvider != null ? safeGet(() -> traceIdProvider.getTraceId()) : null)
+                .build();
+    }
+
+    private EsAuditRecord buildAggErrorRecord(EsAggErrorEvent event) {
+        return EsAuditRecord.builder()
+                .clientId(userProvider != null ? safeGet(() -> userProvider.getClientId()) : null)
+                .clientType(userProvider != null ? safeGet(() -> userProvider.getClientType()) : null)
+                .userId(userProvider != null ? safeGet(() -> userProvider.getUserId()) : null)
+                .username(userProvider != null ? safeGet(() -> userProvider.getUsername()) : null)
+                .indexAlias(event.getRequest().getIndex())
+                .actualIndices(null)
+                .datasource(event.getDatasource())
+                .queryCondition(event.getRequest().getAggs() != null ? event.getRequest().getAggs().toString() : null)
+                .total(null)
+                .returnedSize(null)
+                .took(null)
+                .result("failure")
+                .downgradeLevel(0)
+                .sourceType(event.getSourceType())
+                .errorMessage(event.getError() != null ? event.getError().getMessage() : null)
+                .timestamp(event.getTimestamp())
+                .traceId(traceIdProvider != null ? safeGet(() -> traceIdProvider.getTraceId()) : null)
                 .build();
     }
 

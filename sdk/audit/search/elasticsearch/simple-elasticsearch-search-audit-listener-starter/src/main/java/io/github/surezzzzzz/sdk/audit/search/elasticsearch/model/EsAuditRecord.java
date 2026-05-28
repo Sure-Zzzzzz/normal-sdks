@@ -77,6 +77,36 @@ public class EsAuditRecord {
      */
     private Long took;
 
+    // ==================== 执行上下文 ====================
+
+    /**
+     * 操作结果：success / failure
+     *
+     * @since 1.0.2
+     */
+    private String result;
+
+    /**
+     * 降级级别（0 = 未降级，1~3 = 降级程度递增）
+     *
+     * @since 1.0.2
+     */
+    private Integer downgradeLevel;
+
+    /**
+     * 来源端点类型（QUERY_API / NL_API / EXPRESSION_API）
+     *
+     * @since 1.0.2
+     */
+    private String sourceType;
+
+    /**
+     * 错误信息（仅 result=failure 时有值）
+     *
+     * @since 1.0.2
+     */
+    private String errorMessage;
+
     // ==================== 元数据 ====================
 
     /**

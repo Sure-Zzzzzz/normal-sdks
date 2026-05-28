@@ -7,7 +7,9 @@ import io.github.surezzzzzz.sdk.audit.search.elasticsearch.test.provider.TestTra
 import io.github.surezzzzzz.sdk.audit.search.elasticsearch.test.provider.TestUserProvider;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.AggExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.QueryExecutionContext;
@@ -29,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ES 审计监听器端到端测试
+ * ES 审计事件监听器单元测试
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -38,10 +40,11 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(
         classes = EsAuditListenerTestApplication.class,
         properties = {
-                "test.es.audit.use-mock-provider=true"  // 使用Mock Provider
+                "test.es.audit.use-mock-provider=true",
+                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled=false"
         }
 )
-public class EsAuditListenerEndToEndTest {
+public class EsAuditEventListenerUnitTest {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -68,14 +71,12 @@ public class EsAuditListenerEndToEndTest {
     public void testEsQueryEventHandling() throws InterruptedException {
         log.info("========== 测试：ES 查询事件处理 ==========");
 
-        // 准备：设置用户信息和 traceId
         testUserProvider.setClientId("test-client");
         testUserProvider.setClientType("platform");
         testUserProvider.setUserId("user-123");
         testUserProvider.setUsername("testuser");
         testTraceIdProvider.setTraceId("trace-query-123");
 
-        // 构建查询事件
         QueryRequest request = QueryRequest.builder()
                 .index("test-index")
                 .build();
@@ -90,23 +91,16 @@ public class EsAuditListenerEndToEndTest {
         QueryExecutionContext context = QueryExecutionContext.builder()
                 .actualIndices(new String[]{"test-index-2024"})
                 .datasource("primary")
+                .downgradeLevel(0)
+                .sourceType("QUERY_API")
                 .build();
 
-        EsQueryEvent event = new EsQueryEvent(this, request, response, context);
+        eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
 
-        // 发布事件
-        log.info("发布 ES 查询事件: index={}, total={}", "test-index", 100L);
-        eventPublisher.publishEvent(event);
-
-        // 等待异步处理
         boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
-
-        // 验证：事件已处理
-        log.info("验证审计事件是否被处理");
         assertTrue(received, "Audit handler should receive the event");
-        assertEquals(1, testAuditHandler.records.size(), "Should receive exactly one record");
+        assertEquals(1, testAuditHandler.records.size());
 
-        // 验证：审计记录内容
         EsAuditRecord record = testAuditHandler.records.get(0);
         log.info("验证审计记录内容: {}", record);
         assertEquals("test-client", record.getClientId());
@@ -121,21 +115,23 @@ public class EsAuditListenerEndToEndTest {
         assertEquals(50L, record.getTook());
         assertEquals("trace-query-123", record.getTraceId());
         assertNotNull(record.getTimestamp());
+        // 1.0.2 新字段
+        assertEquals("success", record.getResult());
+        assertEquals(0, record.getDowngradeLevel());
+        assertEquals("QUERY_API", record.getSourceType());
+        assertNull(record.getErrorMessage());
 
-        log.info("ES query audit test passed: user={}, index={}, total={}, traceId={}",
-                record.getUsername(), record.getIndexAlias(), record.getTotal(), record.getTraceId());
+        log.info("testEsQueryEventHandling passed");
     }
 
     @Test
     public void testEsAggEventHandling() throws InterruptedException {
         log.info("========== 测试：ES 聚合事件处理 ==========");
 
-        // 准备：设置用户信息
         testUserProvider.setClientId("agg-client");
         testUserProvider.setUserId("user-456");
         testTraceIdProvider.setTraceId("trace-agg-456");
 
-        // 构建聚合事件
         AggRequest request = AggRequest.builder()
                 .index("agg-index")
                 .build();
@@ -148,72 +144,147 @@ public class EsAuditListenerEndToEndTest {
         AggExecutionContext context = AggExecutionContext.builder()
                 .actualIndices(new String[]{"agg-index-2024"})
                 .datasource("secondary")
+                .downgradeLevel(1)
+                .sourceType("NL_API")
                 .build();
 
-        EsAggEvent event = new EsAggEvent(this, request, response, context);
+        eventPublisher.publishEvent(new EsAggEvent(this, request, response, context));
 
-        // 发布事件
-        log.info("发布 ES 聚合事件: index={}", "agg-index");
-        eventPublisher.publishEvent(event);
-
-        // 等待处理
         boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
         assertTrue(received);
 
-        // 验证
         EsAuditRecord record = testAuditHandler.records.get(0);
         log.info("验证审计记录内容: {}", record);
         assertEquals("agg-client", record.getClientId());
         assertEquals("user-456", record.getUserId());
         assertEquals("agg-index", record.getIndexAlias());
         assertEquals("secondary", record.getDatasource());
-        assertNull(record.getTotal());  // 聚合没有 total
+        assertNull(record.getTotal());
         assertEquals(0, record.getReturnedSize());
         assertEquals(30L, record.getTook());
         assertEquals("trace-agg-456", record.getTraceId());
+        // 1.0.2 新字段
+        assertEquals("success", record.getResult());
+        assertEquals(1, record.getDowngradeLevel());
+        assertEquals("NL_API", record.getSourceType());
+        assertNull(record.getErrorMessage());
 
-        log.info("ES agg audit test passed: user={}, index={}, traceId={}",
-                record.getUserId(), record.getIndexAlias(), record.getTraceId());
+        log.info("testEsAggEventHandling passed");
+    }
+
+    @Test
+    public void testEsQueryErrorEventHandling() throws InterruptedException {
+        log.info("========== 测试：ES 查询失败事件处理 ==========");
+
+        testUserProvider.setClientId("test-client");
+        testUserProvider.setUserId("user-123");
+        testTraceIdProvider.setTraceId("trace-err-001");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test-index")
+                .build();
+        request.setSourceType("QUERY_API");
+
+        eventPublisher.publishEvent(new EsQueryErrorEvent(
+                this, request, new RuntimeException("connection refused"), "primary"));
+
+        boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
+        assertTrue(received, "Audit handler should receive error event");
+
+        EsAuditRecord record = testAuditHandler.records.get(0);
+        log.info("验证查询失败审计记录: {}", record);
+        assertEquals("test-client", record.getClientId());
+        assertEquals("test-index", record.getIndexAlias());
+        assertEquals("primary", record.getDatasource());
+        assertNull(record.getActualIndices());
+        assertNull(record.getTotal());
+        assertNull(record.getTook());
+        assertEquals("trace-err-001", record.getTraceId());
+        // 1.0.2 新字段
+        assertEquals("failure", record.getResult());
+        assertEquals(0, record.getDowngradeLevel());
+        assertEquals("QUERY_API", record.getSourceType());
+        assertEquals("connection refused", record.getErrorMessage());
+
+        log.info("testEsQueryErrorEventHandling passed");
+    }
+
+    @Test
+    public void testEsAggErrorEventHandling() throws InterruptedException {
+        log.info("========== 测试：ES 聚合失败事件处理 ==========");
+
+        testUserProvider.setClientId("agg-client");
+        testTraceIdProvider.setTraceId("trace-err-002");
+
+        AggRequest request = AggRequest.builder()
+                .index("agg-index")
+                .build();
+        request.setSourceType("NL_API");
+
+        eventPublisher.publishEvent(new EsAggErrorEvent(
+                this, request, new RuntimeException("agg execution failed"), null));
+
+        boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
+        assertTrue(received, "Audit handler should receive agg error event");
+
+        EsAuditRecord record = testAuditHandler.records.get(0);
+        log.info("验证聚合失败审计记录: {}", record);
+        assertEquals("agg-client", record.getClientId());
+        assertEquals("agg-index", record.getIndexAlias());
+        assertNull(record.getDatasource());   // 路由前失败，datasource 为 null
+        assertNull(record.getActualIndices());
+        assertEquals("trace-err-002", record.getTraceId());
+        // 1.0.2 新字段
+        assertEquals("failure", record.getResult());
+        assertEquals(0, record.getDowngradeLevel());
+        assertEquals("NL_API", record.getSourceType());
+        assertEquals("agg execution failed", record.getErrorMessage());
+
+        log.info("testEsAggErrorEventHandling passed");
     }
 
     @Test
     public void testWithoutProviders() throws InterruptedException {
         log.info("========== 测试：无 Provider 场景 ==========");
 
-        // 准备：清空所有 Provider
         testUserProvider.reset();
         testTraceIdProvider.setTraceId(null);
 
-        // 构建事件
         QueryRequest request = QueryRequest.builder().index("test").build();
         QueryResponse response = QueryResponse.builder().total(10L).took(5L).build();
         QueryExecutionContext context = QueryExecutionContext.builder()
                 .actualIndices(new String[]{"test-2024"})
                 .datasource("primary")
+                .downgradeLevel(0)
+                .sourceType("EXPRESSION_API")
                 .build();
 
-        EsQueryEvent event = new EsQueryEvent(this, request, response, context);
-        log.info("发布事件（Providers返回null）");
-        eventPublisher.publishEvent(event);
+        eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
 
-        // 等待处理
         boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
         assertTrue(received);
 
-        // 验证：用户信息和 traceId 都为 null
         EsAuditRecord record = testAuditHandler.records.get(0);
-        log.info("验证用户信息和 traceId 为 null");
+        // 用户信息因无 Provider 而为 null
         assertNull(record.getClientId());
         assertNull(record.getClientType());
         assertNull(record.getUserId());
         assertNull(record.getUsername());
         assertNull(record.getTraceId());
-
-        // 但资源信息应该正常
+        // 请求上下文字段应正确填充
         assertEquals("test", record.getIndexAlias());
+        assertArrayEquals(new String[]{"test-2024"}, record.getActualIndices());
         assertEquals("primary", record.getDatasource());
         assertEquals(10L, record.getTotal());
+        assertEquals(0, record.getReturnedSize());
+        assertEquals(5L, record.getTook());
+        // 1.0.2 新字段
+        assertEquals("success", record.getResult());
+        assertEquals(0, record.getDowngradeLevel());
+        assertEquals("EXPRESSION_API", record.getSourceType());
+        assertNull(record.getErrorMessage());
+        assertNotNull(record.getTimestamp());
 
-        log.info("No providers test passed");
+        log.info("testWithoutProviders passed");
     }
 }

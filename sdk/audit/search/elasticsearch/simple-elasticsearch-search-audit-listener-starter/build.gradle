@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 search-core（提供 EsQueryEvent、EsAggEvent）
-    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.8'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.10'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
@@ -14,17 +14,14 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 
     // ES 查询模块（用于测试）
-    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.5.8'
+    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.4'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
     testImplementation 'org.apache.httpcomponents:httpclient'
     testImplementation 'org.apache.httpcomponents:httpcore'
 
     // AKSK 认证模块（用于集成测试）
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-security-context-starter:1.0.3'
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:1.0.6'
-
-    // AKSK 审计模块（验证共存）
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-audit-listener-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-audit-listener-starter:2.0.0'
 
     // Spring Security
     testImplementation 'org.springframework.boot:spring-boot-starter-security'

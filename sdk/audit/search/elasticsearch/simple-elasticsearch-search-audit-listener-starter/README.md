@@ -5,7 +5,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-audit-listener-starter:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-audit-listener-starter:1.0.2'
 ```
 
 前提：项目中已引入 `simple-elasticsearch-search-starter`，它负责发布 `EsQueryEvent` 和 `EsAggEvent`。
@@ -75,82 +75,46 @@ public class MyEsAuditTraceIdProvider implements EsAuditTraceIdProvider {
 
 `EsAuditUserProvider` 的实现取决于你的认证方式，以下是四种常见场景的参考。
 
-### 场景一：AKSK Header 认证
+### 场景一：INTROSPECT 认证
 
-配合 `simple-aksk-security-context-starter` 使用，直接从请求头读取。
+配合 `simple-aksk-resource-server-starter` 的 INTROSPECT 模式使用，从 Spring Security 的 `OAuth2AuthenticatedPrincipal` 中解析。
 
 ```java
 @Component
-public class HeaderEsAuditUserProvider implements EsAuditUserProvider {
+public class IntrospectEsAuditUserProvider implements EsAuditUserProvider {
 
     @Override
     public String getClientId() {
-        return getHeader("x-sure-auth-aksk-client-id");
+        return getClaim("client_id");
     }
 
     @Override
     public String getClientType() {
-        return getHeader("x-sure-auth-aksk-client-type");
+        return getClaim("client_type");
     }
 
     @Override
     public String getUserId() {
-        return getHeader("x-sure-auth-aksk-user-id");
+        return getClaim("user_id");
     }
 
     @Override
     public String getUsername() {
-        return getHeader("x-sure-auth-aksk-username");
+        return getClaim("username");
     }
 
-    private String getHeader(String name) {
-        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
-        if (!(attrs instanceof ServletRequestAttributes)) return null;
-        return ((ServletRequestAttributes) attrs).getRequest().getHeader(name);
-    }
-}
-```
-
-### 场景二：JWT 认证
-
-配合 `simple-aksk-resource-server-starter` 使用，从 Spring Security 的 JWT token 中解析。
-
-```java
-@Component
-public class JwtEsAuditUserProvider implements EsAuditUserProvider {
-
-    @Override
-    public String getClientId() {
-        return getJwtClaim("client_id");
-    }
-
-    @Override
-    public String getClientType() {
-        return getJwtClaim("client_type");
-    }
-
-    @Override
-    public String getUserId() {
-        return getJwtClaim("user_id");
-    }
-
-    @Override
-    public String getUsername() {
-        return getJwtClaim("username");
-    }
-
-    private String getJwtClaim(String claim) {
+    private String getClaim(String claimName) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth instanceof JwtAuthenticationToken)) return null;
-        Object value = ((JwtAuthenticationToken) auth).getToken().getClaim(claim);
+        if (!(auth instanceof OAuth2AuthenticatedPrincipal)) return null;
+        Object value = ((OAuth2AuthenticatedPrincipal) auth).getAttribute(claimName);
         return value != null ? value.toString() : null;
     }
 }
 ```
 
-### 场景三：AkskAccessEvent + ThreadLocal
+### 场景二：AkskAccessEvent + ThreadLocal
 
-同时兼容 Header、JWT 和 INTROSPECT 三种认证方式。监听 `AkskAccessEvent`（所有认证方式都会发布），存入 ThreadLocal，ES 查询时读取。
+同时兼容 INTROSPECT 等认证方式。监听 `AkskAccessEvent`（所有认证方式都会发布），存入 ThreadLocal，ES 查询时读取。
 
 需要同时注册清理拦截器，防止线程池复用导致数据污染。
 
@@ -208,42 +172,9 @@ public class AkskContextClearConfig implements WebMvcConfigurer {
 }
 ```
 
-### 场景四：INTROSPECT 认证
+### 场景三：直接从请求上下文获取
 
-配合 `simple-aksk-resource-server-starter` 的 INTROSPECT 模式使用，从 Spring Security 的 `OAuth2AuthenticatedPrincipal` 中解析。
-
-```java
-@Component
-public class IntrospectEsAuditUserProvider implements EsAuditUserProvider {
-
-    @Override
-    public String getClientId() {
-        return getClaim("client_id");
-    }
-
-    @Override
-    public String getClientType() {
-        return getClaim("client_type");
-    }
-
-    @Override
-    public String getUserId() {
-        return getClaim("user_id");
-    }
-
-    @Override
-    public String getUsername() {
-        return getClaim("username");
-    }
-
-    private String getClaim(String claimName) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (!(auth instanceof OAuth2AuthenticatedPrincipal)) return null;
-        Object value = ((OAuth2AuthenticatedPrincipal) auth).getAttribute(claimName);
-        return value != null ? value.toString() : null;
-    }
-}
-```
+不依赖 aksk 模块，直接从请求上下文（ThreadLocal、MDC 等）获取用户信息，适合自建认证体系的场景。
 
 ---
 
@@ -264,6 +195,10 @@ public class IntrospectEsAuditUserProvider implements EsAuditUserProvider {
 | took | Long | 查询耗时（毫秒） |
 | timestamp | Long | 事件时间戳 |
 | traceId | String | 链路追踪 ID |
+| result | String | 操作结果（`success` / `failure`） |
+| downgradeLevel | Integer | 降级级别，0=未降级 |
+| sourceType | String | 来源端点类型（QUERY_API / NL_API / EXPRESSION_API） |
+| errorMessage | String | 错误信息（仅 `result=failure` 时有值） |
 
 ---
 

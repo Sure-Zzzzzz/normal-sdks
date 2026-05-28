@@ -15,7 +15,7 @@ import java.util.Base64;
 /**
  * OAuth2 Token Helper
  *
- * <p>用于测试中从 aksk-server 获取真实的 JWT Token
+ * <p>用于测试中从 aksk-server 获取 JWE Token（aksk 2.0 使用 JWE 替代 JWT）
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -37,9 +37,9 @@ public class OAuth2TokenHelper {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 从 aksk-server 获取 JWT Token
+     * 从 aksk-server 获取 JWE Token
      *
-     * @return JWT Token
+     * @return JWE Token
      */
     public String getToken() {
         try {

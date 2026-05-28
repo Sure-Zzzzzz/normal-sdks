@@ -171,12 +171,12 @@ public class EsAuditIntrospectIntegrationTest {
         assertEquals(1, testEsAuditHandler.records.size());
 
         EsAuditRecord record = testEsAuditHandler.records.get(0);
-        assertNotNull(record.getClientId());
-        assertNotNull(record.getClientType());
+        assertFalse(record.getClientId().isEmpty(), "clientId should not be empty");
+        assertFalse(record.getClientType().isEmpty(), "clientType should not be empty");
         assertEquals(TEST_INDEX, record.getIndexAlias());
         assertEquals("primary", record.getDatasource());
-        assertNotNull(record.getTotal());
-        assertNotNull(record.getTook());
+        assertTrue(record.getTotal() >= 1, "Query with city=北京 should match at least 1 doc (张三)");
+        assertTrue(record.getTook() >= 0, "took should be >= 0");
         assertNotNull(record.getTimestamp());
 
         log.info("✓ INTROSPECT查询审计通过: clientId={}, index={}, total={}",
@@ -210,11 +210,11 @@ public class EsAuditIntrospectIntegrationTest {
         assertTrue(received, "Should receive audit event");
 
         EsAuditRecord record = testEsAuditHandler.records.get(0);
-        assertNotNull(record.getClientId());
+        assertFalse(record.getClientId().isEmpty(), "clientId should not be empty");
         assertEquals(AGG_INDEX, record.getIndexAlias());
         assertEquals("primary", record.getDatasource());
         assertNull(record.getTotal());
-        assertNotNull(record.getTook());
+        assertTrue(record.getTook() >= 0, "took should be >= 0");
 
         log.info("✓ INTROSPECT聚合审计通过: clientId={}, index={}", record.getClientId(), record.getIndexAlias());
     }
@@ -249,8 +249,10 @@ public class EsAuditIntrospectIntegrationTest {
         assertEquals(2, testEsAuditHandler.records.size());
 
         for (EsAuditRecord record : testEsAuditHandler.records) {
-            assertNotNull(record.getClientId());
+            assertFalse(record.getClientId().isEmpty(), "clientId should not be empty");
             assertTrue(record.getIndexAlias().startsWith("audit_introspect_log_"));
+            assertEquals("primary", record.getDatasource());
+            assertTrue(record.getTotal() >= 0, "total should be >= 0");
         }
 
         log.info("✓ INTROSPECT多查询审计通过: 收到 {} 条记录", testEsAuditHandler.records.size());
