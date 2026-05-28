@@ -1,0 +1,12 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        template:
+          doc:
+            enable: true
+            template-location: classpath:templates/
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk: DEBUG

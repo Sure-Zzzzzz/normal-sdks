@@ -1,0 +1,20 @@
+dependencies {
+    // DOCX 文件操作（Apache POI，自主渲染，不依赖 poi-tl）
+    api 'org.apache.poi:poi-ooxml:5.2.2'
+
+    // Spring Boot Starter
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+
+    // ===== P1 依赖（暂保留，1.0.0 不激活）=====
+    // Markdown 解析与渲染（P1: Markdown 管线）
+    // api 'com.vladsch.flexmark:flexmark-all:0.64.8'
+
+    // HTML → PDF（P1: PDF 输出格式）
+    // api 'com.openhtmltopdf:openhtmltopdf-pdfbox:1.0.10'
+    // api 'com.openhtmltopdf:openhtmltopdf-core:1.0.10'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}

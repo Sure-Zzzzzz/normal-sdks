@@ -1,0 +1,27 @@
+# Build
+build/
+
+# Generated output (business reports, must not be committed)
+src/test/resources/output/
+
+# Business-derived files (templates, generation scripts, confidential)
+biz/
+
+# Test images derived from business documents
+src/test/resources/images/
+
+# Test templates derived from business documents
+src/test/resources/templates/
+
+# IDE
+.idea/
+*.iml
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+DESIGN.md
