@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: es-search-metrics-test
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          search:
+            enable: true
+            indices:
+              - name: "test_metrics_index"
+                date-split: false
+                cache-mapping: true
+                lazy-load: true
+            mapping-refresh:
+              enabled: false
+            query-limits:
+              max-size: 10000
+              default-size: 20
+              max-offset: 10000
+            api:
+              enabled: true
+              base-path: /api
+              include-score: false
+              include-raw-response: false
+            downgrade:
+              enabled: false
+
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              primary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+
+        metrics:
+          elasticsearch:
+            search:
+              enable: true
+        naturallanguage:
+          parser:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.metrics.elasticsearch.search: DEBUG
+    io.github.surezzzzzz.sdk.elasticsearch.search: DEBUG
