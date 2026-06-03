@@ -134,10 +134,10 @@ public class WordRenderer implements Renderer {
             // 页面内容宽度，用于图片 width=0 时的默认值兜底
             int contentWidthPx = DEFAULT_CONTENT_WIDTH_PX;
 
-            // 1. 先处理条件块（[suredt.start:key] / [suredt.end:key]）
-            processConditionBlocks(doc, data);
+            // 条件块已在 ConditionProcessor/DocxConditionHandler 字节级处理完，
+            // 此处 start/end 标记已被删除，无需重复处理
 
-            // 2. 遍历所有段落，处理文本变量、图片、图表
+            // 遍历所有段落，处理文本变量、图片、图表
             processAllParagraphs(doc, data, chartPlaceholders, contentWidthPx);
 
             // 3. 处理所有表格（变量 + 图片 + 行循环）
@@ -166,64 +166,6 @@ public class WordRenderer implements Renderer {
         } catch (Exception e) {
             throw TemplateRenderException.renderFailed(e.getMessage(), e);
         }
-    }
-
-    // ===== 条件块处理 =====
-
-    private void processConditionBlocks(XWPFDocument doc, Map<String, Object> data) {
-        List<IBodyElement> elements = new ArrayList<>(doc.getBodyElements());
-        int i = 0;
-        while (i < elements.size()) {
-            IBodyElement elem = elements.get(i);
-            if (!(elem instanceof XWPFParagraph)) {
-                i++;
-                continue;
-            }
-            String text = getParaText((XWPFParagraph) elem);
-            if (!tagHelper.matches(text, tagHelper.startPrefix()) || !text.endsWith("]")) {
-                i++;
-                continue;
-            }
-            String key = tagHelper.extractKey(text, tagHelper.startPrefix());
-            boolean condition = isTruthy(data.get(key));
-
-            // 找 end 标记
-            int endIdx = -1;
-            String endTag = tagHelper.endTag(key);
-            for (int j = i + 1; j < elements.size(); j++) {
-                if (elements.get(j) instanceof XWPFParagraph) {
-                    if (endTag.equals(getParaText((XWPFParagraph) elements.get(j)))) {
-                        endIdx = j;
-                        break;
-                    }
-                }
-            }
-            if (endIdx == -1) {
-                i++;
-                continue;
-            }
-
-            if (!condition) {
-                for (int j = endIdx; j >= i; j--) {
-                    int pos = doc.getBodyElements().indexOf(elements.get(j));
-                    if (pos >= 0) doc.removeBodyElement(pos);
-                }
-            } else {
-                int endPos = doc.getBodyElements().indexOf(elements.get(endIdx));
-                if (endPos >= 0) doc.removeBodyElement(endPos);
-                int startPos = doc.getBodyElements().indexOf(elements.get(i));
-                if (startPos >= 0) doc.removeBodyElement(startPos);
-            }
-            elements = new ArrayList<>(doc.getBodyElements());
-        }
-    }
-
-    private boolean isTruthy(Object value) {
-        if (value == null) return false;
-        if (value instanceof Boolean) return (Boolean) value;
-        if (value instanceof String) return !((String) value).isEmpty();
-        if (value instanceof List) return !((List<?>) value).isEmpty();
-        return true;
     }
 
     // ===== 段落处理 =====

@@ -9,7 +9,7 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.0.1'
 ```
 
 ### 2. 开启配置
@@ -206,7 +206,7 @@ data.put("styledChart", new Chart(
     ),
     500, 300,
     Chart.ChartType.LINE,
-    16,                          // 标题字号（px）
+    16,                          // 标题字号（pt）
     Chart.LegendPosition.BOTTOM, // 图例位置：BOTTOM / TOP / LEFT / RIGHT / NONE
     true,                        // 折线图：是否平滑曲线
     true,                        // 折线图：是否显示数据点标记

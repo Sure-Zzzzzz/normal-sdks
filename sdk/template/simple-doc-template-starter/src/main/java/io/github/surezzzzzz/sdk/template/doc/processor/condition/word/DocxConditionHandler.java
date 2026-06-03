@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateCompone
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.ConditionBlockException;
 import io.github.surezzzzzz.sdk.template.doc.processor.condition.ConditionHandler;
+import io.github.surezzzzzz.sdk.template.doc.support.BooleanHelper;
 import io.github.surezzzzzz.sdk.template.doc.support.TagHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,9 @@ public class DocxConditionHandler implements ConditionHandler {
 
     @Autowired
     private TagHelper tagHelper;
+
+    @Autowired
+    private BooleanHelper booleanHelper;
 
     @Override
     public byte[] process(byte[] templateBytes, Map<String, Object> data) {
@@ -146,7 +150,7 @@ public class DocxConditionHandler implements ConditionHandler {
                 }
 
                 MarkInfo endMark = marks.get(endIdx);
-                boolean conditionTrue = isTruthy(data.get(key));
+                boolean conditionTrue = booleanHelper.isTrue(data.get(key));
 
                 if (conditionTrue) {
                     // 只删除 start 和 end 标记段落
@@ -165,14 +169,6 @@ public class DocxConditionHandler implements ConditionHandler {
         }
 
         return deleteRanges;
-    }
-
-    private boolean isTruthy(Object value) {
-        if (value == null) return false;
-        if (value instanceof Boolean) return (Boolean) value;
-        if (value instanceof String) return !((String) value).isEmpty();
-        if (value instanceof java.util.List) return !((java.util.List<?>) value).isEmpty();
-        return true;
     }
 
     private String extractPureText(String xml) {
