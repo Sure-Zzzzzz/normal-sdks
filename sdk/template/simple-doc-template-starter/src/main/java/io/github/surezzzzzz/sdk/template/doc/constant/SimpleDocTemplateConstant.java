@@ -81,6 +81,53 @@ public final class SimpleDocTemplateConstant {
      */
     public static final int IO_BUFFER_SIZE = 4096;
 
+    // ==================== OOXML 命名空间 URI（DOCX 格式专属）====================
+
+    /**
+     * OOXML Relationships 命名空间
+     */
+    public static final String NS_RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+    /**
+     * DrawingML WordprocessingDrawing 命名空间
+     */
+    public static final String NS_WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+
+    /**
+     * DrawingML Main 命名空间
+     */
+    public static final String NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+    /**
+     * DrawingML Chart 命名空间
+     */
+    public static final String NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    /**
+     * OfficeDocument Relationships 命名空间
+     */
+    public static final String NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+    /**
+     * Chart 关系类型
+     */
+    public static final String REL_TYPE_CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+
+    /**
+     * Package（嵌入式对象）关系类型
+     */
+    public static final String REL_TYPE_PACKAGE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
+
+    /**
+     * Chart Content-Type
+     */
+    public static final String CT_CHART = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
+
+    /**
+     * XLSX Content-Type
+     */
+    public static final String CT_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
     // ==================== 标签前缀模板（参数：prefix） ====================
 
     /**

@@ -11,6 +11,7 @@ import lombok.Getter;
 public enum OutputFormat {
 
     DOCX(SimpleDocTemplateConstant.FORMAT_DOCX, "Word 文档"),
+    MD(SimpleDocTemplateConstant.FORMAT_MD, "Markdown 文档"),
     PDF(SimpleDocTemplateConstant.FORMAT_PDF, "PDF 文档（P1）"),
     HTML(SimpleDocTemplateConstant.FORMAT_HTML, "HTML 文档（P1）");
 

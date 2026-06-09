@@ -158,20 +158,81 @@ public class Chart {
     /**
      * 图例位置枚举
      */
+    @Getter
     public enum LegendPosition {
-        BOTTOM("b"),
-        TOP("t"),
-        LEFT("l"),
-        RIGHT("r"),
-        NONE("0");
+
+        /**
+         * 底部
+         */
+        BOTTOM("b", "底部"),
+
+        /**
+         * 顶部
+         */
+        TOP("t", "顶部"),
+
+        /**
+         * 左侧
+         */
+        LEFT("l", "左侧"),
+
+        /**
+         * 右侧
+         */
+        RIGHT("r", "右侧"),
+
+        /**
+         * 不显示
+         */
+        NONE("0", "不显示");
 
         private final String code;
+        private final String description;
 
-        LegendPosition(String code) {
+        LegendPosition(String code, String description) {
             this.code = code;
+            this.description = description;
         }
 
-        public String getCode() {
+        /**
+         * 根据 code 获取枚举
+         *
+         * @param code 位置代码
+         * @return 枚举，不存在返回 null
+         */
+        public static LegendPosition fromCode(String code) {
+            if (code == null) {
+                return null;
+            }
+            for (LegendPosition pos : values()) {
+                if (pos.code.equalsIgnoreCase(code)) {
+                    return pos;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * 判断 code 是否有效
+         */
+        public static boolean isValid(String code) {
+            return fromCode(code) != null;
+        }
+
+        /**
+         * 获取所有有效 code
+         */
+        public static String[] getAllCodes() {
+            LegendPosition[] positions = values();
+            String[] codes = new String[positions.length];
+            for (int i = 0; i < positions.length; i++) {
+                codes[i] = positions[i].code;
+            }
+            return codes;
+        }
+
+        @Override
+        public String toString() {
             return code;
         }
     }
@@ -251,6 +312,7 @@ public class Chart {
     /**
      * 数据系列
      */
+    @Getter
     public static class Series {
         /**
          * 系列名称（图例中显示）
@@ -285,18 +347,6 @@ public class Chart {
             this.name = name;
             this.values = values;
             this.color = color;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public List<Number> getValues() {
-            return values;
-        }
-
-        public String getColor() {
-            return color;
         }
     }
 }

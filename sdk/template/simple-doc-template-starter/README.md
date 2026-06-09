@@ -9,7 +9,7 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.0.2'
 ```
 
 ### 2. 开启配置

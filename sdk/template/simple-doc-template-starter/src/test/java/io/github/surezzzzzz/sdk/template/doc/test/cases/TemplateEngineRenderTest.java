@@ -12,6 +12,8 @@ import io.github.surezzzzzz.sdk.template.doc.model.Image;
 import io.github.surezzzzzz.sdk.template.doc.test.SimpleDocTemplateTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -890,6 +892,68 @@ class TemplateEngineRenderTest {
         return sb.toString();
     }
 
+    /**
+     * 仅提取 header 中所有文本
+     */
+    private String extractHeaderText(XWPFDocument doc) {
+        StringBuilder sb = new StringBuilder();
+        for (XWPFHeader header : doc.getHeaderList()) {
+            for (XWPFParagraph para : header.getParagraphs()) {
+                for (XWPFRun run : para.getRuns()) {
+                    String t = run.getText(0);
+                    if (t != null) sb.append(t).append(" ");
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 提取 body + header + footer 中所有文本
+     */
+    private String extractAllTextWithHeaderFooter(XWPFDocument doc) {
+        StringBuilder sb = new StringBuilder();
+        // header 文本
+        for (XWPFHeader header : doc.getHeaderList()) {
+            for (XWPFParagraph para : header.getParagraphs()) {
+                for (XWPFRun run : para.getRuns()) {
+                    String t = run.getText(0);
+                    if (t != null) sb.append(t).append(" ");
+                }
+            }
+        }
+        // body 段落文本
+        for (XWPFParagraph para : doc.getParagraphs()) {
+            for (XWPFRun run : para.getRuns()) {
+                String t = run.getText(0);
+                if (t != null) sb.append(t).append(" ");
+            }
+        }
+        // 表格文本
+        for (XWPFTable table : doc.getTables()) {
+            for (XWPFTableRow row : table.getRows()) {
+                for (XWPFTableCell cell : row.getTableCells()) {
+                    for (XWPFParagraph para : cell.getParagraphs()) {
+                        for (XWPFRun run : para.getRuns()) {
+                            String t = run.getText(0);
+                            if (t != null) sb.append(t).append(" ");
+                        }
+                    }
+                }
+            }
+        }
+        // footer 文本
+        for (XWPFFooter footer : doc.getFooterList()) {
+            for (XWPFParagraph para : footer.getParagraphs()) {
+                for (XWPFRun run : para.getRuns()) {
+                    String t = run.getText(0);
+                    if (t != null) sb.append(t).append(" ");
+                }
+            }
+        }
+        return sb.toString();
+    }
+
     // ==================== 测试数据准备 ====================
 
     private Map<String, Object> buildFullData() {
@@ -1011,6 +1075,132 @@ class TemplateEngineRenderTest {
         data.put("blockList", blockList);
 
         return data;
+    }
+
+    // ==================== Header/Footer ====================
+
+    @Test
+    @DisplayName("header/footer：变量和条件块正常渲染")
+    void renderHeaderFooterVariablesAndCondition() throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("clientName", "测试单位");
+        data.put("reportDate", "2026年6月4日");
+        data.put("pageNum", 1);
+        data.put("showHeaderDate", Boolean.TRUE);
+
+        byte[] bytes = templateEngine.renderToBytes(
+            "classpath:templates/header-footer-template.docx", data);
+
+        Path outPath = OUTPUT_DIR.resolve("header-footer-condition-true-output.docx");
+        Files.write(outPath, bytes);
+        log.info("header/footer 渲染结果已写出: {}", outPath.toAbsolutePath());
+
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+            String allText = extractAllTextWithHeaderFooter(doc);
+            log.info("header/footer 渲染，文档文本: {}", allText);
+            assertTrue(allText.contains("测试单位"), "header 中 clientName 未替换");
+            assertTrue(allText.contains("2026年6月4日"), "header 中 reportDate 未替换");
+            assertTrue(allText.contains("第 1 页"), "footer 中 pageNum 未替换");
+            assertFalse(allText.contains("[suredt.var:"), "不应有残留占位符");
+            assertFalse(allText.contains("[suredt.start:"), "header 条件块 start 标记未删除");
+            assertFalse(allText.contains("[suredt.end:"), "header 条件块 end 标记未删除");
+        }
+    }
+
+    @Test
+    @DisplayName("header：条件块 showHeaderDate=false 时整块删除")
+    void renderHeaderConditionBlockFalse() throws Exception {
+        Map<String, Object> data = new HashMap<>();
+        data.put("clientName", "测试单位");
+        data.put("reportDate", "2026年6月4日");
+        data.put("pageNum", 1);
+        data.put("showHeaderDate", Boolean.FALSE);
+
+        byte[] bytes = templateEngine.renderToBytes(
+            "classpath:templates/header-footer-template.docx", data);
+
+        Path outPath = OUTPUT_DIR.resolve("header-footer-condition-false-output.docx");
+        Files.write(outPath, bytes);
+        log.info("header 条件块 false 渲染结果已写出: {}", outPath.toAbsolutePath());
+
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+            String allText = extractAllTextWithHeaderFooter(doc);
+            String headerText = extractHeaderText(doc);
+            log.info("header 条件块 false，文档文本: {}", allText);
+            assertTrue(allText.contains("测试单位"), "header 中 clientName 未替换");
+            // 日期部分应被从 header 删除（body 里可能还有 reportDate，只检查 header）
+            assertFalse(headerText.contains("2026年6月4日"), "showHeaderDate=false 时 header 中日期不应出现");
+            assertFalse(allText.contains("[suredt.start:"), "start 标记应被删除");
+            assertFalse(allText.contains("[suredt.end:"), "end 标记应被删除");
+        }
+    }
+
+    // ==================== 表格单元格格式 ====================
+
+    @Test
+    @DisplayName("表格循环：展开行保留模板数据行的背景色")
+    void renderTableLoopPreservesCellBackgroundColor() throws Exception {
+        List<Map<String, Object>> items = new ArrayList<>();
+        Map<String, Object> item1 = new HashMap<>();
+        item1.put("itemName", "第一项");
+        item1.put("itemValue", "值一");
+        item1.put("remark", "");
+        items.add(item1);
+        Map<String, Object> item2 = new HashMap<>();
+        item2.put("itemName", "第二项");
+        item2.put("itemValue", "值二");
+        item2.put("remark", "");
+        items.add(item2);
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("items", items);
+
+        byte[] bytes = templateEngine.renderToBytes(
+            "classpath:templates/cell-format-template.docx", data);
+
+        Path outPath = OUTPUT_DIR.resolve("cell-format-output.docx");
+        Files.write(outPath, bytes);
+        log.info("表格单元格格式渲染结果已写出: {}", outPath.toAbsolutePath());
+
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(bytes))) {
+            String allText = extractAllText(doc);
+            log.info("表格单元格格式验证，文档文本: {}", allText);
+            assertTrue(allText.contains("第一项"), "第1条 itemName 未展开");
+            assertTrue(allText.contains("第二项"), "第2条 itemName 未展开");
+            assertTrue(allText.contains("值一"), "第1条 itemValue 未展开");
+            assertTrue(allText.contains("值二"), "第2条 itemValue 未展开");
+
+            // 验证背景色被复制到展开行
+            for (XWPFTable table : doc.getTables()) {
+                for (XWPFTableRow row : table.getRows()) {
+                    for (XWPFTableCell cell : row.getTableCells()) {
+                        if (cell.getText().contains("第一项") || cell.getText().contains("值一")
+                            || cell.getText().contains("第二项") || cell.getText().contains("值二")) {
+                            // 展开的数据行应该有背景色（E7EFF7 = 十六进制 RGB）
+                            assertTrue(hasCellShading(cell), "展开行单元格应有背景色，当前文本: " + cell.getText());
+                        }
+                    }
+                }
+            }
+            log.info("表格单元格背景色验证通过");
+        }
+    }
+
+    /**
+     * 检查单元格是否有背景色填充
+     */
+    private boolean hasCellShading(XWPFTableCell cell) {
+        try {
+            CTTcPr tcPr = cell.getCTTc().getTcPr();
+            if (tcPr != null && tcPr.isSetShd()) {
+                CTShd shd = tcPr.getShd();
+                String fill = shd.getFill().toString();
+                return fill != null && !fill.isEmpty() && !"auto".equalsIgnoreCase(fill);
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return false;
     }
 
     // ==================== Chart 构建辅助 ====================

@@ -71,17 +71,17 @@ public class WordRenderer implements Renderer {
     private static final String DOCX_CHART_RELS_TMPL = "word/charts/_rels/chart%d.xml.rels";
     private static final String DOCX_EMBEDDING_TMPL = "word/embeddings/Microsoft_Office_Chart%d.xlsx";
 
-    // ===== OOXML 命名空间 & 关系类型（Word 专属，自闭环）=====
+    // ===== OOXML 命名空间 & 关系类型（引用常量）=====
 
-    private static final String NS_RELATIONSHIPS = "http://schemas.openxmlformats.org/package/2006/relationships";
-    private static final String NS_WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
-    private static final String NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
-    private static final String NS_C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-    private static final String NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private static final String REL_TYPE_CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
-    private static final String REL_TYPE_PACKAGE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
-    private static final String CT_CHART = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
-    private static final String CT_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private static final String NS_RELATIONSHIPS = SimpleDocTemplateConstant.NS_RELATIONSHIPS;
+    private static final String NS_WP = SimpleDocTemplateConstant.NS_WP;
+    private static final String NS_A = SimpleDocTemplateConstant.NS_A;
+    private static final String NS_C = SimpleDocTemplateConstant.NS_C;
+    private static final String NS_R = SimpleDocTemplateConstant.NS_R;
+    private static final String REL_TYPE_CHART = SimpleDocTemplateConstant.REL_TYPE_CHART;
+    private static final String REL_TYPE_PACKAGE = SimpleDocTemplateConstant.REL_TYPE_PACKAGE;
+    private static final String CT_CHART = SimpleDocTemplateConstant.CT_CHART;
+    private static final String CT_XLSX = SimpleDocTemplateConstant.CT_XLSX;
 
     // ===== Chart 生成相关常量（Word 专属，自闭环）=====
 
@@ -137,13 +137,13 @@ public class WordRenderer implements Renderer {
             // 条件块已在 ConditionProcessor/DocxConditionHandler 字节级处理完，
             // 此处 start/end 标记已被删除，无需重复处理
 
-            // 遍历所有段落，处理文本变量、图片、图表
+            // 1. 遍历所有段落，处理文本变量、图片、图表
             processAllParagraphs(doc, data, chartPlaceholders, contentWidthPx);
 
-            // 3. 处理所有表格（变量 + 图片 + 行循环）
+            // 2. 处理所有表格（变量 + 图片 + 行循环）
             processAllTables(doc, data, contentWidthPx);
 
-            // 4. 写出临时文件
+            // 3. 写出临时文件
             Path tmpDocx = Files.createTempFile("rendered-", ".docx");
             try {
                 try (java.io.OutputStream os = Files.newOutputStream(tmpDocx)) {
@@ -153,7 +153,7 @@ public class WordRenderer implements Renderer {
                 doc.close();
             }
 
-            // 5. 处理图表（需要操作 ZIP 结构：写入 chart.xml + 更新 rels）
+            // 4. 处理图表（需要操作 ZIP 结构：写入 chart.xml + 更新 rels）
             byte[] tmpBytes;
             try (InputStream is = Files.newInputStream(tmpDocx)) {
                 tmpBytes = toByteArray(is);
@@ -161,7 +161,7 @@ public class WordRenderer implements Renderer {
             byte[] withCharts = processChartsInZip(tmpBytes, chartPlaceholders);
             Files.deleteIfExists(tmpDocx);
 
-            // 6. 直接用最终字节构造 WordDocument，不经 POI 二次序列化
+            // 5. 直接用最终字节构造 WordDocument，不经 POI 二次序列化
             return new WordDocument(withCharts);
         } catch (Exception e) {
             throw TemplateRenderException.renderFailed(e.getMessage(), e);
@@ -175,6 +175,27 @@ public class WordRenderer implements Renderer {
             processParagraphText(para, data);
             replaceImgPlaceholder(para, data, contentWidthPx);
             replaceChartPlaceholder(para, data, chartPlaceholders);
+        }
+        processHeadersAndFooters(doc, data, chartPlaceholders, contentWidthPx);
+    }
+
+    /**
+     * 处理页眉/页脚中的段落
+     */
+    private void processHeadersAndFooters(XWPFDocument doc, Map<String, Object> data,
+                                         List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
+        for (XWPFHeader header : doc.getHeaderList()) {
+            for (XWPFParagraph para : header.getParagraphs()) {
+                processParagraphText(para, data);
+                replaceImgPlaceholder(para, data, contentWidthPx);
+                // header 不支持 chart，忽略
+            }
+        }
+        for (XWPFFooter footer : doc.getFooterList()) {
+            for (XWPFParagraph para : footer.getParagraphs()) {
+                processParagraphText(para, data);
+                replaceImgPlaceholder(para, data, contentWidthPx);
+            }
         }
     }
 
@@ -827,6 +848,8 @@ public class WordRenderer implements Renderer {
         for (int i = 0; i < src.getTableCells().size(); i++) {
             XWPFTableCell srcCell = src.getTableCells().get(i);
             XWPFTableCell dstCell = dst.getTableCells().get(i);
+            // 复制单元格属性（宽度、背景色、边框等）
+            copyCellProperties(srcCell, dstCell);
             for (int p = dstCell.getParagraphs().size() - 1; p >= 0; p--) {
                 dstCell.removeParagraph(p);
             }
@@ -837,6 +860,25 @@ public class WordRenderer implements Renderer {
                 }
             }
         }
+    }
+
+    /**
+     * 复制单元格属性（CTTcPr）：宽度、背景色、边框、垂直对齐等
+     */
+    private void copyCellProperties(XWPFTableCell src, XWPFTableCell dst) {
+        CTTc srcCTTc = src.getCTTc();
+        if (!srcCTTc.isSetTcPr()) {
+            return;
+        }
+        CTTcPr srcTcPr = srcCTTc.getTcPr();
+        CTTcPr dstTcPr = dst.getCTTc().isSetTcPr()
+                ? dst.getCTTc().getTcPr()
+                : dst.getCTTc().addNewTcPr();
+        if (srcTcPr.isSetTcW()) dstTcPr.setTcW(srcTcPr.getTcW());
+        if (srcTcPr.isSetShd()) dstTcPr.setShd(srcTcPr.getShd());
+        if (srcTcPr.isSetTcBorders()) dstTcPr.setTcBorders(srcTcPr.getTcBorders());
+        if (srcTcPr.isSetVAlign()) dstTcPr.setVAlign(srcTcPr.getVAlign());
+        if (srcTcPr.isSetNoWrap()) dstTcPr.setNoWrap(srcTcPr.getNoWrap());
     }
 
     private void deleteRows(XWPFTable table, int fromInclusive, int toInclusive) {
