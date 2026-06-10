@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.core.event;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.AggExecutionContext;
 import lombok.Getter;
 import org.springframework.context.ApplicationEvent;
 
@@ -25,16 +26,44 @@ public class EsAggErrorEvent extends ApplicationEvent {
     private final String datasource;
 
     /**
+     * 降级级别（0 = 未降级，1~3 = 降级程度递增）
+     *
+     * @since 1.0.11
+     */
+    private final int downgradeLevel;
+
+    /**
      * 请求来源类型（QUERY_API / NL_API / EXPRESSION_API），取自 AggRequest.sourceType
      */
     private final String sourceType;
 
+    /**
+     * 执行上下文（路由成功后失败时有值，校验阶段/路由阶段失败时为 null）
+     * <p>
+     * 供下游监听器获取完整的执行上下文，未来新增字段扩展也加在此处。
+     *
+     * @since 1.0.11
+     */
+    private final AggExecutionContext context;
+
     public EsAggErrorEvent(Object source, AggRequest request,
                            Throwable error, String datasource) {
+        this(source, request, error, datasource, 0, null);
+    }
+
+    /**
+     * @since 1.0.11
+     */
+    public EsAggErrorEvent(Object source, AggRequest request,
+                           Throwable error, String datasource,
+                           int downgradeLevel,
+                           AggExecutionContext context) {
         super(source);
         this.request = request;
         this.error = error;
         this.datasource = datasource;
+        this.downgradeLevel = downgradeLevel;
         this.sourceType = request != null ? request.getSourceType() : null;
+        this.context = context;
     }
 }

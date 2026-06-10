@@ -61,6 +61,12 @@ public class QueryRequest {
     private String sourceType;
 
     /**
+     * 是否仅返回总数（不走 _search，走 _count API）
+     * 默认 false
+     */
+    private Boolean countOnly;
+
+    /**
      * 日期范围
      */
     @Data
