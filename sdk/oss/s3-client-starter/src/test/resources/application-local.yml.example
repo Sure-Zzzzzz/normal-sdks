@@ -1,0 +1,18 @@
+# 本地测试配置文件示例
+# 使用方法：
+# 1. 复制本文件为 application-local.yml
+# 2. 填入真实的 AK/SK 和端点信息
+# 3. application-local.yml 不会被提交到 git（已在 .gitignore 中）
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        oss:
+          s3:
+            endpoint: http://your-s3-endpoint:port
+            access-key: your-access-key
+            secret-key: your-secret-key
+            url-prefix: https://your-oss-domain
+            # role-arn 仅 STS 测试需要，不配置则 STS 相关用例自动跳过
+            role-arn: arn:aws:iam::global:role/your-role

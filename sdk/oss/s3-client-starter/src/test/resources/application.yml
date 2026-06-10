@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: s3-client-test
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        oss:
+          s3:
+            enabled: true
+            # endpoint 和凭证在 application-local.yml 中配置
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.oss.s3: DEBUG
