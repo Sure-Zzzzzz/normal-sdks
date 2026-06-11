@@ -434,7 +434,7 @@ public class ClientManagementService {
 │   │   └── {模块名}Component.java                      ← 自定义注解（starter包必需）
 │   ├── configuration/
 │   │   ├── {模块名}Properties.java                     ← 全局配置（单一）
-│   │   └── {模块名}Configuration.java                  ← 自动配置
+│   │   └── {模块名}AutoConfiguration.java             ← 自动配置
 │   ├── constant/
 │   │   ├── {模块名}Constant.java                       ← 常量
 │   │   ├── ErrorCode.java                              ← 错误码
@@ -490,7 +490,7 @@ simple-aksk-starter/
 │   ├── annotation/SimpleAkskComponent.java
 │   ├── configuration/
 │   │   ├── SimpleAkskProperties.java
-│   │   └── SimpleAkskConfiguration.java
+│   │   └── SimpleAkskAutoConfiguration.java
 │   ├── constant/
 │   │   ├── SimpleAkskConstant.java
 │   │   ├── ErrorCode.java
@@ -508,7 +508,7 @@ smart-keyword-sensitive-starter/
 │   ├── annotation/SmartKeywordSensitiveComponent.java
 │   ├── configuration/
 │   │   ├── SmartKeywordSensitiveProperties.java
-│   │   └── SmartKeywordSensitiveConfiguration.java
+│   │   └── SmartKeywordSensitiveAutoConfiguration.java
 │   ├── constant/
 │   │   ├── SmartKeywordSensitiveConstant.java
 │   │   ├── ErrorCode.java
@@ -729,7 +729,9 @@ public class {模块名}Properties {
 - ✅ **仅适用于 starter 包**
 - ❌ **core 包不需要 AutoConfiguration 类**
 
-**命名规则**：`{模块名}Configuration`
+**命名规则**：`{模块名}Configuration` 或 `{模块名}AutoConfiguration`
+
+**说明**：两种命名均可，核心是配置逻辑本身，放在哪个包下不重要。如果类名已经很长了，可以使用 `AutoConfiguration` 后缀来压缩长度。
 
 **要求**：
 - 使用 Package Marker + 自定义注解实现精准扫描
@@ -766,7 +768,7 @@ import org.springframework.context.annotation.Configuration;
     includeFilters = @ComponentScan.Filter({模块名}Component.class)
 )
 @ConditionalOnProperty(prefix = {模块名}Constant.CONFIG_PREFIX, name = "enable", havingValue = "true")
-public class {模块名}Configuration {
+public class {模块名}AutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
@@ -782,7 +784,9 @@ public class {模块名}Configuration {
 `src/main/resources/META-INF/spring.factories`：
 ```properties
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.surezzzzzz.sdk.{domain}.{module}.configuration.{模块名}Configuration
+io.github.surezzzzzz.sdk.{domain}.{module}.configuration.{模块名}AutoConfiguration
+# 如果使用了 Configuration 后缀，则改为：
+# io.github.surezzzzzz.sdk.{domain}.{module}.configuration.{模块名}Configuration
 ```
 
 ---
@@ -2125,7 +2129,7 @@ dependencies {
 - [ ] 自定义异常体系完整（基础异常命名：`{模块名}Exception`）
 - [ ] 子 Gradle 仅包含依赖声明
 - [ ] version.properties 文件存在
-- [ ] Configuration 类使用 Package Marker + 自定义注解扫描（命名规范：`{模块名}Configuration`）
+- [ ] Configuration 类使用 Package Marker + 自定义注解扫描（命名规范：`{模块名}AutoConfiguration` 或 `{模块名}Configuration`）
 
 **测试代码**：
 
