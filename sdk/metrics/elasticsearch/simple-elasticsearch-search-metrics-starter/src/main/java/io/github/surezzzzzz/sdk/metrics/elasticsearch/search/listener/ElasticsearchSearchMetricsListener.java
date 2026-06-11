@@ -80,27 +80,33 @@ public class ElasticsearchSearchMetricsListener {
     }
 
     /**
-     * 查询失败事件（不携带 ExecutionContext，downgradeLevel 固定为 0）
+     * 查询失败事件
      */
     @EventListener
     public void onQueryFailure(EsQueryErrorEvent event) {
         String sourceType = resolveSourceType(event.getSourceType());
+        String downgradeLevel = event.getContext() != null
+                ? String.valueOf(event.getContext().getDowngradeLevel())
+                : SimpleElasticsearchSearchMetricsConstant.DOWNGRADE_LEVEL_ZERO;
         incrementCounter(SimpleElasticsearchSearchMetricsConstant.EVENT_TYPE_QUERY,
                 SimpleElasticsearchSearchMetricsConstant.RESULT_FAILURE,
                 sourceType,
-                SimpleElasticsearchSearchMetricsConstant.DOWNGRADE_LEVEL_ZERO);
+                downgradeLevel);
     }
 
     /**
-     * 聚合失败事件（不携带 ExecutionContext，downgradeLevel 固定为 0）
+     * 聚合失败事件
      */
     @EventListener
     public void onAggFailure(EsAggErrorEvent event) {
         String sourceType = resolveSourceType(event.getSourceType());
+        String downgradeLevel = event.getContext() != null
+                ? String.valueOf(event.getContext().getDowngradeLevel())
+                : SimpleElasticsearchSearchMetricsConstant.DOWNGRADE_LEVEL_ZERO;
         incrementCounter(SimpleElasticsearchSearchMetricsConstant.EVENT_TYPE_AGG,
                 SimpleElasticsearchSearchMetricsConstant.RESULT_FAILURE,
                 sourceType,
-                SimpleElasticsearchSearchMetricsConstant.DOWNGRADE_LEVEL_ZERO);
+                downgradeLevel);
     }
 
     private void incrementCounter(String eventType, String result, String sourceType, String downgradeLevel) {

@@ -1,11 +1,11 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.10'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.11'
     compileOnly 'io.micrometer:micrometer-core'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
 
-    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.5'
+    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.6'
     testImplementation 'io.micrometer:micrometer-core:1.9.17'
     testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
