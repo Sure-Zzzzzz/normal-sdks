@@ -118,4 +118,11 @@ public class EsAuditRecord {
      * 链路追踪ID
      */
     private String traceId;
+
+    /**
+     * 是否为 countOnly 请求（仅查询事件有值，聚合事件为 null）
+     *
+     * @since 1.0.3
+     */
+    private Boolean countOnly;
 }
