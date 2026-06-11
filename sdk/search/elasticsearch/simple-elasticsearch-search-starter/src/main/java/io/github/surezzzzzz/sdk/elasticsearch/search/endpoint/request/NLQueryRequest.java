@@ -54,4 +54,10 @@ public class NLQueryRequest {
      * 字段折叠去重（可选）
      */
     private QueryRequest.CollapseField collapse;
+
+    /**
+     * 是否仅返回总数（不走 _search，走 _count API）
+     * 默认 false
+     */
+    private Boolean countOnly;
 }

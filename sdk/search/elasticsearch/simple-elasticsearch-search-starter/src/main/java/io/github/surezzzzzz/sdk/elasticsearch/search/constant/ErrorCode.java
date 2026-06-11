@@ -101,6 +101,13 @@ public class ErrorCode {
      */
     public static final String BETWEEN_VALUES_INVALID = "SEARCH_QUERY_009";
 
+    /**
+     * countOnly 模式不支持 PIT 分页
+     *
+     * @since 1.6.6
+     */
+    public static final String COUNT_ONLY_PIT_NOT_SUPPORTED = "SEARCH_QUERY_011";
+
     // ========== 聚合相关错误码 ==========
 
     /**

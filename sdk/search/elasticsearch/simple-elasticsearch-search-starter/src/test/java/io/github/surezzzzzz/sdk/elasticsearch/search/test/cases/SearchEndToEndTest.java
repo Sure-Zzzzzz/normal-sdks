@@ -4414,5 +4414,267 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ 三条件 OR 扁平查询: {}",
                         result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
+
+    // ==================== v1.6.6 countOnly 端到端测试 ====================
+
+    @Test
+    @Order(300)
+    @DisplayName("v1.6.6 countOnly=true - /query 返回 total，items=null")
+    void testCountOnlyQuery() throws Exception {
+        log.info("========== 测试：countOnly=true 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("张三")
+                        .build())
+                .countOnly(true)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andDo(result -> log.info("countOnly 查询响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist());
+    }
+
+    @Test
+    @Order(301)
+    @DisplayName("v1.6.6 countOnly=true - /query 无匹配文档返回 total=0")
+    void testCountOnlyNoMatch() throws Exception {
+        log.info("========== 测试：countOnly=true 无匹配 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("不存在的名字")
+                        .build())
+                .countOnly(true)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(0))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly 无匹配: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(302)
+    @DisplayName("v1.6.6 countOnly=true + PIT - 报错 SEARCH_QUERY_011")
+    void testCountOnlyWithPit() throws Exception {
+        log.info("========== 测试：countOnly=true + PIT 分页报错 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("张三")
+                        .build())
+                .countOnly(true)
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("pit")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("countOnly 模式不支持 PIT")))
+                .andDo(result -> log.info("✓ countOnly + PIT 报错: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(303)
+    @DisplayName("v1.6.6 countOnly=true + offset 分页 - 参数静默忽略")
+    void testCountOnlyWithOffset() throws Exception {
+        log.info("========== 测试：countOnly=true + offset 分页 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .countOnly(true)
+                .pagination(PaginationInfo.builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.page").doesNotExist())
+                .andExpect(jsonPath("$.data.size").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly + offset 静默忽略: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(304)
+    @DisplayName("v1.6.6 countOnly=true - /query/expression 透传")
+    void testCountOnlyExpression() throws Exception {
+        log.info("========== 测试：countOnly=true 表达式查询 ==========");
+
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"name = 'Alice'\",\"countOnly\":true}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly 表达式查询: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(305)
+    @DisplayName("v1.6.6 countOnly=false - 走正常查询路径")
+    void testCountOnlyFalse() throws Exception {
+        log.info("========== 测试：countOnly=false 走正常查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("张三")
+                        .build())
+                .countOnly(false)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("张三"))
+                .andDo(result -> log.info("✓ countOnly=false 正常查询: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(306)
+    @DisplayName("v1.6.6 countOnly=null - 走正常查询路径")
+    void testCountOnlyNull() throws Exception {
+        log.info("========== 测试：countOnly=null 走正常查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("张三")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("张三"))
+                .andDo(result -> log.info("✓ countOnly=null 正常查询: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(307)
+    @DisplayName("v1.6.6 countOnly=true + dateRange - 日期分割索引计数")
+    void testCountOnlyWithDateRange() throws Exception {
+        log.info("========== 测试：countOnly=true + dateRange ==========");
+
+        // test_log_* 是日期分割索引，每天 3 条数据
+        String today = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+        QueryRequest request = QueryRequest.builder()
+                .index(LOG_INDEX_PREFIX + "*")
+                .countOnly(true)
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from(today + "T00:00:00")
+                        .to(today + "T23:59:59")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(3))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly + dateRange: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(308)
+    @DisplayName("v1.6.6 countOnly=true + /query/nl - NL 端点透传")
+    void testCountOnlyNl() throws Exception {
+        log.info("========== 测试：countOnly=true NL 端点 ==========");
+
+        String body = "{\"nl\":\"查询test_nl_user_index索引\",\"countOnly\":true}";
+        mockMvc.perform(post("/api/query/nl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(4))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly NL 端点: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(309)
+    @DisplayName("v1.6.6 countOnly=true + /query 全量计数（无 query 条件）")
+    void testCountOnlyNoQuery() throws Exception {
+        log.info("========== 测试：countOnly=true 无 query 条件 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .countOnly(true)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist())
+                .andDo(result -> log.info("✓ countOnly 无 query 条件: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
 }
 

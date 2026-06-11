@@ -47,4 +47,10 @@ public class ExpressionQueryRequest {
      * 日期分割索引的路由范围（可选）
      */
     private QueryRequest.DateRange dateRange;
+
+    /**
+     * 是否仅返回总数（不走 _search，走 _count API）
+     * 默认 false
+     */
+    private Boolean countOnly;
 }

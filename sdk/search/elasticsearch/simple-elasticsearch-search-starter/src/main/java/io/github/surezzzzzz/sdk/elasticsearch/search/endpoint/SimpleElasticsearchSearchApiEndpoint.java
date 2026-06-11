@@ -23,6 +23,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.Expressi
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.nl.service.NLDslService;
+import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.CountExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.QueryExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -57,6 +58,7 @@ import java.util.stream.Collectors;
 public class SimpleElasticsearchSearchApiEndpoint {
 
     private final QueryExecutor queryExecutor;
+    private final CountExecutor countExecutor;
     private final AggExecutor aggExecutor;
     private final MappingManager mappingManager;
     private final SimpleElasticsearchSearchProperties properties;
@@ -80,7 +82,10 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<QueryResponse>> query(@RequestBody QueryRequest request) {
         try {
             log.debug("Received query request: index={}", request.getIndex());
-            request.setSourceType(SourceType.QUERY_API);
+            request.setSourceType(SourceType.QUERY_API.getCode());
+            if (Boolean.TRUE.equals(request.getCountOnly())) {
+                return ResponseEntity.ok(ApiResponse.success(countExecutor.execute(request)));
+            }
             return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
@@ -98,7 +103,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
     public ResponseEntity<ApiResponse<AggResponse>> aggregate(@RequestBody AggRequest request) {
         try {
             log.debug("Received aggregation request: index={}", request.getIndex());
-            request.setSourceType(SourceType.QUERY_API);
+            request.setSourceType(SourceType.QUERY_API.getCode());
             return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(request)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Aggregation validation failed: index={}, error={}", request.getIndex(), e.getMessage());
@@ -246,6 +251,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
                 queryRequest = QueryRequest.builder()
                         .index(request.getDataSource())
                         .pagination(request.getPagination())
+                        .countOnly(request.getCountOnly())
                         .build();
             } else {
                 // 正常流程：NL → QueryRequest
@@ -254,11 +260,15 @@ public class SimpleElasticsearchSearchApiEndpoint {
                 // 覆盖可选参数
                 if (request.getPagination() != null) queryRequest.setPagination(request.getPagination());
                 if (request.getDateRange() != null) queryRequest.setDateRange(request.getDateRange());
-                if (request.getFields() != null && !request.getFields().isEmpty()) queryRequest.setFields(request.getFields());
+                if (request.getFields() != null && !request.getFields().isEmpty())
+                    queryRequest.setFields(request.getFields());
                 if (request.getCollapse() != null) queryRequest.setCollapse(request.getCollapse());
+                if (request.getCountOnly() != null) queryRequest.setCountOnly(request.getCountOnly());
             }
-            queryRequest.setSourceType(SourceType.NL_API);
-            QueryResponse response = queryExecutor.execute(queryRequest);
+            queryRequest.setSourceType(SourceType.NL_API.getCode());
+            QueryResponse response = Boolean.TRUE.equals(request.getCountOnly())
+                    ? countExecutor.execute(queryRequest)
+                    : queryExecutor.execute(queryRequest);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (NLDslTranslationException e) {
             log.warn("NL query translation failed: nl='{}', error={}", truncate(request.getNl()), truncate(e.getMessage()));
@@ -304,7 +314,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             // 覆盖可选参数
             if (request.getDateRange() != null) aggRequest.setDateRange(request.getDateRange());
             if (request.getAfter() != null) aggRequest.setAfter(request.getAfter());
-            aggRequest.setSourceType(SourceType.NL_API);
+            aggRequest.setSourceType(SourceType.NL_API.getCode());
             AggResponse response = aggExecutor.execute(aggRequest);
             return ResponseEntity.ok(ApiResponse.success(response));
         } catch (NLDslTranslationException e) {
@@ -350,9 +360,13 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .pagination(request.getPagination())
                     .fields(request.getFields())
                     .dateRange(request.getDateRange())
-                    .sourceType(SourceType.EXPRESSION_API)
+                    .countOnly(request.getCountOnly())
+                    .sourceType(SourceType.EXPRESSION_API.getCode())
                     .build();
-            return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(queryRequest)));
+            return ResponseEntity.ok(ApiResponse.success(
+                    Boolean.TRUE.equals(request.getCountOnly())
+                            ? countExecutor.execute(queryRequest)
+                            : queryExecutor.execute(queryRequest)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Expression query failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
@@ -420,7 +434,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .query(condition)
                     .aggs(request.getAggs())
                     .after(request.getAfter())
-                    .sourceType(SourceType.EXPRESSION_API)
+                    .sourceType(SourceType.EXPRESSION_API.getCode())
                     .build();
             return ResponseEntity.ok(ApiResponse.success(aggExecutor.execute(aggRequest)));
         } catch (SimpleElasticsearchSearchException e) {

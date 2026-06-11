@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsAggEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.AggExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.executor.AbstractExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
@@ -132,7 +133,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             AggExecutionContext context = AggExecutionContext.builder()
                     .actualIndices(searchRequest.indices())
                     .datasource(datasourceKey)
-                    .downgradeLevel(level.ordinal())
+                    .downgradeLevel(level.getValue())
                     .sourceType(request.getSourceType())
                     .build();
             eventPublisher.publishEvent(new EsAggEvent(this, request, response, context));
@@ -161,7 +162,17 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
                 datasource = routeResolver.resolveDataSource(request.getIndex());
             } catch (Exception ignored) {
             }
-            eventPublisher.publishEvent(new EsAggErrorEvent(this, request, error, datasource));
+            int downgradeLevel = DowngradeLevel.LEVEL_0.getValue();
+            if (error instanceof DowngradeFailedException) {
+                downgradeLevel = ((DowngradeFailedException) error).getFinalLevel().getValue();
+            }
+            AggExecutionContext context = AggExecutionContext.builder()
+                    .datasource(datasource)
+                    .downgradeLevel(downgradeLevel)
+                    .sourceType(request.getSourceType())
+                    .build();
+            eventPublisher.publishEvent(new EsAggErrorEvent(this, request, error, datasource,
+                    downgradeLevel, context));
         } catch (Exception e) {
             log.warn("Failed to publish EsAggErrorEvent", e);
         }

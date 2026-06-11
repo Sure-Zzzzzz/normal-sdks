@@ -415,6 +415,43 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String METHOD_FROM_XCONTENT = "fromXContent";
 
+    /**
+     * nextToken 方法名
+     *
+     * @since 1.6.6
+     */
+    public static final String METHOD_NEXT_TOKEN = "nextToken";
+
+    /**
+     * currentName 方法名
+     *
+     * @since 1.6.6
+     */
+    public static final String METHOD_CURRENT_NAME = "currentName";
+
+    /**
+     * longValue 方法名
+     *
+     * @since 1.6.6
+     */
+    public static final String METHOD_GET_LONG_VALUE = "longValue";
+
+    // ========== Java 反射相关常量（内部类/字段名） ==========
+
+    /**
+     * XContentParser.Token 内部类名
+     *
+     * @since 1.6.6
+     */
+    public static final String XCONTENT_CLASS_TOKEN = "$Token";
+
+    /**
+     * XContentParser.Token.FIELD_NAME 字段名
+     *
+     * @since 1.6.6
+     */
+    public static final String FIELD_TOKEN_FIELD_NAME = "FIELD_NAME";
+
     // ========== 日期间隔 ==========
 
     /**
@@ -553,6 +590,67 @@ public class SimpleElasticsearchSearchConstant {
      * ES scroll 查询参数（初始请求追加到 URL）
      */
     public static final String ES_SCROLL_QUERY_PARAM = "?scroll=";
+
+    // ========== count 相关 ==========
+
+    /**
+     * ES count API 路径
+     *
+     * @since 1.6.6
+     */
+    public static final String ES_API_COUNT = "/_count";
+
+    /**
+     * ES _count API 空查询 JSON（match_all）
+     *
+     * @since 1.6.6
+     */
+    public static final String ES_COUNT_EMPTY_QUERY = "{}";
+
+    /**
+     * ES _count API query 包装模板
+     * 参数: query DSL JSON
+     *
+     * @since 1.6.6
+     */
+    public static final String ES_COUNT_QUERY_TEMPLATE = "{\"query\":%s}";
+
+    // ========== 日期边界判断常量 ==========
+
+    /**
+     * 日期时间分隔符（ISO 8601 日期与时间的分隔符 "T"）
+     *
+     * @since 1.6.6
+     */
+    public static final String DATE_TIME_SEPARATOR = "T";
+
+    /**
+     * 日期起始时间后缀（当天零点整）
+     *
+     * @since 1.6.6
+     */
+    public static final String DATE_START_OF_DAY = "T00:00:00";
+
+    /**
+     * 日期起始时间后缀（当天零点，含毫秒）
+     *
+     * @since 1.6.6
+     */
+    public static final String DATE_START_OF_DAY_MILLIS = "T00:00:00.000";
+
+    /**
+     * 日期结束时间后缀（当天最后时刻）
+     *
+     * @since 1.6.6
+     */
+    public static final String DATE_END_OF_DAY = "T23:59:59";
+
+    /**
+     * 日期结束时间后缀（当天最后时刻，含毫秒）
+     *
+     * @since 1.6.6
+     */
+    public static final String DATE_END_OF_DAY_MILLIS = "T23:59:59.999";
 
     // ========== Composite 聚合相关 ==========
 

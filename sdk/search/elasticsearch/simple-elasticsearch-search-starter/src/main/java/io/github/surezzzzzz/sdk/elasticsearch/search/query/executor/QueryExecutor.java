@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryEvent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.model.QueryExecutionContext;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.executor.AbstractExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
@@ -142,7 +143,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
             QueryExecutionContext context = QueryExecutionContext.builder()
                     .actualIndices(searchRequest.indices())
                     .datasource(datasourceKey)
-                    .downgradeLevel(level.ordinal())
+                    .downgradeLevel(level.getValue())
                     .sourceType(request.getSourceType())
                     .build();
             eventPublisher.publishEvent(new EsQueryEvent(this, request, response, context));
@@ -171,7 +172,17 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
                 datasource = routeResolver.resolveDataSource(request.getIndex());
             } catch (Exception ignored) {
             }
-            eventPublisher.publishEvent(new EsQueryErrorEvent(this, request, error, datasource));
+            int downgradeLevel = DowngradeLevel.LEVEL_0.getValue();
+            if (error instanceof DowngradeFailedException) {
+                downgradeLevel = ((DowngradeFailedException) error).getFinalLevel().getValue();
+            }
+            QueryExecutionContext context = QueryExecutionContext.builder()
+                    .datasource(datasource)
+                    .downgradeLevel(downgradeLevel)
+                    .sourceType(request.getSourceType())
+                    .build();
+            eventPublisher.publishEvent(new EsQueryErrorEvent(this, request, error, datasource,
+                    downgradeLevel, Boolean.TRUE.equals(request.getCountOnly()), context));
         } catch (Exception e) {
             log.warn("Failed to publish EsQueryErrorEvent", e);
         }
@@ -238,12 +249,12 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     }
 
     private boolean needsDateFilter(QueryRequest.DateRange dateRange) {
-        boolean fromHasTime = dateRange.getFrom().contains("T")
-                && !dateRange.getFrom().endsWith("T00:00:00")
-                && !dateRange.getFrom().endsWith("T00:00:00.000");
-        boolean toHasTime = dateRange.getTo().contains("T")
-                && !dateRange.getTo().endsWith("T23:59:59")
-                && !dateRange.getTo().endsWith("T23:59:59.999");
+        boolean fromHasTime = dateRange.getFrom().contains(SimpleElasticsearchSearchConstant.DATE_TIME_SEPARATOR)
+                && !dateRange.getFrom().endsWith(SimpleElasticsearchSearchConstant.DATE_START_OF_DAY)
+                && !dateRange.getFrom().endsWith(SimpleElasticsearchSearchConstant.DATE_START_OF_DAY_MILLIS);
+        boolean toHasTime = dateRange.getTo().contains(SimpleElasticsearchSearchConstant.DATE_TIME_SEPARATOR)
+                && !dateRange.getTo().endsWith(SimpleElasticsearchSearchConstant.DATE_END_OF_DAY)
+                && !dateRange.getTo().endsWith(SimpleElasticsearchSearchConstant.DATE_END_OF_DAY_MILLIS);
         return fromHasTime || toHasTime;
     }
 

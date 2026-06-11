@@ -34,6 +34,30 @@ public class ErrorMessage {
      */
     public static final String SEARCH_AFTER_SORT_REQUIRED = "search_after 分页必须指定排序字段";
 
+    // ========== countOnly 相关 ==========
+
+    /**
+     * countOnly 模式不支持 PIT 分页
+     *
+     * @since 1.6.6
+     */
+    public static final String COUNT_ONLY_PIT_NOT_SUPPORTED = "countOnly 模式不支持 PIT 分页，请去掉 searchAfterMode=pit 或不传 countOnly=true";
+
+    /**
+     * _count 响应中找不到 count 字段
+     *
+     * @since 1.6.6
+     */
+    public static final String COUNT_RESPONSE_FIELD_MISSING = "_count 响应中找不到 count 字段";
+
+    /**
+     * _count 响应解析失败
+     * 参数: 错误原因
+     *
+     * @since 1.6.6
+     */
+    public static final String COUNT_RESPONSE_PARSE_FAILED = "_count 响应解析失败: %s";
+
     // ========== 聚合相关 ==========
 
     /**

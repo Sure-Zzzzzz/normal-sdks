@@ -131,6 +131,48 @@ public class ElasticsearchCompatibilityHelper {
         return XContentReflectionHelper.parseResponse(response.getEntity().getContent(), responseClass, xContentPackage);
     }
 
+    /**
+     * 执行计数查询（版本兼容）
+     * <p>
+     * ES 6.x / 7.x+ 均使用低级 API 透传，ES _count API 无 6.x/7.x 兼容差异。
+     *
+     * @param client                   RestHighLevelClient
+     * @param datasourceKey            数据源标识
+     * @param indices                  目标索引
+     * @param queryJson                query DSL JSON 字符串
+     * @param ignoreUnavailableIndices 是否忽略不可用索引
+     * @return 匹配文档数
+     * @throws IOException IO异常
+     * @since 1.6.6
+     */
+    public static long executeCount(RestHighLevelClient client, String datasourceKey,
+                                    String[] indices, String queryJson,
+                                    boolean ignoreUnavailableIndices) throws IOException {
+        String indexPath = String.join(",", indices);
+        String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + indexPath + SimpleElasticsearchSearchConstant.ES_API_COUNT;
+
+        org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint);
+        if (ignoreUnavailableIndices) {
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_IGNORE_UNAVAILABLE,
+                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
+        }
+        request.setJsonEntity(queryJson != null ? queryJson : SimpleElasticsearchSearchConstant.ES_COUNT_EMPTY_QUERY);
+
+        org.elasticsearch.client.Response response = client.getLowLevelClient().performRequest(request);
+        return parseCountResponse(response);
+    }
+
+    /**
+     * 解析 _count 响应
+     */
+    private static long parseCountResponse(org.elasticsearch.client.Response response) throws IOException {
+        String xContentPackage = XContentReflectionHelper.detectXContentPackage();
+        // _count 响应格式: {"count": 12345, "_shards": {...}}
+        // 直接解析 JSON 取 count 字段
+        return XContentReflectionHelper.parseCountResponse(response.getEntity().getContent(), xContentPackage);
+    }
+
     private static SearchResponse executeSearchViaLowLevelApi(RestHighLevelClient highLevelClient,
                                                               SearchRequest searchRequest) throws IOException {
         org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();

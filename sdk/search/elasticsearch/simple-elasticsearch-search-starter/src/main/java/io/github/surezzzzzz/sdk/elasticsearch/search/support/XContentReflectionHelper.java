@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.support;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchResponse;
@@ -210,5 +211,45 @@ public final class XContentReflectionHelper {
      */
     public static SearchResponse parseSearchResponse(byte[] responseBytes, String xContentPackage) throws IOException {
         return parseResponse(new java.io.ByteArrayInputStream(responseBytes), SearchResponse.class, xContentPackage);
+    }
+
+    /**
+     * 解析 _count API 响应，取 count 字段值
+     *
+     * @param inputStream     HTTP 响应流
+     * @param xContentPackage XContent API 包路径
+     * @return 匹配文档数
+     * @throws IOException IO异常
+     * @since 1.6.6
+     */
+    public static long parseCountResponse(InputStream inputStream, String xContentPackage) throws IOException {
+        Object parser = null;
+        try {
+            parser = createParser(inputStream, xContentPackage);
+            // 使用 XContentParser 遍历 token，找到 "count" 字段
+            Class<?> xContentParserClass = Class.forName(xContentPackage + SimpleElasticsearchSearchConstant.XCONTENT_CLASS_PARSER);
+            Class<?> tokenClass = Class.forName(xContentParserClass.getName() + SimpleElasticsearchSearchConstant.XCONTENT_CLASS_TOKEN);
+            Method nextToken = xContentParserClass.getMethod(SimpleElasticsearchSearchConstant.METHOD_NEXT_TOKEN);
+            Method currentName = xContentParserClass.getMethod(SimpleElasticsearchSearchConstant.METHOD_CURRENT_NAME);
+            Method longValue = xContentParserClass.getMethod(SimpleElasticsearchSearchConstant.METHOD_GET_LONG_VALUE);
+            Object fieldNameToken = tokenClass.getField(SimpleElasticsearchSearchConstant.FIELD_TOKEN_FIELD_NAME).get(null);
+
+            Object token = nextToken.invoke(parser);
+            while (token != null) {
+                if (fieldNameToken.equals(token)) {
+                    String fieldName = (String) currentName.invoke(parser);
+                    if (SimpleElasticsearchSearchConstant.ES_JSON_COUNT.equals(fieldName)) {
+                        nextToken.invoke(parser); // 移动到 count 的值
+                        return (Long) longValue.invoke(parser);
+                    }
+                }
+                token = nextToken.invoke(parser);
+            }
+            throw new IOException(ErrorMessage.COUNT_RESPONSE_FIELD_MISSING);
+        } catch (ReflectiveOperationException e) {
+            throw new IOException(String.format(ErrorMessage.COUNT_RESPONSE_PARSE_FAILED, e.getMessage()), e);
+        } finally {
+            closeParser(parser);
+        }
     }
 }
