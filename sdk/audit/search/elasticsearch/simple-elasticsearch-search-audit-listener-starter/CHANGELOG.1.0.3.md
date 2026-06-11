@@ -1,6 +1,6 @@
 # 更新日志
 
-## v1.0.3 (2026-06-08)
+## v1.0.3 (2026-06-11)
 
 **依赖升级：**
 
@@ -12,8 +12,8 @@
 **新增功能：**
 
 - `EsAuditRecord` 新增 `countOnly` 字段（Boolean）：区分 count 查询与普通查询，供审计日志统计 count 流量
-- `EsAuditEventListener.buildQueryRecord()`：从 `event.getContext().getCountOnly()` 填充
-- `EsAuditEventListener.buildQueryErrorRecord()`：从 `event.getContext().getCountOnly()` 填充
+- `EsAuditEventListener.buildQueryRecord()`：从 `event.getRequest().getCountOnly()` 填充
+- `EsAuditEventListener.buildQueryErrorRecord()`：从 `event.isCountOnly()` 填充
 
 **Bug Fix：**
 
