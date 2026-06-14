@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 simple-aksk-redis-token-manager（提供 TokenManager Bean）
-    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.1'
 
     // Spring Cloud OpenFeign（compileOnly，用户自行引入）
     // 版本号仅用于编译，运行时使用用户环境的版本
