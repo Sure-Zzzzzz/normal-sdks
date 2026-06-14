@@ -1,29 +1,24 @@
-# simple-aksk-client-demo
+# simple-aksk-client-demo (1.x)
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+
+> **1.x 版本文档**（已冻结，不再维护）
+>
+> **当前稳定版本为 [2.0.0](./README.md)**：
+> - feign-redis-client-starter / resttemplate-redis-client-starter 升级至 2.0.1
+> - 底层 token-manager 升级至 2.0.1（SHA-256 cacheKey 防 hashCode 碰撞串号）
+> - JWE Token 形态、由 Redis TTL 保证有效性
 
 验证 `simple-aksk-feign-redis-client-starter` 和 `simple-aksk-resttemplate-redis-client-starter` 同时引用时互不冲突，共享同一个 `TokenManager`。
 
 > 本模块只有测试代码，不发布到 Maven Central。
->
-> 1.x 版本文档已归档至 [README.1.x.md](./README.1.x.md)。
-
-## 2.x 关键变化
-
-| 变化 | 来源 |
-|------|------|
-| Token 有效性完全由 Redis TTL 保证，不再解析 JWT（兼容 JWE 不可读密文） | token-manager 2.0.0 |
-| L2 预刷新由 smart-cache 框架根据 Redis TTL 触发 | token-manager 2.0.0 |
-| 多租户 cacheKey 由 `String.hashCode()`（32-bit）升级为 SHA-256 截断 128-bit hex，杜绝 hashCode 碰撞串号 | token-manager 2.0.1 |
-
-业务代码 / 配置 0 改动，依赖版本号升即可。
 
 ## 依赖引入
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:2.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:2.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:1.1.0'
 
     // 运行时依赖（compileOnly 不传递，需自行引入）
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.8'
@@ -75,6 +70,8 @@ io:
               enable: true
               server-url: http://localhost:8080
               token-endpoint: /oauth2/token
+              token:
+                refresh-before-expire: 300
               redis:
                 token:
                   cache-name: aksk-client-token
@@ -90,12 +87,12 @@ io:
             max-size: 1000
           l2:
             enabled: true
-            expire-seconds: 3600     # 兜底 TTL，server 未返回 expiresIn 时使用
+            expire-seconds: 3600
             preload:
               enabled: true
-              before-expire-seconds: 60   # Redis TTL <= 此值时由 smart-cache 触发预刷新
+              before-expire-seconds: 300
           consistency:
-            mode: strong            # 多实例 L1 一致性（Pub/Sub 广播）
+            mode: strong
 ```
 
 ## 测试场景
@@ -108,7 +105,7 @@ io:
 | testBothClientsShareSameTokenManager | 两个客户端共享同一个 TokenManager，token 只取一次 |
 | testFeignAndRestTemplateBothCallSucceed | Feign 和 RestTemplate 同时发请求，互不干扰 |
 | testBothClientsReuseToken | 两个客户端复用同一个缓存 token，无重复获取 |
-| testPlainFeignClientNotAffectedByAksk | 普通 `@FeignClient` 不受 AKSK 拦截器影响（验证 feign-starter 1.0.1 修复在 2.x 仍生效） |
+| testPlainFeignClientNotAffectedByAksk | 普通 `@FeignClient` 不受 AKSK 拦截器影响（验证 feign-starter 1.0.1 修复） |
 
 ### FeignOnlyCallTest — Feign 独立调用
 
@@ -124,7 +121,7 @@ io:
 |------|------|
 | testRestTemplateGetToken | 获取 token 成功 |
 | testRestTemplateCallWithToken | 携带 token 调用接口成功 |
-| testRestTemplateAutoRefreshToken | token 过期后自动刷新（由 Redis TTL preload 驱动） |
+| testRestTemplateAutoRefreshToken | token 过期后自动刷新 |
 | testRestTemplateReuseToken | 多次调用复用同一个 token |
 
 ## 结论
@@ -133,13 +130,11 @@ io:
 
 ## 版本历史
 
-### 2.0.0 (2026-06-14)
+### 1.1.0 (2026-05-06)
 
-- 升级 feign-redis-client-starter / resttemplate-redis-client-starter 至 2.0.1
-- 底层 token-manager 升级至 2.0.1：JWE Token + 由 Redis TTL 保证有效性、SHA-256 cacheKey 防 hashCode 碰撞串号
-- 验证两个 starter 在 2.x 形态下共存场景的 token 共享、拦截器隔离仍然成立
-- 移除 `token.refresh-before-expire` 配置项（2.x 由 Redis TTL + smart-cache preload 驱动，不再需要应用层 refresh 窗口）
+- 升级 feign-redis-client-starter、resttemplate-redis-client-starter 至 1.1.0
+- 更新配置：`redis.token.me` → `redis.token.cache-name`，新增 smart-cache 配置块
 
-### 1.x
+### 1.0.0 (2026-01-27)
 
-详见 [README.1.x.md](./README.1.x.md)
+- 初始版本，验证 Feign 和 RestTemplate 两个 starter 共存场景
