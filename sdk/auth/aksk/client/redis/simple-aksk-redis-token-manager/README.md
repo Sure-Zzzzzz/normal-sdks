@@ -17,7 +17,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.1'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -128,10 +128,14 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 
 由 `smart-cache-starter` 统一管理，格式：`{keyPrefix}:{cacheName}:{me}::{cacheKey}`
 
+> 注：尾部 `cacheKey` 部分由 smart-cache 框架自动包裹大括号 `{...}`，作为 Redis Cluster Hash Tag，保证同一 `cacheName` 下所有 key 落到同一 slot，便于跨 key 操作（如 `SCAN` / `MGET`）。
+
 | 场景 | Key 示例 |
 |------|---------|
 | 平台级（无 security_context） | `my-app:aksk-client-token:instance-1::{default}` |
-| 用户级（有 security_context） | `my-app:aksk-client-token:instance-1::{hashCode}` |
+| 用户级（有 security_context） | `my-app:aksk-client-token:instance-1::{a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6}` |
+
+> 用户级 cacheKey 自 2.0.1 起使用 SHA-256 截断 128-bit hex（32 字符），替换 2.0.0 的 `hashCode()` 32-bit 数字串，消除碰撞风险。Hash Tag 行为由 smart-cache 控制，本模块未做修改。
 
 ---
 
@@ -147,6 +151,17 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 ---
 
 ## 版本历史
+
+### 2.0.1
+
+- **Security Hardening**：缓存 Key 算法升级，`String.hashCode()`（32-bit）→ SHA-256 截断 128-bit hex
+  - 消除生日悖论碰撞风险（10w 上下文从 ~70% 降至 ~1.5e-29）
+  - 防止跨用户 / 跨 scope Token 串号
+  - 经典 hashCode 碰撞输入（如 `"Aa"` / `"BB"` 同 hashCode = 2112）现已映射到不同 cacheKey
+  - API / 配置零变更，业务代码无需修改
+  - 旧缓存条目自然过期失效，首次升级后短时间 cache miss 由 SmartCache 锁兜底
+- **测试覆盖**：新增 `RedisTokenManagerMultiSecurityContextEndToEndTest` 端到端测试，覆盖多 securityContext 隔离、`clearToken()` 按 cacheKey 隔离、hashCode 碰撞输入全流程不串台
+- **内部重构**：常量集中（`SimpleAkskRedisTokenManagerConstant` / `ErrorCode` / `ErrorMessage`），新增模块异常体系（`SimpleAkskRedisTokenManagerException` / `CacheKeyGenerationException`），`Properties` 配置前缀引用 core 常量去除硬编码
 
 ### 2.0.0
 

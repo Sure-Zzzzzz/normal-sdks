@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextPr
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.preload.TokenCachePreloadHandler;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
@@ -117,11 +118,9 @@ class TokenPreloadTest {
         assertNotNull(firstToken, "第一次 Token 不应为 null");
         log.info("第一次获取 Token 成功");
 
-        // cacheKey 必须与 getToken() 内部使用的 key 一致（securityContext 的 hash）
+        // cacheKey 必须与 getToken() 内部使用的 key 一致（CacheKeyHelper 生成）
         String expectedSecurityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = expectedSecurityContext != null
-                ? String.valueOf(expectedSecurityContext.hashCode())
-                : "default";
+        String cacheKey = CacheKeyHelper.generate(expectedSecurityContext);
 
         // 触发 reload，securityContext 应与首次获取相同
         Object result = preloadHandler.reload(cacheName, cacheKey);

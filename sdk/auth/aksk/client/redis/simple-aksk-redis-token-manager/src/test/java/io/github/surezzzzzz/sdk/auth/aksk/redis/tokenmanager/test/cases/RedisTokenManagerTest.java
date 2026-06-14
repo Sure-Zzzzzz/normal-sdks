@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
@@ -16,7 +17,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.util.StringUtils;
 
 import java.util.Set;
 
@@ -73,9 +73,7 @@ class RedisTokenManagerTest {
     }
 
     private String generateCacheKey(String securityContext) {
-        return StringUtils.hasText(securityContext)
-                ? String.valueOf(securityContext.hashCode())
-                : "default";
+        return CacheKeyHelper.generate(securityContext);
     }
 
     @Test
@@ -146,17 +144,17 @@ class RedisTokenManagerTest {
     }
 
     @Test
-    @DisplayName("测试有 security_context 时使用其 hashCode 作为 cache key")
+    @DisplayName("测试有 security_context 时使用 CacheKeyHelper 生成 cache key")
     void testCacheKeyUsesSecurityContextHash() {
-        log.info("========== 测试有 security_context 时使用其 hashCode 作为 cache key ==========");
+        log.info("========== 测试有 security_context 时使用 CacheKeyHelper 生成 cache key ==========");
 
         String securityContext = securityContextProvider.getSecurityContext();
         String cacheKey = generateCacheKey(securityContext);
 
         log.info("securityContext={}, cacheKey={}", securityContext, cacheKey);
         assertNotNull(securityContext, "securityContext 不应为 null");
-        assertEquals(String.valueOf(securityContext.hashCode()), cacheKey,
-                "有 security_context 时 cacheKey 应为其 hashCode");
+        assertEquals(CacheKeyHelper.generate(securityContext), cacheKey,
+                "有 security_context 时 cacheKey 应由 CacheKeyHelper 生成");
 
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");

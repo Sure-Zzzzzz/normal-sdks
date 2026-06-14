@@ -15,7 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Set;
 
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
         SimpleAkskRedisTokenManagerTestApplication.class,
         RedisTokenManagerDefaultCacheKeyTest.TestConfig.class
 })
+@ActiveProfiles("defaultCacheKey")
 class RedisTokenManagerDefaultCacheKeyTest {
 
     /**
@@ -43,6 +46,7 @@ class RedisTokenManagerDefaultCacheKeyTest {
      * 保证本测试类使用 null securityContext 验证 "default" cacheKey 场景。
      */
     @Configuration
+    @Profile("defaultCacheKey")
     static class TestConfig {
         @Bean
         public io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider securityContextProvider() {

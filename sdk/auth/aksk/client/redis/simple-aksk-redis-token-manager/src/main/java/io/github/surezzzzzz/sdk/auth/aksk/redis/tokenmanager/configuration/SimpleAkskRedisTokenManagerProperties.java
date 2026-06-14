@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.SimpleAkskRedisTokenManagerConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -13,7 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @author surezzzzzz
  */
 @Data
-@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.auth.aksk.client")
+@ConfigurationProperties(prefix = SimpleAkskClientCoreConstant.CONFIG_PREFIX)
 public class SimpleAkskRedisTokenManagerProperties {
 
     /**
@@ -36,10 +38,8 @@ public class SimpleAkskRedisTokenManagerProperties {
              * SmartCache cacheName，用于隔离 token 缓存
              * <p>
              * 最终 Redis Key 格式：{keyPrefix}:{cacheName}:{me}::{cacheKey}
-             * <p>
-             * 默认值：aksk-client-token
              */
-            private String cacheName = "aksk-client-token";
+            private String cacheName = SimpleAkskRedisTokenManagerConstant.DEFAULT_TOKEN_CACHE_NAME;
         }
     }
 }

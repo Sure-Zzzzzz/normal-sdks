@@ -5,13 +5,14 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerProperties;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.SimpleAkskRedisTokenManagerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,16 +53,6 @@ public class RedisTokenManager implements TokenManager {
      */
     private final ConcurrentHashMap<String, Object> localLocks = new ConcurrentHashMap<>();
 
-    /**
-     * L2 轮询间隔（毫秒）
-     */
-    private static final int L2_POLL_INTERVAL_MS = 500;
-
-    /**
-     * 分布式锁超时 fallback 值（秒），当 SmartCacheProperties.getLock() 为 null 时使用
-     */
-    private static final int DEFAULT_LOCK_TIMEOUT_SECONDS = 30;
-
     @Override
     public String getToken() {
         String securityContext = securityContextProvider.getSecurityContext();
@@ -82,7 +73,7 @@ public class RedisTokenManager implements TokenManager {
         try {
             int lockTimeout = smartCacheProperties.getLock() != null
                     ? smartCacheProperties.getLock().getTimeoutSeconds()
-                    : DEFAULT_LOCK_TIMEOUT_SECONDS;
+                    : SimpleAkskRedisTokenManagerConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
             locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
 
             if (locked) {
@@ -134,10 +125,10 @@ public class RedisTokenManager implements TokenManager {
      * 轮询 L2，等待其他实例写入 token
      */
     private String waitForTokenFromL2(String cacheName, String cacheKey, int lockTimeout) {
-        int retryCount = (int) (lockTimeout * 1000L / L2_POLL_INTERVAL_MS);
+        int retryCount = (int) (lockTimeout * 1000L / SimpleAkskRedisTokenManagerConstant.L2_POLL_INTERVAL_MS);
         for (int i = 0; i < retryCount; i++) {
             try {
-                Thread.sleep(L2_POLL_INTERVAL_MS);
+                Thread.sleep(SimpleAkskRedisTokenManagerConstant.L2_POLL_INTERVAL_MS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
@@ -183,9 +174,7 @@ public class RedisTokenManager implements TokenManager {
      * @return 缓存 Key
      */
     private String generateCacheKey(String securityContext) {
-        return StringUtils.hasText(securityContext)
-                ? String.valueOf(securityContext.hashCode())
-                : "default";
+        return CacheKeyHelper.generate(securityContext);
     }
 
     /**

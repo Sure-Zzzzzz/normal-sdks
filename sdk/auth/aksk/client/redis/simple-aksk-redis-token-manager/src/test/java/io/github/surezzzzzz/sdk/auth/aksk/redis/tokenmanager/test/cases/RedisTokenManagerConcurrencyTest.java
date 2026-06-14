@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
@@ -12,9 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.util.StringUtils;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -265,11 +265,9 @@ class RedisTokenManagerConcurrencyTest {
         // nonNullSecurityContext profile 下 SecurityContextProvider 返回 TEST_SECURITY_CONTEXT
         String expectedSecurityContext = securityContextProvider.getSecurityContext();
         assertNotNull(expectedSecurityContext, "nonNullSecurityContext profile 应返回非 null securityContext");
-        String expectedCacheKey = String.valueOf(expectedSecurityContext.hashCode());
-        String actualCacheKey = StringUtils.hasText(expectedSecurityContext)
-                ? String.valueOf(expectedSecurityContext.hashCode())
-                : "default";
-        assertEquals(expectedCacheKey, actualCacheKey, "cacheKey 应为 securityContext.hashCode()");
+        String expectedCacheKey = CacheKeyHelper.generate(expectedSecurityContext);
+        String actualCacheKey = CacheKeyHelper.generate(expectedSecurityContext);
+        assertEquals(expectedCacheKey, actualCacheKey, "cacheKey 应由 CacheKeyHelper 确定性生成");
 
         Set<String> allTokens = userTokensMap.values().stream()
                 .flatMap(Set::stream)

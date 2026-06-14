@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
@@ -74,7 +75,7 @@ class RedisTokenManagerEndToEndTest {
         cleanupTestKeys();
         // provider 返回非空 securityContext，cacheKey 应与其 hash 对齐
         String sc = securityContextProvider.getSecurityContext();
-        cacheKey = sc != null ? String.valueOf(sc.hashCode()) : "default";
+        cacheKey = CacheKeyHelper.generate(sc);
     }
 
     @AfterEach
