@@ -1,6 +1,6 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
@@ -115,7 +115,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:2.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:2.0.1'
 }
 ```
 
@@ -252,7 +252,7 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 }
 ```
 
-不同用户会获取不同的 Token（基于 hashCode 隔离）。
+不同用户会获取不同的 Token（基于 SHA-256 截断 hex 隔离，自 token-manager 2.0.1 起，杜绝 hashCode 碰撞串号风险）。
 
 ## 拦截器工作原理
 
@@ -369,6 +369,11 @@ io:
 ```
 
 ## 版本历史
+
+### 2.0.1 (2026-06-14)
+
+- 升级 simple-aksk-redis-token-manager 2.0.0 → 2.0.1（Security Hardening：cacheKey 由 `hashCode()` 32-bit 升级为 SHA-256 截断 128-bit hex，消除多租户 hashCode 碰撞串号风险）
+- API / 配置零变更，业务代码无需修改
 
 ### 2.0.0 (2026-05-27)
 
