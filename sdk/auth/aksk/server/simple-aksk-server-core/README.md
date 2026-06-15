@@ -68,7 +68,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.2'
 ```
 
 通常不需要直接引用，`simple-aksk-server-starter` 会通过 `api` 传递依赖。

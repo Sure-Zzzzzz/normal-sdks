@@ -38,6 +38,11 @@ public class RedisKeyHelper {
      */
     public static final String CACHE_OAUTH2_AUTHORIZATION_TOKEN = "oauth2:authorization:token";
 
+    /**
+     * OAuth2 Registered Client Entity 缓存名称（按 clientId 索引）
+     */
+    public static final String CACHE_OAUTH2_CLIENT_ENTITY = "oauth2:client:entity";
+
     // ==================== 私有常量 ====================
 
     private static final String SEPARATOR_DOUBLE_COLON = "::";
