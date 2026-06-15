@@ -8,8 +8,8 @@
 
 ## 版本
 
-- 当前版本：`1.0.9`
-- 依赖方：`simple-elasticsearch-search-starter:1.6.2+`
+- 当前版本：`1.0.12`
+- 依赖方：`simple-elasticsearch-search-starter:1.6.7+`
 
 ## 包结构
 
@@ -130,6 +130,8 @@ public void onQueryError(EsQueryErrorEvent event) {
 - `1.0.8`：`PaginationType` 新增 `SCROLL`，`PaginationInfo` 新增 `scrollId`/`scrollTtl`
 - `1.0.9`：`ExecutionContext` 基类，Error Events，`AggRequest.dateRange` Bug Fix，`sourceType` 透传
 - `1.0.10`：Error Events 补齐 `sourceType` 字段
+- `1.0.11`：Error Events 新增 `downgradeLevel` / `countOnly` / `context` 字段
+- `1.0.12`：`QueryOperator` 新增 `NOT_PREFIX` / `NOT_SUFFIX` / `NOT_REGEX` 三个不匹配操作符
 
 ## 注意事项
 

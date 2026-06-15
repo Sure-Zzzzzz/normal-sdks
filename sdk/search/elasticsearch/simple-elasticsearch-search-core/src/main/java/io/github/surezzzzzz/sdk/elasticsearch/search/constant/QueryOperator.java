@@ -95,7 +95,22 @@ public enum QueryOperator {
     /**
      * 正则表达式匹配
      */
-    REGEX("regex", "正则匹配");
+    REGEX("regex", "正则匹配"),
+
+    /**
+     * 前缀不匹配
+     */
+    NOT_PREFIX("not_prefix", "前缀不匹配"),
+
+    /**
+     * 后缀不匹配
+     */
+    NOT_SUFFIX("not_suffix", "后缀不匹配"),
+
+    /**
+     * 正则不匹配
+     */
+    NOT_REGEX("not_regex", "正则不匹配");
 
     private final String operator;
     private final String description;
