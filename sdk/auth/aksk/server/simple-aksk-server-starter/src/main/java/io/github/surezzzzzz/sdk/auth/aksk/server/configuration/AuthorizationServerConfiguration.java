@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.repository.EnabledAwareRegister
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.AuditableOAuth2AuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2AuthorizationService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweOAuth2TokenGenerator;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -69,7 +70,18 @@ public class AuthorizationServerConfiguration {
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
         JdbcRegisteredClientRepository jdbcRepository = new JdbcRegisteredClientRepository(jdbcTemplate);
-        return new EnabledAwareRegisteredClientRepository(jdbcRepository, entityRepository);
+        return new EnabledAwareRegisteredClientRepository(jdbcRepository, cachedClientEntityService());
+    }
+
+    @Bean
+    public CachedOAuth2RegisteredClientEntityService cachedClientEntityService() {
+        if (smartCacheManager != null && redisKeyHelper != null) {
+            log.info("Smart cache (L1+L2) enabled for OAuth2 client entity");
+        } else {
+            log.info("SmartCacheManager not available, client entity uses database only");
+        }
+        return new CachedOAuth2RegisteredClientEntityService(
+                entityRepository, smartCacheManager, redisKeyHelper);
     }
 
     @Bean

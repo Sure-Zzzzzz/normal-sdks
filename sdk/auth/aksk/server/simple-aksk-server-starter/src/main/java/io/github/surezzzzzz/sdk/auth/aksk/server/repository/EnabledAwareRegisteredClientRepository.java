@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.repository;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -20,7 +21,7 @@ import java.util.Optional;
 public class EnabledAwareRegisteredClientRepository implements RegisteredClientRepository {
 
     private final RegisteredClientRepository delegate;
-    private final OAuth2RegisteredClientEntityRepository entityRepository;
+    private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
 
     @Override
     public void save(RegisteredClient registeredClient) {
@@ -51,7 +52,7 @@ public class EnabledAwareRegisteredClientRepository implements RegisteredClientR
         }
 
         // 查询enabled状态
-        Optional<OAuth2RegisteredClientEntity> entityOpt = entityRepository.findByClientId(client.getClientId());
+        Optional<OAuth2RegisteredClientEntity> entityOpt = cachedClientEntityService.findByClientId(client.getClientId());
         if (entityOpt.isPresent()) {
             OAuth2RegisteredClientEntity entity = entityOpt.get();
             if (!entity.isEnabled()) {

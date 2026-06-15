@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecret
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.OAuth2SettingsHelper;
@@ -43,6 +44,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     private final PasswordEncoder passwordEncoder;
     private final SimpleAkskServerProperties properties;
     private final TokenManagementService tokenManagementService;
+    private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
 
     @Override
     public ClientInfoResponse createPlatformClient(String clientName) {
@@ -82,6 +84,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Created platform client: {}", clientId);
 
             // Return ClientInfoResponse with plain text secret (not from database)
@@ -142,6 +145,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Created user client: {} for user: {}", clientId, ownerUserId);
 
             // Return ClientInfoResponse with plain text secret (not from database)
@@ -179,6 +183,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             tokenManagementService.revokeAllByClientId(clientId);
             // 再删除 Client
             clientRepository.delete(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Deleted client: {}", clientId);
         } catch (Exception e) {
             log.error("Failed to delete client: {}", clientId, e);
@@ -279,6 +284,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Regenerated secret for client: {}", clientId);
             return newSecret;
         } catch (Exception e) {
@@ -310,6 +316,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             entity.setScopes(scopesStr);
             try {
                 clientRepository.save(entity);
+                cachedClientEntityService.evict(entity.getClientId());
                 updatedCount++;
             } catch (Exception e) {
                 log.error("Failed to update scopes for client: {}", entity.getClientId(), e);
@@ -332,6 +339,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Disabled client: {}", clientId);
         } catch (Exception e) {
             log.error("Failed to disable client: {}", clientId, e);
@@ -355,6 +363,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Enabled client: {}", clientId);
         } catch (Exception e) {
             log.error("Failed to enable client: {}", clientId, e);
@@ -379,6 +388,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Updated scopes for client: {}, new scopes: {}", clientId, scopesStr);
         } catch (Exception e) {
             log.error("Failed to update scopes for client: {}", clientId, e);
@@ -448,6 +458,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Updated client name for: {}, new name: {}", clientId, clientName);
         } catch (Exception e) {
             log.error("Failed to update client name for: {}", clientId, e);
@@ -479,6 +490,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             clientRepository.save(entity);
+            cachedClientEntityService.evict(clientId);
             log.info("Updated owner info for: {}, ownerUserId: {}, ownerUsername: {}", clientId, ownerUserId, ownerUsername);
         } catch (Exception e) {
             log.error("Failed to update owner info for: {}", clientId, e);

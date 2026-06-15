@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.converter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
-import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DefaultScopeAuthenticationConverter implements AuthenticationConverter {
 
-    private final OAuth2RegisteredClientEntityRepository entityRepository;
+    private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
 
     @Override
     public Authentication convert(HttpServletRequest request) {
@@ -60,7 +60,7 @@ public class DefaultScopeAuthenticationConverter implements AuthenticationConver
         } else {
             // 如果未提供scope，从数据库读取注册的scope
             String clientId = clientPrincipal.getName();
-            Optional<OAuth2RegisteredClientEntity> entityOpt = entityRepository.findByClientId(clientId);
+            Optional<OAuth2RegisteredClientEntity> entityOpt = cachedClientEntityService.findByClientId(clientId);
 
             if (entityOpt.isPresent()) {
                 OAuth2RegisteredClientEntity entity = entityOpt.get();

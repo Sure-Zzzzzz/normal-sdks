@@ -156,6 +156,13 @@
                     <div class="form-text text-danger" id="scopeError" style="display:none;">
                         ⚠️ 检测到回车换行，请使用逗号分隔
                     </div>
+                    <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
+                        <strong>Scope 格式说明：</strong><br>
+                        <strong>接口权限</strong>：如 <code>/api/*</code>（通配符 * 匹配所有路径），多个接口用逗号分隔，如 <code>/api/orders,/api/products</code><br>
+                        <strong>数据权限</strong>：如 <code>data:*</code>（访问全部数据）、<code>data:dept:华东</code>（按部门限制数据范围）<br>
+                        <strong>生效规则</strong>：接口权限和数据权限均为 <strong>固有能力</strong>，签发时确定，运行时不可覆盖；两者同时满足才放行<br>
+                        <strong>示例</strong>：<code>/api/orders,/api/products,data:dept:华东</code> 表示可调 orders 和 products 接口，且只能操作华东数据
+                    </div>
                 </div>
 
                 <div class="alert alert-warning" role="alert">
@@ -283,7 +290,7 @@
     const scopeError = document.getElementById('scopeError');
 
     scopesTextarea.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             scopeError.style.display = 'block';
             scopesTextarea.classList.add('is-invalid');
@@ -294,42 +301,34 @@
         }
     });
 
-    // 监听粘贴事件，自动替换换行符为逗号
+    // 监听粘贴事件，自动替换换行符和空格为逗号
     scopesTextarea.addEventListener('paste', function(e) {
         e.preventDefault();
         const pastedText = (e.clipboardData || window.clipboardData).getData('text');
 
-        // 检测是否包含换行符
-        if (pastedText.includes('\n') || pastedText.includes('\r')) {
-            // 替换所有换行符为逗号
-            const cleanedText = pastedText
-                .replace(/\r\n/g, ',')
-                .replace(/\n/g, ',')
-                .replace(/\r/g, ',')
+        // 替换所有换行符和空格为逗号
+        const cleanedText = pastedText
+                .replace(/[\r\n\s]+/g, ',')
                 .replace(/,+/g, ',')  // 合并多个连续逗号
                 .replace(/^,|,$/g, '');  // 移除首尾逗号
 
-            // 插入清理后的文本
-            const start = this.selectionStart;
-            const end = this.selectionEnd;
-            const currentValue = this.value;
-            this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
+        // 插入清理后的文本
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        const currentValue = this.value;
+        this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
 
-            // 显示成功提示
-            scopeError.textContent = '✓ 已自动将换行符替换为逗号';
-            scopeError.classList.remove('text-danger');
-            scopeError.classList.add('text-success');
-            scopeError.style.display = 'block';
-            setTimeout(() => {
-                scopeError.style.display = 'none';
-                scopeError.classList.remove('text-success');
-                scopeError.classList.add('text-danger');
-                scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
-            }, 2000);
-        } else {
-            // 没有换行符，正常粘贴
-            document.execCommand('insertText', false, pastedText);
-        }
+        // 显示成功提示
+        scopeError.textContent = '✓ 已自动将换行符和空格替换为逗号';
+        scopeError.classList.remove('text-danger');
+        scopeError.classList.add('text-success');
+        scopeError.style.display = 'block';
+        setTimeout(() => {
+            scopeError.style.display = 'none';
+            scopeError.classList.remove('text-success');
+            scopeError.classList.add('text-danger');
+            scopeError.textContent = '⚠️ 检测到回车换行或空格，请使用逗号分隔';
+        }, 2000);
     });
 
     function updateName() {
@@ -357,9 +356,9 @@
     function updateScopes() {
         const scopesText = document.getElementById('editScopes').value.trim();
 
-        // 后端验证：检查是否包含换行符
-        if (scopesText.match(/[\r\n]+/)) {
-            alert('权限范围不允许包含换行符，请使用逗号分隔');
+        // 前端验证：检查是否包含换行符或空格
+        if (scopesText.match(/[\r\n\s]+/)) {
+            alert('权限范围不允许包含换行符或空格，请使用逗号分隔');
             return;
         }
 

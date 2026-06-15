@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 import io.github.surezzzzzz.sdk.auth.aksk.server.converter.DefaultScopeAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AnonymousIntrospectionFilter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
-import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,11 +16,10 @@ import org.springframework.security.config.annotation.web.configurers.oauth2.ser
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -34,7 +33,7 @@ import org.springframework.security.web.SecurityFilterChain;
 public class OAuth2SecurityConfiguration {
 
     private final JwtKeyProvider jwtKeyProvider;
-    private final OAuth2RegisteredClientEntityRepository entityRepository;
+    private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
     private final SimpleAkskServerProperties properties;
     private final JweJwtDecoder jweJwtDecoder;
 
@@ -49,7 +48,7 @@ public class OAuth2SecurityConfiguration {
         http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
                 .tokenEndpoint(tokenEndpoint ->
                         tokenEndpoint.accessTokenRequestConverter(
-                                new DefaultScopeAuthenticationConverter(entityRepository)
+                                new DefaultScopeAuthenticationConverter(cachedClientEntityService)
                         )
                 );
 

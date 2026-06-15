@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerP
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
-import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -37,7 +37,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
-    private final OAuth2RegisteredClientEntityRepository entityRepository;
+    private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
     private final SimpleAkskServerProperties properties;
 
     @Override
@@ -45,7 +45,7 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
         String clientId = context.getRegisteredClient().getClientId();
 
         // 1. 查询客户端扩展信息
-        OAuth2RegisteredClientEntity entity = entityRepository.findByClientId(clientId).orElse(null);
+        OAuth2RegisteredClientEntity entity = cachedClientEntityService.findByClientId(clientId).orElse(null);
         if (entity == null) {
             log.warn("未找到客户端扩展信息: clientId={}", clientId);
             return;

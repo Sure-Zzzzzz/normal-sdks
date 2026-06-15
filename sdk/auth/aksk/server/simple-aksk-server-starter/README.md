@@ -1,6 +1,6 @@
 # Simple AKSK Server Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -193,13 +193,22 @@ AKSK 的权限体系由两层组成：
 接口权限和数据权限统一写在 scope 中，AKSK 创建时确定，运行时不可变：
 
 ```
-scope: "read:order write:order region:华东 level:3"
+AKP 示例：`"/api/orders,/api/products,data:*"`
+AKP 示例：`"/api/orders,/api/products,data:dept:华东"`
 ```
+
+| scope | 含义 |
+|-------|------|
+| `/api/*` | 可调所有 API |
+| `/api/orders` | 仅可调 orders 接口 |
+| `data:*` | 可访问全部数据 |
+| `data:dept:华东` | 仅可访问华东数据 |
 
 资源侧通过 `@RequireExpression` 鉴权表达式判断：
 
 ```java
-@RequireExpression("#context['scope'] != null && (' ' + #context['scope'] + ' ').contains(' region:华东 ')")
+// 判断是否有华东数据权限
+@RequireExpression("#context['scope'] != null && (' ' + #context['scope'] + ' ').contains(' data:dept:华东 ')")
 public Order getOrder(String orderId) { ... }
 ```
 
@@ -225,10 +234,10 @@ String tenantId = contextProvider.get("tenant_id");
 **3. 不要在 Security Context 中重复 Scope 已有的字段**
 
 ```
-❌ scope 包含 region:华东，security_context 又传 region:华南
+❌ scope 包含 data:dept:华东，security_context 又传 region:华南
    → 字段冲突，说明权限设计有问题
 
-✅ scope 包含 region:华东（数据权限，固定），security_context 传 request_source:mobile（动态上下文）
+✅ scope 包含 data:dept:华东（数据权限，固定），security_context 传 request_source:mobile（动态上下文）
    → 职责清晰，互不重叠
 ```
 
@@ -472,6 +481,12 @@ logging:
 ---
 
 ## 版本历史
+
+### 2.0.2 (2026-06-15)
+
+性能优化 + 依赖升级，向后兼容。
+
+**新增：Client Entity 两级缓存**。`/oauth2/token` 请求中 `OAuth2RegisteredClientEntity.findByClientId` 的 JPA 查询次数从 2~3 次降至 0~1 次（首次 1 次，后续命中 L1）。详见 [CHANGELOG.2.0.2.md](CHANGELOG.2.0.2.md)。
 
 ### 1.1.3 (2026-05-01)
 

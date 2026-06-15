@@ -1,9 +1,9 @@
 dependencies {
     api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.2'
 
     // SmartCache
-    api 'io.github.sure-zzzzzz:smart-cache-starter:1.0.4'
+    api 'io.github.sure-zzzzzz:smart-cache-starter:1.1.2'
     api 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 
     // Spring Boot

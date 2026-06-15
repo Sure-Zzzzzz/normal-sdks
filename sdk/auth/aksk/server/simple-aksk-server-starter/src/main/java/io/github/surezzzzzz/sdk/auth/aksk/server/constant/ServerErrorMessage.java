@@ -102,6 +102,8 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_SCOPE_NEWLINE_NOT_ALLOWED = "权限范围不允许包含换行符，请使用逗号分隔";
 
+    public static final String ADMIN_SCOPE_SPACE_NOT_ALLOWED = "权限范围不允许包含空格，仅允许逗号分隔";
+
     // ==================== Admin页面-Token操作消息 ====================
 
     public static final String ADMIN_TOKEN_NOT_FOUND = "Token不存在";

@@ -4,7 +4,9 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoR
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,12 @@ class OAuth2EndToEndTest {
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private L1Cache l1Cache;
+
+    @Autowired
+    private RedisKeyHelper redisKeyHelper;
 
     /**
      * 每个测试方法执行后清理数据
@@ -240,5 +248,70 @@ class OAuth2EndToEndTest {
         assertNotNull(response.getBody().get("access_token"));
 
         log.info("启用AKSK测试通过");
+    }
+
+    /**
+     * 验证 /oauth2/token 请求中 Client Entity 缓存生效（通过 L1Cache 验证，不依赖 @SpyBean）
+     *
+     * <p>第一次 /oauth2/token（cache miss）后，L1 写入缓存；
+     * 第二次/第三次请求同一 clientId 时命中 L1，无需查 JPA。
+     */
+    @Test
+    void testClientEntityCacheReducesJpaCalls() {
+        log.info("========== 测试 Client Entity 缓存减少 JPA 调用次数 ==========");
+
+        // Step 1: 创建客户端
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Cache Test Client");
+        String clientId = clientInfo.getClientId();
+        String clientSecret = clientInfo.getClientSecret();
+
+        String cacheName = RedisKeyHelper.CACHE_OAUTH2_CLIENT_ENTITY;
+        String cacheKey = redisKeyHelper.buildCacheKeyById(clientId);
+
+        // Step 2: 第一次 /oauth2/token（cache miss，回源 JPA 并写入 L1）
+        String tokenUrl = "http://localhost:" + port + "/oauth2/token";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBasicAuth(clientId, clientSecret);
+        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+        body.add("grant_type", "client_credentials");
+        body.add("scope", "read write");
+        ResponseEntity<Map> response1 = restTemplate.exchange(
+                tokenUrl, HttpMethod.POST,
+                new HttpEntity<MultiValueMap<String, String>>(body, headers), Map.class);
+        assertEquals(HttpStatus.OK, response1.getStatusCode());
+        log.info("第一次 /oauth2/token 成功，带 scope，clientId={}", clientId);
+
+        // cache miss 后 L1 应有缓存值
+        assertNotNull(l1Cache.get(cacheName, cacheKey), "第一次请求后 L1 应有缓存值");
+        log.info("✓ 第一次请求（cache miss）后 L1 写入缓存");
+
+        // Step 3: 第二次 /oauth2/token（cache hit，L1 有值则不查 JPA）
+        ResponseEntity<Map> response2 = restTemplate.exchange(
+                tokenUrl, HttpMethod.POST,
+                new HttpEntity<MultiValueMap<String, String>>(body, headers), Map.class);
+        assertEquals(HttpStatus.OK, response2.getStatusCode());
+
+        // cache hit 后 L1 仍应有值（缓存未被逐出，且无 JPA 调用）
+        assertNotNull(l1Cache.get(cacheName, cacheKey), "第二次请求（cache hit）后 L1 仍有缓存值");
+        log.info("✓ 第二次请求（cache hit）L1 命中，未查 JPA");
+
+        // Step 4: 不带 scope 的请求也会命中缓存
+        HttpHeaders headersNoScope = new HttpHeaders();
+        headersNoScope.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headersNoScope.setBasicAuth(clientId, clientSecret);
+        MultiValueMap<String, String> bodyNoScope = new LinkedMultiValueMap<>();
+        bodyNoScope.add("grant_type", "client_credentials");
+        // 不传 scope 参数，会触发 DefaultScopeAuthenticationConverter 读 entity
+        ResponseEntity<Map> response3 = restTemplate.exchange(
+                tokenUrl, HttpMethod.POST,
+                new HttpEntity<MultiValueMap<String, String>>(bodyNoScope, headersNoScope), Map.class);
+        assertEquals(HttpStatus.OK, response3.getStatusCode());
+
+        // 不带 scope 时走 DefaultScopeAuthenticationConverter，L1 已有缓存应命中
+        assertNotNull(l1Cache.get(cacheName, cacheKey), "不带 scope 请求也命中 L1 缓存");
+        log.info("✓ 不带 scope 请求也命中 L1 缓存");
+
+        log.info("Client Entity 缓存测试通过");
     }
 }

@@ -145,6 +145,11 @@ public class AdminController {
                 redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_NEWLINE_NOT_ALLOWED);
                 return "redirect:/admin/create-platform";
             }
+            // 后端验证：检查scopes是否包含空格（仅允许逗号分隔）
+            if (scopes != null && scopes.matches(".*\\s+.*")) {
+                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_SPACE_NOT_ALLOWED);
+                return "redirect:/admin/create-platform";
+            }
 
             // 解析 scopes
             List<String> scopeList = null;
@@ -207,6 +212,11 @@ public class AdminController {
             // 后端验证：检查scopes是否包含换行符
             if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
                 redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_NEWLINE_NOT_ALLOWED);
+                return "redirect:/admin/create-user";
+            }
+            // 后端验证：检查scopes是否包含空格（仅允许逗号分隔）
+            if (scopes != null && scopes.matches(".*\\s+.*")) {
+                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_SPACE_NOT_ALLOWED);
                 return "redirect:/admin/create-user";
             }
 
