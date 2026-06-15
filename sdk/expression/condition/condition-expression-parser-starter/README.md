@@ -11,7 +11,7 @@
 ## 特性
 
 - **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
-- **功能完善** - 6大类运算符：比较、集合、模糊、空值、逻辑、括号优先级
+- **功能完善** - 8大类运算符：比较、集合、模糊（LIKE/PREFIX/SUFFIX + NOT_LIKE/NOT_PREFIX/NOT_SUFFIX）、空值、逻辑、括号优先级
 - **中文友好** - 运算符支持中文写法（`等于`/`且`/`包含于`…），中文字段名无需空格分隔
 - **大小写不敏感** - 英文关键字 `AND`/`And`/`and` 均可
 - **多值类型** - 字符串、整数、浮点数、布尔值、时间范围枚举（30+种预定义范围）
@@ -25,7 +25,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.4'
 }
 ```
 
@@ -75,12 +75,14 @@ String sql = expr.accept(new SqlVisitor());
 
 ### 模糊匹配运算符
 
-| 关键字         | 中文    | 说明    | 示例                    |
-|-------------|-------|-------|-----------------------|
-| LIKE        | 包含    | 模糊匹配  | `名称 LIKE '测试'`        |
-| PREFIX LIKE | 前缀    | 前缀匹配  | `名称 PREFIX LIKE '测试'` |
-| SUFFIX LIKE | 后缀    | 后缀匹配  | `名称 SUFFIX LIKE '测试'` |
-| NOT LIKE    | 不包含   | 模糊不匹配 | `名称 NOT LIKE '删除'`    |
+| 关键字           | 中文     | 说明      | 示例                         |
+|---------------|--------|---------|----------------------------|
+| LIKE          | 包含     | 模糊匹配   | `名称 LIKE '测试'`             |
+| PREFIX LIKE   | 前缀     | 前缀匹配   | `名称 PREFIX LIKE '测试'`        |
+| SUFFIX LIKE   | 后缀     | 后缀匹配   | `名称 SUFFIX LIKE '测试'`        |
+| NOT LIKE      | 不包含    | 模糊不匹配  | `名称 NOT LIKE '删除'`            |
+| NOT PREFIX LIKE | 前缀不匹配 | 排除前缀匹配 | `名称 NOT PREFIX LIKE '张'`     |
+| NOT SUFFIX LIKE | 后缀不匹配 | 排除后缀匹配 | `邮箱 NOT SUFFIX LIKE '@spam.com'` |
 
 > SDK 只识别运算符类型，业务层根据类型自行决定通配符位置（`%test%`、`test%`、`%test`）。
 

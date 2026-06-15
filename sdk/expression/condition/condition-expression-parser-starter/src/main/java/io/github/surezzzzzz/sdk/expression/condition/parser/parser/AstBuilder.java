@@ -209,6 +209,28 @@ public class AstBuilder extends ConditionExprBaseVisitor<Expression> {
                 .build();
     }
 
+    @Override
+    public Expression visitNotPrefixLikeCondition(ConditionExprParser.NotPrefixLikeConditionContext ctx) {
+        String field = ctx.field().getText();
+        ValueNode value = parseValue(ctx.value());
+        return LikeExpression.builder()
+                .field(field)
+                .operator(MatchOperator.NOT_PREFIX)
+                .value(value)
+                .build();
+    }
+
+    @Override
+    public Expression visitNotSuffixLikeCondition(ConditionExprParser.NotSuffixLikeConditionContext ctx) {
+        String field = ctx.field().getText();
+        ValueNode value = parseValue(ctx.value());
+        return LikeExpression.builder()
+                .field(field)
+                .operator(MatchOperator.NOT_SUFFIX)
+                .value(value)
+                .build();
+    }
+
     // ========== NULL 条件 ==========
 
     @Override

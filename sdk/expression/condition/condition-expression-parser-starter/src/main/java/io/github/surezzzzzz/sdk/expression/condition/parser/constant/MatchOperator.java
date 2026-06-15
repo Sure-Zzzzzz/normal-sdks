@@ -28,7 +28,17 @@ public enum MatchOperator {
     /**
      * 不匹配（排除模糊匹配）
      */
-    NOT_LIKE("不匹配");
+    NOT_LIKE("不匹配"),
+
+    /**
+     * 前缀不匹配
+     */
+    NOT_PREFIX("前缀不匹配"),
+
+    /**
+     * 后缀不匹配
+     */
+    NOT_SUFFIX("后缀不匹配");
 
     private final String description;
 

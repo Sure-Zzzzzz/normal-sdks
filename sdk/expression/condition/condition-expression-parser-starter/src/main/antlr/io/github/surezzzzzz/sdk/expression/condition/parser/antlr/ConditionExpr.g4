@@ -46,10 +46,12 @@ condition
     : field comparisonOp value               # ComparisonCondition
     | field IN LPAREN valueList RPAREN       # InCondition
     | field NOT IN LPAREN valueList RPAREN   # NotInCondition
-    | field LIKE value                       # LikeCondition
+    | field NOT PREFIX LIKE value            # NotPrefixLikeCondition
     | field PREFIX LIKE value                # PrefixLikeCondition
+    | field NOT SUFFIX LIKE value            # NotSuffixLikeCondition
     | field SUFFIX LIKE value                # SuffixLikeCondition
     | field NOT LIKE value                   # NotLikeCondition
+    | field LIKE value                       # LikeCondition
     | field IS NULL                          # IsNullCondition
     | field IS NOT NULL                      # IsNotNullCondition
     ;

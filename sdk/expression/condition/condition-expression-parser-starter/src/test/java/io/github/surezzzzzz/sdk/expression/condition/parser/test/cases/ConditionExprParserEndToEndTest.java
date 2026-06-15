@@ -932,6 +932,191 @@ class ConditionExprParserEndToEndTest {
         log.info("✓ 中文比较运算符测试通过");
     }
 
+    // ==================== v1.0.4 新增测试：NOT_PREFIX / NOT_SUFFIX ====================
+
+    @Test
+    @Order(60)
+    @DisplayName("NOT PREFIX LIKE - 前缀不匹配（英文 NOT）")
+    void testNotPrefixLikeOperator() {
+        log.info("========== 测试：NOT PREFIX LIKE 运算符 ==========");
+
+        // 中文字段
+        String expr1 = "名称 NOT PREFIX LIKE '张'";
+        log.info("表达式: {}", expr1);
+        LikeExpression result1 = asLike(parser.parse(expr1));
+        log.info("解析结果: {}", result1);
+        assertEquals("名称", result1.getField());
+        assertEquals(MatchOperator.NOT_PREFIX, result1.getOperator());
+        assertEquals("张", result1.getValue().getRawValue());
+        assertEquals(ValueType.STRING, result1.getValue().getType());
+
+        // 英文字段
+        String expr2 = "name NOT PREFIX LIKE 'John'";
+        log.info("表达式: {}", expr2);
+        LikeExpression result2 = asLike(parser.parse(expr2));
+        log.info("解析结果: {}", result2);
+        assertEquals("name", result2.getField());
+        assertEquals(MatchOperator.NOT_PREFIX, result2.getOperator());
+        assertEquals("John", result2.getValue().getRawValue());
+
+        log.info("✓ NOT PREFIX LIKE 运算符测试通过");
+    }
+
+    @Test
+    @Order(61)
+    @DisplayName("NOT SUFFIX LIKE - 后缀不匹配（英文 NOT）")
+    void testNotSuffixLikeOperator() {
+        log.info("========== 测试：NOT SUFFIX LIKE 运算符 ==========");
+
+        // 中文字段
+        String expr1 = "邮箱 NOT SUFFIX LIKE '@spam.com'";
+        log.info("表达式: {}", expr1);
+        LikeExpression result1 = asLike(parser.parse(expr1));
+        log.info("解析结果: {}", result1);
+        assertEquals("邮箱", result1.getField());
+        assertEquals(MatchOperator.NOT_SUFFIX, result1.getOperator());
+        assertEquals("@spam.com", result1.getValue().getRawValue());
+        assertEquals(ValueType.STRING, result1.getValue().getType());
+
+        // 英文字段
+        String expr2 = "email NOT SUFFIX LIKE '@spam.com'";
+        log.info("表达式: {}", expr2);
+        LikeExpression result2 = asLike(parser.parse(expr2));
+        log.info("解析结果: {}", result2);
+        assertEquals("email", result2.getField());
+        assertEquals(MatchOperator.NOT_SUFFIX, result2.getOperator());
+        assertEquals("@spam.com", result2.getValue().getRawValue());
+
+        log.info("✓ NOT SUFFIX LIKE 运算符测试通过");
+    }
+
+    @Test
+    @Order(62)
+    @DisplayName("中文 NOT（非）- NOT_PREFIX / NOT_SUFFIX")
+    void testChineseNotPrefixSuffix() {
+        log.info("========== 测试：中文 NOT（非）前缀不匹配/后缀不匹配 ==========");
+
+        // 名称 非 前缀 包含 '张' → NOT_PREFIX
+        String expr1 = "名称 非 前缀 包含 '张'";
+        log.info("表达式: {}", expr1);
+        LikeExpression result1 = asLike(parser.parse(expr1));
+        log.info("解析结果: {}", result1);
+        assertEquals("名称", result1.getField());
+        assertEquals(MatchOperator.NOT_PREFIX, result1.getOperator());
+        assertEquals("张", result1.getValue().getRawValue());
+
+        // 邮箱 非 后缀 包含 '@spam.com' → NOT_SUFFIX
+        String expr2 = "邮箱 非 后缀 包含 '@spam.com'";
+        log.info("表达式: {}", expr2);
+        LikeExpression result2 = asLike(parser.parse(expr2));
+        log.info("解析结果: {}", result2);
+        assertEquals("邮箱", result2.getField());
+        assertEquals(MatchOperator.NOT_SUFFIX, result2.getOperator());
+        assertEquals("@spam.com", result2.getValue().getRawValue());
+
+        log.info("✓ 中文 NOT 前缀/后缀不匹配测试通过");
+    }
+
+    @Test
+    @Order(63)
+    @DisplayName("大小写不敏感 - NOT PREFIX LIKE / NOT SUFFIX LIKE")
+    void testCaseInsensitiveNotPrefixSuffix() {
+        log.info("========== 测试：大小写不敏感 NOT PREFIX/SUFFIX ==========");
+
+        // not prefix like
+        Expression result1 = parser.parse("名称 not prefix like '张'");
+        assertTrue(result1 instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_PREFIX, ((LikeExpression) result1).getOperator());
+
+        // Not Prefix Like（大写开头）
+        Expression result2 = parser.parse("名称 Not Prefix Like '张'");
+        assertTrue(result2 instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_PREFIX, ((LikeExpression) result2).getOperator());
+
+        // not suffix like
+        Expression result3 = parser.parse("邮箱 not suffix like '@spam.com'");
+        assertTrue(result3 instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_SUFFIX, ((LikeExpression) result3).getOperator());
+
+        // Not Suffix Like（大写开头）
+        Expression result4 = parser.parse("邮箱 Not Suffix Like '@spam.com'");
+        assertTrue(result4 instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_SUFFIX, ((LikeExpression) result4).getOperator());
+
+        log.info("✓ 大小写不敏感 NOT PREFIX/SUFFIX 测试通过");
+    }
+
+    @Test
+    @Order(64)
+    @DisplayName("NOT PREFIX/SUFFIX 与正向 PREFIX/SUFFIX 语法无冲突")
+    void testNotPrefixSuffixNoConflictWithPositive() {
+        log.info("========== 测试：NOT PREFIX/SUFFIX 与正向语法无冲突 ==========");
+
+        // NOT PREFIX LIKE 不应被 PREFIX LIKE 吞掉 NOT
+        String expr1 = "名称 NOT PREFIX LIKE '张'";
+        LikeExpression result1 = asLike(parser.parse(expr1));
+        assertEquals(MatchOperator.NOT_PREFIX, result1.getOperator());
+        assertEquals("张", result1.getValue().getRawValue());
+
+        // 正向 PREFIX LIKE 不应被 NOT PREFIX LIKE 吞掉前缀
+        String expr2 = "名称 PREFIX LIKE '张'";
+        LikeExpression result2 = asLike(parser.parse(expr2));
+        assertEquals(MatchOperator.PREFIX, result2.getOperator());
+        assertEquals("张", result2.getValue().getRawValue());
+
+        // NOT SUFFIX LIKE 不应被 SUFFIX LIKE 吞掉 NOT
+        String expr3 = "邮箱 NOT SUFFIX LIKE '@spam.com'";
+        LikeExpression result3 = asLike(parser.parse(expr3));
+        assertEquals(MatchOperator.NOT_SUFFIX, result3.getOperator());
+        assertEquals("@spam.com", result3.getValue().getRawValue());
+
+        // 正向 SUFFIX LIKE 不应被 NOT SUFFIX LIKE 吞掉前缀
+        String expr4 = "邮箱 SUFFIX LIKE '@spam.com'";
+        LikeExpression result4 = asLike(parser.parse(expr4));
+        assertEquals(MatchOperator.SUFFIX, result4.getOperator());
+        assertEquals("@spam.com", result4.getValue().getRawValue());
+
+        log.info("✓ 语法无冲突测试通过");
+    }
+
+    @Test
+    @Order(65)
+    @DisplayName("NOT PREFIX/SUFFIX 组合在复杂表达式中")
+    void testNotPrefixSuffixInComplexExpression() {
+        log.info("========== 测试：NOT PREFIX/SUFFIX 复杂组合 ==========");
+
+        // 组合 NOT_PREFIX + NOT_SUFFIX + AND/OR
+        String expr1 = "名称 NOT PREFIX LIKE '张' AND 邮箱 NOT SUFFIX LIKE '@spam.com'";
+        log.info("表达式: {}", expr1);
+        BinaryExpression result1 = asBinary(parser.parse(expr1));
+        assertEquals(LogicalOperator.AND, result1.getOperator());
+        assertTrue(result1.getLeft() instanceof LikeExpression);
+        assertTrue(result1.getRight() instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_PREFIX, ((LikeExpression) result1.getLeft()).getOperator());
+        assertEquals(MatchOperator.NOT_SUFFIX, ((LikeExpression) result1.getRight()).getOperator());
+
+        // NOT PREFIX + 比较 + OR
+        String expr2 = "名称 NOT PREFIX LIKE '张' OR 年龄>18";
+        log.info("表达式: {}", expr2);
+        BinaryExpression result2 = asBinary(parser.parse(expr2));
+        assertEquals(LogicalOperator.OR, result2.getOperator());
+        assertTrue(result2.getLeft() instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_PREFIX, ((LikeExpression) result2.getLeft()).getOperator());
+        assertTrue(result2.getRight() instanceof ComparisonExpression);
+
+        // 带括号：NOT PREFIX 在括号内
+        String expr3 = "(名称 NOT PREFIX LIKE '张') AND 状态='活跃'";
+        log.info("表达式: {}", expr3);
+        BinaryExpression result3 = asBinary(parser.parse(expr3));
+        assertEquals(LogicalOperator.AND, result3.getOperator());
+        assertTrue(result3.getLeft() instanceof ParenthesisExpression);
+        ParenthesisExpression paren = asParen(result3.getLeft());
+        assertTrue(paren.getExpression() instanceof LikeExpression);
+        assertEquals(MatchOperator.NOT_PREFIX, ((LikeExpression) paren.getExpression()).getOperator());
+
+        log.info("✓ NOT PREFIX/SUFFIX 复杂组合测试通过");
+    }
+
     @Test
     @Order(59)
     @DisplayName("枚举 Lombok @Getter 验证")
@@ -948,7 +1133,11 @@ class ConditionExprParserEndToEndTest {
 
         // MatchOperator
         assertEquals("模糊匹配", MatchOperator.LIKE.getDescription());
+        assertEquals("前缀匹配", MatchOperator.PREFIX.getDescription());
+        assertEquals("后缀匹配", MatchOperator.SUFFIX.getDescription());
         assertEquals("不匹配", MatchOperator.NOT_LIKE.getDescription());
+        assertEquals("前缀不匹配", MatchOperator.NOT_PREFIX.getDescription());
+        assertEquals("后缀不匹配", MatchOperator.NOT_SUFFIX.getDescription());
 
         // UnaryOperator
         assertEquals("逻辑非", UnaryOperator.NOT.getDescription());
