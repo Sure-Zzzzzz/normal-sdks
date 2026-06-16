@@ -81,6 +81,16 @@ public enum OperatorType {
     REGEX("regex", "正则匹配"),
 
     /**
+     * 前缀不匹配
+     */
+    NOT_PREFIX("not_prefix", "前缀不匹配"),
+
+    /**
+     * 后缀不匹配
+     */
+    NOT_SUFFIX("not_suffix", "后缀不匹配"),
+
+    /**
      * 字段存在
      */
     EXISTS("exists", "字段存在"),

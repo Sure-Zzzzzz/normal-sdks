@@ -59,6 +59,8 @@ public class DefaultKeywordRegistry implements KeywordRegistry {
         addOperatorKeywords(OperatorType.PREFIX, "开头是", "前缀", "prefix");
         addOperatorKeywords(OperatorType.SUFFIX, "结尾是", "后缀", "suffix");
         addOperatorKeywords(OperatorType.REGEX, "正则", "regex");
+        addOperatorKeywords(OperatorType.NOT_PREFIX, "开头不是", "前缀不匹配", "not_prefix");
+        addOperatorKeywords(OperatorType.NOT_SUFFIX, "结尾不是", "后缀不匹配", "not_suffix");
         addOperatorKeywords(OperatorType.EXISTS, "存在", "有", "exists");
         addOperatorKeywords(OperatorType.NOT_EXISTS, "不存在", "没有", "not exists");
         addOperatorKeywords(OperatorType.IS_NULL, "为空", "is null");

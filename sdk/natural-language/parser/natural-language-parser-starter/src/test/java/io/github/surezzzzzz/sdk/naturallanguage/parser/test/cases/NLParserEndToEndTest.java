@@ -491,6 +491,76 @@ class NLParserEndToEndTest {
         log.info("✓ 索引提取测试通过");
     }
 
+    // ==================== v1.1.4 新增测试：不匹配操作符 ====================
+
+    @Test
+    @Order(20)
+    @DisplayName("NOT_PREFIX - 前缀不匹配")
+    void testNotPrefixOperator() {
+        log.info("========== 测试：NOT_PREFIX 前缀不匹配 ==========");
+
+        // "开头不是" 触发 NOT_PREFIX
+        ConditionIntent c1 = asQueryIntent(nlParser.parse("名字开头不是张")).getCondition();
+        log.info("查询: 名字开头不是张, 结果: {}", c1);
+        assertEquals(OperatorType.NOT_PREFIX, c1.getOperator());
+        assertEquals("名字", c1.getFieldHint());
+        assertEquals("张", c1.getValue());
+
+        log.info("✓ NOT_PREFIX 测试通过");
+    }
+
+    @Test
+    @Order(21)
+    @DisplayName("NOT_SUFFIX - 后缀不匹配")
+    void testNotSuffixOperator() {
+        log.info("========== 测试：NOT_SUFFIX 后缀不匹配 ==========");
+
+        // "结尾不是" 触发 NOT_SUFFIX
+        ConditionIntent c1 = asQueryIntent(nlParser.parse("邮箱结尾不是abc")).getCondition();
+        log.info("查询: 邮箱结尾不是abc, 结果: {}", c1);
+        assertEquals(OperatorType.NOT_SUFFIX, c1.getOperator());
+        assertEquals("邮箱", c1.getFieldHint());
+        assertEquals("abc", c1.getValue());
+
+        log.info("✓ NOT_SUFFIX 测试通过");
+    }
+
+    @Test
+    @Order(22)
+    @DisplayName("NOT_PREFIX/SUFFIX 与正向操作符不冲突")
+    void testNotOperatorsNoConflict() {
+        log.info("========== 测试：不匹配操作符与正向操作符不冲突 ==========");
+
+        // 正向 PREFIX 不被 NOT_PREFIX 吞掉
+        ConditionIntent c1 = asQueryIntent(nlParser.parse("名字开头是张")).getCondition();
+        assertEquals(OperatorType.PREFIX, c1.getOperator());
+        assertEquals("张", c1.getValue());
+
+        // 正向 SUFFIX 不被 NOT_SUFFIX 吞掉
+        ConditionIntent c2 = asQueryIntent(nlParser.parse("邮箱结尾是abc")).getCondition();
+        assertEquals(OperatorType.SUFFIX, c2.getOperator());
+        assertEquals("abc", c2.getValue());
+
+        log.info("✓ 不冲突测试通过");
+    }
+
+    @Test
+    @Order(23)
+    @DisplayName("NOT_PREFIX/SUFFIX 与比较运算符组合")
+    void testNotOperatorsWithComparison() {
+        log.info("========== 测试：NOT_PREFIX + 比较 ==========");
+
+        // NOT_PREFIX + 比较 + OR
+        ConditionIntent c1 = asQueryIntent(
+                nlParser.parse("名字开头不是张或者年龄大于18")).getCondition();
+        log.info("查询: 名字开头不是张或者年龄大于18, 结果: {}", c1);
+        assertEquals(LogicType.OR, c1.getLogic());
+        assertTrue(findOperatorInCondition(c1, OperatorType.NOT_PREFIX));
+        assertTrue(findOperatorInCondition(c1, OperatorType.GT));
+
+        log.info("✓ 组合测试通过");
+    }
+
     // ==================== 辅助方法 ====================
 
     private boolean findOperatorInCondition(ConditionIntent condition, OperatorType operator) {

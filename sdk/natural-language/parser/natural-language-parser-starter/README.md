@@ -11,7 +11,7 @@
 - **可插拔解析器架构** — `NLParserPlugin` 接口 + `@Order` 控制执行顺序，可注册自定义 Parser
 - **可替换分词器** — `NLTokenizer` 接口化，默认 HanLP，注册自己的 Bean 即可替换
 - **三层关键字扩展** — Bean（`KeywordContributor`）> YAML 配置 > 内置默认值
-- **18 种操作符** — eq/ne/gt/gte/lt/lte/in/between/like/not_like/prefix/suffix/exists/not_exists/is_null/is_not_null/regex/not_in
+- **20 种操作符** — eq/ne/gt/gte/lt/lte/in/between/like/not_like/prefix/suffix/not_prefix/not_suffix/regex/exists/not_exists/is_null/is_not_null/not_in
 - **22 种聚合类型** — 指标聚合、桶聚合、Pipeline 聚合全覆盖
 - **字段折叠** — 去重解析，支持多种自然语言模式
 - **FieldBinder / IntentTranslator** — SPI 接口，接入自己的存储系统
@@ -24,7 +24,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.3'
+    implementation 'io.github.sure-zzzzzz:natural-language-parser-starter:1.1.4'
 }
 ```
 
@@ -68,7 +68,9 @@ AnalyticsIntent a = (AnalyticsIntent) intent;
 | 包含、匹配 | like | - | `like` |
 | 不包含 | not like | - | `not_like` |
 | 开头是 | prefix | - | `prefix` |
+| 开头不是 | not_prefix | - | `not_prefix` |
 | 结尾是 | suffix | - | `suffix` |
+| 结尾不是 | not_suffix | - | `not_suffix` |
 | 介于、范围 | between | - | `between` |
 | 存在 | exists | - | `exists` |
 | 不存在 | not_exists | - | `not_exists` |
@@ -399,6 +401,13 @@ io:
 - HanLP portable 1.8.6
 
 ## 版本历史
+
+### v1.1.4 (2026-06-15)
+
+Minor Release。详见 [CHANGELOG.1.1.4.md](CHANGELOG.1.1.4.md)
+
+- OperatorType 新增 `NOT_PREFIX` / `NOT_SUFFIX` 两个不匹配操作符
+- DefaultKeywordRegistry 新增对应关键字映射
 
 ### v1.1.3 (2026-05-13)
 
