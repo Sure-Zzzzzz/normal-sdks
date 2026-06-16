@@ -11,7 +11,7 @@
 ## 特性
 
 - **ANTLR 驱动** - 基于 ANTLR 4.10.1，语法严谨，性能优异
-- **功能完善** - 8大类运算符：比较、集合、模糊（LIKE/PREFIX/SUFFIX + NOT_LIKE/NOT_PREFIX/NOT_SUFFIX）、空值、逻辑、括号优先级
+- **功能完善** - 8大类运算符：比较、集合、模糊（LIKE/PREFIX/SUFFIX + NOT_LIKE/NOT_PREFIX/NOT_SUFFIX）、空值、存在性（EXISTS/NOT EXISTS）、逻辑、括号优先级
 - **中文友好** - 运算符支持中文写法（`等于`/`且`/`包含于`…），中文字段名无需空格分隔
 - **大小写不敏感** - 英文关键字 `AND`/`And`/`and` 均可
 - **多值类型** - 字符串、整数、浮点数、布尔值、时间范围枚举（30+种预定义范围）
@@ -25,7 +25,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.4'
+    implementation 'io.github.sure-zzzzzz:condition-expression-parser-starter:1.0.5'
 }
 ```
 
@@ -92,6 +92,13 @@ String sql = expr.accept(new SqlVisitor());
 |-------------|-----|------------------|
 | IS NULL     | 空   | `备注 IS NULL`     |
 | IS NOT NULL | 非空  | `备注 IS NOT NULL` |
+
+### 存在性检查
+
+| 关键字      | 中文     | 示例               |
+|----------|--------|------------------|
+| EXISTS   | 存在     | `备注 EXISTS`      |
+| NOT EXISTS | 不存在 | `备注 NOT EXISTS`  |
 
 ### 逻辑运算符
 

@@ -54,6 +54,8 @@ condition
     | field LIKE value                       # LikeCondition
     | field IS NULL                          # IsNullCondition
     | field IS NOT NULL                      # IsNotNullCondition
+    | field NOT EXISTS                      # NotExistsCondition
+    | field EXISTS                          # ExistsCondition
     ;
 
 /**
@@ -112,6 +114,7 @@ SUFFIX  : S U F F I X | '后缀' ;
 // 空值判断
 IS      : I S | '是' ;
 NULL    : N U L L | '空' ;
+EXISTS  : E X I S T S | '存在' | '有' ;
 
 // 布尔值
 BOOLEAN

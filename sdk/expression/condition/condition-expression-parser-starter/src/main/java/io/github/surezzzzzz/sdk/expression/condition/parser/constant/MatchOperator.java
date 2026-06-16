@@ -38,7 +38,17 @@ public enum MatchOperator {
     /**
      * 后缀不匹配
      */
-    NOT_SUFFIX("后缀不匹配");
+    NOT_SUFFIX("后缀不匹配"),
+
+    /**
+     * 字段存在
+     */
+    EXISTS("字段存在"),
+
+    /**
+     * 字段不存在
+     */
+    NOT_EXISTS("字段不存在");
 
     private final String description;
 

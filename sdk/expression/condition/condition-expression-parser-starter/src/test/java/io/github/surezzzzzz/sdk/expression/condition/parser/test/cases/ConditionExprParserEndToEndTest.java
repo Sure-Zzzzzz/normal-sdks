@@ -305,6 +305,40 @@ class ConditionExprParserEndToEndTest {
         log.info("✓ IS NOT NULL运算符测试通过");
     }
 
+    // ==================== v1.0.5 新增：存在性检查 ====================
+
+    @Test
+    @Order(10)
+    @DisplayName("EXISTS - 字段存在")
+    void testExistsOperator() {
+        log.info("========== 测试：EXISTS 运算符 ==========");
+
+        String expr = "备注 EXISTS";
+        log.info("表达式: {}", expr);
+        LikeExpression result = asLike(parser.parse(expr));
+        log.info("解析结果: {}", result);
+        assertEquals("备注", result.getField());
+        assertEquals(MatchOperator.EXISTS, result.getOperator());
+
+        log.info("✓ EXISTS 运算符测试通过");
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("NOT EXISTS - 字段不存在")
+    void testNotExistsOperator() {
+        log.info("========== 测试：NOT EXISTS 运算符 ==========");
+
+        String expr = "备注 NOT EXISTS";
+        log.info("表达式: {}", expr);
+        LikeExpression result = asLike(parser.parse(expr));
+        log.info("解析结果: {}", result);
+        assertEquals("备注", result.getField());
+        assertEquals(MatchOperator.NOT_EXISTS, result.getOperator());
+
+        log.info("✓ NOT EXISTS 运算符测试通过");
+    }
+
     // ==================== 值类型测试 ====================
 
     @Test

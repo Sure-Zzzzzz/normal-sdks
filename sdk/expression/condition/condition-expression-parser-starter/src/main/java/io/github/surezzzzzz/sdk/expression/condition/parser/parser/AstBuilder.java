@@ -253,6 +253,28 @@ public class AstBuilder extends ConditionExprBaseVisitor<Expression> {
                 .build();
     }
 
+    // ========== EXISTS 条件 ==========
+
+    @Override
+    public Expression visitExistsCondition(ConditionExprParser.ExistsConditionContext ctx) {
+        String field = ctx.field().getText();
+        return LikeExpression.builder()
+                .field(field)
+                .operator(MatchOperator.EXISTS)
+                .value(null)
+                .build();
+    }
+
+    @Override
+    public Expression visitNotExistsCondition(ConditionExprParser.NotExistsConditionContext ctx) {
+        String field = ctx.field().getText();
+        return LikeExpression.builder()
+                .field(field)
+                .operator(MatchOperator.NOT_EXISTS)
+                .value(null)
+                .build();
+    }
+
     // ========== 辅助方法 ==========
 
     /**
