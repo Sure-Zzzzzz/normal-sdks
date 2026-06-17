@@ -3,7 +3,7 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-starter-aop'
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
 
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.6'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.7'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'

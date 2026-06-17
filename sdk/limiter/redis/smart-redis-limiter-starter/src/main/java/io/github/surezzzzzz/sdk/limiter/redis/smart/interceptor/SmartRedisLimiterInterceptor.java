@@ -8,9 +8,11 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.generator.SmartRedisLimiterKeyProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterRuleMatchCacheHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterWebContextHelper;
@@ -24,7 +26,9 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 智能限流拦截器
@@ -69,12 +73,55 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
     private ApplicationContext applicationContext;
 
     /**
-     * 初始化
+     * 自定义 KeyProvider 缓存（key=keyProviderName，value=Bean 实例）
+     * <p>启动时校验并缓存，运行时直接读，避免每次请求查 Bean。</p>
+     */
+    private final Map<String, SmartRedisLimiterKeyProvider> keyProviderCache = new HashMap<>();
+
+    /**
+     * 初始化：校验并缓存所有规则中引用的 KeyProvider Bean
      */
     @PostConstruct
     public void init() {
-        log.info("SmartRedisLimiterInterceptor 初始化完成, mode={}, enabled={}",
-                properties.getMode(), properties.getEnable());
+        SmartRedisLimiterMode mode = SmartRedisLimiterMode.fromCode(properties.getMode());
+        if (mode.isInterceptorEnabled()) {
+            validateAndCacheKeyProviders();
+        }
+        log.info("SmartRedisLimiterInterceptor 初始化完成, mode={}, enabled={}, keyProviderCount={}",
+                properties.getMode(), properties.getEnable(), keyProviderCache.size());
+    }
+
+    /**
+     * 启动时校验所有 rule.keyProvider 引用的 Bean 存在且类型正确，缓存到 keyProviderCache
+     */
+    private void validateAndCacheKeyProviders() {
+        List<SmartRedisLimiterProperties.SmartInterceptorRule> rules = properties.getInterceptor().getRules();
+        if (rules == null || rules.isEmpty()) {
+            return;
+        }
+
+        for (SmartRedisLimiterProperties.SmartInterceptorRule rule : rules) {
+            String keyProviderName = rule.getKeyProvider();
+            if (keyProviderName == null || keyProviderName.trim().isEmpty()) {
+                continue;
+            }
+            if (keyProviderCache.containsKey(keyProviderName)) {
+                continue;
+            }
+            try {
+                SmartRedisLimiterKeyProvider provider =
+                        applicationContext.getBean(keyProviderName, SmartRedisLimiterKeyProvider.class);
+                keyProviderCache.put(keyProviderName, provider);
+                log.info("SmartRedisLimiter KeyProvider 已注册: name={}, rule.pathPattern={}, rule.method={}",
+                        keyProviderName, rule.getPathPattern(), rule.getMethod());
+            } catch (Exception e) {
+                log.error("SmartRedisLimiter KeyProvider 校验失败: name={}, rule.pathPattern={}, rule.method={}",
+                        keyProviderName, rule.getPathPattern(), rule.getMethod(), e);
+                throw new IllegalStateException(
+                        String.format("KeyProvider Bean 不存在或类型不匹配: name=%s, rule.pathPattern=%s, rule.method=%s",
+                                keyProviderName, rule.getPathPattern(), rule.getMethod()), e);
+            }
+        }
     }
 
     /**
@@ -100,22 +147,17 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         SmartRedisLimiterProperties.SmartInterceptorRule matchedRule =
                 smartRedisLimiterRuleMatchCache.findMatchedRule(requestUri, requestMethod);
 
-        String keyStrategy;
         List<SmartRedisLimiterProperties.SmartLimitRule> limitRules;
         String fallbackStrategy;
 
         if (matchedRule != null) {
             log.debug("匹配到规则: {}", matchedRule);
-            keyStrategy = matchedRule.getKeyStrategy() != null ?
-                    matchedRule.getKeyStrategy() :
-                    properties.getInterceptor().getDefaultKeyStrategy();
             limitRules = matchedRule.getLimits().isEmpty() ?
                     properties.getInterceptor().getDefaultLimits() :
                     matchedRule.getLimits();
             fallbackStrategy = determineFallbackStrategy(matchedRule);
         } else {
             log.debug("使用默认规则, URI: {}", requestUri);
-            keyStrategy = properties.getInterceptor().getDefaultKeyStrategy();
             limitRules = properties.getInterceptor().getDefaultLimits();
             fallbackStrategy = determineFallbackStrategy(null);
         }
@@ -125,6 +167,7 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
             return true;
         }
 
+        // 先构建上下文（带 web 信息 + matchedPathPattern），供 KeyProvider 使用
         SmartRedisLimiterContext.SmartRedisLimiterContextBuilder builder = SmartRedisLimiterContext.builder();
         SmartRedisLimiterWebContextHelper.fillWebContext(builder, request);
 
@@ -134,6 +177,14 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         }
 
         SmartRedisLimiterContext context = builder.build();
+
+        // 解析 keyStrategy / keyProvider —— 优先级：keyProvider > rule.keyStrategy > default-key-strategy
+        String keyStrategy = resolveKeyStrategy(matchedRule, request, context, fallbackStrategy, limitRules);
+        if (keyStrategy == null) {
+            // KeyProvider 抛异常 + fallback=deny → 已抛 SmartRedisLimitExceededException
+            // KeyProvider 抛异常 + fallback=allow → 直接放行
+            return true;
+        }
 
         String algorithm = determineAlgorithmStrategy(matchedRule);
         SmartRedisLimiterAlgorithm algorithmInstance = algorithmFactory.getAlgorithm(algorithm);
@@ -160,6 +211,85 @@ public class SmartRedisLimiterInterceptor implements HandlerInterceptor {
         }
 
         return true;
+    }
+
+    /**
+     * 解析 keyStrategy（含 keyProvider 优先级处理）
+     * <p>优先级：rule.keyProvider > rule.keyStrategy > interceptor.default-key-strategy</p>
+     * <ul>
+     *   <li>keyProvider 返回非空字符串 → 写入 PRECOMPUTED_KEY_PART，keyStrategy 记为 "custom:" + providerName</li>
+     *   <li>keyProvider 返回 null/空 → 回退到 keyStrategy 路径</li>
+     *   <li>keyProvider 抛异常 → 按 fallback 处理（allow → 返回 null 表示放行；deny → 抛 SmartRedisLimitExceededException）</li>
+     * </ul>
+     *
+     * @return keyStrategy（用于事件审计与 KeyGenerator 查找）；null 表示 KeyProvider 异常+allow，调用方应直接放行
+     */
+    private String resolveKeyStrategy(SmartRedisLimiterProperties.SmartInterceptorRule matchedRule,
+                                      HttpServletRequest request,
+                                      SmartRedisLimiterContext context,
+                                      String fallbackStrategy,
+                                      List<SmartRedisLimiterProperties.SmartLimitRule> limitRules) {
+        if (matchedRule != null) {
+            String keyProviderName = matchedRule.getKeyProvider();
+            if (keyProviderName != null && !keyProviderName.trim().isEmpty()) {
+                SmartRedisLimiterKeyProvider provider = keyProviderCache.get(keyProviderName);
+                if (provider == null) {
+                    // 启动校验已通过仍取不到，理论上不该发生，作为防御性处理
+                    log.error("KeyProvider 缓存未命中（启动校验未覆盖此 rule？）: {}", keyProviderName);
+                    throw new IllegalStateException("KeyProvider 缓存未命中: " + keyProviderName);
+                }
+                String keyPart;
+                try {
+                    keyPart = provider.provide(request, context);
+                } catch (Exception e) {
+                    log.warn("KeyProvider 抛异常，按 fallback 处理: name={}, fallback={}",
+                            keyProviderName, fallbackStrategy, e);
+                    return handleKeyProviderException(keyProviderName, fallbackStrategy, limitRules, request);
+                }
+                if (keyPart != null && !keyPart.isEmpty()) {
+                    context.setAttribute(SmartRedisLimiterContextAttribute.PRECOMPUTED_KEY_PART, keyPart);
+                    return SmartRedisLimiterConstant.EVENT_KEY_STRATEGY_CUSTOM_PREFIX + keyProviderName;
+                }
+                log.debug("KeyProvider 返回 null/空，回退到 keyStrategy: name={}", keyProviderName);
+                // fall through to keyStrategy
+            }
+            if (matchedRule.getKeyStrategy() != null && !matchedRule.getKeyStrategy().trim().isEmpty()) {
+                return matchedRule.getKeyStrategy();
+            }
+        }
+        return properties.getInterceptor().getDefaultKeyStrategy();
+    }
+
+    /**
+     * KeyProvider 抛异常时的 fallback 处理：
+     * <ul>
+     *   <li>allow → 返回 null（调用方放行请求，不进入算法）</li>
+     *   <li>deny → 抛 SmartRedisLimitExceededException（与正常限流触发一致）</li>
+     * </ul>
+     * <p>不回退 keyStrategy：避免 provider 实现 bug 把限流降级为低区分度的 path 维度，反而弱化保护。</p>
+     */
+    private String handleKeyProviderException(String keyProviderName,
+                                              String fallbackStrategy,
+                                              List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                                              HttpServletRequest request) {
+        SmartRedisLimiterFallbackStrategy fallback = SmartRedisLimiterFallbackStrategy.fromCode(fallbackStrategy);
+        if (fallback == SmartRedisLimiterFallbackStrategy.DENY) {
+            long retryAfter = limitRules.stream()
+                    .mapToLong(SmartRedisLimiterProperties.SmartLimitRule::getWindowSeconds)
+                    .min()
+                    .orElse(1L);
+            long limit = limitRules.stream()
+                    .mapToLong(SmartRedisLimiterProperties.SmartLimitRule::getCount)
+                    .min()
+                    .orElse(0L);
+            log.warn("KeyProvider 异常 + fallback=deny，拒绝请求: provider={}, uri={}",
+                    keyProviderName, SmartRedisLimiterWebContextHelper.getRequestPath(request));
+            throw new SmartRedisLimitExceededException(
+                    SmartRedisLimiterWebContextHelper.getRequestPath(request),
+                    retryAfter, limit, 0, System.currentTimeMillis() / SmartRedisLimiterConstant.MILLIS_PER_SECOND + retryAfter);
+        }
+        log.warn("KeyProvider 异常 + fallback=allow，放行请求: provider={}", keyProviderName);
+        return null;
     }
 
     private void publishLimitEvent(SmartRedisLimiterContext context,

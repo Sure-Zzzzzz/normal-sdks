@@ -1,10 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.generator.SmartRedisLimiterKeyGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -172,10 +169,15 @@ public interface SmartRedisLimiterAlgorithm {
 
     /**
      * 构建限流Key前缀
+     * <p>若上下文中已写入 {@link SmartRedisLimiterContextAttribute#PRECOMPUTED_KEY_PART}
+     * （由自定义 KeyProvider 在拦截器中预计算），直接使用之；否则按 keyStrategy 解析 KeyGenerator。</p>
      */
     default String buildBaseKey(SmartRedisLimiterContext context, String keyStrategy) {
-        SmartRedisLimiterKeyGenerator keyGenerator = getKeyGenerator(keyStrategy);
-        String keyPart = keyGenerator.generate(context);
+        String keyPart = context.getAttribute(SmartRedisLimiterContextAttribute.PRECOMPUTED_KEY_PART);
+        if (keyPart == null || keyPart.isEmpty()) {
+            SmartRedisLimiterKeyGenerator keyGenerator = getKeyGenerator(keyStrategy);
+            keyPart = keyGenerator.generate(context);
+        }
         return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX +
                 getProperties().getMe() +
                 SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR +

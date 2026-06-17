@@ -126,6 +126,71 @@ io:
                         window: 10
                         unit: seconds
 
+                  # === KeyProvider 测试规则（1.1.4 新增） ===
+
+                  # 规则5：自定义 KeyProvider 从 header 提取 clientId
+                  - path-pattern: /api/limiter/by-header
+                    method: GET
+                    key-provider: testHeaderKeyProvider
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则6：KeyProvider 返回 null → 回退到 keyStrategy=path
+                  - path-pattern: /api/limiter/null-fallback/**
+                    method: GET
+                    key-provider: testNullingKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则7：同时配置 keyProvider + keyStrategy，验证 keyProvider 优先级更高
+                  - path-pattern: /api/limiter/provider-priority/**
+                    method: GET
+                    key-provider: testHeaderKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则8：KeyProvider 返回空字符串 → 回退到 keyStrategy=path
+                  - path-pattern: /api/limiter/empty-fallback/**
+                    method: GET
+                    key-provider: testEmptyKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则9：KeyProvider 抛异常 + fallback=allow → 放行
+                  - path-pattern: /api/limiter/throwing-allow
+                    method: GET
+                    key-provider: testThrowingKeyProvider
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则10：KeyProvider 抛异常 + fallback=deny → 拒绝（429）
+                  - path-pattern: /api/limiter/throwing-deny
+                    method: GET
+                    key-provider: testThrowingKeyProvider
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
               # 降级策略
               fallback:
                 on-redis-error: deny  # 全局降级策略：Redis异常时拒绝请求

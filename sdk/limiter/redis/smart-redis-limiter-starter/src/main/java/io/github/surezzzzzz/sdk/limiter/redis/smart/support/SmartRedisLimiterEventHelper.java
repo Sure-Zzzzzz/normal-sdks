@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.generator.SmartRedisLimiterKeyGenerator;
@@ -30,10 +31,10 @@ public class SmartRedisLimiterEventHelper {
     /**
      * 构建限流 Key（用于事件发布）
      *
-     * @param context             限流上下文
-     * @param keyStrategy         Key策略
-     * @param me                  服务标识
-     * @param applicationContext  Spring上下文
+     * @param context            限流上下文
+     * @param keyStrategy        Key策略
+     * @param me                 服务标识
+     * @param applicationContext Spring上下文
      * @return 限流Key
      */
     public static String buildLimitKey(SmartRedisLimiterContext context,
@@ -41,10 +42,13 @@ public class SmartRedisLimiterEventHelper {
                                        String me,
                                        ApplicationContext applicationContext) {
         try {
-            String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
-            SmartRedisLimiterKeyGenerator generator =
-                    applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
-            String keyPart = generator.generate(context);
+            String keyPart = context.getAttribute(SmartRedisLimiterContextAttribute.PRECOMPUTED_KEY_PART);
+            if (keyPart == null || keyPart.isEmpty()) {
+                String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
+                SmartRedisLimiterKeyGenerator generator =
+                        applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
+                keyPart = generator.generate(context);
+            }
             return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX
                     + me
                     + SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR

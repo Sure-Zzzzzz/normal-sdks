@@ -246,4 +246,75 @@ public class TestController {
         result.put("timestamp", System.currentTimeMillis());
         return result;
     }
+
+    // ==================== KeyProvider 测试接口（1.1.4） ====================
+
+    /**
+     * 自定义 KeyProvider（基于请求头）
+     */
+    @GetMapping("/limiter/by-header")
+    public Map<String, Object> limiterByHeader() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "by-header endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 自定义 KeyProvider 返回 null → 回退到 keyStrategy=path
+     */
+    @GetMapping("/limiter/null-fallback/{id}")
+    public Map<String, Object> limiterNullFallback(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "null-fallback endpoint");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 自定义 KeyProvider 优先级高于 keyStrategy
+     */
+    @GetMapping("/limiter/provider-priority/{id}")
+    public Map<String, Object> limiterProviderPriority(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "provider-priority endpoint");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 自定义 KeyProvider 返回空字符串 → 回退到 keyStrategy=path
+     */
+    @GetMapping("/limiter/empty-fallback/{id}")
+    public Map<String, Object> limiterEmptyFallback(@PathVariable String id) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "empty-fallback endpoint");
+        result.put("id", id);
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 自定义 KeyProvider 抛异常 + fallback=allow → 放行
+     */
+    @GetMapping("/limiter/throwing-allow")
+    public Map<String, Object> limiterThrowingAllow() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "throwing-allow endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
+
+    /**
+     * 自定义 KeyProvider 抛异常 + fallback=deny → 拒绝
+     */
+    @GetMapping("/limiter/throwing-deny")
+    public Map<String, Object> limiterThrowingDeny() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "throwing-deny endpoint");
+        result.put("timestamp", System.currentTimeMillis());
+        return result;
+    }
 }

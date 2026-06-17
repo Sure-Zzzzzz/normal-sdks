@@ -1,7 +1,10 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.configuration;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.*;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -401,6 +404,11 @@ public class SmartRedisLimiterProperties {
          * Key策略
          */
         private String keyStrategy;
+
+        /**
+         * 自定义 key provider 的 Spring Bean 名称（可选，优先级高于 keyStrategy）
+         */
+        private String keyProvider;
 
         /**
          * 限流算法
