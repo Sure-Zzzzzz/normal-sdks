@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.constant;
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.core.exception.AkskException;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * Simple AKSK Server Constants
  *
@@ -35,6 +37,68 @@ public final class SimpleAkskServerConstant {
      * 默认 Security Context 最大大小（字节）
      */
     public static final int DEFAULT_SECURITY_CONTEXT_MAX_SIZE = 4096;
+
+    // ==================== 限流相关常量 ====================
+
+    /**
+     * OAuth2端点限流默认开关
+     */
+    public static final boolean DEFAULT_LIMITER_OAUTH2_ENABLE = true;
+
+    /**
+     * 默认限流算法
+     */
+    public static final String DEFAULT_LIMITER_ALGORITHM = "sliding";
+
+    /**
+     * 默认限流Key策略
+     */
+    public static final String DEFAULT_LIMITER_KEY_STRATEGY = "ip";
+
+    /**
+     * Token端点默认降级策略
+     */
+    public static final String DEFAULT_LIMITER_TOKEN_FALLBACK = "deny";
+
+    /**
+     * Introspect端点默认降级策略
+     */
+    public static final String DEFAULT_LIMITER_INTROSPECT_FALLBACK = "allow";
+
+    /**
+     * Revoke端点默认降级策略
+     */
+    public static final String DEFAULT_LIMITER_REVOKE_FALLBACK = "allow";
+
+    /**
+     * 默认限流窗口
+     */
+    public static final int DEFAULT_LIMITER_WINDOW = 1;
+
+    /**
+     * 默认限流窗口单位
+     */
+    public static final TimeUnit DEFAULT_LIMITER_WINDOW_UNIT = TimeUnit.MINUTES;
+
+    /**
+     * Token端点默认限流次数
+     */
+    public static final int DEFAULT_LIMITER_TOKEN_COUNT = 60;
+
+    /**
+     * Introspect端点默认限流次数
+     */
+    public static final int DEFAULT_LIMITER_INTROSPECT_COUNT = 300;
+
+    /**
+     * Revoke端点默认限流次数
+     */
+    public static final int DEFAULT_LIMITER_REVOKE_COUNT = 120;
+
+    /**
+     * OAuth2 Security Filter限流事件来源
+     */
+    public static final String LIMITER_SOURCE_OAUTH2_FILTER = "OAUTH2_FILTER";
 
     // ==================== Redis相关常量 ====================
 

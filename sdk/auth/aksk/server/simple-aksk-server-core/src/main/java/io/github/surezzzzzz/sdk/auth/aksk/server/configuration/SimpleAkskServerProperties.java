@@ -4,6 +4,10 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConsta
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Simple AKSK Server Properties
  *
@@ -38,6 +42,11 @@ public class SimpleAkskServerProperties {
      */
     private IntrospectConfig introspect = new IntrospectConfig();
 
+    /**
+     * 限流配置
+     */
+    private LimiterConfig limiter = new LimiterConfig();
+
     @Data
     public static class JwtConfig {
 
@@ -60,8 +69,6 @@ public class SimpleAkskServerProperties {
 
     @Data
     public static class RedisConfig {
-
-        private Boolean enabled = false;
 
         private TokenConfig token = new TokenConfig();
 
@@ -98,5 +105,86 @@ public class SimpleAkskServerProperties {
          * 仅在网络隔离的内网/测试环境中使用，<b>生产环境请保持默认值 true</b>。
          */
         private boolean requireAuthentication = true;
+    }
+
+    @Data
+    public static class LimiterConfig {
+
+        private OAuth2Config oauth2 = new OAuth2Config();
+
+        @Data
+        public static class OAuth2Config {
+
+            private Boolean enable = SimpleAkskServerConstant.DEFAULT_LIMITER_OAUTH2_ENABLE;
+
+            private EndpointLimitConfig token = EndpointLimitConfig.token();
+
+            private EndpointLimitConfig introspect = EndpointLimitConfig.introspect();
+
+            private EndpointLimitConfig revoke = EndpointLimitConfig.revoke();
+        }
+
+        @Data
+        public static class EndpointLimitConfig {
+
+            private String algorithm;
+
+            private String fallback;
+
+            private String keyStrategy = SimpleAkskServerConstant.DEFAULT_LIMITER_KEY_STRATEGY;
+
+            private List<LimitRuleConfig> limits = new ArrayList<>();
+
+            private static EndpointLimitConfig token() {
+                EndpointLimitConfig config = new EndpointLimitConfig();
+                config.setAlgorithm(SimpleAkskServerConstant.DEFAULT_LIMITER_ALGORITHM);
+                config.setFallback(SimpleAkskServerConstant.DEFAULT_LIMITER_TOKEN_FALLBACK);
+                config.getLimits().add(LimitRuleConfig.of(
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_TOKEN_COUNT,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW_UNIT));
+                return config;
+            }
+
+            private static EndpointLimitConfig introspect() {
+                EndpointLimitConfig config = new EndpointLimitConfig();
+                config.setAlgorithm(SimpleAkskServerConstant.DEFAULT_LIMITER_ALGORITHM);
+                config.setFallback(SimpleAkskServerConstant.DEFAULT_LIMITER_INTROSPECT_FALLBACK);
+                config.getLimits().add(LimitRuleConfig.of(
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_INTROSPECT_COUNT,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW_UNIT));
+                return config;
+            }
+
+            private static EndpointLimitConfig revoke() {
+                EndpointLimitConfig config = new EndpointLimitConfig();
+                config.setAlgorithm(SimpleAkskServerConstant.DEFAULT_LIMITER_ALGORITHM);
+                config.setFallback(SimpleAkskServerConstant.DEFAULT_LIMITER_REVOKE_FALLBACK);
+                config.getLimits().add(LimitRuleConfig.of(
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_REVOKE_COUNT,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW,
+                        SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW_UNIT));
+                return config;
+            }
+        }
+
+        @Data
+        public static class LimitRuleConfig {
+
+            private Integer count;
+
+            private Integer window;
+
+            private TimeUnit unit = SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW_UNIT;
+
+            private static LimitRuleConfig of(Integer count, Integer window, TimeUnit unit) {
+                LimitRuleConfig config = new LimitRuleConfig();
+                config.setCount(count);
+                config.setWindow(window);
+                config.setUnit(unit);
+                return config;
+            }
+        }
     }
 }

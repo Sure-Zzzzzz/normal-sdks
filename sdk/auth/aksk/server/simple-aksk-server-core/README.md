@@ -1,6 +1,6 @@
 # simple-aksk-server-core
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 
 `simple-aksk-server-starter` 和扩展模块共享的核心库，提供服务端公共配置、常量和 Token 审计事件定义。
 
@@ -37,6 +37,32 @@
 
 `RedisKeyHelper` — Redis Key 构建工具，统一管理所有 Redis Key 格式，确保多实例隔离。
 
+> 2.0.3 起，AKSK Server 不再提供无 Redis 模式，`SimpleAkskServerProperties.RedisConfig.enabled` 已删除。
+
+### OAuth2 限流配置
+
+2.0.3 新增 `SimpleAkskServerProperties.LimiterConfig`，用于承载 AKSK Server OAuth2 Security Filter 限流规则。core 只定义轻量配置对象，不依赖 `smart-redis-limiter-starter` 类型。
+
+默认配置：
+
+| 配置 | 默认值 | 说明 |
+|------|--------|------|
+| `limiter.oauth2.enable` | `true` | OAuth2 端点限流默认开启 |
+| `limiter.oauth2.token.algorithm` | `sliding` | token 端点默认滑动窗口 |
+| `limiter.oauth2.token.fallback` | `deny` | token 端点 Redis / provider 异常时默认拒绝 |
+| `limiter.oauth2.token.key-strategy` | `ip` | provider 返回空时回退 IP |
+| `limiter.oauth2.token.limits[0]` | `60 / 1 MINUTES` | token 端点默认阈值 |
+| `limiter.oauth2.introspect.algorithm` | `sliding` | introspect 端点默认滑动窗口 |
+| `limiter.oauth2.introspect.fallback` | `allow` | introspect 默认异常放行 |
+| `limiter.oauth2.introspect.key-strategy` | `ip` | introspect 默认按 IP 限流 |
+| `limiter.oauth2.introspect.limits[0]` | `300 / 1 MINUTES` | introspect 默认阈值 |
+| `limiter.oauth2.revoke.algorithm` | `sliding` | revoke 端点默认滑动窗口 |
+| `limiter.oauth2.revoke.fallback` | `allow` | revoke 默认异常放行 |
+| `limiter.oauth2.revoke.key-strategy` | `ip` | revoke 默认按 IP 限流 |
+| `limiter.oauth2.revoke.limits[0]` | `120 / 1 MINUTES` | revoke 默认阈值 |
+
+`SimpleAkskServerConstant.LIMITER_SOURCE_OAUTH2_FILTER` 用于 starter 发布 OAuth2 Security Filter 限流事件时标识来源。
+
 ### Token 审计事件
 
 | 类 | 说明 |
@@ -68,7 +94,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.2'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.3'
 ```
 
 通常不需要直接引用，`simple-aksk-server-starter` 会通过 `api` 传递依赖。
