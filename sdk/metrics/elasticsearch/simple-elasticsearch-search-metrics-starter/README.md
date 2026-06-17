@@ -5,7 +5,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-metrics-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-metrics-starter:1.0.2'
 ```
 
 前提：项目中已引入 `simple-elasticsearch-search-starter`（其依赖的 `simple-elasticsearch-search-core` 版本 ≥ 1.0.10），它负责发布 `EsQueryEvent`、`EsAggEvent`、`EsQueryErrorEvent` 和 `EsAggErrorEvent`。
