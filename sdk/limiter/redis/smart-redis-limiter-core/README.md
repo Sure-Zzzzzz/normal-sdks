@@ -1,6 +1,6 @@
 # SmartRedisLimiter Core
 
-[![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.1.7-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 `smart-redis-limiter-core` 是 `smart-redis-limiter-starter` 的核心抽象层，定义了限流事件、审计记录模型、扩展接口和统一常量，供限流主模块和审计模块使用。
@@ -144,7 +144,7 @@ SmartRedisLimiterException                    ← 基础异常类
 | `SmartRedisLimiterKeyStrategy` | Key生成策略枚举：method / path / path-pattern / ip |
 | `SmartRedisLimiterMode` | 限流模式枚举：annotation / interceptor / both |
 | `SmartRedisLimiterFallbackStrategy` | 降级策略枚举：allow / deny |
-| `SmartRedisLimiterContextAttribute` | 上下文属性枚举：requestPath / requestMethod / clientIp / matchedPathPattern / durationNanos / fallback / fallbackStrategy |
+| `SmartRedisLimiterContextAttribute` | 上下文属性枚举：requestPath / requestMethod / clientIp / matchedPathPattern / durationNanos / fallback / fallbackStrategy / precomputedKeyPart |
 | `SmartRedisLimiterHttpMethod` | HTTP方法枚举：GET / POST / PUT / DELETE 等 |
 
 > 所有枚举均提供 `fromCode()`、`isValid()`、`getAllCodes()`、`toString()` 标准方法。
@@ -165,7 +165,7 @@ implementation 'io.github.sure-zzzzzz:smart-redis-limiter-audit-listener-starter
 如果需要自定义 Provider 或直接使用核心组件，可以直接依赖本模块：
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.5'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.7'
 ```
 
 自定义 Provider 示例：
@@ -196,6 +196,16 @@ smart-redis-limiter-core               ← Event、Record、Provider、Exception
 ```
 
 ## 版本历史
+
+### 1.1.7
+
+- `SmartRedisLimiterConstant` 新增 `EVENT_KEY_STRATEGY_CUSTOM_PREFIX = "custom:"` 常量，用于在限流事件 `keyStrategy` 字段中标识自定义 KeyProvider 来源（实际值为 `"custom:" + keyProviderName`）
+- `SmartRedisLimiterContextAttribute` 新增 `PRECOMPUTED_KEY_PART` 枚举值（code = `precomputedKeyPart`），承载自定义 KeyProvider 预先计算好的 key 片段，避免算法层和事件构建器重复执行 KeyGenerator
+- 配套 starter 1.1.4 KeyProvider 扩展点使用，仅契约扩展，无破坏性变更
+
+### 1.1.6
+
+- `SmartRedisLimiterFallbackStrategy` 恢复 `ALLOW_CODE` / `DENY_CODE` 公共常量，避免使用方注解中硬编码字符串
 
 ### 1.1.5
 

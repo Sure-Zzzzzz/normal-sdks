@@ -80,6 +80,12 @@ public final class SmartRedisLimiterConstant {
      */
     public static final String SOURCE_ASPECT = "ASPECT";
 
+    /**
+     * 事件 keyStrategy 字段中标识自定义 KeyProvider 的前缀
+     * <p>实际值为 EVENT_KEY_STRATEGY_CUSTOM_PREFIX + keyProviderName，例如 "custom:aksClientIdKeyProvider"。</p>
+     */
+    public static final String EVENT_KEY_STRATEGY_CUSTOM_PREFIX = "custom:";
+
     // ==================== 注解 ====================
 
     /**

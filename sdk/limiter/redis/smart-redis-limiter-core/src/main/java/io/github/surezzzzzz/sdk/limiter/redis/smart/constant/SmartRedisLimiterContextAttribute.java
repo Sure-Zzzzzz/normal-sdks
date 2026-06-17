@@ -45,7 +45,12 @@ public enum SmartRedisLimiterContextAttribute {
     /**
      * 降级策略
      */
-    FALLBACK_STRATEGY("fallbackStrategy", "降级策略");
+    FALLBACK_STRATEGY("fallbackStrategy", "降级策略"),
+
+    /**
+     * 由自定义 KeyProvider 预先计算好的 key 片段（拦截器写入，算法/事件构建器读取）
+     */
+    PRECOMPUTED_KEY_PART("precomputedKeyPart", "自定义KeyProvider预计算的key片段");
 
     private final String code;
     private final String desc;
