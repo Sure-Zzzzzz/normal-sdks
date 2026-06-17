@@ -150,6 +150,14 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
                 return "prefix";
             case SUFFIX:
                 return "suffix";
+            case NOT_PREFIX:
+                return "not_prefix";
+            case NOT_SUFFIX:
+                return "not_suffix";
+            case EXISTS:
+                return "exists";
+            case NOT_EXISTS:
+                return "not_exists";
             default:
                 return "like";
         }
@@ -253,10 +261,19 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
                 return "not_in";
             case "not_in":
                 return "in";
+            // 匹配：有 AST 专用否定语法（field NOT PREFIX LIKE value），单向映射
             case "like":
                 return "not_like";
-            case "not_like":
-                return "like";
+            case "prefix":
+                return "not_prefix";
+            case "suffix":
+                return "not_suffix";
+            // 存在性：无 AST 专用语法，必须通过 negate() 处理，双向映射修复 bug
+            case "exists":
+                return "not_exists";
+            case "not_exists":
+                return "exists";
+            // 空值：无 AST 专用语法，双向映射
             case "is_null":
                 return "is_not_null";
             case "is_not_null":

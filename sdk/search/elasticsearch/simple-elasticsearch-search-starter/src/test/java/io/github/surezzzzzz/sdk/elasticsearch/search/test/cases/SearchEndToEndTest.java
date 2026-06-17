@@ -1196,10 +1196,10 @@ class SearchEndToEndTest {
         // Carol: age=30, points=1500 → points>1000，不命中
         // Dave:  age=20, points=800  → 命中 name='Alice' AND age>=18 AND points<=1000 时不命中（name不对）
         List<Map<String, Object>> users = Arrays.asList(
-                createNlUser("Alice", 25, "北京", "active", 500L),
-                createNlUser("Bob",   16, "上海", "active", 200L),
-                createNlUser("Carol", 30, "广州", "active", 1500L),
-                createNlUser("Dave",  20, "深圳", "active", 800L)
+                createNlUser("Alice", 25, "北京", "active", 500L, "ORD001"),
+                createNlUser("Bob",   16, "上海", "active", 200L, "ORD002"),
+                createNlUser("Carol", 30, "广州", "active", 1500L, "ORD003"),
+                createNlUser("Dave",  20, "深圳", "active", 800L, "ORD004")
         );
         for (int i = 0; i < users.size(); i++) {
             IndexRequest indexRequest = new IndexRequest(NL_USER_INDEX)
@@ -1212,13 +1212,14 @@ class SearchEndToEndTest {
         log.info("✓ NL 用户索引创建完成，已插入 {} 条数据", users.size());
     }
 
-    private static Map<String, Object> createNlUser(String name, int age, String city, String status, long points) {
+    private static Map<String, Object> createNlUser(String name, int age, String city, String status, long points, String orderId) {
         Map<String, Object> doc = new HashMap<>();
         doc.put("name", name);
         doc.put("age", age);
         doc.put("city", city);
         doc.put("status", status);
         doc.put("points", points);
+        doc.put("orderId", orderId);
         return doc;
     }
 
@@ -2935,6 +2936,97 @@ class SearchEndToEndTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andDo(result -> log.info("✓ 表达式语法错误返回 400: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    // ==================== v1.6.7 表达式端到端测试：不匹配操作符 ====================
+
+    @Test
+    @Order(210)
+    @DisplayName("表达式查询 - NOT PREFIX LIKE 排除前缀匹配")
+    void testExpressionNotPrefixLike() throws Exception {
+        // test_order_index: iPhone 15, MacBook Pro, AirPods Pro, iPad Air, Apple Watch
+        // NOT PREFIX LIKE 'i' → 排除 iPhone 15 和 iPad Air，返回 3 条
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"product_name NOT PREFIX LIKE \\\"i\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andDo(result -> log.info("✓ NOT PREFIX LIKE: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(211)
+    @DisplayName("表达式查询 - NOT SUFFIX LIKE 排除后缀匹配")
+    void testExpressionNotSuffixLike() throws Exception {
+        // NOT SUFFIX LIKE 'Pro' → 排除 MacBook Pro、AirPods Pro（末尾是 Pro），返回 3 条
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"product_name NOT SUFFIX LIKE \\\"Pro\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andDo(result -> log.info("✓ NOT SUFFIX LIKE: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(213)
+    @DisplayName("表达式查询 - NOT (PREFIX LIKE) 取反")
+    void testExpressionNotPrefixLikeNegate() throws Exception {
+        // NOT (product_name PREFIX LIKE 'i') 等价于 NOT PREFIX LIKE 'i'
+        String body = "{\"index\":\"test_order_index\",\"expression\":\"NOT (product_name PREFIX LIKE \\\"i\\\")\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andDo(result -> log.info("✓ NOT (PREFIX LIKE): {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(214)
+    @DisplayName("表达式查询 - EXISTS 字段存在")
+    void testExpressionExists() throws Exception {
+        // test_nl_user_index: Alice/Bob/Carol/Dave 都有 orderId 字段，返回 4 条
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"orderId EXISTS\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andDo(result -> log.info("✓ EXISTS: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(215)
+    @DisplayName("表达式查询 - NOT EXISTS 字段不存在")
+    void testExpressionNotExists() throws Exception {
+        // test_nl_user_index 的 orderId 字段在所有记录中都存在，NOT EXISTS 应返回 0 条
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"orderId NOT EXISTS\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andDo(result -> log.info("✓ NOT EXISTS: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(216)
+    @DisplayName("表达式查询 - NOT (EXISTS) 取反")
+    void testExpressionNotExistsNegate() throws Exception {
+        // NOT (orderId EXISTS) 等价于 NOT EXISTS
+        String body = "{\"index\":\"test_nl_user_index\",\"expression\":\"NOT (orderId EXISTS)\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andDo(result -> log.info("✓ NOT (EXISTS): {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     @Test

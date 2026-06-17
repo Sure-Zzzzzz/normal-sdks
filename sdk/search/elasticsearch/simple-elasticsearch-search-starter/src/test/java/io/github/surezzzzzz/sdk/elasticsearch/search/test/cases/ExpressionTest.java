@@ -170,6 +170,42 @@ class ExpressionTest {
     }
 
     @Test
+    @DisplayName("translate - NOT PREFIX LIKE（中文 NOT）")
+    void testTranslateNotPrefixLike() {
+        QueryCondition result = expressionService.translate("名称 非 前缀 包含 \"张\"", null);
+        log.info("not_prefix: {}", result);
+        assertEquals("not_prefix", result.getOp());
+        assertEquals("张", result.getValue());
+    }
+
+    @Test
+    @DisplayName("translate - NOT PREFIX LIKE（英文 NOT）")
+    void testTranslateNotPrefixLikeEnglish() {
+        QueryCondition result = expressionService.translate("name NOT PREFIX LIKE \"John\"", null);
+        log.info("not_prefix: {}", result);
+        assertEquals("not_prefix", result.getOp());
+        assertEquals("John", result.getValue());
+    }
+
+    @Test
+    @DisplayName("translate - NOT SUFFIX LIKE（中文 NOT）")
+    void testTranslateNotSuffixLike() {
+        QueryCondition result = expressionService.translate("邮箱 非 后缀 包含 \"@spam.com\"", null);
+        log.info("not_suffix: {}", result);
+        assertEquals("not_suffix", result.getOp());
+        assertEquals("@spam.com", result.getValue());
+    }
+
+    @Test
+    @DisplayName("translate - NOT SUFFIX LIKE（英文 NOT）")
+    void testTranslateNotSuffixLikeEnglish() {
+        QueryCondition result = expressionService.translate("email NOT SUFFIX LIKE \"@spam.com\"", null);
+        log.info("not_suffix: {}", result);
+        assertEquals("not_suffix", result.getOp());
+        assertEquals("@spam.com", result.getValue());
+    }
+
+    @Test
     @DisplayName("translate - IS NULL")
     void testTranslateIsNull() {
         QueryCondition result = expressionService.translate("威胁标签 IS NULL", null);
@@ -184,6 +220,42 @@ class ExpressionTest {
         QueryCondition result = expressionService.translate("威胁标签 IS NOT NULL", null);
         log.info("is_not_null: {}", result);
         assertEquals("is_not_null", result.getOp());
+    }
+
+    @Test
+    @DisplayName("translate - EXISTS")
+    void testTranslateExists() {
+        QueryCondition result = expressionService.translate("备注 EXISTS", null);
+        log.info("exists: {}", result);
+        assertEquals("exists", result.getOp(), "EXISTS 应翻译为 exists");
+        assertEquals("备注", result.getField(), "字段名应原样透传");
+    }
+
+    @Test
+    @DisplayName("translate - NOT EXISTS")
+    void testTranslateNotExists() {
+        QueryCondition result = expressionService.translate("备注 NOT EXISTS", null);
+        log.info("not_exists: {}", result);
+        assertEquals("not_exists", result.getOp(), "NOT EXISTS 应翻译为 not_exists");
+        assertEquals("备注", result.getField(), "字段名应原样透传");
+    }
+
+    @Test
+    @DisplayName("translate - NOT (EXISTS) 取反为 not_exists（修复 bug）")
+    void testNegateExists() {
+        QueryCondition result = expressionService.translate(
+                "NOT (备注 EXISTS)", null);
+        log.info("NOT (EXISTS): {}", result);
+        assertEquals("not_exists", result.getOp(), "NOT (EXISTS) 应取反为 not_exists");
+    }
+
+    @Test
+    @DisplayName("translate - NOT (NOT EXISTS) 取反为 exists（修复 bug）")
+    void testNegateNotExists() {
+        QueryCondition result = expressionService.translate(
+                "NOT (备注 NOT EXISTS)", null);
+        log.info("NOT (NOT EXISTS): {}", result);
+        assertEquals("exists", result.getOp(), "NOT (NOT EXISTS) 应取反为 exists");
     }
 
     // ==================== translate - 逻辑组合 ====================
@@ -245,6 +317,26 @@ class ExpressionTest {
         assertEquals(2, result.getConditions().size());
         assertEquals("ne", result.getConditions().get(0).getOp());
         assertEquals("lt", result.getConditions().get(1).getOp());
+    }
+
+    @Test
+    @DisplayName("translate - NOT (PREFIX LIKE) 取反为 not_prefix")
+    void testNegatePrefixLike() {
+        QueryCondition result = expressionService.translate(
+                "NOT (名称 PREFIX LIKE \"张\")", null);
+        log.info("NOT (PREFIX LIKE): {}", result);
+        assertEquals("not_prefix", result.getOp());
+        assertEquals("张", result.getValue());
+    }
+
+    @Test
+    @DisplayName("translate - NOT (SUFFIX LIKE) 取反为 not_suffix")
+    void testNegateSuffixLike() {
+        QueryCondition result = expressionService.translate(
+                "NOT (邮箱 SUFFIX LIKE \"@spam.com\")", null);
+        log.info("NOT (SUFFIX LIKE): {}", result);
+        assertEquals("not_suffix", result.getOp());
+        assertEquals("@spam.com", result.getValue());
     }
 
     // ==================== translate - 字段名映射 ====================

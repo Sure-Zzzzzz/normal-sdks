@@ -16,7 +16,7 @@ import java.util.Map;
 
 /**
  * 操作符策略注册表
- * 内置 17 种操作符策略，启动时自动注册。
+ * 内置 21 种操作符策略，启动时自动注册。
  * 用户可通过注入此 Bean 调用 {@link #register} 扩展自定义策略，但不允许覆盖内置 key。
  *
  * @author surezzzzzz
@@ -46,6 +46,9 @@ public class OperatorStrategyRegistry {
     private final IsNullOperatorStrategy isNullStrategy;
     private final IsNotNullOperatorStrategy isNotNullStrategy;
     private final RegexOperatorStrategy regexStrategy;
+    private final NotPrefixOperatorStrategy notPrefixStrategy;
+    private final NotSuffixOperatorStrategy notSuffixStrategy;
+    private final NotRegexOperatorStrategy notRegexStrategy;
 
     @PostConstruct
     public void init() {
@@ -67,6 +70,9 @@ public class OperatorStrategyRegistry {
         register(QueryOperator.IS_NULL.getOperator(), isNullStrategy);
         register(QueryOperator.IS_NOT_NULL.getOperator(), isNotNullStrategy);
         register(QueryOperator.REGEX.getOperator(), regexStrategy);
+        register(QueryOperator.NOT_PREFIX.getOperator(), notPrefixStrategy);
+        register(QueryOperator.NOT_SUFFIX.getOperator(), notSuffixStrategy);
+        register(QueryOperator.NOT_REGEX.getOperator(), notRegexStrategy);
         log.info("OperatorStrategyRegistry initialized with {} strategies", strategies.size());
     }
 

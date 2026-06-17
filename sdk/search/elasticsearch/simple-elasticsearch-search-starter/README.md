@@ -10,7 +10,7 @@
 | 多数据源路由 | 支持多个 ES 集群，自动路由 | v1.0.2+ |
 | 版本兼容 | 支持 ES 6.x 和 7.x+，Spring Boot 2.2.5+ | v1.5.4+ |
 | 动态 Mapping | 自动获取并缓存索引字段元数据 | v1.0.0+ |
-| 灵活查询 | 支持 18 种操作符和嵌套逻辑组合 | v1.0.0+ |
+| 灵活查询 | 支持 21 种操作符和嵌套逻辑组合 | v1.0.0+ |
 | 条件表达式查询 | 类 SQL 表达式直接查询，支持中文字段名映射 | v1.5.2+ |
 | 表达式提示 | 前端自动补全数据源（字段、运算符、时间范围） | v1.5.3+ |
 | Pipeline 聚合 | bucket_sort Top N、bucket_selector HAVING（ES 6.1+） | v1.5.5+ |
@@ -75,7 +75,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.6'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.7'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -451,12 +451,17 @@ GET /api/expression/hints?index=order
 | `like` | 模糊匹配（wildcard） | `value` |
 | `not_like` | 模糊不匹配 | `value` |
 | `prefix` | 前缀匹配 | `value` |
+| `not_prefix` | 前缀不匹配 | `value` |
 | `suffix` | 后缀匹配 | `value` |
+| `not_suffix` | 后缀不匹配 | `value` |
 | `regex` | 正则匹配 | `value` |
+| `not_regex` | 正则不匹配 | `value` |
 | `exists` | 字段存在 | — |
 | `not_exists` | 字段不存在 | — |
 | `is_null` | 字段为空 | — |
 | `is_not_null` | 字段不为空 | — |
+
+> **表达式语法支持范围**：`regex` / `not_regex` 仅通过 JSON API（`/api/query`）可用，表达式语法无 REGEX 关键字。`between` 仅由时间范围关键字（如 `最近7天`）自动生成，表达式无 BETWEEN 关键字。其余操作符均可通过表达式语法实现，详见[场景九](#场景九条件表达式查询-v152)。
 
 ---
 
@@ -861,17 +866,69 @@ indices:
 
 #### 3. 支持的表达式语法
 
-| 语法 | 示例 |
-|------|------|
-| 等于 / 不等于 | `status = "paid"` / `status != "failed"` |
-| 比较 | `amount >= 100` |
-| 范围 | `amount BETWEEN 10 AND 100` |
-| IN / NOT IN | `status IN ("paid", "refunded")` |
-| LIKE / NOT LIKE | `name LIKE "张%"` |
-| IS NULL / IS NOT NULL | `remark IS NULL` |
-| 时间范围 | `create_time = 最近7天` |
-| 逻辑组合 | `A AND B` / `A OR B` / `NOT A` |
-| 括号分组 | `(A OR B) AND C` |
+> 所有英文关键字大小写不敏感：`AND` / `and` / `And` 等效。中文字段名可直接使用，无需引号。
+
+**比较运算符**
+
+| 语法 | 中文关键字 | 示例 |
+|------|-----------|------|
+| `=` / `==` | `等于` | `status = "paid"` |
+| `!=` / `<>` | `不等于` | `status != "failed"` |
+| `>` | `大于` / `晚于` | `amount > 100` |
+| `>=` | `大于等于` / `不小于` | `amount >= 100` |
+| `<` | `小于` / `早于` | `amount < 100` |
+| `<=` | `小于等于` / `不大于` | `amount <= 100` |
+
+**集合与匹配**
+
+| 语法 | 中文关键字 | 示例 |
+|------|-----------|------|
+| `IN (...)` | `包含于` | `status IN ("paid", "refunded")` |
+| `NOT IN (...)` | — | `status NOT IN ("failed")` |
+| `LIKE value` | `模糊匹配` / `包含` | `name LIKE "张"` |
+| `NOT LIKE value` | — | `name NOT LIKE "test"` |
+| `PREFIX LIKE value` | `前缀` | `name PREFIX LIKE "张"` |
+| `NOT PREFIX LIKE value` | — | `name NOT PREFIX LIKE "test"` |
+| `SUFFIX LIKE value` | `后缀` | `email SUFFIX LIKE "@spam.com"` |
+| `NOT SUFFIX LIKE value` | — | `email NOT SUFFIX LIKE "@spam.com"` |
+
+**存在性检查**
+
+| 语法 | 中文关键字 | 示例 | 说明 |
+|------|-----------|------|------|
+| `field EXISTS` | `存在` / `有` | `remark EXISTS` | 字段在 ES 索引中存在 |
+| `field NOT EXISTS` | — | `remark NOT EXISTS` | 字段不存在 |
+| `field IS NULL` | `是 空` | `remark IS NULL` | 字段值为 null |
+| `field IS NOT NULL` | — | `remark IS NOT NULL` | 字段值不为 null |
+
+**逻辑组合**
+
+| 语法 | 中文关键字 | 优先级 |
+|------|-----------|--------|
+| `NOT expr` | `非` | 最高 |
+| `A AND B` | `且` / `并且` | 中 |
+| `A OR B` | `或` / `或者` | 最低 |
+| `(expr)` | — | 括号覆盖优先级 |
+
+> `NOT` 对复合条件做德摩根展开：`NOT (A AND B)` → `NOT A OR NOT B`；对叶子条件翻转操作符：`=` → `!=`，`LIKE` → `NOT LIKE`，`EXISTS` → `NOT EXISTS` 等。
+
+**时间范围**
+
+| 语法 | 示例 | 说明 |
+|------|------|------|
+| `field = 时间关键字` | `create_time = 最近7天` | `=` 生成 between（from ~ now） |
+| `field > 时间关键字` | `create_time > 近1小时` | `>` / `>=` / `<` / `<=` 生成对应比较（against from 时间点） |
+
+时间关键字完整列表见 `/api/expression/hints` 返回的 `timeRanges`，包含近N分钟/小时/天/周/月/年、今天/昨天/本周/上月等。
+
+**值类型**
+
+| 类型 | 示例 | 说明 |
+|------|------|------|
+| 字符串 | `'value'` / `"value"` | 必须加引号（ASCII 单引号或双引号） |
+| 数字 | `100` / `3.14` / `-5` | 不需要引号 |
+| 布尔 | `true` / `false` / `真` / `假` / `否` | 不需要引号 |
+| 时间关键字 | `最近7天` / `今天` | 不需要引号 |
 
 #### 4. 表达式校验
 
@@ -904,9 +961,11 @@ async function loadHints(index) {
 - `field-mapping` key 为 ES 字段名，value 为中文标签列表，多个标签均可在表达式中使用
 - `strategy: FORBIDDEN` 的敏感字段不允许同时出现在 `field-mapping` 中
 - **字符串值必须加引号**（ASCII 单引号 `'` 或双引号 `"`），数字和布尔值不需要
-  - ✅ `status = 'paid'` / `name LIKE '测试'` / `时间 = '近7天'` / `amount >= 100`
+  - ✅ `status = 'paid'` / `name LIKE '测试'` / `create_time = 最近7天` / `amount >= 100`
   - ❌ `status = paid`（不加引号会被识别为字段名）
   - 不支持中文引号 `""`
+- 布尔值支持 `true` / `false` / `真` / `假` / `否`，不需要引号
+- 所有英文关键字大小写不敏感：`AND` / `and` / `And` 等效
 
 ---
 
@@ -1425,6 +1484,17 @@ POST /api/query/expression
 - **NL 不走降级重试**：`/api/query/nl` 和 `/api/agg/nl` 不经过 QueryExecutor 的降级逻辑，日期分割索引的降级需自行处理；`dateRange` 覆盖可解决日期路由问题
 - **PIT 已支持 alias**：`searchAfterMode: pit` 自动将 alias 解析为物理索引名后再打开 PIT，无需手动传物理索引名
 - **NL 不适合生产高频查询**：NL 解析有额外的 CPU 开销，高频场景建议先用 `/api/nl/dsl` 转换一次，缓存 DSL 后直接调 `/api/query`
+
+---
+
+### 条件表达式
+
+- **表达式 vs JSON API**：表达式适合前端搜索框、低代码平台等用户输入场景；JSON API（`/api/query`）适合程序构造，支持全量操作符（含 `regex` / `not_regex`，表达式不支持）
+- **NOT 语义不是简单取反**：`NOT` 对复合条件做德摩根展开（`NOT (A AND B)` → `NOT A OR NOT B`），对叶子条件翻转操作符（`=` → `!=`，`LIKE` → `NOT LIKE`，`EXISTS` → `NOT EXISTS`，`prefix` → `not_prefix` 等）
+- **通配符性能**：`PREFIX LIKE` 是前缀通配（可利用倒排索引，快）；`SUFFIX LIKE` 是后缀通配（`*value`，慢）；`LIKE` 是双向通配（`*value*`，最慢）。能用 `PREFIX LIKE` 就不用 `SUFFIX LIKE` / `LIKE`
+- **字段映射标签要有区分度**：label 在解析前做字符串替换，按长度降序匹配。标签之间不应存在子串重叠（如 `订单` 和 `订单ID` 同时配置时，`订单ID = 'xxx'` 中的 `订单` 先被替换会导致错误）
+- **先校验再执行**：用户输入的表达式先调 `/api/expression/validate`，通过后再调 `/api/query/expression`，避免语法错误导致 400
+- **用 `/api/expression/hints` 做自动补全**：前端搜索框集成 hints 接口获取字段列表、运算符、时间范围关键字，引导用户正确输入
 
 ---
 
