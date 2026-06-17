@@ -1,6 +1,6 @@
 dependencies {
     // 依赖 search-core（提供 EsQueryEvent、EsAggEvent）
-    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.11'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-core:1.0.12'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
@@ -14,7 +14,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 
     // ES 查询模块（用于测试）
-    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.6'
+    testImplementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.7'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
     testImplementation 'org.apache.httpcomponents:httpclient'
     testImplementation 'org.apache.httpcomponents:httpcore'
