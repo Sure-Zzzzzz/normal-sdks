@@ -65,9 +65,13 @@ public final class ServerErrorMessage {
 
     public static final String JWT_KEY_FILE_LOAD_FAILED = "加载密钥文件失败: %s";
 
-    // ==================== 数据库错误 ====================
+    // ==================== 数据库/缓存错误 ====================
 
     public static final String DATABASE_ERROR = "数据库操作失败：%s";
+
+    public static final String CACHE_OPERATION_FAILED = "缓存操作失败：%s";
+
+    public static final String TOKEN_OPERATION_FAILED = "Token操作失败：%s";
 
     // ==================== Admin页面消息 ====================
 

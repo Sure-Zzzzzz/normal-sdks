@@ -4,11 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -26,17 +28,12 @@ import java.util.Set;
 /**
  * Redis Token Repository
  * 使用RedisTemplate查询Redis中的Token数据
- * 仅在Redis启用时加载
+ * Redis为AKSK Server必需依赖
  *
  * @author surezzzzzz
  */
 @Slf4j
 @SimpleAkskServerComponent
-@ConditionalOnProperty(
-        prefix = "io.github.surezzzzzz.sdk.auth.aksk.server.redis",
-        name = "enabled",
-        havingValue = "true"
-)
 public class RedisTokenRepository {
 
     private final RedisTemplate<String, Object> redisTemplate;
@@ -79,6 +76,8 @@ public class RedisTokenRepository {
                 }
             } catch (Exception e) {
                 log.error("Failed to deserialize authorization from Redis: {}", key, e);
+                throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                        String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, key), e);
             }
         }
         return tokenInfos;
@@ -218,6 +217,8 @@ public class RedisTokenRepository {
                             log.info("Scanned and deleted authorization from Redis: {}", k);
                         } catch (Exception e) {
                             log.warn("Failed to delete key via scan: {}", k, e);
+                            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, k), e);
                         }
                     }
                 }
@@ -250,6 +251,8 @@ public class RedisTokenRepository {
             });
         } catch (Exception e) {
             log.error("Failed to scan keys with pattern: {}", pattern, e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, pattern), e);
         }
         return keys;
     }

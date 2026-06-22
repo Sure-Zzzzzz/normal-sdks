@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
@@ -49,10 +50,10 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     }
 
     @Test
-    void findByClientId_cacheMiss_returnsFromJpaAndWritesToCache() {
+    void testFindByClientIdCacheMissReturnsFromJpaAndWritesToCache() {
         OAuth2RegisteredClientEntity entity = newEntity();
         when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
-                .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
+                .thenAnswer(inv -> inv.getArgument(2, java.util.concurrent.Callable.class).call());
         when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.of(entity));
 
         Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
@@ -65,7 +66,7 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     }
 
     @Test
-    void findByClientId_cacheHit_returnsCachedWithoutJpa() {
+    void testFindByClientIdCacheHitReturnsCachedWithoutJpa() {
         OAuth2RegisteredClientEntity cached = newEntity();
         when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
                 .thenReturn(cached);
@@ -79,9 +80,9 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     }
 
     @Test
-    void findByClientId_cacheReturnsNull_returnsEmptyOptional() {
+    void testFindByClientIdCacheReturnsNullReturnsEmptyOptional() {
         when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
-                .thenAnswer(inv -> inv.getArgument(2, java.util.function.Supplier.class).get());
+                .thenAnswer(inv -> inv.getArgument(2, java.util.concurrent.Callable.class).call());
         when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.empty());
 
         Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
@@ -92,51 +93,21 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     }
 
     @Test
-    void findByClientId_smartCacheManagerNull_fallsBackToJpa() {
-        service = new CachedOAuth2RegisteredClientEntityService(delegate, null, redisKeyHelper);
-        OAuth2RegisteredClientEntity entity = newEntity();
-        when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.of(entity));
-
-        Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
-
-        assertTrue(result.isPresent());
-        verify(delegate).findByClientId(CLIENT_ID);
-        verify(smartCacheManager, never()).get(any(), any(), any());
-        log.info("✓ SmartCacheManager 为 null 时降级直查 JPA");
-    }
-
-    @Test
-    void findByClientId_redisKeyHelperNull_fallsBackToJpa() {
-        service = new CachedOAuth2RegisteredClientEntityService(delegate, smartCacheManager, null);
-        OAuth2RegisteredClientEntity entity = newEntity();
-        when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.of(entity));
-
-        Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
-
-        assertTrue(result.isPresent());
-        verify(delegate).findByClientId(CLIENT_ID);
-        log.info("✓ RedisKeyHelper 为 null 时降级直查 JPA");
-    }
-
-    @Test
-    void findByClientId_smartCacheException_fallsBackToJpa() {
-        OAuth2RegisteredClientEntity entity = newEntity();
+    void testFindByClientIdSmartCacheExceptionThrowsServerException() {
         when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
                 .thenThrow(new RuntimeException("Redis connection failed"));
-        when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.of(entity));
 
-        log.info("验证 SmartCache 异常时降级直查 JPA（loader 抛异常后 catch 内重试一次）");
-        Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
+        log.info("验证 SmartCache 异常时不降级直查 JPA");
+        SimpleAkskServerException exception = assertThrows(SimpleAkskServerException.class,
+                () -> service.findByClientId(CLIENT_ID));
 
-        assertTrue(result.isPresent());
-        assertEquals(CLIENT_ID, result.get().getClientId());
-        // loader 内部调用 1 次 + catch 后 delegate 重试 1 次
-        verify(delegate, atLeastOnce()).findByClientId(CLIENT_ID);
-        log.info("✓ SmartCache 异常时降级直查 JPA（异常透传）");
+        assertNotNull(exception.getErrorCode());
+        verify(delegate, never()).findByClientId(CLIENT_ID);
+        log.info("✓ SmartCache 异常时抛出自定义异常");
     }
 
     @Test
-    void evict_callsSmartCacheManagerEvict() {
+    void testEvictCallsSmartCacheManagerEvict() {
         service.evict(CLIENT_ID);
 
         verify(smartCacheManager).evict(CACHE_NAME, CACHE_KEY);
@@ -144,32 +115,15 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     }
 
     @Test
-    void evict_smartCacheManagerNull_noOp() {
-        service = new CachedOAuth2RegisteredClientEntityService(delegate, null, redisKeyHelper);
-
-        service.evict(CLIENT_ID);
-
-        verify(smartCacheManager, never()).evict(any(), any());
-        log.info("✓ SmartCacheManager 为 null 时 evict 无操作");
-    }
-
-    @Test
-    void evict_redisKeyHelperNull_noOp() {
-        service = new CachedOAuth2RegisteredClientEntityService(delegate, smartCacheManager, null);
-
-        service.evict(CLIENT_ID);
-
-        verify(smartCacheManager, never()).evict(any(), any());
-        log.info("✓ RedisKeyHelper 为 null 时 evict 无操作");
-    }
-
-    @Test
-    void evict_exception_swallowed() {
+    void testEvictExceptionThrowsServerException() {
         doThrow(new RuntimeException("Redis evict failed"))
                 .when(smartCacheManager).evict(CACHE_NAME, CACHE_KEY);
 
-        assertDoesNotThrow(() -> service.evict(CLIENT_ID));
-        log.info("✓ evict 异常不外抛，仅 log 记录");
+        SimpleAkskServerException exception = assertThrows(SimpleAkskServerException.class,
+                () -> service.evict(CLIENT_ID));
+
+        assertNotNull(exception.getErrorCode());
+        log.info("✓ evict 异常时抛出自定义异常");
     }
 
     private OAuth2RegisteredClientEntity newEntity() {

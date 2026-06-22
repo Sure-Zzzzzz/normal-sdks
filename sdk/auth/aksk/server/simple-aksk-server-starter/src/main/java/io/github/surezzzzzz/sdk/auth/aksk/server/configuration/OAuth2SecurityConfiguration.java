@@ -1,13 +1,14 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.converter.DefaultScopeAuthenticationConverter;
+import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AkskServerOAuth2LimiterFilter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AnonymousIntrospectionFilter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -19,8 +20,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
 
 /**
  * OAuth2 Security Configuration
@@ -36,9 +39,9 @@ public class OAuth2SecurityConfiguration {
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
     private final SimpleAkskServerProperties properties;
     private final JweJwtDecoder jweJwtDecoder;
-
-    @Autowired(required = false)
-    private OAuth2AuthorizationService authorizationService;
+    private final AuthorizationServerSettings authorizationServerSettings;
+    private final ObjectProvider<AkskServerOAuth2LimiterFilter> akskServerOAuth2LimiterFilter;
+    private final OAuth2AuthorizationService authorizationService;
 
     @Bean
     @Order(1)
@@ -52,18 +55,19 @@ public class OAuth2SecurityConfiguration {
                         )
                 );
 
+        akskServerOAuth2LimiterFilter.ifAvailable(filter ->
+                http.addFilterBefore(filter, AbstractPreAuthenticatedProcessingFilter.class));
+
         // requireAuthentication=false 时，在 OAuth2ClientAuthenticationFilter 之前
         // 加一个 filter 直接处理无认证的 introspect 请求
         if (!properties.getIntrospect().isRequireAuthentication()) {
             log.warn("⚠️  introspect.require-authentication=false: /oauth2/introspect 端点无需认证即可访问，" +
                     "仅适用于网络隔离的内网/测试环境，生产环境请勿使用此配置！");
-            if (authorizationService != null) {
-                // 放在 LogoutFilter 之后，UsernamePasswordAuthenticationFilter 之前
-                http.addFilterAfter(
-                        new AnonymousIntrospectionFilter(authorizationService),
-                        org.springframework.security.web.authentication.logout.LogoutFilter.class
-                );
-            }
+            // 放在 LogoutFilter 之后，UsernamePasswordAuthenticationFilter 之前
+            http.addFilterAfter(
+                    new AnonymousIntrospectionFilter(authorizationService, authorizationServerSettings),
+                    org.springframework.security.web.authentication.logout.LogoutFilter.class
+            );
         }
 
         http.httpBasic().disable();

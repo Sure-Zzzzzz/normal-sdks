@@ -61,7 +61,7 @@ class TokenManagementIntegrationTest {
     @Autowired
     private OAuth2AuthorizationRepository authorizationRepository;
 
-    @Autowired(required = false)
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     private String jwtToken;
@@ -159,16 +159,14 @@ class TokenManagementIntegrationTest {
         }
 
         // 清理Redis中的测试数据
-        if (redisTemplate != null) {
-            try {
-                Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
-                if (keys != null && !keys.isEmpty()) {
-                    redisTemplate.delete(keys);
-                    log.info("清理Redis测试数据: {} 条", keys.size());
-                }
-            } catch (Exception e) {
-                log.warn("清理Redis失败: {}", e.getMessage());
+        try {
+            Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.info("清理Redis测试数据: {} 条", keys.size());
             }
+        } catch (Exception e) {
+            log.warn("清理Redis失败: {}", e.getMessage());
         }
 
         log.info("测试数据清理完成");

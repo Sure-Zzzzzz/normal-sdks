@@ -1,9 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.service;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.lang.Nullable;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
@@ -13,8 +15,7 @@ import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
  * Cached OAuth2 Authorization Service
  *
  * <p>Wraps {@link OAuth2AuthorizationService} with SmartCache (L1+L2) layer.
- * When {@link SmartCacheManager} is available, uses L1(Caffeine) + L2(Redis) two-level cache.
- * Falls back to database-only mode otherwise.
+ * SmartCache is a required AKSK Server dependency.
  *
  * @author surezzzzzz
  */
@@ -37,10 +38,6 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
     public void save(OAuth2Authorization authorization) {
         delegate.save(authorization);
 
-        if (smartCacheManager == null) {
-            return;
-        }
-
         OAuth2Authorization.Token<OAuth2AccessToken> accessToken =
                 authorization.getToken(OAuth2AccessToken.class);
         boolean isRevoked = accessToken != null && accessToken.isInvalidated();
@@ -55,6 +52,8 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
             log.debug("Saved authorization to smart cache: {}", authorization.getId());
         } catch (Exception e) {
             log.error("Failed to cache authorization: {}", authorization.getId(), e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, authorization.getId()), e);
         }
 
         // token 被撤销时清除 token 缓存，避免 introspect 拿到旧数据
@@ -66,10 +65,6 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
     @Override
     public void remove(OAuth2Authorization authorization) {
         delegate.remove(authorization);
-
-        if (smartCacheManager == null) {
-            return;
-        }
 
         try {
             smartCacheManager.evict(
@@ -84,15 +79,13 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
             log.debug("Evicted authorization from smart cache: {}", authorization.getId());
         } catch (Exception e) {
             log.error("Failed to evict authorization from smart cache: {}", authorization.getId(), e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, authorization.getId()), e);
         }
     }
 
     @Override
     public OAuth2Authorization findById(String id) {
-        if (smartCacheManager == null) {
-            return delegate.findById(id);
-        }
-
         try {
             return smartCacheManager.get(
                     RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION,
@@ -107,16 +100,13 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
             );
         } catch (Exception e) {
             log.error("Failed to get authorization from smart cache: {}", id, e);
-            return delegate.findById(id);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, id), e);
         }
     }
 
     @Override
-    public OAuth2Authorization findByToken(String token, @Nullable OAuth2TokenType tokenType) {
-        if (smartCacheManager == null) {
-            return delegate.findByToken(token, tokenType);
-        }
-
+    public OAuth2Authorization findByToken(String token, OAuth2TokenType tokenType) {
         try {
             String key = redisKeyHelper.buildCacheKeyByToken(token, tokenType != null ? tokenType.getValue() : null);
             return smartCacheManager.get(
@@ -132,7 +122,8 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
             );
         } catch (Exception e) {
             log.error("Failed to get authorization from smart cache by token, type: {}", tokenType, e);
-            return delegate.findByToken(token, tokenType);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, tokenType), e);
         }
     }
 
@@ -140,10 +131,6 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
      * 通过 SmartCacheManager 清除 token 相关缓存（L1+L2+Pub/Sub）
      */
     public void evictTokenCache(String tokenValue) {
-        if (smartCacheManager == null) {
-            log.warn("SmartCacheManager is null, cannot evict token cache");
-            return;
-        }
         try {
             String nullTypeKey = redisKeyHelper.buildCacheKeyByToken(tokenValue, null);
             String accessTokenTypeKey = redisKeyHelper.buildCacheKeyByToken(tokenValue, OAuth2TokenType.ACCESS_TOKEN.getValue());
@@ -161,6 +148,8 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
                     tokenValue.substring(0, Math.min(20, tokenValue.length())));
         } catch (Exception e) {
             log.error("[Pub/Sub] Failed to evict token cache via smart cache", e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, tokenValue), e);
         }
     }
 }

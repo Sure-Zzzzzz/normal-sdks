@@ -17,6 +17,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2AuthorizationEntit
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -26,7 +27,6 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -60,25 +60,25 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     private final OAuth2AuthorizationEntityRepository authorizationEntityRepository;
     private final OAuth2RegisteredClientEntityRepository clientRepository;
     private final ApplicationEventPublisher eventPublisher;
-
-    @Autowired(required = false)
-    private RedisTokenRepository redisRepository;
-
-    @Autowired(required = false)
-    private SmartCacheManager smartCacheManager;
-
-    @Autowired(required = false)
-    private RedisKeyHelper redisKeyHelper;
+    private final RedisTokenRepository redisRepository;
+    private final SmartCacheManager smartCacheManager;
+    private final RedisKeyHelper redisKeyHelper;
 
     public TokenManagementServiceImpl(
             OAuth2AuthorizationRepository mysqlRepository,
             OAuth2AuthorizationEntityRepository authorizationEntityRepository,
             OAuth2RegisteredClientEntityRepository clientRepository,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            RedisTokenRepository redisRepository,
+            SmartCacheManager smartCacheManager,
+            RedisKeyHelper redisKeyHelper) {
         this.mysqlRepository = mysqlRepository;
         this.authorizationEntityRepository = authorizationEntityRepository;
         this.clientRepository = clientRepository;
         this.eventPublisher = eventPublisher;
+        this.redisRepository = redisRepository;
+        this.smartCacheManager = smartCacheManager;
+        this.redisKeyHelper = redisKeyHelper;
     }
 
     @Override
@@ -108,10 +108,6 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     @Override
     public PageResponse<TokenInfoResponse> queryRedisTokens(TokenInfo.TokenStatus status, int page, int size) {
-        if (redisRepository == null) {
-            return PageResponse.of(new ArrayList<>(), 0L, page, size);
-        }
-
         // 从Redis获取所有token
         List<TokenInfo> allRedisTokens = redisRepository.findAllFromRedis();
 
@@ -159,15 +155,13 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             return toTokenInfoResponse(tokenInfo);
         }
         // MySQL 中不存在，fallback 到 Redis
-        if (redisRepository != null) {
-            List<TokenInfo> redisTokens = redisRepository.findAllFromRedis();
-            tokenInfo = redisTokens.stream()
-                    .filter(t -> id.equals(t.getId()))
-                    .findFirst()
-                    .orElse(null);
-            if (tokenInfo != null) {
-                return toTokenInfoResponse(enrichClientInfo(tokenInfo));
-            }
+        List<TokenInfo> redisTokens = redisRepository.findAllFromRedis();
+        tokenInfo = redisTokens.stream()
+                .filter(t -> id.equals(t.getId()))
+                .findFirst()
+                .orElse(null);
+        if (tokenInfo != null) {
+            return toTokenInfoResponse(enrichClientInfo(tokenInfo));
         }
         return null;
     }
@@ -179,38 +173,36 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         if (entity == null) {
             // MySQL 里没有，但 Redis 里可能有
             log.warn("Token not found in MySQL, checking Redis: {}", id);
-            if (redisRepository != null) {
-                // 先尝试从 Redis 获取 token 信息，以便发布完整的撤销事件
-                List<TokenInfo> allRedisTokens = redisRepository.findAllFromRedis();
-                TokenInfo redisToken = allRedisTokens.stream()
-                        .filter(token -> id.equals(token.getId()))
-                        .findFirst()
-                        .orElse(null);
+            // 先尝试从 Redis 获取 token 信息，以便发布完整的撤销事件
+            List<TokenInfo> allRedisTokens = redisRepository.findAllFromRedis();
+            TokenInfo redisToken = allRedisTokens.stream()
+                    .filter(token -> id.equals(token.getId()))
+                    .findFirst()
+                    .orElse(null);
 
-                if (redisToken != null) {
-                    log.info("Token found in Redis, revoking: {}", id);
-                    // 发布 TokenRevokedEvent 事件
-                    try {
-                        eventPublisher.publishEvent(new TokenRevokedEvent(
-                                this,
-                                redisToken.getClientId(),
-                                null,
-                                redisToken.getOwnerUserId(),
-                                redisToken.getOwnerUsername(),
-                                redisToken.getTokenValue(),
-                                redisToken.getScopes() != null ? new java.util.HashSet<>(redisToken.getScopes()) : null,
-                                redisToken.getIssuedAt(),
-                                redisToken.getExpiresAt()
-                        ));
-                        log.debug("Published TokenRevokedEvent for Redis-only token: {}", id);
-                    } catch (Exception e) {
-                        log.warn("Failed to publish TokenRevokedEvent for Redis-only token: {}", id, e);
-                    }
+            if (redisToken != null) {
+                log.info("Token found in Redis, revoking: {}", id);
+                // 发布 TokenRevokedEvent 事件
+                try {
+                    eventPublisher.publishEvent(new TokenRevokedEvent(
+                            this,
+                            redisToken.getClientId(),
+                            null,
+                            redisToken.getOwnerUserId(),
+                            redisToken.getOwnerUsername(),
+                            redisToken.getTokenValue(),
+                            redisToken.getScopes() != null ? new java.util.HashSet<>(redisToken.getScopes()) : null,
+                            redisToken.getIssuedAt(),
+                            redisToken.getExpiresAt()
+                    ));
+                    log.debug("Published TokenRevokedEvent for Redis-only token: {}", id);
+                } catch (Exception e) {
+                    log.warn("Failed to publish TokenRevokedEvent for Redis-only token: {}", id, e);
                 }
-
-                // 清除 Redis 中的 token
-                redisRepository.deleteById(id);
             }
+
+            // 清除 Redis 中的 token
+            redisRepository.deleteById(id);
             return;
         }
 
@@ -232,7 +224,8 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         byte[] updatedMetadata = markInvalidated(entity.getAccessTokenMetadata());
         if (updatedMetadata == null) {
             log.error("Failed to update token metadata for revocation: {}", id);
-            return;
+            throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, id));
         }
         authorizationEntityRepository.updateAccessTokenMetadata(id, updatedMetadata);
         log.debug("Updated token metadata in database: {}", id);
@@ -276,7 +269,6 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     }
 
     private void evictTokenCache(String id, OAuth2AuthorizationEntity entity) {
-        if (smartCacheManager == null || redisKeyHelper == null) return;
         try {
             // evict SmartCache（按 id 索引）
             smartCacheManager.evict(
@@ -298,12 +290,12 @@ public class TokenManagementServiceImpl implements TokenManagementService {
                 }
             }
             // 同时删掉 RedisTokenRepository 扫描用的完整 key
-            if (redisRepository != null) {
-                redisRepository.deleteById(id);
-            }
+            redisRepository.deleteById(id);
             log.debug("Evicted token cache: {}", id);
         } catch (Exception e) {
             log.warn("Failed to evict token cache: {}", id, e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, id), e);
         }
     }
 
@@ -353,6 +345,8 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             revokeToken(id);
         } catch (Exception e) {
             log.warn("Failed to revoke token before deletion: {}", id, e);
+            throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, id), e);
         }
 
         // 再从 MySQL 删除（先检查存在性）
@@ -366,16 +360,18 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             }
         } catch (Exception e) {
             log.error("Failed to delete token from MySQL: {}", id, e);
+            throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, id), e);
         }
 
         // 确保也从 Redis 删除（revokeToken 里已经删了，这里再确保一下）
-        if (redisRepository != null) {
-            try {
-                redisRepository.deleteById(id);
-                log.info("Token deleted from Redis: {}", id);
-            } catch (Exception e) {
-                log.error("Failed to delete token from Redis: {}", id, e);
-            }
+        try {
+            redisRepository.deleteById(id);
+            log.info("Token deleted from Redis: {}", id);
+        } catch (Exception e) {
+            log.error("Failed to delete token from Redis: {}", id, e);
+            throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, id), e);
         }
 
         log.info("Token deletion process completed: {}", id);
@@ -389,16 +385,16 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
         // Redis中的过期Token会自动过期，但也可以手动清理
         int redisDeleted = 0;
-        if (redisRepository != null) {
-            List<TokenInfo> redisTokens = redisRepository.findAllFromRedis();
-            for (TokenInfo token : redisTokens) {
-                if (token.getStatus() == TokenInfo.TokenStatus.EXPIRED) {
-                    try {
-                        redisRepository.deleteById(token.getId());
-                        redisDeleted++;
-                    } catch (Exception e) {
-                        log.error("Failed to delete expired token from Redis: {}", token.getId(), e);
-                    }
+        List<TokenInfo> redisTokens = redisRepository.findAllFromRedis();
+        for (TokenInfo token : redisTokens) {
+            if (token.getStatus() == TokenInfo.TokenStatus.EXPIRED) {
+                try {
+                    redisRepository.deleteById(token.getId());
+                    redisDeleted++;
+                } catch (Exception e) {
+                    log.error("Failed to delete expired token from Redis: {}", token.getId(), e);
+                    throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
+                            String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, token.getId()), e);
                 }
             }
         }
@@ -531,6 +527,8 @@ public class TokenManagementServiceImpl implements TokenManagementService {
                     revokedCount++;
                 } catch (Exception e) {
                     log.warn("Failed to revoke token: {}", entity.getId(), e);
+                    throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                            String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, entity.getId()), e);
                 }
             }
             page++;

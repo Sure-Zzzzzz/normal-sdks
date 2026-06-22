@@ -15,7 +15,6 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweOAuth2TokenGenerator;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,12 +44,8 @@ public class AuthorizationServerConfiguration {
     private final SimpleAkskServerProperties properties;
     private final OAuth2RegisteredClientEntityRepository entityRepository;
     private final ApplicationEventPublisher eventPublisher;
-
-    @Autowired(required = false)
-    private SmartCacheManager smartCacheManager;
-
-    @Autowired(required = false)
-    private RedisKeyHelper redisKeyHelper;
+    private final SmartCacheManager smartCacheManager;
+    private final RedisKeyHelper redisKeyHelper;
 
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
@@ -75,11 +70,7 @@ public class AuthorizationServerConfiguration {
 
     @Bean
     public CachedOAuth2RegisteredClientEntityService cachedClientEntityService() {
-        if (smartCacheManager != null && redisKeyHelper != null) {
-            log.info("Smart cache (L1+L2) enabled for OAuth2 client entity");
-        } else {
-            log.info("SmartCacheManager not available, client entity uses database only");
-        }
+        log.info("Smart cache (L1+L2) enabled for OAuth2 client entity");
         return new CachedOAuth2RegisteredClientEntityService(
                 entityRepository, smartCacheManager, redisKeyHelper);
     }
@@ -91,17 +82,8 @@ public class AuthorizationServerConfiguration {
                 registeredClientRepository()
         );
 
-        OAuth2AuthorizationService service = jdbcService;
-
-        // 可选：SmartCache 缓存层（L1+L2）
-        if (properties.getRedis().getEnabled()) {
-            if (smartCacheManager != null) {
-                log.info("Smart cache (L1+L2) enabled for OAuth2 authorization storage");
-            } else {
-                log.info("Redis enabled but SmartCacheManager not available, using database only");
-            }
-            service = new CachedOAuth2AuthorizationService(jdbcService, smartCacheManager, redisKeyHelper);
-        }
+        log.info("Smart cache (L1+L2) enabled for OAuth2 authorization storage");
+        OAuth2AuthorizationService service = new CachedOAuth2AuthorizationService(jdbcService, smartCacheManager, redisKeyHelper);
 
         // 始终：审计事件层
         service = new AuditableOAuth2AuthorizationService(service, eventPublisher);

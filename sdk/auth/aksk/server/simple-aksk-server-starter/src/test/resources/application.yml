@@ -39,7 +39,6 @@ io:
                 private-key: classpath:keys/private.pem
                 expires-in: 3600
               redis:
-                enabled: true
                 token:
                   me: "test-app"
               admin:
@@ -48,6 +47,29 @@ io:
                 password: # 请在 application-local.yml 中配置真实密码
               introspect:
                 require-authentication: true  # 默认 true，改为 false 则允许匿名 introspect
+              limiter:
+                oauth2:
+                  token:
+                    limits:
+                      - count: 1000000
+                        window: 1
+                        unit: MINUTES
+                  introspect:
+                    limits:
+                      - count: 1000000
+                        window: 1
+                        unit: MINUTES
+                  revoke:
+                    limits:
+                      - count: 1000000
+                        window: 1
+                        unit: MINUTES
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me:test-app}
+              mode: annotation
         cache:
           key-prefix: sure-auth-aksk
           me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me:test-app}

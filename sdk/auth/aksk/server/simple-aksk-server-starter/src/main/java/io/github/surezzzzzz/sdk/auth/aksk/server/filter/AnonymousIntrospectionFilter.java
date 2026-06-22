@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterWebContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -11,6 +12,7 @@ import org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNam
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
+import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenClaimNames;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -37,16 +39,17 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AnonymousIntrospectionFilter extends OncePerRequestFilter {
 
-    private static final String INTROSPECT_ENDPOINT = "/oauth2/introspect";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final OAuth2AuthorizationService authorizationService;
+    private final AuthorizationServerSettings authorizationServerSettings;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         if (!HttpMethod.POST.name().equals(request.getMethod())
-                || !INTROSPECT_ENDPOINT.equals(request.getRequestURI())) {
+                || !authorizationServerSettings.getTokenIntrospectionEndpoint().equals(
+                SmartRedisLimiterWebContextHelper.getRequestPath(request))) {
             filterChain.doFilter(request, response);
             return;
         }

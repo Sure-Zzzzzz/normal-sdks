@@ -70,12 +70,24 @@ public final class ErrorCode {
      */
     public static final String JWE_DECODE_FAILED = "JWE_002";
 
+    // ==================== Cache错误 ====================
+
+    /**
+     * Cache操作失败
+     */
+    public static final String CACHE_OPERATION_FAILED = "CACHE_001";
+
     // ==================== Token管理错误 ====================
 
     /**
      * clientId 参数缺失
      */
     public static final String TOKEN_CLIENT_ID_REQUIRED = "TOKEN_001";
+
+    /**
+     * Token操作失败
+     */
+    public static final String TOKEN_OPERATION_FAILED = "TOKEN_002";
 
 
 }
