@@ -8,10 +8,14 @@ import lombok.Getter;
 @Getter
 public enum FileDisposition {
 
-    DOWNLOAD("attachment", "下载"),
-    INLINE("inline", "预览");
+    /** 附件下载模式 */
+    DOWNLOAD(S3ClientConstant.CONTENT_DISPOSITION_ATTACHMENT, "下载"),
+    /** 内联预览模式 */
+    INLINE(S3ClientConstant.CONTENT_DISPOSITION_INLINE, "预览");
 
+    /** Content-Disposition 值 */
     private final String disposition;
+    /** 描述 */
     private final String description;
 
     FileDisposition(String disposition, String description) {
@@ -23,7 +27,7 @@ public enum FileDisposition {
      * 根据 Content-Disposition 头部格式生成值
      */
     public String getContentDisposition(String fileName) {
-        return String.format("%s; filename=\"%s\"", disposition, fileName);
+        return String.format(S3ClientConstant.CONTENT_DISPOSITION_TEMPLATE, disposition, fileName);
     }
 
     /**

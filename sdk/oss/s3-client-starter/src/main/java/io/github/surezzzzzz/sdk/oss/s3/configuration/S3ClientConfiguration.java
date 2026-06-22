@@ -36,6 +36,9 @@ public class S3ClientConfiguration {
     @Autowired
     private S3ClientProperties properties;
 
+    /**
+     * 创建 AWS 安全令牌服务客户端
+     */
     @Bean
     public AWSSecurityTokenService awsSecurityTokenService() {
         log.info("开始创建AWS安全令牌服务客户端");
@@ -47,6 +50,9 @@ public class S3ClientConfiguration {
                 .build();
     }
 
+    /**
+     * 创建 AmazonS3 客户端
+     */
     @Bean
     public AmazonS3 amazonS3() {
         log.info("开始创建AmazonS3客户端");

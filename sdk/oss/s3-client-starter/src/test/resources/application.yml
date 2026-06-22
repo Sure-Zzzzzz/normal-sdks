@@ -12,6 +12,9 @@ io:
           s3:
             enabled: true
             # endpoint 和凭证在 application-local.yml 中配置
+            # 测试用小阈值/小分段加速集成测试（part 必须 >= 5MB，取 6MB 留余量）
+            multipart-part-size-mb: 6
+            multipart-threshold-mb: 10
 
 logging:
   level:

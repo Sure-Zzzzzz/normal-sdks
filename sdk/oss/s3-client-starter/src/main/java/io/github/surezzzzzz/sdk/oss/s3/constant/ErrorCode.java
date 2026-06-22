@@ -23,4 +23,12 @@ public final class ErrorCode {
     public static final String COPY_OBJECT_FAILED = "OSS_206";
     public static final String LIST_OBJECTS_FAILED = "OSS_207";
     public static final String GET_OBJECT_METADATA_FAILED = "OSS_208";
+    public static final String SET_OBJECT_TAGGING_FAILED = "OSS_209";
+    public static final String UPLOAD_PART_FAILED = "OSS_210";
+    public static final String COMPLETE_MULTIPART_UPLOAD_FAILED = "OSS_211";
+    public static final String GET_OBJECT_TAGGING_FAILED = "OSS_212";
+    public static final String DELETE_OBJECT_TAGGING_FAILED = "OSS_213";
+
+    // ==================== 配置错误（3xx）====================
+    public static final String S3_CLIENT_PROPERTIES_INVALID = "OSS_301";
 }

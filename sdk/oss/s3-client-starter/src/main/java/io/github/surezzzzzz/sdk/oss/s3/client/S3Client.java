@@ -16,9 +16,14 @@ import io.github.surezzzzzz.sdk.oss.s3.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.oss.s3.constant.FileDisposition;
 import io.github.surezzzzzz.sdk.oss.s3.constant.S3ClientConstant;
 import io.github.surezzzzzz.sdk.oss.s3.exception.client.FileNotFoundException;
+import io.github.surezzzzzz.sdk.oss.s3.exception.client.S3ClientPropertiesInvalidException;
 import io.github.surezzzzzz.sdk.oss.s3.exception.client.S3ObjectNotExistException;
 import io.github.surezzzzzz.sdk.oss.s3.exception.server.*;
-import io.github.surezzzzzz.sdk.oss.s3.support.CapitalizeNamingStrategy;
+import io.github.surezzzzzz.sdk.oss.s3.model.MultipartUpload;
+import io.github.surezzzzzz.sdk.oss.s3.model.MultipartUploadList;
+import io.github.surezzzzzz.sdk.oss.s3.model.MultipartUploadPart;
+import io.github.surezzzzzz.sdk.oss.s3.model.MultipartUploadPartList;
+import io.github.surezzzzzz.sdk.oss.s3.strategy.CapitalizeNamingStrategy;
 import io.github.surezzzzzz.sdk.oss.s3.support.ContentTypeHelper;
 import io.github.surezzzzzz.sdk.oss.s3.support.DateTimeHelper;
 import io.github.surezzzzzz.sdk.oss.s3.support.PolicyDocumentHelper;
@@ -27,14 +32,19 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.*;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
-import java.util.Base64;
-import java.util.Date;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 /**
  * S3 客户端
@@ -57,9 +67,41 @@ public class S3Client {
 
     private final ObjectMapper capitalizeObjectMapper;
 
+    private ExecutorService multipartExecutor;
+
     public S3Client() {
         this.capitalizeObjectMapper = new ObjectMapper();
         this.capitalizeObjectMapper.setPropertyNamingStrategy(new CapitalizeNamingStrategy());
+    }
+
+    /**
+     * 校验配置并初始化分段上传线程池（依赖注入完成后执行）
+     */
+    @PostConstruct
+    public void init() {
+        validateProperties();
+        this.multipartExecutor = Executors.newFixedThreadPool(properties.getMultipartConcurrency());
+    }
+
+    /**
+     * 校验分段上传配置参数
+     */
+    private void validateProperties() {
+        if (properties.getMultipartPartSizeMB() < S3ClientConstant.MIN_PART_SIZE_MB) {
+            throw new S3ClientPropertiesInvalidException(String.format(
+                    ErrorMessage.PROPERTIES_MULTIPART_PART_SIZE_INVALID,
+                    S3ClientConstant.MIN_PART_SIZE_MB, properties.getMultipartPartSizeMB()));
+        }
+        if (properties.getMultipartConcurrency() < S3ClientConstant.MIN_MULTIPART_CONCURRENCY) {
+            throw new S3ClientPropertiesInvalidException(String.format(
+                    ErrorMessage.PROPERTIES_MULTIPART_CONCURRENCY_INVALID,
+                    properties.getMultipartConcurrency()));
+        }
+        if (properties.getMultipartThresholdMB() < S3ClientConstant.MIN_MULTIPART_THRESHOLD_MB) {
+            throw new S3ClientPropertiesInvalidException(String.format(
+                    ErrorMessage.PROPERTIES_MULTIPART_THRESHOLD_INVALID,
+                    properties.getMultipartThresholdMB()));
+        }
     }
 
     // ==================== STS 凭证 ====================
@@ -101,13 +143,13 @@ public class S3Client {
             AssumeRoleRequest req = new AssumeRoleRequest()
                     .withDurationSeconds(properties.getStsDurationSeconds())
                     .withRoleArn(properties.getRoleArn())
-                    .withRoleSessionName(String.format(PolicyDocumentHelper.SESSION_NAME_TEMPLATE, sessionName))
+                    .withRoleSessionName(String.format(S3ClientConstant.STS_SESSION_NAME_TEMPLATE, sessionName))
                     .withPolicy(capitalizeObjectMapper.writeValueAsString(
                             PolicyDocumentHelper.builder().statement(
-                                    java.util.Arrays.asList(PolicyDocumentHelper.Statement.builder()
-                                            .notResource(java.util.Arrays.asList(
-                                                    String.format(PolicyDocumentHelper.RESOURCE_POLICY_ARN_TEMPLATE, path),
-                                                    String.format(PolicyDocumentHelper.BUCKET_POLICY_ARN_TEMPLATE, path)))
+                                    Arrays.asList(PolicyDocumentHelper.Statement.builder()
+                                            .notResource(Arrays.asList(
+                                                    String.format(S3ClientConstant.RESOURCE_POLICY_ARN_TEMPLATE, path),
+                                                    String.format(S3ClientConstant.BUCKET_POLICY_ARN_TEMPLATE, path)))
                                             .build())
                             ).build()
                     ));
@@ -298,6 +340,383 @@ public class S3Client {
         }
     }
 
+    // ==================== 对象标签 ====================
+
+    /**
+     * 设置对象标签（覆盖已有标签）
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param tags       标签键值对，最多 10 个，Key/Value UTF-8 字节长度不能超过限制
+     * @throws SetObjectTaggingFailedException 设置对象标签失败时抛出
+     */
+    public void setObjectTagging(String bucketName, String objectKey, Map<String, String> tags) {
+        try {
+            validateObjectTagging(tags);
+            ObjectTagging tagging = new ObjectTagging(tags.entrySet().stream()
+                    .map(e -> new Tag(e.getKey(), e.getValue()))
+                    .collect(Collectors.toList()));
+            amazonS3.setObjectTagging(new SetObjectTaggingRequest(bucketName, objectKey, tagging));
+            log.info("对象标签设置成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+        } catch (SetObjectTaggingFailedException e) {
+            throw e;
+        } catch (Exception e) {
+            log.debug("setObjectTagging e:", e);
+            throw new SetObjectTaggingFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 校验 S3 标签参数
+     */
+    private void validateObjectTagging(Map<String, String> tags) {
+        if (tags.size() > S3ClientConstant.MAX_OBJECT_TAGS) {
+            throw new SetObjectTaggingFailedException(String.format(
+                    ErrorMessage.TAGGING_TOO_MANY, S3ClientConstant.MAX_OBJECT_TAGS, tags.size()));
+        }
+        for (Map.Entry<String, String> entry : tags.entrySet()) {
+            if (entry.getKey().getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_KEY_BYTES) {
+                throw new SetObjectTaggingFailedException(String.format(
+                        ErrorMessage.TAGGING_KEY_TOO_LONG, S3ClientConstant.MAX_TAG_KEY_BYTES, entry.getKey()));
+            }
+            if (entry.getValue().getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_VALUE_BYTES) {
+                throw new SetObjectTaggingFailedException(String.format(
+                        ErrorMessage.TAGGING_VALUE_TOO_LONG, S3ClientConstant.MAX_TAG_VALUE_BYTES, entry.getKey()));
+            }
+        }
+    }
+
+    /**
+     * 获取对象标签
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @return 对象标签键值对
+     * @throws GetObjectTaggingFailedException 获取对象标签失败时抛出
+     */
+    public Map<String, String> getObjectTagging(String bucketName, String objectKey) {
+        try {
+            List<Tag> tagList = amazonS3.getObjectTagging(
+                    new GetObjectTaggingRequest(bucketName, objectKey)).getTagSet();
+            Map<String, String> result = new HashMap<>();
+            for (Tag tag : tagList) {
+                result.put(tag.getKey(), tag.getValue());
+            }
+            return result;
+        } catch (Exception e) {
+            log.debug("getObjectTagging e:", e);
+            throw new GetObjectTaggingFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 删除对象全部标签
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @throws DeleteObjectTaggingFailedException 删除对象标签失败时抛出
+     */
+    public void deleteObjectTagging(String bucketName, String objectKey) {
+        try {
+            amazonS3.deleteObjectTagging(new DeleteObjectTaggingRequest(bucketName, objectKey));
+            log.info("对象标签删除成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+        } catch (Exception e) {
+            log.debug("deleteObjectTagging e:", e);
+            throw new DeleteObjectTaggingFailedException(e.getMessage(), e);
+        }
+    }
+
+    // ==================== 分段上传 ====================
+
+    /**
+     * 大文件分段上传（自动切分 parts，文件超过阈值时触发）
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param file       待上传文件
+     * @throws FileNotFoundException                  文件不存在时抛出
+     * @throws UploadPartFailedException              上传分段失败时抛出
+     * @throws CompleteMultipartUploadFailedException 完成分段上传失败时抛出
+     */
+    public void uploadObjectMultipart(String bucketName, String objectKey, File file) {
+        uploadObjectMultipart(bucketName, objectKey, file, properties.getMultipartPartSizeMB());
+    }
+
+    /**
+     * 大文件分段上传（指定每段大小）
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param file       待上传文件
+     * @param partSizeMB 分段大小，单位 MB，不能小于 5
+     * @throws FileNotFoundException                  文件不存在时抛出
+     * @throws UploadPartFailedException              上传分段失败或分段参数非法时抛出
+     * @throws CompleteMultipartUploadFailedException 完成分段上传失败时抛出
+     */
+    public void uploadObjectMultipart(String bucketName, String objectKey, File file, int partSizeMB) {
+        if (!file.exists()) {
+            throw new FileNotFoundException(file.getPath());
+        }
+        if (partSizeMB < S3ClientConstant.MIN_PART_SIZE_MB) {
+            throw new UploadPartFailedException(String.format(
+                    ErrorMessage.PART_SIZE_TOO_SMALL, S3ClientConstant.MIN_PART_SIZE_MB, partSizeMB));
+        }
+        long fileSize = file.length();
+        long thresholdBytes = (long) properties.getMultipartThresholdMB() * S3ClientConstant.MB_IN_BYTES;
+        if (fileSize <= thresholdBytes && fileSize <= S3ClientConstant.MAX_SINGLE_UPLOAD_BYTES) {
+            uploadObject(bucketName, objectKey, file);
+            return;
+        }
+
+        long partSizeBytes = (long) partSizeMB * S3ClientConstant.MB_IN_BYTES;
+        long partCount = (fileSize + partSizeBytes - 1) / partSizeBytes;
+        if (partCount > S3ClientConstant.MAX_MULTIPART_PARTS) {
+            throw new UploadPartFailedException(String.format(
+                    ErrorMessage.MULTIPART_PART_COUNT_EXCEEDED, S3ClientConstant.MAX_MULTIPART_PARTS, partCount));
+        }
+        final String uploadId = generateUploadId(bucketName, objectKey);
+        try {
+            List<PartETag> allPartETags = Collections.synchronizedList(new ArrayList<>());
+            int maxConcurrent = properties.getMultipartConcurrency();
+
+            for (int i = 0; i < partCount; i += maxConcurrent) {
+                List<Future<PartETag>> futures = new ArrayList<>();
+                for (int j = 0; j < maxConcurrent && (i + j) < partCount; j++) {
+                    int partNumber = i + j + 1;
+                    long offset = (long) (i + j) * partSizeBytes;
+                    long length = Math.min(partSizeBytes, fileSize - offset);
+                    futures.add(multipartExecutor.submit(() ->
+                            uploadPartWithRetry(bucketName, objectKey, uploadId, partNumber, file, offset, length)));
+                }
+                for (Future<PartETag> future : futures) {
+                    try {
+                        allPartETags.add(future.get());
+                    } catch (Exception e) {
+                        throw new UploadPartFailedException(e.getMessage(), e);
+                    }
+                }
+            }
+
+            allPartETags.sort((a, b) -> Integer.compare(a.getPartNumber(), b.getPartNumber()));
+            completeMultipartUpload(bucketName, objectKey, uploadId, allPartETags);
+            log.info("分段上传成功，bucketName：{}，objectKey：{}，partCount：{}", bucketName, objectKey, partCount);
+        } catch (UploadPartFailedException | CompleteMultipartUploadFailedException e) {
+            try {
+                abortMultipartUpload(bucketName, objectKey, uploadId);
+                log.info("分段上传失败，已清理 uploadId：{}", uploadId);
+            } catch (Exception cleanupEx) {
+                log.warn("清理 uploadId 失败：{}", cleanupEx.getMessage());
+            }
+            throw e;
+        } catch (Exception e) {
+            try {
+                abortMultipartUpload(bucketName, objectKey, uploadId);
+            } catch (Exception cleanupEx) {
+                log.warn("清理 uploadId 失败：{}", cleanupEx.getMessage());
+            }
+            throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 初始化分段上传，返回 uploadId
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @return S3 返回的 uploadId
+     * @throws UploadPartFailedException 初始化分段上传失败时抛出
+     */
+    public String generateUploadId(String bucketName, String objectKey) {
+        try {
+            return amazonS3.initiateMultipartUpload(
+                    new InitiateMultipartUploadRequest(bucketName, objectKey)).getUploadId();
+        } catch (Exception e) {
+            log.debug("generateUploadId e:", e);
+            throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 上传单个分段
+     *
+     * @param bucketName    存储桶名称
+     * @param objectKey     对象 Key
+     * @param uploadId      分段上传 ID
+     * @param partNumber    分段编号，从 1 开始
+     * @param inputStream   分段内容输入流，调用方负责提供可读流
+     * @param contentLength 分段内容长度
+     * @return 已上传分段的 ETag 信息
+     * @throws UploadPartFailedException 上传分段失败时抛出
+     */
+    public PartETag uploadPart(String bucketName, String objectKey, String uploadId,
+                               int partNumber, InputStream inputStream, long contentLength) {
+        try {
+            UploadPartRequest request = new UploadPartRequest()
+                    .withBucketName(bucketName)
+                    .withKey(objectKey)
+                    .withUploadId(uploadId)
+                    .withPartNumber(partNumber)
+                    .withInputStream(inputStream)
+                    .withPartSize(contentLength);
+            return amazonS3.uploadPart(request).getPartETag();
+        } catch (Exception e) {
+            log.debug("uploadPart e:", e);
+            throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 从文件指定偏移读取一段分段内容并上传
+     */
+    private PartETag uploadPartWithRetry(String bucketName, String objectKey, String uploadId,
+                                         int partNumber, File file, long offset, long length) {
+        try {
+            return taskRetryExecutor.executeWithRetry(
+                    () -> uploadPartFromFile(bucketName, objectKey, uploadId, partNumber, file, offset, length),
+                    properties.getMaxUploadRetryTimes(),
+                    properties.getMaxUploadRetrySeconds()
+            );
+        } catch (Exception e) {
+            log.debug("uploadPartWithRetry e:", e);
+            throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 从文件指定偏移上传分段，保证每次重试都由 AWS SDK 重新打开文件片段
+     */
+    private PartETag uploadPartFromFile(String bucketName, String objectKey, String uploadId,
+                                        int partNumber, File file, long offset, long length) {
+        UploadPartRequest request = new UploadPartRequest()
+                .withBucketName(bucketName)
+                .withKey(objectKey)
+                .withUploadId(uploadId)
+                .withPartNumber(partNumber)
+                .withFile(file)
+                .withFileOffset(offset)
+                .withPartSize(length);
+        return amazonS3.uploadPart(request).getPartETag();
+    }
+
+    /**
+     * 完成分段上传
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param uploadId   分段上传 ID
+     * @param partETags  已上传分段 ETag 列表，应按 partNumber 升序传入
+     * @throws CompleteMultipartUploadFailedException 完成分段上传失败时抛出
+     */
+    public void completeMultipartUpload(String bucketName, String objectKey, String uploadId, List<PartETag> partETags) {
+        try {
+            amazonS3.completeMultipartUpload(new CompleteMultipartUploadRequest(
+                    bucketName, objectKey, uploadId, partETags));
+            log.info("完成分段上传成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+        } catch (Exception e) {
+            log.debug("completeMultipartUpload e:", e);
+            throw new CompleteMultipartUploadFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 中止分段上传，清理已上传 parts（幂等：已完成或已中止的分段上传再次调用不抛异常）
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param uploadId   分段上传 ID
+     * @throws UploadPartFailedException 中止分段上传失败时抛出
+     */
+    public void abortMultipartUpload(String bucketName, String objectKey, String uploadId) {
+        try {
+            amazonS3.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, objectKey, uploadId));
+            log.info("中止分段上传成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+        } catch (AmazonS3Exception e) {
+            if (S3ClientConstant.S3_ERROR_NO_SUCH_UPLOAD.equals(e.getErrorCode())) {
+                log.info("分段上传不存在或已结束，视为中止成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+                return;
+            }
+            throw new UploadPartFailedException(e.getMessage(), e);
+        } catch (Exception e) {
+            throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 列举已上传的分段
+     *
+     * @param bucketName 存储桶名称
+     * @param objectKey  对象 Key
+     * @param uploadId   分段上传 ID
+     * @return 已上传分段集合，方法内部会聚合全部分页，完成时 nextPartNumberMarker 为 0
+     * @throws ListObjectsFailedException 列举分段失败时抛出
+     */
+    public MultipartUploadPartList listParts(String bucketName, String objectKey, String uploadId) {
+        try {
+            List<MultipartUploadPart> allParts = new ArrayList<>();
+            int nextMarker = 0;
+            while (true) {
+                ListPartsRequest request = new ListPartsRequest(bucketName, objectKey, uploadId)
+                        .withPartNumberMarker(nextMarker)
+                        .withMaxParts(S3ClientConstant.LIST_PARTS_PAGE_SIZE);
+                PartListing result = amazonS3.listParts(request);
+                for (PartSummary part : result.getParts()) {
+                    allParts.add(new MultipartUploadPart(
+                            part.getPartNumber(),
+                            part.getETag(),
+                            part.getSize(),
+                            part.getLastModified()));
+                }
+                if (!result.isTruncated()) {
+                    nextMarker = 0;
+                    break;
+                }
+                nextMarker = result.getNextPartNumberMarker();
+            }
+            return new MultipartUploadPartList(allParts, nextMarker);
+        } catch (Exception e) {
+            log.debug("listParts e:", e);
+            throw new ListObjectsFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 列举进行中的分段上传
+     *
+     * @param bucketName 存储桶名称
+     * @return 进行中的分段上传集合，方法内部会聚合全部分页
+     * @throws ListObjectsFailedException 列举进行中的分段上传失败时抛出
+     */
+    public MultipartUploadList listMultipartUploads(String bucketName) {
+        try {
+            List<MultipartUpload> allUploads = new ArrayList<>();
+            String nextKeyMarker = null;
+            String nextUploadIdMarker = null;
+            while (true) {
+                ListMultipartUploadsRequest request = new ListMultipartUploadsRequest(bucketName)
+                        .withKeyMarker(nextKeyMarker)
+                        .withUploadIdMarker(nextUploadIdMarker)
+                        .withMaxUploads(S3ClientConstant.LIST_UPLOADS_PAGE_SIZE);
+                MultipartUploadListing result = amazonS3.listMultipartUploads(request);
+                for (com.amazonaws.services.s3.model.MultipartUpload upload : result.getMultipartUploads()) {
+                    allUploads.add(new MultipartUpload(
+                            upload.getUploadId(),
+                            upload.getKey(),
+                            upload.getInitiated()));
+                }
+                if (!result.isTruncated()) {
+                    break;
+                }
+                nextKeyMarker = result.getNextKeyMarker();
+                nextUploadIdMarker = result.getNextUploadIdMarker();
+            }
+            return new MultipartUploadList(allUploads, false, null, null);
+        } catch (Exception e) {
+            log.debug("listMultipartUploads e:", e);
+            throw new ListObjectsFailedException(e.getMessage(), e);
+        }
+    }
+
+
     // ==================== 查询 ====================
 
     /**
@@ -469,7 +888,7 @@ public class S3Client {
      */
     public String customPresignedUrl(String bucketName, String objectKey, Long expirationSeconds) throws Exception {
         long exp = (expirationSeconds == null) ? properties.getPresignedUrlExpirationSeconds() : expirationSeconds;
-        String canonicalizedResource = String.format("/%s/%s", bucketName, objectKey);
+        String canonicalizedResource = String.format(S3ClientConstant.CANONICALIZED_RESOURCE_TEMPLATE, bucketName, objectKey);
         Date expirationDate = new Date(System.currentTimeMillis() + exp * S3ClientConstant.MILLIS_PER_SECOND);
         String signStr = String.format(S3ClientConstant.CUSTOM_SIGN_STRING_TEMPLATE, expirationDate.getTime(), canonicalizedResource);
         SecretKeySpec signinKey = new SecretKeySpec(properties.getSecretKey().getBytes(), S3ClientConstant.HMAC_SHA1_ALGORITHM);
@@ -510,8 +929,10 @@ public class S3Client {
             enableBucketVersioning(bucketName);
             setDefaultBucketLifecycle(bucketName);
             return bucket;
+        } catch (CreateBucketFailedException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("创建存储桶失败：", e);
+            log.error("创建存储桶失败：{}", e.getMessage());
             throw new CreateBucketFailedException(e.getMessage(), e);
         }
     }
@@ -613,16 +1034,22 @@ public class S3Client {
 
     /**
      * 生成 UUID 桶名
+     *
+     * @param symbol 业务标识，当前实现保留参数但不参与桶名生成（历史 API 兼容）
      */
+    @SuppressWarnings("unused")
     public String generateBucketName(String symbol) {
-        return UUID.randomUUID().toString().replace(S3ClientConstant.UUID_HYPHEN, "");
+        return UUID.randomUUID().toString().replace(S3ClientConstant.UUID_HYPHEN, StringUtils.EMPTY);
     }
 
     /**
      * 生成 UUID 桶名（带前缀）
+     *
+     * @param symbol 业务标识，当前实现保留参数但不参与桶名生成（历史 API 兼容）
      */
+    @SuppressWarnings("unused")
     public String generateBucketName(String prefix, String symbol) {
-        return prefix + UUID.randomUUID().toString().replace(S3ClientConstant.UUID_HYPHEN, "");
+        return prefix + UUID.randomUUID().toString().replace(S3ClientConstant.UUID_HYPHEN, StringUtils.EMPTY);
     }
 
     /**
@@ -634,6 +1061,9 @@ public class S3Client {
 
     // ==================== 内部工具 ====================
 
+    /**
+     * 静默关闭 InputStream，忽略关闭异常
+     */
     private void closeQuietly(InputStream inputStream) {
         if (inputStream != null) {
             try {
@@ -644,6 +1074,9 @@ public class S3Client {
         }
     }
 
+    /**
+     * 静默关闭 RandomAccessFile，忽略关闭异常
+     */
     private void closeQuietly(RandomAccessFile raf) {
         if (raf != null) {
             try {
@@ -654,6 +1087,9 @@ public class S3Client {
         }
     }
 
+    /**
+     * 静默关闭 S3Object，忽略关闭异常
+     */
     private void closeQuietly(S3Object s3Object) {
         if (s3Object != null) {
             try {
@@ -661,6 +1097,16 @@ public class S3Client {
             } catch (IOException e) {
                 // ignore
             }
+        }
+    }
+
+    /**
+     * 关闭分段上传线程池
+     */
+    @PreDestroy
+    public void shutdownMultipartExecutor() {
+        if (multipartExecutor != null && !multipartExecutor.isShutdown()) {
+            multipartExecutor.shutdown();
         }
     }
 }

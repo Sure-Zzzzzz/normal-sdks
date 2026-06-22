@@ -2,6 +2,7 @@ dependencies {
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework:spring-context"
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
     api "org.apache.commons:commons-lang3:3.13.0"
     api 'com.amazonaws:aws-java-sdk-sts:1.12.573'
     api 'com.amazonaws:aws-java-sdk-s3:1.12.573'

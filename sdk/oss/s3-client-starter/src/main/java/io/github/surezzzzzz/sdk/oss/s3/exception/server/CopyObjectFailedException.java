@@ -9,10 +9,21 @@ import io.github.surezzzzzz.sdk.oss.s3.exception.base.S3ServerException;
  */
 public class CopyObjectFailedException extends S3ServerException {
 
+    /**
+     * 构造复制对象失败异常
+     *
+     * @param message 错误信息
+     */
     public CopyObjectFailedException(String message) {
         super(ErrorCode.COPY_OBJECT_FAILED, String.format(ErrorMessage.COPY_OBJECT_FAILED, message));
     }
 
+    /**
+     * 构造复制对象失败异常
+     *
+     * @param message 错误信息
+     * @param cause   原始异常
+     */
     public CopyObjectFailedException(String message, Throwable cause) {
         super(ErrorCode.COPY_OBJECT_FAILED, String.format(ErrorMessage.COPY_OBJECT_FAILED, message), cause);
     }
