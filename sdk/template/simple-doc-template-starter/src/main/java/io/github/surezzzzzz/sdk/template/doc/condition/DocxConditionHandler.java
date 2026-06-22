@@ -1,13 +1,12 @@
-package io.github.surezzzzzz.sdk.template.doc.processor.condition.word;
+package io.github.surezzzzzz.sdk.template.doc.condition;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.ConditionBlockException;
-import io.github.surezzzzzz.sdk.template.doc.processor.condition.ConditionHandler;
 import io.github.surezzzzzz.sdk.template.doc.support.BooleanHelper;
 import io.github.surezzzzzz.sdk.template.doc.support.TagHelper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -31,13 +30,11 @@ import java.util.zip.ZipOutputStream;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class DocxConditionHandler implements ConditionHandler {
 
-    @Autowired
-    private TagHelper tagHelper;
-
-    @Autowired
-    private BooleanHelper booleanHelper;
+    private final TagHelper tagHelper;
+    private final BooleanHelper booleanHelper;
 
     // ===== OOXML header/footer 元素名（Word 专属，自闭环）=====
 
@@ -156,7 +153,7 @@ public class DocxConditionHandler implements ConditionHandler {
                     }
                 }
                 if (endIdx == -1) {
-                    throw ConditionBlockException.mismatch(tagHelper.getPrefix(), key, "");
+                    throw ConditionBlockException.mismatch(tagHelper.getPrefix(), key, SimpleDocTemplateConstant.EMPTY);
                 }
 
                 MarkInfo endMark = marks.get(endIdx);
@@ -178,7 +175,6 @@ public class DocxConditionHandler implements ConditionHandler {
             }
         }
 
-        log.debug("findDeleteRanges: marks={}", marks.size());
         return deleteRanges;
     }
 

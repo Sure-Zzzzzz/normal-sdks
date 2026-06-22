@@ -1,9 +1,9 @@
-package io.github.surezzzzzz.sdk.template.doc.engine;
+package io.github.surezzzzzz.sdk.template.doc.renderer;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.renderer.Renderer;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
@@ -17,12 +17,11 @@ import java.util.Map;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class RendererRegistry {
 
     private final Map<String, Renderer> registry = new HashMap<>();
-
-    @Autowired
-    private List<Renderer> allRenderers;
+    private final List<Renderer> allRenderers;
 
     @PostConstruct
     void init() {

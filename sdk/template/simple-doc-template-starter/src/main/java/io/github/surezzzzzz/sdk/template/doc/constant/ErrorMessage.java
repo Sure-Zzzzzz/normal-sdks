@@ -18,6 +18,11 @@ public final class ErrorMessage {
      */
     public static final String RENDER_FAILED = "模板渲染失败: %s";
 
+    /**
+     * 页眉/页脚中不支持 chart 占位符，参数：位置（页眉/页脚）
+     */
+    public static final String CHART_IN_HEADER_FOOTER = "%s中不支持 chart 占位符，请将 chart 放到正文段落中";
+
     // ==================== 模板相关 ====================
 
     /**
@@ -43,9 +48,39 @@ public final class ErrorMessage {
     public static final String OUTPUT_FORMAT_MISMATCH = "输出格式不匹配：期望 %s，实际 %s";
 
     /**
-     * 写出失败
+     * 渲染器类型不匹配，参数：期望类型，实际类型
      */
-    public static final String OUTPUT_WRITE_FAILED = "文档写出失败";
+    public static final String RENDERER_TYPE_MISMATCH = "渲染器类型不匹配：期望 %s，实际 %s";
+
+    /**
+     * 写出失败，参数：错误原因
+     */
+    public static final String OUTPUT_WRITE_FAILED = "文档写出失败: %s";
+
+    /**
+     * WordDocument 字节解析失败
+     */
+    public static final String WORD_DOCUMENT_PARSE_FAILED = "WordDocument 字节解析失败";
+
+    /**
+     * 输出路径参数为空
+     */
+    public static final String OUTPUT_PATH_ARGUMENT_EMPTY = "dir and fileName must not be null";
+
+    /**
+     * 内嵌字体解析错误，参数：具体错误描述
+     */
+    public static final String EMBEDDED_FONT_PARSE_ERROR = "内嵌字体解析失败: %s";
+
+    /**
+     * 内嵌字体 GUID 格式错误，参数：GUID
+     */
+    public static final String EMBEDDED_FONT_GUID_INVALID = "Invalid GUID format: %s";
+
+    /**
+     * PDF footer 不支持某元素，参数：元素描述
+     */
+    public static final String PDF_FOOTER_UNSUPPORTED = "%s不支持放入 PDF footer，请简化 footer 或改用 DOCX 输出（OutputFormat.DOCX）";
 
     // ==================== SDK 条件块相关 ====================
 
@@ -63,4 +98,51 @@ public final class ErrorMessage {
      * 条件块处理失败，参数：异常信息
      */
     public static final String CONDITION_PROCESS_FAILED = "条件块处理失败: %s";
+
+    // ==================== PDF 相关（1.1.0）====================
+
+    /**
+     * DOCX → PDF 转换失败，参数：异常信息
+     */
+    public static final String PDF_CONVERSION_FAILED = "DOCX 转 PDF 失败: %s";
+
+    /**
+     * POI 加载 DOCX 失败，参数：异常信息
+     */
+    public static final String PDF_POI_DOCX_LOAD_FAILED = "POI 加载 DOCX 失败: %s";
+
+    /**
+     * PDF 文件写出失败，参数：文件路径
+     */
+    public static final String PDF_FILE_WRITE_FAILED = "PDF 文件写出失败: %s";
+
+    /**
+     * PDF 流写出失败
+     */
+    public static final String PDF_STREAM_WRITE_FAILED = "PDF 流写出失败";
+
+    /**
+     * DOCX 缺少关键 XML 或 rels 文件
+     */
+    public static final String PDF_DOCX_CORE_PART_MISSING = "DOCX 缺少 document.xml 或 rels 文件";
+
+    /**
+     * chart 图片替换失败，参数：异常信息
+     */
+    public static final String PDF_CHART_IMAGE_REPLACE_FAILED = "chart 图片替换失败: %s";
+
+    /**
+     * 字体不存在，参数：缺失字体名称
+     */
+    public static final String PDF_FONT_NOT_FOUND = "系统缺少中文字体，PDF 输出可能异常，请安装 %s";
+
+    /**
+     * Chart PNG 生成失败，参数：chart key，异常信息
+     */
+    public static final String PDF_CHART_PNG_FAILED = "chart [%s] PNG 生成失败: %s";
+
+    /**
+     * PDF 库加载/初始化失败，参数：库名，异常信息
+     */
+    public static final String PDF_LIB_LOAD_FAILED = "PDF 库 [%s] 加载失败: %s";
 }

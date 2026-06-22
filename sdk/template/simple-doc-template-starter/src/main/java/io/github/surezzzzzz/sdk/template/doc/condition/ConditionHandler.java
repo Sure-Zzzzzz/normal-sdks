@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.template.doc.processor.condition;
+package io.github.surezzzzzz.sdk.template.doc.condition;
 
 import java.util.Map;
 

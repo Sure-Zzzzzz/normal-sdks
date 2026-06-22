@@ -1,9 +1,11 @@
-package io.github.surezzzzzz.sdk.template.doc.engine;
+package io.github.surezzzzzz.sdk.template.doc.result;
 
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.OutputFormat;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandler;
+import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandlerRegistry;
 import lombok.Getter;
 
 import java.io.File;
@@ -72,6 +74,12 @@ public class TemplateRenderResult {
         private final Document document;
         private final OutputHandler handler;
 
+        /**
+         * 创建输出目标持有器
+         *
+         * @param document 渲染文档
+         * @param handler 输出处理器
+         */
         public OutputTarget(Document document, OutputHandler handler) {
             this.document = document;
             this.handler = handler;
@@ -112,7 +120,7 @@ public class TemplateRenderResult {
          */
         public void toFile(String dir, String fileName) {
             if (dir == null || fileName == null) {
-                throw new IllegalArgumentException("dir and fileName must not be null");
+                throw TemplateRenderException.writeFailed(ErrorMessage.OUTPUT_PATH_ARGUMENT_EMPTY);
             }
             handler.writeToFile(document, dir + File.separator + fileName);
         }

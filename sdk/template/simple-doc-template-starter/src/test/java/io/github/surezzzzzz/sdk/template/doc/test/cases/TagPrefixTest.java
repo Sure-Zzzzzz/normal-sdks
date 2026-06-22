@@ -36,7 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("标签前缀测试")
 class TagPrefixTest {
 
-    private static final Path OUTPUT_DIR = Paths.get("src/test/resources/output");
+    private static final Path OUTPUT_DIR = Paths.get("build/test-output/tag-prefix");
 
     // ==================== 默认前缀 ====================
 

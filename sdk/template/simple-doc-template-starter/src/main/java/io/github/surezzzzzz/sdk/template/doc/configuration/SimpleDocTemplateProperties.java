@@ -4,6 +4,10 @@ import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * Simple Doc Template Properties
  *
@@ -16,7 +20,7 @@ public class SimpleDocTemplateProperties {
     /**
      * 是否启用（默认 false）
      */
-    private boolean enable = false;
+    private boolean enable = SimpleDocTemplateConstant.DEFAULT_ENABLE;
 
     /**
      * 模板根路径
@@ -27,5 +31,13 @@ public class SimpleDocTemplateProperties {
      * 标签前缀，用于拼接模板占位符（如 [suredt.var:key]），可自定义但需与模板中占位符一致
      */
     private String tagPrefix = SimpleDocTemplateConstant.DEFAULT_TAG_PREFIX;
+
+    /**
+     * 字体文件路径列表（PDF 渲染用）
+     * <p>
+     * 路径可以是字体文件或目录（目录时自动扫描其下所有 .ttf/.ttc 文件）。
+     * 不存在的路径静默跳过。配了就覆盖默认值。
+     */
+    private List<String> fontPaths = new ArrayList<>(Arrays.asList(SimpleDocTemplateConstant.DEFAULT_FONT_PATHS));
 
 }

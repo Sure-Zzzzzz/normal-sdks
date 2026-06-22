@@ -3,27 +3,26 @@ package io.github.surezzzzzz.sdk.template.doc.test.cases;
 import io.github.surezzzzzz.sdk.template.doc.constant.OutputFormat;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
 import io.github.surezzzzzz.sdk.template.doc.engine.TemplateEngine;
-import io.github.surezzzzzz.sdk.template.doc.engine.TemplateRenderResult;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateNotFoundException;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.docx.DocxOutputHandler;
 import io.github.surezzzzzz.sdk.template.doc.model.Chart;
 import io.github.surezzzzzz.sdk.template.doc.model.Image;
+import io.github.surezzzzzz.sdk.template.doc.result.TemplateRenderResult;
 import io.github.surezzzzzz.sdk.template.doc.test.SimpleDocTemplateTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.xwpf.usermodel.*;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,7 +48,7 @@ class TemplateEngineRenderTest {
     @Autowired
     private TemplateEngine templateEngine;
 
-    private static final Path OUTPUT_DIR = Paths.get("src/test/resources/output");
+    private static final Path OUTPUT_DIR = Paths.get("build/test-output/docx");
 
     private Map<String, Object> fullData;
 
@@ -69,9 +68,9 @@ class TemplateEngineRenderTest {
     @DisplayName("全量数据：文本变量全部正确替换")
     void renderFullDataTextVariablesReplaced() throws Exception {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -97,9 +96,9 @@ class TemplateEngineRenderTest {
     @DisplayName("全量数据：表格行循环正确展开（riskList 3条→3行）")
     void renderFullDataRiskListExpanded() throws Exception {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -119,9 +118,9 @@ class TemplateEngineRenderTest {
     @DisplayName("全量数据：assetList 2条→2行展开")
     void renderFullDataAssetListExpanded() throws Exception {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -138,9 +137,9 @@ class TemplateEngineRenderTest {
     @DisplayName("全量数据：图片已插入（DOCX 包含图片数据）")
     void renderFullDataImagesInserted() throws Exception {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         // 验证 DOCX 内部 media 目录包含图片
         int imageCount = 0;
@@ -162,8 +161,8 @@ class TemplateEngineRenderTest {
         String outputPath = OUTPUT_DIR.resolve("full-report-output.docx").toString();
 
         templateEngine.render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toFile(outputPath);
+                .output(OutputFormat.DOCX)
+                .toFile(outputPath);
 
         File outputFile = new File(outputPath);
         log.info("文件输出验证，路径: {}, 大小: {} bytes", outputPath, outputFile.length());
@@ -175,9 +174,9 @@ class TemplateEngineRenderTest {
     @DisplayName("全量数据：字节数组输出正常")
     void renderFullDataToBytes() {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         log.info("字节数组输出验证，大小: {} bytes", docxBytes != null ? docxBytes.length : 0);
         assertNotNull(docxBytes);
@@ -190,8 +189,8 @@ class TemplateEngineRenderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         templateEngine.render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toStream(baos);
+                .output(OutputFormat.DOCX)
+                .toStream(baos);
 
         byte[] result = baos.toByteArray();
         log.info("流输出验证，大小: {} bytes", result != null ? result.length : 0);
@@ -203,14 +202,14 @@ class TemplateEngineRenderTest {
     @DisplayName("output() 无参自动推断格式：与 output(DOCX) 结果一致")
     void outputAutoInferFormat() {
         byte[] explicit = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         byte[] inferred = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output()
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output()
+                .toBytes();
 
         log.info("自动推断格式验证，explicit: {} bytes, inferred: {} bytes", explicit.length, inferred.length);
         assertNotNull(inferred);
@@ -221,7 +220,7 @@ class TemplateEngineRenderTest {
     @DisplayName("renderToBytes 快捷方法：与链式调用结果一致")
     void renderToBytesShortcut() {
         byte[] result = templateEngine.renderToBytes(
-            "classpath:templates/weekly-report-template.docx", fullData);
+                "classpath:templates/weekly-report-template.docx", fullData);
 
         log.info("renderToBytes 快捷方法验证，大小: {} bytes", result != null ? result.length : 0);
         assertNotNull(result);
@@ -234,7 +233,7 @@ class TemplateEngineRenderTest {
         String outputPath = OUTPUT_DIR.resolve("shortcut-full-path.docx").toString();
 
         templateEngine.renderToFile(
-            "classpath:templates/weekly-report-template.docx", fullData, outputPath);
+                "classpath:templates/weekly-report-template.docx", fullData, outputPath);
 
         File outputFile = new File(outputPath);
         log.info("renderToFile(完整路径) 验证，路径: {}, 大小: {} bytes", outputPath, outputFile.length());
@@ -249,7 +248,7 @@ class TemplateEngineRenderTest {
         String fileName = "shortcut-dir-name.docx";
 
         templateEngine.renderToFile(
-            "classpath:templates/weekly-report-template.docx", fullData, dir, fileName);
+                "classpath:templates/weekly-report-template.docx", fullData, dir, fileName);
 
         File outputFile = new File(dir, fileName);
         log.info("renderToFile(目录+文件名) 验证，路径: {}, 大小: {} bytes", outputFile.getPath(), outputFile.length());
@@ -264,8 +263,8 @@ class TemplateEngineRenderTest {
         String fileName = "chain-dir-name.docx";
 
         templateEngine.render("classpath:templates/weekly-report-template.docx", fullData)
-            .output()
-            .toFile(dir, fileName);
+                .output()
+                .toFile(dir, fileName);
 
         File outputFile = new File(dir, fileName);
         log.info("toFile(dir, fileName) 验证，路径: {}, 大小: {} bytes", outputFile.getPath(), outputFile.length());
@@ -277,8 +276,8 @@ class TemplateEngineRenderTest {
     @DisplayName("isEmpty()：全量数据渲染结果不为空")
     void renderResultIsNotEmpty() {
         boolean empty = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .isEmpty();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .isEmpty();
 
         log.info("isEmpty() 验证，结果: {}", empty);
         assertFalse(empty, "全量数据渲染结果不应为空");
@@ -290,7 +289,7 @@ class TemplateEngineRenderTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
         templateEngine.renderToStream(
-            "classpath:templates/weekly-report-template.docx", fullData, baos);
+                "classpath:templates/weekly-report-template.docx", fullData, baos);
 
         byte[] result = baos.toByteArray();
         log.info("renderToStream 快捷方法验证，大小: {} bytes", result != null ? result.length : 0);
@@ -304,8 +303,8 @@ class TemplateEngineRenderTest {
     @DisplayName("模板文件不存在：抛出 TemplateNotFoundException，errorCode = TEMPLATE_NOT_FOUND")
     void renderTemplateNotFound() {
         TemplateNotFoundException exception = assertThrows(
-            TemplateNotFoundException.class,
-            () -> templateEngine.render("classpath:templates/not-exist.docx", fullData)
+                TemplateNotFoundException.class,
+                () -> templateEngine.render("classpath:templates/not-exist.docx", fullData)
         );
         log.info("异常场景：模板不存在，errorCode: {}, message: {}", exception.getErrorCode(), exception.getMessage());
         assertEquals("TEMPLATE_001", exception.getErrorCode());
@@ -315,8 +314,8 @@ class TemplateEngineRenderTest {
     @DisplayName("后缀未注册：抛出 TemplateNotFoundException，errorCode = RENDERER_NOT_FOUND")
     void renderUnsupportedSuffix() {
         TemplateNotFoundException exception = assertThrows(
-            TemplateNotFoundException.class,
-            () -> templateEngine.render("classpath:templates/report.xyz", fullData)
+                TemplateNotFoundException.class,
+                () -> templateEngine.render("classpath:templates/report.xyz", fullData)
         );
         log.info("异常场景：后缀未注册，errorCode: {}, message: {}", exception.getErrorCode(), exception.getMessage());
         assertEquals("TEMPLATE_002", exception.getErrorCode());
@@ -327,11 +326,12 @@ class TemplateEngineRenderTest {
     @DisplayName("Handler 未注册：抛出 TemplateRenderException，errorCode = OUTPUT_001")
     void outputHandlerNotFound() {
         TemplateRenderResult result = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData);
+                .render("classpath:templates/weekly-report-template.docx", fullData);
 
+        // MD 格式存在但未注册 Handler，用于测试 Handler 未注册场景
         TemplateRenderException exception = assertThrows(
-            TemplateRenderException.class,
-            () -> result.output(OutputFormat.HTML)
+                TemplateRenderException.class,
+                () -> result.output(OutputFormat.MD)
         );
         log.info("异常场景：Handler 未注册，errorCode: {}", exception.getErrorCode());
         assertEquals("OUTPUT_001", exception.getErrorCode());
@@ -343,14 +343,19 @@ class TemplateEngineRenderTest {
         DocxOutputHandler handler = new DocxOutputHandler();
         Document fakeDoc = new Document() {
             @Override
-            public String getFormat() { return "md"; }
+            public String getFormat() {
+                return "md";
+            }
+
             @Override
-            public boolean isEmpty() { return false; }
+            public boolean isEmpty() {
+                return false;
+            }
         };
 
         TemplateRenderException exception = assertThrows(
-            TemplateRenderException.class,
-            () -> handler.writeToFile(fakeDoc, OUTPUT_DIR.resolve("fake.docx").toString())
+                TemplateRenderException.class,
+                () -> handler.writeToFile(fakeDoc, OUTPUT_DIR.resolve("fake.docx").toString())
         );
         log.info("异常场景：格式不匹配，errorCode: {}, message: {}", exception.getErrorCode(), exception.getMessage());
         assertEquals("OUTPUT_002", exception.getErrorCode());
@@ -370,9 +375,9 @@ class TemplateEngineRenderTest {
         data.put("hasBlockList", Boolean.TRUE);
 
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", data)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", data)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -397,9 +402,9 @@ class TemplateEngineRenderTest {
         data.put("hasBlockList", Boolean.FALSE);
 
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", data)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", data)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -428,9 +433,9 @@ class TemplateEngineRenderTest {
         data.remove("unitInboundChart");
 
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", data)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", data)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         // 验证无图片
         int imageCount = 0;
@@ -454,9 +459,9 @@ class TemplateEngineRenderTest {
         data.put("reportDate", "2026年05月21日");
 
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", data)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", data)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -489,9 +494,9 @@ class TemplateEngineRenderTest {
     @DisplayName("blockList 1条→1行")
     void renderFullDataBlockListExpanded() throws Exception {
         byte[] docxBytes = templateEngine
-            .render("classpath:templates/weekly-report-template.docx", fullData)
-            .output(OutputFormat.DOCX)
-            .toBytes();
+                .render("classpath:templates/weekly-report-template.docx", fullData)
+                .output(OutputFormat.DOCX)
+                .toBytes();
 
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docxBytes))) {
             String allText = extractAllText(doc);
@@ -520,21 +525,21 @@ class TemplateEngineRenderTest {
         data.put("autoWidthImg", new Image("src/test/resources/images/chart2.png", 0, 300));
         data.put("manualImg", new Image("src/test/resources/images/chart3.png", 400, 200));
         data.put("autoWidthChart", new Chart(
-            "自适应宽度", java.util.Arrays.asList("A", "B"),
-            java.util.Collections.singletonList(new Chart.Series("数值", java.util.Arrays.asList(1, 2))),
-            0, 300, Chart.ChartType.LINE));
+                "自适应宽度", java.util.Arrays.asList("A", "B"),
+                java.util.Collections.singletonList(new Chart.Series("数值", java.util.Arrays.asList(1, 2))),
+                0, 300, Chart.ChartType.LINE));
         data.put("styledChart", new Chart(
-            "样式图表", java.util.Arrays.asList("X", "Y"),
-            java.util.Arrays.asList(new Chart.Series("系列A", java.util.Arrays.asList(10, 20), "C0504D")),
-            600, 350, Chart.ChartType.LINE, 18, Chart.LegendPosition.TOP, false, false, true));
+                "样式图表", java.util.Arrays.asList("X", "Y"),
+                java.util.Arrays.asList(new Chart.Series("系列A", java.util.Arrays.asList(10, 20), "C0504D")),
+                600, 350, Chart.ChartType.LINE, 18, Chart.LegendPosition.TOP, false, false, true));
         data.put("styledBarChart", new Chart(
-            "柱状图", java.util.Arrays.asList("甲", "乙"),
-            java.util.Arrays.asList(new Chart.Series("数量", java.util.Arrays.asList(35, 28), "75A254")),
-            500, 300, Chart.ChartType.BAR, 16, Chart.LegendPosition.LEFT, false, false, false));
+                "柱状图", java.util.Arrays.asList("甲", "乙"),
+                java.util.Arrays.asList(new Chart.Series("数量", java.util.Arrays.asList(35, 28), "75A254")),
+                500, 300, Chart.ChartType.BAR, 16, Chart.LegendPosition.LEFT, false, false, false));
         data.put("styledPieChart", new Chart(
-            "饼图", java.util.Arrays.asList("类型A", "类型B", "类型C"),
-            java.util.Arrays.asList(new Chart.Series("占比", java.util.Arrays.asList(50, 30, 20))),
-            500, 300, Chart.ChartType.PIE));
+                "饼图", java.util.Arrays.asList("类型A", "类型B", "类型C"),
+                java.util.Arrays.asList(new Chart.Series("占比", java.util.Arrays.asList(50, 30, 20))),
+                500, 300, Chart.ChartType.PIE));
 
         byte[] result = templateEngine.renderToBytes("classpath:templates/style-test-template.docx", data);
 
@@ -599,11 +604,11 @@ class TemplateEngineRenderTest {
     void renderChartAutoWidth() throws Exception {
         Map<String, Object> data = new HashMap<>();
         data.put("autoWidthChart", new Chart(
-            "自适应宽度图表",
-            java.util.Arrays.asList("A", "B", "C"),
-            java.util.Collections.singletonList(new Chart.Series("数值", java.util.Arrays.asList(10, 20, 30))),
-            0, 300,
-            Chart.ChartType.LINE
+                "自适应宽度图表",
+                java.util.Arrays.asList("A", "B", "C"),
+                java.util.Collections.singletonList(new Chart.Series("数值", java.util.Arrays.asList(10, 20, 30))),
+                0, 300,
+                Chart.ChartType.LINE
         ));
 
         byte[] result = templateEngine.renderToBytes("classpath:templates/style-test-template.docx", data);
@@ -633,22 +638,22 @@ class TemplateEngineRenderTest {
     @DisplayName("图表：自定义样式（多系列+颜色+标题字号+图例位置+折线平滑/标记点+网格线）")
     void renderChartWithCustomStyles() throws Exception {
         List<Chart.Series> multiSeries = java.util.Arrays.asList(
-            new Chart.Series("系列A", java.util.Arrays.asList(120, 98, 145), "C0504D"),
-            new Chart.Series("系列B", java.util.Arrays.asList(85, 92, 78), "4F81BD")
+                new Chart.Series("系列A", java.util.Arrays.asList(120, 98, 145), "C0504D"),
+                new Chart.Series("系列B", java.util.Arrays.asList(85, 92, 78), "4F81BD")
         );
 
         Map<String, Object> data = new HashMap<>();
         data.put("styledChart", new Chart(
-            "自定义样式图表",
-            java.util.Arrays.asList("3/30", "3/31", "4/1"),
-            multiSeries,
-            600, 350,
-            Chart.ChartType.LINE,
-            18,
-            Chart.LegendPosition.TOP,
-            false,   // smooth = false
-            false,   // showMarker = false
-            true     // showGridLines = true
+                "自定义样式图表",
+                java.util.Arrays.asList("3/30", "3/31", "4/1"),
+                multiSeries,
+                600, 350,
+                Chart.ChartType.LINE,
+                18,
+                Chart.LegendPosition.TOP,
+                false,   // smooth = false
+                false,   // showMarker = false
+                true     // showGridLines = true
         ));
 
         byte[] result = templateEngine.renderToBytes("classpath:templates/style-test-template.docx", data);
@@ -687,23 +692,23 @@ class TemplateEngineRenderTest {
     void renderBarChartWithCustomStyles() throws Exception {
         Map<String, Object> data = new HashMap<>();
         data.put("styledBarChart", new Chart(
-            "柱状图样式测试",
-            java.util.Arrays.asList("教育", "金融", "能源"),
-            java.util.Arrays.asList(new Chart.Series("数量", java.util.Arrays.asList(350, 280, 210), "75A254")),
-            500, 300,
-            Chart.ChartType.BAR,
-            16,
-            Chart.LegendPosition.LEFT,
-            false,
-            false,
-            false
+                "柱状图样式测试",
+                java.util.Arrays.asList("教育", "金融", "能源"),
+                java.util.Arrays.asList(new Chart.Series("数量", java.util.Arrays.asList(350, 280, 210), "75A254")),
+                500, 300,
+                Chart.ChartType.BAR,
+                16,
+                Chart.LegendPosition.LEFT,
+                false,
+                false,
+                false
         ));
         data.put("styledPieChart", new Chart(
-            "饼图样式测试",
-            java.util.Arrays.asList("A", "B", "C"),
-            java.util.Arrays.asList(new Chart.Series("占比", java.util.Arrays.asList(50, 30, 20))),
-            400, 250,
-            Chart.ChartType.PIE
+                "饼图样式测试",
+                java.util.Arrays.asList("A", "B", "C"),
+                java.util.Arrays.asList(new Chart.Series("占比", java.util.Arrays.asList(50, 30, 20))),
+                400, 250,
+                Chart.ChartType.PIE
         ));
 
         byte[] result = templateEngine.renderToBytes("classpath:templates/style-test-template.docx", data);
@@ -846,7 +851,7 @@ class TemplateEngineRenderTest {
     void renderWithFullPathSkipsTemplateLocation() {
         // 带 classpath: 前缀，直接使用，不拼接 templateLocation
         byte[] result = templateEngine.renderToBytes(
-            "classpath:templates/weekly-report-template.docx", fullData);
+                "classpath:templates/weekly-report-template.docx", fullData);
 
         assertNotNull(result);
         assertTrue(result.length > 5000, "完整路径渲染结果应大于5KB");
@@ -857,8 +862,8 @@ class TemplateEngineRenderTest {
     @DisplayName("templateLocation：仅传文件名但文件不存在，抛出 TemplateNotFoundException")
     void renderWithFileNameOnlyNotFound() {
         TemplateNotFoundException exception = assertThrows(
-            TemplateNotFoundException.class,
-            () -> templateEngine.renderToBytes("not-exist.docx", fullData)
+                TemplateNotFoundException.class,
+                () -> templateEngine.renderToBytes("not-exist.docx", fullData)
         );
         assertEquals("TEMPLATE_001", exception.getErrorCode());
         log.info("templateLocation 文件不存在验证通过，errorCode: {}", exception.getErrorCode());
@@ -866,7 +871,9 @@ class TemplateEngineRenderTest {
 
     // ==================== 辅助方法 ====================
 
-    /** 提取 DOCX 中所有文本内容 */
+    /**
+     * 提取 DOCX 中所有文本内容
+     */
     private String extractAllText(XWPFDocument doc) {
         StringBuilder sb = new StringBuilder();
         // 段落文本
@@ -969,14 +976,14 @@ class TemplateEngineRenderTest {
         data.put("outboundIndustryList", "电信、经营性公众互联网、能源");
         data.put("topOutboundThreat", "银狐");
         data.put("outboundThreatList", "木马、后门、GH0st、病毒");
-        data.put("outboundChart", buildLineChart("外联告警态势", new String[]{"3/30","3/31","4/1","4/2","4/3","4/4","4/5"}, new Number[]{120,98,145,200,178,156,210}));
+        data.put("outboundChart", buildLineChart("外联告警态势", new String[]{"3/30", "3/31", "4/1", "4/2", "4/3", "4/4", "4/5"}, new Number[]{120, 98, 145, 200, 178, 156, 210}));
         data.put("outboundChartImg", new Image("src/test/resources/images/chart1.png", 400, 300, "outboundChartImg", Image.ImageType.PNG));
 
         data.put("topInboundIndustry", "教育");
         data.put("topInboundCount", "8888");
         data.put("inboundIndustryList", "电信、其他、银行、广电");
         data.put("topInboundRules", "请求中包含zgrab扫描器特征...");
-        data.put("inboundChart", buildBarChart("正面攻击态势", new String[]{"3/30","3/31","4/1","4/2","4/3","4/4","4/5"}, new Number[]{3200,4100,2800,5600,4900,3700,6200}));
+        data.put("inboundChart", buildBarChart("正面攻击态势", new String[]{"3/30", "3/31", "4/1", "4/2", "4/3", "4/4", "4/5"}, new Number[]{3200, 4100, 2800, 5600, 4900, 3700, 6200}));
         data.put("inboundChartImg", new Image("src/test/resources/images/chart2.png", 400, 300, "inboundChartImg", Image.ImageType.PNG));
 
         data.put("unitOutboundTotal", "63712");
@@ -987,13 +994,13 @@ class TemplateEngineRenderTest {
         data.put("unitOutboundTargetTop3", "vs.haifti.com、1.uqidashi.com、185.27.134.11");
         data.put("topOutboundIntelOrg", "银狐");
         data.put("unitOutboundIntelOrgList", "mylobot、phorpiex、dorkbot");
-        data.put("unitOutboundChart", buildLineChart("本单位外联趋势", new String[]{"3/30","3/31","4/1","4/2","4/3","4/4","4/5"}, new Number[]{8500,9200,7800,11500,10200,9600,7100}));
+        data.put("unitOutboundChart", buildLineChart("本单位外联趋势", new String[]{"3/30", "3/31", "4/1", "4/2", "4/3", "4/4", "4/5"}, new Number[]{8500, 9200, 7800, 11500, 10200, 9600, 7100}));
 
         data.put("unitInboundPeakDate", "2026-04-24");
         data.put("unitInboundPeakCount", "178000");
         data.put("unitInboundAttackerTop3", "11.53.73.197、11.53.73.195、11.53.73.186");
         data.put("unitInboundAttackTypeList", "SQL注入、Webshell攻击、隐蔽隧道...");
-        data.put("unitInboundChart", buildPieChart("本单位攻击类型分布", new String[]{"SQL注入","Webshell","隐蔽隧道","暴力破解","其他"}, new Number[]{35,25,20,12,8}));
+        data.put("unitInboundChart", buildPieChart("本单位攻击类型分布", new String[]{"SQL注入", "Webshell", "隐蔽隧道", "暴力破解", "其他"}, new Number[]{35, 25, 20, 12, 8}));
 
         data.put("deviceStatus", "系统、流量、授权均正常；情报、规则均为最新版本。");
 
@@ -1089,7 +1096,7 @@ class TemplateEngineRenderTest {
         data.put("showHeaderDate", Boolean.TRUE);
 
         byte[] bytes = templateEngine.renderToBytes(
-            "classpath:templates/header-footer-template.docx", data);
+                "classpath:templates/header-footer-template.docx", data);
 
         Path outPath = OUTPUT_DIR.resolve("header-footer-condition-true-output.docx");
         Files.write(outPath, bytes);
@@ -1117,7 +1124,7 @@ class TemplateEngineRenderTest {
         data.put("showHeaderDate", Boolean.FALSE);
 
         byte[] bytes = templateEngine.renderToBytes(
-            "classpath:templates/header-footer-template.docx", data);
+                "classpath:templates/header-footer-template.docx", data);
 
         Path outPath = OUTPUT_DIR.resolve("header-footer-condition-false-output.docx");
         Files.write(outPath, bytes);
@@ -1156,7 +1163,7 @@ class TemplateEngineRenderTest {
         data.put("items", items);
 
         byte[] bytes = templateEngine.renderToBytes(
-            "classpath:templates/cell-format-template.docx", data);
+                "classpath:templates/cell-format-template.docx", data);
 
         Path outPath = OUTPUT_DIR.resolve("cell-format-output.docx");
         Files.write(outPath, bytes);
@@ -1175,7 +1182,7 @@ class TemplateEngineRenderTest {
                 for (XWPFTableRow row : table.getRows()) {
                     for (XWPFTableCell cell : row.getTableCells()) {
                         if (cell.getText().contains("第一项") || cell.getText().contains("值一")
-                            || cell.getText().contains("第二项") || cell.getText().contains("值二")) {
+                                || cell.getText().contains("第二项") || cell.getText().contains("值二")) {
                             // 展开的数据行应该有背景色（E7EFF7 = 十六进制 RGB）
                             assertTrue(hasCellShading(cell), "展开行单元格应有背景色，当前文本: " + cell.getText());
                         }
@@ -1207,22 +1214,22 @@ class TemplateEngineRenderTest {
 
     private Chart buildLineChart(String title, String[] categories, Number[] values) {
         return new Chart(title,
-            java.util.Arrays.asList(categories),
-            java.util.Collections.singletonList(new Chart.Series("数量", java.util.Arrays.asList(values))),
-            400, 300, Chart.ChartType.LINE);
+                java.util.Arrays.asList(categories),
+                java.util.Collections.singletonList(new Chart.Series("数量", java.util.Arrays.asList(values))),
+                400, 300, Chart.ChartType.LINE);
     }
 
     private Chart buildBarChart(String title, String[] categories, Number[] values) {
         return new Chart(title,
-            java.util.Arrays.asList(categories),
-            java.util.Collections.singletonList(new Chart.Series("数量", java.util.Arrays.asList(values))),
-            400, 300, Chart.ChartType.BAR);
+                java.util.Arrays.asList(categories),
+                java.util.Collections.singletonList(new Chart.Series("数量", java.util.Arrays.asList(values))),
+                400, 300, Chart.ChartType.BAR);
     }
 
     private Chart buildPieChart(String title, String[] categories, Number[] values) {
         return new Chart(title,
-            java.util.Arrays.asList(categories),
-            java.util.Collections.singletonList(new Chart.Series("占比", java.util.Arrays.asList(values))),
-            400, 300, Chart.ChartType.PIE);
+                java.util.Arrays.asList(categories),
+                java.util.Collections.singletonList(new Chart.Series("占比", java.util.Arrays.asList(values))),
+                400, 300, Chart.ChartType.PIE);
     }
 }

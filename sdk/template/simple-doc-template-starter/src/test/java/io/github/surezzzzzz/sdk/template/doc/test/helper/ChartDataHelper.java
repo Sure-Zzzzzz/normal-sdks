@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.template.doc.test.helper;
 
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
 
@@ -182,13 +183,9 @@ public class ChartDataHelper {
     }
 
     @Getter
+    @AllArgsConstructor
     public static class SeriesData {
         private final String name;
         private final double[] values;
-
-        public SeriesData(String name, double[] values) {
-            this.name = name;
-            this.values = values;
-        }
     }
 }

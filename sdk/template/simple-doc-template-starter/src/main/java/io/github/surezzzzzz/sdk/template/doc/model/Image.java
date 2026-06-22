@@ -171,6 +171,12 @@ public class Image {
             this.description = description;
         }
 
+        /**
+         * 根据图片类型代码获取图片类型
+         *
+         * @param code 图片类型代码
+         * @return 图片类型，不存在返回 null
+         */
         public static ImageType fromCode(String code) {
             if (code == null) {
                 return null;
@@ -183,6 +189,12 @@ public class Image {
             return null;
         }
 
+        /**
+         * 根据文件名推断图片类型
+         *
+         * @param fileName 文件名
+         * @return 图片类型，无法识别时返回 PNG
+         */
         public static ImageType fromFileName(String fileName) {
             if (fileName == null) {
                 return PNG;
@@ -197,10 +209,21 @@ public class Image {
             return PNG;
         }
 
+        /**
+         * 判断图片类型代码是否有效
+         *
+         * @param code 图片类型代码
+         * @return true 有效，false 无效
+         */
         public static boolean isValid(String code) {
             return fromCode(code) != null;
         }
 
+        /**
+         * 获取所有图片类型代码
+         *
+         * @return 图片类型代码数组
+         */
         public static String[] getAllCodes() {
             ImageType[] types = values();
             String[] codes = new String[types.length];

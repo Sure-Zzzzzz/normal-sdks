@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateNotFoundException;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.util.StreamUtils;
@@ -20,13 +21,10 @@ import java.io.InputStream;
  * @author surezzzzzz
  */
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class TemplateResourceHelper {
 
     private final ResourceLoader resourceLoader;
-
-    public TemplateResourceHelper(ResourceLoader resourceLoader) {
-        this.resourceLoader = resourceLoader;
-    }
 
     /**
      * 加载模板资源

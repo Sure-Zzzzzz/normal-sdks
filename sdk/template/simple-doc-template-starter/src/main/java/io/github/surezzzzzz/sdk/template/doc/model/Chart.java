@@ -78,6 +78,47 @@ public class Chart {
      */
     private final boolean showGridLines;
 
+    /**
+     * 标题是否粗体（默认 true，与 Office 默认一致）
+     */
+    private final boolean titleBold;
+
+    /**
+     * 柱状图：分组间距百分比（OOXML c:gapWidth val），null 表示走 JFreeChart 默认值
+     */
+    private final Integer barGapWidth;
+
+    /**
+     * Y 轴最小值（c:scaling/c:min），null 表示自动量程
+     */
+    private final Double yMin;
+
+    /**
+     * Y 轴最大值（c:scaling/c:max），null 表示自动量程
+     */
+    private final Double yMax;
+
+    /**
+     * Y 轴主刻度间隔（c:majorUnit），null 表示自动
+     */
+    private final Double yMajorUnit;
+
+    /**
+     * Y 轴数字格式（c:numFmt formatCode，如 "0", "0.00", "0%"），null 走 General
+     */
+    private final String yNumFmt;
+
+    /**
+     * 是否在数据点上显示数值（c:dLbls/c:showVal），默认 false
+     */
+    private final boolean showVal;
+
+    /**
+     * 柱状图是否为 3D 样式（OOXML c:bar3DChart），默认 false（2D 平面 c:barChart）。
+     * 2D 时柱子纯平色，3D 时带渐变和阴影。
+     */
+    private final boolean bar3D;
+
     // ===== 构造器 =====
 
     /**
@@ -103,7 +144,19 @@ public class Chart {
     }
 
     /**
-     * 全量构造器
+     * 11 参构造器：兼容老调用方，扩展字段走默认值
+     */
+    public Chart(String title, List<String> categories, List<Series> series,
+                 int width, int height, ChartType chartType,
+                 int titleFontSize, LegendPosition legendPosition,
+                 boolean smooth, boolean showMarker, boolean showGridLines) {
+        this(title, categories, series, width, height, chartType,
+                titleFontSize, legendPosition, smooth, showMarker, showGridLines,
+                true, null, null, null, null, null, false, false);
+    }
+
+    /**
+     * 全量构造器（含 OOXML 解析的扩展字段）
      *
      * @param title          图表标题
      * @param categories     X 轴分类标签
@@ -113,14 +166,25 @@ public class Chart {
      * @param chartType      图表类型（默认 LINE）
      * @param titleFontSize  标题字号（默认 14）
      * @param legendPosition 图例位置（默认底部）
-     * @param smooth         折线图：是否平滑（默认 true）
-     * @param showMarker     折线图：是否显示标记点（默认 true）
-     * @param showGridLines  是否显示网格线（默认 false）
+     * @param smooth         折线图：是否平滑
+     * @param showMarker     折线图：是否显示标记点
+     * @param showGridLines  是否显示网格线
+     * @param titleBold      标题粗体（默认 true）
+     * @param barGapWidth    柱状图分组间距百分比（null 走默认）
+     * @param yMin           Y 轴最小值（null 自动）
+     * @param yMax           Y 轴最大值（null 自动）
+     * @param yMajorUnit     Y 轴主刻度间隔（null 自动）
+     * @param yNumFmt        Y 轴数字格式（null 走 General）
+     * @param showVal        数据标签是否显示数值
+     * @param bar3D          柱状图是否 3D 样式（c:bar3DChart），默认 false
      */
     public Chart(String title, List<String> categories, List<Series> series,
                  int width, int height, ChartType chartType,
                  int titleFontSize, LegendPosition legendPosition,
-                 boolean smooth, boolean showMarker, boolean showGridLines) {
+                 boolean smooth, boolean showMarker, boolean showGridLines,
+                 boolean titleBold, Integer barGapWidth,
+                 Double yMin, Double yMax, Double yMajorUnit, String yNumFmt,
+                 boolean showVal, boolean bar3D) {
         this.title = title;
         this.categories = categories;
         this.series = series;
@@ -132,6 +196,14 @@ public class Chart {
         this.smooth = smooth;
         this.showMarker = showMarker;
         this.showGridLines = showGridLines;
+        this.titleBold = titleBold;
+        this.barGapWidth = barGapWidth;
+        this.yMin = yMin;
+        this.yMax = yMax;
+        this.yMajorUnit = yMajorUnit;
+        this.yNumFmt = yNumFmt;
+        this.showVal = showVal;
+        this.bar3D = bar3D;
     }
 
     /**

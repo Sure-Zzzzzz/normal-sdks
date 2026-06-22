@@ -19,6 +19,11 @@ public final class SimpleDocTemplateConstant {
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.template.doc";
 
     /**
+     * 默认是否启用
+     */
+    public static final boolean DEFAULT_ENABLE = false;
+
+    /**
      * 默认模板根路径
      */
     public static final String DEFAULT_TEMPLATE_LOCATION = "classpath:templates/";
@@ -27,6 +32,32 @@ public final class SimpleDocTemplateConstant {
      * 默认标签前缀
      */
     public static final String DEFAULT_TAG_PREFIX = "suredt";
+
+    /**
+     * 空字符串
+     */
+    public static final String EMPTY = "";
+
+    /**
+     * 默认字体路径列表（PDF 渲染用，路径可以是文件或目录）
+     * <p>
+     * 按优先级排列，.ttf 优先于 .ttc（openhtmltopdf 对 .ttc 支持有限）。
+     * 业务方通过 font-paths 配置覆盖此默认值。
+     */
+    public static final String[] DEFAULT_FONT_PATHS = {
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+            "C:/Windows/Fonts/simfang.ttf",
+            "C:/Windows/Fonts/simkai.ttf",
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/msyhbd.ttc",
+            "C:/Windows/Fonts/msyhl.ttc",
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    };
 
     /**
      * 文件编码
@@ -62,17 +93,47 @@ public final class SimpleDocTemplateConstant {
      */
     public static final String FORMAT_PDF = "pdf";
 
-    /**
-     * 格式标识：HTML（P1）
-     */
-    public static final String FORMAT_HTML = "html";
-
     // ==================== DOCX 内部路径 ====================
 
     /**
      * DOCX 主文档 XML 路径
      */
     public static final String DOCX_DOCUMENT_XML = "word/document.xml";
+
+    /**
+     * DOCX 主文档关系文件路径
+     */
+    public static final String DOCX_DOCUMENT_RELS = "word/_rels/document.xml.rels";
+
+    /**
+     * DOCX 内容类型文件路径
+     */
+    public static final String DOCX_CONTENT_TYPES = "[Content_Types].xml";
+
+    /**
+     * DOCX 图表目录
+     */
+    public static final String DOCX_CHARTS_DIR = "word/charts/";
+
+    /**
+     * DOCX 嵌入对象目录
+     */
+    public static final String DOCX_EMBEDDINGS_DIR = "word/embeddings/";
+
+    /**
+     * DOCX 媒体目录前缀
+     */
+    public static final String DOCX_MEDIA_DIR = "word/media/";
+
+    /**
+     * Chart marker 前缀（WordRenderer 写入、PdfOutputHandler 识别）
+     */
+    public static final String CHART_MARKER_PREFIX = "SUREDT_CHART_";
+
+    /**
+     * 渲染临时文件名前缀
+     */
+    public static final String TEMP_RENDERED_DOCX_PREFIX = "rendered-";
 
     // ==================== IO ====================
 
@@ -112,6 +173,11 @@ public final class SimpleDocTemplateConstant {
      * Chart 关系类型
      */
     public static final String REL_TYPE_CHART = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+
+    /**
+     * Image 关系类型
+     */
+    public static final String REL_TYPE_IMAGE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
     /**
      * Package（嵌入式对象）关系类型
@@ -186,4 +252,105 @@ public final class SimpleDocTemplateConstant {
      * 完整标签模板：循环结束
      */
     public static final String TAG_ENDFOR_TAG_TEMPLATE = "[%s.endfor:%s]";
+
+    // ==================== 临时文件 ====================
+
+    /**
+     * DOCX 临时文件名前缀
+     */
+    public static final String TEMP_DOCX_PREFIX = "docx-";
+
+    /**
+     * ZIP 临时文件后缀
+     */
+    public static final String TEMP_ZIP_SUFFIX = ".zip";
+
+    // ==================== 业务描述 ====================
+
+    /**
+     * WordRenderer 类名
+     */
+    public static final String RENDERER_WORD_CLASS_NAME = "WordRenderer";
+
+    /**
+     * PDF footer 不支持元素：表格
+     */
+    public static final String ELEMENT_TABLE = "表格";
+
+    /**
+     * PDF footer 不支持元素：列表
+     */
+    public static final String ELEMENT_LIST = "列表（项目符号/编号）";
+
+    /**
+     * PDF footer 不支持元素：图片
+     */
+    public static final String ELEMENT_IMAGE_DRAWING = "图片（drawing/pict）";
+
+    /**
+     * 直接转换 chart 标识
+     */
+    public static final String DIRECT_CONVERT_CHART_KEY = "(direct-convert)";
+
+    /**
+     * 页眉位置描述
+     */
+    public static final String POSITION_HEADER = "页眉";
+
+    /**
+     * 页脚位置描述
+     */
+    public static final String POSITION_FOOTER = "页脚";
+
+    // ==================== OOXML 样式默认值 ====================
+
+    /**
+     * Word 默认段落样式 ID
+     */
+    public static final String WORD_DEFAULT_PARA_STYLE_ID = "999";
+
+    /**
+     * Word 默认字体大小（half-point），11pt = 22 halfPt
+     */
+    public static final int WORD_DEFAULT_FONT_HALF_PT = 22;
+
+    /**
+     * Word 默认正文字体大小（pt）
+     */
+    public static final double WORD_DEFAULT_BODY_FONT_PT = 12.0;
+
+    /**
+     * Word 页眉/页脚默认字号（pt）
+     */
+    public static final double WORD_HEADER_DEFAULT_FONT_PT = 9.0;
+
+    /**
+     * Word 表格单元格默认字号（pt）
+     */
+    public static final double WORD_TABLE_CELL_DEFAULT_FONT_PT = 10.0;
+
+    /**
+     * Word 空格宽度系数（相对于字号），用于估算中英文混排空格宽度
+     */
+    public static final double WORD_SPACE_WIDTH_COEFFICIENT = 0.5;
+
+    // ==================== 渲染默认值 ====================
+
+    /**
+     * 内容区宽度回退值（CSS px），当文档无 sectPr/pgSz/pgMar 时使用
+     */
+    public static final int CONTENT_WIDTH_PX_FALLBACK = 952;
+
+    // ==================== Chart 渲染默认值 ====================
+
+    /**
+     * Chart 默认宽度（px）
+     */
+    public static final int CHART_DEFAULT_WIDTH_PX = 600;
+
+    /**
+     * Chart 默认高度（px）
+     */
+    public static final int CHART_DEFAULT_HEIGHT_PX = 360;
+
 }

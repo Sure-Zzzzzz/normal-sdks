@@ -1,13 +1,20 @@
 package io.github.surezzzzzz.sdk.template.doc.engine;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.condition.ConditionProcessor;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
+import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
-import io.github.surezzzzzz.sdk.template.doc.processor.condition.ConditionProcessor;
+import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
+import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandlerRegistry;
 import io.github.surezzzzzz.sdk.template.doc.renderer.Renderer;
+import io.github.surezzzzzz.sdk.template.doc.renderer.RendererRegistry;
+import io.github.surezzzzzz.sdk.template.doc.renderer.word.WordRenderer;
+import io.github.surezzzzzz.sdk.template.doc.result.PdfRenderResult;
+import io.github.surezzzzzz.sdk.template.doc.result.TemplateRenderResult;
 import io.github.surezzzzzz.sdk.template.doc.support.TemplateResourceHelper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.io.OutputStream;
 import java.util.Map;
@@ -38,18 +45,14 @@ import java.util.Map;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class TemplateEngine {
 
-    @Autowired
-    private SimpleDocTemplateProperties properties;
-    @Autowired
-    private TemplateResourceHelper resourceHelper;
-    @Autowired
-    private RendererRegistry rendererRegistry;
-    @Autowired
-    private OutputHandlerRegistry outputHandlerRegistry;
-    @Autowired
-    private ConditionProcessor conditionProcessor;
+    private final SimpleDocTemplateProperties properties;
+    private final TemplateResourceHelper resourceHelper;
+    private final RendererRegistry rendererRegistry;
+    private final OutputHandlerRegistry outputHandlerRegistry;
+    private final ConditionProcessor conditionProcessor;
 
     /**
      * 渲染模板，返回链式结果（核心入口）
@@ -118,6 +121,48 @@ public class TemplateEngine {
      */
     public void renderToStream(String templateLocation, Map<String, Object> data, OutputStream outputStream) {
         render(templateLocation, data).output().toStream(outputStream);
+    }
+
+    // ===== PDF 输出（1.1.0）=====
+
+    /**
+     * PDF 快捷方法：渲染 DOCX 模板并直接返回 PDF 字节数组
+     *
+     * @param templateLocation 模板路径（仅支持 .docx）
+     * @param data             渲染数据
+     * @return PDF 字节数组
+     */
+    public byte[] renderToPdf(String templateLocation, Map<String, Object> data) {
+        return renderForPdf(templateLocation, data).toBytes();
+    }
+
+    /**
+     * PDF 专用渲染入口：生成带 chart PNG 的 PdfRenderResult
+     * <p>
+     * 含 chart 时自动走 Chart 路径（chart → PNG），不含 chart 时走普通路径。
+     *
+     * @param templateLocation 模板路径（仅支持 .docx）
+     * @param data             渲染数据
+     * @return PdfRenderResult，可调用 toFile / toStream / toBytes 输出 PDF
+     */
+    public PdfRenderResult renderForPdf(String templateLocation, Map<String, Object> data) {
+        String resolved = resolveLocation(templateLocation);
+        String suffix = extractSuffix(resolved);
+        if (!SimpleDocTemplateConstant.SUFFIX_DOCX.equals(suffix)) {
+            throw TemplateRenderException.formatMismatch(SimpleDocTemplateConstant.SUFFIX_DOCX, suffix);
+        }
+
+        byte[] rawBytes = resourceHelper.loadResourceBytes(resolved);
+        byte[] processedBytes = conditionProcessor.process(rawBytes, suffix, data);
+
+        Renderer renderer = rendererRegistry.find(suffix);
+        if (renderer == null) {
+            throw io.github.surezzzzzz.sdk.template.doc.exception.TemplateNotFoundException.rendererNotFound(suffix);
+        }
+        if (!(renderer instanceof WordRenderer)) {
+            throw TemplateRenderException.rendererTypeMismatch(SimpleDocTemplateConstant.RENDERER_WORD_CLASS_NAME, renderer.getClass().getName());
+        }
+        return ((WordRenderer) renderer).renderForPdf(processedBytes, data);
     }
 
     private String resolveLocation(String location) {

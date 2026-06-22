@@ -12,8 +12,7 @@ public enum OutputFormat {
 
     DOCX(SimpleDocTemplateConstant.FORMAT_DOCX, "Word 文档"),
     MD(SimpleDocTemplateConstant.FORMAT_MD, "Markdown 文档"),
-    PDF(SimpleDocTemplateConstant.FORMAT_PDF, "PDF 文档（P1）"),
-    HTML(SimpleDocTemplateConstant.FORMAT_HTML, "HTML 文档（P1）");
+    PDF(SimpleDocTemplateConstant.FORMAT_PDF, "PDF 文档");
 
     private final String code;
     private final String description;
@@ -23,6 +22,12 @@ public enum OutputFormat {
         this.description = description;
     }
 
+    /**
+     * 根据格式代码获取输出格式
+     *
+     * @param code 格式代码
+     * @return 输出格式，不存在返回 null
+     */
     public static OutputFormat fromCode(String code) {
         if (code == null) {
             return null;
@@ -35,10 +40,21 @@ public enum OutputFormat {
         return null;
     }
 
+    /**
+     * 判断格式代码是否有效
+     *
+     * @param code 格式代码
+     * @return true 有效，false 无效
+     */
     public static boolean isValid(String code) {
         return fromCode(code) != null;
     }
 
+    /**
+     * 获取所有格式代码
+     *
+     * @return 格式代码数组
+     */
     public static String[] getAllCodes() {
         OutputFormat[] formats = values();
         String[] codes = new String[formats.length];

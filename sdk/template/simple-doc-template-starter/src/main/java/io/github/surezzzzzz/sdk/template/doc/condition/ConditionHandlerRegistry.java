@@ -1,8 +1,8 @@
-package io.github.surezzzzzz.sdk.template.doc.processor.condition;
+package io.github.surezzzzzz.sdk.template.doc.condition;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
@@ -16,12 +16,11 @@ import java.util.Map;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class ConditionHandlerRegistry {
 
     private final Map<String, ConditionHandler> registry = new HashMap<>();
-
-    @Autowired
-    private List<ConditionHandler> allHandlers;
+    private final List<ConditionHandler> allHandlers;
 
     @PostConstruct
     void init() {

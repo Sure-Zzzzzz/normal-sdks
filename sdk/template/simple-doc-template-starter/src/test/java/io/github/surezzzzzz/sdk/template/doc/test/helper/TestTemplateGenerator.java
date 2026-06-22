@@ -2,7 +2,6 @@ package io.github.surezzzzzz.sdk.template.doc.test.helper;
 
 import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xwpf.usermodel.*;
-import org.junit.jupiter.api.Test;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,21 +15,6 @@ import java.nio.file.Paths;
  */
 @Slf4j
 public class TestTemplateGenerator {
-
-    @Test
-    public void generate() throws Exception {
-        Path styleOut = Paths.get("src/test/resources/templates/style-test-template.docx");
-        generateStyleTestTemplate(styleOut);
-        log.info("样式模板已生成: {}", styleOut);
-
-        Path hfOut = Paths.get("src/test/resources/templates/header-footer-template.docx");
-        generateHeaderFooterTemplate(hfOut);
-        log.info("页眉页脚模板已生成: {}", hfOut);
-
-        Path cellFmtOut = Paths.get("src/test/resources/templates/cell-format-template.docx");
-        generateCellFormatTemplate(cellFmtOut);
-        log.info("单元格格式模板已生成: {}", cellFmtOut);
-    }
 
     /**
      * 生成测试模板，包含：

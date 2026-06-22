@@ -1,10 +1,9 @@
-package io.github.surezzzzzz.sdk.template.doc.engine;
+package io.github.surezzzzzz.sdk.template.doc.handler;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.constant.OutputFormat;
-import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandler;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
@@ -18,12 +17,11 @@ import java.util.Map;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class OutputHandlerRegistry {
 
     private final Map<String, OutputHandler> registry = new HashMap<>();
-
-    @Autowired
-    private List<OutputHandler> allHandlers;
+    private final List<OutputHandler> allHandlers;
 
     @PostConstruct
     void init() {

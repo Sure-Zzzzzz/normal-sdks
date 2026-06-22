@@ -3,8 +3,8 @@ package io.github.surezzzzzz.sdk.template.doc.support;
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 
@@ -17,13 +17,13 @@ import javax.annotation.PostConstruct;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class TagHelper {
 
     /** 运行时前缀，由 PostConstruct 注入 */
     private String prefix = SimpleDocTemplateConstant.DEFAULT_TAG_PREFIX;
 
-    @Autowired
-    private SimpleDocTemplateProperties properties;
+    private final SimpleDocTemplateProperties properties;
 
     @PostConstruct
     void init() {
@@ -31,6 +31,11 @@ public class TagHelper {
         log.info("Tag prefix initialized: [{}]", prefix);
     }
 
+    /**
+     * 获取当前模板标签前缀
+     *
+     * @return 标签前缀
+     */
     public String getPrefix() {
         return prefix;
     }

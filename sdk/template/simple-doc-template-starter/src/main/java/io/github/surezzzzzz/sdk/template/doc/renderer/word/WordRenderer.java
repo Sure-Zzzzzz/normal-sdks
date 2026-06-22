@@ -1,14 +1,20 @@
 package io.github.surezzzzzz.sdk.template.doc.renderer.word;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
 import io.github.surezzzzzz.sdk.template.doc.document.WordDocument;
+import io.github.surezzzzzz.sdk.template.doc.exception.ChartPngGenerationException;
+import io.github.surezzzzzz.sdk.template.doc.exception.FontNotFoundException;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
+import io.github.surezzzzzz.sdk.template.doc.handler.pdf.PdfOutputHandler;
 import io.github.surezzzzzz.sdk.template.doc.model.Chart;
 import io.github.surezzzzzz.sdk.template.doc.model.Image;
 import io.github.surezzzzzz.sdk.template.doc.renderer.Renderer;
+import io.github.surezzzzzz.sdk.template.doc.result.PdfRenderResult;
 import io.github.surezzzzzz.sdk.template.doc.support.TagHelper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.ss.usermodel.Row;
@@ -16,9 +22,24 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.util.Units;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.usermodel.*;
+import org.jfree.chart.ChartUtils;
+import org.jfree.chart.JFreeChart;
+import org.jfree.chart.axis.CategoryAxis;
+import org.jfree.chart.axis.NumberAxis;
+import org.jfree.chart.axis.NumberTickUnit;
+import org.jfree.chart.labels.StandardCategoryItemLabelGenerator;
+import org.jfree.chart.labels.StandardPieSectionLabelGenerator;
+import org.jfree.chart.plot.CategoryPlot;
+import org.jfree.chart.plot.PiePlot;
+import org.jfree.chart.plot.PlotOrientation;
+import org.jfree.chart.renderer.category.BarRenderer;
+import org.jfree.chart.renderer.category.LineAndShapeRenderer;
+import org.jfree.chart.title.TextTitle;
+import org.jfree.chart.ui.RectangleEdge;
+import org.jfree.data.category.DefaultCategoryDataset;
+import org.jfree.data.general.DefaultPieDataset;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTc;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import javax.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
@@ -28,6 +49,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -52,6 +74,7 @@ import java.util.zip.ZipOutputStream;
  */
 @Slf4j
 @SimpleDocTemplateComponent
+@RequiredArgsConstructor
 public class WordRenderer implements Renderer {
 
     // ===== 模板标签正则 =====
@@ -60,13 +83,13 @@ public class WordRenderer implements Renderer {
     private Pattern imgPattern;
     private Pattern chartPattern;
 
-    // ===== DOCX ZIP 内部路径（Word 专属，自闭环）=====
+    // ===== DOCX ZIP 内部路径（引用常量）=====
 
     private static final String DOCX_DOCUMENT_XML = SimpleDocTemplateConstant.DOCX_DOCUMENT_XML;
-    private static final String DOCX_DOCUMENT_RELS = "word/_rels/document.xml.rels";
-    private static final String DOCX_CONTENT_TYPES = "[Content_Types].xml";
-    private static final String DOCX_CHARTS_DIR = "word/charts/";
-    private static final String DOCX_EMBEDDINGS_DIR = "word/embeddings/";
+    private static final String DOCX_DOCUMENT_RELS = SimpleDocTemplateConstant.DOCX_DOCUMENT_RELS;
+    private static final String DOCX_CONTENT_TYPES = SimpleDocTemplateConstant.DOCX_CONTENT_TYPES;
+    private static final String DOCX_CHARTS_DIR = SimpleDocTemplateConstant.DOCX_CHARTS_DIR;
+    private static final String DOCX_EMBEDDINGS_DIR = SimpleDocTemplateConstant.DOCX_EMBEDDINGS_DIR;
     private static final String DOCX_CHART_XML_TMPL = "word/charts/chart%d.xml";
     private static final String DOCX_CHART_RELS_TMPL = "word/charts/_rels/chart%d.xml.rels";
     private static final String DOCX_EMBEDDING_TMPL = "word/embeddings/Microsoft_Office_Chart%d.xlsx";
@@ -85,7 +108,7 @@ public class WordRenderer implements Renderer {
 
     // ===== Chart 生成相关常量（Word 专属，自闭环）=====
 
-    private static final String CHART_MARKER_PREFIX = "SUREDT_CHART_";
+    private static final String CHART_MARKER_PREFIX = SimpleDocTemplateConstant.CHART_MARKER_PREFIX;
     private static final String CHART_REL_ID_PREFIX = "rIdChart";
     private static final String CHART_COLOR_DEFAULT = "4F81BD";
     private static final String CHART_LANG = "zh-CN";
@@ -99,7 +122,7 @@ public class WordRenderer implements Renderer {
      * 默认页面内容宽度（px）。
      * 仅在模板无页面设置时使用，约等于 A4 页面（148mm）减去 2.5cm*2 边距后的宽度。
      */
-    private static final int DEFAULT_CONTENT_WIDTH_PX = 952;
+    private static final int DEFAULT_CONTENT_WIDTH_PX = SimpleDocTemplateConstant.CONTENT_WIDTH_PX_FALLBACK;
 
     /**
      * 1px 对应的 EMU 数（1 inch = 914400 EMU，1 inch ≈ 96px）
@@ -111,8 +134,11 @@ public class WordRenderer implements Renderer {
      */
     private static final int PICTURE_TYPE_PNG = XWPFDocument.PICTURE_TYPE_PNG;
 
-    @Autowired
-    private TagHelper tagHelper;
+    private final TagHelper tagHelper;
+
+    private final SimpleDocTemplateProperties properties;
+
+    private final PdfOutputHandler pdfOutputHandler;
 
     @PostConstruct
     void init() {
@@ -127,24 +153,19 @@ public class WordRenderer implements Renderer {
         try {
             List<ChartPlaceholderInfo> chartPlaceholders = new ArrayList<>();
 
-            // OPCPackage 由 XWPFDocument 管理，随 doc.close() 一起关闭
             OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(templateBytes));
             XWPFDocument doc = new XWPFDocument(pkg);
 
-            // 页面内容宽度，用于图片 width=0 时的默认值兜底
             int contentWidthPx = DEFAULT_CONTENT_WIDTH_PX;
-
-            // 条件块已在 ConditionProcessor/DocxConditionHandler 字节级处理完，
-            // 此处 start/end 标记已被删除，无需重复处理
 
             // 1. 遍历所有段落，处理文本变量、图片、图表
             processAllParagraphs(doc, data, chartPlaceholders, contentWidthPx);
 
             // 2. 处理所有表格（变量 + 图片 + 行循环）
-            processAllTables(doc, data, contentWidthPx);
+            processAllTables(doc, data, chartPlaceholders, contentWidthPx);
 
             // 3. 写出临时文件
-            Path tmpDocx = Files.createTempFile("rendered-", ".docx");
+            Path tmpDocx = Files.createTempFile(SimpleDocTemplateConstant.TEMP_RENDERED_DOCX_PREFIX, SimpleDocTemplateConstant.SUFFIX_DOCX);
             try {
                 try (java.io.OutputStream os = Files.newOutputStream(tmpDocx)) {
                     doc.write(os);
@@ -168,6 +189,79 @@ public class WordRenderer implements Renderer {
         }
     }
 
+    /**
+     * PDF 场景专用入口：渲染模板并返回 PdfRenderResult（含 chart PNG）
+     * <p>
+     * 字体来自 properties.fontPaths，全局唯一入口，不允许其他来源。
+     */
+    public PdfRenderResult renderForPdf(byte[] templateBytes, Map<String, Object> data) {
+        List<ChartPlaceholderInfo> chartPlaceholders = new ArrayList<>();
+
+        try {
+            OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(templateBytes));
+            XWPFDocument doc = new XWPFDocument(pkg);
+
+            int contentWidthPx = DEFAULT_CONTENT_WIDTH_PX;
+
+            // 1. 遍历所有段落，处理文本变量、图片、图表
+            processAllParagraphs(doc, data, chartPlaceholders, contentWidthPx);
+
+            // 2. 处理所有表格（变量 + 图片 + 行循环）
+            processAllTables(doc, data, chartPlaceholders, contentWidthPx);
+
+            // 3. 写出临时文件
+            Path tmpDocx = Files.createTempFile(SimpleDocTemplateConstant.TEMP_RENDERED_DOCX_PREFIX, SimpleDocTemplateConstant.SUFFIX_DOCX);
+            try {
+                try (java.io.OutputStream os = Files.newOutputStream(tmpDocx)) {
+                    doc.write(os);
+                }
+            } finally {
+                doc.close();
+            }
+
+            // 4. 读取临时文件字节
+            byte[] tmpBytes;
+            try (InputStream is = Files.newInputStream(tmpDocx)) {
+                tmpBytes = toByteArray(is);
+            }
+            Files.deleteIfExists(tmpDocx);
+
+            // 5. 根据是否有 chart 分叉
+            if (!chartPlaceholders.isEmpty()) {
+                // PDF 路径：chart marker 保留在 docxBytes 中，生成 PNG 列表
+                List<byte[]> pngList = generateChartPngList(chartPlaceholders);
+                return new PdfRenderResult(tmpBytes, pngList, pdfOutputHandler);
+            } else {
+                // 普通路径：无 chart，直接返回
+                return new PdfRenderResult(tmpBytes, Collections.emptyList(), pdfOutputHandler);
+            }
+        } catch (FontNotFoundException e) {
+            throw e;
+        } catch (ChartPngGenerationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw TemplateRenderException.renderFailed(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 为所有 chart 占位符生成 PNG 字节列表
+     */
+    private List<byte[]> generateChartPngList(List<ChartPlaceholderInfo> chartPlaceholders) {
+        java.awt.Font cjkFont = loadCjkFontFromProperties();
+        List<byte[]> pngList = new ArrayList<>();
+        for (ChartPlaceholderInfo info : chartPlaceholders) {
+            try {
+                pngList.add(chartToPng(info.chart, cjkFont));
+            } catch (FontNotFoundException e) {
+                throw e;
+            } catch (Exception e) {
+                throw ChartPngGenerationException.failed(info.key, e.getMessage(), e);
+            }
+        }
+        return pngList;
+    }
+
     // ===== 段落处理 =====
 
     private void processAllParagraphs(XWPFDocument doc, Map<String, Object> data, List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
@@ -188,15 +282,25 @@ public class WordRenderer implements Renderer {
             for (XWPFParagraph para : header.getParagraphs()) {
                 processParagraphText(para, data);
                 replaceImgPlaceholder(para, data, contentWidthPx);
-                // header 不支持 chart，忽略
+                if (hasChartPlaceholder(para)) {
+                    throw TemplateRenderException.chartInHeaderFooter(SimpleDocTemplateConstant.POSITION_HEADER);
+                }
             }
         }
         for (XWPFFooter footer : doc.getFooterList()) {
             for (XWPFParagraph para : footer.getParagraphs()) {
                 processParagraphText(para, data);
                 replaceImgPlaceholder(para, data, contentWidthPx);
+                if (hasChartPlaceholder(para)) {
+                    throw TemplateRenderException.chartInHeaderFooter(SimpleDocTemplateConstant.POSITION_FOOTER);
+                }
             }
         }
+    }
+
+    private boolean hasChartPlaceholder(XWPFParagraph para) {
+        String text = getParaText(para);
+        return chartPattern.matcher(text).find();
     }
 
     /**
@@ -246,6 +350,322 @@ public class WordRenderer implements Renderer {
         chartPlaceholders.add(new ChartPlaceholderInfo(key, chart, marker));
     }
 
+    // ===== Chart → PNG（JFreeChart 渲染）=====
+
+    /**
+     * 将 Chart 对象渲染为 PNG 字节数组（JFreeChart）
+     * <p>
+     * 宽高：直接用 chart.getWidth()/getHeight()（像素值），为 0 时用默认值。
+     * 字体由调用方从 properties.fontPaths 加载后传入，本方法不再独立查找字体。
+     */
+    private byte[] chartToPng(Chart chart, java.awt.Font cjkFont) throws Exception {
+        int width = chart.getWidth() > 0 ? chart.getWidth() : DEFAULT_CONTENT_WIDTH_PX;
+        int height = chart.getHeight() > 0 ? chart.getHeight() : DEFAULT_CHART_HEIGHT_PX;
+
+        JFreeChart jfreeChart;
+        Chart.ChartType type = chart.getChartType();
+
+        if (type == Chart.ChartType.PIE) {
+            DefaultPieDataset dataset = new DefaultPieDataset();
+            Chart.Series series = chart.getSeries().get(0);
+            for (int ci = 0; ci < chart.getCategories().size(); ci++) {
+                if (ci < series.getValues().size()) {
+                    dataset.setValue(chart.getCategories().get(ci),
+                            series.getValues().get(ci).doubleValue());
+                }
+            }
+            PiePlot plot = new PiePlot(dataset);
+            plot.setLabelFont(cjkFont);
+            plot.setLabelGenerator(new StandardPieSectionLabelGenerator(
+                    "{0}={1} ({2})"));
+            // 饼图颜色：用户传了 series.color 就用用户的，没传则不设（让 JFreeChart 自行决定）
+            String pieColor = chart.getSeries().isEmpty() ? null : chart.getSeries().get(0).getColor();
+            java.awt.Color singleColor = parseHexColor(pieColor, -1);
+            for (int ci = 0; ci < chart.getCategories().size(); ci++) {
+                plot.setSectionPaint(chart.getCategories().get(ci), singleColor);
+            }
+            jfreeChart = new JFreeChart(plot);
+        } else {
+            DefaultCategoryDataset dataset = new DefaultCategoryDataset();
+            for (int si = 0; si < chart.getSeries().size(); si++) {
+                Chart.Series s = chart.getSeries().get(si);
+                for (int ci = 0; ci < chart.getCategories().size(); ci++) {
+                    if (ci < s.getValues().size()) {
+                        dataset.addValue(s.getValues().get(ci).doubleValue(),
+                                s.getName(), chart.getCategories().get(ci));
+                    }
+                }
+            }
+            CategoryAxis categoryAxis = new CategoryAxis();
+            categoryAxis.setTickLabelFont(cjkFont);
+            categoryAxis.setLabelFont(cjkFont);
+            NumberAxis valueAxis = new NumberAxis();
+            valueAxis.setTickLabelFont(cjkFont);
+            valueAxis.setLabelFont(cjkFont);
+            applyValueAxisScaling(valueAxis, chart);
+
+            if (type == Chart.ChartType.BAR) {
+                BarRenderer renderer = new BarRenderer();
+                if (!chart.isBar3D()) {
+                    renderer.setBarPainter(new org.jfree.chart.renderer.category.StandardBarPainter());
+                    renderer.setShadowVisible(false);
+                }
+                applySeriesColors(renderer, chart.getSeries());
+                applyBarGapWidth(renderer, chart);
+                applyShowVal(renderer, chart, cjkFont);
+                CategoryPlot plot = new CategoryPlot(dataset, categoryAxis, valueAxis, renderer);
+                plot.setOrientation(PlotOrientation.VERTICAL);
+                jfreeChart = new JFreeChart(plot);
+            } else {
+                // LINE (default)；smooth=true 时走 Catmull-Rom 平滑曲线（OOXML c:smooth）
+                LineAndShapeRenderer renderer = chart.isSmooth()
+                        ? new io.github.surezzzzzz.sdk.template.doc.renderer.SmoothLineAndShapeRenderer(true, chart.isShowMarker())
+                        : new LineAndShapeRenderer(true, chart.isShowMarker());
+                applySeriesColors(renderer, chart.getSeries());
+                applyShowVal(renderer, chart, cjkFont);
+                CategoryPlot plot = new CategoryPlot(dataset, categoryAxis, valueAxis, renderer);
+                plot.setOrientation(PlotOrientation.VERTICAL);
+                jfreeChart = new JFreeChart(plot);
+            }
+        }
+
+        // 标题：按 chart.titleFontSize/titleBold 派生 cjkFont
+        float titleSizePt = chart.getTitleFontSize() > 0 ? chart.getTitleFontSize() : 14f;
+        int titleStyle = chart.isTitleBold() ? java.awt.Font.BOLD : java.awt.Font.PLAIN;
+        java.awt.Font titleFont = cjkFont.deriveFont(titleStyle, titleSizePt);
+        jfreeChart.setTitle(new TextTitle(chart.getTitle() == null ? "" : chart.getTitle(), titleFont));
+
+        // 图例位置 + 字体
+        if (jfreeChart.getLegend() != null) {
+            jfreeChart.getLegend().setItemFont(cjkFont);
+            Chart.LegendPosition lp = chart.getLegendPosition();
+            if (lp != null) {
+                switch (lp) {
+                    case TOP:
+                        jfreeChart.getLegend().setPosition(RectangleEdge.TOP);
+                        break;
+                    case LEFT:
+                        jfreeChart.getLegend().setPosition(RectangleEdge.LEFT);
+                        break;
+                    case RIGHT:
+                        jfreeChart.getLegend().setPosition(RectangleEdge.RIGHT);
+                        break;
+                    case NONE:
+                        jfreeChart.removeLegend();
+                        break;
+                    case BOTTOM:
+                    default:
+                        jfreeChart.getLegend().setPosition(RectangleEdge.BOTTOM);
+                        break;
+                }
+            }
+        }
+
+        // Y 轴自动量程修正：JFreeChart 算到 220，Office 算到 250（"漂亮数字"）
+        applyNiceAxisRange(jfreeChart, chart);
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ChartUtils.writeChartAsPNG(bos, jfreeChart, width, height);
+        return bos.toByteArray();
+    }
+
+    /**
+     * 应用 chart 的 valAx scaling：min/max/majorUnit/numFmt
+     */
+    private void applyValueAxisScaling(NumberAxis axis, Chart chart) {
+        Double yMin = chart.getYMin();
+        Double yMax = chart.getYMax();
+        if (yMin != null && yMax != null && yMax > yMin) {
+            axis.setRange(yMin, yMax);
+        } else if (yMin != null) {
+            axis.setLowerBound(yMin);
+        } else if (yMax != null) {
+            axis.setUpperBound(yMax);
+        }
+        Double major = chart.getYMajorUnit();
+        if (major != null && major > 0) {
+            axis.setTickUnit(new NumberTickUnit(major));
+        }
+        String fmt = chart.getYNumFmt();
+        if (fmt != null && !fmt.isEmpty()) {
+            try {
+                java.text.NumberFormat nf = new java.text.DecimalFormat(fmt.replaceAll("\\[[^\\]]*]", ""));
+                axis.setNumberFormatOverride(nf);
+            } catch (IllegalArgumentException ignored) {
+                // 复杂 Excel 格式（含条件分支）不解析
+            }
+        }
+    }
+
+    /**
+     * BarRenderer.itemMargin = gap / (gap + 100)，与 ChartToPngRenderer 行为一致。
+     */
+    private void applyBarGapWidth(BarRenderer barRenderer, Chart chart) {
+        Integer gap = chart.getBarGapWidth();
+        if (gap == null || gap < 0) return;
+        double margin = (double) gap / (gap + 100.0);
+        if (margin > 0.95) margin = 0.95;
+        barRenderer.setItemMargin(margin);
+    }
+
+    /**
+     * 数据标签 showVal：打开 default item labels
+     */
+    private void applyShowVal(org.jfree.chart.renderer.category.AbstractCategoryItemRenderer renderer,
+                              Chart chart, java.awt.Font cjkFont) {
+        if (!chart.isShowVal()) return;
+        renderer.setDefaultItemLabelGenerator(new StandardCategoryItemLabelGenerator());
+        renderer.setDefaultItemLabelsVisible(true);
+        renderer.setDefaultItemLabelFont(cjkFont);
+    }
+
+    /**
+     * Y 轴自动量程修正：JFreeChart 默认量程偏紧（max=210 → 0~220），
+     * Office/WPS 向上取整到"漂亮数字"（0~250，tick=50）。
+     * 仅在 chart 未显式指定 yMax 时生效。
+     */
+    private static void applyNiceAxisRange(JFreeChart jfreeChart, Chart chart) {
+        if (chart.getChartType() == Chart.ChartType.PIE) return;
+        if (chart.getYMax() != null) return;
+
+        CategoryPlot plot = jfreeChart.getCategoryPlot();
+        NumberAxis valueAxis = (NumberAxis) plot.getRangeAxis();
+        valueAxis.configure();
+
+        double autoUpper = valueAxis.getUpperBound();
+        if (autoUpper <= 0) return;
+
+        double niceTick = niceTickUnit(autoUpper / 5.0);
+        double niceUpper = Math.ceil(autoUpper / niceTick) * niceTick;
+
+        double lower = valueAxis.getLowerBound();
+        if (chart.getYMin() == null && lower > 0) {
+            lower = Math.floor(lower / niceTick) * niceTick;
+        }
+
+        valueAxis.setRange(lower, niceUpper);
+        if (chart.getYMajorUnit() == null) {
+            valueAxis.setTickUnit(new NumberTickUnit(niceTick));
+        }
+    }
+
+    private static double niceTickUnit(double rawTick) {
+        if (rawTick <= 0) return 1;
+        double exponent = Math.floor(Math.log10(rawTick));
+        double fraction = rawTick / Math.pow(10, exponent);
+        double niceFraction;
+        if (fraction <= 1.0) niceFraction = 1;
+        else if (fraction <= 2.0) niceFraction = 2;
+        else if (fraction <= 5.0) niceFraction = 5;
+        else niceFraction = 10;
+        return niceFraction * Math.pow(10, exponent);
+    }
+
+    /**
+     * 把每个 series 的 color 应用到 JFreeChart 的 category renderer 上。
+     * series.color 为空时，按 Office 默认调色板（与 OOXML chart 默认色一致）兜底，
+     * 保证 PNG 路径和 Word 内嵌 chart 的视觉颜色一致。
+     */
+    private void applySeriesColors(org.jfree.chart.renderer.category.AbstractCategoryItemRenderer renderer,
+                                   List<Chart.Series> seriesList) {
+        for (int si = 0; si < seriesList.size(); si++) {
+            String hex = seriesList.get(si).getColor();
+            renderer.setSeriesPaint(si, parseHexColor(hex, si));
+        }
+    }
+
+    /**
+     * 将 hex（如 "4F81BD"）转 AWT Color；为空/非法时按 paletteIndex 取 Office 默认调色板。
+     */
+    private static java.awt.Color parseHexColor(String hex, int paletteIndex) {
+        if (hex != null) {
+            String s = hex.trim();
+            if (s.startsWith("#")) s = s.substring(1);
+            if (s.length() == 6) {
+                try {
+                    return new java.awt.Color(Integer.parseInt(s, 16));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        if (paletteIndex < 0) return null;
+        return OFFICE_DEFAULT_PALETTE[Math.floorMod(paletteIndex, OFFICE_DEFAULT_PALETTE.length)];
+    }
+
+    /**
+     * Office 2007 chart 默认调色板（accent1..accent6），与 Word 内嵌 chart 默认色对齐
+     */
+    private static final java.awt.Color[] OFFICE_DEFAULT_PALETTE = new java.awt.Color[]{
+            new java.awt.Color(0x4F81BD),
+            new java.awt.Color(0xC0504D),
+            new java.awt.Color(0x9BBB59),
+            new java.awt.Color(0x8064A2),
+            new java.awt.Color(0x4BACC6),
+            new java.awt.Color(0xF79646),
+    };
+
+    /**
+     * 从 properties.fontPaths 加载 AWT Font（chart PNG 渲染用）。
+     * <p>
+     * 全局唯一字体入口：遍历配置的 fontPaths（文件或目录），找到第一个能成功创建 AWT Font
+     * 的字体文件即返回。任何文件均不可用时抛 FontNotFoundException。
+     */
+    private java.awt.Font loadCjkFontFromProperties() {
+        List<String> fontPaths = properties.getFontPaths();
+        if (fontPaths == null || fontPaths.isEmpty()) {
+            throw FontNotFoundException.unsupported(
+                    "未配置 simple-doc-template.font-paths，chart PNG 渲染需要至少一个可用字体文件");
+        }
+        for (String pathStr : fontPaths) {
+            Path p = Paths.get(pathStr);
+            if (!Files.exists(p)) {
+                continue;
+            }
+            if (Files.isDirectory(p)) {
+                java.awt.Font f = tryLoadFontFromDirectory(p);
+                if (f != null) {
+                    return f;
+                }
+            } else {
+                java.awt.Font f = tryCreateAwtFont(p);
+                if (f != null) {
+                    return f;
+                }
+            }
+        }
+        throw FontNotFoundException.unsupported(
+                "simple-doc-template.font-paths 中没有可用的字体文件: " + fontPaths);
+    }
+
+    private java.awt.Font tryLoadFontFromDirectory(Path dir) {
+        try (java.util.stream.Stream<Path> stream = Files.list(dir)) {
+            return stream
+                    .filter(Files::isRegularFile)
+                    .filter(WordRenderer::isFontFile)
+                    .map(this::tryCreateAwtFont)
+                    .filter(java.util.Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("扫描字体目录失败: dir={}, error={}", dir, e.getMessage());
+            return null;
+        }
+    }
+
+    private static boolean isFontFile(Path p) {
+        String name = p.getFileName().toString().toLowerCase();
+        return name.endsWith(".ttf") || name.endsWith(".ttc") || name.endsWith(".otf");
+    }
+
+    private java.awt.Font tryCreateAwtFont(Path file) {
+        try (InputStream is = Files.newInputStream(file)) {
+            return java.awt.Font.createFont(java.awt.Font.TRUETYPE_FONT, is).deriveFont(12f);
+        } catch (Exception e) {
+            log.debug("字体文件不可用: file={}, error={}", file, e.getMessage());
+            return null;
+        }
+    }
+
     private void insertPicture(XWPFParagraph para, Image img, int containerWidthPx) {
         String src = img.getSrc();
         try {
@@ -284,8 +704,10 @@ public class WordRenderer implements Renderer {
             int pictureType = toPictureType(img.getType());
             XWPFRun run = para.createRun();
             try (InputStream is = Files.newInputStream(path)) {
+                // 用 pixelToEMU 而非 toEMU：targetWidthPx/HeightPx 是像素值，
+                // toEMU 接受 points（×12700），会得到 100 倍的错误结果。
                 run.addPicture(is, pictureType, path.getFileName().toString(),
-                        Units.toEMU(targetWidthPx), Units.toEMU(targetHeightPx));
+                        Units.pixelToEMU(targetWidthPx), Units.pixelToEMU(targetHeightPx));
             }
         } catch (Exception e) {
             log.error("插入图片失败: src={}, error={}", src, e.getMessage());
@@ -422,8 +844,9 @@ public class WordRenderer implements Renderer {
             int targetWidth = chart.getWidth() > 0 ? chart.getWidth() : DEFAULT_CONTENT_WIDTH_PX;
             int targetHeight = chart.getHeight() > 0 ? chart.getHeight() : DEFAULT_CHART_HEIGHT_PX;
             int chartNum = i + 1;
-            long cx = Units.toEMU(targetWidth);
-            long cy = Units.toEMU(targetHeight);
+            // targetWidth/Height 是像素值，必须用 pixelToEMU 而非 toEMU（后者按 points 处理）
+            long cx = Units.pixelToEMU(targetWidth);
+            long cy = Units.pixelToEMU(targetHeight);
             String chartId = CHART_REL_ID_PREFIX + chartNum;
 
             String drawingXml =
@@ -475,6 +898,7 @@ public class WordRenderer implements Renderer {
 
     private String generateChartXml(Chart chart) {
         int titleFontSize = chart.getTitleFontSize();
+        String titleBoldAttr = chart.isTitleBold() ? "1" : "0";
         String legendPosCode = chart.getLegendPosition() != null
                 ? chart.getLegendPosition().getCode() : Chart.LegendPosition.BOTTOM.getCode();
 
@@ -490,8 +914,8 @@ public class WordRenderer implements Renderer {
         sb.append("    <c:title>\n");
         sb.append("      <c:tx><c:rich>\n");
         sb.append("        <a:bodyPr/><a:lstStyle/>\n");
-        sb.append("        <a:p><a:pPr><a:defRPr sz=\"").append(titleFontSize).append("\" b=\"1\"/></a:pPr>\n");
-        sb.append("          <a:r><a:rPr lang=\"").append(CHART_LANG).append("\" sz=\"").append(titleFontSize).append("\" b=\"1\"/>\n");
+        sb.append("        <a:p><a:pPr><a:defRPr sz=\"").append(titleFontSize).append("\" b=\"").append(titleBoldAttr).append("\"/></a:pPr>\n");
+        sb.append("          <a:r><a:rPr lang=\"").append(CHART_LANG).append("\" sz=\"").append(titleFontSize).append("\" b=\"").append(titleBoldAttr).append("\"/>\n");
         sb.append("            <a:t>").append(escapeXml(chart.getTitle())).append("</a:t>\n");
         sb.append("          </a:r></a:p>\n");
         sb.append("      </c:rich></c:tx>\n");
@@ -501,6 +925,8 @@ public class WordRenderer implements Renderer {
         sb.append("    <c:plotArea>\n");
 
         Chart.ChartType type = chart.getChartType();
+        String showValAttr = chart.isShowVal() ? "1" : "0";
+
         if (type == Chart.ChartType.PIE) {
             sb.append("      <c:pieChart>\n");
             sb.append("        <c:varyColors val=\"1\"/>\n");
@@ -508,7 +934,7 @@ public class WordRenderer implements Renderer {
                 appendPieSeries(sb, si, chart);
             }
             sb.append("        <c:dLbls>\n");
-            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/>\n");
+            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"").append(showValAttr).append("\"/>\n");
             sb.append("          <c:showCatName val=\"1\"/><c:showSerName val=\"0\"/>\n");
             sb.append("          <c:showPercent val=\"1\"/>\n");
             sb.append("        </c:dLbls>\n");
@@ -522,10 +948,11 @@ public class WordRenderer implements Renderer {
                 appendCategorySeries(sb, si, chart);
             }
             sb.append("        <c:dLbls>\n");
-            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/>\n");
+            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"").append(showValAttr).append("\"/>\n");
             sb.append("          <c:showCatName val=\"0\"/><c:showSerName val=\"0\"/>\n");
             sb.append("        </c:dLbls>\n");
-            sb.append("        <c:gapWidth val=\"150\"/>\n");
+            int gapWidth = chart.getBarGapWidth() != null ? chart.getBarGapWidth() : 150;
+            sb.append("        <c:gapWidth val=\"").append(gapWidth).append("\"/>\n");
             sb.append("        <c:axId val=\"1\"/><c:axId val=\"2\"/>\n");
             sb.append("      </c:barChart>\n");
         } else {
@@ -536,7 +963,7 @@ public class WordRenderer implements Renderer {
                 appendCategorySeries(sb, si, chart);
             }
             sb.append("        <c:dLbls>\n");
-            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"0\"/>\n");
+            sb.append("          <c:showLegendKey val=\"0\"/><c:showVal val=\"").append(showValAttr).append("\"/>\n");
             sb.append("        </c:dLbls>\n");
             if (chart.isShowMarker()) {
                 sb.append("        <c:marker val=\"1\"/>\n");
@@ -561,12 +988,24 @@ public class WordRenderer implements Renderer {
             sb.append("      </c:catAx>\n");
             sb.append("      <c:valAx>\n");
             sb.append("        <c:axId val=\"2\"/>\n");
-            sb.append("        <c:scaling><c:orientation val=\"minMax\"/></c:scaling>\n");
+            sb.append("        <c:scaling>");
+            // min/max
+            if (chart.getYMin() != null) {
+                sb.append("<c:min val=\"").append(chart.getYMin()).append("\"/>");
+            }
+            if (chart.getYMax() != null) {
+                sb.append("<c:max val=\"").append(chart.getYMax()).append("\"/>");
+            }
+            sb.append("<c:orientation val=\"minMax\"/></c:scaling>\n");
             sb.append("        <c:delete val=\"0\"/><c:axPos val=\"l\"/>\n");
             if (chart.isShowGridLines()) {
                 sb.append("        <c:majorGridlines/>\n");
             }
-            sb.append("        <c:numFmt formatCode=\"General\" sourceLinked=\"0\"/>\n");
+            String numFmt = chart.getYNumFmt() != null ? chart.getYNumFmt() : "General";
+            sb.append("        <c:numFmt formatCode=\"").append(escapeXml(numFmt)).append("\" sourceLinked=\"0\"/>\n");
+            if (chart.getYMajorUnit() != null) {
+                sb.append("        <c:majorUnit val=\"").append(chart.getYMajorUnit()).append("\"/>\n");
+            }
             sb.append("        <c:majorTickMark val=\"out\"/><c:minorTickMark val=\"none\"/>\n");
             sb.append("        <c:tickLblPos val=\"nextTo\"/>\n");
             sb.append("        <c:crossAx val=\"1\"/>\n");
@@ -671,14 +1110,16 @@ public class WordRenderer implements Renderer {
 
     // ===== 表格处理 =====
 
-    private void processAllTables(XWPFDocument doc, Map<String, Object> data, int contentWidthPx) {
+    private void processAllTables(XWPFDocument doc, Map<String, Object> data,
+                                  List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
         for (XWPFTable table : doc.getTables()) {
-            processTableRows(table, data, contentWidthPx);
+            processTableRows(table, data, chartPlaceholders, contentWidthPx);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private void processTableRows(XWPFTable table, Map<String, Object> data, int contentWidthPx) {
+    private void processTableRows(XWPFTable table, Map<String, Object> data,
+                                  List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
         if (table.getRows().isEmpty()) return;
 
         for (int i = 0; i < table.getRows().size(); i++) {
@@ -686,7 +1127,7 @@ public class WordRenderer implements Renderer {
             String forKey = findForKey(row);
             if (forKey == null) {
                 // 普通行：处理变量替换和图片占位符
-                replaceRowText(row, data, null, contentWidthPx);
+                replaceRowText(row, data, null, chartPlaceholders, contentWidthPx);
                 continue;
             }
 
@@ -729,7 +1170,7 @@ public class WordRenderer implements Renderer {
             for (Map<String, Object> item : itemList) {
                 XWPFTableRow newRow = table.insertNewTableRow(insertPos);
                 copyRowStructure(tplRow, newRow);
-                replaceRowText(newRow, data, item, contentWidthPx);
+                replaceRowText(newRow, data, item, chartPlaceholders, contentWidthPx);
                 insertPos++;
             }
 
@@ -753,7 +1194,8 @@ public class WordRenderer implements Renderer {
      *
      * @param item 循环项，为 null 时使用 data
      */
-    private void replaceRowText(XWPFTableRow row, Map<String, Object> data, Map<String, Object> item, int contentWidthPx) {
+    private void replaceRowText(XWPFTableRow row, Map<String, Object> data, Map<String, Object> item,
+                                List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
         Map<String, Object> ctx = item != null ? item : data;
         for (XWPFTableCell cell : row.getTableCells()) {
             // 取单元格宽度（EMU），转换为 px
@@ -763,6 +1205,8 @@ public class WordRenderer implements Renderer {
                 processParagraphText(para, ctx);
                 // 图片占位符：主数据中的 Image（图片 key 不在 item 中）
                 replaceImgPlaceholder(para, data, cellWidthPx);
+                // 图表占位符：主数据中的 Chart（PDF 路径需要收集 marker → PNG）
+                replaceChartPlaceholder(para, data, chartPlaceholders);
             }
         }
     }
