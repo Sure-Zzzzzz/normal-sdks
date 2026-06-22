@@ -7,7 +7,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:2.0.1'
 ```
 
 前提：项目中已引入 `simple-aksk-server-starter`，它负责发布 Token 生命周期事件。
@@ -102,6 +102,10 @@ io:
 ---
 
 ## 版本历史
+
+### 2.0.1
+
+依赖跟进 `simple-aksk-server-core:2.0.3`，测试依赖跟进 `simple-aksk-server-starter:2.0.3`。审计接口和记录字段无变更。详见 [CHANGELOG.2.0.1.md](CHANGELOG.2.0.1.md)。
 
 ### 2.0.0
 

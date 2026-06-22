@@ -38,13 +38,31 @@ io:
                 private-key: classpath:keys/private.pem
                 expires-in: 3600
               redis:
-                enabled: true
                 token:
                   me: "audit-test-app"
               admin:
                 enabled: false
               introspect:
                 require-authentication: false
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me:audit-test-app}
+              mode: annotation
+        cache:
+          key-prefix: sure-auth-aksk
+          me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me:audit-test-app}
+          l1:
+            enabled: true
+            expire-seconds: 10
+            max-size: 10000
+          l2:
+            enabled: true
+            expire-seconds: ${io.github.surezzzzzz.sdk.auth.aksk.server.jwt.expires-in:3600}
+            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+          consistency:
+            mode: strong
 
 logging:
   level:

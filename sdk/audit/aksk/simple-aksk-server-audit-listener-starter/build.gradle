@@ -1,13 +1,13 @@
 dependencies {
     // 依赖 server-core（提供 AbstractTokenEvent 等）
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.3'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework:spring-context'
 
     // 测试依赖：引入完整的 aksk-server，测试真实的 token 生命周期事件
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:2.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:2.0.3'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-security'
