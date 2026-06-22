@@ -20,10 +20,38 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-elasticsearch-search-core](sdk/search/elasticsearch/simple-elasticsearch-search-core) | 1.0.10 | 搜索核心库（事件发布） | - |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.6.5 | 查询框架（API / NL / 表达式），内置集成 route-starter | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
-| [simple-elasticsearch-search-metrics-starter](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter) | 1.0.0 | 指标采集 | [README](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter/README.md) |
-| [simple-elasticsearch-search-audit-listener-starter](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter) | 1.0.2 | 审计事件 | [README](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter/README.md) |
+| [simple-elasticsearch-search-core](sdk/search/elasticsearch/simple-elasticsearch-search-core) | 1.0.12 | 搜索核心库（事件发布） | - |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.6.7 | 查询框架（API / NL / 表达式 / countOnly），内置集成 route-starter | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-search-metrics-starter](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter) | 1.0.2 | 指标采集 | [README](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter/README.md) |
+| [simple-elasticsearch-search-audit-listener-starter](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter) | 1.0.4 | 审计事件 | [README](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter/README.md) |
+
+**版本兼容**：
+
+| search-starter | search-core | route-starter | metrics-starter | audit-listener-starter |
+|----------------|-------------|---------------|-----------------|----------------------|
+| 1.6.7 | 1.0.12 | 1.0.10 | 1.0.2 | 1.0.4 |
+| 1.6.6 | 1.0.11 | 1.0.10 | 1.0.1 | 1.0.3 |
+| 1.6.5 | 1.0.10 | 1.0.10 | 1.0.0 | 1.0.2 |
+| 1.6.4 | 1.0.10 | 1.0.10 | - | 1.0.2 |
+| 1.6.3 | 1.0.10 | 1.0.10 | - | 1.0.2 |
+| 1.6.2 | 1.0.10 | 1.0.10 | - | 1.0.2 |
+| 1.6.1 | 1.0.8 | 1.0.10 | - | 1.0.1 |
+| 1.6.0 | 1.0.8 | 1.0.10 | - | 1.0.1 |
+| 1.5.8 | 1.0.8 | 1.0.8 | - | 1.0.1 |
+| 1.5.7 | 1.0.7 | 1.0.8 | - | 1.0.0 |
+| 1.5.6 | 1.0.6 | 1.0.8 | - | 1.0.0 |
+| 1.5.5 | 1.0.5 | 1.0.8 | - | 1.0.0 |
+| 1.5.4 | 1.0.5 | 1.0.8 | - | 1.0.0 |
+| 1.5.3 | 1.0.5 | 1.0.7 | - | 1.0.0 |
+| 1.5.2 | 1.0.5 | 1.0.7 | - | 1.0.0 |
+| 1.5.1 | 1.0.4 | 1.0.7 | - | 1.0.0 |
+| 1.5.0 | 1.0.4 | 1.0.7 | - | 1.0.0 |
+| 1.4.0 | 1.0.4 | 1.0.7 | - | 1.0.0 |
+| 1.3.1 | 1.0.3 | 1.0.7 | - | 1.0.0 |
+| 1.3.0 | 1.0.3 | 1.0.7 | - | 1.0.0 |
+| 1.2.1 | 1.0.1 | 1.0.5 | - | 1.0.0 |
+| 1.2.0 | 1.0.1 | 1.0.5 | - | 1.0.0 |
+| ≤ 1.1.x | - | 1.0.5 | - | - |
 
 **核心特性**：
 - 支持 ES 6.x 和 7.x+
@@ -93,23 +121,40 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-aksk-core](sdk/auth/aksk/simple-aksk-core) | 2.0.0 | AKSK 核心库 | [README](sdk/auth/aksk/simple-aksk-core/README.md) |
-| [simple-aksk-server-core](sdk/auth/aksk/server/simple-aksk-server-core) | 2.0.1 | Server 核心库 | [README](sdk/auth/aksk/server/simple-aksk-server-core/README.md) |
-| [simple-aksk-server-starter](sdk/auth/aksk/server/simple-aksk-server-starter) | 2.0.1 | 认证服务器（基于 Spring Authorization Server） | [USER_MANUAL](sdk/auth/aksk/USER_MANUAL.md) |
-| [simple-aksk-server-audit-listener-starter](sdk/audit/aksk/simple-aksk-server-audit-listener-starter) | 2.0.0 | 审计事件 | [README](sdk/audit/aksk/simple-aksk-server-audit-listener-starter/README.md) |
+| [simple-aksk-server-core](sdk/auth/aksk/server/simple-aksk-server-core) | 2.0.3 | Server 核心库 | [README](sdk/auth/aksk/server/simple-aksk-server-core/README.md) |
+| [simple-aksk-server-starter](sdk/auth/aksk/server/simple-aksk-server-starter) | 2.0.3 | 认证服务器（OAuth2 / JWE / Redis 必需 / OAuth2 端点限流） | [README](sdk/auth/aksk/server/simple-aksk-server-starter/README.md) |
+| [simple-aksk-server-audit-listener-starter](sdk/audit/aksk/simple-aksk-server-audit-listener-starter) | 2.0.1 | Server Token 审计事件 | [README](sdk/audit/aksk/simple-aksk-server-audit-listener-starter/README.md) |
+
+**Server 版本兼容**：
+
+| server-starter | server-core | server-audit-listener-starter | 说明 |
+|----------------|-------------|-------------------------------|------|
+| 2.0.3 | 2.0.3 | 2.0.1 | Redis 必需化，新增 OAuth2 Security Filter 端点限流，复用 smart-limiter |
+| 2.0.2 | 2.0.2 | 2.0.0 | Client Entity 两级缓存 |
+| 2.0.0 | 2.0.1 | 2.0.0 | AKSK Server 2.x 初始链路，JWE Token |
 
 **核心特性**：
 - OAuth2 标准协议（Authorization Server）
 - 双层级 AKSK 管理（平台级 AKP / 用户级 AKU）
 - JWE Token（A256GCMKW + A256GCM 加密，scope 等敏感信息不裸奔，HTTPS 被截获也无法解读）
+- Redis 必需基础设施，支持 Token 缓存、撤销同步、多实例 L1 缓存失效广播
+- OAuth2 端点限流（`/oauth2/token`、`/oauth2/introspect`、`/oauth2/revoke`），默认按 clientId provider 维度计数
 
 #### Client
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-aksk-client-core](sdk/auth/aksk/client/simple-aksk-client-core) | 2.0.0 | Client 核心库 | [README](sdk/auth/aksk/client/simple-aksk-client-core/README.md) |
-| [simple-aksk-redis-token-manager](sdk/auth/aksk/client/redis/simple-aksk-redis-token-manager) | 2.0.0 | Redis Token 管理器（L1 本地 + L2 Redis 二级缓存） | [README](sdk/auth/aksk/client/redis/simple-aksk-redis-token-manager/README.md) |
-| [simple-aksk-feign-redis-client-starter](sdk/auth/aksk/client/redis/simple-aksk-feign-redis-client-starter) | 2.0.0 | Feign 客户端（Redis） | [README](sdk/auth/aksk/client/redis/simple-aksk-feign-redis-client-starter/README.md) |
-| [simple-aksk-resttemplate-redis-client-starter](sdk/auth/aksk/client/redis/simple-aksk-resttemplate-redis-client-starter) | 2.0.0 | RestTemplate 客户端（Redis） | [README](sdk/auth/aksk/client/redis/simple-aksk-resttemplate-redis-client-starter/README.md) |
+| [simple-aksk-redis-token-manager](sdk/auth/aksk/client/redis/simple-aksk-redis-token-manager) | 2.0.1 | Redis Token 管理器（L1 本地 + L2 Redis 二级缓存，SHA-256 cacheKey 防多租户碰撞串号） | [README](sdk/auth/aksk/client/redis/simple-aksk-redis-token-manager/README.md) |
+| [simple-aksk-feign-redis-client-starter](sdk/auth/aksk/client/redis/simple-aksk-feign-redis-client-starter) | 2.0.1 | Feign 客户端（Redis） | [README](sdk/auth/aksk/client/redis/simple-aksk-feign-redis-client-starter/README.md) |
+| [simple-aksk-resttemplate-redis-client-starter](sdk/auth/aksk/client/redis/simple-aksk-resttemplate-redis-client-starter) | 2.0.1 | RestTemplate 客户端（Redis） | [README](sdk/auth/aksk/client/redis/simple-aksk-resttemplate-redis-client-starter/README.md) |
+
+**Client 版本兼容**：
+
+| feign-redis-client-starter | resttemplate-redis-client-starter | redis-token-manager | client-core | 说明 |
+|----------------------------|-----------------------------------|---------------------|-------------|------|
+| 2.0.1 | 2.0.1 | 2.0.1 | 2.0.0 | SHA-256 cacheKey 防多租户碰撞串号 |
+| 2.0.0 | 2.0.0 | 2.0.0 | 2.0.0 | AKSK Client 2.x 初始链路 |
 
 **核心特性**：
 - Feign / RestTemplate 客户端各自独立注册，开箱即用
@@ -121,7 +166,13 @@
 |-----|------|------|------|
 | [simple-aksk-resource-core](sdk/auth/aksk/resource/simple-aksk-resource-core) | 2.0.0 | Resource 核心库 | [README](sdk/auth/aksk/resource/simple-aksk-resource-core/README.md) |
 | [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 2.0.0 | 资源服务器（Introspect 远程校验） | [README](sdk/auth/aksk/resource/simple-aksk-resource-server-starter/README.md) |
-| [simple-aksk-resource-audit-listener-starter](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter) | 2.0.0 | 审计事件 | [README](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter/README.md) |
+| [simple-aksk-resource-audit-listener-starter](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter) | 2.0.0 | Resource 访问审计事件 | [README](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter/README.md) |
+
+**Resource 版本兼容**：
+
+| resource-server-starter | resource-core | resource-audit-listener-starter | 说明 |
+|-------------------------|---------------|---------------------------------|------|
+| 2.0.0 | 2.0.0 | 2.0.0 | AKSK Resource 2.x 初始链路，Introspect 远程校验 |
 
 **核心特性**：
 - Introspect 远程校验（本地缓存 + 兜底降级）
@@ -188,7 +239,7 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.1.3 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
+| [natural-language-parser-starter](sdk/natural-language/parser/natural-language-parser-starter) | 1.1.4 | 自然语言查询解析器 | [README](sdk/natural-language/parser/natural-language-parser-starter/README.md) |
 
 **核心特性**：
 - 智能解析中英文查询，支持 15+ 种操作符
@@ -201,7 +252,7 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [condition-expression-parser-starter](sdk/expression/condition/condition-expression-parser-starter) | 1.0.3 | 条件表达式解析器（ANTLR 4） | [README](sdk/expression/condition/condition-expression-parser-starter/README.md) |
+| [condition-expression-parser-starter](sdk/expression/condition/condition-expression-parser-starter) | 1.0.5 | 条件表达式解析器（ANTLR 4） | [README](sdk/expression/condition/condition-expression-parser-starter/README.md) |
 
 **核心特性**：
 - 6 大类运算符：比较、集合、模糊匹配、空值检查、逻辑运算、括号优先级
@@ -227,6 +278,19 @@
 
 **核心特性**：
 - 文件上传下载、预签名 URL、自动分片上传
+
+---
+
+### 📄 文档模板
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-doc-template-starter](sdk/template/simple-doc-template-starter) | 1.0.2 | 文档模板渲染（Word .docx，统一 `[suredt.指令:key]` 语法） | [README](sdk/template/simple-doc-template-starter/README.md) |
+
+**核心特性**：
+- 统一模板语法 `[suredt.指令:key]`，切换输出格式无需修改模板
+- 支持 Word（.docx）：变量替换、条件块、循环展开、图片替换、图表数据填充、页眉页脚
+- `classpath:` / `file:` / `http:` 多来源模板加载
 
 ---
 
