@@ -9,7 +9,7 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.1.0'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.1.1'
 ```
 
 ### 2. 开启配置
@@ -82,6 +82,96 @@ if (!result.isEmpty()) {
     result.output().toFile("/output/report.docx");
 }
 ```
+
+---
+
+## Helper 快捷入口
+
+除 `TemplateEngine` 外，SDK 还提供更贴近业务的 Helper 层，适用于高频场景：
+
+### DocxHelper：DOCX 模板渲染
+
+适用于 DOCX 模板 + data 生成 DOCX 或 PDF：
+
+```java
+@Autowired
+private DocxHelper docxHelper;
+
+// DOCX 模板 → DOCX bytes
+byte[] docxBytes = docxHelper.render("classpath:templates/report.docx", data);
+
+// DOCX 模板 → PDF bytes
+byte[] pdfBytes = docxHelper.renderPdf("classpath:templates/report.docx", data);
+
+// DOCX 模板 → PDF 文件
+docxHelper.renderPdfToFile("classpath:templates/report.docx", data, "/data/report.pdf");
+
+// DOCX 模板 → DOCX 文件
+docxHelper.renderToFile("classpath:templates/report.docx", data, "/data/report.docx");
+
+// DOCX 模板 → DOCX/PDF 流
+docxHelper.renderToStream("classpath:templates/report.docx", data, response.getOutputStream());
+docxHelper.renderPdfToStream("classpath:templates/report.docx", data, response.getOutputStream());
+```
+
+### PdfConvertHelper：已有 DOCX 转 PDF
+
+适用于已有 DOCX 文件或 bytes 转 PDF，不需要模板渲染：
+
+```java
+@Autowired
+private PdfConvertHelper pdfConvertHelper;
+
+// DOCX bytes → PDF bytes
+byte[] pdfBytes = pdfConvertHelper.fromDocx(docxBytes);
+
+// DOCX 文件 → PDF bytes
+byte[] pdfBytes = pdfConvertHelper.fromDocx(Paths.get("/data/report.docx"));
+
+// DOCX 上传流 → PDF 流
+pdfConvertHelper.fromDocx(file.getInputStream(), response.getOutputStream());
+
+// DOCX 文件 → PDF 文件
+pdfConvertHelper.fromDocx(
+    Paths.get("/data/report.docx"),
+    Paths.get("/data/report.pdf")
+);
+```
+
+### ChartPngHelper：Chart 转 PNG
+
+适用于将 Chart 模型渲染为 PNG 字节数组（不含 DOCX 模板）：
+
+```java
+@Autowired
+private ChartPngHelper chartPngHelper;
+
+// Chart → PNG bytes（使用 Chart 自身宽高）
+byte[] pngBytes = chartPngHelper.toPng(chart);
+
+// Chart → PNG bytes（指定输出宽高）
+byte[] pngBytes = chartPngHelper.toPng(chart, 600, 360);
+```
+
+### 入口选择心智
+
+| 场景 | 推荐入口 |
+|------|----------|
+| 我有 DOCX 模板，要生成 DOCX 或 PDF | `DocxHelper` |
+| 我有已有 DOCX 文件/bytes，要转 PDF | `PdfConvertHelper` |
+| 我有 Chart 模型，要生成 PNG | `ChartPngHelper` |
+| 需要链式输出、空文档检查、显式格式指定 | `TemplateEngine` |
+| 需要底层 PDF 输出处理器（高级场景） | `PdfOutputHandler` |
+
+### Helper 使用最佳实践
+
+- **业务优先使用 Helper**：常规业务代码优先注入 `DocxHelper` / `PdfConvertHelper` / `ChartPngHelper`，只有需要链式输出、空文档检查、显式格式指定等高级能力时再使用 `TemplateEngine`。
+- **模板渲染和已有文件转换分开**：`DocxHelper` 只处理“DOCX 模板 + data → DOCX/PDF”；已有 DOCX bytes、上传流、本地文件转 PDF 使用 `PdfConvertHelper`，避免重复渲染模板。
+- **模板路径优先使用 `classpath:`**：通用模板建议放在 `src/main/resources/templates/` 下，通过 `classpath:templates/report.docx` 引用，避免部署后文件路径变化。
+- **HTTP 下载建议写出到流**：接口直接返回文件时，优先使用 `renderToStream(...)` / `renderPdfToStream(...)` / `pdfConvertHelper.fromDocx(..., OutputStream)`，避免业务层额外落盘。
+- **本地文件路径使用 `Path` / `File`**：已有 DOCX 转 PDF 时，不提供 `fromDocx(String)`，本地路径请使用 `Paths.get(...)` 或 `File`，避免与模板 location 语义混淆。
+- **PDF 中文字体显式配置**：Linux 或容器环境建议通过 `io.github.surezzzzzz.sdk.template.doc.font-paths` 配置中文字体文件或目录，避免 PDF 中文缺字。
+- **异常在业务边界统一处理**：模板不存在会抛 `TemplateNotFoundException`，DOCX 转 PDF 失败会抛 `DocxToPdfFailedException`，建议在接口层统一转换为业务错误响应。
 
 ---
 

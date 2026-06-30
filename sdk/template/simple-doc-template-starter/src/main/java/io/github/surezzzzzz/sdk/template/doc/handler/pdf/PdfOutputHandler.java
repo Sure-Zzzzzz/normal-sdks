@@ -167,6 +167,32 @@ public class PdfOutputHandler {
         os.flush();
     }
 
+    // ===== 直接转换重载（1.1.1 补强）=====
+
+    /**
+     * 直接转换：传入 DOCX InputStream，返回 PDF 字节数组
+     */
+    public byte[] convertToPdf(InputStream inputStream) {
+        return convertToPdf(toByteArray(inputStream));
+    }
+
+    // ===== 内部工具方法 =====
+
+    private byte[] toByteArray(InputStream inputStream) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[IO_BUFFER_SIZE];
+        int len;
+        try {
+            while ((len = inputStream.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return baos.toByteArray();
+        } catch (IOException e) {
+            throw DocxToPdfFailedException.conversionFailed("读取 DOCX InputStream 失败", e);
+        }
+    }
+
+
     // ===== 核心转换 =====
 
     /**
@@ -924,14 +950,6 @@ public class PdfOutputHandler {
     }
 
     // ===== 工具方法 =====
-
-    private byte[] toByteArray(java.io.InputStream is) throws Exception {
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[IO_BUFFER_SIZE];
-        int len;
-        while ((len = is.read(buf)) != -1) bos.write(buf, 0, len);
-        return bos.toByteArray();
-    }
 
     /**
      * 读 PNG 头部 IHDR 块的 width/height（像素）。
