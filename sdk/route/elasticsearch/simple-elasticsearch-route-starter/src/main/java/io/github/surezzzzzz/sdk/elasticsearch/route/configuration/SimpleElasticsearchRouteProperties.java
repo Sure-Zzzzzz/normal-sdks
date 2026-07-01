@@ -2,9 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.configuration;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
@@ -17,9 +15,7 @@ import java.util.Map;
  *
  * @author surezzzzzz
  */
-@Getter
-@Setter
-@NoArgsConstructor
+@Data
 @ConfigurationProperties(SimpleElasticsearchRouteConstant.CONFIG_PREFIX)
 public class SimpleElasticsearchRouteProperties {
 
@@ -54,11 +50,69 @@ public class SimpleElasticsearchRouteProperties {
     private String proxyType = ProxyType.AUTO.getCode();
 
     /**
+     * 写操作索引配置（推荐配置块）
+     */
+    private GlobalWriteIndexConfig writeIndex = new GlobalWriteIndexConfig();
+
+    /**
+     * 写操作日期索引的全局默认时区（兼容旧平铺配置，不配则使用 JVM 默认时区）
+     *
+     * <p>格式为合法的 {@link java.time.ZoneId} 字符串，如 {@code Asia/Shanghai}、{@code UTC}。
+     * 推荐使用 {@link #writeIndex} 的 {@code zoneId} 配置。
+     *
+     * <p>非法值启动时打 WARN 日志，运行时降级为 JVM 默认时区，不阻断启动。
+     */
+    private String writeIndexZoneId;
+
+    /**
+     * 获取生效的全局写操作日期索引时区
+     *
+     * @return 生效的全局时区配置
+     */
+    public String getEffectiveWriteIndexZoneId() {
+        if (writeIndex != null && hasText(writeIndex.getZoneId())) {
+            return writeIndex.getZoneId();
+        }
+        return writeIndexZoneId;
+    }
+
+    /**
+     * 获取生效的全局写操作日期索引时区配置项名称
+     *
+     * @return 生效的全局时区配置项名称
+     */
+    public String getEffectiveWriteIndexZoneIdConfigName() {
+        if (writeIndex != null && hasText(writeIndex.getZoneId())) {
+            return SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID;
+        }
+        return SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID_LEGACY;
+    }
+
+    /**
+     * 判断字符串是否有有效文本
+     *
+     * @param value 待判断字符串
+     * @return 是否有有效文本
+     */
+    private static boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    /**
+     * 全局写操作索引配置
+     */
+    @Data
+    public static class GlobalWriteIndexConfig {
+        /**
+         * 写操作日期索引的全局默认时区
+         */
+        private String zoneId;
+    }
+
+    /**
      * ES 服务端版本探测配置
      */
-    @Getter
-    @Setter
-    @NoArgsConstructor
+    @Data
     public static class VersionDetectConfig {
         /**
          * 是否启用版本探测（GET /）
@@ -79,9 +133,7 @@ public class SimpleElasticsearchRouteProperties {
     /**
      * 数据源配置
      */
-    @Getter
-    @Setter
-    @NoArgsConstructor
+    @Data
     public static class DataSourceConfig {
         /**
          * ES集群地址（旧方式，向后兼容）
@@ -230,9 +282,7 @@ public class SimpleElasticsearchRouteProperties {
     /**
      * 路由规则
      */
-    @Getter
-    @Setter
-    @NoArgsConstructor
+    @Data
     public static class RouteRule {
         /**
          * 匹配模式
@@ -261,10 +311,21 @@ public class SimpleElasticsearchRouteProperties {
         private boolean enable = true;
 
         /**
-         * 写操作索引名模板（不配则默认行为）
+         * 写操作索引配置（推荐配置块）
+         */
+        private WriteIndexConfig writeIndex = new WriteIndexConfig();
+
+        /**
+         * 读操作索引配置（推荐配置块）
+         */
+        private ReadIndexConfig readIndex = new ReadIndexConfig();
+
+        /**
+         * 写操作索引名模板（兼容旧平铺配置，不配则默认行为）
          *
          * <p>支持日期占位符，格式为 {@code {pattern}}，其中 pattern 为合法的 {@link java.time.format.DateTimeFormatter} 格式串。
          * 每次写操作时将占位符替换为当日日期，并将结果作为实际写入索引名。
+         * 推荐使用 {@link #writeIndex} 的 {@code template} 配置。
          *
          * <p>示例：
          * <ul>
@@ -278,10 +339,11 @@ public class SimpleElasticsearchRouteProperties {
         private String writeIndexTemplate;
 
         /**
-         * 读操作索引名（不配则默认行为）
+         * 读操作索引名（兼容旧平铺配置，不配则默认行为）
          *
          * <p>配置后，search / get 等读操作将使用此值替换原始索引名，支持通配符。
-         * 配合 {@link #writeIndexTemplate} 使用时，写入当日分片，读取覆盖所有历史分片。
+         * 配合写操作索引模板使用时，写入当日分片，读取覆盖所有历史分片。
+         * 推荐使用 {@link #readIndex} 的 {@code pattern} 配置。
          *
          * <p>示例：
          * <ul>
@@ -305,6 +367,64 @@ public class SimpleElasticsearchRouteProperties {
         private boolean asyncWrite = false;
 
         /**
+         * 写操作日期索引的时区（兼容旧平铺配置，不配则继承全局配置）
+         *
+         * <p>格式为合法的 {@link java.time.ZoneId} 字符串，如 {@code Asia/Shanghai}、{@code UTC}。
+         * 推荐使用 {@link #writeIndex} 的 {@code zoneId} 配置。
+         *
+         * <p>非法值启动时打 WARN 日志，运行时降级为全局配置或 JVM 默认时区，不阻断启动。
+         */
+        private String writeIndexZoneId;
+
+        /**
+         * 获取生效的写操作索引名模板
+         *
+         * @return 生效的写操作索引名模板
+         */
+        public String getEffectiveWriteIndexTemplate() {
+            if (writeIndex != null && hasText(writeIndex.getTemplate())) {
+                return writeIndex.getTemplate();
+            }
+            return writeIndexTemplate;
+        }
+
+        /**
+         * 获取生效的读操作索引名
+         *
+         * @return 生效的读操作索引名
+         */
+        public String getEffectiveReadIndexPattern() {
+            if (readIndex != null && hasText(readIndex.getPattern())) {
+                return readIndex.getPattern();
+            }
+            return readIndexPattern;
+        }
+
+        /**
+         * 获取生效的写操作日期索引时区
+         *
+         * @return 生效的写操作日期索引时区
+         */
+        public String getEffectiveWriteIndexZoneId() {
+            if (writeIndex != null && hasText(writeIndex.getZoneId())) {
+                return writeIndex.getZoneId();
+            }
+            return writeIndexZoneId;
+        }
+
+        /**
+         * 获取生效的写操作日期索引时区配置项名称
+         *
+         * @return 生效的写操作日期索引时区配置项名称
+         */
+        public String getEffectiveWriteIndexZoneIdConfigName() {
+            if (writeIndex != null && hasText(writeIndex.getZoneId())) {
+                return SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID;
+            }
+            return SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID_LEGACY;
+        }
+
+        /**
          * 获取匹配类型枚举
          *
          * @return 匹配类型枚举
@@ -316,5 +436,32 @@ public class SimpleElasticsearchRouteProperties {
             }
             return matchType;
         }
+    }
+
+    /**
+     * rule 级写操作索引配置
+     */
+    @Data
+    public static class WriteIndexConfig {
+        /**
+         * 写操作索引名模板
+         */
+        private String template;
+
+        /**
+         * 写操作日期索引时区
+         */
+        private String zoneId;
+    }
+
+    /**
+     * rule 级读操作索引配置
+     */
+    @Data
+    public static class ReadIndexConfig {
+        /**
+         * 读操作索引名或通配符
+         */
+        private String pattern;
     }
 }

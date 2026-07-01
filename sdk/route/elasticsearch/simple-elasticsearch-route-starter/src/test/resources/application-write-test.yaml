@@ -37,6 +37,27 @@ io:
                 type: wildcard
                 priority: 20
 
+              # 1.1.1 时区集成测试：rule 级固定跨日时区覆盖全局（新分组配置）
+              - pattern: "tz_rule.*"
+                datasource: secondary
+                type: wildcard
+                priority: 26
+                write-index:
+                  template: "tz_rule-{yyyy.MM.dd}"
+                  zone-id: Etc/GMT+12
+                read-index:
+                  pattern: "tz_rule-*"
+
+              # 1.1.1 时区集成测试：不配 rule 级，继承全局固定跨日时区（新分组配置）
+              - pattern: "tz_global.*"
+                datasource: secondary
+                type: wildcard
+                priority: 27
+                write-index:
+                  template: "tz_global-{yyyy.MM.dd}"
+                read-index:
+                  pattern: "tz_global-*"
+
 logging:
   level:
     io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG

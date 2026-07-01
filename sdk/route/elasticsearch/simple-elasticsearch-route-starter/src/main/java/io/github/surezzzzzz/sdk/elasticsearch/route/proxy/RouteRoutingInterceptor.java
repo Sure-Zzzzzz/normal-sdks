@@ -23,10 +23,12 @@ import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -110,6 +112,22 @@ public class RouteRoutingInterceptor {
     private final RouteResolver routeResolver;
     private final List<IndexNameExtractor> indexNameExtractors;
     private final Map<String, ExecutorService> asyncWriteExecutorMap;
+    private final ZoneId globalWriteIndexZoneId;
+
+    /** 缓存 DateTimeFormatter，key = pattern 字符串，对齐 SpELHelper/RoutePatternMatcher 缓存风格 */
+    private final Map<String, DateTimeFormatter> formatterCache = new ConcurrentHashMap<>();
+
+    /** 已提示过的非法写索引时区配置值 */
+    private final Set<String> warnedInvalidZoneIds = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    public RouteRoutingInterceptor(Map<String, ElasticsearchRestTemplate> templates,
+                                   ElasticsearchRestTemplate defaultTemplate,
+                                   RouteResolver routeResolver,
+                                   List<IndexNameExtractor> indexNameExtractors,
+                                   Map<String, ExecutorService> asyncWriteExecutorMap) {
+        this(templates, defaultTemplate, routeResolver, indexNameExtractors,
+                asyncWriteExecutorMap, ZoneId.systemDefault());
+    }
 
     Map<String, ElasticsearchRestTemplate> getTemplates() {
         return templates;
@@ -168,7 +186,7 @@ public class RouteRoutingInterceptor {
 
         if (!HAS_GET_METHOD && SimpleElasticsearchRouteConstant.METHOD_GET.equals(method.getName())
                 && args != null && args.length == 2 && args[1] instanceof Class) {
-            if (rule != null && StringUtils.hasText(rule.getReadIndexPattern())) {
+            if (rule != null && StringUtils.hasText(rule.getEffectiveReadIndexPattern())) {
                 return doGetBySearchRoute(template, args, rule);
             }
             return doGetForEs3x(template, method, args, rule);
@@ -188,18 +206,18 @@ public class RouteRoutingInterceptor {
         }
 
         // 写操作 + writeIndexTemplate
-        if (isWrite && StringUtils.hasText(rule.getWriteIndexTemplate())) {
-            String targetIndex = renderTemplate(rule.getWriteIndexTemplate());
+        if (isWrite && StringUtils.hasText(rule.getEffectiveWriteIndexTemplate())) {
+            String targetIndex = renderTemplate(rule.getEffectiveWriteIndexTemplate(), resolveZoneId(rule));
             return doIndexRoute(template, method, args, targetIndex);
         }
 
         // 读操作 + readIndexPattern
-        if (isRead && StringUtils.hasText(rule.getReadIndexPattern())) {
+        if (isRead && StringUtils.hasText(rule.getEffectiveReadIndexPattern())) {
             if (SimpleElasticsearchRouteConstant.METHOD_GET.equals(method.getName())
                     && args != null && args.length == 2 && args[1] instanceof Class) {
                 return doGetBySearchRoute(template, args, rule);
             }
-            return doSearchRoute(template, method, args, rule.getReadIndexPattern());
+            return doSearchRoute(template, method, args, rule.getEffectiveReadIndexPattern());
         }
 
         return invokeOriginal(template, method, args);
@@ -211,8 +229,8 @@ public class RouteRoutingInterceptor {
     private Object doSaveForEs3x(ElasticsearchRestTemplate template, Method method,
                                  Object[] args, RouteRule rule) {
         Object doc = args[0];
-        String targetIndex = rule != null && StringUtils.hasText(rule.getWriteIndexTemplate())
-                ? renderTemplate(rule.getWriteIndexTemplate())
+        String targetIndex = rule != null && StringUtils.hasText(rule.getEffectiveWriteIndexTemplate())
+                ? renderTemplate(rule.getEffectiveWriteIndexTemplate(), resolveZoneId(rule))
                 : null;
         ElasticsearchRestTemplate targetTemplate = template;
 
@@ -272,8 +290,8 @@ public class RouteRoutingInterceptor {
         Object query = args[0];
         Object doc = getIndexQueryObject(query);
         String indexName = routeIndex;
-        if (rule != null && StringUtils.hasText(rule.getWriteIndexTemplate())) {
-            indexName = renderTemplate(rule.getWriteIndexTemplate());
+        if (rule != null && StringUtils.hasText(rule.getEffectiveWriteIndexTemplate())) {
+            indexName = renderTemplate(rule.getEffectiveWriteIndexTemplate(), resolveZoneId(rule));
         }
         ElasticsearchRestTemplate targetTemplate = template;
         if (rule != null && StringUtils.hasText(rule.getDatasource())) {
@@ -348,7 +366,7 @@ public class RouteRoutingInterceptor {
             String query = buildIdsQueryJson(id);
             HttpResult response = performJdkHttpWithBody(getLowLevelClient(targetTemplate),
                     SimpleElasticsearchRouteConstant.HTTP_METHOD_POST,
-                    SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + rule.getReadIndexPattern()
+                    SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + rule.getEffectiveReadIndexPattern()
                             + SimpleElasticsearchRouteConstant.ENDPOINT_SEARCH, query);
             if (!isSuccessStatus(response.status)) {
                 throw routeException(String.format(ErrorMessage.ROUTE_UNEXPECTED_SEARCH_STATUS, response.status));
@@ -409,12 +427,13 @@ public class RouteRoutingInterceptor {
     }
 
     /**
-     * 渲染日期模板
+     * 渲染日期模板（带时区）
      *
      * @param template 模板字符串，如 "a-{yyyy.MM.dd}"
-     * @return 渲染后的索引名，如 "a-2026.06.26"
+     * @param zoneId   时区
+     * @return 渲染后的索引名，如 "a-2026.07.01"
      */
-    public String renderTemplate(String template) {
+    public String renderTemplate(String template, ZoneId zoneId) {
         if (!StringUtils.hasText(template)) {
             return template;
         }
@@ -425,13 +444,56 @@ public class RouteRoutingInterceptor {
         }
         String pattern = template.substring(start + 1, end);
         try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
-            String dateStr = LocalDate.now().format(formatter);
+            ZoneId effectiveZoneId = zoneId != null ? zoneId : ZoneId.systemDefault();
+            DateTimeFormatter formatter = formatterCache.computeIfAbsent(
+                    pattern, DateTimeFormatter::ofPattern);
+            String dateStr = LocalDate.now(effectiveZoneId).format(formatter);
             return template.substring(0, start) + dateStr + template.substring(end + 1);
-        } catch (IllegalArgumentException | DateTimeParseException e) {
-            log.warn("日期模板解析失败，pattern=[{}]，错误=[{}]，使用原始模板", pattern, e.getMessage());
+        } catch (IllegalArgumentException | DateTimeException e) {
+            formatterCache.remove(pattern);
+            log.warn("日期模板渲染失败，pattern=[{}]，错误=[{}]，使用原始模板", pattern, e.getMessage());
             return template;
         }
+    }
+
+    /**
+     * 渲染日期模板（使用 JVM 默认时区），保留向后兼容。
+     */
+    public String renderTemplate(String template) {
+        return renderTemplate(template, ZoneId.systemDefault());
+    }
+
+    /**
+     * 解析有效时区：rule 级 → 全局默认 → JVM 默认。
+     */
+    private ZoneId resolveZoneId(RouteRule rule) {
+        if (rule != null && StringUtils.hasText(rule.getEffectiveWriteIndexZoneId())) {
+            try {
+                return ZoneId.of(rule.getEffectiveWriteIndexZoneId());
+            } catch (Exception e) {
+                if (warnedInvalidZoneIds.add(rule.getEffectiveWriteIndexZoneId())) {
+                    log.warn("rule [{}]=[{}] 非法，降级到全局默认时区，错误=[{}]",
+                            rule.getEffectiveWriteIndexZoneIdConfigName(),
+                            rule.getEffectiveWriteIndexZoneId(), e.getMessage());
+                }
+            }
+        }
+        return globalWriteIndexZoneId != null ? globalWriteIndexZoneId : ZoneId.systemDefault();
+    }
+
+    /**
+     * 清除 DateTimeFormatter 缓存。
+     */
+    public void clearFormatterCache() {
+        formatterCache.clear();
+        log.info("DateTimeFormatter 缓存已清空");
+    }
+
+    /**
+     * 获取 DateTimeFormatter 缓存大小。
+     */
+    public int getFormatterCacheSize() {
+        return formatterCache.size();
     }
 
     /**
@@ -439,8 +501,8 @@ public class RouteRoutingInterceptor {
      */
     private void doAsyncWrite(ElasticsearchRestTemplate template, Method method,
                               Object[] args, RouteRule rule) {
-        String targetIndex = StringUtils.hasText(rule.getWriteIndexTemplate())
-                ? renderTemplate(rule.getWriteIndexTemplate())
+        String targetIndex = StringUtils.hasText(rule.getEffectiveWriteIndexTemplate())
+                ? renderTemplate(rule.getEffectiveWriteIndexTemplate(), resolveZoneId(rule))
                 : null;
         String datasourceKey = rule.getDatasource();
         String executorKey = StringUtils.hasText(datasourceKey) ? datasourceKey : SimpleElasticsearchRouteConstant.DEFAULT_ASYNC_WRITE_EXECUTOR_KEY;

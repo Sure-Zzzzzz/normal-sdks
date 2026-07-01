@@ -318,6 +318,36 @@ public final class SimpleElasticsearchRouteConstant {
      */
     public static final String TEMPLATE_RULE_PREFIX = "路由规则 #%d ";
 
+    /**
+     * 配置项：write-index.zone-id
+     */
+    public static final String CONFIG_WRITE_INDEX_ZONE_ID = "write-index.zone-id";
+
+    /**
+     * 配置项：write-index-zone-id
+     */
+    public static final String CONFIG_WRITE_INDEX_ZONE_ID_LEGACY = "write-index-zone-id";
+
+    /**
+     * 配置项：write-index.template
+     */
+    public static final String CONFIG_WRITE_INDEX_TEMPLATE = "write-index.template";
+
+    /**
+     * 配置项：write-index-template
+     */
+    public static final String CONFIG_WRITE_INDEX_TEMPLATE_LEGACY = "write-index-template";
+
+    /**
+     * 配置项：read-index.pattern
+     */
+    public static final String CONFIG_READ_INDEX_PATTERN = "read-index.pattern";
+
+    /**
+     * 配置项：read-index-pattern
+     */
+    public static final String CONFIG_READ_INDEX_PATTERN_LEGACY = "read-index-pattern";
+
     // ==================== 异步写线程池 ====================
 
     /**

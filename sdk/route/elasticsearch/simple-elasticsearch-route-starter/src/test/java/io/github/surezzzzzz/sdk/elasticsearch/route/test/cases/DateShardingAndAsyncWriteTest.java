@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.RouteException;
 import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.RouteRoutingInterceptor;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
@@ -25,6 +26,7 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 
@@ -41,6 +43,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class DateShardingAndAsyncWriteTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final DateTimeFormatter DATE_FORMATTER_DAY = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+    private static final DateTimeFormatter DATE_FORMATTER_MONTH = DateTimeFormatter.ofPattern("yyyy.MM");
+    private static final DateTimeFormatter DATE_FORMATTER_YEAR = DateTimeFormatter.ofPattern("yyyy");
+    private static final DateTimeFormatter DATE_FORMATTER_COMPACT_DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final long ES_REFRESH_WAIT_MS = 2000L;
 
     @Autowired
     private ElasticsearchRestTemplate elasticsearchRestTemplate;
@@ -87,8 +94,9 @@ public class DateShardingAndAsyncWriteTest {
     public void renderTemplateReplacesDatePlaceholder() {
         log.info("=== renderTemplateReplacesDatePlaceholder ===");
         RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
-                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap());
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
+        String today = LocalDate.now().format(DATE_FORMATTER_DAY);
 
         String result = interceptor.renderTemplate("log-{yyyy.MM.dd}");
 
@@ -100,7 +108,8 @@ public class DateShardingAndAsyncWriteTest {
     public void renderTemplateWithNoPlaceholderReturnsOriginal() {
         log.info("=== renderTemplateWithNoPlaceholderReturnsOriginal ===");
         RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
-                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap());
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
 
         String result = interceptor.renderTemplate("no-placeholder");
 
@@ -112,7 +121,8 @@ public class DateShardingAndAsyncWriteTest {
     public void renderTemplateWithInvalidPatternReturnsOriginal() {
         log.info("=== renderTemplateWithInvalidPatternReturnsOriginal ===");
         RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
-                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap());
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
         String template = "a-{invalid!!}";
 
         String result = interceptor.renderTemplate(template);
@@ -125,7 +135,8 @@ public class DateShardingAndAsyncWriteTest {
     public void renderTemplateWithEmptyReturnsEmpty() {
         log.info("=== renderTemplateWithEmptyReturnsEmpty ===");
         RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
-                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap());
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
 
         log.info("renderTemplate null result: {}", interceptor.renderTemplate(null));
         assertNull(interceptor.renderTemplate(null), "null 应返回 null");
@@ -136,8 +147,9 @@ public class DateShardingAndAsyncWriteTest {
     public void renderTemplateWithPrefixOnly() {
         log.info("=== renderTemplateWithPrefixOnly ===");
         RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
-                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap());
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
+        String today = LocalDate.now().format(DATE_FORMATTER_COMPACT_DAY);
 
         String result = interceptor.renderTemplate("{yyyyMMdd}");
 
@@ -170,7 +182,7 @@ public class DateShardingAndAsyncWriteTest {
     @Test
     public void dateShardWriteRoutesToYearIndex() throws Exception {
         log.info("=== dateShardWriteRoutesToYearIndex ===");
-        String indexName = "date_shard_year-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy"));
+        String indexName = "date_shard_year-" + LocalDate.now().format(DATE_FORMATTER_YEAR);
         String docId = "shard-year-" + System.currentTimeMillis();
         assertDateShardWriteAndRead(indexName, new DateShardYearTestDocument(docId, "year-value"),
                 docId, "year-value", DateShardYearTestDocument.class);
@@ -179,7 +191,7 @@ public class DateShardingAndAsyncWriteTest {
     @Test
     public void dateShardWriteRoutesToMonthIndex() throws Exception {
         log.info("=== dateShardWriteRoutesToMonthIndex ===");
-        String indexName = "date_shard_month-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM"));
+        String indexName = "date_shard_month-" + LocalDate.now().format(DATE_FORMATTER_MONTH);
         String docId = "shard-month-" + System.currentTimeMillis();
         assertDateShardWriteAndRead(indexName, new DateShardMonthTestDocument(docId, "month-value"),
                 docId, "month-value", DateShardMonthTestDocument.class);
@@ -188,7 +200,7 @@ public class DateShardingAndAsyncWriteTest {
     @Test
     public void dateShardWriteRoutesToRenderedIndex() throws Exception {
         log.info("=== dateShardWriteRoutesToRenderedIndex ===");
-        String todayIndex = "date_shard-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+        String todayIndex = "date_shard-" + LocalDate.now().format(DATE_FORMATTER_DAY);
         String docId = "shard-e2e-" + System.currentTimeMillis();
         assertDateShardWriteAndRead(todayIndex, new DateShardTestDocument(docId, "shard-value"),
                 docId, "shard-value", DateShardTestDocument.class);
@@ -202,13 +214,13 @@ public class DateShardingAndAsyncWriteTest {
         log.info("save() 返回值: {}", saved);
         assertNotNull(saved, "writeIndexTemplate 同步写应返回非 null");
 
-        Thread.sleep(2000);
+        Thread.sleep(ES_REFRESH_WAIT_MS);
         RestClient secondaryLow = registry.getLowLevelClient("secondary");
         Response resp = secondaryLow.performRequest(new Request("GET", "/" + indexName + "/_doc/" + docId));
         String body = EntityUtils.toString(resp.getEntity());
 
         log.info("日期分片索引直查读回，index={}, docId={}, body={}", indexName, docId, body);
-        assertEquals(200, resp.getStatusLine().getStatusCode(),
+        assertEquals(SimpleElasticsearchRouteConstant.HTTP_STATUS_OK, resp.getStatusLine().getStatusCode(),
                 "日期分片索引 " + indexName + " 应能读回写入的文档");
 
         JsonNode root = OBJECT_MAPPER.readTree(body);
@@ -272,5 +284,71 @@ public class DateShardingAndAsyncWriteTest {
 
         @Field(type = FieldType.Keyword)
         private String value;
+    }
+
+    // ---- 1.1.1 时区单元测试 ----
+
+    @Test
+    public void renderTemplateWithExplicitZone_Shanghai() {
+        log.info("=== renderTemplateWithExplicitZone_Shanghai ===");
+        ZoneId zone = ZoneId.of("Asia/Shanghai");
+        RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                zone);
+        String expected = "log-" + LocalDate.now(zone).format(DATE_FORMATTER_DAY);
+
+        String result = interceptor.renderTemplate("log-{yyyy.MM.dd}", zone);
+
+        log.info("Shanghai 时区渲染结果: {}", result);
+        assertEquals(expected, result, "Asia/Shanghai 时区渲染结果应与 LocalDate.now(Shanghai) 一致");
+    }
+
+    @Test
+    public void renderTemplateWithExplicitZone_UTC() {
+        log.info("=== renderTemplateWithExplicitZone_UTC ===");
+        ZoneId zone = ZoneId.of("UTC");
+        RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                zone);
+        String expected = "log-" + LocalDate.now(zone).format(DATE_FORMATTER_DAY);
+
+        String result = interceptor.renderTemplate("log-{yyyy.MM.dd}", zone);
+
+        log.info("UTC 时区渲染结果: {}", result);
+        assertEquals(expected, result, "UTC 时区渲染结果应与 LocalDate.now(UTC) 一致");
+    }
+
+    @Test
+    public void renderTemplateEachZoneMatchesItsOwnDate() {
+        log.info("=== renderTemplateEachZoneMatchesItsOwnDate ===");
+        ZoneId shanghai = ZoneId.of("Asia/Shanghai");
+        ZoneId utc = ZoneId.of("UTC");
+        RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
+
+        String shResult = interceptor.renderTemplate("idx-{yyyy.MM.dd}", shanghai);
+        String utcResult = interceptor.renderTemplate("idx-{yyyy.MM.dd}", utc);
+        String shExpected = "idx-" + LocalDate.now(shanghai).format(DATE_FORMATTER_DAY);
+        String utcExpected = "idx-" + LocalDate.now(utc).format(DATE_FORMATTER_DAY);
+
+        log.info("Shanghai 渲染: {}，UTC 渲染: {}", shResult, utcResult);
+        assertEquals(shExpected, shResult, "Shanghai 渲染结果应与自身 LocalDate.now(Shanghai) 一致");
+        assertEquals(utcExpected, utcResult, "UTC 渲染结果应与自身 LocalDate.now(UTC) 一致");
+    }
+
+    @Test
+    public void renderTemplateWithNoZoneUsesSystemDefault() {
+        log.info("=== renderTemplateWithNoZoneUsesSystemDefault ===");
+        RouteRoutingInterceptor interceptor = new RouteRoutingInterceptor(
+                Collections.emptyMap(), null, null, Collections.emptyList(), Collections.emptyMap(),
+                ZoneId.systemDefault());
+        String template = "idx-{yyyy.MM.dd}";
+
+        String noArgResult = interceptor.renderTemplate(template);
+        String explicitResult = interceptor.renderTemplate(template, ZoneId.systemDefault());
+
+        log.info("无参渲染: {}，显式 systemDefault 渲染: {}", noArgResult, explicitResult);
+        assertEquals(explicitResult, noArgResult, "无参 renderTemplate 应等价于传入 ZoneId.systemDefault()");
     }
 }

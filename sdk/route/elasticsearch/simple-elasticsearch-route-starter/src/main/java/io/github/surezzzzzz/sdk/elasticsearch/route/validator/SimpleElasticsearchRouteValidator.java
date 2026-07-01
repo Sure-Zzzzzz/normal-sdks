@@ -14,6 +14,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
@@ -67,6 +70,9 @@ public class SimpleElasticsearchRouteValidator {
             properties.getSources().forEach(this::validateDataSourceConfig);
 
             validateVersionDetectConfig(properties.getVersionDetect());
+
+            // 3.1 全局写索引配置新旧冲突提示
+            validateGlobalWriteIndexConfigCompatibility();
 
             // 4. 校验路由规则
             if (!CollectionUtils.isEmpty(properties.getRules())) {
@@ -186,10 +192,20 @@ public class SimpleElasticsearchRouteValidator {
                                 rule.getPattern(), rule.getDatasource(), properties.getSources().keySet()));
             }
 
-            // 2.2 writeIndexTemplate 格式校验
-            if (!isEmpty(rule.getWriteIndexTemplate())) {
-                validateWriteIndexTemplate(rule.getWriteIndexTemplate(), rulePrefix);
+            // 2.2 新旧索引配置冲突提示
+            validateIndexConfigCompatibility(rule, rulePrefix);
+
+            // 2.3 writeIndexTemplate 格式校验
+            if (!isEmpty(rule.getEffectiveWriteIndexTemplate())) {
+                validateWriteIndexTemplate(rule.getEffectiveWriteIndexTemplate(), rulePrefix);
             }
+
+            // 2.4 rule 级时区校验
+            if (!isEmpty(rule.getEffectiveWriteIndexZoneId())) {
+                validateWriteIndexZoneId(rule.getEffectiveWriteIndexZoneId(),
+                        rule.getEffectiveWriteIndexZoneIdConfigName(), rulePrefix);
+            }
+
             if (!RouteMatchType.isValid(rule.getType())) {
                 throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_TYPE_INVALID,
                         rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_TYPE_INVALID,
@@ -249,6 +265,49 @@ public class SimpleElasticsearchRouteValidator {
     }
 
     /**
+     * 校验全局写索引新旧配置冲突（冲突只 warn，不抛异常）
+     */
+    private void validateGlobalWriteIndexConfigCompatibility() {
+        if (properties.getWriteIndex() == null) {
+            return;
+        }
+        warnIfBothConfigured("", SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID, properties.getWriteIndex().getZoneId(),
+                SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID_LEGACY, properties.getWriteIndexZoneId());
+    }
+
+    /**
+     * 校验 rule 级索引新旧配置冲突（冲突只 warn，不抛异常）
+     */
+    private void validateIndexConfigCompatibility(SimpleElasticsearchRouteProperties.RouteRule rule, String rulePrefix) {
+        if (rule.getWriteIndex() != null) {
+            warnIfBothConfigured(rulePrefix, SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_TEMPLATE,
+                    rule.getWriteIndex().getTemplate(),
+                    SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_TEMPLATE_LEGACY,
+                    rule.getWriteIndexTemplate());
+            warnIfBothConfigured(rulePrefix, SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID,
+                    rule.getWriteIndex().getZoneId(),
+                    SimpleElasticsearchRouteConstant.CONFIG_WRITE_INDEX_ZONE_ID_LEGACY,
+                    rule.getWriteIndexZoneId());
+        }
+        if (rule.getReadIndex() != null) {
+            warnIfBothConfigured(rulePrefix, SimpleElasticsearchRouteConstant.CONFIG_READ_INDEX_PATTERN,
+                    rule.getReadIndex().getPattern(),
+                    SimpleElasticsearchRouteConstant.CONFIG_READ_INDEX_PATTERN_LEGACY,
+                    rule.getReadIndexPattern());
+        }
+    }
+
+    /**
+     * 新旧配置同时配置且值不一致时提示优先级
+     */
+    private void warnIfBothConfigured(String prefix, String newName, String newValue,
+                                      String legacyName, String legacyValue) {
+        if (!isEmpty(newValue) && !isEmpty(legacyValue) && !newValue.trim().equals(legacyValue.trim())) {
+            log.warn("{}同时配置 [{}] 和 [{}]，将优先使用 [{}]", prefix, newName, legacyName, newName);
+        }
+    }
+
+    /**
      * 校验 writeIndexTemplate 格式（非法只 warn，不抛异常）
      */
     private void validateWriteIndexTemplate(String template, String rulePrefix) {
@@ -259,10 +318,26 @@ public class SimpleElasticsearchRouteValidator {
         }
         String pattern = template.substring(start + 1, end);
         try {
-            DateTimeFormatter.ofPattern(pattern);
-        } catch (IllegalArgumentException e) {
-            log.warn("{}writeIndexTemplate 日期格式非法，pattern=[{}]，错误=[{}]，运行时将使用原始模板",
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern(pattern);
+            LocalDate.now().format(formatter);
+        } catch (IllegalArgumentException | DateTimeException e) {
+            log.warn("{}writeIndexTemplate 日期模板不可渲染，pattern=[{}]，错误=[{}]，运行时将使用原始模板",
                     rulePrefix, pattern, e.getMessage());
+        }
+    }
+
+    /**
+     * 校验 writeIndexZoneId 格式（非法只 warn，不抛异常）
+     */
+    private void validateWriteIndexZoneId(String zoneId, String configName, String prefix) {
+        if (isEmpty(zoneId)) {
+            return;
+        }
+        try {
+            ZoneId.of(zoneId);
+        } catch (Exception e) {
+            log.warn("{}{}=[{}] 非法，将降级为全局默认时区；全局不可用时使用 JVM 默认时区，错误=[{}]",
+                    prefix, configName, zoneId, e.getMessage());
         }
     }
 

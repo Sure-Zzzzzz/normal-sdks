@@ -26,6 +26,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 
 import javax.annotation.PostConstruct;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -178,9 +179,11 @@ public class SimpleElasticsearchRouteConfiguration implements DisposableBean {
                 indexNameExtractors.size());
 
         // 构建路由拦截器
+        ZoneId globalZoneId = resolveGlobalZoneId(properties.getEffectiveWriteIndexZoneId(),
+                properties.getEffectiveWriteIndexZoneIdConfigName());
         RouteRoutingInterceptor routingInterceptor = new RouteRoutingInterceptor(
                 templatesMap, defaultTemplate, routeResolver,
-                indexNameExtractors, asyncWriteExecutorMap);
+                indexNameExtractors, asyncWriteExecutorMap, globalZoneId);
 
         ProxyType proxyType = getProxyType();
         return createProxy(proxyType, routingInterceptor, defaultTemplate, defaultClient);
@@ -248,6 +251,22 @@ public class SimpleElasticsearchRouteConfiguration implements DisposableBean {
             ElasticsearchRestTemplate defaultTemplate) {
 
         return JdkRouteTemplateProxy.createProxy(routingInterceptor, defaultTemplate);
+    }
+
+    /**
+     * 解析全局写索引时区，非法值 WARN 降级到 JVM 默认。
+     */
+    private ZoneId resolveGlobalZoneId(String zoneIdStr, String configName) {
+        if (zoneIdStr == null || zoneIdStr.trim().isEmpty()) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(zoneIdStr);
+        } catch (Exception e) {
+            log.warn("全局 [{}]=[{}] 非法，降级为 JVM 默认时区，错误=[{}]",
+                    configName, zoneIdStr, e.getMessage());
+            return ZoneId.systemDefault();
+        }
     }
 
     /**
