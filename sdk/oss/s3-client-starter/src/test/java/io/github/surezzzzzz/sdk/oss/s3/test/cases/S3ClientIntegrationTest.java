@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -736,6 +737,7 @@ class S3ClientIntegrationTest {
                 "Key 超长应抛异常");
         log.info("异常 errorCode={}, message={}", ex.getErrorCode(), ex.getMessage());
         assertEquals(ErrorCode.SET_OBJECT_TAGGING_FAILED, ex.getErrorCode(), "errorCode 应为 OSS_209");
+        assertNull(ex.getCause(), "Key 超长属于前置校验，不应有 cause");
         assertTrue(ex.getMessage().contains(String.valueOf(S3ClientConstant.MAX_TAG_KEY_BYTES)),
                 "异常消息应提示 Key 字节上限 " + S3ClientConstant.MAX_TAG_KEY_BYTES);
     }
@@ -758,6 +760,7 @@ class S3ClientIntegrationTest {
                 "Value 超长应抛异常");
         log.info("异常 errorCode={}, message={}", ex.getErrorCode(), ex.getMessage());
         assertEquals(ErrorCode.SET_OBJECT_TAGGING_FAILED, ex.getErrorCode(), "errorCode 应为 OSS_209");
+        assertNull(ex.getCause(), "Value 超长属于前置校验，不应有 cause");
         assertTrue(ex.getMessage().contains(String.valueOf(S3ClientConstant.MAX_TAG_VALUE_BYTES)),
                 "异常消息应提示 Value 字节上限 " + S3ClientConstant.MAX_TAG_VALUE_BYTES);
     }
@@ -916,9 +919,12 @@ class S3ClientIntegrationTest {
         log.info("listParts 返回 {} 个分段", parts.getParts().size());
         assertEquals(partETags.size(), parts.getParts().size(), "listParts 应返回相同数量的分段");
 
+        List<PartETag> unorderedPartETags = new ArrayList<>(partETags);
+        Collections.reverse(unorderedPartETags);
+        log.info("使用无序 partETags 调用 completeMultipartUpload，验证 SDK 内部排序");
         assertDoesNotThrow(() ->
-                        s3Client.completeMultipartUpload(TEST_BUCKET, MULTIPART_MANUAL_KEY, uploadId, partETags),
-                "完成分段上传不应抛异常");
+                        s3Client.completeMultipartUpload(TEST_BUCKET, MULTIPART_MANUAL_KEY, uploadId, unorderedPartETags),
+                "无序 partETags 完成分段上传不应抛异常");
         assertTrue(s3Client.doesObjectExist(TEST_BUCKET, MULTIPART_MANUAL_KEY), "对象应存在");
         assertEquals(fileSize,
                 s3Client.getObjectMetadata(TEST_BUCKET, MULTIPART_MANUAL_KEY).getContentLength(),

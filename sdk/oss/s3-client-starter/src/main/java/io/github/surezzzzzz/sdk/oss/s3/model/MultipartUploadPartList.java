@@ -20,7 +20,7 @@ public class MultipartUploadPartList {
     private final List<MultipartUploadPart> parts;
 
     /**
-     * 下一次列举的起始位置标记，为 0 时表示已列举完毕
+     * 下一次列举的起始位置标记；S3Client.listParts 已聚合全部分页，返回值固定为 0，表示已列举完毕
      */
     private final int nextPartNumberMarker;
 }

@@ -1,6 +1,6 @@
 # S3 Client Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > **1.x 封版文档**：如果你使用的是 1.x 版本（包名 `io.github.surezzzzzz.sdk.s3`），请查看 [README.1.x.md](README.1.x.md)。
@@ -42,7 +42,7 @@
 ### 5. 删除
 
 - `deleteObject(bucketName, objectKey)` - 删除对象（幂等，NoSuchKey 视为成功）
-- `deleteObject(bucketName, objectKey, bypassGovernanceRetention)` - 删除对象（可指定是否绕过治理保留模式）
+- `deleteObject(bucketName, objectKey, bypassGovernanceRetention)` - 删除对象（兼容保留参数；当前单对象删除不实际绕过治理保留）
 
 ### 6. 查询
 
@@ -85,7 +85,7 @@
 
 ### 12. 对象标签
 
-- `setObjectTagging(bucketName, objectKey, tags)` - 设置对象标签（覆盖已有标签；S3 限制最多 10 个键值对，Key/Value 最大 128 字节）
+- `setObjectTagging(bucketName, objectKey, tags)` - 设置对象标签（覆盖已有标签；当前 SDK 限制最多 10 个键值对，Key/Value 最大 128 UTF-8 字节）
 - `getObjectTagging(bucketName, objectKey)` - 获取对象标签
 - `deleteObjectTagging(bucketName, objectKey)` - 删除对象全部标签（对象不存在时抛 `DeleteObjectTaggingFailedException`）
 
@@ -95,7 +95,7 @@
 - `uploadObjectMultipart(bucketName, objectKey, file, partSizeMB)` - 指定分段大小
 - `generateUploadId(bucketName, objectKey)` - 初始化分段上传，返回 uploadId
 - `uploadPart(bucketName, objectKey, uploadId, partNumber, inputStream, contentLength)` - 上传单个分段，返回 `PartETag`
-- `completeMultipartUpload(bucketName, objectKey, uploadId, partETags)` - 完成分段上传
+- `completeMultipartUpload(bucketName, objectKey, uploadId, partETags)` - 完成分段上传（partETags 非空，partNumber 1~10000 且不能重复；SDK 会复制并升序提交）
 - `abortMultipartUpload(bucketName, objectKey, uploadId)` - 中止分段上传（`NoSuchUpload` 视为成功）
 - `listParts(bucketName, objectKey, uploadId)` - 列举已上传的分段，返回 `MultipartUploadPartList`，内部聚合全部分页
 - `listMultipartUploads(bucketName)` - 列举进行中的分段上传，内部聚合全部分页
@@ -117,8 +117,11 @@ s3Client.deleteObjectTagging("normal-sdks-dev", "demo/object.txt");
 说明：
 
 - `setObjectTagging` 会覆盖对象已有标签
+- `tags` 不能为 null；空 Map 允许，SDK 目标语义为清空标签。为最大兼容性，生产代码清空标签优先使用 `deleteObjectTagging`
 - 单对象最多 10 个标签
-- Key / Value 按 UTF-8 字节长度校验，当前限制均为 128 字节
+- Key 不能为 null / empty / blank；Value 不能为 null，但允许空字符串
+- Key / Value 按 UTF-8 字节长度校验，当前 SDK 限制均为 128 字节
+- 空 Map 会通过 PUT Object tagging 发送空 TagSet；如目标 S3 兼容服务不接受空 TagSet，请使用 `deleteObjectTagging`
 - `deleteObjectTagging` 只删除标签，不删除对象；对象不存在时抛 `DeleteObjectTaggingFailedException`
 
 ---
@@ -166,18 +169,25 @@ try {
 注意：
 
 - `generateUploadId` 和 `completeMultipartUpload` 是 S3 multipart 边界操作，SDK 层不做重复调用重试，避免响应丢失时创建孤儿 uploadId 或重复 complete 误报失败
+- `completeMultipartUpload` 要求 `partETags` 非空，元素不能为 null，partNumber 范围为 1~10000，ETag 不能为空，partNumber 不能重复；调用方传入列表可以无序，SDK 会复制并按 partNumber 升序提交，不修改原始 List
 - public `uploadPart(InputStream...)` 不复用输入流做 SDK 层重试；如果调用方需要手动重试，应重新提供可读的 `InputStream`
-- 自动分段上传内部会按文件偏移读取 part，并对单个 part 上传做重试
+- 自动分段上传内部会按文件偏移读取 part，并对单个 part 上传做重试；批次内发现 part 失败后会取消当前批次未完成 future，并由 `abortMultipartUpload` 兜底清理 S3 侧 uploadId
 - `abortMultipartUpload` 对 `NoSuchUpload` 视为成功，可用于清理兜底
-- `listParts` 和 `listMultipartUploads` 会在方法内部聚合全部分页结果
+- `listParts` 和 `listMultipartUploads` 会在方法内部聚合全部分页结果；`listParts` 聚合完成后 `nextPartNumberMarker=0`，`listMultipartUploads` 聚合完成后 `truncated=false` 且 marker 为 null
 - multipart 返回模型位于 `io.github.surezzzzzz.sdk.oss.s3.model` 包：`MultipartUpload`、`MultipartUploadPart`、`MultipartUploadPartList`、`MultipartUploadList`
+
+---
+
+## 删除对象说明
+
+`deleteObject(bucketName, objectKey, bypassGovernanceRetention)` 中的 `bypassGovernanceRetention` 为历史兼容参数。当前单对象删除实现使用 AWS SDK S3 `DeleteObjectRequest`，不会实际设置 bypass governance retention；如对象受治理保留保护，删除仍可能失败。
 
 ---
 
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:s3-client-starter:2.0.1'
+implementation 'io.github.sure-zzzzzz:s3-client-starter:2.0.2'
 ```
 
 **⚠️ 必须添加 Spring Boot 依赖**（本 starter 使用 compileOnly 配置）：
@@ -278,6 +288,10 @@ io:
 ---
 
 ## 版本历史
+
+### 2.0.2 (2026-07-01)
+
+Patch 稳定化版本：补充对象标签 null / blank / null value 前置校验；补充 `completeMultipartUpload` 的 partETags 非空、partNumber 范围、ETag 非空、重复 partNumber 校验，并在 starter 层显式复制排序后提交；自动分段上传批次失败时取消未完成 future；明确 `bypassGovernanceRetention` 兼容参数、分页聚合返回语义和标签空 Map 兼容性。详见 [CHANGELOG.2.0.2.md](CHANGELOG.2.0.2.md)
 
 ### 2.0.1 (2026-06-12)
 

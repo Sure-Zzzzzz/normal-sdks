@@ -41,6 +41,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -310,17 +311,17 @@ public class S3Client {
     }
 
     /**
-     * 删除对象（可指定是否绕过治理保留模式）
+     * 删除对象（兼容保留治理保留参数）
      *
-     * @param bypassGovernanceRetention 是否绕过治理保留模式（AWS SDK 1.x 暂不支持此参数，传入 true 不会实际绕过治理保留）
+     * @param bypassGovernanceRetention 历史兼容参数；当前单对象删除实现使用的 DeleteObjectRequest 不支持该参数，传入 true 不会实际绕过治理保留
      */
     public void deleteObject(String bucketName, String objectKey, boolean bypassGovernanceRetention) {
         try {
             taskRetryExecutor.executeWithFixedDelay(
                     () -> {
                         try {
-                            // AWS SDK 1.x DeleteObjectRequest 不支持 withBypassGovernanceRetention，
-                            // bypassGovernanceRetention 参数在此版本中暂不生效
+                            // 当前单对象删除使用的 DeleteObjectRequest 不支持 withBypassGovernanceRetention，
+                            // bypassGovernanceRetention 参数在此兼容签名中暂不生效
                             amazonS3.deleteObject(new DeleteObjectRequest(bucketName, objectKey));
                             log.info("对象删除成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
                         } catch (AmazonS3Exception e) {
@@ -347,7 +348,7 @@ public class S3Client {
      *
      * @param bucketName 存储桶名称
      * @param objectKey  对象 Key
-     * @param tags       标签键值对，最多 10 个，Key/Value UTF-8 字节长度不能超过限制
+     * @param tags       标签键值对，不能为 null；空 Map 允许，目标语义为清空标签；Key 不能 blank，Value 不能为 null，Key/Value UTF-8 字节长度不能超过限制
      * @throws SetObjectTaggingFailedException 设置对象标签失败时抛出
      */
     public void setObjectTagging(String bucketName, String objectKey, Map<String, String> tags) {
@@ -370,18 +371,30 @@ public class S3Client {
      * 校验 S3 标签参数
      */
     private void validateObjectTagging(Map<String, String> tags) {
+        if (tags == null) {
+            throw new SetObjectTaggingFailedException(ErrorMessage.TAGGING_NULL);
+        }
         if (tags.size() > S3ClientConstant.MAX_OBJECT_TAGS) {
             throw new SetObjectTaggingFailedException(String.format(
                     ErrorMessage.TAGGING_TOO_MANY, S3ClientConstant.MAX_OBJECT_TAGS, tags.size()));
         }
         for (Map.Entry<String, String> entry : tags.entrySet()) {
-            if (entry.getKey().getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_KEY_BYTES) {
-                throw new SetObjectTaggingFailedException(String.format(
-                        ErrorMessage.TAGGING_KEY_TOO_LONG, S3ClientConstant.MAX_TAG_KEY_BYTES, entry.getKey()));
+            String key = entry.getKey();
+            if (StringUtils.isBlank(key)) {
+                throw new SetObjectTaggingFailedException(ErrorMessage.TAGGING_KEY_EMPTY);
             }
-            if (entry.getValue().getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_VALUE_BYTES) {
+            String value = entry.getValue();
+            if (value == null) {
                 throw new SetObjectTaggingFailedException(String.format(
-                        ErrorMessage.TAGGING_VALUE_TOO_LONG, S3ClientConstant.MAX_TAG_VALUE_BYTES, entry.getKey()));
+                        ErrorMessage.TAGGING_VALUE_NULL, key));
+            }
+            if (key.getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_KEY_BYTES) {
+                throw new SetObjectTaggingFailedException(String.format(
+                        ErrorMessage.TAGGING_KEY_TOO_LONG, S3ClientConstant.MAX_TAG_KEY_BYTES, key));
+            }
+            if (value.getBytes(StandardCharsets.UTF_8).length > S3ClientConstant.MAX_TAG_VALUE_BYTES) {
+                throw new SetObjectTaggingFailedException(String.format(
+                        ErrorMessage.TAGGING_VALUE_TOO_LONG, S3ClientConstant.MAX_TAG_VALUE_BYTES, key));
             }
         }
     }
@@ -491,7 +504,16 @@ public class S3Client {
                 for (Future<PartETag> future : futures) {
                     try {
                         allPartETags.add(future.get());
-                    } catch (Exception e) {
+                    } catch (InterruptedException e) {
+                        cancelFutures(futures);
+                        Thread.currentThread().interrupt();
+                        throw new UploadPartFailedException(e.getMessage(), e);
+                    } catch (ExecutionException e) {
+                        cancelFutures(futures);
+                        Throwable cause = e.getCause() == null ? e : e.getCause();
+                        throw new UploadPartFailedException(cause.getMessage(), cause);
+                    } catch (RuntimeException e) {
+                        cancelFutures(futures);
                         throw new UploadPartFailedException(e.getMessage(), e);
                     }
                 }
@@ -515,6 +537,17 @@ public class S3Client {
                 log.warn("清理 uploadId 失败：{}", cleanupEx.getMessage());
             }
             throw new UploadPartFailedException(e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 取消当前批次未完成的分段上传任务
+     */
+    private void cancelFutures(List<Future<PartETag>> futures) {
+        for (Future<PartETag> future : futures) {
+            if (future != null && !future.isDone()) {
+                future.cancel(true);
+            }
         }
     }
 
@@ -604,18 +637,58 @@ public class S3Client {
      * @param bucketName 存储桶名称
      * @param objectKey  对象 Key
      * @param uploadId   分段上传 ID
-     * @param partETags  已上传分段 ETag 列表，应按 partNumber 升序传入
+     * @param partETags  已上传分段 ETag 列表，不能为空；partNumber 必须在 1~10000 且不能重复，SDK 会复制并按 partNumber 升序提交
      * @throws CompleteMultipartUploadFailedException 完成分段上传失败时抛出
      */
     public void completeMultipartUpload(String bucketName, String objectKey, String uploadId, List<PartETag> partETags) {
         try {
+            List<PartETag> sortedPartETags = validatePartETags(partETags);
             amazonS3.completeMultipartUpload(new CompleteMultipartUploadRequest(
-                    bucketName, objectKey, uploadId, partETags));
+                    bucketName, objectKey, uploadId, sortedPartETags));
             log.info("完成分段上传成功，bucketName：{}，objectKey：{}", bucketName, objectKey);
+        } catch (CompleteMultipartUploadFailedException e) {
+            throw e;
         } catch (Exception e) {
             log.debug("completeMultipartUpload e:", e);
             throw new CompleteMultipartUploadFailedException(e.getMessage(), e);
         }
+    }
+
+    /**
+     * 校验完成分段上传的 PartETag 列表，并返回按 partNumber 升序排列的副本
+     */
+    private List<PartETag> validatePartETags(List<PartETag> partETags) {
+        if (partETags == null) {
+            throw new CompleteMultipartUploadFailedException(ErrorMessage.PART_ETAGS_NULL);
+        }
+        if (partETags.isEmpty()) {
+            throw new CompleteMultipartUploadFailedException(ErrorMessage.PART_ETAGS_EMPTY);
+        }
+
+        Set<Integer> partNumbers = new HashSet<>();
+        for (PartETag partETag : partETags) {
+            if (partETag == null) {
+                throw new CompleteMultipartUploadFailedException(ErrorMessage.PART_ETAG_NULL);
+            }
+            int partNumber = partETag.getPartNumber();
+            if (partNumber < 1 || partNumber > S3ClientConstant.MAX_MULTIPART_PARTS) {
+                throw new CompleteMultipartUploadFailedException(String.format(
+                        ErrorMessage.PART_ETAG_PART_NUMBER_INVALID,
+                        S3ClientConstant.MAX_MULTIPART_PARTS, partNumber));
+            }
+            if (StringUtils.isBlank(partETag.getETag())) {
+                throw new CompleteMultipartUploadFailedException(String.format(
+                        ErrorMessage.PART_ETAG_ETAG_EMPTY, partNumber));
+            }
+            if (!partNumbers.add(partNumber)) {
+                throw new CompleteMultipartUploadFailedException(String.format(
+                        ErrorMessage.PART_ETAG_PART_NUMBER_DUPLICATE, partNumber));
+            }
+        }
+
+        List<PartETag> sortedPartETags = new ArrayList<>(partETags);
+        sortedPartETags.sort((a, b) -> Integer.compare(a.getPartNumber(), b.getPartNumber()));
+        return sortedPartETags;
     }
 
     /**
