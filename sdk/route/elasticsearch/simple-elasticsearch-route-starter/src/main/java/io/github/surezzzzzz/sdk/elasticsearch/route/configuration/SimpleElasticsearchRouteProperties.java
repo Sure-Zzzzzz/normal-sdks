@@ -1,11 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.configuration;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.RouteMatchType;
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.route.exception.ConfigurationException;
-import io.github.surezzzzzz.sdk.elasticsearch.route.model.ServerVersion;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -51,6 +47,11 @@ public class SimpleElasticsearchRouteProperties {
      * ES 服务端版本探测配置
      */
     private VersionDetectConfig versionDetect = new VersionDetectConfig();
+
+    /**
+     * 代理类型（默认 AUTO）
+     */
+    private String proxyType = ProxyType.AUTO.getCode();
 
     /**
      * ES 服务端版本探测配置
@@ -172,6 +173,12 @@ public class SimpleElasticsearchRouteProperties {
         private boolean enableConnectionReuse = SimpleElasticsearchRouteConstant.DEFAULT_ENABLE_CONNECTION_REUSE;
 
         /**
+         * 异步写线程池大小（所有配了该 datasource 的 rule 共用）
+         * 默认：8
+         */
+        private int asyncWriteThreadPoolSize = SimpleElasticsearchRouteConstant.DEFAULT_ASYNC_WRITE_THREAD_POOL_SIZE;
+
+        /**
          * 获取解析后的 URL 列表（标准化为 http://xxx 或 https://xxx）
          */
         public List<String> getResolvedUrls() {
@@ -252,6 +259,50 @@ public class SimpleElasticsearchRouteProperties {
          * 是否启用
          */
         private boolean enable = true;
+
+        /**
+         * 写操作索引名模板（不配则默认行为）
+         *
+         * <p>支持日期占位符，格式为 {@code {pattern}}，其中 pattern 为合法的 {@link java.time.format.DateTimeFormatter} 格式串。
+         * 每次写操作时将占位符替换为当日日期，并将结果作为实际写入索引名。
+         *
+         * <p>示例：
+         * <ul>
+         *   <li>{@code "app-log-{yyyy.MM.dd}"} → {@code "app-log-2026.07.01"}（Logstash 风格）</li>
+         *   <li>{@code "metric-{yyyy-MM-dd}"} → {@code "metric-2026-07-01"}（ISO 日期）</li>
+         *   <li>{@code "{yyyyMMdd}-access"} → {@code "20260701-access"}（紧凑格式）</li>
+         * </ul>
+         *
+         * <p>非法 pattern 会在启动时打 WARN 日志，运行时直接使用原始模板字符串（不抛异常）。
+         */
+        private String writeIndexTemplate;
+
+        /**
+         * 读操作索引名（不配则默认行为）
+         *
+         * <p>配置后，search / get 等读操作将使用此值替换原始索引名，支持通配符。
+         * 配合 {@link #writeIndexTemplate} 使用时，写入当日分片，读取覆盖所有历史分片。
+         *
+         * <p>示例：
+         * <ul>
+         *   <li>{@code "app-log-*"}：覆盖所有日期分片</li>
+         *   <li>{@code "app-log-2026.*"}：只覆盖 2026 年的分片</li>
+         * </ul>
+         */
+        private String readIndexPattern;
+
+        /**
+         * 写操作是否强制异步（默认 false）
+         *
+         * <p>设为 {@code true} 时，写操作（save/index/bulkIndex 等）提交到独立线程池后立即返回 {@code null}，
+         * 不等待 ES 响应。执行异常在线程池内部记录错误日志，不向调用方抛出。
+         *
+         * <p>适用场景：日志、埋点、审计等允许少量丢失的写场景，对吞吐量要求高。
+         * <p>不适用：需要确认写入结果、强一致性要求、事务语义的场景。
+         *
+         * <p>线程池由 {@link DataSourceConfig#asyncWriteThreadPoolSize} 配置，按 datasource 隔离。
+         */
+        private boolean asyncWrite = false;
 
         /**
          * 获取匹配类型枚举

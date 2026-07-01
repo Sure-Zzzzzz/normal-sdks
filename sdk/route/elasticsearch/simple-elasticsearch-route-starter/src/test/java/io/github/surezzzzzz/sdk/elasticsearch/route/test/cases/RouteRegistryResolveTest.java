@@ -54,7 +54,7 @@ public class RouteRegistryResolveTest {
 
         RouteException ex = assertThrows(RouteException.class,
                 () -> registry.resolveDataSourceOrThrow(new String[]{"order-2025", "user-1"}));
-        assertTrue(ex.getMessage().contains("Cross datasource"));
+        assertTrue(ex.getMessage().contains("不支持跨数据源查询"));
     }
 
     private SimpleElasticsearchRouteRegistry createRegistryWithRules() {

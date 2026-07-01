@@ -18,23 +18,15 @@ io:
                 max-conn-per-route: 10
                 enable-connection-reuse: true
 
-              # secondary 指向真实的 ES
-              secondary:
-                urls: http://localhost:9200
-                connect-timeout: 5000
-                socket-timeout: 60000
-                keep-alive-strategy: 300
-                max-conn-total: 100
-                max-conn-per-route: 10
-                enable-connection-reuse: true
+              # secondary 不在此文件定义，默认继承 application.yaml；版本 profile 会按对应测试场景覆盖。
 
             rules:
-              # test_index_b.secondary 应该路由到 secondary (9200)
+              # test_index_b.secondary 应该路由到 secondary
               - pattern: "test_index_b.secondary"
                 datasource: secondary
                 type: exact
                 priority: 10
-              # write_test_secondary 应该路由到 secondary (9200)
+              # write_test_secondary 应该路由到 secondary
               - pattern: "write_test_secondary"
                 datasource: secondary
                 type: exact

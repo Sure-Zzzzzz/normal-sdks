@@ -69,10 +69,10 @@ public class SimpleElasticsearchRouteRegistry {
 
     @PostConstruct
     public void init() {
-        log.info("Initializing SimpleElasticsearchRouteRegistry...");
+        log.info("开始初始化 Elasticsearch 路由注册表");
         createAllClients();
         initClusterInfoAndDetect();
-        log.info("SimpleElasticsearchRouteRegistry initialized: datasources={}", clientsMap.keySet());
+        log.info("Elasticsearch 路由注册表初始化完成，datasources={}", clientsMap.keySet());
     }
 
     @PreDestroy
@@ -85,7 +85,7 @@ public class SimpleElasticsearchRouteRegistry {
             try {
                 clients.close();
             } catch (Exception e) {
-                log.warn("Failed to close datasource [{}] client", key, e);
+                log.warn("数据源 [{}] 客户端关闭失败", key, e);
             }
         });
     }
@@ -242,7 +242,7 @@ public class SimpleElasticsearchRouteRegistry {
         }
 
         templatesView = Collections.unmodifiableMap(templates);
-        log.info("Created {} Elasticsearch datasource(s)", clientsMap.size());
+        log.info("已创建 {} 个 Elasticsearch 数据源", clientsMap.size());
     }
 
     private DataSourceClients createDataSourceClients(String key, SimpleElasticsearchRouteProperties.DataSourceConfig config) {
@@ -252,23 +252,20 @@ public class SimpleElasticsearchRouteRegistry {
         RestClientBuilder restClientBuilder = buildRestClientBuilder(key, hosts, config, config.getConnectTimeout(), config.getSocketTimeout());
         RestHighLevelClient client = new RestHighLevelClient(restClientBuilder);
 
-        // Spring Data Elasticsearch 4.0.x（Spring Boot 2.3.x）的 ElasticsearchRestTemplate 构造函数
-        // 依赖 org.elasticsearch.client.core.MainResponse，该类在 ES Client 6.8.x 中不存在，
-        // 直接 new ElasticsearchRestTemplate(client) 会抛出 BootstrapMethodError: NoClassDefFoundError。
-        // 此处兜底 catch，确保 RestHighLevelClient 创建成功后 template 失败不会导致整体启动失败。
+        // 某些 Spring Data Elasticsearch 版本在初始化 template 时会触发客户端类缺失错误。
+        // template 不可用时仍保留 RestHighLevelClient，调用方可通过 registry 获取原生客户端。
         ElasticsearchRestTemplate template;
         try {
             template = new ElasticsearchRestTemplate(client);
         } catch (BootstrapMethodError | ExceptionInInitializerError e) {
-            log.warn("Failed to create ElasticsearchRestTemplate for datasource [{}] (ES Client 6.8.x?): {}. " +
-                            "This datasource will not be available via ElasticsearchRestTemplate. " +
-                            "Use SimpleElasticsearchRouteRegistry.getHighLevelClient() instead.",
+            log.warn("ElasticsearchRestTemplate 初始化失败，datasource=[{}]，原因=[{}]。" +
+                            "该数据源仍可通过 SimpleElasticsearchRouteRegistry.getHighLevelClient() 使用原生客户端。",
                     key, e.getMessage());
             template = null;
         }
 
-        log.info("Elasticsearch datasource [{}] initialized - urls: {}, template: {}",
-                key, urls, template != null ? "available" : "unavailable");
+        log.info("Elasticsearch 数据源初始化完成，datasource=[{}]，urls={}，template={}",
+                key, urls, template != null ? "已创建" : "未创建");
         return new DataSourceClients(client, template);
     }
 
@@ -281,13 +278,13 @@ public class SimpleElasticsearchRouteRegistry {
         properties.getSources().forEach((key, dsConfig) -> {
             ServerVersion configured = ServerVersion.tryParse(dsConfig.getServerVersion());
             if (configured != null) {
-                log.info("[ds={}] server-version configured: {}", key, configured.getRaw());
+                log.info("数据源 [{}] 已配置 server-version：{}", key, configured.getRaw());
             }
             clusterInfoMap.put(key, ClusterInfo.initial(key, configured));
         });
 
         if (!enabled) {
-            log.info("Version detect disabled");
+            log.info("Elasticsearch 服务端版本探测未启用");
             return;
         }
 
@@ -338,28 +335,45 @@ public class SimpleElasticsearchRouteRegistry {
             });
 
             ClusterInfo info = clusterInfoMap.get(datasourceKey);
-            log.info("[ds={}] detected server-version: {}", datasourceKey, detected.getRaw());
+            log.info("数据源 [{}] 自动探测到 Elasticsearch 服务端版本：{}", datasourceKey, detected.getRaw());
             if (info != null && info.isVersionMismatch()) {
-                log.warn("[ds={}] server-version mismatch: configured={}, detected={} (will use configured)",
+                log.warn("数据源 [{}] 配置的 server-version 与探测结果不一致，configured={}，detected={}，将使用配置值",
                         datasourceKey,
                         info.getConfiguredVersion() == null ? null : info.getConfiguredVersion().getRaw(),
                         info.getDetectedVersion() == null ? null : info.getDetectedVersion().getRaw());
             }
 
         } catch (Exception e) {
+            if (containsInterruptedException(e)) {
+                Thread.currentThread().interrupt();
+                log.debug("数据源 [{}] 服务端版本探测被中断", datasourceKey);
+                return;
+            }
+
             clusterInfoMap.compute(datasourceKey, (k, old) -> {
                 ClusterInfo base = old == null ? ClusterInfo.initial(datasourceKey, ServerVersion.tryParse(dsConfig.getServerVersion())) : old;
                 return base.withDetectError(e.getMessage(), now);
             });
 
             if (!StringUtils.hasText(dsConfig.getServerVersion())) {
-                log.warn("[ds={}] detect server-version failed, mark as UNKNOWN (suggest configure sources.{}.server-version)",
+                log.warn("数据源 [{}] 未配置 server-version，且服务端版本探测失败，将标记为 UNKNOWN；建议配置 sources.{}.server-version",
                         datasourceKey, datasourceKey, e);
             } else {
-                log.warn("[ds={}] detect server-version failed (configured={}, will use configured)",
+                log.warn("数据源 [{}] 服务端版本探测失败，将使用已配置的 server-version [{}]",
                         datasourceKey, dsConfig.getServerVersion(), e);
             }
         }
+    }
+
+    private boolean containsInterruptedException(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InterruptedException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private ServerVersion detectServerVersion(String datasourceKey,
@@ -393,7 +407,7 @@ public class SimpleElasticsearchRouteRegistry {
                 try {
                     probeClient.close();
                 } catch (Exception e) {
-                    log.debug("[ds={}] failed to close probe client", datasourceKey, e);
+                    log.debug("数据源 [{}] 版本探测客户端关闭失败", datasourceKey, e);
                 }
             }
         }
@@ -465,7 +479,7 @@ public class SimpleElasticsearchRouteRegistry {
                 try {
                     SSLContext sslContext;
                     if (config.isSkipSslValidation()) {
-                        log.warn("Datasource [{}] is configured to skip SSL validation - DO NOT use in production!", datasourceKey);
+                        log.warn("数据源 [{}] 已配置跳过 SSL 校验，请勿在生产环境使用", datasourceKey);
                         sslContext = SSLContextBuilder.create()
                                 .loadTrustMaterial((chain, authType) -> true)
                                 .build();

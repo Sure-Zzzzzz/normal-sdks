@@ -6,6 +6,8 @@
 
 - 🚀 **零代码侵入**：基于 Spring Boot AutoConfiguration，无需修改业务代码
 - 🎯 **智能路由**：支持 5 种匹配模式（精确、前缀、后缀、通配符、正则）
+- 📅 **日期分片**：写操作自动路由至当日索引，读操作通配模式查询历史分片（1.1.0+）
+- ⚡ **异步写**：规则级别启用异步写，写请求提交线程池立即返回，适合日志/审计场景（1.1.0+）
 - 🔌 **多版本兼容**：支持 Elasticsearch 6.x / 7.x，自动版本探测
 - 💪 **版本自适应客户端**：提供 RestHighLevelClient，屏蔽版本差异
 - ⚡ **高性能**：路由规则缓存、SpEL 表达式缓存、正则编译缓存
@@ -17,7 +19,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.0.10'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.1.0'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -149,7 +151,7 @@ io:
 **版本探测说明：**
 - 如果配置了 `server-version`，则使用配置值，探测结果仅用于校验（不一致时告警）
 - 如果未配置 `server-version`，则使用探测结果
-- 探测失败且未配置 `server-version` 时，启动会失败
+- 探测失败且未配置 `server-version` 时，默认标记为 UNKNOWN 并继续启动；`fail-fast-on-detect-error=true` 时启动失败
 
 ### 5. 使用示例
 
@@ -246,50 +248,42 @@ elasticsearchTemplate.save(order); // 索引: orders -> 路由到 cluster3
 
 ### ElasticsearchRestTemplate 路由代理
 
-route-starter 使用 CGLIB 动态代理创建 `ElasticsearchRestTemplate`，在不同 Spring Boot 版本下行为如下：
+route-starter 使用动态代理创建 `ElasticsearchRestTemplate`，并按当前 Spring Data Elasticsearch API 形态选择直接调用、反射调用或 HTTP 兼容调用。
 
-| Spring Boot 版本 | ES Client | 单数据源 | 多数据源 |
-|-----------------|-----------|---------|---------|
-| 2.2.5 | 6.5.x | ✅ 降级简单 template | ❌ 启动失败，需升级版本 |
-| 2.3.12 | 6.8.x | ✅ 降级简单 template | ❌ 启动失败，需升级版本 |
-| 2.4.x | 7.9+ | ✅ CGLIB 降级 | ❌ 启动失败，需升级版本 |
-| 2.7.x+（推荐） | 7.17+ | ✅ CGLIB 代理，路由正常 | ✅ 路由正常 |
+| Spring Boot 版本 | Spring Data Elasticsearch API 风格 | 路由代理 | 当前状态 |
+|-----------------|------------------------------------|----------|----------|
+| 2.2.x | 3.x | JDK 代理 + HTTP 兼容调用 | ✅ 支持 |
+| 2.3.12 | 3.x / 4.x 过渡 | JDK 代理 + 反射兼容 | ✅ 支持 |
+| 2.4.5 | 4.x | AUTO：CGLIB 失败时回退到 JDK | ✅ 支持 |
+| 2.7.9（主版本） | 4.x | AUTO：优先 CGLIB | ✅ 支持，默认验证版本 |
 
-**单数据源降级说明：**
+**兼容说明：**
 
-`SimpleElasticsearchRouteConfiguration` 中使用 CGLIB 创建代理，依赖 ES Client 7.x 类链路。Spring Boot 2.2.5 / 2.3.12 使用 ES Client 6.5.x / 6.8.x，`org.elasticsearch.client.core.MainResponse` 在 6.x 中不存在，JVM 加载时报 `BootstrapMethodError`。route-starter 会在启动时自动检测并降级为简单 template，路由功能在单数据源场景下失效（无实际影响，因为只有单一数据源）。
-
-**多数据源说明：**
-
-CGLIB 在 2.2.x / 2.3.x / 2.4.x 下无法访问 `AbstractElasticsearchTemplate` 的 protected 成员，代理创建失败。多数据源场景下路由失效会导致数据写入错误的集群，因此 route-starter 会在启动时直接报错，而不是静默失败。
-
-如果你的业务**不使用 `ElasticsearchRestTemplate`**（例如只通过 `registry.getHighLevelClient()` 操作 ES），多数据源在低版本下实际上是可以工作的——`ElasticsearchRestTemplate` 这个 bean 只是给 Spring Data Repository 用的，直接使用原生客户端的场景不受影响。
-
-**建议：** 新项目使用 Spring Boot 2.7.x+，存量项目如需多数据源请升级。
+- Spring Boot 2.7.9 是主版本，默认优先保障该版本行为不退化。
+- Spring Boot 2.2.x / 2.3.12 下，Spring Data Elasticsearch API 缺少部分新版方法或类型，例如 `IndexCoordinates`、接口级 `save(Object)`、接口级 `get(String, Class)`。
+- 1.1.0 通过反射检测和 HTTP 兼容路径补齐旧版 API 能力，低版本也纳入正式适配范围。
+- `proxy-type=AUTO` 优先使用 CGLIB；CGLIB 创建失败时回退到 JDK 代理。
+- JDK 代理会额外挂载 `SaveAndGetInterface`，保证旧版 Spring Data Elasticsearch 中未声明在接口上的 `save/get` 也能被路由拦截。
 
 ### route-starter 的版本屏蔽职责边界
 
 **✅ route-starter 负责的版本屏蔽：**
-- `RestHighLevelClient` 层面：根据 `server-version` 配置创建对应版本的客户端
-- `RestClient` 层面：低级 HTTP 客户端，版本自适应
-- 通过 `SimpleElasticsearchRouteRegistry.getHighLevelClient()` 获取的客户端是版本自适应的
+- ES 服务端版本：通过 `server-version` 或自动探测得到，用于记录集群版本与辅助兼容判断。
+- RestHighLevelClient / RestClient：提供原生客户端访问入口，适合版本敏感操作。
+- Spring Data Elasticsearch API 形态：通过反射和 HTTP 兼容调用适配 2.2.x / 2.3.12 / 2.4.5 / 2.7.9。
+- `read-index-pattern` 下的 `get(id, Class)`：通过 `_search` + `ids` 查询支持通配索引读取。
 
-**❌ route-starter 无法屏蔽的版本差异：**
-- `ElasticsearchRestTemplate` 层面：Spring Data Elasticsearch 的封装，某些 API 不支持所有 ES 版本
-- 例如：`IndexOperations.getSettings()` 在 ES 6.x 会因 `master_timeout` 参数报错
-
-**💡 使用建议：**
-- **常规 CRUD 操作**：可以使用 `ElasticsearchRestTemplate`（save、search、delete 等）
-- **版本敏感操作**：使用 `registry.getHighLevelClient(datasourceKey)` 获取原生客户端
-- **遇到版本兼容性错误**：route-starter 会自动检测并打印友好的 WARN 日志，提示使用原生客户端
+**⚠️ 仍需注意的边界：**
+- `ElasticsearchRestTemplate` 本身属于 Spring Data Elasticsearch 封装，个别 Spring Data API 与特定 ES 服务端版本组合可能仍存在参数或语义差异。
+- 版本敏感操作建议优先使用 `registry.getHighLevelClient(datasourceKey)` 或 `registry.getLowLevelClient(datasourceKey)`。
 
 **示例：**
 ```java
-// ❌ 不推荐：某些版本下会报错
-IndexOperations indexOps = template.indexOps(IndexCoordinates.of("test"));
-Settings settings = indexOps.getSettings();  // ES 6.x 会报 master_timeout 错误
+// 常规 CRUD：走路由代理
+elasticsearchTemplate.save(document);
+Document readBack = elasticsearchTemplate.get(id, Document.class);
 
-// ✅ 推荐：使用原生客户端，版本自适应
+// 版本敏感操作：使用原生客户端
 RestHighLevelClient client = registry.getHighLevelClient("default");
 GetSettingsRequest request = new GetSettingsRequest().indices("test");
 GetSettingsResponse response = client.indices().getSettings(request, RequestOptions.DEFAULT);
@@ -354,7 +348,7 @@ try {
 1. **条件激活**：当 `io.github.surezzzzzz.sdk.elasticsearch.route.enable=true` 时激活
 2. **数据源初始化**：根据配置创建多个 `RestHighLevelClient` 和 `ElasticsearchRestTemplate` 实例
 3. **版本探测**：自动探测或使用配置的 ES 版本，创建对应版本的客户端
-4. **代理创建**：使用 CGLIB 创建 `ElasticsearchRestTemplate` 的动态代理
+4. **代理创建**：根据 `proxyType` 配置（默认 AUTO）创建路由代理：优先 CGLIB，失败后自动回退到 JDK
 5. **Bean 注册**：将代理对象注册为 Spring Bean，替换默认的 `ElasticsearchRestTemplate`
 
 ### 2. 路由决策流程
@@ -381,27 +375,123 @@ try {
    - 匹配成功：使用规则指定的数据源
    - 匹配失败：使用默认数据源
 
-### 3. 版本兼容性检测
+### 3. Spring Data API 兼容处理
 
-当使用 `ElasticsearchRestTemplate` 遇到版本兼容性问题时，`RouteTemplateProxy` 会自动检测并打印友好的 WARN 日志：
+不同 Spring Boot 版本绑定的 Spring Data Elasticsearch API 不完全一致，route-starter 会在启动时检测当前 API 形态：
 
+- 检测到 `IndexCoordinates` 时，优先使用 Spring Data Elasticsearch 4.x 的索引路由能力。
+- 未检测到 `IndexCoordinates` 时，按 Spring Data Elasticsearch 3.x 兼容路径处理。
+- 当前 API 未声明 `save(Object)` / `get(String, Class)` 时，使用 HTTP 兼容调用完成写入和按 ID 查询。
+- `read-index-pattern` 场景下的 `get(id, Class)` 使用 `_search` + `ids` 查询，以支持通配索引读取。
+
+## 🆕 1.1.0 新功能
+
+### 1. 日期分片索引路由
+
+针对日志、审计等按天分片的索引，写操作自动路由至当日索引，读操作使用通配符覆盖历史分片。
+
+**配置示例：**
+
+```yaml
+rules:
+  - pattern: "app-log-*"
+    type: wildcard
+    datasource: logging
+    write-index-template: "app-log-{yyyy.MM.dd}"   # 写入当日索引，如 app-log-2026.07.01
+    read-index-pattern: "app-log-*"                 # 查询覆盖所有历史分片
 ```
-WARN  i.g.s.s.e.r.s.RouteTemplateProxy : 检测到 Elasticsearch 版本兼容性问题: method=[getSettings], index=[test_index].
-这不是 simple-elasticsearch-route-starter 的问题，而是 Spring Data Elasticsearch API 与特定 ES 版本不兼容导致的.
-建议使用 SimpleElasticsearchRouteRegistry.getHighLevelClient() 获取原生客户端进行版本敏感的操作.
-原始错误: request [/test_index/_settings] contains unrecognized parameter: [master_timeout]
+
+**行为说明：**
+
+| 操作 | 使用的索引 | 说明 |
+|------|-----------|------|
+| save / index（写） | `app-log-2026.07.01`（当日） | 日期在主线程渲染，再提交执行 |
+| search / get（读） | `app-log-*`（通配） | 覆盖所有历史分片 |
+| 未配置 template/pattern | 原始索引名 | 按普通路由逻辑处理 |
+
+**占位符格式（`{pattern}`）：**
+
+| 占位符 | 渲染结果示例 | 说明 |
+|--------|------------|------|
+| `{yyyy.MM.dd}` | `2026.07.01` | 最常见，Logstash 风格 |
+| `{yyyy-MM-dd}` | `2026-07-01` | ISO 日期 |
+| `{yyyyMMdd}` | `20260701` | 紧凑格式 |
+
+非法 DateTimeFormatter pattern（如 `{invalid!!}`）会打 WARN 日志并原样使用模板，不抛异常。
+
+---
+
+### 2. 异步写
+
+规则级别启用异步写：写请求提交到独立线程池后立即返回 `null`，不等待 ES 响应。适合日志、埋点、审计等允许少量丢失的写场景。
+
+**配置示例：**
+
+```yaml
+sources:
+  logging:
+    urls: http://log-es:9200
+    async-write-thread-pool-size: 8    # 异步写线程池大小，默认 8
+
+rules:
+  - pattern: "app-log-*"
+    type: wildcard
+    datasource: logging
+    async-write: true                  # 启用异步写
+    write-index-template: "app-log-{yyyy.MM.dd}"
 ```
+
+**行为：**
+- `async-write=true` 时：主线程渲染模板后立即提交线程池，方法返回 `null`
+- 异步执行异常会记录错误日志，不向上传播，不影响主业务
+- 线程池按 datasource 隔离，互不影响
+- Spring 容器关闭时优雅等待 30s，超时强制中断
+
+**⚠️ 不适用场景：** 需要确认写入结果、强一致性要求、事务语义的场景。
+
+**线程池默认参数（per datasource）：**
+
+| 参数 | 默认值 |
+|------|--------|
+| 核心线程数 | `async-write-thread-pool-size`（默认 8）|
+| 最大线程数 | `poolSize * 2` |
+| 队列容量 | `1000`（超出走 CallerRunsPolicy） |
+| keepAlive | 60s |
+| 关闭等待 | 30s |
+
+---
+
+### 3. 可配置代理类型
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            proxy-type: AUTO    # CGLIB / JDK / AUTO（默认）
+```
+
+| 模式 | 说明 | 适用场景 |
+|------|------|---------|
+| `CGLIB`（默认优先） | 动态子类代理，方法覆盖最全 | Spring Boot 2.7.x + ES 7.17+ |
+| `JDK` | 基于接口的动态代理 | 特殊兼容需求 |
+| `AUTO` | 优先 CGLIB，失败后自动回退到 JDK | **推荐，保持默认** |
+
+`AUTO` 在 Spring Boot 2.4.x 下 CGLIB 创建失败时会自动回退到 JDK 代理，多数据源路由正常工作。
+
+---
 
 ## ⚙️ 完整配置示例
 
 ### application.yml
+
 ```yaml
-# 应用配置
 spring:
   application:
     name: elasticsearch-route-demo
 
-# Elasticsearch 路由配置
 io:
   github:
     surezzzzzz:
@@ -411,8 +501,11 @@ io:
             # 是否启用路由功能
             enable: true
 
-            # 默认数据源 key（当没有匹配到任何规则时使用）
+            # 默认数据源 key；未命中路由规则时使用
             default-source: default
+
+            # 代理模式：CGLIB / JDK / AUTO，推荐保持 AUTO
+            proxy-type: AUTO
 
             # 数据源配置
             sources:
@@ -430,6 +523,7 @@ io:
                 max-conn-per-route: 10
                 enable-connection-reuse: true
                 keep-alive-strategy: 300
+                async-write-thread-pool-size: 8
 
               # 业务数据源（ES 6.x）
               business:
@@ -442,6 +536,7 @@ io:
                 use-ssl: false
                 max-conn-total: 200
                 max-conn-per-route: 20
+                async-write-thread-pool-size: 8
 
               # 日志数据源（ES 7.x）
               logging:
@@ -455,6 +550,7 @@ io:
                 skip-ssl-validation: false
                 max-conn-total: 150
                 max-conn-per-route: 15
+                async-write-thread-pool-size: 16
 
             # 路由规则配置
             rules:
@@ -472,46 +568,62 @@ io:
                 priority: 2
                 enable: true
 
-              # 3. 应用日志 - 前缀匹配
-              - pattern: app-log-
-                type: prefix
+              # 3. 应用日志 - 日期分片 + 异步写
+              - pattern: app-log-*
+                type: wildcard
                 datasource: logging
                 priority: 3
                 enable: true
+                write-index-template: app-log-{yyyy.MM.dd}
+                read-index-pattern: app-log-*
+                async-write: true
 
-              # 4. 错误日志 - 后缀匹配
-              - pattern: -error
-                type: suffix
+              # 4. 审计日志 - 按月分片 + 异步写
+              - pattern: audit-log-*
+                type: wildcard
                 datasource: logging
                 priority: 4
                 enable: true
+                write-index-template: audit-log-{yyyy.MM}
+                read-index-pattern: audit-log-*
+                async-write: true
 
-              # 5. 测试数据 - 通配符匹配
-              - pattern: test_*
+              # 5. 年度归档 - 按年分片
+              - pattern: archive-*
                 type: wildcard
-                datasource: default
+                datasource: business
                 priority: 5
                 enable: true
+                write-index-template: archive-{yyyy}
+                read-index-pattern: archive-*
 
-              # 6. 监控指标 - 正则表达式匹配
-              - pattern: "^metric\\.\\w+\\.\\d{4}-\\d{2}-\\d{2}$"
-                type: regex
+              # 6. 错误日志 - 后缀匹配
+              - pattern: -error
+                type: suffix
                 datasource: logging
                 priority: 6
                 enable: true
 
-            # 版本探测配置
+              # 7. 监控指标 - 正则表达式匹配
+              - pattern: "^metric\\.\\w+\\.\\d{4}-\\d{2}-\\d{2}$"
+                type: regex
+                datasource: logging
+                priority: 7
+                enable: true
+
+            # ES 服务端版本探测配置
             version-detect:
               enabled: true
               timeout-ms: 1500
               fail-fast-on-detect-error: false
 
-# 日志配置
 logging:
   level:
     io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG
     org.springframework.data.elasticsearch: INFO
 ```
+
+这个示例包含 1.1.0 的新增配置：`proxy-type`、`async-write-thread-pool-size`、`write-index-template`、`read-index-pattern`、`async-write`，并同时覆盖精确、前缀、后缀、通配符、正则 5 种匹配类型。
 
 ## 🚀 高级特性
 
@@ -618,7 +730,8 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
-- [CHANGELOG 1.0.10](./CHANGELOG.1.0.10.md) - **最新版本**
+- [CHANGELOG 1.1.0](./CHANGELOG.1.1.0.md) - **最新版本**
+- [CHANGELOG 1.0.10](./CHANGELOG.1.0.10.md)
 - [CHANGELOG 1.0.9](./CHANGELOG.1.0.9.md)
 - [CHANGELOG 1.0.5](./CHANGELOG.1.0.5.md)
 - [CHANGELOG 1.0.4](./CHANGELOG.1.0.4.md)

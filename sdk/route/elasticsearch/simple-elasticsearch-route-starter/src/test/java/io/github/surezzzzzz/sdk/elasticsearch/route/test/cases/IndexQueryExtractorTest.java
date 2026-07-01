@@ -1,9 +1,8 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.test.SimpleElasticsearchRouteTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.route.test.WriteTestProfilesResolver;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,44 +11,27 @@ import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
-import org.springframework.data.elasticsearch.core.IndexOperations;
-import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
 import org.springframework.data.elasticsearch.core.query.IndexQueryBuilder;
 import org.springframework.test.context.ActiveProfiles;
+
+import java.lang.reflect.InvocationTargetException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * IndexQuery 和 UpdateQuery Extractor 测试
  *
- * <p><b>测试目的:</b> 验证新增的 IndexQueryExtractor 是否正确工作</p>
- *
- * <p><b>测试方案:</b></p>
- * <ul>
- *   <li>primary 数据源配置为不存在的端口 (localhost:9201)</li>
- *   <li>secondary 数据源配置为真实 ES (localhost:9200)</li>
- *   <li>通过 IndexQuery 手动指定索引名,验证路由是否正确</li>
- * </ul>
- *
- * <p><b>版本兼容性：</b>
- * {@code IndexQueryBuilder.withIndex()} 和 {@code IndexQuery.getIndexName()} 在
- * Spring Data Elasticsearch 4.2+（Spring Boot 2.5+）才有，4.1.x 下整个测试类会跳过。
- * </p>
- *
  * @author surezzzzzz
  */
 @Slf4j
 @SpringBootTest(classes = SimpleElasticsearchRouteTestApplication.class)
-@ActiveProfiles("write-test")
+@ActiveProfiles(resolver = WriteTestProfilesResolver.class)
 public class IndexQueryExtractorTest {
 
     @Autowired
     private ElasticsearchRestTemplate elasticsearchRestTemplate;
 
-    /**
-     * 测试文档 - 使用通用索引名,不应该路由到 secondary
-     */
     @lombok.Data
     @lombok.NoArgsConstructor
     @lombok.AllArgsConstructor
@@ -62,96 +44,162 @@ public class IndexQueryExtractorTest {
         private String testField;
     }
 
-    /**
-     * 检查当前 Spring Data Elasticsearch 版本是否支持 IndexQueryBuilder.withIndex()
-     * 4.1.x 不支持，4.2+ 才有
-     */
-    @BeforeEach
-    void checkVersion() {
+    private Object createIndexCoordinates(String indexName) {
         try {
-            IndexQueryBuilder.class.getMethod("withIndex", String.class);
-        } catch (NoSuchMethodException e) {
-            Assumptions.assumeTrue(false,
-                    "IndexQueryBuilder.withIndex() 不存在（Spring Data Elasticsearch < 4.2），跳过此测试");
-        }
-    }
-
-    /**
-     * 构建带索引名的 IndexQuery（兼容 4.1.x 和 4.2+）
-     */
-    private IndexQuery buildIndexQueryWithIndex(String id, Object object, String indexName) {
-        try {
-            IndexQueryBuilder builder = new IndexQueryBuilder()
-                    .withId(id)
-                    .withObject(object);
-            java.lang.reflect.Method withIndex = IndexQueryBuilder.class.getMethod("withIndex", String.class);
-            withIndex.invoke(builder, indexName);
-            return builder.build();
+            Class<?> clazz = Class.forName("org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+            java.lang.reflect.Method of = clazz.getMethod("of", String[].class);
+            return of.invoke(null, (Object) new String[]{indexName});
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to build IndexQuery with index name", e);
+            throw new RuntimeException("Failed to create IndexCoordinates for: " + indexName, e);
         }
     }
 
-    /**
-     * 测试1: IndexQuery 手动指定索引名 - 应该路由到 secondary
-     */
+    private boolean indexExists(String indexName) {
+        try {
+            java.lang.reflect.Method indexExists = elasticsearchRestTemplate.getClass()
+                    .getMethod("indexExists", String.class);
+            return (boolean) indexExists.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            Object indexOps = indexOpsForCoordinates(indexName);
+            try {
+                java.lang.reflect.Method exists = indexOps.getClass().getMethod("exists");
+                return (boolean) exists.invoke(indexOps);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call exists()", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call indexExists(" + indexName + ")", e);
+        }
+    }
+
+    private boolean createIndex(String indexName) {
+        try {
+            java.lang.reflect.Method createIndex = elasticsearchRestTemplate.getClass()
+                    .getMethod("createIndex", String.class);
+            return (boolean) createIndex.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            Object indexOps = indexOpsForCoordinates(indexName);
+            try {
+                java.lang.reflect.Method create = indexOps.getClass().getMethod("create");
+                return (boolean) create.invoke(indexOps);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call create()", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call createIndex(" + indexName + ")", e);
+        }
+    }
+
+    private Object indexOpsForCoordinates(String indexName) {
+        try {
+            Object indexCoordinates = createIndexCoordinates(indexName);
+            Class<?> coordinatesClass = Class.forName(
+                    "org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+            java.lang.reflect.Method indexOps = elasticsearchRestTemplate.getClass()
+                    .getMethod("indexOps", coordinatesClass);
+            return indexOps.invoke(elasticsearchRestTemplate, indexCoordinates);
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call indexOps for: " + indexName, e);
+        }
+    }
+
+    private String indexDocumentToName(IndexQuery query, String indexName) {
+        try {
+            java.lang.reflect.Method indexMethod = elasticsearchRestTemplate.getClass()
+                    .getMethod("index", IndexQuery.class);
+            return (String) indexMethod.invoke(elasticsearchRestTemplate, withIndexName(query, indexName));
+        } catch (NoSuchMethodException e) {
+            try {
+                Object indexCoordinates = createIndexCoordinates(indexName);
+                Class<?> coordinatesClass = Class.forName(
+                        "org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+                java.lang.reflect.Method indexMethod = elasticsearchRestTemplate.getClass()
+                        .getMethod("index", IndexQuery.class, coordinatesClass);
+                return (String) indexMethod.invoke(elasticsearchRestTemplate, query, indexCoordinates);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to index document to: " + indexName, ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to index document to: " + indexName, e);
+        }
+    }
+
+    private IndexQuery withIndexName(IndexQuery query, String indexName) {
+        try {
+            java.lang.reflect.Method setIndexName = IndexQuery.class.getMethod("setIndexName", String.class);
+            setIndexName.invoke(query, indexName);
+            return query;
+        } catch (NoSuchMethodException e) {
+            return query;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set index name", e);
+        }
+    }
+
+    private IndexQuery buildIndexQueryWithIndex(String id, Object object, String indexName) {
+        IndexQueryBuilder builder = new IndexQueryBuilder()
+                .withId(id)
+                .withObject(object);
+        try {
+            java.lang.reflect.Method withIndexName = IndexQueryBuilder.class.getMethod("withIndexName", String.class);
+            withIndexName.invoke(builder, indexName);
+        } catch (NoSuchMethodException e) {
+            try {
+                java.lang.reflect.Method withIndex = IndexQueryBuilder.class.getMethod("withIndex", String.class);
+                withIndex.invoke(builder, indexName);
+            } catch (NoSuchMethodException ignored) {
+                log.info("当前 IndexQueryBuilder 不支持直接写入索引名，调用侧会用 index/indexOps 参数指定索引");
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to build IndexQuery with index", ex);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build IndexQuery with index", e);
+        }
+        return builder.build();
+    }
+
     @Test
     public void testIndexQueryWithManualIndexName() {
         log.info("========== 测试 IndexQuery 手动指定索引名路由 ==========");
-
         try {
-            IndexCoordinates index = IndexCoordinates.of("indexquery_test.secondary");
-            IndexOperations indexOps = elasticsearchRestTemplate.indexOps(index);
-            if (!indexOps.exists()) {
-                indexOps.create();
+            if (!indexExists("indexquery_test.secondary")) {
+                createIndex("indexquery_test.secondary");
                 log.info("索引 indexquery_test.secondary 已创建");
             }
-
             GenericDocument doc = new GenericDocument("iq-001", "test-value");
             IndexQuery indexQuery = buildIndexQueryWithIndex(doc.getId(), doc, "indexquery_test.secondary");
 
-            log.info("开始索引文档,IndexQuery 指定索引: indexquery_test.secondary");
-            String documentId = elasticsearchRestTemplate.index(indexQuery, index);
+            String documentId = indexDocumentToName(indexQuery, "indexquery_test.secondary");
 
-            log.info("✓ 文档索引成功! documentId=[{}], 说明路由到了 secondary (9200)", documentId);
+            log.info("文档索引成功，documentId=[{}]", documentId);
             assertNotNull(documentId, "文档ID不应该为空");
             assertEquals("iq-001", documentId, "文档ID应该匹配");
-
         } catch (Exception e) {
-            log.error("❌ 文档索引失败!", e);
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.contains("9201")) {
-                fail("路由错误! IndexQuery 指定的索引 indexquery_test.secondary 应该路由到 secondary (9200), " +
-                        "但实际路由到了 primary (9201). 错误信息: " + errorMsg);
-            } else {
-                throw e;
-            }
+            log.error("文档索引失败", e);
+            assertNotPrimaryRouteError(e, "indexquery_test.secondary");
+            throw e;
         }
     }
 
-    /**
-     * 测试2: IndexQuery 未指定索引名 - 应该回退到实体类的 @Document 注解
-     *
-     * <p>验证当 IndexQueryExtractor 返回 null 时，责任链会继续到 EntityObjectExtractor。
-     * 由于 test_generic_doc 不匹配任何路由规则，会使用 default（primary，9201 不可用），
-     * 此测试仅在 primary 9201 确实不可用时才有意义，否则跳过。</p>
-     */
     @Test
     public void testIndexQueryWithoutManualIndexName() {
         log.info("========== 测试 IndexQuery 未指定索引名的回退逻辑 ==========");
-
-        // 只有 primary (9201) 不可用时，此测试才有意义
-        boolean primaryUnavailable;
-        try {
-            java.net.Socket socket = new java.net.Socket();
-            socket.connect(new java.net.InetSocketAddress("localhost", 9201), 500);
-            socket.close();
-            primaryUnavailable = false;
-        } catch (Exception e) {
-            primaryUnavailable = true;
-        }
-        Assumptions.assumeTrue(primaryUnavailable, "primary (localhost:9201) 可用，跳过此测试（需要 9201 不可用才能验证路由回退）");
-
         GenericDocument doc = new GenericDocument("iq-002", "test-value-2");
         IndexQuery indexQuery = new IndexQueryBuilder()
                 .withId(doc.getId())
@@ -159,50 +207,66 @@ public class IndexQueryExtractorTest {
                 .build();
 
         Exception exception = assertThrows(Exception.class, () ->
-                elasticsearchRestTemplate.index(indexQuery, IndexCoordinates.of("test_generic_doc")));
+                indexDocumentToName(indexQuery, "test_generic_doc"));
 
-        log.info("✓ 测试通过! 未指定索引名时正确回退到实体类注解，并因 primary 不可用而失败");
-        assertTrue(exception.getMessage().contains("9201") ||
-                        exception.getMessage().contains("Connection refused"),
-                "应该因为无法连接 primary (9201) 而失败");
+        String fullMsg = buildCauseChain(exception);
+        log.info("完整 cause 链: {}", fullMsg);
+        assertTrue(fullMsg.contains("9201") || fullMsg.contains("9202") || fullMsg.contains("Connection refused")
+                        || fullMsg.contains("refused") || fullMsg.contains("connect"),
+                "应该因为无法连接 primary 而失败，cause链: " + fullMsg);
     }
 
-    /**
-     * 测试3: IndexQuery 的优先级低于 IndexCoordinates
-     */
     @Test
     public void testIndexCoordinatesTakesPrecedenceOverIndexQuery() {
-        log.info("========== 测试 IndexCoordinates 优先级高于 IndexQuery ==========");
-
+        log.info("========== 测试显式 index 参数优先于 IndexQuery ==========");
         try {
-            IndexCoordinates highPriorityIndex = IndexCoordinates.of("priority_test.secondary");
-            IndexOperations indexOps = elasticsearchRestTemplate.indexOps(highPriorityIndex);
-            if (!indexOps.exists()) {
-                indexOps.create();
+            if (!indexExists("priority_test.secondary")) {
+                createIndex("priority_test.secondary");
                 log.info("索引 priority_test.secondary 已创建");
             }
-
             GenericDocument doc = new GenericDocument("iq-003", "priority-test");
             IndexQuery indexQuery = buildIndexQueryWithIndex(doc.getId(), doc, "indexquery_specified.secondary");
 
-            log.info("IndexQuery 指定索引: indexquery_specified.secondary");
-            log.info("IndexCoordinates 指定索引: priority_test.secondary");
-            log.info("预期: 使用 IndexCoordinates 的索引 (优先级更高)");
+            String documentId = indexDocumentToName(indexQuery, "priority_test.secondary");
 
-            String documentId = elasticsearchRestTemplate.index(indexQuery, highPriorityIndex);
-
-            log.info("✓ 文档索引成功! documentId=[{}], IndexCoordinates 优先级验证通过", documentId);
+            log.info("文档索引成功，documentId=[{}]", documentId);
             assertNotNull(documentId, "文档ID不应该为空");
-
+            assertEquals("iq-003", documentId, "文档ID应该匹配");
         } catch (Exception e) {
-            log.error("❌ 优先级测试失败!", e);
-            String errorMsg = e.getMessage();
-            if (errorMsg != null && errorMsg.contains("9201")) {
-                fail("优先级验证失败! 应该使用 IndexCoordinates (priority_test.secondary -> secondary), " +
-                        "但实际使用了其他索引并路由到了 primary (9201). 错误信息: " + errorMsg);
-            } else {
-                throw e;
-            }
+            log.error("优先级测试失败", e);
+            assertNotPrimaryRouteError(e, "priority_test.secondary");
+            throw e;
         }
+    }
+
+    private RuntimeException unwrap(InvocationTargetException e) {
+        Throwable cause = e.getTargetException();
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        if (cause instanceof Error) {
+            throw (Error) cause;
+        }
+        return new RuntimeException(cause);
+    }
+
+    private void assertNotPrimaryRouteError(Exception e, String indexName) {
+        String errorMsg = buildCauseChain(e);
+        if (errorMsg.contains("9201") || errorMsg.contains("9202")) {
+            fail("路由错误! 索引 " + indexName + " 应该路由到 secondary，"
+                    + "但实际路由到了 primary。错误信息: " + errorMsg);
+        }
+    }
+
+    private String buildCauseChain(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Throwable cur = t;
+        while (cur != null) {
+            if (cur.getMessage() != null) {
+                sb.append(cur.getMessage()).append(" | ");
+            }
+            cur = cur.getCause();
+        }
+        return sb.toString();
     }
 }

@@ -9,11 +9,9 @@ import org.springframework.data.elasticsearch.annotations.Document;
 import java.lang.reflect.Method;
 
 /**
- * 实体对象提取器 (修复 save 方法路由 bug)
+ * 实体对象索引名提取器
  *
- * <p>从带有 @Document 注解的实体对象中提取索引名称</p>
- * <p>支持 SpEL 表达式解析</p>
- *
+ * <p>从带有 @Document 注解的实体对象中提取索引名称，支持 SpEL 表达式解析。</p>
  * <p><b>使用场景:</b> elasticsearchTemplate.save(entity)</p>
  *
  * @author surezzzzzz
@@ -34,7 +32,7 @@ public class EntityObjectExtractor implements IndexNameExtractor {
             if (supports(arg)) {
                 String indexName = extractIndexFromClass(arg.getClass());
                 if (indexName != null) {
-                    log.trace("Extracted index name [{}] from entity object [{}]",
+                    log.trace("从实体对象提取索引名成功，index=[{}]，class=[{}]",
                             indexName, arg.getClass().getSimpleName());
                     return indexName;
                 }
@@ -58,10 +56,9 @@ public class EntityObjectExtractor implements IndexNameExtractor {
         if (doc != null) {
             String indexName = doc.indexName();
 
-            // 解析 SpEL 表达式
             if (SpELHelper.isSpEL(indexName)) {
                 String resolved = SpELHelper.resolve(indexName);
-                log.trace("Resolved SpEL index name from [{}] to [{}]", indexName, resolved);
+                log.trace("实体对象索引名 SpEL 解析完成，expression=[{}]，index=[{}]", indexName, resolved);
                 return resolved;
             }
 

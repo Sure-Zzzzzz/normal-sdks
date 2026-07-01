@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
-import org.springframework.data.elasticsearch.core.mapping.IndexCoordinates;
 
 import java.lang.reflect.InvocationTargetException;
 
@@ -15,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * RouteTemplateProxy 异常处理集成测试
- * 使用真实的 Spring 环境验证异常不会被包装为 InvocationTargetException
  *
  * @author Sure
  * @since 1.0.3
@@ -28,146 +26,205 @@ public class RouteTemplateProxyExceptionTest {
     @Qualifier("elasticsearchRestTemplate")
     private ElasticsearchRestTemplate elasticsearchRestTemplate;
 
-    /**
-     * 测试：访问不存在的索引应该抛出原始异常，不被包装
-     */
+    private Object indexCoordinatesOf(String indexName) {
+        try {
+            Class<?> clazz = Class.forName("org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+            java.lang.reflect.Method of = clazz.getMethod("of", String[].class);
+            return of.invoke(null, (Object) new String[]{indexName});
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create IndexCoordinates for: " + indexName, e);
+        }
+    }
+
+    private void callIndexOps(String indexName) {
+        try {
+            java.lang.reflect.Method indexOps = elasticsearchRestTemplate.getClass()
+                    .getMethod("indexOps", String.class);
+            indexOps.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            try {
+                Object indexCoordinates = indexCoordinatesOf(indexName);
+                Class<?> coordsClass = Class.forName(
+                        "org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+                java.lang.reflect.Method indexOps = elasticsearchRestTemplate.getClass()
+                        .getMethod("indexOps", coordsClass);
+                indexOps.invoke(elasticsearchRestTemplate, indexCoordinates);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call indexOps", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call indexOps", e);
+        }
+    }
+
+    private boolean callIndexExists(String indexName) {
+        try {
+            java.lang.reflect.Method indexExists = elasticsearchRestTemplate.getClass()
+                    .getMethod("indexExists", String.class);
+            return (boolean) indexExists.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            Object indexOps = indexOpsObject(indexName);
+            try {
+                java.lang.reflect.Method exists = indexOps.getClass().getMethod("exists");
+                return (boolean) exists.invoke(indexOps);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call exists", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call indexExists", e);
+        }
+    }
+
+    private void callDeleteIndex(String indexName) {
+        try {
+            java.lang.reflect.Method deleteIndex = elasticsearchRestTemplate.getClass()
+                    .getMethod("deleteIndex", String.class);
+            deleteIndex.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            Object indexOps = indexOpsObject(indexName);
+            try {
+                java.lang.reflect.Method delete = indexOps.getClass().getMethod("delete");
+                delete.invoke(indexOps);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call delete", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call deleteIndex", e);
+        }
+    }
+
+    private Object indexOpsObject(String indexName) {
+        try {
+            java.lang.reflect.Method indexOps = elasticsearchRestTemplate.getClass()
+                    .getMethod("indexOps", String.class);
+            return indexOps.invoke(elasticsearchRestTemplate, indexName);
+        } catch (NoSuchMethodException e) {
+            try {
+                Object indexCoordinates = indexCoordinatesOf(indexName);
+                Class<?> coordsClass = Class.forName(
+                        "org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
+                java.lang.reflect.Method indexOps = elasticsearchRestTemplate.getClass()
+                        .getMethod("indexOps", coordsClass);
+                return indexOps.invoke(elasticsearchRestTemplate, indexCoordinates);
+            } catch (InvocationTargetException ex) {
+                throw unwrap(ex);
+            } catch (Exception ex) {
+                throw new RuntimeException("Failed to call indexOps", ex);
+            }
+        } catch (InvocationTargetException e) {
+            throw unwrap(e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to call indexOps", e);
+        }
+    }
+
+    private RuntimeException unwrap(InvocationTargetException e) {
+        Throwable cause = e.getTargetException();
+        if (cause instanceof RuntimeException) {
+            return (RuntimeException) cause;
+        }
+        if (cause instanceof Error) {
+            throw (Error) cause;
+        }
+        return new RuntimeException(cause);
+    }
+
     @Test
     public void testExceptionNotWrappedAsInvocationTargetException() {
         log.info("=== testExceptionNotWrappedAsInvocationTargetException ===");
-
         try {
-            // 尝试访问一个不存在的索引（会触发异常）
-            elasticsearchRestTemplate.exists("non-existent-id",
-                    IndexCoordinates.of("non_existent_index_12345"));
-
+            callIndexExists("non_existent_index_12345");
         } catch (Exception e) {
             log.info("Caught exception type: {}", e.getClass().getName());
             log.info("Exception message: {}", e.getMessage());
-
-            // 验证：不是 InvocationTargetException
             assertNotEquals(InvocationTargetException.class, e.getClass(),
                     "异常不应该被包装为 InvocationTargetException");
-
-            // 验证堆栈中不包含 InvocationTargetException
-            boolean hasInvocationException = containsInvocationTargetException(e);
-            assertFalse(hasInvocationException,
+            assertFalse(containsInvocationTargetException(e),
                     "堆栈信息不应包含 InvocationTargetException");
-
-            log.info("✅ Exception correctly thrown without InvocationTargetException wrapping");
             return;
         }
-
-        // 如果索引存在或连接失败，测试仍然通过（因为重点是异常处理机制）
-        log.warn("⚠️ No exception thrown - ES might be offline or index exists");
+        log.info("索引不存在检查未抛异常，代理异常解包路径未触发");
     }
 
-    /**
-     * 测试：模拟版本兼容性错误场景
-     * 通过尝试不支持的操作来触发类似的异常
-     */
     @Test
     public void testVersionCompatibilityLikeException() {
         log.info("=== testVersionCompatibilityLikeException ===");
-
         try {
-            // 尝试使用可能不兼容的操作
-            // 注意：这个测试可能因 ES 版本而有不同行为
-            elasticsearchRestTemplate.indexOps(IndexCoordinates.of("_invalid.index.name.with.dots"));
-
+            callIndexOps("_invalid.index.name.with.dots");
         } catch (Exception e) {
             log.info("Caught exception type: {}", e.getClass().getName());
             log.info("Exception message: {}", e.getMessage());
-
-            // 验证异常处理机制
             assertNotEquals(InvocationTargetException.class, e.getClass());
-
-            // 检查是否被识别为兼容性问题
             boolean isCompatibilityIssue = isVersionCompatibilityRelated(e.getMessage());
             if (isCompatibilityIssue) {
-                log.info("✅ Compatibility issue correctly detected: {}", e.getMessage());
+                log.info("Compatibility issue correctly detected: {}", e.getMessage());
             }
-
             return;
         }
-
-        log.warn("⚠️ No exception thrown - operation might be supported in current ES version");
+        log.info("当前版本未在 indexOps 构造阶段抛异常");
     }
 
-    /**
-     * 测试：批量操作异常处理
-     */
     @Test
-    public void testBulkOperationException() {
-        log.info("=== testBulkOperationException ===");
-
+    public void testDeleteIndexException() {
+        log.info("=== testDeleteIndexException ===");
         try {
-            // 尝试对不存在的索引执行操作
-            elasticsearchRestTemplate.delete("test-id",
-                    IndexCoordinates.of("definitely_non_existent_index_99999"));
-
+            callDeleteIndex("definitely_non_existent_index_99999");
         } catch (Exception e) {
             log.info("Caught exception type: {}", e.getClass().getName());
-
-            // 验证异常链
             assertNotNull(e);
             assertNotEquals(InvocationTargetException.class, e.getClass());
-
-            // 打印异常链
             printExceptionChain(e);
-
-            log.info("✅ Bulk operation exception handled correctly");
             return;
         }
-
-        log.warn("⚠️ No exception thrown");
+        log.info("删除不存在索引未抛异常，当前 ES API 将该操作视为幂等");
     }
 
-    /**
-     * 辅助方法：检查异常链中是否包含 InvocationTargetException
-     */
     private boolean containsInvocationTargetException(Throwable throwable) {
         Throwable current = throwable;
         while (current != null) {
             if (current instanceof InvocationTargetException) {
                 return true;
             }
-
-            // 检查堆栈
             for (StackTraceElement element : current.getStackTrace()) {
                 if (element.getClassName().contains("InvocationTargetException")) {
                     return true;
                 }
             }
-
             current = current.getCause();
         }
         return false;
     }
 
-    /**
-     * 辅助方法：检查是否是版本兼容性相关的异常
-     */
     private boolean isVersionCompatibilityRelated(String message) {
         if (message == null) {
             return false;
         }
-
         String lower = message.toLowerCase();
-        return lower.contains("unrecognized parameter") ||
-                lower.contains("master_timeout") ||
-                lower.contains("no such parameter") ||
-                lower.contains("unknown setting") ||
-                lower.contains("illegal_argument_exception");
+        return lower.contains("unrecognized parameter")
+                || lower.contains("master_timeout")
+                || lower.contains("no such parameter")
+                || lower.contains("unknown setting")
+                || lower.contains("illegal_argument_exception");
     }
 
-    /**
-     * 辅助方法：打印完整异常链
-     */
     private void printExceptionChain(Throwable throwable) {
         log.info("=== Exception Chain ===");
         int level = 0;
         Throwable current = throwable;
-
         while (current != null) {
             log.info("Level {}: {} - {}",
                     level,

@@ -61,11 +61,11 @@ public class RoutePatternMatcher {
                     return compiledPattern.matcher(indexName).matches();
 
                 default:
-                    log.warn("Unsupported route match type [{}], treating as exact match", matchType);
+                    log.warn("不支持的路由匹配类型 [{}]，按 exact 规则处理", matchType);
                     return indexName.equals(pattern);
             }
         } catch (Exception e) {
-            log.error("Error matching index [{}] with rule [pattern={}, type={}]",
+            log.error("路由规则匹配失败，index=[{}]，pattern=[{}]，type=[{}]",
                     indexName, pattern, matchType, e);
             return false;
         }
@@ -76,7 +76,7 @@ public class RoutePatternMatcher {
      */
     public void clearCache() {
         patternCache.clear();
-        log.info("Pattern cache cleared");
+        log.info("路由 Pattern 缓存已清空");
     }
 
     /**

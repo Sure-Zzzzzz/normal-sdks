@@ -1,0 +1,12 @@
+# Spring Boot 2.2.x 测试 profile。
+# primary 继承 application.yaml 的 ES 6.2.2（9203），secondary 使用 ES 7.9.3（9204）验证跨实例路由。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              secondary:
+                urls: http://localhost:9204

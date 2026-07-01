@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.extractor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.elasticsearch.core.query.IndexQuery;
@@ -42,20 +43,18 @@ public class IndexQueryExtractor implements IndexNameExtractor {
         for (Object arg : args) {
             if (supports(arg)) {
                 IndexQuery query = (IndexQuery) arg;
-                // getIndexName() 在 Spring Data Elasticsearch 4.2+ 才有，4.1.x 不存在
-                // 用反射兼容两个版本，4.1.x 下返回 null，由后续提取器处理
+                // getIndexName() 在部分 Spring Data Elasticsearch 版本中不存在，使用反射兼容。
                 try {
-                    java.lang.reflect.Method getIndexName = IndexQuery.class.getMethod("getIndexName");
+                    java.lang.reflect.Method getIndexName = IndexQuery.class.getMethod(SimpleElasticsearchRouteConstant.METHOD_GET_INDEX_NAME);
                     String indexName = (String) getIndexName.invoke(query);
                     if (indexName != null && !indexName.isEmpty()) {
-                        log.trace("Extracted index name [{}] from IndexQuery", indexName);
+                        log.trace("从 IndexQuery 提取索引名成功，index=[{}]", indexName);
                         return indexName;
                     }
                 } catch (NoSuchMethodException e) {
-                    // Spring Data Elasticsearch 4.1.x 不支持，忽略
-                    log.trace("IndexQuery.getIndexName() not available in current Spring Data Elasticsearch version");
+                    log.trace("当前 Spring Data Elasticsearch 版本的 IndexQuery 未提供 getIndexName() 方法");
                 } catch (Exception e) {
-                    log.trace("Failed to extract index name from IndexQuery", e);
+                    log.trace("从 IndexQuery 提取索引名失败", e);
                 }
             }
         }

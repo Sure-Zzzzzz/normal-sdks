@@ -34,7 +34,7 @@ public class ClassTypeExtractor implements IndexNameExtractor {
             if (supports(arg)) {
                 String indexName = extractIndexFromClass((Class<?>) arg);
                 if (indexName != null) {
-                    log.trace("Extracted index name [{}] from Class annotation", indexName);
+                    log.trace("从 Class 注解提取索引名成功，index=[{}]", indexName);
                     return indexName;
                 }
             }
@@ -57,10 +57,9 @@ public class ClassTypeExtractor implements IndexNameExtractor {
         if (doc != null) {
             String indexName = doc.indexName();
 
-            // 解析 SpEL 表达式
             if (SpELHelper.isSpEL(indexName)) {
                 String resolved = SpELHelper.resolve(indexName);
-                log.trace("Resolved SpEL index name from [{}] to [{}]", indexName, resolved);
+                log.trace("Class 注解索引名 SpEL 解析完成，expression=[{}]，index=[{}]", indexName, resolved);
                 return resolved;
             }
 

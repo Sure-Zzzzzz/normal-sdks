@@ -544,6 +544,27 @@ public class ConfigValidationTest {
     }
 
     /**
+     * 测试21：asyncWriteThreadPoolSize <= 0 时应该抛异常
+     */
+    @Test
+    public void testInvalidAsyncWriteThreadPoolSize() {
+        log.info("=== 测试 asyncWriteThreadPoolSize <= 0 时验证失败 ===");
+
+        SimpleElasticsearchRouteProperties properties = createValidProperties();
+        properties.getSources().get("primary").setAsyncWriteThreadPoolSize(0);
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> {
+            new SimpleElasticsearchRouteValidator(properties).init();
+        });
+
+        Throwable cause = exception.getCause();
+        assertNotNull(cause);
+        log.info("异常信息: {}", cause.getMessage());
+
+        log.info("=== asyncWriteThreadPoolSize 验证测试通过 ===");
+    }
+
+    /**
      * 创建一个合法的配置对象
      */
     private SimpleElasticsearchRouteProperties createValidProperties() {

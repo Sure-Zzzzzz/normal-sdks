@@ -14,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.util.CollectionUtils;
 
 import javax.annotation.PostConstruct;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Simple Elasticsearch Route 配置校验器
@@ -30,11 +31,11 @@ public class SimpleElasticsearchRouteValidator {
 
     @PostConstruct
     public void init() {
-        log.info("Simple Elasticsearch Route enabled: {}", properties.isEnable());
-        log.info("Default datasource: {}", properties.getDefaultSource());
-        log.info("Configured datasources: {}", properties.getSources().keySet());
-        log.info("Configured route rules: {}", properties.getRules().size());
-        log.info("Version detect enabled: {}, fail-fast-on-detect-error: {}",
+        log.info("Simple Elasticsearch Route 启用状态：{}", properties.isEnable());
+        log.info("默认数据源：{}", properties.getDefaultSource());
+        log.info("已配置数据源：{}", properties.getSources().keySet());
+        log.info("已配置路由规则数：{}", properties.getRules().size());
+        log.info("服务端版本探测启用状态：{}，探测失败是否快速失败：{}",
                 properties.getVersionDetect().isEnabled(), properties.getVersionDetect().isFailFastOnDetectError());
 
         validate();
@@ -72,7 +73,7 @@ public class SimpleElasticsearchRouteValidator {
                 validateRouteRules(properties.getRules());
             }
 
-            log.info("Configuration validation passed");
+            log.info("Simple Elasticsearch Route 配置校验通过");
 
         } catch (ConfigurationException e) {
             throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
@@ -140,6 +141,12 @@ public class SimpleElasticsearchRouteValidator {
                     prefix + ErrorMessage.CONFIG_KEEP_ALIVE_INVALID);
         }
 
+        // 5.1 异步写线程池大小
+        if (config.getAsyncWriteThreadPoolSize() <= 0) {
+            throw new ConfigurationException(ErrorCode.CONFIG_ASYNC_WRITE_THREAD_POOL_INVALID,
+                    prefix + "异步写线程池大小必须大于 0");
+        }
+
         // 6. 验证 URL 格式（调用 getResolvedUrls 触发验证）
         try {
             config.getResolvedUrls();
@@ -166,14 +173,23 @@ public class SimpleElasticsearchRouteValidator {
                         rulePrefix + ErrorMessage.CONFIG_ROUTE_PATTERN_EMPTY);
             }
 
-            // 2. 数据源必须存在
+            // 2. 数据源不能为空
+            if (isEmpty(rule.getDatasource())) {
+                throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_DATASOURCE_NOT_FOUND,
+                        rulePrefix + "datasource 不能为空");
+            }
+
+            // 2.1 数据源必须存在
             if (!properties.getSources().containsKey(rule.getDatasource())) {
                 throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_DATASOURCE_NOT_FOUND,
                         rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_DATASOURCE_NOT_FOUND,
                                 rule.getPattern(), rule.getDatasource(), properties.getSources().keySet()));
             }
 
-            // 3. 匹配类型有效性
+            // 2.2 writeIndexTemplate 格式校验
+            if (!isEmpty(rule.getWriteIndexTemplate())) {
+                validateWriteIndexTemplate(rule.getWriteIndexTemplate(), rulePrefix);
+            }
             if (!RouteMatchType.isValid(rule.getType())) {
                 throw new ConfigurationException(ErrorCode.CONFIG_ROUTE_TYPE_INVALID,
                         rulePrefix + String.format(ErrorMessage.CONFIG_ROUTE_TYPE_INVALID,
@@ -229,6 +245,24 @@ public class SimpleElasticsearchRouteValidator {
         if (config.getTimeoutMs() != null && config.getTimeoutMs() <= 0) {
             throw new ConfigurationException(ErrorCode.CONFIG_VERSION_DETECT_TIMEOUT_INVALID,
                     ErrorMessage.CONFIG_VERSION_DETECT_TIMEOUT_INVALID);
+        }
+    }
+
+    /**
+     * 校验 writeIndexTemplate 格式（非法只 warn，不抛异常）
+     */
+    private void validateWriteIndexTemplate(String template, String rulePrefix) {
+        int start = template.indexOf("{");
+        int end = template.lastIndexOf("}");
+        if (start == -1 || end == -1 || start >= end) {
+            return;
+        }
+        String pattern = template.substring(start + 1, end);
+        try {
+            DateTimeFormatter.ofPattern(pattern);
+        } catch (IllegalArgumentException e) {
+            log.warn("{}writeIndexTemplate 日期格式非法，pattern=[{}]，错误=[{}]，运行时将使用原始模板",
+                    rulePrefix, pattern, e.getMessage());
         }
     }
 

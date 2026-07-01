@@ -1,0 +1,12 @@
+# Spring Boot 2.7.9 主版本测试 profile。
+# primary 继承 application.yaml 的 9203，secondary 使用 ES 7.17.16（9200）。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              secondary:
+                urls: http://localhost:9200

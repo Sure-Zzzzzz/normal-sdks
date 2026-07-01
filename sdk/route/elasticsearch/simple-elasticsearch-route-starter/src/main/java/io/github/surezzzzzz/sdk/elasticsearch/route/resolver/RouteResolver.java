@@ -28,7 +28,7 @@ public class RouteResolver {
 
     private final SimpleElasticsearchRouteProperties properties;
     private final RoutePatternMatcher patternMatcher;
-    private final Map<String, String> routingCache = new ConcurrentHashMap<>();
+    private final Map<String, SimpleElasticsearchRouteProperties.RouteRule> routingCache = new ConcurrentHashMap<>();
 
     /**
      * 排序后的启用规则列表（缓存）
@@ -42,14 +42,14 @@ public class RouteResolver {
 
         if (CollectionUtils.isEmpty(rules)) {
             this.sortedEnabledRules = new ArrayList<>();
-            log.debug("No route rules configured");
+            log.debug("未配置路由规则");
         } else {
             this.sortedEnabledRules = rules.stream()
                     .filter(SimpleElasticsearchRouteProperties.RouteRule::isEnable)
                     .sorted(Comparator.comparingInt(SimpleElasticsearchRouteProperties.RouteRule::getPriority))
                     .collect(Collectors.toList());
 
-            log.info("Cached {} enabled route rules (sorted by priority)", sortedEnabledRules.size());
+            log.info("已缓存启用的路由规则，数量={}，按 priority 升序匹配", sortedEnabledRules.size());
         }
     }
 
@@ -60,38 +60,47 @@ public class RouteResolver {
      * @return 数据源key
      */
     public String resolveDataSource(String indexName) {
-        if (indexName == null) {
-            log.trace("Index name is null, using default datasource [{}]", properties.getDefaultSource());
-            return properties.getDefaultSource();
-        }
+        SimpleElasticsearchRouteProperties.RouteRule rule = resolveRule(indexName);
+        return rule != null ? rule.getDatasource() : properties.getDefaultSource();
+    }
 
+    /**
+     * 解析索引对应的路由规则
+     *
+     * @param indexName 索引名称
+     * @return 命中的规则，null 表示未命中任何规则
+     */
+    public SimpleElasticsearchRouteProperties.RouteRule resolveRule(String indexName) {
+        if (indexName == null) {
+            return null;
+        }
         return routingCache.computeIfAbsent(indexName, this::doResolve);
     }
 
     /**
-     * 执行路由解析
+     * 执行路由解析，返回命中的规则或 null
      */
-    private String doResolve(String indexName) {
+    private SimpleElasticsearchRouteProperties.RouteRule doResolve(String indexName) {
         if (sortedEnabledRules.isEmpty()) {
-            log.debug("No route rules configured, index [{}] using default datasource [{}]",
+            log.debug("未配置路由规则，index=[{}] 使用默认数据源 [{}]",
                     indexName, properties.getDefaultSource());
-            return properties.getDefaultSource();
+            return null;
         }
 
         // 遍历规则进行匹配
         for (SimpleElasticsearchRouteProperties.RouteRule rule : sortedEnabledRules) {
             if (patternMatcher.matches(indexName, rule)) {
-                log.debug("Index [{}] matched rule [pattern={}, type={}, priority={}], routing to datasource [{}]",
+                log.debug("索引命中路由规则，index=[{}]，pattern=[{}]，type=[{}]，priority=[{}]，datasource=[{}]",
                         indexName, rule.getPattern(), rule.getMatchType().getDescription(),
                         rule.getPriority(), rule.getDatasource());
-                return rule.getDatasource();
+                return rule;
             }
         }
 
-        // 没有匹配的规则，使用默认数据源
-        log.debug("Index [{}] no matching rule, using default datasource [{}]",
+        // 没有匹配的规则
+        log.debug("索引未命中路由规则，index=[{}] 使用默认数据源 [{}]",
                 indexName, properties.getDefaultSource());
-        return properties.getDefaultSource();
+        return null;
     }
 
     /**
@@ -99,7 +108,7 @@ public class RouteResolver {
      */
     public void clearCache() {
         routingCache.clear();
-        log.info("Route cache cleared");
+        log.info("路由缓存已清空");
     }
 
     /**
@@ -109,7 +118,7 @@ public class RouteResolver {
      */
     public void clearCache(String indexName) {
         routingCache.remove(indexName);
-        log.debug("Route cache cleared for index [{}]", indexName);
+        log.debug("指定索引路由缓存已清空，index=[{}]", indexName);
     }
 
     /**

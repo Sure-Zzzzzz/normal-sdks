@@ -49,20 +49,17 @@ public class SpELHelper {
         }
 
         try {
-            // 从缓存获取或编译 Expression（仅编译过程被缓存）
             Expression compiledExpr = SPEL_CACHE.computeIfAbsent(expression, SpELHelper::compileExpression);
-
-            // 每次都重新执行表达式求值（以支持运行时上下文）
             Object value = compiledExpr.getValue(new StandardEvaluationContext());
 
             String result = value != null ? value.toString() : null;
 
-            log.debug("Resolved SpEL expression [{}] -> [{}]", expression, result);
+            log.debug("SpEL 表达式解析完成，expression=[{}]，result=[{}]", expression, result);
 
             return result;
 
         } catch (Exception e) {
-            log.warn("Failed to resolve SpEL expression [{}], using original value. Error: {}",
+            log.warn("SpEL 表达式解析失败，使用原始值，expression=[{}]，error=[{}]",
                     expression, e.getMessage());
             return expression;
         }
@@ -72,7 +69,6 @@ public class SpELHelper {
      * 编译 SpEL 表达式（仅在首次使用时调用，结果会被缓存）
      */
     private static Expression compileExpression(String expression) {
-        // 去掉 #{ 和 }
         String expr = expression.substring(2, expression.length() - 1);
         return PARSER.parseExpression(expr);
     }
@@ -82,7 +78,7 @@ public class SpELHelper {
      */
     public static void clearCache() {
         SPEL_CACHE.clear();
-        log.info("SpEL cache cleared");
+        log.info("SpEL 表达式缓存已清空");
     }
 
     /**

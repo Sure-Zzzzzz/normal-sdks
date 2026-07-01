@@ -2,8 +2,12 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.configuration;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.SimpleElasticsearchRoutePackage;
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.ProxyType;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexNameExtractor;
+import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.JdkRouteTemplateProxy;
+import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.RouteRoutingInterceptor;
 import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.RouteTemplateProxy;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
@@ -11,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.springframework.beans.factory.BeanCreationException;
+import org.springframework.beans.factory.DisposableBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,8 +25,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 
+import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple Elasticsearch Route Auto Configuration
@@ -29,6 +39,7 @@ import java.util.Map;
  * @author surezzzzzz
  */
 @Slf4j
+@RequiredArgsConstructor
 @Configuration
 @EnableConfigurationProperties(SimpleElasticsearchRouteProperties.class)
 @ComponentScan(
@@ -36,14 +47,10 @@ import java.util.Map;
         includeFilters = @ComponentScan.Filter(SimpleElasticsearchRouteComponent.class)
 )
 @ConditionalOnProperty(prefix = SimpleElasticsearchRouteConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
-@RequiredArgsConstructor
-public class SimpleElasticsearchRouteConfiguration {
+public class SimpleElasticsearchRouteConfiguration implements DisposableBean {
 
     /**
-     * 检测 ES Java Client 是否为 7.9+ 版本
-     * <p>{@code org.elasticsearch.client.core.MainResponse} 是 ES Client 7.9+ 才引入的类，
-     * 6.8.x（对应 Spring Boot 2.3.x）中不存在。CGLIB 代理依赖 7.x 的类链路，
-     * 在 6.8.x 下会触发 {@code BootstrapMethodError}。</p>
+     * 判断当前依赖中是否存在 Elasticsearch RestHighLevelClient 7.x 标记类。
      */
     private static final boolean ES_CLIENT_7X_AVAILABLE;
 
@@ -53,26 +60,98 @@ public class SimpleElasticsearchRouteConfiguration {
             Class.forName(SimpleElasticsearchRouteConstant.ES_CLIENT_7X_MARKER_CLASS);
             available = true;
         } catch (ClassNotFoundException ignored) {
-            // ES Client 6.8.x
+            // 旧版 RestHighLevelClient 依赖中没有该标记类。
         }
         ES_CLIENT_7X_AVAILABLE = available;
+    }
+
+    private static String getSpringBootVersion() {
+        try {
+            Class<?> clazz = Class.forName(SimpleElasticsearchRouteConstant.CLASS_SPRING_BOOT_VERSION);
+            java.lang.reflect.Method m = clazz.getMethod(SimpleElasticsearchRouteConstant.METHOD_VERSION);
+            return (String) m.invoke(null);
+        } catch (Exception e) {
+            return SimpleElasticsearchRouteConstant.VERSION_UNKNOWN;
+        }
     }
 
     private final SimpleElasticsearchRouteProperties properties;
     private final SimpleElasticsearchRouteRegistry routeRegistry;
 
     /**
+     * 异步写线程池（按 datasource key 隔离）
+     */
+    private final Map<String, ExecutorService> asyncWriteExecutorMap = new ConcurrentHashMap<>();
+
+    @PostConstruct
+    public void init() {
+        initAsyncWriteExecutors();
+    }
+
+    /**
+     * 初始化异步写线程池
+     */
+    private void initAsyncWriteExecutors() {
+        for (Map.Entry<String, SimpleElasticsearchRouteProperties.DataSourceConfig> entry
+                : properties.getSources().entrySet()) {
+            String dsKey = entry.getKey();
+            int poolSize = entry.getValue().getAsyncWriteThreadPoolSize();
+            int maxPoolSize = poolSize * SimpleElasticsearchRouteConstant.ASYNC_WRITE_MAX_POOL_MULTIPLIER;
+            ExecutorService executor = new ThreadPoolExecutor(
+                    poolSize,
+                    maxPoolSize,
+                    SimpleElasticsearchRouteConstant.ASYNC_WRITE_KEEP_ALIVE_SECONDS,
+                    TimeUnit.SECONDS,
+                    new java.util.concurrent.LinkedBlockingQueue<>(
+                            SimpleElasticsearchRouteConstant.ASYNC_WRITE_QUEUE_CAPACITY),
+                    r -> {
+                        Thread t = new Thread(r);
+                        t.setName(SimpleElasticsearchRouteConstant.ASYNC_WRITE_THREAD_NAME_PREFIX + dsKey);
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+            asyncWriteExecutorMap.put(dsKey, executor);
+            log.info("异步写线程池初始化完成，datasource=[{}]，poolSize=[{}]，maxPoolSize=[{}]",
+                    dsKey, poolSize, maxPoolSize);
+        }
+    }
+
+    @Override
+    public void destroy() {
+        log.info("开始关闭异步写线程池，共 {} 个", asyncWriteExecutorMap.size());
+        for (Map.Entry<String, ExecutorService> entry : asyncWriteExecutorMap.entrySet()) {
+            String dsKey = entry.getKey();
+            ExecutorService executor = entry.getValue();
+            executor.shutdown();
+            try {
+                if (!executor.awaitTermination(
+                        SimpleElasticsearchRouteConstant.ASYNC_WRITE_SHUTDOWN_AWAIT_SECONDS,
+                        TimeUnit.SECONDS)) {
+                    executor.shutdownNow();
+                    log.warn("异步写线程池 [{}] 在 {}s 内未关闭完成，已强制中断",
+                            dsKey, SimpleElasticsearchRouteConstant.ASYNC_WRITE_SHUTDOWN_AWAIT_SECONDS);
+                } else {
+                    log.info("异步写线程池 [{}] 已优雅关闭", dsKey);
+                }
+            } catch (InterruptedException e) {
+                executor.shutdownNow();
+                Thread.currentThread().interrupt();
+                log.warn("异步写线程池 [{}] 关闭被中断", dsKey);
+            }
+        }
+    }
+
+    /**
      * 创建路由代理 ElasticsearchRestTemplate
      *
-     * <p>优先创建 {@link RouteTemplateProxy} 支持多数据源路由。
-     * 在低版本 Spring Boot 下按以下策略降级：
+     * <p>根据 proxyType 配置选择 CGLIB 或 JDK 代理：
      * <ul>
-     *   <li>ES Client 6.8.x（Spring Boot 2.3.x）：CGLIB 代理依赖 7.x 类链路，跳过代理创建</li>
-     *   <li>Spring Boot 2.4.x：CGLIB 无法访问 protected 成员，代理创建失败</li>
-     *   <li>单数据源：降级到简单 {@link ElasticsearchRestTemplate}，功能正常</li>
-     *   <li>多数据源：启动失败并报错，路由失效会导致数据写入错误数据源</li>
+     *   <li>CGLIB：方法覆盖最全，支持所有继承方法</li>
+     *   <li>JDK：依赖 ElasticsearchOperations 接口，部分非接口方法走透传</li>
+     *   <li>AUTO：优先 CGLIB，失败后回退到 JDK</li>
      * </ul>
-     * </p>
      */
     @Bean
     @Primary
@@ -84,56 +163,99 @@ public class SimpleElasticsearchRouteConfiguration {
         Map<String, ElasticsearchRestTemplate> templatesMap = routeRegistry.getTemplates();
         String defaultKey = properties.getDefaultSource();
 
-        // ES Client 6.8.x（Spring Boot 2.3.x）前置检测，避免触发 BootstrapMethodError
-        if (!ES_CLIENT_7X_AVAILABLE) {
-            int datasourceCount = properties.getSources().size();
-            if (datasourceCount > 1) {
-                log.error(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
-                throw new BeanCreationException("elasticsearchRestTemplate",
-                        SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_MULTI);
-            } else {
-                log.warn(SimpleElasticsearchRouteConstant.MSG_ES_CLIENT_6X_SINGLE);
-                // ES Client 6.8.x 下 template 可能为 null（见 Registry.createDataSourceClients），
-                // 此时直接返回 null，让 Spring 放弃注册此 bean，避免后续调用 getTemplate 抛 ROUTE_004。
-                return null;
-            }
-        }
-
         ElasticsearchRestTemplate defaultTemplate = routeRegistry.getTemplate(defaultKey);
         RestHighLevelClient defaultClient = routeRegistry.getHighLevelClient(defaultKey);
 
-        log.info("Creating routing ElasticsearchRestTemplate proxy with {} datasource(s)", templatesMap.size());
-        log.info("Configured route rules: {} rule(s)", properties.getRules().size());
-        log.info("Loaded {} IndexNameExtractor(s): {}",
-                indexNameExtractors.size(),
-                indexNameExtractors.stream()
-                        .map(e -> e.getClass().getSimpleName())
-                        .toArray());
-        log.info("Default Elasticsearch datasource set to: [{}]", defaultKey);
+        if (!ES_CLIENT_7X_AVAILABLE) {
+            log.info("Spring Boot [{}] 当前使用 Spring Data Elasticsearch 3.x 风格 API，路由代理将对 save/get/index 使用 HTTP 兼容调用",
+                    getSpringBootVersion());
+        }
+
+        log.info("创建路由代理，当前 datasource 数：{}，默认 datasource：[{}]", templatesMap.size(), defaultKey);
+        log.info("配置的路由规则数：{}，proxyType：[{}]",
+                properties.getRules().size(), getProxyType());
+        log.info("加载的 IndexNameExtractor 数：{}",
+                indexNameExtractors.size());
+
+        // 构建路由拦截器
+        RouteRoutingInterceptor routingInterceptor = new RouteRoutingInterceptor(
+                templatesMap, defaultTemplate, routeResolver,
+                indexNameExtractors, asyncWriteExecutorMap);
+
+        ProxyType proxyType = getProxyType();
+        return createProxy(proxyType, routingInterceptor, defaultTemplate, defaultClient);
+    }
+
+    /**
+     * 根据 proxyType 创建代理
+     */
+    private ElasticsearchRestTemplate createProxy(
+            ProxyType proxyType,
+            RouteRoutingInterceptor routingInterceptor,
+            ElasticsearchRestTemplate defaultTemplate,
+            RestHighLevelClient defaultClient) {
+
+        // AUTO：先 CGLIB，失败后 JDK
+        if (proxyType == ProxyType.AUTO) {
+            return tryCglibOrJdk(routingInterceptor, defaultTemplate, defaultClient);
+        }
+
+        // 强制 CGLIB
+        if (proxyType == ProxyType.CGLIB) {
+            return createCglibProxy(routingInterceptor, defaultClient);
+        }
+
+        // 强制 JDK
+        return createJdkProxy(routingInterceptor, defaultTemplate);
+    }
+
+    /**
+     * AUTO：尝试 CGLIB，失败后回退到 JDK
+     */
+    private ElasticsearchRestTemplate tryCglibOrJdk(
+            RouteRoutingInterceptor routingInterceptor,
+            ElasticsearchRestTemplate defaultTemplate,
+            RestHighLevelClient defaultClient) {
 
         try {
-            ElasticsearchRestTemplate proxy = RouteTemplateProxy.createProxy(
-                    templatesMap, defaultTemplate, routeResolver, indexNameExtractors, defaultClient);
-            log.info("Routing ElasticsearchRestTemplate initialized successfully");
-            return proxy;
-
+            return createCglibProxy(routingInterceptor, defaultClient);
         } catch (Exception e) {
-            // Spring Boot 2.4.x 下 CGLIB 无法访问 protected 成员，代理创建失败
-            int datasourceCount = properties.getSources().size();
-            if (datasourceCount > 1) {
-                log.error("Failed to create RouteTemplateProxy for {} datasource(s). " +
-                        "This is likely caused by CGLIB limitation in Spring Boot 2.4.x " +
-                        "(cannot access protected members of AbstractElasticsearchTemplate). " +
-                        "Please upgrade to Spring Boot 2.7.x+.", datasourceCount, e);
+            log.warn("CGLIB 代理创建失败，自动回退到 JDK 代理。原因：[{}]", e.getMessage());
+            try {
+                return createJdkProxy(routingInterceptor, defaultTemplate);
+            } catch (Exception ex) {
                 throw new BeanCreationException("elasticsearchRestTemplate",
-                        "Cannot create routing ElasticsearchRestTemplate proxy for multiple datasources. " +
-                                "Please upgrade to Spring Boot 2.7.x+.", e);
-            } else {
-                log.warn("Failed to create RouteTemplateProxy, falling back to simple ElasticsearchRestTemplate " +
-                        "(routing disabled, single datasource mode). " +
-                        "This is likely caused by CGLIB limitation in Spring Boot 2.4.x.", e);
-                return defaultTemplate;
+                        ErrorMessage.PROXY_CREATION_FAILED, ex);
             }
         }
+    }
+
+    /**
+     * 创建 CGLIB 代理
+     */
+    private ElasticsearchRestTemplate createCglibProxy(
+            RouteRoutingInterceptor routingInterceptor,
+            RestHighLevelClient defaultClient) {
+
+        return RouteTemplateProxy.createProxy(routingInterceptor, defaultClient);
+    }
+
+    /**
+     * 创建 JDK 代理
+     */
+    private ElasticsearchRestTemplate createJdkProxy(
+            RouteRoutingInterceptor routingInterceptor,
+            ElasticsearchRestTemplate defaultTemplate) {
+
+        return JdkRouteTemplateProxy.createProxy(routingInterceptor, defaultTemplate);
+    }
+
+    /**
+     * 获取 proxyType 配置
+     */
+    private ProxyType getProxyType() {
+        String configured = properties.getProxyType();
+        ProxyType type = ProxyType.fromCode(configured);
+        return type != null ? type : ProxyType.AUTO;
     }
 }

@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.extractor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.annotation.SimpleElasticsearchRouteComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 
@@ -11,9 +12,9 @@ import java.lang.reflect.Method;
  *
  * <p>从 IndexCoordinates 类型的参数中提取索引名称(优先级最高,最准确)</p>
  *
- * <p><b>版本兼容性:</b> IndexCoordinates 是 Spring Data Elasticsearch 4.0+ 才引入的类，
- * 在 3.2.x (Spring Boot 2.2.x) 中不存在。本提取器使用反射检测类是否存在，
- * 在 3.2.x 环境下自动降级为不支持(返回 false)，不会导致 NoClassDefFoundError。</p>
+ * <p><b>版本兼容性:</b> IndexCoordinates 是 Spring Data Elasticsearch 4.x API，
+ * Spring Data Elasticsearch 3.x 环境不存在该类。本提取器通过反射检测，
+ * 类不存在时直接跳过，不触发 NoClassDefFoundError。</p>
  *
  * @author surezzzzzz
  * @since 1.0.6
@@ -37,14 +38,13 @@ public class IndexCoordinatesExtractor implements IndexNameExtractor {
         Class<?> clazz = null;
         Method method = null;
         try {
-            clazz = Class.forName("org.springframework.data.elasticsearch.core.mapping.IndexCoordinates");
-            method = clazz.getMethod("getIndexName");
-            log.debug("IndexCoordinates detected - Spring Data Elasticsearch 4.0+ runtime");
+            clazz = Class.forName(SimpleElasticsearchRouteConstant.CLASS_INDEX_COORDINATES);
+            method = clazz.getMethod(SimpleElasticsearchRouteConstant.METHOD_GET_INDEX_NAME);
+            log.debug("检测到 IndexCoordinates API，启用 IndexCoordinates 参数索引名提取");
         } catch (ClassNotFoundException e) {
-            log.info("IndexCoordinates not available - Spring Data Elasticsearch 3.x runtime, " +
-                    "IndexCoordinatesExtractor will be disabled");
+            log.info("当前 Spring Data Elasticsearch 版本未提供 IndexCoordinates API，跳过 IndexCoordinates 参数提取");
         } catch (NoSuchMethodException e) {
-            log.warn("IndexCoordinates found but getIndexName() method missing - unexpected Spring Data version", e);
+            log.warn("IndexCoordinates API 未提供 getIndexName() 方法，跳过 IndexCoordinates 参数提取", e);
         }
         INDEX_COORDINATES_CLASS = clazz;
         GET_INDEX_NAME_METHOD = method;
@@ -64,10 +64,10 @@ public class IndexCoordinatesExtractor implements IndexNameExtractor {
             if (supports(arg)) {
                 try {
                     String indexName = (String) GET_INDEX_NAME_METHOD.invoke(arg);
-                    log.trace("Extracted index name [{}] from IndexCoordinates", indexName);
+                    log.trace("从 IndexCoordinates 提取索引名成功，index=[{}]", indexName);
                     return indexName;
                 } catch (Exception e) {
-                    log.trace("Failed to extract index name from IndexCoordinates via reflection", e);
+                    log.trace("通过反射从 IndexCoordinates 提取索引名失败", e);
                 }
             }
         }

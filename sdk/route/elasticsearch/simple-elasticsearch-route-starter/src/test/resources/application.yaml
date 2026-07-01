@@ -39,6 +39,32 @@ io:
                 datasource: secondary
                 type: wildcard
                 priority: 20
+              # 1.1.0 新功能测试用规则：异步写 + 日期分片
+              - pattern: "async_write.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                async-write: true
+                write-index-template: "async_write-{yyyy.MM.dd}"
+              # 1.1.0 新功能测试用规则：同步写日期分片
+              - pattern: "date_shard.year.*"
+                datasource: secondary
+                type: wildcard
+                priority: 28
+                write-index-template: "date_shard_year-{yyyy}"
+                read-index-pattern: "date_shard_year-*"
+              - pattern: "date_shard.month.*"
+                datasource: secondary
+                type: wildcard
+                priority: 29
+                write-index-template: "date_shard_month-{yyyy.MM}"
+                read-index-pattern: "date_shard_month-*"
+              - pattern: "date_shard.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                write-index-template: "date_shard-{yyyy.MM.dd}"
+                read-index-pattern: "date_shard-*"
 
 logging:
   level:

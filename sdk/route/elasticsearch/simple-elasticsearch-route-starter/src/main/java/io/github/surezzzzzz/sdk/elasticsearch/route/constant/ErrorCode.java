@@ -5,7 +5,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.constant;
  *
  * @author surezzzzzz
  */
-public class ErrorCode {
+public final class ErrorCode {
 
     // ========== 配置相关 (CONFIG_xxx) ==========
 
@@ -28,6 +28,7 @@ public class ErrorCode {
     public static final String CONFIG_ROUTE_REGEX_INVALID = "CONFIG_017";
     public static final String CONFIG_ROUTE_EXACT_DUPLICATE = "CONFIG_018";
     public static final String CONFIG_VERSION_DETECT_TIMEOUT_INVALID = "CONFIG_019";
+    public static final String CONFIG_ASYNC_WRITE_THREAD_POOL_INVALID = "CONFIG_020";
     public static final String CONFIG_VALIDATION_FAILED = "CONFIG_999";
 
     // ========== 版本相关 (VERSION_xxx) ==========

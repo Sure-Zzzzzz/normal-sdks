@@ -5,7 +5,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.route.constant;
  *
  * @author surezzzzzz
  */
-public class ErrorMessage {
+public final class ErrorMessage {
 
     // ========== 配置相关 ==========
 
@@ -34,21 +34,37 @@ public class ErrorMessage {
 
     public static final String VERSION_EMPTY = "server-version 不能为空";
     public static final String VERSION_PARSE_FAILED = "无法解析 server-version: %s";
-    public static final String VERSION_DETECT_FAILED = "[ds=%s] detect server-version failed and server-version is not configured";
-    public static final String VERSION_NUMBER_NOT_FOUND = "version.number not found in response";
+    public static final String VERSION_DETECT_FAILED = "[ds=%s] 未配置 server-version，且自动探测服务端版本失败";
+    public static final String VERSION_NUMBER_NOT_FOUND = "Elasticsearch 根节点响应中未找到 version.number";
 
     // ========== 路由相关 ==========
 
-    public static final String ROUTE_DATASOURCE_NOT_FOUND = "Datasource [%s] not found, available: %s";
-    public static final String ROUTE_CROSS_DATASOURCE = "Cross datasource query is not supported, datasources=%s, indices=%s";
-    public static final String ROUTE_NO_DATASOURCE = "No Elasticsearch datasource initialized!";
-    public static final String ROUTE_TEMPLATE_UNAVAILABLE = "ElasticsearchRestTemplate unavailable for datasource [%s] (ES Client 6.8.x detected, Spring Data 4.x incompatible), use getHighLevelClient() instead";
+    public static final String ROUTE_DATASOURCE_NOT_FOUND = "数据源 [%s] 不存在，已配置的数据源: %s";
+    public static final String ROUTE_CROSS_DATASOURCE = "不支持跨数据源查询，datasources=%s, indices=%s";
+    public static final String ROUTE_NO_DATASOURCE = "未初始化任何 Elasticsearch 数据源";
+    public static final String ROUTE_TEMPLATE_UNAVAILABLE = "数据源 [%s] 未创建 ElasticsearchRestTemplate，请改用 SimpleElasticsearchRouteRegistry.getHighLevelClient() 获取原生客户端";
+    public static final String ROUTE_ES3X_STRING_INDEX_FAILED = "Spring Data Elasticsearch 3.x 索引级方法兼容调用失败: %s";
+    public static final String ROUTE_ES3X_INDEX_FAILED = "Spring Data Elasticsearch 3.x 文档写入兼容调用失败";
+    public static final String ROUTE_ES3X_GET_FAILED = "Spring Data Elasticsearch 3.x 按 ID 查询兼容调用失败";
+    public static final String ROUTE_UNEXPECTED_INDEX_STATUS = "Elasticsearch 写入响应状态异常: %d";
+    public static final String ROUTE_UNEXPECTED_GET_STATUS = "Elasticsearch GET 响应状态异常: %d";
+    public static final String ROUTE_UNEXPECTED_SEARCH_STATUS = "Elasticsearch SEARCH 响应状态异常: %d";
+    public static final String ROUTE_INDEX_QUERY_OBJECT_FAILED = "读取 IndexQuery 文档对象失败";
+    public static final String ROUTE_INDEX_QUERY_ID_FAILED = "读取 IndexQuery 文档 ID 失败";
+    public static final String ROUTE_DOCUMENT_INDEX_NAME_NOT_FOUND = "文档类未配置 @Document.indexName: %s";
+    public static final String ROUTE_INDEX_COORDINATES_CREATE_FAILED = "创建 IndexCoordinates 失败，index: %s";
+    public static final String ROUTE_REFLECTION_INVOKE_FAILED = "反射调用 ElasticsearchRestTemplate 方法失败";
+
+    // ========== 代理相关 ==========
+
+    public static final String PROXY_JDK_INTERFACE_NOT_FOUND = "ElasticsearchRestTemplate 实现类 [%s] 及其父类均未实现任何接口，无法创建 JDK 代理";
+    public static final String PROXY_CREATION_FAILED = "CGLIB 和 JDK 代理均创建失败，请检查 spring-data-elasticsearch 版本兼容性";
 
     // ========== 其他 ==========
 
-    public static final String OTHER_CLIENT_EXTRACT_FAILED = "Failed to extract RestHighLevelClient from ElasticsearchRestTemplate";
-    public static final String OTHER_DATASOURCE_INIT_FAILED = "Failed to initialize datasource: %s";
-    public static final String OTHER_SSL_CONFIG_FAILED = "Failed to configure SSL for datasource: %s";
+    public static final String OTHER_CLIENT_EXTRACT_FAILED = "从 ElasticsearchRestTemplate 提取 RestHighLevelClient 失败";
+    public static final String OTHER_DATASOURCE_INIT_FAILED = "初始化数据源失败: %s";
+    public static final String OTHER_SSL_CONFIG_FAILED = "配置数据源 SSL 失败: %s";
     public static final String OTHER_URL_INVALID = "无效的 URL 格式: %s";
     public static final String OTHER_URL_EMPTY = "hosts 和 urls 都为空";
 
