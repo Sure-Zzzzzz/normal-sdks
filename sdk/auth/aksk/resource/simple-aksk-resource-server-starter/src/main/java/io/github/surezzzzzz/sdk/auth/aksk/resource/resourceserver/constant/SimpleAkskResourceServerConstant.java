@@ -17,6 +17,28 @@ public final class SimpleAkskResourceServerConstant {
      */
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.auth.aksk.resource.server";
 
+    /**
+     * Spring Boot servlet context-path 配置键
+     */
+    public static final String PROPERTY_SERVER_SERVLET_CONTEXT_PATH = "server.servlet.context-path";
+
+    // ==================== Path Constants ====================
+
+    /**
+     * URL 路径分隔符
+     */
+    public static final String URL_PATH_SEPARATOR = "/";
+
+    /**
+     * URL query string 分隔符
+     */
+    public static final String URL_QUERY_SEPARATOR = "?";
+
+    /**
+     * Spring Security 全量 Ant matcher
+     */
+    public static final String ANT_PATTERN_ALL = "/**";
+
     // ==================== PEM Format Constants ====================
 
     /**
@@ -48,7 +70,27 @@ public final class SimpleAkskResourceServerConstant {
      */
     public static final String ERROR_PUBLIC_KEY_FILE_NOT_FOUND = "Public key file not found: ";
 
+    /**
+     * permit-all-paths 包含 /** 时覆盖 protected-paths 的错误消息
+     */
+    public static final String ERROR_PERMIT_ALL_OVERRIDES_PROTECTED =
+            "permit-all-paths contains /** after context-path normalization; " +
+                    "it will override protected-paths because Spring Security uses first-match authorization rules. " +
+                    "Remove /** from permit-all-paths or clear protected-paths.";
+
+    /**
+     * Security path 中不允许包含 query string 的错误消息模板
+     * 参数: path
+     */
+    public static final String ERROR_SECURITY_PATH_CONTAINS_QUERY_STRING =
+            "security path must not contain query string: %s";
+
     // ==================== 本地缓存默认值 ====================
+
+    /**
+     * 默认启用 context-path-aware 路径归一化
+     */
+    public static final boolean DEFAULT_CONTEXT_PATH_AWARE = true;
 
     /**
      * 本地缓存默认开启

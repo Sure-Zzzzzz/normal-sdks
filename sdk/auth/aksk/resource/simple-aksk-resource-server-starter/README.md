@@ -1,6 +1,6 @@
 # Simple AKSK Resource Server Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
@@ -23,7 +23,7 @@
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.security:spring-security-oauth2-resource-server'
@@ -54,6 +54,60 @@ io:
                   protected-paths:
                     - /api/**
 ```
+
+### server.servlet.context-path 兼容
+
+2.0.1 起默认启用 `context-path-aware` 路径归一化。如果业务配置了：
+
+```yaml
+server:
+  servlet:
+    context-path: /api
+```
+
+则以下两种写法都可以保护外部 `/api/**` 接口：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                security:
+                  # 外部访问路径写法，SDK 会自动归一化为 /**
+                  protected-paths:
+                    - /api/**
+
+                  # 或者直接使用 Spring Security 看到的应用内路径写法
+                  # protected-paths:
+                  #   - /**
+```
+
+如果确实需要保留 2.0.0 的路径匹配语义，可以关闭：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                security:
+                  context-path-aware: false
+```
+
+> 注意：`spring.mvc.servlet.path` 和 `server.servlet.context-path` 不是同一层路径。2.0.1 只剥离 `server.servlet.context-path`，不剥离 `spring.mvc.servlet.path`。如果只配置 `spring.mvc.servlet.path=/api`，`protected-paths: /api/**` 通常不需要归一化即可匹配；如果同时配置 `server.servlet.context-path=/gateway` 和 `spring.mvc.servlet.path=/api`，外部 `/gateway/api/**` 会归一化为 matcher `/api/**`。
+
+> 注意：SDK 不引入 Actuator 依赖，`/actuator/health` 只作为普通路径处理。如需在 `server.servlet.context-path=/api` 下放行外部 `/api/actuator/health`，可配置 `permit-all-paths: /api/actuator/health`，SDK 会归一化为 `/actuator/health`。
+
+> 注意：不要通过 `permit-all-paths: /api/**` 解决 CORS 预检问题。该配置在 `server.servlet.context-path=/api` 下会归一化为 `/**`，并覆盖保护路径，2.0.1 会 fail fast。跨域 OPTIONS 放行应由业务自己的 CORS / Security 配置处理。
+
+> 注意：2.0.1 不改变业务自定义 `SecurityFilterChain` 场景的接管/退让语义。如果业务自行定义安全链路，需要业务自行处理 AKSK Resource Server 的 matcher 顺序、OAuth2 Resource Server 配置和 Spring Security 多链路优先级。
 
 本地缓存默认开启，可按需调整；可选开启兜底缓存，端点不可用时用历史缓存放行：
 
@@ -152,10 +206,17 @@ public void onAkskAccess(AkskAccessEvent event) {
 | `introspect.local-cache.fallback.stale-max-size`   | 兜底缓存最大条目数                             | 10000   |
 | `security.protected-paths`                          | 需要认证的路径                               | [/api/**] |
 | `security.permit-all-paths`                         | 白名单路径                                 | []      |
+| `security.context-path-aware`                       | 是否启用 context-path-aware 路径归一化         | true    |
 
 ---
 
 ## 版本历史
+
+### 2.0.1 (2026-07-01)
+
+Patch Release：新增 `security.context-path-aware` 路径归一化，修复 `server.servlet.context-path=/api` 时默认 `protected-paths=/api/**` 无法保护应用内 `/xxx` Controller 的问题；对 `permit-all-paths` 同步归一化，并对高风险 `/**` 白名单覆盖保护路径配置 fail fast。
+
+详见 [CHANGELOG.2.0.1.md](CHANGELOG.2.0.1.md)
 
 ### 2.0.0 (2026-05-25)
 

@@ -14,7 +14,7 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.0.10 | 多数据源路由 | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
+| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.1.0 | 多数据源路由（日期分片 + 异步写 + 可配置代理） | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
 
 #### 搜索
 
@@ -29,29 +29,29 @@
 
 | search-starter | search-core | route-starter | metrics-starter | audit-listener-starter |
 |----------------|-------------|---------------|-----------------|----------------------|
-| 1.6.7 | 1.0.12 | 1.0.10 | 1.0.2 | 1.0.4 |
-| 1.6.6 | 1.0.11 | 1.0.10 | 1.0.1 | 1.0.3 |
-| 1.6.5 | 1.0.10 | 1.0.10 | 1.0.0 | 1.0.2 |
-| 1.6.4 | 1.0.10 | 1.0.10 | - | 1.0.2 |
-| 1.6.3 | 1.0.10 | 1.0.10 | - | 1.0.2 |
-| 1.6.2 | 1.0.10 | 1.0.10 | - | 1.0.2 |
-| 1.6.1 | 1.0.8 | 1.0.10 | - | 1.0.1 |
-| 1.6.0 | 1.0.8 | 1.0.10 | - | 1.0.1 |
-| 1.5.8 | 1.0.8 | 1.0.8 | - | 1.0.1 |
-| 1.5.7 | 1.0.7 | 1.0.8 | - | 1.0.0 |
-| 1.5.6 | 1.0.6 | 1.0.8 | - | 1.0.0 |
-| 1.5.5 | 1.0.5 | 1.0.8 | - | 1.0.0 |
-| 1.5.4 | 1.0.5 | 1.0.8 | - | 1.0.0 |
-| 1.5.3 | 1.0.5 | 1.0.7 | - | 1.0.0 |
-| 1.5.2 | 1.0.5 | 1.0.7 | - | 1.0.0 |
-| 1.5.1 | 1.0.4 | 1.0.7 | - | 1.0.0 |
-| 1.5.0 | 1.0.4 | 1.0.7 | - | 1.0.0 |
-| 1.4.0 | 1.0.4 | 1.0.7 | - | 1.0.0 |
-| 1.3.1 | 1.0.3 | 1.0.7 | - | 1.0.0 |
-| 1.3.0 | 1.0.3 | 1.0.7 | - | 1.0.0 |
-| 1.2.1 | 1.0.1 | 1.0.5 | - | 1.0.0 |
-| 1.2.0 | 1.0.1 | 1.0.5 | - | 1.0.0 |
-| ≤ 1.1.x | - | 1.0.5 | - | - |
+| 1.6.7 | 1.0.12 | 1.0.10        | 1.0.2 | 1.0.4 |
+| 1.6.6 | 1.0.11 | 1.0.10        | 1.0.1 | 1.0.3 |
+| 1.6.5 | 1.0.10 | 1.0.10        | 1.0.0 | 1.0.2 |
+| 1.6.4 | 1.0.10 | 1.0.10        | - | 1.0.2 |
+| 1.6.3 | 1.0.10 | 1.0.10        | - | 1.0.2 |
+| 1.6.2 | 1.0.10 | 1.0.10        | - | 1.0.2 |
+| 1.6.1 | 1.0.8 | 1.0.10        | - | 1.0.1 |
+| 1.6.0 | 1.0.8 | 1.0.10        | - | 1.0.1 |
+| 1.5.8 | 1.0.8 | 1.0.8         | - | 1.0.1 |
+| 1.5.7 | 1.0.7 | 1.0.8         | - | 1.0.0 |
+| 1.5.6 | 1.0.6 | 1.0.8         | - | 1.0.0 |
+| 1.5.5 | 1.0.5 | 1.0.8         | - | 1.0.0 |
+| 1.5.4 | 1.0.5 | 1.0.8         | - | 1.0.0 |
+| 1.5.3 | 1.0.5 | 1.0.7         | - | 1.0.0 |
+| 1.5.2 | 1.0.5 | 1.0.7         | - | 1.0.0 |
+| 1.5.1 | 1.0.4 | 1.0.7         | - | 1.0.0 |
+| 1.5.0 | 1.0.4 | 1.0.7         | - | 1.0.0 |
+| 1.4.0 | 1.0.4 | 1.0.7         | - | 1.0.0 |
+| 1.3.1 | 1.0.3 | 1.0.7         | - | 1.0.0 |
+| 1.3.0 | 1.0.3 | 1.0.7         | - | 1.0.0 |
+| 1.2.1 | 1.0.1 | 1.0.5         | - | 1.0.0 |
+| 1.2.0 | 1.0.1 | 1.0.5         | - | 1.0.0 |
+| ≤ 1.1.x | - | 1.0.5         | - | - |
 
 **核心特性**：
 - 支持 ES 6.x 和 7.x+
@@ -165,13 +165,14 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-aksk-resource-core](sdk/auth/aksk/resource/simple-aksk-resource-core) | 2.0.0 | Resource 核心库 | [README](sdk/auth/aksk/resource/simple-aksk-resource-core/README.md) |
-| [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 2.0.0 | 资源服务器（Introspect 远程校验） | [README](sdk/auth/aksk/resource/simple-aksk-resource-server-starter/README.md) |
+| [simple-aksk-resource-server-starter](sdk/auth/aksk/resource/simple-aksk-resource-server-starter) | 2.0.1 | 资源服务器（Introspect 远程校验 / context-path-aware 路径归一化） | [README](sdk/auth/aksk/resource/simple-aksk-resource-server-starter/README.md) |
 | [simple-aksk-resource-audit-listener-starter](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter) | 2.0.0 | Resource 访问审计事件 | [README](sdk/audit/aksk/simple-aksk-resource-audit-listener-starter/README.md) |
 
 **Resource 版本兼容**：
 
 | resource-server-starter | resource-core | resource-audit-listener-starter | 说明 |
 |-------------------------|---------------|---------------------------------|------|
+| 2.0.1 | 2.0.0 | 2.0.0 | 支持 server.servlet.context-path 场景下路径归一化 |
 | 2.0.0 | 2.0.0 | 2.0.0 | AKSK Resource 2.x 初始链路，Introspect 远程校验 |
 
 **核心特性**：

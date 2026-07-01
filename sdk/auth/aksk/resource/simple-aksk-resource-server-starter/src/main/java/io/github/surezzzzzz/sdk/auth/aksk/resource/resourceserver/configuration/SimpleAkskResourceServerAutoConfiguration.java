@@ -57,6 +57,7 @@ public class SimpleAkskResourceServerAutoConfiguration {
         log.info("Simple AKSK Resource Server Starter initialized, INTROSPECT mode");
         log.info("Protected paths: {}", properties.getSecurity().getProtectedPaths());
         log.info("Permit all paths: {}", properties.getSecurity().getPermitAllPaths());
+        log.info("Context path aware: {}", properties.getSecurity().isContextPathAware());
     }
 
     /**

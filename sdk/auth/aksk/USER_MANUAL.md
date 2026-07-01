@@ -102,7 +102,7 @@ Simple AKSK 是一套基于 OAuth2 Client Credentials Grant 的 API 认证解决
 | `simple-aksk-feign-redis-client-starter` | 2.0.0 | 客户端 | Feign + Redis Token 管理 |
 | `simple-aksk-resttemplate-redis-client-starter` | 2.0.0 | 客户端 | RestTemplate + Redis Token 管理 |
 | `simple-aksk-resource-core` | 2.0.0 | 资源端核心 | 权限注解、安全上下文工具 |
-| `simple-aksk-resource-server-starter` | 2.0.0 | 资源端 | INTROSPECT 验证，支持本地缓存和兜底降级 |
+| `simple-aksk-resource-server-starter` | 2.0.1 | 资源端 | INTROSPECT 验证，支持本地缓存、兜底降级和 context-path-aware 路径归一化 |
 | `simple-aksk-resource-audit-listener-starter` | 2.0.0 | 审计 | 监听资源端访问事件，生成审计记录 |
 | `simple-aksk-server-audit-listener-starter` | 2.0.0 | 审计 | 监听 Server Token 生命周期事件，生成审计记录 |
 
@@ -401,7 +401,7 @@ String clientType = SimpleAkskSecurityContextHelper.getClientType();
 资源端验证 starter，仅支持 INTROSPECT 模式。
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
 ```
 
 **配置**：
@@ -448,6 +448,9 @@ io:
 | `introspect.local-cache.fallback.stale-max-size` | `10000` | 兜底缓存最大条目数 |
 | `security.protected-paths` | `/api/**` | 需要认证的路径 |
 | `security.permit-all-paths` | - | 白名单路径 |
+| `security.context-path-aware` | `true` | 是否启用 context-path-aware 路径归一化 |
+
+`simple-aksk-resource-server-starter:2.0.1` 起默认启用 `context-path-aware`。如果业务配置 `server.servlet.context-path=/api`，外部 `/api/**` 会自动归一化为 Spring Security matcher 看到的应用内 `/**`；白名单 `permit-all-paths` 也会使用相同规则。`spring.mvc.servlet.path` 与 `server.servlet.context-path` 不是同一层路径，SDK 只剥离 `server.servlet.context-path`。
 
 验证通过后，introspect 结果自动注入请求属性，可通过 `SimpleAkskSecurityContextHelper` 读取。同时发布 `AkskAccessEvent` 事件（`source` 为 `"introspect"`）。
 
@@ -641,7 +644,7 @@ public interface MyServiceClient {
 ### 8.3 保护资源服务
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
 ```
 
 ```yaml
@@ -777,6 +780,7 @@ logging:
 
 | 版本 | 日期 | 说明 |
 |------|------|------|
+| 2.0.1 | 2026-07-01 | 支持 server.servlet.context-path 场景下路径归一化；resource-core 保持 2.0.0 |
 | 2.0.0 | 2026-05-25 | 移除 JWT 模式，仅保留 INTROSPECT；resource-core 升至 2.0.0 |
 | 1.0.6 | 2026-05-06 | oauth2-oidc-sdk 依赖范围改为 api |
 | 1.0.4 | 2026-05-02 | 兜底缓存降级策略、缓存统计日志、默认模式改为 INTROSPECT |

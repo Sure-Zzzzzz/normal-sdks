@@ -121,5 +121,10 @@ public class SimpleAkskResourceServerProperties {
          * 白名单路径（不需要认证）
          */
         private List<String> permitAllPaths = new ArrayList<>();
+
+        /**
+         * 是否启用 context-path-aware 路径归一化，默认开启
+         */
+        private boolean contextPathAware = SimpleAkskResourceServerConstant.DEFAULT_CONTEXT_PATH_AWARE;
     }
 }
