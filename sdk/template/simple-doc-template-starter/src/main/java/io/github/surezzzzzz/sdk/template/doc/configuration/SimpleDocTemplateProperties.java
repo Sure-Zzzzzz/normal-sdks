@@ -40,4 +40,29 @@ public class SimpleDocTemplateProperties {
      */
     private List<String> fontPaths = new ArrayList<>(Arrays.asList(SimpleDocTemplateConstant.DEFAULT_FONT_PATHS));
 
+    /**
+     * 最大模板大小（字节）
+     */
+    private long maxTemplateBytes = SimpleDocTemplateConstant.DEFAULT_MAX_TEMPLATE_BYTES;
+
+    /**
+     * 最大图片大小（字节）
+     */
+    private long maxImageBytes = SimpleDocTemplateConstant.DEFAULT_MAX_IMAGE_BYTES;
+
+    /**
+     * 最大 DOCX 解压后大小（字节）
+     */
+    private long maxDocxUncompressedBytes = SimpleDocTemplateConstant.DEFAULT_MAX_DOCX_UNCOMPRESSED_BYTES;
+
+    /**
+     * 最大 ZIP entry 数量
+     */
+    private int maxZipEntryCount = SimpleDocTemplateConstant.DEFAULT_MAX_ZIP_ENTRY_COUNT;
+
+    /**
+     * 是否允许远程资源
+     */
+    private boolean allowRemoteResource = SimpleDocTemplateConstant.DEFAULT_ALLOW_REMOTE_RESOURCE;
+
 }

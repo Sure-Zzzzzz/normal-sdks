@@ -104,6 +104,143 @@ public class TemplateRenderException extends SimpleDocTemplateException {
     }
 
     /**
+     * PDF 链式输出暂不支持
+     *
+     * @return 异常实例
+     */
+    public static TemplateRenderException pdfOutputNotSupported() {
+        return new TemplateRenderException(
+                ErrorCode.PDF_OUTPUT_NOT_SUPPORTED,
+                String.format(ErrorMessage.PDF_OUTPUT_NOT_SUPPORTED, ErrorMessage.PDF_OUTPUT_RECOMMENDED_ENTRY)
+        );
+    }
+
+    /**
+     * Markdown 不支持的能力
+     *
+     * @param feature 能力描述
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownUnsupportedFeature(String feature) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_UNSUPPORTED_FEATURE,
+                String.format(ErrorMessage.MD_UNSUPPORTED_FEATURE, feature)
+        );
+    }
+
+    /**
+     * Markdown 模板渲染失败
+     *
+     * @param message 失败原因
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownRenderFailed(String message) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_RENDER_FAILED,
+                String.format(ErrorMessage.MD_RENDER_FAILED, message)
+        );
+    }
+
+    /**
+     * Markdown 模板渲染失败
+     *
+     * @param message 失败原因
+     * @param cause   原始异常
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownRenderFailed(String message, Throwable cause) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_RENDER_FAILED,
+                String.format(ErrorMessage.MD_RENDER_FAILED, message),
+                cause
+        );
+    }
+
+    /**
+     * Markdown 转 HTML 失败
+     *
+     * @param message 失败原因
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownToHtmlFailed(String message) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_TO_HTML_FAILED,
+                String.format(ErrorMessage.MD_TO_HTML_FAILED, message)
+        );
+    }
+
+    /**
+     * Markdown 转 HTML 失败
+     *
+     * @param message 失败原因
+     * @param cause   原始异常
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownToHtmlFailed(String message, Throwable cause) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_TO_HTML_FAILED,
+                String.format(ErrorMessage.MD_TO_HTML_FAILED, message),
+                cause
+        );
+    }
+
+    /**
+     * Markdown 转 PDF 失败
+     *
+     * @param message 失败原因
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownToPdfFailed(String message) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_TO_PDF_FAILED,
+                String.format(ErrorMessage.MD_TO_PDF_FAILED, message)
+        );
+    }
+
+    /**
+     * Markdown 转 PDF 失败
+     *
+     * @param message 失败原因
+     * @param cause   原始异常
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownToPdfFailed(String message, Throwable cause) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_TO_PDF_FAILED,
+                String.format(ErrorMessage.MD_TO_PDF_FAILED, message),
+                cause
+        );
+    }
+
+    /**
+     * Markdown 安全校验拒绝
+     *
+     * @param message 失败原因
+     * @return 异常实例
+     */
+    public static TemplateRenderException markdownSecurityRejected(String message) {
+        return new TemplateRenderException(
+                ErrorCode.MARKDOWN_SECURITY_REJECTED,
+                String.format(ErrorMessage.MD_SECURITY_REJECTED, message)
+        );
+    }
+
+    /**
+     * HTML/XHTML 转 PDF 失败
+     *
+     * @param message 失败原因
+     * @param cause   原始异常
+     * @return 异常实例
+     */
+    public static TemplateRenderException htmlToPdfFailed(String message, Throwable cause) {
+        return new TemplateRenderException(
+                ErrorCode.HTML_TO_PDF_FAILED,
+                String.format(ErrorMessage.HTML_TO_PDF_FAILED, message),
+                cause
+        );
+    }
+
+    /**
      * 模板渲染失败
      *
      * @param message 失败原因

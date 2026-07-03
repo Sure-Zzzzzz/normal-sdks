@@ -1,9 +1,9 @@
-package io.github.surezzzzzz.sdk.template.doc.handler.docx;
+package io.github.surezzzzzz.sdk.template.doc.handler.md;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.constant.OutputFormat;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
-import io.github.surezzzzzz.sdk.template.doc.document.WordDocument;
+import io.github.surezzzzzz.sdk.template.doc.document.MdDocument;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandler;
 
@@ -12,16 +12,16 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * DOCX Output Handler
+ * Markdown Output Handler
  *
  * @author surezzzzzz
  */
 @SimpleDocTemplateComponent
-public class DocxOutputHandler implements OutputHandler {
+public class MdOutputHandler implements OutputHandler {
 
     @Override
     public void writeToFile(Document document, String filePath) {
-        byte[] bytes = toDocxBytes(document);
+        byte[] bytes = toMdBytes(document);
         try (FileOutputStream fos = new FileOutputStream(filePath)) {
             fos.write(bytes);
         } catch (IOException e) {
@@ -31,7 +31,7 @@ public class DocxOutputHandler implements OutputHandler {
 
     @Override
     public void writeToStream(Document document, OutputStream outputStream) {
-        byte[] bytes = toDocxBytes(document);
+        byte[] bytes = toMdBytes(document);
         try {
             outputStream.write(bytes);
         } catch (IOException e) {
@@ -41,21 +41,21 @@ public class DocxOutputHandler implements OutputHandler {
 
     @Override
     public byte[] toBytes(Document document) {
-        return toDocxBytes(document);
+        return toMdBytes(document);
     }
 
     @Override
     public OutputFormat supportedFormat() {
-        return OutputFormat.DOCX;
+        return OutputFormat.MD;
     }
 
-    private byte[] toDocxBytes(Document document) {
+    private byte[] toMdBytes(Document document) {
         if (document == null) {
-            throw TemplateRenderException.formatMismatch(OutputFormat.DOCX.getCode(), null);
+            throw TemplateRenderException.markdownRenderFailed("Markdown document must not be null");
         }
-        if (!(document instanceof WordDocument)) {
-            throw TemplateRenderException.formatMismatch(OutputFormat.DOCX.getCode(), document.getFormat());
+        if (!(document instanceof MdDocument)) {
+            throw TemplateRenderException.formatMismatch(OutputFormat.MD.getCode(), document.getFormat());
         }
-        return ((WordDocument) document).getDocxBytes();
+        return ((MdDocument) document).getMdBytes();
     }
 }

@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
-import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.DocxToPdfFailedException;
+import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.pdf.PdfOutputHandler;
 import lombok.RequiredArgsConstructor;
 
@@ -13,7 +13,8 @@ import java.nio.file.Path;
 /**
  * PDF Convert Helper
  *
- * <p>面向业务的 PDF 转换快捷入口。当前支持已有 DOCX 转 PDF，后续可扩展其他来源到 PDF。
+ * <p>面向业务的 PDF 转换快捷入口，仅支持已有 DOCX 转 PDF。
+ * 所有读取路径走 {@link LimitedInputStreamHelper} 受限读取，防止无上限读取。
  *
  * @author surezzzzzz
  */
@@ -21,9 +22,8 @@ import java.nio.file.Path;
 @RequiredArgsConstructor
 public class PdfConvertHelper {
 
-    private static final int IO_BUFFER_SIZE = SimpleDocTemplateConstant.IO_BUFFER_SIZE;
-
     private final PdfOutputHandler pdfOutputHandler;
+    private final LimitedInputStreamHelper inputStreamHelper;
 
     /**
      * 已有 DOCX 字节数组转 PDF 字节数组
@@ -42,7 +42,7 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(InputStream inputStream) {
-        return pdfOutputHandler.convertToPdf(inputStream);
+        return pdfOutputHandler.convertToPdf(toByteArray(inputStream, "读取 DOCX 输入流失败"));
     }
 
     /**
@@ -52,7 +52,7 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(File file) {
-        return fromDocx(toByteArray(file));
+        return fromDocx(toByteArray(file.toPath(), String.format("读取 DOCX 文件失败: %s", file.getAbsolutePath())));
     }
 
     /**
@@ -62,7 +62,7 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(Path path) {
-        return fromDocx(toByteArray(path));
+        return fromDocx(toByteArray(path, String.format("读取 DOCX 文件失败: %s", path)));
     }
 
     /**
@@ -86,7 +86,7 @@ public class PdfConvertHelper {
      * @param outputStream PDF 输出流
      */
     public void fromDocx(InputStream inputStream, OutputStream outputStream) {
-        fromDocx(toByteArray(inputStream), outputStream);
+        fromDocx(toByteArray(inputStream, "读取 DOCX 输入流失败"), outputStream);
     }
 
     /**
@@ -114,35 +114,26 @@ public class PdfConvertHelper {
         }
     }
 
-    private byte[] toByteArray(InputStream inputStream) {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[IO_BUFFER_SIZE];
-        int len;
-        try {
-            while ((len = inputStream.read(buffer)) != -1) {
-                baos.write(buffer, 0, len);
-            }
-            return baos.toByteArray();
+    private byte[] toByteArray(Path path, String failureMessage) {
+        if (!Files.exists(path)) {
+            throw DocxToPdfFailedException.conversionFailed(failureMessage, new java.nio.file.NoSuchFileException(path.toString()));
+        }
+        try (InputStream is = Files.newInputStream(path)) {
+            return readLimited(is, failureMessage);
         } catch (IOException e) {
-            throw DocxToPdfFailedException.conversionFailed("读取 DOCX 输入流失败", e);
+            throw DocxToPdfFailedException.conversionFailed(failureMessage, e);
         }
     }
 
-    private byte[] toByteArray(File file) {
-        try {
-            return Files.readAllBytes(file.toPath());
-        } catch (IOException e) {
-            throw DocxToPdfFailedException.conversionFailed(
-                    String.format("读取 DOCX 文件失败: %s", file.getAbsolutePath()), e);
-        }
+    private byte[] toByteArray(InputStream inputStream, String failureMessage) {
+        return readLimited(inputStream, failureMessage);
     }
 
-    private byte[] toByteArray(Path path) {
+    private byte[] readLimited(InputStream inputStream, String failureMessage) {
         try {
-            return Files.readAllBytes(path);
-        } catch (IOException e) {
-            throw DocxToPdfFailedException.conversionFailed(
-                    String.format("读取 DOCX 文件失败: %s", path), e);
+            return inputStreamHelper.readTemplateBytes(inputStream);
+        } catch (TemplateRenderException e) {
+            throw DocxToPdfFailedException.conversionFailed(failureMessage, e);
         }
     }
 }

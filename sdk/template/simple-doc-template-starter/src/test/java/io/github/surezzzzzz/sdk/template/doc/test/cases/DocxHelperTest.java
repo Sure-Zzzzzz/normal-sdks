@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.test.cases;
 
 import io.github.surezzzzzz.sdk.template.doc.engine.TemplateEngine;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateNotFoundException;
+import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.model.Image;
 import io.github.surezzzzzz.sdk.template.doc.support.DocxHelper;
 import io.github.surezzzzzz.sdk.template.doc.test.SimpleDocTemplateTestApplication;
@@ -39,14 +40,36 @@ class DocxHelperTest {
     @Autowired
     private TemplateEngine templateEngine;
 
-    private static final Path OUTPUT_DIR = Paths.get("build/test-output/helper");
+    private static final Path DOCX_DIR = Paths.get("build/test-output/docx");
+    private static final Path PDF_DIR = Paths.get("build/test-output/pdf");
 
     private Map<String, Object> fullData;
 
     @BeforeEach
     void setUp() throws Exception {
-        Files.createDirectories(OUTPUT_DIR);
+        Files.createDirectories(DOCX_DIR);
+        Files.createDirectories(PDF_DIR);
         fullData = buildFullData();
+    }
+
+    @Test
+    @DisplayName("DocxHelper：拒绝 Markdown 模板")
+    void docxHelperRejectsMdRender() {
+        TemplateRenderException exception = assertThrows(TemplateRenderException.class,
+                () -> docxHelper.render("classpath:templates/markdown-report.md", fullData));
+
+        log.info("DocxHelper 拒绝 MD: {}", exception.getMessage());
+        assertTrue(exception.getMessage().contains("DocxHelper"), "应提示 DocxHelper 边界");
+    }
+
+    @Test
+    @DisplayName("DocxHelper：拒绝非 DOCX 模板")
+    void docxHelperRejectsTxtRender() {
+        TemplateRenderException exception = assertThrows(TemplateRenderException.class,
+                () -> docxHelper.render("classpath:templates/report.txt", fullData));
+
+        log.info("DocxHelper 拒绝 TXT: {}", exception.getMessage());
+        assertTrue(exception.getMessage().contains("DocxHelper"), "应提示 DocxHelper 边界");
     }
 
     // ==================== DOCX 模板 → DOCX ====================
@@ -100,7 +123,7 @@ class DocxHelperTest {
     @Test
     @DisplayName("renderToFile：DOCX 模板渲染写出到文件")
     void renderToFileWritesDocx() throws Exception {
-        Path outputPath = OUTPUT_DIR.resolve("docx-helper-output.docx");
+        Path outputPath = DOCX_DIR.resolve("docx-helper-output.docx");
 
         docxHelper.renderToFile(
                 "classpath:templates/weekly-report-template.docx", fullData, outputPath.toString());
@@ -128,7 +151,7 @@ class DocxHelperTest {
     @Test
     @DisplayName("renderPdfToFile：DOCX 模板渲染写出 PDF 文件")
     void renderPdfToFileWritesPdf() throws Exception {
-        Path pdfPath = OUTPUT_DIR.resolve("docx-helper-pdf-output.pdf");
+        Path pdfPath = PDF_DIR.resolve("docx-helper-pdf-output.pdf");
 
         docxHelper.renderPdfToFile(
                 "classpath:templates/weekly-report-template.docx", fullData, pdfPath.toString());

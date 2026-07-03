@@ -42,7 +42,8 @@ class PdfOutputHandlerTest {
     @Autowired
     private PdfOutputHandler handler;
 
-    private static final Path OUTPUT_DIR = Paths.get("build/test-output/pdf");
+    private static final Path DOCX_DIR = Paths.get("build/test-output/docx");
+    private static final Path PDF_DIR = Paths.get("build/test-output/pdf");
 
     /**
      * PDF 文件头标识
@@ -56,7 +57,8 @@ class PdfOutputHandlerTest {
 
     @BeforeEach
     void ensureOutputDir() throws Exception {
-        Files.createDirectories(OUTPUT_DIR);
+        Files.createDirectories(DOCX_DIR);
+        Files.createDirectories(PDF_DIR);
     }
 
     // ==================== renderToPdf 快捷方法 ====================
@@ -86,7 +88,7 @@ class PdfOutputHandlerTest {
     void renderForPdfToToFile() throws Exception {
         Map<String, Object> data = buildFullData();
 
-        Path pdfPath = OUTPUT_DIR.resolve("chain-tofile.pdf");
+        Path pdfPath = PDF_DIR.resolve("chain-tofile.pdf");
         templateEngine.renderForPdf(
                 "classpath:templates/weekly-report-template.docx", data)
                 .toFile(pdfPath.toString());
@@ -145,7 +147,7 @@ class PdfOutputHandlerTest {
                 .render("classpath:templates/weekly-report-template.docx", data)
                 .output(OutputFormat.DOCX)
                 .toBytes();
-        Path docxPath = OUTPUT_DIR.resolve("weekly-report.docx");
+        Path docxPath = DOCX_DIR.resolve("weekly-report.docx");
         Files.write(docxPath, docxBytes);
         log.info("[端到端] DOCX 已落盘: {} ({} bytes)", docxPath.toAbsolutePath(), docxBytes.length);
 
@@ -155,7 +157,7 @@ class PdfOutputHandlerTest {
             docxFromDisk = StreamUtils.copyToByteArray(inputStream);
         }
         byte[] pdfBytes = handler.convertToPdf(docxFromDisk);
-        Path pdfPath = OUTPUT_DIR.resolve("weekly-report.pdf");
+        Path pdfPath = PDF_DIR.resolve("weekly-report.pdf");
         Files.write(pdfPath, pdfBytes);
         log.info("[端到端] PDF 已落盘: {} ({} bytes)", pdfPath.toAbsolutePath(), pdfBytes.length);
 
@@ -284,7 +286,7 @@ class PdfOutputHandlerTest {
     }
 
     private void writePdf(String name, byte[] pdfBytes) throws IOException {
-        Path pdfPath = OUTPUT_DIR.resolve(name);
+        Path pdfPath = PDF_DIR.resolve(name);
         Files.write(pdfPath, pdfBytes);
         log.info("{} PDF 已写出: {} ({} KB)", name, pdfPath, pdfBytes.length / 1024);
     }

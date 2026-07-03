@@ -323,18 +323,18 @@ class TemplateEngineRenderTest {
     }
 
     @Test
-    @DisplayName("Handler 未注册：抛出 TemplateRenderException，errorCode = OUTPUT_001")
-    void outputHandlerNotFound() {
+    @DisplayName("链式 PDF 输出：抛出 TemplateRenderException，errorCode = OUTPUT_005")
+    void outputPdfNotSupported() {
         TemplateRenderResult result = templateEngine
                 .render("classpath:templates/weekly-report-template.docx", fullData);
 
-        // MD 格式存在但未注册 Handler，用于测试 Handler 未注册场景
         TemplateRenderException exception = assertThrows(
                 TemplateRenderException.class,
-                () -> result.output(OutputFormat.MD)
+                () -> result.output(OutputFormat.PDF)
         );
-        log.info("异常场景：Handler 未注册，errorCode: {}", exception.getErrorCode());
-        assertEquals("OUTPUT_001", exception.getErrorCode());
+        log.info("异常场景：链式 PDF 输出不支持，errorCode: {}", exception.getErrorCode());
+        assertEquals("OUTPUT_005", exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("TemplateEngine.renderToPdf"));
     }
 
     @Test

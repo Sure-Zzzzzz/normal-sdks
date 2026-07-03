@@ -39,13 +39,15 @@ class PdfConvertHelperTest {
     @Autowired
     private TemplateEngine templateEngine;
 
-    private static final Path OUTPUT_DIR = Paths.get("build/test-output/helper");
+    private static final Path DOCX_DIR = Paths.get("build/test-output/docx");
+    private static final Path PDF_DIR = Paths.get("build/test-output/pdf");
 
     private byte[] docxBytes;
 
     @BeforeEach
     void setUp() throws Exception {
-        Files.createDirectories(OUTPUT_DIR);
+        Files.createDirectories(DOCX_DIR);
+        Files.createDirectories(PDF_DIR);
         docxBytes = buildDocxBytes();
     }
 
@@ -83,7 +85,7 @@ class PdfConvertHelperTest {
     @DisplayName("fromDocx：Path → byte[] 返回有效 PDF")
     void fromDocxPathReturnsPdf() throws Exception {
         // 先写出 DOCX 文件
-        Path docxPath = OUTPUT_DIR.resolve("pdf-convert-test.docx");
+        Path docxPath = DOCX_DIR.resolve("pdf-convert-test.docx");
         Files.write(docxPath, docxBytes);
 
         byte[] pdfBytes = pdfConvertHelper.fromDocx(docxPath);
@@ -99,7 +101,7 @@ class PdfConvertHelperTest {
     @Test
     @DisplayName("fromDocx：File → byte[] 返回有效 PDF")
     void fromDocxFileReturnsPdf() throws Exception {
-        Path docxPath = OUTPUT_DIR.resolve("pdf-convert-file-test.docx");
+        Path docxPath = DOCX_DIR.resolve("pdf-convert-file-test.docx");
         Files.write(docxPath, docxBytes);
 
         byte[] pdfBytes = pdfConvertHelper.fromDocx(docxPath.toFile());
@@ -149,8 +151,8 @@ class PdfConvertHelperTest {
     @Test
     @DisplayName("fromDocx：Path → Path 生成有效 PDF 文件")
     void fromDocxPathToPath() throws Exception {
-        Path docxPath = OUTPUT_DIR.resolve("source-for-pdf-path.docx");
-        Path pdfPath = OUTPUT_DIR.resolve("output-from-path-to-path.pdf");
+        Path docxPath = DOCX_DIR.resolve("source-for-pdf-path.docx");
+        Path pdfPath = PDF_DIR.resolve("output-from-path-to-path.pdf");
         Files.write(docxPath, docxBytes);
 
         pdfConvertHelper.fromDocx(docxPath, pdfPath);
@@ -167,8 +169,8 @@ class PdfConvertHelperTest {
     @Test
     @DisplayName("fromDocx：File → File 生成有效 PDF 文件")
     void fromDocxFileToFile() throws Exception {
-        Path docxPath = OUTPUT_DIR.resolve("source-for-pdf-file.docx");
-        Path pdfPath = OUTPUT_DIR.resolve("output-from-file-to-file.pdf");
+        Path docxPath = DOCX_DIR.resolve("source-for-pdf-file.docx");
+        Path pdfPath = PDF_DIR.resolve("output-from-file-to-file.pdf");
         Files.write(docxPath, docxBytes);
 
         pdfConvertHelper.fromDocx(docxPath.toFile(), pdfPath.toFile());
@@ -201,7 +203,7 @@ class PdfConvertHelperTest {
     @Test
     @DisplayName("fromDocx：Path 不存在抛 DocxToPdfFailedException")
     void fromDocxNonexistentPathThrowsException() {
-        Path nonexistentPath = OUTPUT_DIR.resolve("nonexistent-file-12345.docx");
+        Path nonexistentPath = DOCX_DIR.resolve("nonexistent-file-12345.docx");
 
         DocxToPdfFailedException ex = assertThrows(
                 DocxToPdfFailedException.class,
@@ -215,7 +217,7 @@ class PdfConvertHelperTest {
     @Test
     @DisplayName("fromDocx：File 不存在抛 DocxToPdfFailedException")
     void fromDocxNonexistentFileThrowsException() {
-        File nonexistentFile = OUTPUT_DIR.resolve("nonexistent-file-67890.docx").toFile();
+        File nonexistentFile = DOCX_DIR.resolve("nonexistent-file-67890.docx").toFile();
 
         DocxToPdfFailedException ex = assertThrows(
                 DocxToPdfFailedException.class,

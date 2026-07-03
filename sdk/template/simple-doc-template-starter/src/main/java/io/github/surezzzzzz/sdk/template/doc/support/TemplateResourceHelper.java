@@ -5,7 +5,6 @@ import io.github.surezzzzzz.sdk.template.doc.exception.TemplateNotFoundException
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +24,8 @@ import java.io.InputStream;
 public class TemplateResourceHelper {
 
     private final ResourceLoader resourceLoader;
+    private final TemplateResourcePolicy resourcePolicy;
+    private final LimitedInputStreamHelper inputStreamHelper;
 
     /**
      * 加载模板资源
@@ -33,6 +34,7 @@ public class TemplateResourceHelper {
      * @return Resource 对象
      */
     public Resource loadResource(String location) {
+        resourcePolicy.validateTemplateLocation(location);
         return resourceLoader.getResource(location);
     }
 
@@ -47,12 +49,13 @@ public class TemplateResourceHelper {
      * @throws TemplateNotFoundException 模板文件不存在或读取失败
      */
     public byte[] loadResourceBytes(String location) {
+        resourcePolicy.validateTemplateLocation(location);
         Resource resource = resourceLoader.getResource(location);
         if (!resource.exists()) {
             throw TemplateNotFoundException.notFound(location);
         }
         try (InputStream is = resource.getInputStream()) {
-            return StreamUtils.copyToByteArray(is);
+            return inputStreamHelper.readTemplateBytes(is);
         } catch (IOException e) {
             throw TemplateNotFoundException.notFound(location);
         }

@@ -14,6 +14,10 @@ dependencies {
     // Chart → PNG（PDF 输出且含 chart）
     api 'org.jfree:jfreechart:1.5.4'
 
+    // Markdown 解析（Java 8 兼容版本）
+    implementation 'org.commonmark:commonmark:0.21.0'
+    implementation 'org.commonmark:commonmark-ext-gfm-tables:0.21.0'
+
     // 测试依赖
     testImplementation 'org.springframework.boot:spring-boot-starter'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

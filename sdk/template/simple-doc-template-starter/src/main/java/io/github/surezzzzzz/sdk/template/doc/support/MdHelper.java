@@ -11,108 +11,116 @@ import java.io.OutputStream;
 import java.util.Map;
 
 /**
- * DOCX Helper
+ * Markdown Helper
  *
- * <p>面向业务的 DOCX 模板快捷入口，封装 DOCX 模板渲染为 DOCX/PDF 的常用场景。
+ * <p>面向业务的 Markdown 模板快捷入口，封装 Markdown 模板渲染为 MD/PDF 的常用场景。
  *
  * @author surezzzzzz
  */
 @SimpleDocTemplateComponent
 @RequiredArgsConstructor
-public class DocxHelper {
+public class MdHelper {
 
     private final TemplateEngine templateEngine;
     private final TemplateLocationHelper locationHelper;
 
     /**
-     * 渲染 DOCX 模板，返回 DOCX 字节数组
+     * 渲染 Markdown 模板，返回 Markdown 字节数组。
      *
      * @param templateLocation 模板路径
-     * @param data             渲染数据
-     * @return DOCX 字节数组
+     * @param data 渲染数据
+     * @return Markdown 字节数组
      */
     public byte[] render(String templateLocation, Map<String, Object> data) {
-        requireDocx(templateLocation);
+        requireMd(templateLocation);
         return templateEngine.renderToBytes(templateLocation, data);
     }
 
     /**
-     * 渲染 DOCX 模板，写出 DOCX 到流
+     * 渲染 Markdown 模板，写出到流。
      *
      * @param templateLocation 模板路径
-     * @param data             渲染数据
-     * @param outputStream     输出流
+     * @param data 渲染数据
+     * @param outputStream 输出流
      */
     public void renderToStream(String templateLocation, Map<String, Object> data, OutputStream outputStream) {
-        requireDocx(templateLocation);
+        requireMd(templateLocation);
         templateEngine.renderToStream(templateLocation, data, outputStream);
     }
 
     /**
-     * 渲染 DOCX 模板，写出 DOCX 到文件
+     * 渲染 Markdown 模板，写出到文件。
      *
      * @param templateLocation 模板路径
-     * @param data             渲染数据
-     * @param filePath         输出文件完整路径
+     * @param data 渲染数据
+     * @param filePath 输出文件完整路径
      */
     public void renderToFile(String templateLocation, Map<String, Object> data, String filePath) {
-        requireDocx(templateLocation);
+        requireMd(templateLocation);
         templateEngine.renderToFile(templateLocation, data, filePath);
     }
 
     /**
-     * 渲染 DOCX 模板，写出 DOCX 到文件
+     * 渲染 Markdown 模板，写出到文件。
      *
      * @param templateLocation 模板路径
-     * @param data             渲染数据
-     * @param dir              输出目录
-     * @param fileName         输出文件名
+     * @param data 渲染数据
+     * @param dir 输出目录
+     * @param fileName 输出文件名
      */
     public void renderToFile(String templateLocation, Map<String, Object> data, String dir, String fileName) {
-        requireDocx(templateLocation);
+        requireMd(templateLocation);
         templateEngine.renderToFile(templateLocation, data, dir, fileName);
     }
 
     /**
-     * 渲染 DOCX 模板，返回 PDF 字节数组
+     * 渲染 Markdown 模板为 PDF 字节数组。
      *
-     * @param templateLocation 模板路径（仅支持 .docx）
-     * @param data             渲染数据
+     * @param templateLocation 模板路径
+     * @param data 渲染数据
      * @return PDF 字节数组
      */
     public byte[] renderPdf(String templateLocation, Map<String, Object> data) {
-        requireDocx(templateLocation);
-        return templateEngine.renderForPdf(templateLocation, data).toBytes();
+        requireMd(templateLocation);
+        return templateEngine.renderToPdf(templateLocation, data);
     }
 
     /**
-     * 渲染 DOCX 模板，写出 PDF 到流
+     * 渲染 Markdown 模板为 PDF 并写出到流。
      *
-     * @param templateLocation 模板路径（仅支持 .docx）
-     * @param data             渲染数据
-     * @param outputStream     输出流
+     * @param templateLocation 模板路径
+     * @param data 渲染数据
+     * @param outputStream 输出流
      */
     public void renderPdfToStream(String templateLocation, Map<String, Object> data, OutputStream outputStream) {
-        requireDocx(templateLocation);
-        templateEngine.renderForPdf(templateLocation, data).toStream(outputStream);
+        requireMd(templateLocation);
+        try {
+            outputStream.write(templateEngine.renderToPdf(templateLocation, data));
+        } catch (java.io.IOException e) {
+            throw TemplateRenderException.writeFailed(e);
+        }
     }
 
     /**
-     * 渲染 DOCX 模板，写出 PDF 到文件
+     * 渲染 Markdown 模板为 PDF 并写出到文件。
      *
-     * @param templateLocation 模板路径（仅支持 .docx）
-     * @param data             渲染数据
-     * @param filePath         输出文件完整路径
+     * @param templateLocation 模板路径
+     * @param data 渲染数据
+     * @param filePath 输出文件完整路径
      */
     public void renderPdfToFile(String templateLocation, Map<String, Object> data, String filePath) {
-        requireDocx(templateLocation);
-        templateEngine.renderForPdf(templateLocation, data).toFile(filePath);
+        requireMd(templateLocation);
+        try {
+            java.nio.file.Files.write(java.nio.file.Paths.get(filePath), templateEngine.renderToPdf(templateLocation, data));
+        } catch (java.io.IOException e) {
+            throw TemplateRenderException.writeFailed(e);
+        }
     }
 
-    private void requireDocx(String templateLocation) {
-        if (!locationHelper.hasSuffix(templateLocation, SimpleDocTemplateConstant.SUFFIX_DOCX)) {
+    private void requireMd(String templateLocation) {
+        if (!locationHelper.hasSuffix(templateLocation, SimpleDocTemplateConstant.SUFFIX_MD)) {
             String suffix = locationHelper.extractSuffix(locationHelper.resolveLocation(templateLocation));
-            throw TemplateRenderException.formatMismatch(ErrorMessage.DOCX_HELPER_SUFFIX_ONLY, suffix);
+            throw TemplateRenderException.formatMismatch(ErrorMessage.MD_HELPER_SUFFIX_ONLY, suffix);
         }
     }
 }

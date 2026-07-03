@@ -1,13 +1,13 @@
 package io.github.surezzzzzz.sdk.template.doc.renderer;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
-import io.github.surezzzzzz.sdk.template.doc.renderer.Renderer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -36,7 +36,15 @@ public class RendererRegistry {
      * @param renderer 渲染策略
      */
     public void register(Renderer renderer) {
-        registry.put(renderer.supportedSuffix(), renderer);
+        if (renderer == null) {
+            return;
+        }
+        String key = normalize(renderer.supportedSuffix());
+        Renderer previous = registry.put(key, renderer);
+        if (previous != null) {
+            log.warn("Renderer duplicate registration: {}, previous={}, current={}", key,
+                    previous.getClass().getName(), renderer.getClass().getName());
+        }
     }
 
     /**
@@ -46,6 +54,10 @@ public class RendererRegistry {
      * @return 渲染策略，未找到返回 null
      */
     public Renderer find(String suffix) {
-        return registry.get(suffix);
+        return registry.get(normalize(suffix));
+    }
+
+    private String normalize(String suffix) {
+        return suffix == null ? null : suffix.trim().toLowerCase(Locale.ROOT);
     }
 }

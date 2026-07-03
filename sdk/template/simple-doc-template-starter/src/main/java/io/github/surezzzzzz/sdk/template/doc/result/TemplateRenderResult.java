@@ -36,6 +36,9 @@ public class TemplateRenderResult {
      * @return OutputTarget，提供 toFile / toStream / toBytes
      */
     public OutputTarget output(OutputFormat format) {
+        if (OutputFormat.PDF == format) {
+            throw TemplateRenderException.pdfOutputNotSupported();
+        }
         OutputHandler handler = outputHandlerRegistry.find(format);
         if (handler == null) {
             throw TemplateRenderException.outputHandlerNotFound(format.getCode());

@@ -37,7 +37,7 @@ class ChartPngHelperTest {
     /**
      * 测试输出目录
      */
-    private static final Path OUTPUT_DIR = Paths.get("build/test-output/chart-png");
+    private static final Path OUTPUT_DIR = Paths.get("build/test-output/png");
 
     @Autowired
     private ChartPngHelper chartPngHelper;

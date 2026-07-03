@@ -34,6 +34,31 @@ public final class SimpleDocTemplateConstant {
     public static final String DEFAULT_TAG_PREFIX = "suredt";
 
     /**
+     * 默认最大模板大小（字节）
+     */
+    public static final long DEFAULT_MAX_TEMPLATE_BYTES = 10 * 1024 * 1024;
+
+    /**
+     * 默认最大图片大小（字节）
+     */
+    public static final long DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * 默认最大 DOCX 解压后大小（字节）
+     */
+    public static final long DEFAULT_MAX_DOCX_UNCOMPRESSED_BYTES = 50 * 1024 * 1024;
+
+    /**
+     * 默认最大 ZIP entry 数量
+     */
+    public static final int DEFAULT_MAX_ZIP_ENTRY_COUNT = 2048;
+
+    /**
+     * 是否默认允许远程资源
+     */
+    public static final boolean DEFAULT_ALLOW_REMOTE_RESOURCE = false;
+
+    /**
      * 空字符串
      */
     public static final String EMPTY = "";
@@ -92,6 +117,87 @@ public final class SimpleDocTemplateConstant {
      * 格式标识：PDF（P1）
      */
     public static final String FORMAT_PDF = "pdf";
+
+    /**
+     * PDF 模板支持后缀描述
+     */
+    public static final String PDF_TEMPLATE_SUFFIX_EXPECTED = ".docx/.md";
+
+    /**
+     * Markdown 换行符
+     */
+    public static final String MARKDOWN_LINE_SEPARATOR = "\n";
+
+    /**
+     * Markdown 表格单元格分隔符
+     */
+    public static final String MARKDOWN_TABLE_CELL_SEPARATOR = "|";
+
+    /**
+     * Markdown 图片模板，参数：description, src
+     */
+    public static final String MARKDOWN_IMAGE_TEMPLATE = "![%s](%s)";
+
+    /**
+     * SDK Markdown 图片 token 模板，参数：index
+     */
+    public static final String MARKDOWN_IMAGE_TOKEN_TEMPLATE = "suredt-img://%d";
+
+    /**
+     * HTML doctype（XML 严格格式，openhtmltopdf 要求大写）
+     */
+    public static final String HTML_DOCTYPE = "<!DOCTYPE html>";
+
+    /**
+     * HTML UTF-8 charset
+     */
+    public static final String HTML_CHARSET_UTF8 = "UTF-8";
+
+    /**
+     * URL scheme：http
+     */
+    public static final String URL_SCHEME_HTTP = "http";
+
+    /**
+     * URL scheme：https
+     */
+    public static final String URL_SCHEME_HTTPS = "https";
+
+    /**
+     * URL scheme：data
+     */
+    public static final String URL_SCHEME_DATA = "data";
+
+    /**
+     * URL scheme：file
+     */
+    public static final String URL_SCHEME_FILE = "file";
+
+    /**
+     * URL scheme：classpath
+     */
+    public static final String URL_SCHEME_CLASSPATH = "classpath";
+
+    /**
+     * URL scheme 前缀：classpath:
+     */
+    public static final String URL_SCHEME_CLASSPATH_PREFIX =
+            URL_SCHEME_CLASSPATH + ":";
+
+    /**
+     * URL scheme：jar
+     */
+    public static final String URL_SCHEME_JAR = "jar";
+
+    /**
+     * URL scheme：javascript
+     */
+    public static final String URL_SCHEME_JAVASCRIPT = "javascript";
+
+    /**
+     * URL scheme：vbscript
+     */
+    public static final String URL_SCHEME_VBSCRIPT = "vbscript";
 
     // ==================== DOCX 内部路径 ====================
 

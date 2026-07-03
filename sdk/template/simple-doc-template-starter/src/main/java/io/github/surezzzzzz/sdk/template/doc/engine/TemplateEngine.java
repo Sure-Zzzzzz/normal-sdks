@@ -2,16 +2,22 @@ package io.github.surezzzzzz.sdk.template.doc.engine;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.condition.ConditionProcessor;
-import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
+import io.github.surezzzzzz.sdk.template.doc.document.MdDocument;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.OutputHandlerRegistry;
+import io.github.surezzzzzz.sdk.template.doc.handler.pdf.HtmlPdfRenderEngine;
+import io.github.surezzzzzz.sdk.template.doc.handler.pdf.PdfFontRegistrationPlan;
+import io.github.surezzzzzz.sdk.template.doc.handler.pdf.PdfFontRegistry;
+import io.github.surezzzzzz.sdk.template.doc.html.MarkdownXhtmlRenderer;
+import io.github.surezzzzzz.sdk.template.doc.model.MarkdownPdfContext;
 import io.github.surezzzzzz.sdk.template.doc.renderer.Renderer;
 import io.github.surezzzzzz.sdk.template.doc.renderer.RendererRegistry;
 import io.github.surezzzzzz.sdk.template.doc.renderer.word.WordRenderer;
 import io.github.surezzzzzz.sdk.template.doc.result.PdfRenderResult;
 import io.github.surezzzzzz.sdk.template.doc.result.TemplateRenderResult;
+import io.github.surezzzzzz.sdk.template.doc.support.TemplateLocationHelper;
 import io.github.surezzzzzz.sdk.template.doc.support.TemplateResourceHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,23 +54,26 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TemplateEngine {
 
-    private final SimpleDocTemplateProperties properties;
     private final TemplateResourceHelper resourceHelper;
+    private final TemplateLocationHelper locationHelper;
     private final RendererRegistry rendererRegistry;
     private final OutputHandlerRegistry outputHandlerRegistry;
     private final ConditionProcessor conditionProcessor;
+    private final PdfFontRegistry pdfFontRegistry;
+    private final MarkdownXhtmlRenderer markdownXhtmlRenderer;
+    private final HtmlPdfRenderEngine htmlPdfRenderEngine;
 
     /**
      * 渲染模板，返回链式结果（核心入口）
      *
-     * @param templateLocation 模板路径。包含协议前缀（classpath:、file:、http:）时直接使用；
+     * @param templateLocation 模板路径。包含协议前缀（classpath:、file:）时直接使用；
      *                         否则拼接配置的 templateLocation 根路径
      * @param data             渲染数据
      * @return 渲染结果，可链式调用 output().toFile() / toStream() / toBytes()
      */
     public TemplateRenderResult render(String templateLocation, Map<String, Object> data) {
-        String resolved = resolveLocation(templateLocation);
-        String suffix = extractSuffix(resolved);
+        String resolved = locationHelper.resolveLocation(templateLocation);
+        String suffix = locationHelper.extractSuffix(resolved);
 
         Renderer renderer = rendererRegistry.find(suffix);
         if (renderer == null) {
@@ -126,14 +135,22 @@ public class TemplateEngine {
     // ===== PDF 输出（1.1.0）=====
 
     /**
-     * PDF 快捷方法：渲染 DOCX 模板并直接返回 PDF 字节数组
+     * PDF 快捷方法：渲染模板并直接返回 PDF 字节数组
      *
-     * @param templateLocation 模板路径（仅支持 .docx）
+     * @param templateLocation 模板路径（支持 .docx / .md）
      * @param data             渲染数据
      * @return PDF 字节数组
      */
     public byte[] renderToPdf(String templateLocation, Map<String, Object> data) {
-        return renderForPdf(templateLocation, data).toBytes();
+        String resolved = locationHelper.resolveLocation(templateLocation);
+        String suffix = locationHelper.extractSuffix(resolved);
+        if (SimpleDocTemplateConstant.SUFFIX_DOCX.equalsIgnoreCase(suffix)) {
+            return renderForPdf(templateLocation, data).toBytes();
+        }
+        if (SimpleDocTemplateConstant.SUFFIX_MD.equalsIgnoreCase(suffix)) {
+            return renderMdToPdf(templateLocation, resolved, data);
+        }
+        throw TemplateRenderException.formatMismatch(SimpleDocTemplateConstant.PDF_TEMPLATE_SUFFIX_EXPECTED, suffix);
     }
 
     /**
@@ -146,8 +163,8 @@ public class TemplateEngine {
      * @return PdfRenderResult，可调用 toFile / toStream / toBytes 输出 PDF
      */
     public PdfRenderResult renderForPdf(String templateLocation, Map<String, Object> data) {
-        String resolved = resolveLocation(templateLocation);
-        String suffix = extractSuffix(resolved);
+        String resolved = locationHelper.resolveLocation(templateLocation);
+        String suffix = locationHelper.extractSuffix(resolved);
         if (!SimpleDocTemplateConstant.SUFFIX_DOCX.equals(suffix)) {
             throw TemplateRenderException.formatMismatch(SimpleDocTemplateConstant.SUFFIX_DOCX, suffix);
         }
@@ -165,25 +182,47 @@ public class TemplateEngine {
         return ((WordRenderer) renderer).renderForPdf(processedBytes, data);
     }
 
-    private String resolveLocation(String location) {
-        if (location == null) {
-            return "";
+    private byte[] renderMdToPdf(String templateLocation, String resolved, Map<String, Object> data) {
+        try {
+            TemplateRenderResult result = render(templateLocation, data);
+            if (!(result.getDocument() instanceof MdDocument)) {
+                throw TemplateRenderException.formatMismatch(SimpleDocTemplateConstant.FORMAT_MD, result.getDocument().getFormat());
+            }
+            MdDocument document = (MdDocument) result.getDocument();
+            String markdown = new String(document.getInternalMdBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            MarkdownPdfContext context = new MarkdownPdfContext(
+                    templateLocation,
+                    resolved,
+                    buildBaseUri(resolved),
+                    document.getImageReferences(),
+                    false
+            );
+            PdfFontRegistrationPlan fontPlan = pdfFontRegistry.createPlan();
+            String xhtml = markdownXhtmlRenderer.toXhtml(markdown, fontPlan.getCssFontFamily(), context);
+            return htmlPdfRenderEngine.render(xhtml, context.getBaseUri(), fontPlan);
+        } catch (TemplateRenderException e) {
+            throw e;
+        } catch (Exception e) {
+            throw TemplateRenderException.markdownToPdfFailed(e.getMessage(), e);
         }
-        if (location.contains(":")) {
-            return location;
-        }
-        String base = properties.getTemplateLocation();
-        if (base == null || base.isEmpty()) {
-            return location;
-        }
-        return base.endsWith("/") ? base + location : base + "/" + location;
     }
 
-    private String extractSuffix(String templateLocation) {
-        if (templateLocation == null) {
-            return "";
+    private String buildBaseUri(String resolved) {
+        if (resolved == null || resolved.isEmpty()) {
+            return null;
         }
-        int lastDot = templateLocation.lastIndexOf('.');
-        return lastDot > 0 ? templateLocation.substring(lastDot) : "";
+        String classpathPrefix = SimpleDocTemplateConstant.URL_SCHEME_CLASSPATH_PREFIX;
+        if (resolved.startsWith(classpathPrefix)) {
+            String path = resolved.substring(classpathPrefix.length());
+            int slash = path.lastIndexOf('/');
+            return slash >= 0 ? classpathPrefix + path.substring(0, slash + 1) : classpathPrefix;
+        }
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(resolved);
+            java.nio.file.Path parent = path.toAbsolutePath().getParent();
+            return parent == null ? null : parent.toString();
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

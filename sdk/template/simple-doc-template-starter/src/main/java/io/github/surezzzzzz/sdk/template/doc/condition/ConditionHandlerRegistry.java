@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -35,7 +36,15 @@ public class ConditionHandlerRegistry {
      * @param handler 条件处理策略
      */
     public void register(ConditionHandler handler) {
-        registry.put(handler.supportedSuffix(), handler);
+        if (handler == null) {
+            return;
+        }
+        String key = normalize(handler.supportedSuffix());
+        ConditionHandler previous = registry.put(key, handler);
+        if (previous != null) {
+            log.warn("ConditionHandler duplicate registration: {}, previous={}, current={}", key,
+                    previous.getClass().getName(), handler.getClass().getName());
+        }
     }
 
     /**
@@ -45,6 +54,10 @@ public class ConditionHandlerRegistry {
      * @return 条件处理策略，未找到返回 null
      */
     public ConditionHandler find(String suffix) {
-        return registry.get(suffix);
+        return registry.get(normalize(suffix));
+    }
+
+    private String normalize(String suffix) {
+        return suffix == null ? null : suffix.trim().toLowerCase(Locale.ROOT);
     }
 }

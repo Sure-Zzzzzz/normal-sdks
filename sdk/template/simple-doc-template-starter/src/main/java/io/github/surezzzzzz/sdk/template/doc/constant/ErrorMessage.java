@@ -82,6 +82,56 @@ public final class ErrorMessage {
      */
     public static final String PDF_FOOTER_UNSUPPORTED = "%s不支持放入 PDF footer，请简化 footer 或改用 DOCX 输出（OutputFormat.DOCX）";
 
+    /**
+     * 输出 PDF 格式暂不支持链式 output，参数：推荐入口说明
+     */
+    public static final String PDF_OUTPUT_NOT_SUPPORTED = "TemplateRenderResult.output(OutputFormat.PDF) 暂不支持。请使用 %s";
+
+    /**
+     * Markdown 不支持的能力，参数：能力描述
+     */
+    public static final String MD_UNSUPPORTED_FEATURE = "Markdown 不支持的能力: %s";
+
+    /**
+     * Markdown 模板渲染失败，参数：原因
+     */
+    public static final String MD_RENDER_FAILED = "Markdown 模板渲染失败: %s";
+
+    /**
+     * Markdown 转 HTML 失败，参数：原因
+     */
+    public static final String MD_TO_HTML_FAILED = "Markdown 转 HTML 失败: %s";
+
+    /**
+     * Markdown 转 PDF 失败，参数：原因
+     */
+    public static final String MD_TO_PDF_FAILED = "Markdown 转 PDF 失败: %s";
+
+    /**
+     * Markdown 安全校验拒绝，参数：原因
+     */
+    public static final String MD_SECURITY_REJECTED = "Markdown 安全校验拒绝: %s";
+
+    /**
+     * HTML/XHTML 转 PDF 失败，参数：原因
+     */
+    public static final String HTML_TO_PDF_FAILED = "HTML/XHTML 转 PDF 失败: %s";
+
+    /**
+     * 推荐的 PDF 输出入口说明
+     */
+    public static final String PDF_OUTPUT_RECOMMENDED_ENTRY = "TemplateEngine.renderToPdf(...)、DocxHelper.renderPdf(...) 或 MdHelper.renderPdf(...)";
+
+    /**
+     * MdHelper 后缀错误
+     */
+    public static final String MD_HELPER_SUFFIX_ONLY = "MdHelper 仅支持 .md 模板";
+
+    /**
+     * DocxHelper 后缀错误
+     */
+    public static final String DOCX_HELPER_SUFFIX_ONLY = "DocxHelper 仅支持 .docx 模板";
+
     // ==================== SDK 条件块相关 ====================
 
     /**
@@ -145,4 +195,76 @@ public final class ErrorMessage {
      * PDF 库加载/初始化失败，参数：库名，异常信息
      */
     public static final String PDF_LIB_LOAD_FAILED = "PDF 库 [%s] 加载失败: %s";
+
+    // ==================== 图片资源相关（1.2.0）====================
+
+    /**
+     * 图片对象为空
+     */
+    public static final String IMAGE_NULL = "图片不能为空";
+
+    /**
+     * 图片路径为空
+     */
+    public static final String IMAGE_SRC_EMPTY = "图片路径不能为空";
+
+    /**
+     * 原生 Markdown 图片不支持绝对 URI，参数：src
+     */
+    public static final String IMAGE_ABSOLUTE_URI_REJECTED = "原生 Markdown 图片不支持绝对 URI: %s";
+
+    /**
+     * 不允许的图片 scheme，参数：scheme
+     */
+    public static final String IMAGE_SCHEME_REJECTED = "不允许的图片 scheme: %s";
+
+    /**
+     * 图片路径逃逸，参数：src
+     */
+    public static final String IMAGE_PATH_TRAVERSAL = "图片路径逃逸: %s";
+
+    /**
+     * 缺少 baseUri 无法解析相对图片，参数：src
+     */
+    public static final String IMAGE_BASE_URI_MISSING = "缺少 baseUri，无法解析相对图片: %s";
+
+    /**
+     * 无效的 baseUri，参数：baseUri
+     */
+    public static final String IMAGE_BASE_URI_INVALID = "无效的 baseUri: %s";
+
+    /**
+     * classpath baseUri 不应走文件解析，参数：src
+     */
+    public static final String IMAGE_CLASSPATH_BASE_MISUSE = "classpath baseUri 不应走文件解析: %s";
+
+    /**
+     * 无效的 file URI，参数：src
+     */
+    public static final String IMAGE_FILE_URI_INVALID = "无效的 file URI: %s";
+
+    /**
+     * 图片不存在，参数：路径
+     */
+    public static final String IMAGE_NOT_FOUND = "图片不存在: %s";
+
+    /**
+     * 读取图片失败，参数：路径
+     */
+    public static final String IMAGE_READ_FAILED = "读取图片失败: %s";
+
+    /**
+     * 图片 data URI 仅支持 base64
+     */
+    public static final String IMAGE_DATA_URI_BASE64_ONLY = "图片 data URI 仅支持 base64";
+
+    /**
+     * data URI 必须是 image MIME
+     */
+    public static final String IMAGE_DATA_URI_MIME_INVALID = "data URI 必须是 image MIME";
+
+    /**
+     * 图片 data URI base64 非法
+     */
+    public static final String IMAGE_DATA_URI_BASE64_INVALID = "图片 data URI base64 非法";
 }

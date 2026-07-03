@@ -84,6 +84,43 @@ public final class ErrorCode {
      */
     public static final String CONDITION_PROCESS_FAILED = "COND_003";
 
+    /**
+     * HTML/PDF 链式输出不支持
+     */
+    public static final String PDF_OUTPUT_NOT_SUPPORTED = "OUTPUT_005";
+
+    // ==================== Markdown 相关（1.2.0）====================
+
+    /**
+     * Markdown 不支持的能力
+     */
+    public static final String MARKDOWN_UNSUPPORTED_FEATURE = "MD_001";
+
+    /**
+     * Markdown 模板渲染失败
+     */
+    public static final String MARKDOWN_RENDER_FAILED = "MD_002";
+
+    /**
+     * Markdown 转 HTML 失败
+     */
+    public static final String MARKDOWN_TO_HTML_FAILED = "MD_003";
+
+    /**
+     * Markdown 转 PDF 失败
+     */
+    public static final String MARKDOWN_TO_PDF_FAILED = "MD_004";
+
+    /**
+     * Markdown 安全校验拒绝
+     */
+    public static final String MARKDOWN_SECURITY_REJECTED = "MD_005";
+
+    /**
+     * HTML/XHTML 转 PDF 失败
+     */
+    public static final String HTML_TO_PDF_FAILED = "PDF_006";
+
     // ==================== PDF 相关（1.1.0）====================
 
     /**

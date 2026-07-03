@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import javax.annotation.PostConstruct;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -36,7 +37,15 @@ public class OutputHandlerRegistry {
      * @param outputHandler 输出策略
      */
     public void register(OutputHandler outputHandler) {
-        registry.put(outputHandler.supportedFormat().getCode(), outputHandler);
+        if (outputHandler == null || outputHandler.supportedFormat() == null) {
+            return;
+        }
+        String key = normalize(outputHandler.supportedFormat().getCode());
+        OutputHandler previous = registry.put(key, outputHandler);
+        if (previous != null) {
+            log.warn("OutputHandler duplicate registration: {}, previous={}, current={}", key,
+                    previous.getClass().getName(), outputHandler.getClass().getName());
+        }
     }
 
     /**
@@ -46,7 +55,10 @@ public class OutputHandlerRegistry {
      * @return 输出策略，未找到返回 null
      */
     public OutputHandler find(OutputFormat format) {
-        return registry.get(format.getCode());
+        if (format == null) {
+            return null;
+        }
+        return registry.get(normalize(format.getCode()));
     }
 
     /**
@@ -60,6 +72,10 @@ public class OutputHandlerRegistry {
             return null;
         }
         String code = suffix.startsWith(".") ? suffix.substring(1) : suffix;
-        return registry.get(code.toLowerCase());
+        return registry.get(normalize(code));
+    }
+
+    private String normalize(String code) {
+        return code == null ? null : code.trim().toLowerCase(Locale.ROOT);
     }
 }
