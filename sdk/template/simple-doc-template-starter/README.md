@@ -9,7 +9,7 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.2.0'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.2.1'
 ```
 
 ### 2. 开启配置
@@ -215,7 +215,7 @@ byte[] pngBytes = chartPngHelper.toPng(chart, 600, 360);
 | `[suredt.img:key]` | 插入图片 | `Image` |
 | `[suredt.chart:key]` | 插入原生可编辑图表（当前仅 Word） | `Chart` |
 | `[suredt.start:key]` / `[suredt.end:key]` | 条件块（成对使用） | `Boolean`（或其他真值） |
-| `[suredt.for:key]` / `[suredt.endfor:key]` | 循环展开（成对使用，当前仅 Word 表格行） | `List<Map>` |
+| `[suredt.for:key]` / `[suredt.endfor:key]` | 循环展开（成对使用，Word 表格行 / Markdown 行块），支持任意层嵌套 | `List<Map>` |
 
 ### 文本变量
 
@@ -308,10 +308,33 @@ byte[] mdBytes = mdHelper.render("classpath:templates/report.md", data);
 byte[] pdfBytes = mdHelper.renderPdf("classpath:templates/report.md", data);
 ```
 
+1.2.1 起支持嵌套循环，内层循环项可通过变量作用域访问外层循环变量：
+
+```markdown
+[suredt.for:risks]
+## [suredt.var:rname]
+[suredt.for:measures]
+- [suredt.var:mname]
+[suredt.endfor:measures]
+[suredt.endfor:risks]
+```
+
+```java
+List<Map<String, Object>> risks = new ArrayList<>();
+Map<String, Object> risk = new HashMap<>();
+risk.put("rname", "风险A");
+risk.put("measures", Arrays.asList(
+    measure("措施1"),
+    measure("措施2")
+));
+risks.add(risk);
+data.put("risks", risks);
+```
+
 Markdown 边界：
 
 - `[suredt.var:key]` 会做 Markdown 特殊字符转义，表格行内会额外转义 `|`。
-- `[suredt.for:key]` / `[suredt.endfor:key]` 在 Markdown 中按行块展开，支持 `List<Map>`；不支持嵌套循环。
+- `[suredt.for:key]` / `[suredt.endfor:key]` 在 Markdown 中按行块展开，支持 `List<Map>`；支持任意层嵌套循环，内层循环可访问外层循环变量。
 - `[suredt.img:key]` 在 Markdown 输出中保留业务图片路径；在 Markdown → PDF 时会转为受控 data URI，不泄露内部 token。
 - `[suredt.chart:key]` 不支持 Markdown 模板；如需图表图片，请用 `ChartPngHelper` 先生成 PNG，再作为 `Image` 传入。
 - 原生 Markdown 图片用于 PDF 时只接受相对路径或 `data:image/*;base64,...`，拒绝 `http:`、`https:`、`file:`、`classpath:` 等绝对 URI。
@@ -611,7 +634,7 @@ public class ReportService {
 ## Markdown 模板制作注意事项
 
 - 占位符语法与 Word 模板一致，均为 `[suredt.指令:key]`
-- `[suredt.for:key]` / `[suredt.endfor:key]` 各自独占一行，中间为循环体；不支持嵌套循环
+- `[suredt.for:key]` / `[suredt.endfor:key]` 各自独占一行，中间为循环体；支持嵌套循环，内层循环项可访问外层循环变量
 - `[suredt.var:key]` 在表格行内会额外转义 `|`
 - `[suredt.img:key]` 不支持图表，需先用 `ChartPngHelper` 生成 PNG 再作为 `Image` 传入
 - 原生 Markdown 图片（`![alt](src)`）用于 PDF 时只接受相对路径或 `data:image/*;base64,...`，绝对 URI 会被拒绝
@@ -645,7 +668,7 @@ public class ReportService {
 | `TemplateRenderException` | `OUTPUT_004` | 渲染器类型不匹配 |
 | `TemplateRenderException` | `RENDER_001` | 渲染过程异常 |
 | `TemplateRenderException` | `RENDER_002` | 页眉/页脚中使用 chart 占位符 |
-| `TemplateRenderException` | `MD_001` | Markdown 不支持的能力（chart、嵌套循环、blockquote 等） |
+| `TemplateRenderException` | `MD_001` | Markdown 不支持的能力（chart、blockquote 等） |
 | `TemplateRenderException` | `MD_002` | Markdown 模板渲染失败 |
 | `TemplateRenderException` | `MD_003` | Markdown 转 HTML/XHTML 失败 |
 | `TemplateRenderException` | `MD_004` | Markdown 转 PDF 失败 |

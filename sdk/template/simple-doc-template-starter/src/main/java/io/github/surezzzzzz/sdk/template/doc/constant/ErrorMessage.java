@@ -149,6 +149,28 @@ public final class ErrorMessage {
      */
     public static final String CONDITION_PROCESS_FAILED = "条件块处理失败: %s";
 
+    // ==================== Markdown 循环相关（1.2.1）====================
+
+    /**
+     * 孤立的 endfor 标签，参数：标签原文
+     */
+    public static final String MD_LOOP_ORPHAN_ENDFOR = "孤立的 endfor 标签: %s";
+
+    /**
+     * 循环项必须是 Map，参数：循环 key
+     */
+    public static final String MD_LOOP_ITEM_NOT_MAP = "循环项必须是 Map: %s";
+
+    /**
+     * 循环标签 key 不匹配，参数：for 的 key，endfor 的 key
+     */
+    public static final String MD_LOOP_KEY_MISMATCH = "循环标签 key 不匹配: %s / %s";
+
+    /**
+     * 缺少 endfor 标签，参数：循环 key
+     */
+    public static final String MD_LOOP_MISSING_ENDFOR = "缺少 endfor 标签: %s";
+
     // ==================== PDF 相关（1.1.0）====================
 
     /**
