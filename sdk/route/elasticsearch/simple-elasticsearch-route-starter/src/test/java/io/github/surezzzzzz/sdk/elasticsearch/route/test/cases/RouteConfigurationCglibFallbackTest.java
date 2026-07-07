@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElastics
 import io.github.surezzzzzz.sdk.elasticsearch.route.configuration.SimpleElasticsearchRouteProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.route.extractor.IndexNameExtractor;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.DefaultWriteIndexResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RestHighLevelClient;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +70,8 @@ public class RouteConfigurationCglibFallbackTest {
                 new SimpleElasticsearchRouteConfiguration(properties, registry);
 
         try {
-            ElasticsearchRestTemplate result = configuration.elasticsearchRestTemplate(routeResolver, extractors);
+            ElasticsearchRestTemplate result = configuration.elasticsearchRestTemplate(routeResolver, extractors,
+                    new DefaultWriteIndexResolver(routeResolver, ZoneId.systemDefault()));
             log.info("单数据源返回 template = {}", result == null ? null : result.getClass().getSimpleName());
             assertNotNull(result, "单数据源场景下应该返回非 null 的 template");
         } catch (BeanCreationException e) {
@@ -97,7 +100,8 @@ public class RouteConfigurationCglibFallbackTest {
                 new SimpleElasticsearchRouteConfiguration(properties, registry);
 
         assertThrows(BeanCreationException.class,
-                () -> configuration.elasticsearchRestTemplate(routeResolver, extractors),
+                () -> configuration.elasticsearchRestTemplate(routeResolver, extractors,
+                        new DefaultWriteIndexResolver(routeResolver, ZoneId.systemDefault())),
                 "多数据源场景下 CGLIB 失败应该抛出 BeanCreationException");
         log.info("多数据源：CGLIB+JDK 均失败时正确抛出 BeanCreationException");
     }

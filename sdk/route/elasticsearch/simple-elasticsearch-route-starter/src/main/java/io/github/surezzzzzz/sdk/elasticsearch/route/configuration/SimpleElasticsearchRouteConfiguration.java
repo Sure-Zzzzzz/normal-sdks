@@ -10,7 +10,9 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.JdkRouteTemplateProxy;
 import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.RouteRoutingInterceptor;
 import io.github.surezzzzzz.sdk.elasticsearch.route.proxy.RouteTemplateProxy;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.DefaultWriteIndexResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.WriteIndexResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.RestHighLevelClient;
@@ -155,11 +157,21 @@ public class SimpleElasticsearchRouteConfiguration implements DisposableBean {
      * </ul>
      */
     @Bean
+    @ConditionalOnMissingBean(WriteIndexResolver.class)
+    public WriteIndexResolver writeIndexResolver(RouteResolver routeResolver) {
+        ZoneId globalZoneId = resolveGlobalZoneId(properties.getEffectiveWriteIndexZoneId(),
+                properties.getEffectiveWriteIndexZoneIdConfigName());
+        log.info("初始化 WriteIndexResolver，globalWriteIndexZoneId=[{}]", globalZoneId);
+        return new DefaultWriteIndexResolver(routeResolver, globalZoneId);
+    }
+
+    @Bean
     @Primary
     @ConditionalOnMissingBean(name = "elasticsearchRestTemplate")
     public ElasticsearchRestTemplate elasticsearchRestTemplate(
             RouteResolver routeResolver,
-            List<IndexNameExtractor> indexNameExtractors) {
+            List<IndexNameExtractor> indexNameExtractors,
+            WriteIndexResolver writeIndexResolver) {
 
         Map<String, ElasticsearchRestTemplate> templatesMap = routeRegistry.getTemplates();
         String defaultKey = properties.getDefaultSource();
@@ -179,11 +191,9 @@ public class SimpleElasticsearchRouteConfiguration implements DisposableBean {
                 indexNameExtractors.size());
 
         // 构建路由拦截器
-        ZoneId globalZoneId = resolveGlobalZoneId(properties.getEffectiveWriteIndexZoneId(),
-                properties.getEffectiveWriteIndexZoneIdConfigName());
         RouteRoutingInterceptor routingInterceptor = new RouteRoutingInterceptor(
                 templatesMap, defaultTemplate, routeResolver,
-                indexNameExtractors, asyncWriteExecutorMap, globalZoneId);
+                indexNameExtractors, asyncWriteExecutorMap, writeIndexResolver);
 
         ProxyType proxyType = getProxyType();
         return createProxy(proxyType, routingInterceptor, defaultTemplate, defaultClient);

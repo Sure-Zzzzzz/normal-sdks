@@ -20,7 +20,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.1.2'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -384,6 +384,55 @@ try {
 - 未检测到 `IndexCoordinates` 时，按 Spring Data Elasticsearch 3.x 兼容路径处理。
 - 当前 API 未声明 `save(Object)` / `get(String, Class)` 时，使用 HTTP 兼容调用完成写入和按 ID 查询。
 - `read-index.pattern` / `read-index-pattern` 场景下的 `get(id, Class)` 使用 `_search` + `ids` 查询，以支持通配索引读取。
+
+## 🆕 1.1.2 新功能
+
+### 1. WriteIndexResolver 接口：写索引渲染能力可复用
+
+日期分片渲染能力从 `RouteRoutingInterceptor` 内部抽取为独立 `WriteIndexResolver` 接口，
+供 route 拦截器和外部 SDK（persistence-starter）共用同一渲染实例，保证渲染结果一致。
+
+**注册方式**：`@Bean @ConditionalOnMissingBean`，用户可自定义实现替换默认行为：
+
+```java
+@SimpleElasticsearchRouteComponent
+public class CustomWriteIndexResolver implements WriteIndexResolver {
+    // 完全自定义，或 extends DefaultWriteIndexResolver 部分覆盖
+}
+```
+
+**接口方法：**
+
+```java
+// 给 raw index name，先 resolveRule 再渲染。未命中/无模板时返回原值
+String resolveWriteIndex(String rawIndex);
+
+// 给已命中的 rule，直接渲染。null/无模板时返回 null
+String resolveWriteIndex(RouteRule rule);
+
+// 核心渲染
+String renderTemplate(String template, ZoneId zoneId);
+String renderTemplate(String template);  // JVM 默认时区
+
+// 缓存管理
+void clearFormatterCache();
+int getFormatterCacheSize();
+```
+
+**两种 fallback 语义差异（外部 SDK 应使用 `resolveWriteIndex(String)`）：**
+
+| 方法 | rule 为 null | rule 无模板 | 未命中规则 |
+|------|-------------|------------|-----------|
+| `resolveWriteIndex(String)` | null | 返回 rawIndex | 返回 rawIndex |
+| `resolveWriteIndex(RouteRule)` | null | **null** | 不适用 |
+
+### 2. 拦截器职责精简
+
+`RouteRoutingInterceptor` 不再持有渲染状态（globalWriteIndexZoneId / formatterCache /
+warnedInvalidZoneIds / renderTemplate / resolveZoneId），统一委托 `WriteIndexResolver`。
+AOP 行为不变，渲染结果与 1.1.1 完全一致。
+
+---
 
 ## 🆕 1.1.1 新功能
 
@@ -803,7 +852,8 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
-- [CHANGELOG 1.1.1](./CHANGELOG.1.1.1.md) - **最新版本**
+- [CHANGELOG 1.1.2](./CHANGELOG.1.1.2.md) - **最新版本**
+- [CHANGELOG 1.1.1](./CHANGELOG.1.1.1.md)
 - [CHANGELOG 1.1.0](./CHANGELOG.1.1.0.md)
 - [CHANGELOG 1.0.10](./CHANGELOG.1.0.10.md)
 - [CHANGELOG 1.0.9](./CHANGELOG.1.0.9.md)

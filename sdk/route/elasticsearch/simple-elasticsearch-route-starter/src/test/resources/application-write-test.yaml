@@ -58,6 +58,39 @@ io:
                 read-index:
                   pattern: "tz_global-*"
 
+              # 1.1.2 端到端测试：异步写 + 日期分片（从 application.yaml 同步，确保 write-test profile 下也命中）
+              - pattern: "async_write.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                async-write: true
+                write-index:
+                  template: "async_write-{yyyy.MM.dd}"
+              - pattern: "date_shard.year.*"
+                datasource: secondary
+                type: wildcard
+                priority: 28
+                write-index:
+                  template: "date_shard_year-{yyyy}"
+                read-index:
+                  pattern: "date_shard_year-*"
+              - pattern: "date_shard.month.*"
+                datasource: secondary
+                type: wildcard
+                priority: 29
+                write-index:
+                  template: "date_shard_month-{yyyy.MM}"
+                read-index:
+                  pattern: "date_shard_month-*"
+              - pattern: "date_shard.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                write-index:
+                  template: "date_shard-{yyyy.MM.dd}"
+                read-index:
+                  pattern: "date_shard-*"
+
 logging:
   level:
     io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG
