@@ -42,6 +42,7 @@
 | + NL 直接查询（`/api/query/nl`） | **1.6.2** | 1.0.10 | + pagination/dateRange/fields/collapse 覆盖、scroll 续页 |
 | + 表达式 TEXT 字段精确匹配 / AND-OR 扁平化 | **1.6.5** | 1.0.10 | Bug Fix：`=` 操作符自动使用 `.keyword` 子字段；多条件 AND/OR 生成单层 bool |
 | + 独立计数查询（`countOnly=true`，走 `_count` API） | **1.6.6** | 1.0.10 | 仅返回 total，无文档 fetch/sort，性能远优于 `_search + size=0` |
+| + 通配符索引字段元数据合并 | **1.6.8** | 1.0.10 | Bug Fix：通配符索引 fields / query 探测从"取第一个"改为"合并全部匹配索引" |
 
 ### route-starter 各版本能力
 
@@ -75,7 +76,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.7'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.8'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"

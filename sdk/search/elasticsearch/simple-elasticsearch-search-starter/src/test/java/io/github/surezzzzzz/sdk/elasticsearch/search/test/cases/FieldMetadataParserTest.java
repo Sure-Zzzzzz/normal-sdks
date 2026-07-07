@@ -199,4 +199,241 @@ class FieldMetadataParserTest {
         def.put("type", type);
         return def;
     }
+
+    /**
+     * 构建单个字段的 mapping 定义（name: {type: xxx}），用于 {@link #properties(Map)} 的可变参数。
+     * 示例：fieldDef("name", "text") 返回 {"name": {"type": "text"}}
+     */
+    private Map<String, Object> fieldDef(String name, String type) {
+        Map<String, Object> field = new HashMap<>();
+        field.put("type", type);
+        Map<String, Object> def = new LinkedHashMap<>();
+        def.put(name, field);
+        return def;
+    }
+
+    // ========== parseAndMerge 合并测试 ==========
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> properties(Map<String, Object>... entries) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map<String, Object> entry : entries) {
+            result.putAll(entry);
+        }
+        return result;
+    }
+
+    /**
+     * 构建单字段 properties map（JDK 1.8 兼容，不用 Map.of）。
+     * 示例：singleField("title", titleA) 返回 {"title": titleA}
+     */
+    private Map<String, Object> singleField(String name, Map<String, Object> fieldDef) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put(name, fieldDef);
+        return props;
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：字段并集，新索引同名覆盖旧索引")
+    void testParseAndMergeFieldUnion() {
+        Map<String, Object> idxA = properties(
+                fieldDef("name", "keyword"),
+                fieldDef("status", "keyword"));
+        Map<String, Object> idxB = properties(
+                fieldDef("name", "text"),  // 同名字段，新索引覆盖
+                fieldDef("aptLevel", "text"));  // 新增字段
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", idxA);
+        indexProperties.put("idxB", idxB);
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("合并结果（字段并集）：{}", result.stream().map(FieldMetadata::getName).collect(Collectors.toList()));
+        assertEquals(3, result.size());
+
+        FieldMetadata nameField = result.stream().filter(f -> f.getName().equals("name")).findFirst().orElseThrow();
+        assertEquals(FieldType.TEXT, nameField.getType());  // idxB 的类型
+
+        assertTrue(result.stream().anyMatch(f -> f.getName().equals("status")));
+        assertTrue(result.stream().anyMatch(f -> f.getName().equals("aptLevel")));
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：子字段并集，最新索引的子字段胜出")
+    void testParseAndMergeSubFieldUnion() {
+        // idxA: title={type:text, fields:{keyword}}
+        Map<String, Object> titleA = new HashMap<>();
+        titleA.put("type", "text");
+        Map<String, Object> subFieldsA = new HashMap<>();
+        subFieldsA.put("keyword", fieldDef("keyword"));
+        titleA.put("fields", subFieldsA);
+
+        // idxB: title={type:text, fields:{keyword, raw}}
+        Map<String, Object> titleB = new HashMap<>();
+        titleB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        subFieldsB.put("raw", fieldDef("keyword"));
+        titleB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("title", titleA));
+        indexProperties.put("idxB", singleField("title", titleB));
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("合并结果（子字段并集）：{}", result);
+        assertEquals(1, result.size());
+        FieldMetadata titleField = result.get(0);
+        assertNotNull(titleField.getSubFields());
+        assertEquals(2, titleField.getSubFields().size());  // keyword + raw
+        assertTrue(titleField.getSubFields().containsKey("keyword"));
+        assertTrue(titleField.getSubFields().containsKey("raw"));
+        // 验证子字段的 name 属性（应为 title.keyword / title.raw）
+        FieldMetadata keywordSub = titleField.getSubFields().get("keyword");
+        assertNotNull(keywordSub);
+        assertEquals("title.keyword", keywordSub.getName());
+        assertEquals(FieldType.KEYWORD, keywordSub.getType());
+        FieldMetadata rawSub = titleField.getSubFields().get("raw");
+        assertNotNull(rawSub);
+        assertEquals("title.raw", rawSub.getName());
+        assertEquals(FieldType.KEYWORD, rawSub.getType());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：类型冲突时打 warn 日志，最新索引类型胜出")
+    void testParseAndMergeTypeConflictNewestWins() {
+        // idxA: level={type:keyword}
+        Map<String, Object> levelA = fieldDef("keyword");
+        // idxB: level={type:text, fields:{keyword}}
+        Map<String, Object> levelB = new HashMap<>();
+        levelB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        levelB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("level", levelA));
+        indexProperties.put("idxB", singleField("level", levelB));
+
+        // 验证 warn 日志发出（类型冲突时打 warn 是设计要求）
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("合并结果（类型冲突）：{}", result);
+        assertEquals(1, result.size());
+        FieldMetadata levelField = result.get(0);
+        assertEquals(FieldType.TEXT, levelField.getType());  // idxB 胜出
+        assertNotNull(levelField.getSubFields());  // idxB 有 keyword 子字段
+        assertTrue(levelField.getSubFields().containsKey("keyword"));
+        // 验证子字段的 name 属性（应为 level.keyword）
+        FieldMetadata keywordSubField = levelField.getSubFields().get("keyword");
+        assertNotNull(keywordSubField);
+        assertEquals("level.keyword", keywordSubField.getName());
+        assertEquals(FieldType.KEYWORD, keywordSubField.getType());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：空 map 返回空列表")
+    void testParseAndMergeEmpty() {
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("空 map 合并结果：{}", result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：子字段冲突时，最新索引的子字段胜出（keyword subfield 覆盖无子字段）")
+    void testParseAndMergeSubFieldConflictNewestWins() {
+        // idxA: title={type:text, fields:{keyword}}
+        Map<String, Object> titleA = new HashMap<>();
+        titleA.put("type", "text");
+        Map<String, Object> subFieldsA = new HashMap<>();
+        subFieldsA.put("keyword", fieldDef("keyword"));
+        titleA.put("fields", subFieldsA);
+
+        // idxB: title={type:text, fields:{keyword, raw}}（idxB 覆盖 idxA 的子字段并集）
+        Map<String, Object> titleB = new HashMap<>();
+        titleB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        subFieldsB.put("raw", fieldDef("keyword"));
+        titleB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("title", titleA));
+        indexProperties.put("idxB", singleField("title", titleB));
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("子字段冲突合并结果：{}", result);
+        assertEquals(1, result.size());
+        FieldMetadata titleField = result.get(0);
+        assertNotNull(titleField.getSubFields());
+        assertEquals(2, titleField.getSubFields().size());  // keyword + raw（idxB 覆盖 idxA）
+        assertTrue(titleField.getSubFields().containsKey("keyword"));
+        assertTrue(titleField.getSubFields().containsKey("raw"));
+        // 验证子字段的 name 和 type 属性
+        FieldMetadata keywordSub = titleField.getSubFields().get("keyword");
+        assertNotNull(keywordSub);
+        assertEquals("title.keyword", keywordSub.getName());
+        assertEquals(FieldType.KEYWORD, keywordSub.getType());
+        FieldMetadata rawSub = titleField.getSubFields().get("raw");
+        assertNotNull(rawSub);
+        assertEquals("title.raw", rawSub.getName());
+        assertEquals(FieldType.KEYWORD, rawSub.getType());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：老索引无子字段，新索引新增 keyword 子字段，合并后有子字段")
+    void testParseAndMergeNewSubFieldAppears() {
+        // idxA: title={type:text}（无子字段）
+        Map<String, Object> titleA = new HashMap<>();
+        titleA.put("type", "text");
+
+        // idxB: title={type:text, fields:{keyword}}（新增子字段）
+        Map<String, Object> titleB = new HashMap<>();
+        titleB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        titleB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("title", titleA));
+        indexProperties.put("idxB", singleField("title", titleB));
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        log.info("新增子字段合并结果：{}", result);
+        assertEquals(1, result.size());
+        FieldMetadata titleField = result.get(0);
+        // 最新索引是 idxB，有 keyword 子字段
+        assertNotNull(titleField.getSubFields());
+        assertEquals(1, titleField.getSubFields().size());
+        assertTrue(titleField.getSubFields().containsKey("keyword"));
+        // 验证子字段的 name 和 type 属性
+        FieldMetadata keywordSub = titleField.getSubFields().get("keyword");
+        assertNotNull(keywordSub);
+        assertEquals("title.keyword", keywordSub.getName());
+        assertEquals(FieldType.KEYWORD, keywordSub.getType());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：单索引等价于 parse 单个")
+    void testParseAndMergeSingleIndex() {
+        Map<String, Object> idxProps = properties(
+                fieldDef("name", "text"),
+                fieldDef("status", "keyword"));
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxOnly", idxProps);
+
+        List<FieldMetadata> merged = parser.parseAndMerge(indexProperties, emptyConfig());
+        List<FieldMetadata> parsed = parser.parse(idxProps, "", emptyConfig());
+
+        log.info("单索引合并 vs 解析对比：{} vs {}", merged.size(), parsed.size());
+        assertEquals(parsed.size(), merged.size());
+        assertTrue(merged.stream().anyMatch(f -> f.getName().equals("name")));
+        assertTrue(merged.stream().anyMatch(f -> f.getName().equals("status")));
+    }
 }

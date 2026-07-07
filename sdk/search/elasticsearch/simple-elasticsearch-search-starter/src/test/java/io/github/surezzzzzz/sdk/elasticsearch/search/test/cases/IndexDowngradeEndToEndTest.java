@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -103,15 +104,35 @@ class IndexDowngradeEndToEndTest {
             String indexName = DOWNGRADE_LOG_INDEX_PREFIX + current.format(formatter);
             if (!client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
                 CreateIndexRequest createRequest = new CreateIndexRequest(indexName);
-                createRequest.mapping(
-                        "{\"properties\":{" +
-                                "\"user_id\":{\"type\":\"keyword\"}," +
-                                "\"action\":{\"type\":\"keyword\"}," +
-                                "\"message\":{\"type\":\"text\"}," +
-                                "\"timestamp\":{\"type\":\"date\"}" +
-                                "}}",
-                        org.elasticsearch.xcontent.XContentType.JSON
-                );
+
+                // 字段合并测试：2024-01 无 extraField/extraField2，2024-02/03 有
+                // LocalDate.of(2024, 1, 1) ~ 2024-01-31 为第一个月
+                boolean isMonth1 = current.getMonthValue() == 1;
+                if (isMonth1) {
+                    // 月份1：基础字段，无 extraField/extraField2（模拟 2024 旧索引）
+                    createRequest.mapping(
+                            "{\"properties\":{" +
+                                    "\"user_id\":{\"type\":\"keyword\"}," +
+                                    "\"action\":{\"type\":\"keyword\"}," +
+                                    "\"message\":{\"type\":\"text\"}," +
+                                    "\"timestamp\":{\"type\":\"date\"}" +
+                                    "}}",
+                            org.elasticsearch.xcontent.XContentType.JSON
+                    );
+                } else {
+                    // 月份2/3：有 extraField(text+keyword子字段) 和 extraField2(keyword)（模拟 2025/2026 新索引）
+                    createRequest.mapping(
+                            "{\"properties\":{" +
+                                    "\"user_id\":{\"type\":\"keyword\"}," +
+                                    "\"action\":{\"type\":\"keyword\"}," +
+                                    "\"message\":{\"type\":\"text\"}," +
+                                    "\"timestamp\":{\"type\":\"date\"}," +
+                                    "\"extraField\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\"}}}," +
+                                    "\"extraField2\":{\"type\":\"keyword\"}" +
+                                    "}}",
+                            org.elasticsearch.xcontent.XContentType.JSON
+                    );
+                }
                 client.indices().create(createRequest, RequestOptions.DEFAULT);
 
                 Map<String, Object> doc = new HashMap<>();
@@ -120,12 +141,18 @@ class IndexDowngradeEndToEndTest {
                         : current.getDayOfMonth() % 3 == 1 ? "logout" : "view");
                 doc.put("message", "Test log for " + current);
                 doc.put("timestamp", current.atStartOfDay().toString());
+                if (!isMonth1) {
+                    // 只有月份 2/3 的索引有 extraField/extraField2
+                    doc.put("extraField", "level-" + current.getMonthValue());
+                    doc.put("extraField2", "v" + current.getMonthValue() + ".0");
+                }
                 client.index(new IndexRequest(indexName).id("1").source(doc), RequestOptions.DEFAULT);
             }
             current = current.plusDays(1);
             count++;
         }
-        log.info("✓ 共创建 {} 个日粒度索引（{} ~ {}）", count, from, to);
+        log.info("✓ 共创建 {} 个日粒度索引（{} ~ {}），其中月份1无extraField/extraField2，月份2/3有",
+                count, from, to);
     }
 
     // ==================== 降级功能测试 ====================
@@ -357,5 +384,136 @@ class IndexDowngradeEndToEndTest {
                 .andExpect(jsonPath("$.data.items[*].action").value(org.hamcrest.Matchers.everyItem(
                         org.hamcrest.Matchers.equalTo("login"))))
                 .andDo(result -> log.info("✓ 多条件查询降级成功"));
+    }
+
+    // ==================== 通配符索引字段合并测试 ====================
+
+    @Test
+    @Order(8)
+    @DisplayName("2.1 /fields 接口：通配符索引合并后返回全部字段（含新增的 extraField 和 extraField2）")
+    void testFieldsApiMergesAllFields() throws Exception {
+        log.info("========== 测试：/fields 接口返回合并后的全量字段 ==========");
+
+        mockMvc.perform(get("/api/indices/test_downgrade_log--*/fields")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isOk())
+                // 基础字段：所有索引都有
+                .andExpect(jsonPath("$.data.fields[*].name").value(org.hamcrest.Matchers.hasItem("user_id")))
+                .andExpect(jsonPath("$.data.fields[*].name").value(org.hamcrest.Matchers.hasItem("action")))
+                .andExpect(jsonPath("$.data.fields[*].name").value(org.hamcrest.Matchers.hasItem("timestamp")))
+                // 新增字段：来自月份 2/3 的索引
+                .andExpect(jsonPath("$.data.fields[*].name").value(org.hamcrest.Matchers.hasItem("extraField")))
+                .andExpect(jsonPath("$.data.fields[*].name").value(org.hamcrest.Matchers.hasItem("extraField2")))
+                .andDo(result -> log.info("✓ /fields 返回合并字段：{}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("2.2 /fields 接口：extraField 子字段 keyword 正确返回")
+    void testFieldsApiExtraFieldKeywordSubField() throws Exception {
+        log.info("========== 测试：extraField 的 keyword 子字段在 /fields 中返回 ==========");
+
+        mockMvc.perform(get("/api/indices/test_downgrade_log--*/fields")
+                        .characterEncoding("UTF-8"))
+                .andExpect(status().isOk())
+                // 找到 extraField 字段（type 为小写 text）
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField')].type").value("text"))
+                // extraField 的 subFields 中有 keyword（type 和 name 都为小写）
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField')].subFields.keyword.type").value("keyword"))
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField')].subFields.keyword.name").value("extraField.keyword"))
+                .andDo(result -> log.info("✓ extraField.keyword 子字段正确返回"));
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("2.3 /query 接口：带 extraField.keyword 查询不报错（字段在合并后 fieldMap 中存在）")
+    void testQueryWithExtraFieldKeyword() throws Exception {
+        log.info("========== 测试：extraField.keyword 查询成功（合并后能命中 fieldMap） ==========");
+
+        // 只查月份 2，extraField 字段有值
+        QueryRequest request = QueryRequest.builder()
+                .index("test_downgrade_log--*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from("2024-02-01")
+                        .to("2024-02-01")
+                        .build())
+                .query(QueryCondition.builder()
+                        .field("extraField.keyword")
+                        .op("EQ")
+                        .value("level-2")
+                        .build())
+                .pagination(PaginationInfo.builder().size(10).build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                // 2月份只有1天，应该查到1条
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].extraField").value("level-2"))
+                .andDo(result -> log.info("✓ extraField.keyword 查询成功，返回数据：{}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("2.4 /query 接口：带 extraField2 查询不报错（字段在合并后 fieldMap 中存在）")
+    void testQueryWithExtraField2() throws Exception {
+        log.info("========== 测试：extraField2 查询成功（合并后能命中 fieldMap） ==========");
+
+        // 只查月份 3，extraField2 字段有值
+        QueryRequest request = QueryRequest.builder()
+                .index("test_downgrade_log--*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from("2024-03-01")
+                        .to("2024-03-01")
+                        .build())
+                .query(QueryCondition.builder()
+                        .field("extraField2")
+                        .op("EQ")
+                        .value("v3.0")
+                        .build())
+                .pagination(PaginationInfo.builder().size(10).build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0].extraField2").value("v3.0"))
+                .andDo(result -> log.info("✓ extraField2 查询成功"));
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("2.5 /query 接口：多索引查询时各索引字段均有数据（extraField 在 2/3 月有值，1 月无值）")
+    void testQueryMultiMonthFieldsData() throws Exception {
+        log.info("========== 测试：跨月查询，合并字段在各索引均有正确数据 ==========");
+
+        // 查 2-3 月（两个月都有 extraField）
+        QueryRequest request = QueryRequest.builder()
+                .index("test_downgrade_log--*")
+                .dateRange(QueryRequest.DateRange.builder()
+                        .from("2024-02-15")
+                        .to("2024-03-15")
+                        .build())
+                .pagination(PaginationInfo.builder().size(10).build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                // 2月15日到3月15日跨月，2月有16天+3月有15天=31天，但ES默认去重/排序不确定，取前10条
+                .andExpect(jsonPath("$.data.total").isNumber())
+                .andExpect(jsonPath("$.data.items").isArray())
+                // 所有返回的 item 都有 user_id / action / timestamp（各月都有的字段）
+                .andDo(result -> log.info("✓ 跨月查询成功：{}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 }

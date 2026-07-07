@@ -25,9 +25,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -249,29 +247,34 @@ public class MappingManager {
         }
 
         List<String> actualIndices = new ArrayList<>(mappings.keySet());
+        Collections.sort(actualIndices);
 
-        String targetIndex;
+        List<FieldMetadata> fields = new ArrayList<>();
         if (specificIndexName != null && !specificIndexName.isEmpty()) {
             if (!mappings.containsKey(specificIndexName)) {
                 throw new MappingException(ErrorCode.SPECIFIC_INDEX_NOT_FOUND,
                         String.format(ErrorMessage.SPECIFIC_INDEX_NOT_FOUND, specificIndexName,
                                 String.join(",", actualIndices)));
             }
-            targetIndex = specificIndexName;
+            fields = parseSingleIndex(mappings.get(specificIndexName), indexConfig);
+            log.debug("Loaded field metadata from specific index: {}", specificIndexName);
         } else {
-            targetIndex = actualIndices.get(0);
-        }
-        log.debug("Loading field metadata from index: {}", targetIndex);
-
-        MappingMetadata mappingMetadata = mappings.get(targetIndex);
-        Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
-
-        List<FieldMetadata> fields = new ArrayList<>();
-        if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
-                    SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
-            fields = fieldMetadataParser.parse(propertiesMap, "", indexConfig);
+            LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+            for (String idx : actualIndices) {
+                MappingMetadata mappingMetadata = mappings.get(idx);
+                Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
+                if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
+                            SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
+                    indexProperties.put(idx, propertiesMap);
+                }
+            }
+            if (!indexProperties.isEmpty()) {
+                fields = fieldMetadataParser.parseAndMerge(indexProperties, indexConfig);
+            }
+            log.debug("Merged field metadata from {} indices: {}",
+                    indexProperties.size(), indexProperties.keySet());
         }
 
         IndexMetadata metadata = IndexMetadata.builder()
@@ -286,8 +289,28 @@ public class MappingManager {
             metadataCache.put(cacheKey, metadata);
         }
 
-        log.debug("Loaded {} fields for index: {} (from {})", fields.size(), cacheKey, targetIndex);
+        log.debug("Loaded {} fields for index: {} (merged from {} indices)",
+                fields.size(), cacheKey, actualIndices.size());
         return metadata;
+    }
+
+    /**
+     * 解析单个索引的字段元数据
+     *
+     * @param mappingMetadata 索引 mapping 元数据
+     * @param indexConfig     索引配置
+     * @return 字段元数据列表
+     */
+    private List<FieldMetadata> parseSingleIndex(MappingMetadata mappingMetadata,
+                                                 SimpleElasticsearchSearchProperties.IndexConfig indexConfig) {
+        Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
+        if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
+                    SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES);
+            return fieldMetadataParser.parse(propertiesMap, "", indexConfig);
+        }
+        return new ArrayList<>();
     }
 
     private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient,

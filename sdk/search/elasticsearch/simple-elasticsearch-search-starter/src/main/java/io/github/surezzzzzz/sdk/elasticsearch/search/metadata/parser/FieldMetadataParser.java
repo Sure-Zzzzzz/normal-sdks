@@ -8,10 +8,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 字段元数据解析器
@@ -117,5 +114,78 @@ public class FieldMetadataParser {
             }
         }
         return null;
+    }
+
+    /**
+     * 解析并合并多个索引的字段元数据（用于通配符索引场景）。
+     *
+     * <p>调用方按索引名升序传入（{@link LinkedHashMap} 保证遍历顺序），
+     * 使最新索引的字段定义在冲突时胜出。</p>
+     *
+     * <p>合并规则：</p>
+     * <ul>
+     *   <li>字段取并集，按字段名去重</li>
+     *   <li>同名字段：取最新索引的 type / format / searchable / sortable / aggregatable / sensitive / masked / reason</li>
+     *   <li>子字段（multi-fields）：取所有索引的并集，冲突时最新索引胜出</li>
+     *   <li>类型冲突：打 warn 日志，采用最新索引定义</li>
+     * </ul>
+     *
+     * @param indexProperties 索引名 -> properties 映射（升序，最新索引最后）
+     * @param indexConfig     索引配置（用于敏感字段判断）
+     * @return 合并后的字段元数据列表
+     */
+    public List<FieldMetadata> parseAndMerge(
+            LinkedHashMap<String, Map<String, Object>> indexProperties,
+            SimpleElasticsearchSearchProperties.IndexConfig indexConfig) {
+        Map<String, FieldMetadata> mergedByName = new LinkedHashMap<>();
+        for (Map.Entry<String, Map<String, Object>> entry : indexProperties.entrySet()) {
+            String indexName = entry.getKey();
+            List<FieldMetadata> parsed = parse(entry.getValue(), "", indexConfig);
+            for (FieldMetadata field : parsed) {
+                FieldMetadata existing = mergedByName.get(field.getName());
+                if (existing == null) {
+                    mergedByName.put(field.getName(), field);
+                } else {
+                    mergedByName.put(field.getName(),
+                            mergeFieldMetadata(existing, field, indexName));
+                }
+            }
+        }
+        return new ArrayList<>(mergedByName.values());
+    }
+
+    /**
+     * 合并同名字段元数据：最新索引的标量属性胜出，子字段取并集（最新胜出）。
+     *
+     * @param older          较旧索引的字段定义
+     * @param newer          较新索引的字段定义
+     * @param newerIndexName 较新索引名（用于冲突日志）
+     * @return 合并后的字段定义
+     */
+    private FieldMetadata mergeFieldMetadata(FieldMetadata older, FieldMetadata newer, String newerIndexName) {
+        if (older.getType() != newer.getType()) {
+            log.warn("字段 [{}] 类型在索引间不一致: {} -> {}，采用最新索引 [{}] 的定义",
+                    newer.getName(), older.getType(), newer.getType(), newerIndexName);
+        }
+        Map<String, FieldMetadata> mergedSubFields = new LinkedHashMap<>();
+        if (older.getSubFields() != null) {
+            mergedSubFields.putAll(older.getSubFields());
+        }
+        if (newer.getSubFields() != null) {
+            mergedSubFields.putAll(newer.getSubFields());
+        }
+        return FieldMetadata.builder()
+                .name(newer.getName())
+                .type(newer.getType())
+                .array(newer.isArray())
+                .searchable(newer.isSearchable())
+                .sortable(newer.isSortable())
+                .aggregatable(newer.isAggregatable())
+                .sensitive(newer.isSensitive())
+                .masked(newer.isMasked())
+                .format(newer.getFormat())
+                .reason(newer.getReason())
+                .subFields(mergedSubFields.isEmpty() ? null : mergedSubFields)
+                .build();
     }
 }
