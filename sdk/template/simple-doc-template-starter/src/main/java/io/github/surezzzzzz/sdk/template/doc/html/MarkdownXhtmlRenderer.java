@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.template.doc.html;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.model.MarkdownPdfContext;
@@ -12,7 +13,10 @@ import org.commonmark.ext.gfm.tables.TablesExtension;
 import org.commonmark.node.*;
 import org.commonmark.parser.Parser;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Markdown XHTML Renderer
@@ -29,9 +33,9 @@ public class MarkdownXhtmlRenderer {
     /**
      * 转换 Markdown 为 XHTML。
      *
-     * @param markdownText Markdown 文本
+     * @param markdownText  Markdown 文本
      * @param cssFontFamily CSS 字体族
-     * @param context PDF 上下文
+     * @param context       PDF 上下文
      * @return XHTML
      */
     public String toXhtml(String markdownText, String cssFontFamily, MarkdownPdfContext context) {
@@ -136,7 +140,7 @@ public class MarkdownXhtmlRenderer {
         } else if (node instanceof ThematicBreak) {
             writer.voidTag("hr", null);
         } else if (node instanceof BlockQuote) {
-            throw TemplateRenderException.markdownUnsupportedFeature("blockquote");
+            throw TemplateRenderException.markdownUnsupportedFeature(ErrorMessage.MD_BLOCKQUOTE_UNSUPPORTED);
         } else {
             renderChildren(node, writer, context);
         }

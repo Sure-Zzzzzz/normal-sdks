@@ -188,7 +188,7 @@ public class PdfOutputHandler {
             }
             return baos.toByteArray();
         } catch (IOException e) {
-            throw DocxToPdfFailedException.conversionFailed("读取 DOCX InputStream 失败", e);
+            throw DocxToPdfFailedException.conversionFailed(ErrorMessage.PDF_DOCX_INPUT_STREAM_READ_FAILED, e);
         }
     }
 

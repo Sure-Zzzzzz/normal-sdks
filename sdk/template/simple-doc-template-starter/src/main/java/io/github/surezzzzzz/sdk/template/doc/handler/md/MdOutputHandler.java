@@ -51,7 +51,7 @@ public class MdOutputHandler implements OutputHandler {
 
     private byte[] toMdBytes(Document document) {
         if (document == null) {
-            throw TemplateRenderException.markdownRenderFailed("Markdown document must not be null");
+            throw TemplateRenderException.formatMismatch(OutputFormat.MD.getCode(), null);
         }
         if (!(document instanceof MdDocument)) {
             throw TemplateRenderException.formatMismatch(OutputFormat.MD.getCode(), document.getFormat());

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import lombok.RequiredArgsConstructor;
@@ -74,7 +75,7 @@ public class TemplateLocationHelper {
      * 要求模板后缀匹配。
      *
      * @param templateLocation 模板路径
-     * @param expectedSuffix 期望后缀
+     * @param expectedSuffix   期望后缀
      */
     public void requireSuffix(String templateLocation, String expectedSuffix) {
         String resolvedLocation = resolveLocation(templateLocation);
@@ -88,7 +89,7 @@ public class TemplateLocationHelper {
      * 判断模板后缀是否匹配。
      *
      * @param templateLocation 模板路径
-     * @param expectedSuffix 期望后缀
+     * @param expectedSuffix   期望后缀
      * @return true 匹配
      */
     public boolean hasSuffix(String templateLocation, String expectedSuffix) {
@@ -179,7 +180,8 @@ public class TemplateLocationHelper {
     private void rejectPathTraversal(String location) {
         String normalized = location.replace(WINDOWS_SEPARATOR, UNIX_SEPARATOR);
         if (normalized.startsWith("../") || normalized.contains("/../") || normalized.endsWith("/..") || "..".equals(normalized)) {
-            throw TemplateRenderException.markdownSecurityRejected("模板路径不得包含路径逃逸: " + location);
+            throw TemplateRenderException.markdownSecurityRejected(
+                    String.format(ErrorMessage.TEMPLATE_PATH_TRAVERSAL, location));
         }
     }
 }

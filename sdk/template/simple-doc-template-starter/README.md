@@ -9,7 +9,7 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.2.1'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.2.2'
 ```
 
 ### 2. 开启配置
@@ -663,7 +663,7 @@ public class ReportService {
 | `TemplateNotFoundException` | `TEMPLATE_001` | 模板文件不存在 |
 | `TemplateNotFoundException` | `TEMPLATE_002` | 模板后缀无对应 Renderer |
 | `TemplateRenderException` | `OUTPUT_001` | 输出格式无对应 Handler |
-| `TemplateRenderException` | `OUTPUT_002` | Document 类型与 Handler 不匹配 |
+| `TemplateRenderException` | `OUTPUT_002` | Document 类型与 Handler 不匹配（含 MdOutputHandler 收到 null Document） |
 | `TemplateRenderException` | `OUTPUT_003` | 文件写出异常 |
 | `TemplateRenderException` | `OUTPUT_004` | 渲染器类型不匹配 |
 | `TemplateRenderException` | `RENDER_001` | 渲染过程异常 |

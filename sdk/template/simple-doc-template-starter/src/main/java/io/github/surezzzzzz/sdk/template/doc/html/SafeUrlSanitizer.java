@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.template.doc.html;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 
@@ -32,7 +33,8 @@ public class SafeUrlSanitizer {
                 || SimpleDocTemplateConstant.URL_SCHEME_HTTPS.equals(scheme)) {
             return trimmed;
         }
-        throw TemplateRenderException.markdownSecurityRejected("不允许的链接 scheme: " + scheme);
+        throw TemplateRenderException.markdownSecurityRejected(
+                String.format(ErrorMessage.URL_LINK_SCHEME_REJECTED, scheme));
     }
 
     /**
@@ -51,14 +53,15 @@ public class SafeUrlSanitizer {
         if (scheme.isEmpty() || SimpleDocTemplateConstant.URL_SCHEME_DATA.equals(scheme)) {
             return trimmed;
         }
-        throw TemplateRenderException.markdownSecurityRejected("不允许的图片 scheme: " + scheme);
+        throw TemplateRenderException.markdownSecurityRejected(
+                String.format(ErrorMessage.IMAGE_SCHEME_REJECTED, scheme));
     }
 
     private void rejectControl(String url) {
         for (int i = 0; i < url.length(); i++) {
             char c = url.charAt(i);
             if (c < 0x20 || c == 0x7F) {
-                throw TemplateRenderException.markdownSecurityRejected("URL 包含控制字符");
+                throw TemplateRenderException.markdownSecurityRejected(ErrorMessage.URL_CONTROL_CHAR_REJECTED);
             }
         }
     }

@@ -1,12 +1,16 @@
 package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.exception.DocxToPdfFailedException;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import io.github.surezzzzzz.sdk.template.doc.handler.pdf.PdfOutputHandler;
 import lombok.RequiredArgsConstructor;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -42,7 +46,7 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(InputStream inputStream) {
-        return pdfOutputHandler.convertToPdf(toByteArray(inputStream, "读取 DOCX 输入流失败"));
+        return pdfOutputHandler.convertToPdf(toByteArray(inputStream, ErrorMessage.PDF_DOCX_INPUT_STREAM_READ_FAILED));
     }
 
     /**
@@ -52,7 +56,8 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(File file) {
-        return fromDocx(toByteArray(file.toPath(), String.format("读取 DOCX 文件失败: %s", file.getAbsolutePath())));
+        return fromDocx(toByteArray(file.toPath(),
+                String.format(ErrorMessage.PDF_DOCX_FILE_READ_FAILED, file.getAbsolutePath())));
     }
 
     /**
@@ -62,7 +67,8 @@ public class PdfConvertHelper {
      * @return PDF 字节数组
      */
     public byte[] fromDocx(Path path) {
-        return fromDocx(toByteArray(path, String.format("读取 DOCX 文件失败: %s", path)));
+        return fromDocx(toByteArray(path,
+                String.format(ErrorMessage.PDF_DOCX_FILE_READ_FAILED, path)));
     }
 
     /**
@@ -75,7 +81,7 @@ public class PdfConvertHelper {
         try {
             pdfOutputHandler.convertToPdf(docxBytes, outputStream);
         } catch (IOException e) {
-            throw DocxToPdfFailedException.conversionFailed("写出 PDF 流失败", e);
+            throw DocxToPdfFailedException.conversionFailed(ErrorMessage.PDF_STREAM_WRITE_FAILED, e);
         }
     }
 
@@ -86,7 +92,7 @@ public class PdfConvertHelper {
      * @param outputStream PDF 输出流
      */
     public void fromDocx(InputStream inputStream, OutputStream outputStream) {
-        fromDocx(toByteArray(inputStream, "读取 DOCX 输入流失败"), outputStream);
+        fromDocx(toByteArray(inputStream, ErrorMessage.PDF_DOCX_INPUT_STREAM_READ_FAILED), outputStream);
     }
 
     /**
@@ -110,7 +116,7 @@ public class PdfConvertHelper {
             Files.write(pdfPath, fromDocx(docxPath));
         } catch (IOException e) {
             throw DocxToPdfFailedException.conversionFailed(
-                    String.format("写出 PDF 文件失败: %s", pdfPath), e);
+                    String.format(ErrorMessage.PDF_FILE_WRITE_FAILED, pdfPath), e);
         }
     }
 

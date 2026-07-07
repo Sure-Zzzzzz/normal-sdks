@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class LimitedInputStreamHelper {
      * @return 字节数组
      */
     public byte[] readTemplateBytes(InputStream inputStream) {
-        return readLimited(inputStream, properties.getMaxTemplateBytes(), "模板超过最大大小限制");
+        return readLimited(inputStream, properties.getMaxTemplateBytes(), ErrorMessage.TEMPLATE_SIZE_LIMIT_EXCEEDED);
     }
 
     /**
@@ -40,15 +41,15 @@ public class LimitedInputStreamHelper {
      * @return 字节数组
      */
     public byte[] readImageBytes(InputStream inputStream) {
-        return readLimited(inputStream, properties.getMaxImageBytes(), "图片超过最大大小限制");
+        return readLimited(inputStream, properties.getMaxImageBytes(), ErrorMessage.IMAGE_SIZE_LIMIT_EXCEEDED);
     }
 
     /**
      * 受限读取输入流。
      *
      * @param inputStream 输入流
-     * @param maxBytes 最大字节数
-     * @param message 错误消息
+     * @param maxBytes    最大字节数
+     * @param message     错误消息
      * @return 字节数组
      */
     public byte[] readLimited(InputStream inputStream, long maxBytes, String message) {
@@ -64,7 +65,8 @@ public class LimitedInputStreamHelper {
             while ((len = inputStream.read(buffer)) != -1) {
                 total += len;
                 if (total > limit) {
-                    throw TemplateRenderException.markdownSecurityRejected(message + ": " + maxBytes);
+                    throw TemplateRenderException.markdownSecurityRejected(
+                            String.format(ErrorMessage.RESOURCE_SIZE_LIMIT_EXCEEDED_FORMAT, message, maxBytes));
                 }
                 baos.write(buffer, 0, len);
             }

@@ -172,7 +172,8 @@ public class MdRenderer implements Renderer {
             if (value == null) {
                 sb.append(SimpleDocTemplateConstant.EMPTY);
             } else if (!(value instanceof Image)) {
-                throw TemplateRenderException.markdownRenderFailed("图片变量必须是 Image: " + key);
+                throw TemplateRenderException.markdownRenderFailed(
+                        String.format(ErrorMessage.MD_IMAGE_VARIABLE_NOT_IMAGE, key));
             } else {
                 Image image = (Image) value;
                 String src;
@@ -192,7 +193,7 @@ public class MdRenderer implements Renderer {
 
     private void detectChart(String text) {
         if (text != null && text.contains(tagHelper.chartPrefix())) {
-            throw TemplateRenderException.markdownUnsupportedFeature("Markdown chart");
+            throw TemplateRenderException.markdownUnsupportedFeature(ErrorMessage.MD_CHART_UNSUPPORTED);
         }
     }
 

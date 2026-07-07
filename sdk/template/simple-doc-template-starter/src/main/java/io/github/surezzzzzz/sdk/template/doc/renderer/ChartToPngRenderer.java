@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.template.doc.renderer;
 
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.ChartPngGenerationException;
 import io.github.surezzzzzz.sdk.template.doc.exception.FontNotFoundException;
@@ -22,7 +23,7 @@ import org.jfree.chart.ui.RectangleEdge;
 import org.jfree.data.category.DefaultCategoryDataset;
 import org.jfree.data.general.DefaultPieDataset;
 
-import java.awt.Font;
+import java.awt.*;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -232,7 +233,7 @@ public class ChartToPngRenderer {
     /**
      * BarRenderer.itemMargin 是同 category 内多 series 之间的间距比例（0..1）。
      * OOXML gapWidth 是相邻 category 之间的间距占柱宽百分比，这里取一个折中映射：
-     *   margin = clamp(gap / (gap + 100), 0.0, 0.95)
+     * margin = clamp(gap / (gap + 100), 0.0, 0.95)
      * 这样 gapWidth=150 → margin≈0.6；gapWidth=50 → margin≈0.33；与 Office 视觉接近。
      */
     private void applyBarGapWidth(BarRenderer barRenderer, Chart chart) {
@@ -347,7 +348,8 @@ public class ChartToPngRenderer {
     private Font loadCjkFont(List<String> fontPaths) {
         if (fontPaths == null || fontPaths.isEmpty()) {
             throw FontNotFoundException.unsupported(
-                    "未配置 simple-doc-template.font-paths，chart PNG 渲染需要至少一个可用字体文件");
+                    String.format(ErrorMessage.FONT_PATHS_NOT_CONFIGURED,
+                            SimpleDocTemplateConstant.FONT_PATHS_CONFIG_KEY));
         }
         for (String pathStr : fontPaths) {
             Path p = Paths.get(pathStr);
@@ -361,7 +363,8 @@ public class ChartToPngRenderer {
             }
         }
         throw FontNotFoundException.unsupported(
-                "simple-doc-template.font-paths 中没有可用的字体文件: " + fontPaths);
+                String.format(ErrorMessage.FONT_PATHS_NO_USABLE_FONT,
+                        SimpleDocTemplateConstant.FONT_PATHS_CONFIG_KEY, fontPaths));
     }
 
     private Font scanDir(Path dir) {

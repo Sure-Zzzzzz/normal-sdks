@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.template.doc.condition;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.ConditionBlockException;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
@@ -91,7 +92,7 @@ public class MdConditionHandler implements ConditionHandler {
             } else if (isEndfor(trim)) {
                 inLoop = false;
             } else if (inLoop && (isStart(trim) || isEnd(trim))) {
-                throw TemplateRenderException.markdownUnsupportedFeature("循环内条件块");
+                throw TemplateRenderException.markdownUnsupportedFeature(ErrorMessage.MD_CONDITION_INSIDE_LOOP);
             }
         }
     }

@@ -19,6 +19,11 @@ public final class SimpleDocTemplateConstant {
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.template.doc";
 
     /**
+     * 字体路径配置 key（font-paths）
+     */
+    public static final String FONT_PATHS_CONFIG_KEY = CONFIG_PREFIX + ".font-paths";
+
+    /**
      * 默认是否启用
      */
     public static final boolean DEFAULT_ENABLE = false;

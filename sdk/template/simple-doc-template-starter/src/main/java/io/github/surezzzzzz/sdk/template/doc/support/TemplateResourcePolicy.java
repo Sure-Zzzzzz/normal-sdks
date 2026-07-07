@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.support;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.exception.TemplateRenderException;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,8 @@ public class TemplateResourcePolicy {
      */
     public void validateTemplateLocation(String location) {
         if (isRemote(location) && !properties.isAllowRemoteResource()) {
-            throw TemplateRenderException.markdownSecurityRejected("远程模板默认禁用: " + location);
+            throw TemplateRenderException.markdownSecurityRejected(
+                    String.format(ErrorMessage.REMOTE_TEMPLATE_DISABLED, location));
         }
     }
 
@@ -40,7 +42,8 @@ public class TemplateResourcePolicy {
      */
     public void validateImageSource(String src) {
         if (isRemote(src) && !properties.isAllowRemoteResource()) {
-            throw TemplateRenderException.markdownSecurityRejected("远程图片默认禁用: " + src);
+            throw TemplateRenderException.markdownSecurityRejected(
+                    String.format(ErrorMessage.REMOTE_IMAGE_DISABLED, src));
         }
     }
 

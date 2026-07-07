@@ -171,6 +171,42 @@ public final class ErrorMessage {
      */
     public static final String MD_LOOP_MISSING_ENDFOR = "缺少 endfor 标签: %s";
 
+    // ==================== Markdown 能力描述（1.2.2）====================
+
+    /**
+     * Markdown 不支持循环内条件块（作为 markdownUnsupportedFeature 参数）
+     */
+    public static final String MD_CONDITION_INSIDE_LOOP = "循环内条件块";
+
+    /**
+     * Markdown 不支持 chart（作为 markdownUnsupportedFeature 参数）
+     */
+    public static final String MD_CHART_UNSUPPORTED = "Markdown chart";
+
+    /**
+     * Markdown 不支持 blockquote（作为 markdownUnsupportedFeature 参数）
+     */
+    public static final String MD_BLOCKQUOTE_UNSUPPORTED = "blockquote";
+
+    // ==================== 图片变量相关（1.2.2）====================
+
+    /**
+     * 图片变量类型错误，参数：变量 key
+     */
+    public static final String MD_IMAGE_VARIABLE_NOT_IMAGE = "图片变量必须是 Image: %s";
+
+    // ==================== PDF 字体配置相关（1.2.2）====================
+
+    /**
+     * 字体路径未配置，参数：字体配置 key
+     */
+    public static final String FONT_PATHS_NOT_CONFIGURED = "未配置 %s，chart PNG 渲染需要至少一个可用字体文件";
+
+    /**
+     * 字体路径无可用字体，参数：字体配置 key，配置的路径列表
+     */
+    public static final String FONT_PATHS_NO_USABLE_FONT = "%s 中没有可用的字体文件: %s";
+
     // ==================== PDF 相关（1.1.0）====================
 
     /**
@@ -192,6 +228,16 @@ public final class ErrorMessage {
      * PDF 流写出失败
      */
     public static final String PDF_STREAM_WRITE_FAILED = "PDF 流写出失败";
+
+    /**
+     * 读取 DOCX 输入流失败
+     */
+    public static final String PDF_DOCX_INPUT_STREAM_READ_FAILED = "读取 DOCX 输入流失败";
+
+    /**
+     * 读取 DOCX 文件失败，参数：文件路径
+     */
+    public static final String PDF_DOCX_FILE_READ_FAILED = "读取 DOCX 文件失败: %s";
 
     /**
      * DOCX 缺少关键 XML 或 rels 文件
@@ -289,4 +335,50 @@ public final class ErrorMessage {
      * 图片 data URI base64 非法
      */
     public static final String IMAGE_DATA_URI_BASE64_INVALID = "图片 data URI base64 非法";
+
+    // ==================== URL 安全相关（1.2.2）====================
+
+    /**
+     * 链接 scheme 不允许，参数：scheme
+     */
+    public static final String URL_LINK_SCHEME_REJECTED = "不允许的链接 scheme: %s";
+
+    /**
+     * URL 包含控制字符
+     */
+    public static final String URL_CONTROL_CHAR_REJECTED = "URL 包含控制字符";
+
+    /**
+     * 模板路径逃逸，参数：路径
+     */
+    public static final String TEMPLATE_PATH_TRAVERSAL = "模板路径不得包含路径逃逸: %s";
+
+    // ==================== 远程资源相关（1.2.2）====================
+
+    /**
+     * 远程模板默认禁用，参数：路径
+     */
+    public static final String REMOTE_TEMPLATE_DISABLED = "远程模板默认禁用: %s";
+
+    /**
+     * 远程图片默认禁用，参数：路径
+     */
+    public static final String REMOTE_IMAGE_DISABLED = "远程图片默认禁用: %s";
+
+    // ==================== 资源大小限制相关（1.2.2）====================
+
+    /**
+     * 模板超过最大大小限制
+     */
+    public static final String TEMPLATE_SIZE_LIMIT_EXCEEDED = "模板超过最大大小限制";
+
+    /**
+     * 图片超过最大大小限制
+     */
+    public static final String IMAGE_SIZE_LIMIT_EXCEEDED = "图片超过最大大小限制";
+
+    /**
+     * 资源大小超限格式，参数：限制描述，限制值
+     */
+    public static final String RESOURCE_SIZE_LIMIT_EXCEEDED_FORMAT = "%s: %s";
 }

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.template.doc.renderer.word;
 
 import io.github.surezzzzzz.sdk.template.doc.annotation.SimpleDocTemplateComponent;
 import io.github.surezzzzzz.sdk.template.doc.configuration.SimpleDocTemplateProperties;
+import io.github.surezzzzzz.sdk.template.doc.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.template.doc.constant.SimpleDocTemplateConstant;
 import io.github.surezzzzzz.sdk.template.doc.document.Document;
 import io.github.surezzzzzz.sdk.template.doc.document.WordDocument;
@@ -277,7 +278,7 @@ public class WordRenderer implements Renderer {
      * 处理页眉/页脚中的段落
      */
     private void processHeadersAndFooters(XWPFDocument doc, Map<String, Object> data,
-                                         List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
+                                          List<ChartPlaceholderInfo> chartPlaceholders, int contentWidthPx) {
         for (XWPFHeader header : doc.getHeaderList()) {
             for (XWPFParagraph para : header.getParagraphs()) {
                 processParagraphText(para, data);
@@ -614,7 +615,8 @@ public class WordRenderer implements Renderer {
         List<String> fontPaths = properties.getFontPaths();
         if (fontPaths == null || fontPaths.isEmpty()) {
             throw FontNotFoundException.unsupported(
-                    "未配置 simple-doc-template.font-paths，chart PNG 渲染需要至少一个可用字体文件");
+                    String.format(ErrorMessage.FONT_PATHS_NOT_CONFIGURED,
+                            SimpleDocTemplateConstant.FONT_PATHS_CONFIG_KEY));
         }
         for (String pathStr : fontPaths) {
             Path p = Paths.get(pathStr);
@@ -634,7 +636,8 @@ public class WordRenderer implements Renderer {
             }
         }
         throw FontNotFoundException.unsupported(
-                "simple-doc-template.font-paths 中没有可用的字体文件: " + fontPaths);
+                String.format(ErrorMessage.FONT_PATHS_NO_USABLE_FONT,
+                        SimpleDocTemplateConstant.FONT_PATHS_CONFIG_KEY, fontPaths));
     }
 
     private java.awt.Font tryLoadFontFromDirectory(Path dir) {
