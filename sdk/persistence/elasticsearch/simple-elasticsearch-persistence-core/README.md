@@ -136,6 +136,7 @@ Bulk 批量项，支持混合操作类型。
 
 ## 版本历史
 
+- `1.0.1`：`UpdateOptions` 新增 `upsertDoc`（兜底初始化文档）和 `scriptedUpsert`（scripted_upsert 语义），支持文档不存在时通过 Painless 脚本初始化字段
 - `1.0.0`：初始版本，提供写操作核心模型、枚举常量、事件定义
 
 ## 注意事项
