@@ -10,8 +10,6 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.ByQu
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteByQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryTaskResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceEsRequestHelper;
-import org.elasticsearch.index.reindex.BulkByScrollResponse;
 
 /**
  * Delete By Query Executor
@@ -49,17 +47,7 @@ public class DeleteByQueryExecutor extends AbstractPersistenceExecutor<DeleteByQ
             context.setTaskId(taskId);
             return ByQueryTaskResult.builder().completed(false).taskId(taskId).datasource(datasource).index(request.getIndex()).build();
         }
-        BulkByScrollResponse response = writeApiHelper.deleteByQuery(datasource,
-                PersistenceEsRequestHelper.buildDeleteByQueryRequest(request));
-        return ByQueryTaskResult.builder()
-                .completed(true)
-                .datasource(datasource)
-                .index(request.getIndex())
-                .total(response.getTotal())
-                .deleted(response.getDeleted())
-                .versionConflicts(response.getVersionConflicts())
-                .tookMs(response.getTook().millis())
-                .build();
+        return writeApiHelper.deleteByQuerySync(datasource, request);
     }
 
     @Override

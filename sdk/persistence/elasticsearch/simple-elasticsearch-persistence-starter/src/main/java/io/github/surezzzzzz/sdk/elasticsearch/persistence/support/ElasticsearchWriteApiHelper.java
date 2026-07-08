@@ -18,9 +18,6 @@ import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.*;
-import org.elasticsearch.index.reindex.BulkByScrollResponse;
-import org.elasticsearch.index.reindex.DeleteByQueryRequest;
-import org.elasticsearch.index.reindex.UpdateByQueryRequest;
 
 import java.io.InputStream;
 import java.util.*;
@@ -58,14 +55,18 @@ public class ElasticsearchWriteApiHelper {
         return client.bulk(request, RequestOptions.DEFAULT);
     }
 
-    public BulkByScrollResponse updateByQuery(String datasource, UpdateByQueryRequest request) throws Exception {
-        RestHighLevelClient client = registry.getHighLevelClient(datasource);
-        return client.updateByQuery(request, RequestOptions.DEFAULT);
+    public ByQueryTaskResult updateByQuerySync(String datasource,
+                                               io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateByQueryRequest request) throws Exception {
+        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.UPDATE_BY_QUERY_PATH_TEMPLATE, request.getIndex());
+        String body = buildUpdateByQueryBody(request);
+        return executeByQuerySync(datasource, request.getIndex(), endpoint, body, true);
     }
 
-    public BulkByScrollResponse deleteByQuery(String datasource, DeleteByQueryRequest request) throws Exception {
-        RestHighLevelClient client = registry.getHighLevelClient(datasource);
-        return client.deleteByQuery(request, RequestOptions.DEFAULT);
+    public ByQueryTaskResult deleteByQuerySync(String datasource,
+                                               io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteByQueryRequest request) throws Exception {
+        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.DELETE_BY_QUERY_PATH_TEMPLATE, request.getIndex());
+        String body = buildDeleteByQueryBody(request);
+        return executeByQuerySync(datasource, request.getIndex(), endpoint, body, false);
     }
 
     /**
@@ -95,7 +96,7 @@ public class ElasticsearchWriteApiHelper {
     public ByQueryTaskResult getTask(String datasource, String taskId) throws Exception {
         RestClient client = registry.getLowLevelClient(datasource);
         String endpoint = String.format(SimpleElasticsearchPersistenceConstant.TASK_PATH_TEMPLATE, taskId);
-        Response response = client.performRequest(new Request("GET", endpoint));
+        Response response = client.performRequest(new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_GET, endpoint));
         Map<String, Object> body = parseBody(response);
 
         boolean completed = Boolean.TRUE.equals(body.get("completed"));
@@ -125,10 +126,38 @@ public class ElasticsearchWriteApiHelper {
         return builder.build();
     }
 
+    private ByQueryTaskResult executeByQuerySync(String datasource, String index, String endpoint, String body,
+                                                 boolean updateOperation) throws Exception {
+        RestClient client = registry.getLowLevelClient(datasource);
+        Request request = new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_POST, endpoint);
+        request.addParameter(SimpleElasticsearchPersistenceConstant.PARAM_WAIT_FOR_COMPLETION,
+                SimpleElasticsearchPersistenceConstant.PARAM_VALUE_TRUE);
+        if (body != null) {
+            request.setJsonEntity(body);
+        }
+        Response response = client.performRequest(request);
+        Map<String, Object> responseBody = parseBody(response);
+        ByQueryTaskResult.ByQueryTaskResultBuilder builder = ByQueryTaskResult.builder()
+                .completed(true)
+                .datasource(datasource)
+                .index(index)
+                .total(toLong(responseBody.get("total")))
+                .versionConflicts(toLong(responseBody.get("version_conflicts")))
+                .tookMs(toLong(responseBody.get("took")))
+                .failureList(extractFailures(responseBody.get("failures")));
+        if (updateOperation) {
+            builder.updated(toLong(responseBody.get("updated")));
+        } else {
+            builder.deleted(toLong(responseBody.get("deleted")));
+        }
+        return builder.build();
+    }
+
     private String submitByLowLevel(String datasource, String endpoint, String body) throws Exception {
         RestClient client = registry.getLowLevelClient(datasource);
-        Request request = new Request("POST", endpoint);
-        request.addParameter("wait_for_completion", "false");
+        Request request = new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_POST, endpoint);
+        request.addParameter(SimpleElasticsearchPersistenceConstant.PARAM_WAIT_FOR_COMPLETION,
+                SimpleElasticsearchPersistenceConstant.PARAM_VALUE_FALSE);
         if (body != null) {
             request.setJsonEntity(body);
         }
@@ -216,7 +245,7 @@ public class ElasticsearchWriteApiHelper {
             body.put("refresh", options.getRefresh());
         }
         if (options.getTimeoutMs() != null) {
-            body.put("timeout", options.getTimeoutMs() + "ms");
+            body.put("timeout", options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
         }
         if (options.getSlices() != null) {
             body.put("slices", options.getSlices());

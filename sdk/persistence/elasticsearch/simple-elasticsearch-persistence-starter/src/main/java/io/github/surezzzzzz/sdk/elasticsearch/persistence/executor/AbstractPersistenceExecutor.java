@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.event.EsPersisten
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.exception.SimpleElasticsearchPersistenceException;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.PersistenceExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.PersistenceRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.processor.DocumentPreProcessorChain;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.ElasticsearchWriteApiHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.validator.PersistenceRequestValidatorRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
@@ -40,6 +41,9 @@ public abstract class AbstractPersistenceExecutor<Req extends PersistenceRequest
 
     @Autowired
     protected ElasticsearchWriteApiHelper writeApiHelper;
+
+    @Autowired
+    protected DocumentPreProcessorChain documentPreProcessorChain;
 
     @Autowired
     protected PersistenceRequestValidatorRegistry validatorRegistry;

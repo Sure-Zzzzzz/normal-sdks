@@ -10,8 +10,6 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.ByQu
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateByQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryTaskResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceEsRequestHelper;
-import org.elasticsearch.index.reindex.BulkByScrollResponse;
 
 /**
  * Update By Query Executor
@@ -49,17 +47,7 @@ public class UpdateByQueryExecutor extends AbstractPersistenceExecutor<UpdateByQ
             context.setTaskId(taskId);
             return ByQueryTaskResult.builder().completed(false).taskId(taskId).datasource(datasource).index(request.getIndex()).build();
         }
-        BulkByScrollResponse response = writeApiHelper.updateByQuery(datasource,
-                PersistenceEsRequestHelper.buildUpdateByQueryRequest(request));
-        return ByQueryTaskResult.builder()
-                .completed(true)
-                .datasource(datasource)
-                .index(request.getIndex())
-                .total(response.getTotal())
-                .updated(response.getUpdated())
-                .versionConflicts(response.getVersionConflicts())
-                .tookMs(response.getTook().millis())
-                .build();
+        return writeApiHelper.updateByQuerySync(datasource, request);
     }
 
     @Override

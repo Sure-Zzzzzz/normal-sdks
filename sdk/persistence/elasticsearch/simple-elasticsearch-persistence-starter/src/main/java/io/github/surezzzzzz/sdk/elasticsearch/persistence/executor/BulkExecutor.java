@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.persistence.executor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.annotation.SimpleElasticsearchPersistenceComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.PersistenceOperationType;
@@ -10,6 +11,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.Bul
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.processor.DocumentProcessContext;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.DocumentMetadataHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceEsRequestHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceResultHelper;
@@ -67,9 +69,22 @@ public class BulkExecutor extends AbstractPersistenceExecutor<BulkRequest, BulkR
     protected BulkResult doExecute(BulkRequest request, String datasource, PersistenceExecutionContext context) throws Exception {
         List<String> renderedIndices = new ArrayList<>(request.getItemList().size());
         if (!CollectionUtils.isEmpty(request.getItemList())) {
-            for (BulkItem item : request.getItemList()) {
-                String rawIndex = StringUtils.hasText(item.getIndex()) ? item.getIndex() : request.getDefaultIndex();
-                renderedIndices.add(resolveWriteIndex(rawIndex));
+            for (int i = 0; i < request.getItemList().size(); i++) {
+                BulkItem item = request.getItemList().get(i);
+                String rawIndex = resolveItemIndex(request, item);
+                String renderedIndex = resolveWriteIndex(rawIndex);
+                renderedIndices.add(renderedIndex);
+                if (isDocumentWrite(item)) {
+                    Object processedDocument = documentPreProcessorChain.process(item.getDocument(), DocumentProcessContext.builder()
+                            .operationType(toOperationType(item.getType()))
+                            .rawIndex(rawIndex)
+                            .renderedIndex(renderedIndex)
+                            .datasource(datasource)
+                            .bulk(true)
+                            .bulkItemIndex(i)
+                            .build());
+                    item.setDocument(processedDocument);
+                }
             }
         }
         BulkResponse response = writeApiHelper.bulk(datasource,
@@ -97,5 +112,14 @@ public class BulkExecutor extends AbstractPersistenceExecutor<BulkRequest, BulkR
             return DocumentMetadataHelper.resolveIndex(item.getDocument(), null);
         }
         return null;
+    }
+
+    private boolean isDocumentWrite(BulkItem item) {
+        return item != null && item.getDocument() != null
+                && (BulkItemType.INDEX == item.getType() || BulkItemType.CREATE == item.getType());
+    }
+
+    private PersistenceOperationType toOperationType(BulkItemType type) {
+        return BulkItemType.CREATE == type ? PersistenceOperationType.CREATE : PersistenceOperationType.INDEX;
     }
 }

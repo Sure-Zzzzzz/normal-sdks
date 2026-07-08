@@ -11,6 +11,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.Bulk
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryTaskResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.PersistenceEngine;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.processor.DocumentPreProcessor;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.processor.DocumentProcessContext;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.DocumentIdHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.FieldValueNormalizerHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.test.EsApiHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.test.PersistenceTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.test.SimpleElasticsearchPersistenceTestApplication;
@@ -21,9 +25,10 @@ import org.elasticsearch.client.RestClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.test.context.ActiveProfiles;
@@ -43,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = SimpleElasticsearchPersistenceTestApplication.class)
+@SpringBootTest(classes = {SimpleElasticsearchPersistenceTestApplication.class, PersistenceEngineIntegrationTest.ProcessorTestConfiguration.class})
 @ActiveProfiles(resolver = PersistenceTestProfilesResolver.class)
 class PersistenceEngineIntegrationTest {
 
@@ -55,11 +60,6 @@ class PersistenceEngineIntegrationTest {
 
     @Autowired
     private SimpleElasticsearchRouteRegistry registry;
-
-    private void assumeByQueryCompatible() {
-        // ES 6.8.x client 会自动带 ignore_throttled；ES 6.2.2 服务端不识别该参数。
-        Assumptions.assumeFalse("2.2.x".equals(System.getProperty("spring.profiles.active")));
-    }
 
     @Data
     @Document(indexName = "test_persistence_e2e")
@@ -76,6 +76,39 @@ class PersistenceEngineIntegrationTest {
         @Id
         private String id;
         private String name;
+    }
+
+    @Data
+    @Document(indexName = "test_persistence_e2e")
+    static class ProcessorDoc {
+        @Id
+        private String id;
+        private String name;
+        private long createTime;
+        private long updateTime;
+    }
+
+    @TestConfiguration
+    static class ProcessorTestConfiguration {
+
+        @Bean
+        DocumentPreProcessor processorDocPreProcessor() {
+            return new DocumentPreProcessor() {
+                @Override
+                public boolean supports(Class<?> entityClass) {
+                    return ProcessorDoc.class.isAssignableFrom(entityClass);
+                }
+
+                @Override
+                public Object process(Object document, DocumentProcessContext context) {
+                    ProcessorDoc doc = (ProcessorDoc) document;
+                    doc.setName(FieldValueNormalizerHelper.trimLowerCase(doc.getName()));
+                    doc.setCreateTime(context.isBulk() ? context.getBulkItemIndex() + 1L : 1L);
+                    doc.setUpdateTime(context.isBulk() ? 200L : 100L);
+                    return doc;
+                }
+            };
+        }
     }
 
     @Test
@@ -238,6 +271,77 @@ class PersistenceEngineIntegrationTest {
     }
 
     @Test
+    @DisplayName("index：DocumentPreProcessor 写入前处理生效")
+    void testIndexPreProcessor() throws Exception {
+        ProcessorDoc doc = new ProcessorDoc();
+        doc.setId("e2e-processor-index-1");
+        doc.setName("  MIXED-NAME  ");
+
+        PersistenceResult result = engine.index(doc);
+        log.info("processor index 结果={}", result);
+        assertTrue(result.isSuccess(), "processor index 应成功");
+
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+        Map<String, Object> saved = EsApiHelper.getDoc(secondaryClient(), INDEX, "e2e-processor-index-1");
+        log.info("processor index 查回 source={}", saved);
+        assertEquals("mixed-name", saved.get("name"), "name 应被标准化");
+        assertEquals(1L, ((Number) saved.get("createTime")).longValue(), "createTime 应被 processor 设置");
+        assertEquals(100L, ((Number) saved.get("updateTime")).longValue(), "updateTime 应被 processor 设置");
+    }
+
+    @Test
+    @DisplayName("bulk：DocumentPreProcessor 对每个 index/create item 生效")
+    void testBulkPreProcessor() throws Exception {
+        ProcessorDoc doc1 = new ProcessorDoc();
+        doc1.setId("e2e-processor-bulk-1");
+        doc1.setName("  BULK-A  ");
+        ProcessorDoc doc2 = new ProcessorDoc();
+        doc2.setId("e2e-processor-bulk-2");
+        doc2.setName("  BULK-B  ");
+        List<BulkItem> items = new ArrayList<BulkItem>();
+        items.add(BulkItem.builder().type(BulkItemType.INDEX).document(doc1).id(doc1.getId()).build());
+        items.add(BulkItem.builder().type(BulkItemType.CREATE).document(doc2).id(doc2.getId()).build());
+
+        BulkResult result = engine.bulk(BulkRequest.builder().defaultIndex(INDEX).itemList(items).build());
+        log.info("processor bulk 结果={}", result);
+        assertTrue(result.isSuccess(), "processor bulk 应成功");
+
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+        Map<String, Object> saved1 = EsApiHelper.getDoc(secondaryClient(), INDEX, "e2e-processor-bulk-1");
+        Map<String, Object> saved2 = EsApiHelper.getDoc(secondaryClient(), INDEX, "e2e-processor-bulk-2");
+        log.info("processor bulk 查回 saved1={}, saved2={}", saved1, saved2);
+        assertEquals("bulk-a", saved1.get("name"), "第一条 name 应被标准化");
+        assertEquals("bulk-b", saved2.get("name"), "第二条 name 应被标准化");
+        assertEquals(1L, ((Number) saved1.get("createTime")).longValue(), "第一条 bulkItemIndex 应为 0");
+        assertEquals(2L, ((Number) saved2.get("createTime")).longValue(), "第二条 bulkItemIndex 应为 1");
+        assertEquals(200L, ((Number) saved1.get("updateTime")).longValue(), "bulk updateTime 应被设置");
+        assertEquals(200L, ((Number) saved2.get("updateTime")).longValue(), "bulk updateTime 应被设置");
+    }
+
+    @Test
+    @DisplayName("typed：withIdResolver 可配合 DocumentIdHelper 生成稳定 ID")
+    void testTypedIdResolverWithDocumentIdHelper() throws Exception {
+        TestDoc doc = new TestDoc();
+        doc.setId("ignored-id");
+        doc.setName("typed-name");
+        doc.setTs(101L);
+        String expectedId = DocumentIdHelper.sha1(doc.getName(), doc.getTs());
+
+        PersistenceResult result = engine.forEntity(TestDoc.class)
+                .withIdResolver(item -> DocumentIdHelper.sha1(item.getName(), item.getTs()))
+                .index(doc);
+        log.info("typed idResolver 结果={}", result);
+        assertTrue(result.isSuccess(), "typed index 应成功");
+        assertEquals(expectedId, result.getId(), "result id 应来自 idResolver");
+
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+        Map<String, Object> saved = EsApiHelper.getDoc(secondaryClient(), INDEX, expectedId);
+        log.info("typed idResolver 查回 source={}", saved);
+        assertNotNull(saved, "按 helper 生成 ID 应可查回");
+        assertEquals("typed-name", saved.get("name"), "name 字段应一致");
+    }
+
+    @Test
     @DisplayName("delete：删除后文档不存在")
     void testDelete() throws Exception {
         TestDoc doc = new TestDoc();
@@ -289,7 +393,6 @@ class PersistenceEngineIntegrationTest {
     @Test
     @DisplayName("updateByQuery：按 term 条件批量更新字段，updated 计数准确，读回验证")
     void testUpdateByQuery() throws Exception {
-        assumeByQueryCompatible();
         // 写入 3 条，其中 2 条 name=ubq-target
         TestDoc d1 = new TestDoc();
         d1.setId("e2e-ubq-1");
@@ -331,7 +434,6 @@ class PersistenceEngineIntegrationTest {
     @Test
     @DisplayName("deleteByQuery：按 term 条件批量删除，deleted 计数准确，读回验证")
     void testDeleteByQuery() throws Exception {
-        assumeByQueryCompatible();
         // 写入 3 条，其中 2 条 name=dbq-target
         TestDoc d1 = new TestDoc();
         d1.setId("e2e-dbq-1");

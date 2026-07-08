@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.Persistence
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.IndexRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.processor.DocumentProcessContext;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.DocumentMetadataHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceEsRequestHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.PersistenceResultHelper;
@@ -39,7 +40,8 @@ public class IndexExecutor extends AbstractPersistenceExecutor<IndexRequest, Per
 
     @Override
     protected PersistenceResult doExecute(IndexRequest request, String datasource, PersistenceExecutionContext context) throws Exception {
-        String renderedIndex = resolveWriteIndex(context.getIndex());
+        String rawIndex = context.getIndex();
+        String renderedIndex = resolveWriteIndex(rawIndex);
         context.setIndex(renderedIndex);
         IndexOperationType operationType = request.getOptions() == null ? IndexOperationType.INDEX : request.getOptions().getOperationType();
         if (operationType == null) {
@@ -48,6 +50,14 @@ public class IndexExecutor extends AbstractPersistenceExecutor<IndexRequest, Per
         PersistenceOperationType persistenceOperationType = IndexOperationType.CREATE == operationType
                 ? PersistenceOperationType.CREATE : PersistenceOperationType.INDEX;
         context.setOperationType(persistenceOperationType);
+        Object processedDocument = documentPreProcessorChain.process(request.getDocument(), DocumentProcessContext.builder()
+                .operationType(persistenceOperationType)
+                .rawIndex(rawIndex)
+                .renderedIndex(renderedIndex)
+                .datasource(datasource)
+                .bulk(false)
+                .build());
+        request.setDocument(processedDocument);
         DocWriteResponse response = writeApiHelper.index(datasource,
                 PersistenceEsRequestHelper.buildIndexRequest(request, renderedIndex));
         return PersistenceResultHelper.fromDocWriteResponse(response, datasource, persistenceOperationType, context);

@@ -8,6 +8,8 @@
 - 🔗 **零侵入继承路由**：自动继承 route 的多数据源路由、日期分片索引渲染、async-write 规则
 - ⚡ **双模式异步**：SDK 级 `indexAsync`（CompletableFuture）与 route 级 `async-write`（fire-and-forget）并存，各自独立
 - 🧩 **强类型门面**：`engine.forEntity(MyDoc.class)` 省去重复传类型，支持自定义 validator / indexResolver / idResolver
+- 🧱 **写入前扩展链**：`DocumentPreProcessor` 支持写入前补字段、清洗字段、生成 ID
+- 🧰 **写入辅助工具**：`DocumentIdHelper` / `FieldValueNormalizerHelper` 提供稳定 ID 与字段标准化能力
 - 🔍 **按查询批量操作**：`updateByQuery` / `deleteByQuery` 支持同步等待和服务端异步（返回 taskId 可轮询）
 - 📡 **事件总线**：每次写操作后发布 `EsPersistenceEvent`（成功）/ `EsPersistenceErrorEvent`（失败），可接入审计、监控
 - 🔌 **多版本兼容**：支持 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9，覆盖 ES 6.x / 7.x
@@ -20,7 +22,7 @@ persistence starter 已内置 route starter 依赖，无需重复声明：
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.0.1'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -46,11 +48,11 @@ io:
               primary:
                 urls: http://localhost:9200
             rules:
-              - pattern: "app-event.*"
+              - pattern: "test-event.*"
                 type: wildcard
                 datasource: primary
                 write-index:
-                  template: "app-event-{yyyy.MM.dd}"
+                  template: "test-event-{yyyy.MM.dd}"
 ```
 
 ### 2. 启用 persistence
@@ -68,13 +70,13 @@ io:
 ### 3. 声明实体
 
 ```java
-@Document(indexName = "app-event.click")
+@Document(indexName = "test-event.type-a"
 @Data
-public class ClickEvent {
+public class TestEvent {
     @Id
     private String id;
-    private String userId;
-    private String eventType;
+    private String fieldA;
+    private String fieldB;
     private long ts;
 }
 ```
@@ -85,21 +87,33 @@ public class ClickEvent {
 @Autowired
 private PersistenceEngine engine;
 
+TestEvent doc1 = new TestEvent();
+doc1.setId("test-1");
+doc1.setFieldA("field-a-1");
+doc1.setFieldB("field-b-1");
+doc1.setTs(now);
+
 // index（upsert 语义，已存在则覆盖）
-PersistenceResult result = engine.index(new ClickEvent("evt-1", "u001", "click", now));
-// result.getId()        → "evt-1"
+PersistenceResult result = engine.index(doc1);
+// result.getId()        → "test-1"
 // result.getDatasource() → "primary"
 // result.getTookMs()     → 实际耗时
 
+TestEvent doc2 = new TestEvent();
+doc2.setId("test-2");
+doc2.setFieldA("field-a-2");
+doc2.setFieldB("field-b-2");
+doc2.setTs(now);
+
 // create（仅新建，已存在抛 PersistenceExecutionException）
-engine.create(new ClickEvent("evt-2", "u002", "scroll", now));
+engine.create(doc2);
 
 // 局部更新（doc 字段）
 Map<String, Object> fields = new LinkedHashMap<String, Object>();
-fields.put("eventType", "dblclick");
+fields.put("fieldB", "field-b-updated");
 engine.update(UpdateRequest.builder()
-    .index("app-event-2026.07.08")
-    .id("evt-1")
+    .index("test-event-2026.07.08")
+    .id("test-1")
     .fieldMap(fields)
     .build());
 
@@ -107,16 +121,16 @@ engine.update(UpdateRequest.builder()
 Map<String, Object> params = new LinkedHashMap<String, Object>();
 params.put("newTs", newTs);
 engine.update(UpdateRequest.builder()
-    .index("app-event-2026.07.08")
-    .id("evt-1")
+    .index("test-event-2026.07.08")
+    .id("test-1")
     .scriptSource("ctx._source.ts = params.newTs")
     .scriptParamMap(params)
     .build());
 
 // 按 ID 删除
 engine.delete(DeleteRequest.builder()
-    .index("app-event-2026.07.08")
-    .id("evt-1")
+    .index("test-event-2026.07.08")
+    .id("test-1")
     .build());
 ```
 
@@ -130,8 +144,8 @@ Map<String, Object> params = new LinkedHashMap<String, Object>();
 params.put("now", now);
 
 engine.update(UpdateRequest.builder()
-    .index("app-event-2026.07.08")
-    .id("evt-1")
+    .index("test-event-2026.07.08")
+    .id("test-1")
     .scriptSource(
         "if (ctx._source.createTime == null) { ctx._source.createTime = params.now } " +
         "ctx._source.updateTime = params.now")
@@ -145,14 +159,41 @@ engine.update(UpdateRequest.builder()
 
 `scriptedUpsert(true)` 会让 ES 在文档不存在时也执行脚本；`upsertDoc` 可以传空 Map，用来触发 scripted_upsert。
 
-### 6. 批量写入
+### 6. 写入前处理与 Helper
+
+`DocumentPreProcessor` 会在 ES 请求构建前执行，适合统一补字段、清洗字段或生成 ID：
+
+```java
+@Component
+public class TestEventPreProcessor implements DocumentPreProcessor {
+
+    @Override
+    public boolean supports(Class<?> entityClass) {
+        return TestEvent.class.isAssignableFrom(entityClass);
+    }
+
+    @Override
+    public Object process(Object document, DocumentProcessContext context) {
+        TestEvent event = (TestEvent) document;
+        event.setFieldB(FieldValueNormalizerHelper.trimLowerCase(event.getFieldB()));
+        if (event.getId() == null) {
+            event.setId(DocumentIdHelper.sha1(event.getFieldA(), event.getFieldB(), event.getTs()));
+        }
+        return event;
+    }
+}
+```
+
+`DocumentPreProcessor` 对 `index/create/bulk index/bulk create` 生效，不处理局部 update、script update、delete、byQuery。
+
+### 7. 批量写入
 
 ```java
 // 便捷批量 index（同类文档，走 @Document 解析索引名）
-List<ClickEvent> eventList = new ArrayList<ClickEvent>();
-eventList.add(evt1);
-eventList.add(evt2);
-eventList.add(evt3);
+List<TestEvent> eventList = new ArrayList<TestEvent>();
+eventList.add(doc1);
+eventList.add(doc2);
+eventList.add(doc3);
 BulkResult bulk = engine.bulkIndex(eventList, BulkOptions.builder().timeoutMs(30000L).build());
 // bulk.getTotal()    → 3
 // bulk.getSucceeded() → 成功条数
@@ -160,36 +201,36 @@ BulkResult bulk = engine.bulkIndex(eventList, BulkOptions.builder().timeoutMs(30
 
 // 混合 bulk（不同操作类型）
 Map<String, Object> updateFields = new LinkedHashMap<String, Object>();
-updateFields.put("eventType", "dblclick");
+updateFields.put("fieldB", "field-b-updated");
 List<BulkItem> items = new ArrayList<BulkItem>();
-items.add(BulkItem.builder().type(BulkItemType.INDEX).document(evt4).id("evt-4").build());
-items.add(BulkItem.builder().type(BulkItemType.UPDATE).id("evt-1").fieldMap(updateFields).build());
-items.add(BulkItem.builder().type(BulkItemType.DELETE).id("evt-old").build());
+items.add(BulkItem.builder().type(BulkItemType.INDEX).document(doc4).id("test-4").build());
+items.add(BulkItem.builder().type(BulkItemType.UPDATE).id("test-1").fieldMap(updateFields).build());
+items.add(BulkItem.builder().type(BulkItemType.DELETE).id("test-old").build());
 BulkRequest req = BulkRequest.builder()
-    .defaultIndex("app-event-2026.07.08")
+    .defaultIndex("test-event-2026.07.08")
     .itemList(items)
     .build();
 BulkResult result = engine.bulk(req);
 ```
 
-### 6. 客户端异步
+### 8. 客户端异步
 
 ```java
-CompletableFuture<PersistenceResult> future = engine.indexAsync(evt5);
+CompletableFuture<PersistenceResult> future = engine.indexAsync(doc5);
 future.thenAccept(r -> log.info("写入完成 index={} took={}ms", r.getIndex(), r.getTookMs()));
 
 // 也有 createAsync / updateAsync / deleteAsync / bulkAsync / bulkIndexAsync
 ```
 
-### 7. 按查询批量操作
+### 9. 按查询批量操作
 
 ```java
 // 同步等待完成
 Map<String, Object> updateTerms = new LinkedHashMap<String, Object>();
-updateTerms.put("eventType.keyword", "click");
+updateTerms.put("fieldB.keyword", "field-b-1");
 ByQueryTaskResult result = engine.updateByQuery(
     UpdateByQueryRequest.builder()
-        .index("app-event-2026.07.08")
+        .index("test-event-2026.07.08")
         .query(PersistenceQuery.builder()
             .termMap(updateTerms)
             .build())
@@ -202,7 +243,7 @@ Map<String, Object> deleteTerms = new LinkedHashMap<String, Object>();
 deleteTerms.put("processed", true);
 ByQueryTaskResult task = engine.deleteByQuery(
     DeleteByQueryRequest.builder()
-        .index("app-event-2026.07.07")
+        .index("test-event-2026.07.07")
         .query(PersistenceQuery.builder()
             .termMap(deleteTerms)
             .build())
@@ -213,21 +254,21 @@ if (!task.isCompleted()) {
 }
 ```
 
-### 8. 强类型门面
+### 10. 强类型门面
 
 ```java
 // 绑定实体类型，省去重复传 Class
-TypedPersistence<ClickEvent> typed = engine.forEntity(ClickEvent.class);
-typed.index(evt);
-typed.create(evt);
-typed.bulkIndex(evtList, BulkOptions.builder().build());
+TypedPersistence<TestEvent> typed = engine.forEntity(TestEvent.class);
+typed.index(doc);
+typed.create(doc);
+typed.bulkIndex(docList, BulkOptions.builder().build());
 
 // 自定义 validator / resolver
-TypedPersistence<ClickEvent> safe = engine.forEntity(ClickEvent.class)
+TypedPersistence<TestEvent> safe = engine.forEntity(TestEvent.class)
     .withValidator(doc -> {
-        if (doc.getUserId() == null) throw new IllegalArgumentException("userId 不能为空");
+        if (doc.getFieldA() == null) throw new IllegalArgumentException("fieldA 不能为空");
     })
-    .withIdResolver(doc -> "evt-" + doc.getTs());
+    .withIdResolver(doc -> "test-" + doc.getTs());
 ```
 
 ---
@@ -310,10 +351,8 @@ persistence 自身无需配置数据源和路由规则，这些全部由 route �
 
 | Spring Boot | ES 客户端 | ES 服务端 | 验证级别 |
 |---|---|---|---|
-| 2.2.x | 6.8.x | 6.x | 主链路全量集成测试；byQuery 在 ES 6.2.2 下因 `ignore_throttled` 参数兼容问题暂不支持 |
+| 2.2.x | 6.8.x | 6.x | 全量集成测试，byQuery 走 low-level REST 兼容 ES 6.2.2 |
 | 2.3.12 | 7.6.x | 7.x | 全量集成测试 |
 | 2.4.5 | 7.9.x | 7.x | 全量集成测试 |
 | 2.7.9 | 7.17.x | 7.x | 全量集成测试（主版本） |
-
-> 说明：Spring Boot 2.2.x 搭配的 ES 6.8.x 客户端在 byQuery 请求中会自动带 `ignore_throttled` 参数，ES 6.2.2 服务端不识别该参数。后续版本会补齐低版本 ES 的 byQuery 兼容路径。
 
