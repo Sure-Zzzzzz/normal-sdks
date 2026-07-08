@@ -31,5 +31,11 @@ public class UpdateRequestValidator implements PersistenceRequestValidator<Updat
             throw new PersistenceExecutionException(ErrorCode.REQUEST_VALIDATION_FAILED,
                     String.format(ErrorMessage.REQUEST_VALIDATION_FAILED, "fieldMap 和 scriptSource 不能同时为空"));
         }
+        WriteOptionsValidator.validate(request.getOptions());
+        if (request.getOptions() != null && request.getOptions().getRetryOnConflict() != null
+                && request.getOptions().getRetryOnConflict() < 0) {
+            throw new PersistenceExecutionException(ErrorCode.REQUEST_VALIDATION_FAILED,
+                    String.format(ErrorMessage.REQUEST_VALIDATION_FAILED, "retryOnConflict 不能小于 0"));
+        }
     }
 }

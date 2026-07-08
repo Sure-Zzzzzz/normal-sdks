@@ -30,5 +30,6 @@ public class DeleteRequestValidator implements PersistenceRequestValidator<Delet
             throw new PersistenceExecutionException(ErrorCode.REQUEST_VALIDATION_FAILED,
                     String.format(ErrorMessage.REQUEST_VALIDATION_FAILED, "index/documentClass 不能同时为空"));
         }
+        WriteOptionsValidator.validate(request.getOptions());
     }
 }

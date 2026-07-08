@@ -10,6 +10,9 @@
 - 🧩 **强类型门面**：`engine.forEntity(MyDoc.class)` 省去重复传类型，支持自定义 validator / indexResolver / idResolver
 - 🧱 **写入前扩展链**：`DocumentPreProcessor` 支持写入前补字段、清洗字段、生成 ID
 - 🧰 **写入辅助工具**：`DocumentIdHelper` / `FieldValueNormalizerHelper` 提供稳定 ID 与字段标准化能力
+- **写入参数透传**：支持 routing / pipeline / refreshPolicy / retryOnConflict / detectNoop / versionType / notFoundAsSuccess
+- **Bulk 可靠性增强**：`batchSize` 真实分批，`continueOnFailure` 控制失败后是否继续，失败明细包含 status / errorType / errorReason / retryable
+- **Bulk 失败分类扩展**：`BulkFailureClassifier` 支持自定义可重试判断，默认覆盖 408 / 429 / 500 / 502 / 503 / 504
 - 🔍 **按查询批量操作**：`updateByQuery` / `deleteByQuery` 支持同步等待和服务端异步（返回 taskId 可轮询）
 - 📡 **事件总线**：每次写操作后发布 `EsPersistenceEvent`（成功）/ `EsPersistenceErrorEvent`（失败），可接入审计、监控
 - 🔌 **多版本兼容**：支持 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9，覆盖 ES 6.x / 7.x
@@ -22,12 +25,20 @@ persistence starter 已内置 route starter 依赖，无需重复声明：
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.0.2'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
 }
 ```
+
+### 版本关系
+
+| starter | core | route-starter | 说明 |
+|---------|------|---------------|------|
+| 1.0.2 | 1.0.2 | 1.1.2 | 写入参数透传、bulk 分批与失败明细、TypedPersistence 增强 |
+| 1.0.1 | 1.0.1 | 1.1.2 | 写入前处理链、稳定 ID/字段标准化 Helper、2.2.x / ES 6.2.2 byQuery 兼容 |
+| 1.0.0 | 1.0.1 | 1.1.2 | 首个写侧 starter 版本，支持 scriptedUpsert 透传 |
 
 ## 🔧 快速开始
 
@@ -70,7 +81,7 @@ io:
 ### 3. 声明实体
 
 ```java
-@Document(indexName = "test-event.type-a"
+@Document(indexName = "test-event.type-a")
 @Data
 public class TestEvent {
     @Id
@@ -159,6 +170,47 @@ engine.update(UpdateRequest.builder()
 
 `scriptedUpsert(true)` 会让 ES 在文档不存在时也执行脚本；`upsertDoc` 可以传空 Map，用来触发 scripted_upsert。
 
+#### 写入参数透传
+
+1.0.2 起，常用 ES 写入参数会透传到实际请求：
+
+```java
+engine.index(IndexRequest.builder()
+    .index("test-event-2026.07.08")
+    .id("test-1")
+    .document(doc1)
+    .options(IndexOptions.builder()
+        .routing("test-route")
+        .pipeline("test-pipeline")
+        .refreshPolicy(SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_WAIT_FOR)
+        .timeoutMs(30000L)
+        .build())
+    .build());
+
+engine.update(UpdateRequest.builder()
+    .index("test-event-2026.07.08")
+    .id("test-1")
+    .fieldMap(fields)
+    .options(UpdateOptions.builder()
+        .routing("test-route")
+        .retryOnConflict(3)
+        .detectNoop(true)
+        .build())
+    .build());
+
+engine.delete(DeleteRequest.builder()
+    .index("test-event-2026.07.08")
+    .id("test-missing")
+    .options(DeleteOptions.builder()
+        .routing("test-route")
+        .versionType("external")
+        .notFoundAsSuccess(false)
+        .build())
+    .build());
+```
+
+`refreshPolicy` 优先级高于历史 `refresh` 布尔值，支持 `true` / `false` / `wait_for`。`notFoundAsSuccess` 默认为兼容旧版本语义：`null` 或 `true` 时 delete 返回 `not_found` 仍视为成功，显式 `false` 时视为失败。
+
 ### 6. 写入前处理与 Helper
 
 `DocumentPreProcessor` 会在 ES 请求构建前执行，适合统一补字段、清洗字段或生成 ID：
@@ -194,23 +246,64 @@ List<TestEvent> eventList = new ArrayList<TestEvent>();
 eventList.add(doc1);
 eventList.add(doc2);
 eventList.add(doc3);
-BulkResult bulk = engine.bulkIndex(eventList, BulkOptions.builder().timeoutMs(30000L).build());
-// bulk.getTotal()    → 3
-// bulk.getSucceeded() → 成功条数
-// bulk.isHasFailure() → 是否有部分失败
+BulkResult bulk = engine.bulkIndex(eventList, BulkOptions.builder()
+    .batchSize(500)
+    .continueOnFailure(true)
+    .timeoutMs(30000L)
+    .refreshPolicy(SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_WAIT_FOR)
+    .build());
+// bulk.getTotal()          → 3
+// bulk.getSucceeded()      → 成功条数
+// bulk.isHasFailure()      → 是否存在 item 失败
+// bulk.getBatchTotal()     → 实际提交批次数
+// bulk.getStoppedOnFailure() → 是否因失败批次停止后续提交
 
 // 混合 bulk（不同操作类型）
 Map<String, Object> updateFields = new LinkedHashMap<String, Object>();
 updateFields.put("fieldB", "field-b-updated");
 List<BulkItem> items = new ArrayList<BulkItem>();
-items.add(BulkItem.builder().type(BulkItemType.INDEX).document(doc4).id("test-4").build());
-items.add(BulkItem.builder().type(BulkItemType.UPDATE).id("test-1").fieldMap(updateFields).build());
+items.add(BulkItem.builder()
+    .type(BulkItemType.INDEX)
+    .document(doc4)
+    .id("test-4")
+    .routing("test-route")
+    .pipeline("test-pipeline")
+    .build());
+items.add(BulkItem.builder()
+    .type(BulkItemType.UPDATE)
+    .id("test-1")
+    .fieldMap(updateFields)
+    .retryOnConflict(3)
+    .detectNoop(true)
+    .build());
 items.add(BulkItem.builder().type(BulkItemType.DELETE).id("test-old").build());
 BulkRequest req = BulkRequest.builder()
     .defaultIndex("test-event-2026.07.08")
     .itemList(items)
+    .options(BulkOptions.builder()
+        .batchSize(500)
+        .continueOnFailure(false)
+        .routing("default-route")
+        .build())
     .build();
 BulkResult result = engine.bulk(req);
+
+for (BulkItemFailure failure : result.getFailureList()) {
+    log.warn("bulk item failed index={} id={} status={} retryable={}",
+        failure.getIndex(), failure.getId(), failure.getStatus(), failure.getRetryable());
+}
+```
+
+`BulkOptions.batchSize` 会真实拆分批次提交；`continueOnFailure=false` 时，某批出现 item failure 后停止提交后续批次。已提交部分会体现在 `batchTotal`、`batchSucceeded`、`batchFailed`、`stoppedOnFailure` 和 `partial` 字段中。
+
+如果需要自定义失败是否可重试，可覆盖默认 `BulkFailureClassifier`：
+
+```java
+@Bean
+public BulkFailureClassifier bulkFailureClassifier() {
+    return (status, errorType, errorReason) -> Integer.valueOf(
+        SimpleElasticsearchPersistenceCoreConstant.HTTP_STATUS_TOO_MANY_REQUESTS).equals(status);
+}
 ```
 
 ### 8. 客户端异步
@@ -262,14 +355,30 @@ TypedPersistence<TestEvent> typed = engine.forEntity(TestEvent.class);
 typed.index(doc);
 typed.create(doc);
 typed.bulkIndex(docList, BulkOptions.builder().build());
+typed.bulkCreate(docList, BulkOptions.builder().batchSize(500).build());
 
-// 自定义 validator / resolver
+// 自定义 validator / resolver / 默认 options
 TypedPersistence<TestEvent> safe = engine.forEntity(TestEvent.class)
     .withValidator(doc -> {
         if (doc.getFieldA() == null) throw new IllegalArgumentException("fieldA 不能为空");
     })
-    .withIdResolver(doc -> "test-" + doc.getTs());
+    .withIdResolver(doc -> "test-" + doc.getTs())
+    .withRoutingResolver(doc -> "route-" + doc.getFieldA())
+    .withDefaultIndexOptions(IndexOptions.builder()
+        .refreshPolicy(SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_WAIT_FOR)
+        .pipeline("test-pipeline")
+        .build())
+    .withDefaultBulkOptions(BulkOptions.builder()
+        .batchSize(500)
+        .continueOnFailure(true)
+        .build());
+
+safe.index(doc);
+safe.create(doc);
+safe.bulkCreate(docList);
 ```
+
+`create` / `createAsync` / `bulkCreate` / `bulkCreateAsync` 会强制使用 CREATE 语义，即使默认 `IndexOptions` 中误传了 INDEX，也不会覆盖 create 语义。
 
 ---
 

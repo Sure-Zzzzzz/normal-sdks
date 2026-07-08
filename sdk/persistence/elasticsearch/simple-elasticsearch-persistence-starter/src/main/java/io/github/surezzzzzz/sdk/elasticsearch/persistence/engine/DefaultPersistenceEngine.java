@@ -154,7 +154,7 @@ public class DefaultPersistenceEngine implements PersistenceEngine {
 
     @Override
     public <T> TypedPersistence<T> forEntity(Class<T> entityClass) {
-        return new DefaultTypedPersistence<>(this, entityClass, null, null, new ArrayList<>());
+        return new DefaultTypedPersistence<>(this, entityClass, null, null, new ArrayList<>(), null, null, null);
     }
 
     private void applyIndexOperationType(IndexRequest request, IndexOperationType operationType) {

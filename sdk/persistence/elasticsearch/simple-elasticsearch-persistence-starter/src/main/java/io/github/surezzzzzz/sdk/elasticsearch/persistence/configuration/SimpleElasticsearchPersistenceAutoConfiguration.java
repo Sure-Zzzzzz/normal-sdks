@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.configuration;
 
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.SimpleElasticsearchPersistencePackage;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.annotation.SimpleElasticsearchPersistenceComponent;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.classifier.BulkFailureClassifier;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.classifier.DefaultBulkFailureClassifier;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.constant.SimpleElasticsearchPersistenceConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.DefaultPersistenceEngine;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.PersistenceEngine;
@@ -44,6 +46,13 @@ public class SimpleElasticsearchPersistenceAutoConfiguration {
         executor.setThreadNamePrefix(SimpleElasticsearchPersistenceConstant.ASYNC_EXECUTOR_THREAD_NAME_PREFIX);
         executor.initialize();
         return executor;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(BulkFailureClassifier.class)
+    public BulkFailureClassifier bulkFailureClassifier() {
+        log.info("初始化 DefaultBulkFailureClassifier");
+        return new DefaultBulkFailureClassifier();
     }
 
     @Bean

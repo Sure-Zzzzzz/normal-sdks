@@ -44,7 +44,8 @@ public class DeleteExecutor extends AbstractPersistenceExecutor<DeleteRequest, P
         context.setIndex(renderedIndex);
         DocWriteResponse response = writeApiHelper.delete(datasource,
                 PersistenceEsRequestHelper.buildDeleteRequest(request, renderedIndex));
-        return PersistenceResultHelper.fromDocWriteResponse(response, datasource, PersistenceOperationType.DELETE, context);
+        Boolean notFoundAsSuccess = request.getOptions() == null ? null : request.getOptions().getNotFoundAsSuccess();
+        return PersistenceResultHelper.fromDeleteResponse(response, datasource, context, notFoundAsSuccess);
     }
 
     @Override

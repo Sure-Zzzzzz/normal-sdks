@@ -25,5 +25,6 @@ public class IndexRequestValidator implements PersistenceRequestValidator<IndexR
             throw new PersistenceExecutionException(ErrorCode.REQUEST_VALIDATION_FAILED,
                     String.format(ErrorMessage.REQUEST_VALIDATION_FAILED, "document 不能为空"));
         }
+        WriteOptionsValidator.validate(request.getOptions());
     }
 }

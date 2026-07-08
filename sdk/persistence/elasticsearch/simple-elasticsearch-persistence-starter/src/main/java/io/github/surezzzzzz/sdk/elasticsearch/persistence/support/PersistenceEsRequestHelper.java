@@ -3,10 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.support;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.constant.SimpleElasticsearchPersistenceConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.IndexOperationType;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.*;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.query.PersistenceQuery;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkItem;
@@ -20,6 +17,7 @@ import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.action.support.single.instance.InstanceShardOperationRequest;
 import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -62,6 +60,12 @@ public final class PersistenceEsRequestHelper {
         IndexOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
+            if (StringUtils.hasText(options.getRouting())) {
+                esRequest.routing(options.getRouting());
+            }
+            if (StringUtils.hasText(options.getPipeline())) {
+                esRequest.setPipeline(options.getPipeline());
+            }
             IndexOperationType operationType = options.getOperationType();
             if (IndexOperationType.CREATE == operationType) {
                 esRequest.opType(DocWriteRequest.OpType.CREATE);
@@ -84,6 +88,9 @@ public final class PersistenceEsRequestHelper {
         UpdateOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
+            if (StringUtils.hasText(options.getRouting())) {
+                esRequest.routing(options.getRouting());
+            }
             if (options.getDocAsUpsert() != null) {
                 esRequest.docAsUpsert(options.getDocAsUpsert());
             }
@@ -99,6 +106,12 @@ public final class PersistenceEsRequestHelper {
             if (Boolean.TRUE.equals(options.getScriptedUpsert())) {
                 esRequest.scriptedUpsert(true);
             }
+            if (options.getRetryOnConflict() != null) {
+                esRequest.retryOnConflict(options.getRetryOnConflict());
+            }
+            if (options.getDetectNoop() != null) {
+                esRequest.detectNoop(options.getDetectNoop());
+            }
         }
         return esRequest;
     }
@@ -109,8 +122,14 @@ public final class PersistenceEsRequestHelper {
         DeleteOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
+            if (StringUtils.hasText(options.getRouting())) {
+                esRequest.routing(options.getRouting());
+            }
             if (options.getVersion() != null) {
                 esRequest.version(options.getVersion());
+            }
+            if (StringUtils.hasText(options.getVersionType())) {
+                esRequest.versionType(VersionType.fromString(options.getVersionType()));
             }
         }
         return esRequest;
@@ -119,9 +138,10 @@ public final class PersistenceEsRequestHelper {
     public static BulkRequest buildBulkRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest request,
                                                java.util.List<String> renderedIndices) {
         BulkRequest esRequest = new BulkRequest();
+        boolean hasItemPipeline = hasItemPipeline(request);
         if (request.getOptions() != null) {
             applyWriteOptions(esRequest, request.getOptions());
-            if (StringUtils.hasText(request.getOptions().getPipeline())) {
+            if (!hasItemPipeline && StringUtils.hasText(request.getOptions().getPipeline())) {
                 esRequest.pipeline(request.getOptions().getPipeline());
             }
         }
@@ -190,6 +210,21 @@ public final class PersistenceEsRequestHelper {
             if (item.getDocAsUpsert() != null) {
                 updateRequest.docAsUpsert(item.getDocAsUpsert());
             }
+            if (item.getUpsertDoc() != null) {
+                Map<String, Object> upsertMap = toMap(item.getUpsertDoc());
+                if (upsertMap != null) {
+                    updateRequest.upsert(upsertMap);
+                }
+            }
+            if (Boolean.TRUE.equals(item.getScriptedUpsert())) {
+                updateRequest.scriptedUpsert(true);
+            }
+            if (item.getRetryOnConflict() != null) {
+                updateRequest.retryOnConflict(item.getRetryOnConflict());
+            }
+            if (item.getDetectNoop() != null) {
+                updateRequest.detectNoop(item.getDetectNoop());
+            }
             applyBulkRouting(updateRequest, item, options);
             esRequest.add(updateRequest);
             return;
@@ -201,6 +236,10 @@ public final class PersistenceEsRequestHelper {
         }
         if (BulkItemType.CREATE == item.getType()) {
             indexRequest.opType(DocWriteRequest.OpType.CREATE);
+        }
+        String pipeline = resolveBulkPipeline(item, options);
+        if (StringUtils.hasText(pipeline)) {
+            indexRequest.setPipeline(pipeline);
         }
         Map<String, Object> itemSourceMap = toMap(item.getDocument());
         if (itemSourceMap != null) {
@@ -233,9 +272,26 @@ public final class PersistenceEsRequestHelper {
     }
 
     private static void applyRefreshPolicy(WriteRequest<?> request, WriteOptions options) {
+        if (StringUtils.hasText(options.getRefreshPolicy())) {
+            request.setRefreshPolicy(toRefreshPolicy(options.getRefreshPolicy()));
+            return;
+        }
         if (options.getRefresh() != null) {
             request.setRefreshPolicy(toRefreshPolicy(options.getRefresh()));
         }
+    }
+
+    private static WriteRequest.RefreshPolicy toRefreshPolicy(String refreshPolicy) {
+        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_TRUE.equals(refreshPolicy)) {
+            return WriteRequest.RefreshPolicy.IMMEDIATE;
+        }
+        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_FALSE.equals(refreshPolicy)) {
+            return WriteRequest.RefreshPolicy.NONE;
+        }
+        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_WAIT_FOR.equals(refreshPolicy)) {
+            return WriteRequest.RefreshPolicy.WAIT_UNTIL;
+        }
+        return WriteRequest.RefreshPolicy.parse(refreshPolicy);
     }
 
     private static void applyBulkRouting(org.elasticsearch.action.DocWriteRequest<?> request, BulkItem item, BulkOptions options) {
@@ -244,6 +300,29 @@ public final class PersistenceEsRequestHelper {
         if (StringUtils.hasText(routing)) {
             request.routing(routing);
         }
+    }
+
+    private static boolean hasItemPipeline(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest request) {
+        if (request == null || CollectionUtils.isEmpty(request.getItemList())) {
+            return false;
+        }
+        for (BulkItem item : request.getItemList()) {
+            if (isIndexLike(item) && StringUtils.hasText(item.getPipeline())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String resolveBulkPipeline(BulkItem item, BulkOptions options) {
+        if (StringUtils.hasText(item.getPipeline())) {
+            return item.getPipeline();
+        }
+        return options == null ? null : options.getPipeline();
+    }
+
+    private static boolean isIndexLike(BulkItem item) {
+        return item != null && (BulkItemType.INDEX == item.getType() || BulkItemType.CREATE == item.getType());
     }
 
     private static void applyByQueryOptions(UpdateByQueryRequest request, ByQueryOptions options) {
