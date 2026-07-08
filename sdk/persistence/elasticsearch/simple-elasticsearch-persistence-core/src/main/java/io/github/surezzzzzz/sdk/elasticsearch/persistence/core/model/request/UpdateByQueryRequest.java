@@ -20,9 +20,14 @@ public class UpdateByQueryRequest extends PersistenceRequest {
 
     private static final long serialVersionUID = 1L;
 
+    /** 目标索引。 */
     private String index;
+    /** 查询条件。 */
     private PersistenceQuery query;
+    /** Painless 脚本。 */
     private String scriptSource;
+    /** 脚本参数。 */
     private Map<String, Object> scriptParamMap;
+    /** ByQuery 执行选项。 */
     private ByQueryOptions options;
 }

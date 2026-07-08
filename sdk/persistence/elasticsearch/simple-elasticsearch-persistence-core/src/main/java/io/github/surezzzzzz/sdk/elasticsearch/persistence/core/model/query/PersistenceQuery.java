@@ -17,7 +17,10 @@ public class PersistenceQuery implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
+    /** 原始 JSON 查询 DSL。 */
     private String rawJson;
+    /** term 查询条件。 */
     private Map<String, Object> termMap;
+    /** range 查询条件。 */
     private Map<String, Object> rangeMap;
 }

@@ -37,7 +37,7 @@ private Boolean scriptedUpsert;
 ```java
 UpdateOptions.builder()
     .scriptedUpsert(true)
-    .upsertDoc(Map.of())   // 空 Map 即可，让 ES 在文档不存在时触发脚本
+    .upsertDoc(Collections.emptyMap())   // 空 Map 即可，让 ES 在文档不存在时触发脚本
     .build()
 ```
 

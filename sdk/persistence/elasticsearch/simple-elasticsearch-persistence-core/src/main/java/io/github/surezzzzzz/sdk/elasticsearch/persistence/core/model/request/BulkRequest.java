@@ -19,7 +19,10 @@ public class BulkRequest extends PersistenceRequest {
 
     private static final long serialVersionUID = 1L;
 
+    /** Bulk item 列表。 */
     private List<BulkItem> itemList;
+    /** 默认目标索引。 */
     private String defaultIndex;
+    /** Bulk 写入选项。 */
     private BulkOptions options;
 }
