@@ -1,0 +1,38 @@
+# persistence 测试基础配置。
+# primary=9203（ES 6.2.2，不参与写入），secondary 默认 9200（2.7.9），由版本 profile 覆盖。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            enable: true
+            default-source: primary
+            sources:
+              primary:
+                urls: http://localhost:9203
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+              secondary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+            rules:
+              - pattern: "test_persistence_*"
+                datasource: secondary
+                type: wildcard
+                priority: 10
+          persistence:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch: DEBUG

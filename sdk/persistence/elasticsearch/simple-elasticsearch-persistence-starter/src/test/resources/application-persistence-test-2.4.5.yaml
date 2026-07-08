@@ -1,0 +1,10 @@
+# 2.4.5 profile：secondary = ES 7.9.3（9204）。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              secondary:
+                urls: http://localhost:9204

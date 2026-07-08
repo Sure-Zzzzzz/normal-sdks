@@ -1,0 +1,10 @@
+# 2.2.x profile：secondary = ES 6.2.2（9203，与 ES 6.8.x 客户端同大版本）。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              secondary:
+                urls: http://localhost:9203

@@ -1,0 +1,20 @@
+# persistence-test profile：写测试专用。
+# primary 指向不存在的 9202，若路由错误会连接失败；test_persistence_* 路由到 secondary。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              primary:
+                urls: http://localhost:9202
+            rules:
+              - pattern: "test_persistence_*"
+                datasource: secondary
+                type: wildcard
+                priority: 10
+              - pattern: "test_persistence_primary_*"
+                datasource: primary
+                type: wildcard
+                priority: 5
