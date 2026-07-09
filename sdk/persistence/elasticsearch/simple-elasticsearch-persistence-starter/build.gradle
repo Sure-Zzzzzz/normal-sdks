@@ -1,6 +1,6 @@
 dependencies {
     api "${group}:simple-elasticsearch-persistence-core:1.0.2"
-    api "${group}:simple-elasticsearch-route-starter:1.1.2"
+    api "${group}:simple-elasticsearch-route-starter:1.2.0"
 
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"

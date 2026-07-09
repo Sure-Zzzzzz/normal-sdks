@@ -22,23 +22,8 @@ public final class SimpleElasticsearchPersistenceConstant {
     public static final String ASYNC_EXECUTOR_BEAN_NAME = "esPersistenceAsyncExecutor";
     public static final String ASYNC_EXECUTOR_THREAD_NAME_PREFIX = "es-persistence-";
 
-    // ==== ES 请求构建 ====
-    /**
-     * ES 6.x 及以上通用默认 mapping type，7.x 中 deprecated 但仍可用。
-     */
-    public static final String ES_DEFAULT_TYPE = "_doc";
-    public static final String TIMEOUT_MS_SUFFIX = "ms";
-    public static final String HTTP_METHOD_GET = "GET";
-    public static final String HTTP_METHOD_POST = "POST";
-    public static final String PARAM_WAIT_FOR_COMPLETION = "wait_for_completion";
-    public static final String PARAM_VALUE_TRUE = "true";
-    public static final String PARAM_VALUE_FALSE = "false";
-
-    // ==== ES 路径模板与脚本 ====
+    // ==== ES 脚本 ====
     public static final String DEFAULT_SCRIPT_LANG = io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.SimpleElasticsearchPersistenceCoreConstant.SCRIPT_LANG_PAINLESS;
-    public static final String TASK_PATH_TEMPLATE = "/_tasks/%s";
-    public static final String UPDATE_BY_QUERY_PATH_TEMPLATE = "/%s/_update_by_query";
-    public static final String DELETE_BY_QUERY_PATH_TEMPLATE = "/%s/_delete_by_query";
 
     // ==== 文档 ID 与字段标准化 ====
     public static final String ID_JOIN_DELIMITER = "|";

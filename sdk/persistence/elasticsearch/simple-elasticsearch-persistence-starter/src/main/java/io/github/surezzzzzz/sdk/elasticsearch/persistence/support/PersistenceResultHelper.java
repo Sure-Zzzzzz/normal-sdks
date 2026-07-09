@@ -3,11 +3,11 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.support;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.classifier.BulkFailureClassifier;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.PersistenceOperationType;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.SimpleElasticsearchPersistenceCoreConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.PersistenceExecutionContext;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkItemFailure;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchResponseHelper;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.bulk.BulkItemResponse;
@@ -52,7 +52,7 @@ public final class PersistenceResultHelper {
                                                        PersistenceExecutionContext context,
                                                        Boolean notFoundAsSuccess) {
         String result = toResult(response.getResult());
-        boolean success = !isNotFound(response) || !Boolean.FALSE.equals(notFoundAsSuccess);
+        boolean success = !ElasticsearchResponseHelper.isNotFound(response) || !Boolean.FALSE.equals(notFoundAsSuccess);
         return PersistenceResult.builder()
                 .success(success)
                 .id(response.getId())
@@ -98,9 +98,9 @@ public final class PersistenceResultHelper {
     private static BulkItemFailure toFailure(BulkItemResponse itemResponse, int itemIndexOffset,
                                              String datasource, BulkFailureClassifier classifier) {
         BulkItemResponse.Failure failure = itemResponse.getFailure();
-        Integer status = failure == null ? null : toInt(failure.getStatus());
+        Integer status = ElasticsearchResponseHelper.extractStatusCode(failure);
         String errorType = failure == null ? null : failure.getType();
-        String errorReason = extractReason(failure);
+        String errorReason = ElasticsearchResponseHelper.extractFailureReason(failure);
         boolean retryable = classifier == null ? false : classifier.retryable(status, errorType, errorReason);
         return BulkItemFailure.builder()
                 .itemIndex(itemIndexOffset + itemResponse.getItemId())
@@ -114,13 +114,6 @@ public final class PersistenceResultHelper {
                 .errorReason(errorReason)
                 .retryable(retryable)
                 .build();
-    }
-
-    private static String extractReason(BulkItemResponse.Failure failure) {
-        if (failure == null || failure.getCause() == null) {
-            return null;
-        }
-        return failure.getCause().getMessage();
     }
 
     private static BulkItemType toItemType(DocWriteRequest.OpType opType) {
@@ -139,31 +132,8 @@ public final class PersistenceResultHelper {
         }
     }
 
-    private static boolean isNotFound(DocWriteResponse response) {
-        return response != null && DocWriteResponse.Result.NOT_FOUND == response.getResult();
-    }
-
     private static String toResult(DocWriteResponse.Result result) {
-        if (result == null) {
-            return null;
-        }
-        switch (result) {
-            case CREATED:
-                return SimpleElasticsearchPersistenceCoreConstant.ES_RESULT_CREATED;
-            case UPDATED:
-                return SimpleElasticsearchPersistenceCoreConstant.ES_RESULT_UPDATED;
-            case DELETED:
-                return SimpleElasticsearchPersistenceCoreConstant.ES_RESULT_DELETED;
-            case NOT_FOUND:
-                return SimpleElasticsearchPersistenceCoreConstant.ES_RESULT_NOT_FOUND;
-            case NOOP:
-                return SimpleElasticsearchPersistenceCoreConstant.ES_RESULT_NOOP;
-            default:
-                return result.name().toLowerCase();
-        }
+        return ElasticsearchResponseHelper.toDocWriteResultCode(result);
     }
 
-    private static Integer toInt(org.elasticsearch.rest.RestStatus status) {
-        return status == null ? null : status.getStatus();
-    }
 }

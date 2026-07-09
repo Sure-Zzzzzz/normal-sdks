@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.engine;
 
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.BulkOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.IndexOptions;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkItem;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.validator.EntityPersistenceValidator;
@@ -41,6 +43,16 @@ public interface TypedPersistence<T> {
         return indexAsync(document, options);
     }
 
+    default PersistenceResult createThenUpdateOnConflict(T document,
+                                                         Function<T, UpdateRequest> updateRequestResolver) {
+        throw new UnsupportedOperationException("createThenUpdateOnConflict 未实现");
+    }
+
+    default CompletableFuture<PersistenceResult> createThenUpdateOnConflictAsync(T document,
+                                                                                 Function<T, UpdateRequest> updateRequestResolver) {
+        throw new UnsupportedOperationException("createThenUpdateOnConflictAsync 未实现");
+    }
+
     BulkResult bulkIndex(List<T> documentList);
 
     default BulkResult bulkIndex(List<T> documentList, BulkOptions options) {
@@ -69,6 +81,18 @@ public interface TypedPersistence<T> {
 
     default CompletableFuture<BulkResult> bulkCreateAsync(List<T> documentList, BulkOptions options) {
         return bulkIndexAsync(documentList, options);
+    }
+
+    default BulkResult bulkCreateThenUpdateOnConflict(List<T> documentList,
+                                                      Function<T, BulkItem> updateItemResolver,
+                                                      BulkOptions options) {
+        throw new UnsupportedOperationException("bulkCreateThenUpdateOnConflict 未实现");
+    }
+
+    default CompletableFuture<BulkResult> bulkCreateThenUpdateOnConflictAsync(List<T> documentList,
+                                                                              Function<T, BulkItem> updateItemResolver,
+                                                                              BulkOptions options) {
+        throw new UnsupportedOperationException("bulkCreateThenUpdateOnConflictAsync 未实现");
     }
 
     TypedPersistence<T> withValidator(EntityPersistenceValidator<? super T> validator);

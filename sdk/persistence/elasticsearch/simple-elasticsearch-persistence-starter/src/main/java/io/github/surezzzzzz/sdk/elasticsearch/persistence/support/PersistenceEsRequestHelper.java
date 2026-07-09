@@ -3,12 +3,16 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.support;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.constant.SimpleElasticsearchPersistenceConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.*;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.IndexOperationType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.*;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.query.PersistenceQuery;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkItem;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
-import org.elasticsearch.action.DocWriteRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchRequestOptionHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchWriteRequestHelper;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.index.IndexRequest;
@@ -17,7 +21,6 @@ import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.support.replication.ReplicationRequest;
 import org.elasticsearch.action.support.single.instance.InstanceShardOperationRequest;
 import org.elasticsearch.action.update.UpdateRequest;
-import org.elasticsearch.index.VersionType;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -49,10 +52,7 @@ public final class PersistenceEsRequestHelper {
     public static IndexRequest buildIndexRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.IndexRequest request,
                                                  String index) {
         String id = DocumentMetadataHelper.resolveId(request.getDocument(), request.getId());
-        IndexRequest esRequest = new IndexRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE);
-        if (StringUtils.hasText(id)) {
-            esRequest.id(id);
-        }
+        IndexRequest esRequest = ElasticsearchWriteRequestHelper.newTypedIndexRequest(index, id);
         Map<String, Object> sourceMap = toMap(request.getDocument());
         if (sourceMap != null) {
             esRequest.source(sourceMap);
@@ -60,23 +60,16 @@ public final class PersistenceEsRequestHelper {
         IndexOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
-            if (StringUtils.hasText(options.getRouting())) {
-                esRequest.routing(options.getRouting());
-            }
-            if (StringUtils.hasText(options.getPipeline())) {
-                esRequest.setPipeline(options.getPipeline());
-            }
-            IndexOperationType operationType = options.getOperationType();
-            if (IndexOperationType.CREATE == operationType) {
-                esRequest.opType(DocWriteRequest.OpType.CREATE);
-            }
+            ElasticsearchWriteRequestHelper.applyRouting(esRequest, options.getRouting());
+            ElasticsearchWriteRequestHelper.applyPipeline(esRequest, options.getPipeline());
+            ElasticsearchWriteRequestHelper.applyCreateOpType(esRequest, IndexOperationType.CREATE == options.getOperationType());
         }
         return esRequest;
     }
 
     public static UpdateRequest buildUpdateRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateRequest request,
                                                    String index) {
-        UpdateRequest esRequest = new UpdateRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE, request.getId());
+        UpdateRequest esRequest = ElasticsearchWriteRequestHelper.newTypedUpdateRequest(index, request.getId());
         if (!CollectionUtils.isEmpty(request.getFieldMap())) {
             esRequest.doc(request.getFieldMap());
         } else if (StringUtils.hasText(request.getScriptSource())) {
@@ -88,9 +81,7 @@ public final class PersistenceEsRequestHelper {
         UpdateOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
-            if (StringUtils.hasText(options.getRouting())) {
-                esRequest.routing(options.getRouting());
-            }
+            ElasticsearchWriteRequestHelper.applyRouting(esRequest, options.getRouting());
             if (options.getDocAsUpsert() != null) {
                 esRequest.docAsUpsert(options.getDocAsUpsert());
             }
@@ -106,31 +97,21 @@ public final class PersistenceEsRequestHelper {
             if (Boolean.TRUE.equals(options.getScriptedUpsert())) {
                 esRequest.scriptedUpsert(true);
             }
-            if (options.getRetryOnConflict() != null) {
-                esRequest.retryOnConflict(options.getRetryOnConflict());
-            }
-            if (options.getDetectNoop() != null) {
-                esRequest.detectNoop(options.getDetectNoop());
-            }
+            ElasticsearchWriteRequestHelper.applyRetryOnConflict(esRequest, options.getRetryOnConflict());
+            ElasticsearchWriteRequestHelper.applyDetectNoop(esRequest, options.getDetectNoop());
         }
         return esRequest;
     }
 
     public static DeleteRequest buildDeleteRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteRequest request,
                                                    String index) {
-        DeleteRequest esRequest = new DeleteRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE, request.getId());
+        DeleteRequest esRequest = ElasticsearchWriteRequestHelper.newTypedDeleteRequest(index, request.getId());
         DeleteOptions options = request.getOptions();
         if (options != null) {
             applyWriteOptions(esRequest, options);
-            if (StringUtils.hasText(options.getRouting())) {
-                esRequest.routing(options.getRouting());
-            }
-            if (options.getVersion() != null) {
-                esRequest.version(options.getVersion());
-            }
-            if (StringUtils.hasText(options.getVersionType())) {
-                esRequest.versionType(VersionType.fromString(options.getVersionType()));
-            }
+            ElasticsearchWriteRequestHelper.applyRouting(esRequest, options.getRouting());
+            ElasticsearchWriteRequestHelper.applyVersion(esRequest, options.getVersion());
+            ElasticsearchWriteRequestHelper.applyVersionType(esRequest, options.getVersionType());
         }
         return esRequest;
     }
@@ -141,8 +122,8 @@ public final class PersistenceEsRequestHelper {
         boolean hasItemPipeline = hasItemPipeline(request);
         if (request.getOptions() != null) {
             applyWriteOptions(esRequest, request.getOptions());
-            if (!hasItemPipeline && StringUtils.hasText(request.getOptions().getPipeline())) {
-                esRequest.pipeline(request.getOptions().getPipeline());
+            if (!hasItemPipeline) {
+                ElasticsearchWriteRequestHelper.applyPipeline(esRequest, request.getOptions().getPipeline());
             }
         }
         int i = 0;
@@ -193,13 +174,13 @@ public final class PersistenceEsRequestHelper {
 
     private static void addBulkItem(BulkRequest esRequest, BulkItem item, String index, BulkOptions options, int itemIndex) {
         if (BulkItemType.DELETE == item.getType()) {
-            DeleteRequest deleteRequest = new DeleteRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE, item.getId());
+            DeleteRequest deleteRequest = ElasticsearchWriteRequestHelper.newTypedDeleteRequest(index, item.getId());
             applyBulkRouting(deleteRequest, item, options);
             esRequest.add(deleteRequest);
             return;
         }
         if (BulkItemType.UPDATE == item.getType()) {
-            UpdateRequest updateRequest = new UpdateRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE, item.getId());
+            UpdateRequest updateRequest = ElasticsearchWriteRequestHelper.newTypedUpdateRequest(index, item.getId());
             if (!CollectionUtils.isEmpty(item.getFieldMap())) {
                 updateRequest.doc(item.getFieldMap());
             } else if (StringUtils.hasText(item.getScriptSource())) {
@@ -219,28 +200,16 @@ public final class PersistenceEsRequestHelper {
             if (Boolean.TRUE.equals(item.getScriptedUpsert())) {
                 updateRequest.scriptedUpsert(true);
             }
-            if (item.getRetryOnConflict() != null) {
-                updateRequest.retryOnConflict(item.getRetryOnConflict());
-            }
-            if (item.getDetectNoop() != null) {
-                updateRequest.detectNoop(item.getDetectNoop());
-            }
+            ElasticsearchWriteRequestHelper.applyRetryOnConflict(updateRequest, item.getRetryOnConflict());
+            ElasticsearchWriteRequestHelper.applyDetectNoop(updateRequest, item.getDetectNoop());
             applyBulkRouting(updateRequest, item, options);
             esRequest.add(updateRequest);
             return;
         }
-        IndexRequest indexRequest = new IndexRequest(index, SimpleElasticsearchPersistenceConstant.ES_DEFAULT_TYPE);
         String id = DocumentMetadataHelper.resolveId(item.getDocument(), item.getId());
-        if (StringUtils.hasText(id)) {
-            indexRequest.id(id);
-        }
-        if (BulkItemType.CREATE == item.getType()) {
-            indexRequest.opType(DocWriteRequest.OpType.CREATE);
-        }
-        String pipeline = resolveBulkPipeline(item, options);
-        if (StringUtils.hasText(pipeline)) {
-            indexRequest.setPipeline(pipeline);
-        }
+        IndexRequest indexRequest = ElasticsearchWriteRequestHelper.newTypedIndexRequest(index, id);
+        ElasticsearchWriteRequestHelper.applyCreateOpType(indexRequest, BulkItemType.CREATE == item.getType());
+        ElasticsearchWriteRequestHelper.applyPipeline(indexRequest, resolveBulkPipeline(item, options));
         Map<String, Object> itemSourceMap = toMap(item.getDocument());
         if (itemSourceMap != null) {
             indexRequest.source(itemSourceMap);
@@ -250,56 +219,27 @@ public final class PersistenceEsRequestHelper {
     }
 
     private static void applyWriteOptions(ReplicationRequest<?> request, WriteOptions options) {
-        if (options.getTimeoutMs() != null) {
-            request.timeout(options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
-        }
-        applyRefreshPolicy((WriteRequest<?>) request, options);
+        ElasticsearchRequestOptionHelper.applyTimeout(request, options.getTimeoutMs());
+        ElasticsearchRequestOptionHelper.applyRefreshPolicy((WriteRequest<?>) request,
+                options.getRefreshPolicy(), options.getRefresh());
     }
 
     private static void applyWriteOptions(InstanceShardOperationRequest<?> request, WriteOptions options) {
-        if (options.getTimeoutMs() != null) {
-            request.timeout(options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
-        }
-        applyRefreshPolicy((WriteRequest<?>) request, options);
+        ElasticsearchRequestOptionHelper.applyTimeout(request, options.getTimeoutMs());
+        ElasticsearchRequestOptionHelper.applyRefreshPolicy((WriteRequest<?>) request,
+                options.getRefreshPolicy(), options.getRefresh());
     }
 
     private static void applyWriteOptions(BulkRequest request, BulkOptions options) {
-        if (options.getTimeoutMs() != null) {
-            request.timeout(options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
-        }
-        applyRefreshPolicy(request, options);
+        ElasticsearchRequestOptionHelper.applyTimeout(request, options.getTimeoutMs());
+        ElasticsearchRequestOptionHelper.applyRefreshPolicy(request, options.getRefreshPolicy(), options.getRefresh());
         request.waitForActiveShards(ActiveShardCount.DEFAULT);
-    }
-
-    private static void applyRefreshPolicy(WriteRequest<?> request, WriteOptions options) {
-        if (StringUtils.hasText(options.getRefreshPolicy())) {
-            request.setRefreshPolicy(toRefreshPolicy(options.getRefreshPolicy()));
-            return;
-        }
-        if (options.getRefresh() != null) {
-            request.setRefreshPolicy(toRefreshPolicy(options.getRefresh()));
-        }
-    }
-
-    private static WriteRequest.RefreshPolicy toRefreshPolicy(String refreshPolicy) {
-        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_TRUE.equals(refreshPolicy)) {
-            return WriteRequest.RefreshPolicy.IMMEDIATE;
-        }
-        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_FALSE.equals(refreshPolicy)) {
-            return WriteRequest.RefreshPolicy.NONE;
-        }
-        if (SimpleElasticsearchPersistenceCoreConstant.REFRESH_POLICY_WAIT_FOR.equals(refreshPolicy)) {
-            return WriteRequest.RefreshPolicy.WAIT_UNTIL;
-        }
-        return WriteRequest.RefreshPolicy.parse(refreshPolicy);
     }
 
     private static void applyBulkRouting(org.elasticsearch.action.DocWriteRequest<?> request, BulkItem item, BulkOptions options) {
         String routing = StringUtils.hasText(item.getRouting()) ? item.getRouting()
                 : options == null ? null : options.getRouting();
-        if (StringUtils.hasText(routing)) {
-            request.routing(routing);
-        }
+        ElasticsearchWriteRequestHelper.applyRouting(request, routing);
     }
 
     private static boolean hasItemPipeline(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest request) {
@@ -329,41 +269,16 @@ public final class PersistenceEsRequestHelper {
         if (options == null) {
             return;
         }
-        if (options.getBatchSize() != null) {
-            request.setBatchSize(options.getBatchSize());
-        }
-        applyCommonByQueryOptions(request, options);
+        ElasticsearchRequestOptionHelper.applyByQueryOptions(request, options.getBatchSize(), options.getSlices(),
+                options.getConflicts(), options.getRefresh(), options.getTimeoutMs());
     }
 
     private static void applyByQueryOptions(DeleteByQueryRequest request, ByQueryOptions options) {
         if (options == null) {
             return;
         }
-        if (options.getBatchSize() != null) {
-            request.setBatchSize(options.getBatchSize());
-        }
-        applyCommonByQueryOptions(request, options);
-    }
-
-    // scrollSize 不在此设置：7.17 HighLevelClient 未暴露 setScrollSize，仅异步 low-level body 路径设置 scroll_size。
-    private static void applyCommonByQueryOptions(org.elasticsearch.index.reindex.AbstractBulkByScrollRequest<?> request,
-                                                  ByQueryOptions options) {
-        if (options.getSlices() != null) {
-            request.setSlices(options.getSlices());
-        }
-        if (StringUtils.hasText(options.getConflicts())) {
-            request.setConflicts(options.getConflicts());
-        }
-        if (options.getRefresh() != null) {
-            request.setRefresh(options.getRefresh());
-        }
-        if (options.getTimeoutMs() != null) {
-            request.setTimeout(options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
-        }
-    }
-
-    private static WriteRequest.RefreshPolicy toRefreshPolicy(Boolean refresh) {
-        return Boolean.TRUE.equals(refresh) ? WriteRequest.RefreshPolicy.IMMEDIATE : WriteRequest.RefreshPolicy.NONE;
+        ElasticsearchRequestOptionHelper.applyByQueryOptions(request, options.getBatchSize(), options.getSlices(),
+                options.getConflicts(), options.getRefresh(), options.getTimeoutMs());
     }
 
     @SuppressWarnings("unchecked")

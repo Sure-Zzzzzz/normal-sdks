@@ -2,15 +2,20 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.IndexOperationType;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.SimpleElasticsearchPersistenceCoreConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.BulkOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.IndexOptions;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkItem;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.IndexRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.DefaultPersistenceEngine;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.DefaultTypedPersistence;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.TypedPersistence;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.ConflictUpdateResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.CreateThenUpdateOnConflictHelper;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
@@ -158,10 +163,82 @@ class DefaultTypedPersistenceTest {
                 "未覆盖字段应保留默认");
     }
 
+    @Test
+    @DisplayName("typed createThenUpdateOnConflict 构建 CREATE request 并补齐 UPDATE index/id/routing")
+    void typedCreateThenUpdateOnConflictBuildsRequests() {
+        CapturingEngine engine = new CapturingEngine();
+        TypedPersistence<TypedDoc> typed = engine.forEntity(TypedDoc.class)
+                .withIndexResolver(d -> "resolved_index")
+                .withIdResolver(TypedDoc::getId)
+                .withRoutingResolver(d -> "routing-" + d.getId());
+
+        TypedDoc doc = new TypedDoc();
+        doc.setId("id-5");
+        doc.setName("n5");
+        typed.createThenUpdateOnConflict(doc, d -> UpdateRequest.builder()
+                .fieldMap(java.util.Collections.singletonMap("extraField", "v5"))
+                .build());
+
+        assertNotNull(engine.lastCreateRequest, "应捕获 CREATE request");
+        assertNotNull(engine.lastUpdateRequest, "应捕获 UPDATE request");
+        assertEquals(IndexOperationType.CREATE, engine.lastCreateRequest.getOptions().getOperationType(),
+                "CREATE request 应强制 CREATE");
+        assertEquals("resolved_index", engine.lastCreateRequest.getIndex(), "CREATE index 应来自 resolver");
+        assertEquals("id-5", engine.lastCreateRequest.getId(), "CREATE id 应来自 resolver");
+        assertEquals("routing-id-5", engine.lastCreateRequest.getOptions().getRouting(),
+                "CREATE routing 应来自 resolver");
+        assertEquals("resolved_index", engine.lastUpdateRequest.getIndex(), "UPDATE index 应自动补齐");
+        assertEquals("id-5", engine.lastUpdateRequest.getId(), "UPDATE id 应自动补齐");
+        assertEquals("routing-id-5", engine.lastUpdateRequest.getOptions().getRouting(),
+                "UPDATE routing 应自动补齐");
+    }
+
+    @Test
+    @DisplayName("typed bulkCreateThenUpdateOnConflict 构建 CREATE bulk 并按原始 document 生成 UPDATE item")
+    void typedBulkCreateThenUpdateOnConflictBuildsResolver() {
+        CapturingEngine engine = new CapturingEngine();
+        TypedPersistence<TypedDoc> typed = engine.forEntity(TypedDoc.class)
+                .withIndexResolver(d -> "idx-" + d.getId())
+                .withIdResolver(TypedDoc::getId)
+                .withRoutingResolver(d -> "routing-" + d.getId())
+                .withDefaultBulkOptions(BulkOptions.builder().batchSize(20).pipeline("create-pipeline").build());
+
+        TypedDoc a = new TypedDoc();
+        a.setId("a");
+        TypedDoc b = new TypedDoc();
+        b.setId("b");
+        typed.bulkCreateThenUpdateOnConflict(Arrays.asList(a, b), d -> BulkItem.builder()
+                .fieldMap(java.util.Collections.singletonMap("extraField", "value-" + d.getId()))
+                .build(), null);
+
+        assertEquals(2, engine.bulkRequestList.size(), "应执行 CREATE 与 UPDATE 两阶段 bulk");
+        BulkRequest createRequest = engine.bulkRequestList.get(0);
+        assertEquals(Integer.valueOf(20), createRequest.getOptions().getBatchSize(),
+                "default bulk options 应生效");
+        assertEquals("create-pipeline", createRequest.getOptions().getPipeline(),
+                "CREATE 阶段 pipeline 应保留");
+        assertEquals(BulkItemType.CREATE, createRequest.getItemList().get(0).getType(),
+                "typed bulk helper 应构建 CREATE item");
+        assertEquals("idx-a", createRequest.getItemList().get(0).getIndex(), "index 应来自 resolver");
+        assertEquals("routing-a", createRequest.getItemList().get(0).getRouting(), "routing 应来自 resolver");
+
+        BulkItem updateItem = engine.bulkRequestList.get(1).getItemList().get(0);
+        assertEquals(BulkItemType.UPDATE, updateItem.getType(), "resolver 结果应转为 UPDATE");
+        assertEquals("idx-b", updateItem.getIndex(), "UPDATE index 应从 create item 补齐");
+        assertEquals("b", updateItem.getId(), "UPDATE id 应从 create item 补齐");
+        assertEquals("routing-b", updateItem.getRouting(), "UPDATE routing 应从 create item 补齐");
+        assertEquals("value-b", updateItem.getFieldMap().get("extraField"),
+                "UPDATE 字段应按原始 document 生成");
+    }
+
     /** 捕获型 fake engine，记录最后一次 index/bulk 的 request，不连 ES。 */
     static class CapturingEngine extends DefaultPersistenceEngine {
         IndexRequest lastIndexRequest;
+        IndexRequest lastCreateRequest;
+        UpdateRequest lastUpdateRequest;
         BulkRequest lastBulkRequest;
+        List<BulkRequest> bulkRequestList = new ArrayList<>();
+        ConflictUpdateResolver capturedResolver;
 
         CapturingEngine() {
             super(null, Runnable::run);
@@ -176,19 +253,59 @@ class DefaultTypedPersistenceTest {
         @Override
         public PersistenceResult create(IndexRequest request) {
             lastIndexRequest = request;
+            lastCreateRequest = request;
+            return PersistenceResult.builder().success(true).build();
+        }
+
+        @Override
+        public PersistenceResult update(UpdateRequest request) {
+            lastUpdateRequest = request;
             return PersistenceResult.builder().success(true).build();
         }
 
         @Override
         public BulkResult bulk(BulkRequest request) {
             lastBulkRequest = request;
-            return BulkResult.builder().success(true).total(request.getItemList().size()).build();
+            bulkRequestList.add(request);
+            if (capturedResolver != null && bulkRequestList.size() == 1) {
+                return BulkResult.builder()
+                        .success(false)
+                        .hasFailure(true)
+                        .total(request.getItemList().size())
+                        .succeeded(request.getItemList().size() - 1)
+                        .failed(1)
+                        .failureList(Arrays.asList(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkItemFailure.builder()
+                                .itemIndex(1)
+                                .type(BulkItemType.CREATE)
+                                .status(SimpleElasticsearchPersistenceCoreConstant.HTTP_STATUS_CONFLICT)
+                                .build()))
+                        .build();
+            }
+            return BulkResult.builder()
+                    .success(true)
+                    .total(request.getItemList().size())
+                    .succeeded(request.getItemList().size())
+                    .failureList(new ArrayList<>())
+                    .build();
         }
 
         @Override
         public CompletableFuture<BulkResult> bulkAsync(BulkRequest request) {
-            lastBulkRequest = request;
-            return CompletableFuture.completedFuture(BulkResult.builder().success(true).build());
+            return CompletableFuture.completedFuture(bulk(request));
+        }
+
+        @Override
+        public PersistenceResult createThenUpdateOnConflict(IndexRequest createRequest, UpdateRequest updateRequest) {
+            lastCreateRequest = createRequest;
+            lastUpdateRequest = updateRequest;
+            return PersistenceResult.builder().success(true).build();
+        }
+
+        @Override
+        public BulkResult bulkCreateThenUpdateOnConflict(BulkRequest createRequest, ConflictUpdateResolver resolver) {
+            lastBulkRequest = createRequest;
+            capturedResolver = resolver;
+            return CreateThenUpdateOnConflictHelper.bulkCreateThenUpdateOnConflict(this, createRequest, resolver);
         }
     }
 }

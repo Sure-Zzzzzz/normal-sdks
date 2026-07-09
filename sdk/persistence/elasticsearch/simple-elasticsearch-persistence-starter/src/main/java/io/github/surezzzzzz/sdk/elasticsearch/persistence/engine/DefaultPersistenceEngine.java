@@ -9,6 +9,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.Bulk
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryTaskResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.executor.PersistenceExecutorRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.ConflictUpdateResolver;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.CreateThenUpdateOnConflictHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.support.TaskQueryRequest;
 import lombok.RequiredArgsConstructor;
 
@@ -135,6 +137,28 @@ public class DefaultPersistenceEngine implements PersistenceEngine {
     @Override
     public <T> CompletableFuture<BulkResult> bulkIndexAsync(List<T> documentList, BulkOptions options) {
         return CompletableFuture.supplyAsync(() -> bulkIndex(documentList, options), asyncExecutor);
+    }
+
+    @Override
+    public PersistenceResult createThenUpdateOnConflict(IndexRequest createRequest, UpdateRequest updateRequest) {
+        return CreateThenUpdateOnConflictHelper.createThenUpdateOnConflict(this, createRequest, updateRequest);
+    }
+
+    @Override
+    public CompletableFuture<PersistenceResult> createThenUpdateOnConflictAsync(IndexRequest createRequest,
+                                                                                UpdateRequest updateRequest) {
+        return CompletableFuture.supplyAsync(() -> createThenUpdateOnConflict(createRequest, updateRequest), asyncExecutor);
+    }
+
+    @Override
+    public BulkResult bulkCreateThenUpdateOnConflict(BulkRequest createRequest, ConflictUpdateResolver resolver) {
+        return CreateThenUpdateOnConflictHelper.bulkCreateThenUpdateOnConflict(this, createRequest, resolver);
+    }
+
+    @Override
+    public CompletableFuture<BulkResult> bulkCreateThenUpdateOnConflictAsync(BulkRequest createRequest,
+                                                                             ConflictUpdateResolver resolver) {
+        return CompletableFuture.supplyAsync(() -> bulkCreateThenUpdateOnConflict(createRequest, resolver), asyncExecutor);
     }
 
     @Override

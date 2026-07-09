@@ -4,9 +4,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItem
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.IndexOperationType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.BulkOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.IndexOptions;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.UpdateOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkItem;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.BulkRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.IndexRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.BulkResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.PersistenceResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.validator.EntityPersistenceValidator;
@@ -91,6 +93,26 @@ public class DefaultTypedPersistence<T> implements TypedPersistence<T> {
     }
 
     @Override
+    public PersistenceResult createThenUpdateOnConflict(T document,
+                                                        Function<T, UpdateRequest> updateRequestResolver) {
+        validate(document);
+        IndexRequest createRequest = buildIndexRequest(document, null, IndexOperationType.CREATE);
+        UpdateRequest updateRequest = updateRequestResolver.apply(document);
+        fillUpdateRequest(updateRequest, createRequest, document);
+        return delegate.createThenUpdateOnConflict(createRequest, updateRequest);
+    }
+
+    @Override
+    public CompletableFuture<PersistenceResult> createThenUpdateOnConflictAsync(T document,
+                                                                                Function<T, UpdateRequest> updateRequestResolver) {
+        validate(document);
+        IndexRequest createRequest = buildIndexRequest(document, null, IndexOperationType.CREATE);
+        UpdateRequest updateRequest = updateRequestResolver.apply(document);
+        fillUpdateRequest(updateRequest, createRequest, document);
+        return delegate.createThenUpdateOnConflictAsync(createRequest, updateRequest);
+    }
+
+    @Override
     public BulkResult bulkIndex(List<T> documentList) {
         return bulkIndex(documentList, null);
     }
@@ -131,6 +153,32 @@ public class DefaultTypedPersistence<T> implements TypedPersistence<T> {
     }
 
     @Override
+    public BulkResult bulkCreateThenUpdateOnConflict(List<T> documentList,
+                                                     Function<T, BulkItem> updateItemResolver,
+                                                     BulkOptions options) {
+        BulkRequest createRequest = buildBulkRequest(documentList, options, BulkItemType.CREATE);
+        return delegate.bulkCreateThenUpdateOnConflict(createRequest, (createItem, conflictFailure) -> {
+            T document = resolveDocument(documentList, conflictFailure.getItemIndex());
+            BulkItem updateItem = updateItemResolver.apply(document);
+            fillUpdateItem(updateItem, createItem, document);
+            return updateItem;
+        });
+    }
+
+    @Override
+    public CompletableFuture<BulkResult> bulkCreateThenUpdateOnConflictAsync(List<T> documentList,
+                                                                             Function<T, BulkItem> updateItemResolver,
+                                                                             BulkOptions options) {
+        BulkRequest createRequest = buildBulkRequest(documentList, options, BulkItemType.CREATE);
+        return delegate.bulkCreateThenUpdateOnConflictAsync(createRequest, (createItem, conflictFailure) -> {
+            T document = resolveDocument(documentList, conflictFailure.getItemIndex());
+            BulkItem updateItem = updateItemResolver.apply(document);
+            fillUpdateItem(updateItem, createItem, document);
+            return updateItem;
+        });
+    }
+
+    @Override
     public TypedPersistence<T> withValidator(EntityPersistenceValidator<? super T> validator) {
         List<EntityPersistenceValidator<? super T>> copy = new ArrayList<>(validatorList);
         copy.add(validator);
@@ -166,6 +214,43 @@ public class DefaultTypedPersistence<T> implements TypedPersistence<T> {
     public TypedPersistence<T> withDefaultBulkOptions(BulkOptions options) {
         return new DefaultTypedPersistence<>(delegate, entityClass, indexResolver, idResolver, validatorList,
                 routingResolver, defaultIndexOptions, options);
+    }
+
+    private void fillUpdateRequest(UpdateRequest updateRequest, IndexRequest createRequest, T document) {
+        if (isBlank(updateRequest.getIndex())) {
+            updateRequest.setIndex(createRequest.getIndex());
+        }
+        if (isBlank(updateRequest.getId())) {
+            updateRequest.setId(createRequest.getId());
+        }
+        if (updateRequest.getOptions() == null) {
+            String routing = resolveRouting(document);
+            if (routing != null) {
+                updateRequest.setOptions(UpdateOptions.builder()
+                        .routing(routing)
+                        .build());
+            }
+        }
+    }
+
+    private void fillUpdateItem(BulkItem updateItem, BulkItem createItem, T document) {
+        if (updateItem == null) {
+            return;
+        }
+        if (isBlank(updateItem.getIndex())) {
+            updateItem.setIndex(createItem.getIndex());
+        }
+        if (isBlank(updateItem.getId())) {
+            updateItem.setId(createItem.getId());
+        }
+        if (isBlank(updateItem.getRouting())) {
+            String routing = resolveRouting(document);
+            updateItem.setRouting(routing == null ? createItem.getRouting() : routing);
+        }
+    }
+
+    private T resolveDocument(List<T> documentList, int itemIndex) {
+        return documentList.get(itemIndex);
     }
 
     private IndexRequest buildIndexRequest(T document, IndexOptions options, IndexOperationType operationType) {
@@ -298,6 +383,10 @@ public class DefaultTypedPersistence<T> implements TypedPersistence<T> {
 
     private String resolveRouting(T document) {
         return routingResolver == null ? null : routingResolver.apply(document);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private void validate(T document) {

@@ -9,9 +9,13 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.ByQu
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryFailure;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.result.ByQueryTaskResult;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.exception.PersistenceExecutionException;
+import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchEndpointHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchRequestOptionHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchResponseHelper;
 import lombok.RequiredArgsConstructor;
-import org.apache.http.HttpEntity;
 import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
@@ -19,7 +23,6 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.*;
 
-import java.io.InputStream;
 import java.util.*;
 
 /**
@@ -57,14 +60,14 @@ public class ElasticsearchWriteApiHelper {
 
     public ByQueryTaskResult updateByQuerySync(String datasource,
                                                io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateByQueryRequest request) throws Exception {
-        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.UPDATE_BY_QUERY_PATH_TEMPLATE, request.getIndex());
+        String endpoint = ElasticsearchEndpointHelper.buildUpdateByQueryEndpoint(request.getIndex());
         String body = buildUpdateByQueryBody(request);
         return executeByQuerySync(datasource, request.getIndex(), endpoint, body, true);
     }
 
     public ByQueryTaskResult deleteByQuerySync(String datasource,
                                                io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteByQueryRequest request) throws Exception {
-        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.DELETE_BY_QUERY_PATH_TEMPLATE, request.getIndex());
+        String endpoint = ElasticsearchEndpointHelper.buildDeleteByQueryEndpoint(request.getIndex());
         String body = buildDeleteByQueryBody(request);
         return executeByQuerySync(datasource, request.getIndex(), endpoint, body, false);
     }
@@ -77,7 +80,7 @@ public class ElasticsearchWriteApiHelper {
                                           io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateByQueryRequest request) throws Exception {
         String index = request.getIndex();
         String body = buildUpdateByQueryBody(request);
-        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.UPDATE_BY_QUERY_PATH_TEMPLATE, index);
+        String endpoint = ElasticsearchEndpointHelper.buildUpdateByQueryEndpoint(index);
         return submitByLowLevel(datasource, endpoint, body);
     }
 
@@ -89,38 +92,41 @@ public class ElasticsearchWriteApiHelper {
                                           io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteByQueryRequest request) throws Exception {
         String index = request.getIndex();
         String body = buildDeleteByQueryBody(request);
-        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.DELETE_BY_QUERY_PATH_TEMPLATE, index);
+        String endpoint = ElasticsearchEndpointHelper.buildDeleteByQueryEndpoint(index);
         return submitByLowLevel(datasource, endpoint, body);
     }
 
     public ByQueryTaskResult getTask(String datasource, String taskId) throws Exception {
         RestClient client = registry.getLowLevelClient(datasource);
-        String endpoint = String.format(SimpleElasticsearchPersistenceConstant.TASK_PATH_TEMPLATE, taskId);
-        Response response = client.performRequest(new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_GET, endpoint));
+        String endpoint = ElasticsearchEndpointHelper.buildTaskEndpoint(taskId);
+        Response response = ElasticsearchLowLevelRequestHelper.execute(client,
+                ElasticsearchLowLevelRequestHelper.newRequest(SimpleElasticsearchRouteConstant.HTTP_METHOD_GET, endpoint));
         Map<String, Object> body = parseBody(response);
 
-        boolean completed = Boolean.TRUE.equals(body.get("completed"));
-        Map<String, Object> task = extractMap(body, "task");
-        String resolvedTaskId = resolveTaskId(taskId, task);
+        boolean completed = Boolean.TRUE.equals(body.get(SimpleElasticsearchRouteConstant.JSON_FIELD_COMPLETED));
+        Map<String, Object> task = extractMap(body, SimpleElasticsearchRouteConstant.JSON_FIELD_TASK);
+        String resolvedTaskId = ElasticsearchResponseHelper.extractTaskId(taskId, task);
 
         ByQueryTaskResult.ByQueryTaskResultBuilder builder = ByQueryTaskResult.builder()
                 .completed(completed)
                 .taskId(resolvedTaskId)
                 .datasource(datasource);
 
-        Map<String, Object> status = completed ? extractMap(body, "response") : extractMap(task, "status");
+        Map<String, Object> status = completed
+                ? extractMap(body, SimpleElasticsearchRouteConstant.JSON_FIELD_RESPONSE)
+                : extractMap(task, SimpleElasticsearchRouteConstant.JSON_FIELD_STATUS);
         if (status != null) {
-            builder.total(toLong(status.get("total")))
-                    .updated(toLong(status.get("updated")))
-                    .deleted(toLong(status.get("deleted")))
-                    .versionConflicts(toLong(status.get("version_conflicts")));
+            builder.total(toLong(status.get(SimpleElasticsearchRouteConstant.JSON_FIELD_TOTAL)))
+                    .updated(toLong(status.get(SimpleElasticsearchRouteConstant.JSON_FIELD_UPDATED)))
+                    .deleted(toLong(status.get(SimpleElasticsearchRouteConstant.JSON_FIELD_DELETED)))
+                    .versionConflicts(toLong(status.get(SimpleElasticsearchRouteConstant.JSON_FIELD_VERSION_CONFLICTS)));
         }
 
         if (completed) {
-            Map<String, Object> resp = extractMap(body, "response");
+            Map<String, Object> resp = extractMap(body, SimpleElasticsearchRouteConstant.JSON_FIELD_RESPONSE);
             if (resp != null) {
-                builder.tookMs(toLong(resp.get("took")));
-                builder.failureList(extractFailures(resp.get("failures")));
+                builder.tookMs(toLong(resp.get(SimpleElasticsearchRouteConstant.JSON_FIELD_TOOK)));
+                builder.failureList(extractFailures(resp.get(SimpleElasticsearchRouteConstant.JSON_FIELD_FAILURES)));
             }
         }
         return builder.build();
@@ -129,41 +135,39 @@ public class ElasticsearchWriteApiHelper {
     private ByQueryTaskResult executeByQuerySync(String datasource, String index, String endpoint, String body,
                                                  boolean updateOperation) throws Exception {
         RestClient client = registry.getLowLevelClient(datasource);
-        Request request = new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_POST, endpoint);
-        request.addParameter(SimpleElasticsearchPersistenceConstant.PARAM_WAIT_FOR_COMPLETION,
-                SimpleElasticsearchPersistenceConstant.PARAM_VALUE_TRUE);
-        if (body != null) {
-            request.setJsonEntity(body);
-        }
-        Response response = client.performRequest(request);
+        Request request = ElasticsearchLowLevelRequestHelper.newJsonRequest(
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint, body);
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_WAIT_FOR_COMPLETION,
+                SimpleElasticsearchRouteConstant.PARAM_VALUE_TRUE);
+        Response response = ElasticsearchLowLevelRequestHelper.execute(client, request);
         Map<String, Object> responseBody = parseBody(response);
         ByQueryTaskResult.ByQueryTaskResultBuilder builder = ByQueryTaskResult.builder()
                 .completed(true)
                 .datasource(datasource)
                 .index(index)
-                .total(toLong(responseBody.get("total")))
-                .versionConflicts(toLong(responseBody.get("version_conflicts")))
-                .tookMs(toLong(responseBody.get("took")))
-                .failureList(extractFailures(responseBody.get("failures")));
+                .total(toLong(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_TOTAL)))
+                .versionConflicts(toLong(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_VERSION_CONFLICTS)))
+                .tookMs(toLong(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_TOOK)))
+                .failureList(extractFailures(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_FAILURES)));
         if (updateOperation) {
-            builder.updated(toLong(responseBody.get("updated")));
+            builder.updated(toLong(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_UPDATED)));
         } else {
-            builder.deleted(toLong(responseBody.get("deleted")));
+            builder.deleted(toLong(responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_DELETED)));
         }
         return builder.build();
     }
 
     private String submitByLowLevel(String datasource, String endpoint, String body) throws Exception {
         RestClient client = registry.getLowLevelClient(datasource);
-        Request request = new Request(SimpleElasticsearchPersistenceConstant.HTTP_METHOD_POST, endpoint);
-        request.addParameter(SimpleElasticsearchPersistenceConstant.PARAM_WAIT_FOR_COMPLETION,
-                SimpleElasticsearchPersistenceConstant.PARAM_VALUE_FALSE);
-        if (body != null) {
-            request.setJsonEntity(body);
-        }
-        Response response = client.performRequest(request);
+        Request request = ElasticsearchLowLevelRequestHelper.newJsonRequest(
+                SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint, body);
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_WAIT_FOR_COMPLETION,
+                SimpleElasticsearchRouteConstant.PARAM_VALUE_FALSE);
+        Response response = ElasticsearchLowLevelRequestHelper.execute(client, request);
         Map<String, Object> responseBody = parseBody(response);
-        Object task = responseBody.get("task");
+        Object task = responseBody.get(SimpleElasticsearchRouteConstant.JSON_FIELD_TASK);
         return task == null ? null : String.valueOf(task);
     }
 
@@ -173,11 +177,11 @@ public class ElasticsearchWriteApiHelper {
         if (request.getScriptSource() != null && !request.getScriptSource().isEmpty()) {
             Map<String, Object> script = new LinkedHashMap<>();
             script.put("source", request.getScriptSource());
-            script.put("lang", SimpleElasticsearchPersistenceConstant.DEFAULT_SCRIPT_LANG);
+            script.put(SimpleElasticsearchRouteConstant.JSON_FIELD_LANG, SimpleElasticsearchPersistenceConstant.DEFAULT_SCRIPT_LANG);
             if (request.getScriptParamMap() != null) {
-                script.put("params", request.getScriptParamMap());
+                script.put(SimpleElasticsearchRouteConstant.JSON_FIELD_PARAMS, request.getScriptParamMap());
             }
-            body.put("script", script);
+            body.put(SimpleElasticsearchRouteConstant.JSON_FIELD_SCRIPT, script);
         }
         applyByQueryBodyOptions(body, request.getOptions());
         return OBJECT_MAPPER.writeValueAsString(body);
@@ -241,33 +245,12 @@ public class ElasticsearchWriteApiHelper {
         if (options == null) {
             return;
         }
-        if (options.getRefresh() != null) {
-            body.put("refresh", options.getRefresh());
-        }
-        if (options.getTimeoutMs() != null) {
-            body.put("timeout", options.getTimeoutMs() + SimpleElasticsearchPersistenceConstant.TIMEOUT_MS_SUFFIX);
-        }
-        if (options.getSlices() != null) {
-            body.put("slices", options.getSlices());
-        }
-        if (options.getConflicts() != null) {
-            body.put("conflicts", options.getConflicts());
-        }
-        if (options.getScrollSize() != null) {
-            body.put("scroll_size", options.getScrollSize());
-        }
+        ElasticsearchRequestOptionHelper.applyByQueryBodyOptions(body, options.getRefresh(), options.getTimeoutMs(),
+                options.getSlices(), options.getConflicts(), options.getScrollSize());
     }
 
     private Map<String, Object> parseBody(Response response) throws Exception {
-        HttpEntity entity = response.getEntity();
-        if (entity == null) {
-            return Collections.emptyMap();
-        }
-        try (InputStream is = entity.getContent()) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> parsed = OBJECT_MAPPER.readValue(is, Map.class);
-            return parsed == null ? Collections.emptyMap() : parsed;
-        }
+        return ElasticsearchResponseHelper.parseResponseBodyAsMap(response);
     }
 
     @SuppressWarnings("unchecked")
@@ -277,18 +260,6 @@ public class ElasticsearchWriteApiHelper {
         }
         Object value = parent.get(key);
         return value instanceof Map ? (Map<String, Object>) value : null;
-    }
-
-    private String resolveTaskId(String taskId, Map<String, Object> task) {
-        if (task == null) {
-            return taskId;
-        }
-        Object node = task.get("node");
-        Object id = task.get("id");
-        if (node != null && id != null) {
-            return String.valueOf(node) + ":" + String.valueOf(id);
-        }
-        return taskId;
     }
 
     private long toLong(Object value) {
@@ -317,27 +288,14 @@ public class ElasticsearchWriteApiHelper {
             }
             Map<String, Object> failure = (Map<String, Object>) item;
             result.add(ByQueryFailure.builder()
-                    .index(getAsString(failure.get("index")))
-                    .id(getAsString(failure.get("id")))
-                    .cause(extractCause(failure.get("cause")))
-                    .status(getAsString(failure.get("status")))
+                    .index(getAsString(failure.get(SimpleElasticsearchRouteConstant.JSON_FIELD_INDEX)))
+                    .id(getAsString(failure.get(SimpleElasticsearchRouteConstant.JSON_FIELD_ID)))
+                    .cause(ElasticsearchResponseHelper.extractFailureCause(
+                            failure.get(SimpleElasticsearchRouteConstant.JSON_FIELD_CAUSE)))
+                    .status(getAsString(failure.get(SimpleElasticsearchRouteConstant.JSON_FIELD_STATUS)))
                     .build());
         }
         return result;
-    }
-
-    @SuppressWarnings("unchecked")
-    private String extractCause(Object cause) {
-        if (cause == null) {
-            return null;
-        }
-        if (cause instanceof Map) {
-            Object reason = ((Map<String, Object>) cause).get("reason");
-            if (reason != null) {
-                return String.valueOf(reason);
-            }
-        }
-        return String.valueOf(cause);
     }
 
     private String getAsString(Object value) {
