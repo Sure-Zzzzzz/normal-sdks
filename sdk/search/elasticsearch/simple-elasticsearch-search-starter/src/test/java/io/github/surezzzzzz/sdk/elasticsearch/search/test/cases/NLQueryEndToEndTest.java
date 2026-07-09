@@ -2,20 +2,18 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -48,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author surezzzzzz
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -65,21 +64,25 @@ class NLQueryEndToEndTest {
     private static final String USER_INDEX = "test_user_index";
     private static final String USER_ALIAS = "test_user";
 
+    private boolean primarySupportsPit() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
+    }
+
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 准备 NL 查询 E2E 测试数据 ==========");
-        RestHighLevelClient client = registry.getHighLevelClient("primary");
-        createUserIndex(client);
-        Thread.sleep(2000);
+        createUserIndex(registry);
         log.info("========== NL 查询 E2E 测试数据准备完成 ==========");
     }
 
-    private static void createUserIndex(RestHighLevelClient client) throws Exception {
-        if (client.indices().exists(new GetIndexRequest(USER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(USER_INDEX), RequestOptions.DEFAULT);
-        }
-        CreateIndexRequest request = new CreateIndexRequest(USER_INDEX);
-        request.mapping(
+    private static void createUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, "primary", USER_INDEX);
+        EsApiHelper.createIndex(registry, "primary", USER_INDEX,
                 "{" +
                         "  \"properties\": {" +
                         "    \"username\": {" +
@@ -97,10 +100,7 @@ class NLQueryEndToEndTest {
                         "    \"password\": {\"type\": \"keyword\"}," +
                         "    \"created_at\": {\"type\": \"date\"}" +
                         "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}");
         log.info("已创建索引: {}", USER_INDEX);
 
         // 测试数据：张三(25,北京), 李四(30,上海), 王五(28,北京), 赵六(22,深圳), 钱七(35,上海)
@@ -112,11 +112,7 @@ class NLQueryEndToEndTest {
         users.add(userMap("eve", "钱七", 35, "上海", "13500135000", "password111"));
 
         for (int i = 0; i < users.size(); i++) {
-            Map<String, Object> user = users.get(i);
-            IndexRequest indexRequest = new IndexRequest(USER_INDEX)
-                    .id(String.valueOf(i + 1))
-                    .source(user);
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, "primary", USER_INDEX, String.valueOf(i + 1), users.get(i));
         }
         log.info("已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
     }
@@ -422,9 +418,9 @@ class NLQueryEndToEndTest {
     @Order(31)
     void testSensitiveFieldForbidden() throws Exception {
         log.info("========== NL 查询：敏感字段 FORBIDDEN ==========");
-        // 密码字段 FORBIDDEN，查询任意用户（无需特定过滤条件）
+        // 密码字段 FORBIDDEN，固定查询张三，避免不同 ES 版本默认排序导致首条记录不一致
         // 验证：password 不返回、phone 被 mask
-        String nl = "查询test_user索引，年龄大于18";
+        String nl = "查询test_user索引，姓名等于张三";
         String body = "{\"nl\":\"" + nl + "\"}";
         log.info("请求: POST /api/query/nl  body={}", body);
 
@@ -747,6 +743,7 @@ class NLQueryEndToEndTest {
     @Test
     @Order(66)
     void testNlQueryWithPit() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 PIT 首页测试");
         log.info("========== NL 查询：PIT 首页覆盖（ES 7.10+，使用 alias） ==========");
         String body = "{" +
                 "\"nl\":\"查询test_user索引，城市等于北京\"," +
@@ -775,6 +772,7 @@ class NLQueryEndToEndTest {
     @Test
     @Order(67)
     void testNlQueryWithPitContinuation() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 PIT 续页测试");
         log.info("========== NL 查询：PIT 续页 ==========");
         // 先发 PIT 首页
         String firstBody = "{" +
@@ -987,6 +985,7 @@ class NLQueryEndToEndTest {
     @Test
     @Order(74)
     void testNlPitKeepAliveRequired() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 pitKeepAlive 参数校验");
         log.info("========== NL 查询错误：PIT 缺少 pitKeepAlive → 400 ==========");
         String body = "{" +
                 "\"nl\":\"查询test_user索引\"," +
@@ -1009,6 +1008,7 @@ class NLQueryEndToEndTest {
     @Test
     @Order(75)
     void testNlPitKeepAliveExceeded() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 pitKeepAlive 上限校验");
         log.info("========== NL 查询错误：PIT pitKeepAlive 超过上限 → 400 ==========");
         String body = "{" +
                 "\"nl\":\"查询test_user索引\"," +

@@ -10,19 +10,16 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.Expression
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
@@ -56,6 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author surezzzzzz
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -70,10 +68,34 @@ class SearchEndToEndTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    private boolean primarySupportsPit() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
+    }
+
+    private boolean primarySupportsCompositeAfterKey() {
+        ClusterInfo clusterInfo = registry.getClusterInfo(DEFAULT_DATASOURCE);
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && clusterInfo.getEffectiveVersion().getMajor() > 6;
+    }
+
     private static final String USER_INDEX = "test_user_index";
     private static final String NL_USER_INDEX = "test_nl_user_index";
     private static final String ORDER_INDEX = "test_order_index";
     private static final String LOG_INDEX_PREFIX = "test_log_";
+    private static final String LOG_MAPPING_JSON = "{"
+            + "  \"properties\": {"
+            + "    \"user_id\": {\"type\": \"keyword\"},"
+            + "    \"action\": {\"type\": \"keyword\"},"
+            + "    \"message\": {\"type\": \"text\"},"
+            + "    \"createTime\": {\"type\": \"date\"}"
+            + "  }"
+            + "}";
     private static final String SECONDARY_INDEX = "test_index_b.secondary";  // 路由到 secondary 数据源的索引
     private static final String DEFAULT_DATASOURCE = "primary";  // 从配置文件中获取的默认数据源
     private static final String SECONDARY_DATASOURCE = "secondary";  // 第二个数据源
@@ -89,20 +111,17 @@ class SearchEndToEndTest {
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备测试数据 ==========");
 
-        // 获取默认数据源的客户端
-        RestHighLevelClient primaryClient = registry.getHighLevelClient(DEFAULT_DATASOURCE);
-
         // 1. 创建 order 索引（primary 数据源）
-        createOrderIndex(primaryClient);
+        createOrderIndex(registry);
 
         // 2. 创建 user 索引（primary 数据源）
-        createUserIndex(primaryClient);
+        createUserIndex(registry);
 
         // 2.5 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
-        createNlUserIndex(primaryClient);
+        createNlUserIndex(registry);
 
         // 3. 创建多天的 log 索引（模拟日期分割，primary 数据源）
-        createMultipleDateLogIndices(primaryClient);
+        createMultipleDateLogIndices(registry);
 
         // 4. 创建 secondary 索引（secondary 数据源）- 测试多数据源路由
         createSecondaryIndex(registry);
@@ -113,7 +132,7 @@ class SearchEndToEndTest {
     /**
      * 创建多天的日期分割索引
      */
-    private static void createMultipleDateLogIndices(RestHighLevelClient client) throws Exception {
+    private static void createMultipleDateLogIndices(SimpleElasticsearchRouteRegistry registry) {
         LocalDateTime baseDate = LocalDateTime.now();
 
         // 创建最近3天的索引
@@ -121,34 +140,17 @@ class SearchEndToEndTest {
             LocalDateTime date = baseDate.minusDays(i);
             String indexName = LOG_INDEX_PREFIX + date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
 
-            createLogIndexForDate(client, indexName, date, i);
+            createLogIndexForDate(registry, indexName, date, i);
         }
     }
 
     /**
      * 创建指定日期的日志索引
      */
-    private static void createLogIndexForDate(RestHighLevelClient client, String indexName,
-                                              LocalDateTime date, int dayOffset) throws Exception {
-        // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(indexName), RequestOptions.DEFAULT);
-        }
-
-        // 创建索引
-        CreateIndexRequest request = new CreateIndexRequest(indexName);
-        request.mapping(
-                "{" +
-                        "  \"properties\": {" +
-                        "    \"user_id\": {\"type\": \"keyword\"}," +
-                        "    \"action\": {\"type\": \"keyword\"}," +
-                        "    \"message\": {\"type\": \"text\"}," +
-                        "    \"createTime\": {\"type\": \"date\"}" +
-                        "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+    private static void createLogIndexForDate(SimpleElasticsearchRouteRegistry registry, String indexName,
+                                              LocalDateTime date, int dayOffset) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, indexName);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName, LOG_MAPPING_JSON);
         log.info("✓ 已创建索引: {}", indexName);
 
         // 插入该日期的测试数据
@@ -159,13 +161,10 @@ class SearchEndToEndTest {
         );
 
         for (int i = 0; i < logs.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(indexName)
-                    .id(String.format("%d-%d", dayOffset, i + 1))
-                    .source(logs.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, indexName,
+                    String.format("%d-%d", dayOffset, i + 1), logs.get(i));
         }
 
-        Thread.sleep(1000);
         log.info("✓ 已插入 {} 条测试数据到 {}", logs.size(), indexName);
     }
 
@@ -185,22 +184,20 @@ class SearchEndToEndTest {
 
         try {
             // 清理 primary 数据源的索引
-            RestHighLevelClient primaryClient = registry.getHighLevelClient(DEFAULT_DATASOURCE);
-            deleteIndexIfExists(primaryClient, ORDER_INDEX);
-            deleteIndexIfExists(primaryClient, USER_INDEX);
-            deleteIndexIfExists(primaryClient, NL_USER_INDEX);
+            deleteIndexIfExists(registry, DEFAULT_DATASOURCE, ORDER_INDEX);
+            deleteIndexIfExists(registry, DEFAULT_DATASOURCE, USER_INDEX);
+            deleteIndexIfExists(registry, DEFAULT_DATASOURCE, NL_USER_INDEX);
 
             // 删除所有 test_log_* 索引
             LocalDateTime baseDate = LocalDateTime.now();
             for (int i = 0; i < 3; i++) {
                 LocalDateTime date = baseDate.minusDays(i);
                 String indexName = LOG_INDEX_PREFIX + date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-                deleteIndexIfExists(primaryClient, indexName);
+                deleteIndexIfExists(registry, DEFAULT_DATASOURCE, indexName);
             }
 
             // 清理 secondary 数据源的索引
-            RestHighLevelClient secondaryClient = registry.getHighLevelClient(SECONDARY_DATASOURCE);
-            deleteIndexIfExists(secondaryClient, SECONDARY_INDEX);
+            deleteIndexIfExists(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
 
         } catch (Exception e) {
             log.warn("清理索引失败", e);
@@ -209,9 +206,11 @@ class SearchEndToEndTest {
         log.info("========== 测试数据清理完成 ==========");
     }
 
-    private static void deleteIndexIfExists(RestHighLevelClient client, String indexName) throws Exception {
-        if (client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(indexName), RequestOptions.DEFAULT);
+    private static void deleteIndexIfExists(SimpleElasticsearchRouteRegistry registry,
+                                            String datasource,
+                                            String indexName) {
+        if (EsApiHelper.indexExists(registry, datasource, indexName)) {
+            EsApiHelper.deleteIndex(registry, datasource, indexName);
             log.info("✓ 已删除索引: {}", indexName);
         }
     }
@@ -737,6 +736,11 @@ class SearchEndToEndTest {
 
         QueryRequest request = QueryRequest.builder()
                 .index("test_user")
+                .query(QueryCondition.builder()
+                        .field("name")
+                        .op("EQ")
+                        .value("张三")
+                        .build())
                 .pagination(PaginationInfo.builder()
                         .size(1)
                         .build())
@@ -960,6 +964,7 @@ class SearchEndToEndTest {
     @Order(72)
     @DisplayName("9.3 searchAfterMode=pit，pitKeepAlive 未传 - 报 400")
     void testSearchAfterPitMissingKeepAlive() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 pitKeepAlive 参数校验");
         log.info("========== 测试：pit 模式缺少 pitKeepAlive ==========");
 
         QueryRequest request = QueryRequest.builder()
@@ -989,6 +994,7 @@ class SearchEndToEndTest {
     @Order(73)
     @DisplayName("9.4 searchAfterMode=pit，pitKeepAlive 超过服务端上限 - 报 400")
     void testSearchAfterPitKeepAliveExceeded() throws Exception {
+        Assumptions.assumeTrue(primarySupportsPit(), "ES < 7.10 不支持 PIT，跳过 pitKeepAlive 上限校验");
         log.info("========== 测试：pit 模式 pitKeepAlive 超过上限 ==========");
 
         QueryRequest request = QueryRequest.builder()
@@ -1057,15 +1063,9 @@ class SearchEndToEndTest {
     /**
      * 创建 order 索引（无标识符）
      */
-    private static void createOrderIndex(RestHighLevelClient client) throws Exception {
-        // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(ORDER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(ORDER_INDEX), RequestOptions.DEFAULT);
-        }
-
-        // 创建索引
-        CreateIndexRequest request = new CreateIndexRequest(ORDER_INDEX);
-        request.mapping(
+    private static void createOrderIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX,
                 "{" +
                         "  \"properties\": {" +
                         "    \"order_id\": {\"type\": \"keyword\"}," +
@@ -1076,10 +1076,7 @@ class SearchEndToEndTest {
                         "    \"client_ip\": {\"type\": \"ip\"}," +
                         "    \"created_at\": {\"type\": \"date\"}" +
                         "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}");
         log.info("✓ 已创建索引: {}", ORDER_INDEX);
 
         // 插入测试数据
@@ -1092,28 +1089,18 @@ class SearchEndToEndTest {
         );
 
         for (int i = 0; i < orders.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(ORDER_INDEX)
-                    .id(String.valueOf(i + 1))
-                    .source(orders.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, ORDER_INDEX, String.valueOf(i + 1), orders.get(i));
         }
 
-        Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {}", orders.size(), ORDER_INDEX);
     }
 
     /**
      * 创建 user 索引（有标识符）
      */
-    private static void createUserIndex(RestHighLevelClient client) throws Exception {
-        // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(USER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(USER_INDEX), RequestOptions.DEFAULT);
-        }
-
-        // 创建索引
-        CreateIndexRequest request = new CreateIndexRequest(USER_INDEX);
-        request.mapping(
+    private static void createUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, USER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, USER_INDEX,
                 "{" +
                         "  \"properties\": {" +
                         "    \"username\": {" +
@@ -1131,10 +1118,7 @@ class SearchEndToEndTest {
                         "    \"password\": {\"type\": \"keyword\"}," +
                         "    \"created_at\": {\"type\": \"date\"}" +
                         "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}");
         log.info("✓ 已创建索引: {}", USER_INDEX);
 
         // 插入测试数据
@@ -1147,26 +1131,18 @@ class SearchEndToEndTest {
         );
 
         for (int i = 0; i < users.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(USER_INDEX)
-                    .id(String.valueOf(i + 1))
-                    .source(users.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, USER_INDEX, String.valueOf(i + 1), users.get(i));
         }
 
-        Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
     }
 
     /**
      * 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
      */
-    private static void createNlUserIndex(RestHighLevelClient client) throws Exception {
-        if (client.indices().exists(new GetIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT);
-        }
-
-        CreateIndexRequest request = new CreateIndexRequest(NL_USER_INDEX);
-        request.mapping(
+    private static void createNlUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX,
                 "{" +
                         "  \"properties\": {" +
                         "    \"name\": {" +
@@ -1184,10 +1160,7 @@ class SearchEndToEndTest {
                         "    \"createTime\": {\"type\": \"date\"}," +
                         "    \"orderId\": {\"type\": \"keyword\"}" +
                         "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}");
         log.info("✓ 已创建索引: {}", NL_USER_INDEX);
 
         // 插入测试数据
@@ -1197,18 +1170,14 @@ class SearchEndToEndTest {
         // Dave:  age=20, points=800  → 命中 name='Alice' AND age>=18 AND points<=1000 时不命中（name不对）
         List<Map<String, Object>> users = Arrays.asList(
                 createNlUser("Alice", 25, "北京", "active", 500L, "ORD001"),
-                createNlUser("Bob",   16, "上海", "active", 200L, "ORD002"),
+                createNlUser("Bob", 16, "上海", "active", 200L, "ORD002"),
                 createNlUser("Carol", 30, "广州", "active", 1500L, "ORD003"),
-                createNlUser("Dave",  20, "深圳", "active", 800L, "ORD004")
+                createNlUser("Dave", 20, "深圳", "active", 800L, "ORD004")
         );
         for (int i = 0; i < users.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(NL_USER_INDEX)
-                    .id("nl-" + (i + 1))
-                    .source(users.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, NL_USER_INDEX, "nl-" + (i + 1), users.get(i));
         }
 
-        Thread.sleep(2000);
         log.info("✓ NL 用户索引创建完成，已插入 {} 条数据", users.size());
     }
 
@@ -1525,7 +1494,6 @@ class SearchEndToEndTest {
         String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
         // 向今天的索引中插入一条昨天时间的数据，模拟入库延迟导致的跨天脏数据
-        RestHighLevelClient client = registry.getHighLevelClient(DEFAULT_DATASOURCE);
         String todayIndex = LOG_INDEX_PREFIX + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
         LocalDateTime yesterday = LocalDateTime.now().minusDays(1);
         Map<String, Object> dirtyData = new HashMap<>();
@@ -1533,8 +1501,7 @@ class SearchEndToEndTest {
         dirtyData.put("action", "dirty_action");
         dirtyData.put("message", "脏数据 - 昨天时间写入今天索引");
         dirtyData.put("createTime", yesterday);
-        client.index(new IndexRequest(todayIndex).id("dirty-1").source(dirtyData), RequestOptions.DEFAULT);
-        Thread.sleep(1000);
+        EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, todayIndex, "dirty-1", dirtyData);
 
         // strict-date-filter=true（默认），查今天整天范围，脏数据的 createTime 是昨天，应被过滤掉
         QueryRequest request = QueryRequest.builder()
@@ -1560,7 +1527,7 @@ class SearchEndToEndTest {
                 });
 
         // 清理脏数据
-        client.delete(new org.elasticsearch.action.delete.DeleteRequest(todayIndex, "dirty-1"), RequestOptions.DEFAULT);
+        EsApiHelper.deleteDoc(registry, DEFAULT_DATASOURCE, todayIndex, "dirty-1");
     }
 
     @Test
@@ -1878,6 +1845,8 @@ class SearchEndToEndTest {
     @Order(80)
     @DisplayName("10.1 composite 聚合 - 第一页（不传 after）")
     void testCompositeAggFirstPage() throws Exception {
+        Assumptions.assumeTrue(primarySupportsCompositeAfterKey(),
+                "ES 6.2.2 composite 聚合不会稳定返回 after_key，跳过翻页游标断言");
         log.info("========== 测试：composite 聚合第一页 ==========");
 
         AggRequest request = AggRequest.builder()
@@ -1920,6 +1889,8 @@ class SearchEndToEndTest {
     @Order(81)
     @DisplayName("10.2 composite 聚合 - 翻页（传 after）")
     void testCompositeAggNextPage() throws Exception {
+        Assumptions.assumeTrue(primarySupportsCompositeAfterKey(),
+                "ES 6.2.2 composite 聚合不会稳定返回 after_key，跳过翻页游标断言");
         log.info("========== 测试：composite 聚合翻页 ==========");
 
         // 第一页：size=2，取 afterKey
@@ -2784,29 +2755,12 @@ class SearchEndToEndTest {
     }
 
 
-    private static String createLogIndex(RestHighLevelClient client) throws Exception {
+    private static String createLogIndex(SimpleElasticsearchRouteRegistry registry) {
         String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
         String indexName = LOG_INDEX_PREFIX + today;
 
-        // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(indexName), RequestOptions.DEFAULT);
-        }
-
-        // 创建索引
-        CreateIndexRequest request = new CreateIndexRequest(indexName);
-        request.mapping(
-                "{" +
-                        "  \"properties\": {" +
-                        "    \"user_id\": {\"type\": \"keyword\"}," +
-                        "    \"action\": {\"type\": \"keyword\"}," +
-                        "    \"message\": {\"type\": \"text\"}," +
-                        "    \"createTime\": {\"type\": \"date\"}" +
-                        "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, indexName);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName, LOG_MAPPING_JSON);
         log.info("✓ 已创建索引: {}", indexName);
 
         // 插入测试数据
@@ -2817,13 +2771,9 @@ class SearchEndToEndTest {
         );
 
         for (int i = 0; i < logs.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(indexName)
-                    .id(String.valueOf(i + 1))
-                    .source(logs.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, indexName, String.valueOf(i + 1), logs.get(i));
         }
 
-        Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {}", logs.size(), indexName);
 
         return indexName;
@@ -3136,13 +3086,8 @@ class SearchEndToEndTest {
      * 用于测试多数据源路由和版本兼容性
      */
     private static void createSecondaryIndex(SimpleElasticsearchRouteRegistry registry) throws Exception {
-        // 获取 secondary 数据源的客户端
-        RestHighLevelClient client = registry.getHighLevelClient(SECONDARY_DATASOURCE);
-
         // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(SECONDARY_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(SECONDARY_INDEX), RequestOptions.DEFAULT);
-        }
+        EsApiHelper.deleteIndex(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
 
         // 使用 TestIndexHelper 创建索引（版本自适应，支持 ES 6.x 和 7.x）
         Map<String, Object> properties = new HashMap<>();
@@ -3183,13 +3128,9 @@ class SearchEndToEndTest {
         );
 
         for (int i = 0; i < products.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(SECONDARY_INDEX)
-                    .id(String.valueOf(i + 1))
-                    .source(products.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX,
+                    String.valueOf(i + 1), products.get(i));
         }
-
-        Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {} (secondary 数据源)", products.size(), SECONDARY_INDEX);
     }
 

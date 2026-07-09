@@ -296,6 +296,33 @@ public class ErrorMessage {
      */
     public static final String AGG_PERCENTILE_RANKS_VALUES_REQUIRED = "percentile_ranks 聚合 [%s] 必须填写 values 字段";
 
+    /**
+     * 聚合反射调用失败（6.x/7.x 跨版本兼容场景）
+     */
+    public static final String AGG_REFLECT_INVOKE_FAILED = "聚合反射调用失败：[%s]";
+
+    /**
+     * 聚合类跨版本加载失败（6.x/7.x 均找不到目标类）
+     */
+    public static final String AGG_REFLECT_CLASS_NOT_FOUND = "聚合类跨版本加载失败：[%s]";
+
+    // ========== XContent 反射相关 ==========
+
+    /**
+     * XContent API 类不存在
+     */
+    public static final String XCONTENT_API_NOT_FOUND = "未找到兼容的 XContent API 类，请检查 Elasticsearch client 版本";
+
+    /**
+     * SearchModule 构造方法不存在
+     */
+    public static final String XCONTENT_SEARCH_MODULE_CONSTRUCTOR_NOT_FOUND = "未找到兼容的 SearchModule 构造方法";
+
+    /**
+     * NamedXContentRegistry 创建失败
+     */
+    public static final String XCONTENT_REGISTRY_CREATE_FAILED = "创建 NamedXContentRegistry 失败";
+
     // ========== 高级表达式相关 ==========
 
     /**

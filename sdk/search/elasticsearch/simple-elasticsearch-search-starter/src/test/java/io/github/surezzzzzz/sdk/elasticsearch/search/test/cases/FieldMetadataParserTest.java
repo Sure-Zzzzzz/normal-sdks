@@ -251,7 +251,7 @@ class FieldMetadataParserTest {
         log.info("合并结果（字段并集）：{}", result.stream().map(FieldMetadata::getName).collect(Collectors.toList()));
         assertEquals(3, result.size());
 
-        FieldMetadata nameField = result.stream().filter(f -> f.getName().equals("name")).findFirst().orElseThrow();
+        FieldMetadata nameField = result.stream().filter(f -> f.getName().equals("name")).findFirst().orElseThrow(AssertionError::new);
         assertEquals(FieldType.TEXT, nameField.getType());  // idxB 的类型
 
         assertTrue(result.stream().anyMatch(f -> f.getName().equals("status")));

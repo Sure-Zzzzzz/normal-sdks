@@ -14,20 +14,17 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -50,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since 1.2.0
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 public class EventPublishEndToEndTest {
 
@@ -68,23 +66,15 @@ public class EventPublishEndToEndTest {
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备事件测试数据 ==========");
 
-        RestHighLevelClient client = registry.getHighLevelClient("primary");
-
         // 创建 user 索引
-        createUserIndex(client);
+        createUserIndex(registry);
 
         log.info("========== 事件测试数据准备完成 ==========");
     }
 
-    private static void createUserIndex(RestHighLevelClient client) throws Exception {
-        // 删除旧索引
-        if (client.indices().exists(new GetIndexRequest(USER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(USER_INDEX), RequestOptions.DEFAULT);
-        }
-
-        // 创建索引
-        CreateIndexRequest request = new CreateIndexRequest(USER_INDEX);
-        request.mapping(
+    private static void createUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, "primary", USER_INDEX);
+        EsApiHelper.createIndex(registry, "primary", USER_INDEX,
                 "{" +
                         "  \"properties\": {" +
                         "    \"username\": {" +
@@ -102,10 +92,7 @@ public class EventPublishEndToEndTest {
                         "    \"password\": {\"type\": \"keyword\"}," +
                         "    \"created_at\": {\"type\": \"date\"}" +
                         "  }" +
-                        "}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}");
         log.info("✓ 已创建索引: {}", USER_INDEX);
 
         // 插入测试数据
@@ -116,13 +103,9 @@ public class EventPublishEndToEndTest {
         );
 
         for (int i = 0; i < users.size(); i++) {
-            IndexRequest indexRequest = new IndexRequest(USER_INDEX)
-                    .id(String.valueOf(i + 1))
-                    .source(users.get(i));
-            client.index(indexRequest, RequestOptions.DEFAULT);
+            EsApiHelper.indexDoc(registry, "primary", USER_INDEX, String.valueOf(i + 1), users.get(i));
         }
 
-        Thread.sleep(2000);
         log.info("✓ 已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
     }
 

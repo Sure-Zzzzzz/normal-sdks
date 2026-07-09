@@ -7,18 +7,16 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDate;
@@ -51,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author surezzzzzz
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 @AutoConfigureMockMvc
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -75,8 +74,7 @@ class IndexDowngradeEndToEndTest {
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备降级测试数据 ==========");
-        RestHighLevelClient client = registry.getHighLevelClient(DEFAULT_DATASOURCE);
-        createLogIndices(client, LocalDate.of(2024, 1, 1), LocalDate.of(2024, 3, 31));
+        createLogIndices(registry, LocalDate.of(2024, 1, 1), LocalDate.of(2024, 3, 31));
         log.info("========== 降级测试数据准备完成 ==========");
     }
 
@@ -84,10 +82,7 @@ class IndexDowngradeEndToEndTest {
     static void cleanupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始清理降级测试数据 ==========");
         try {
-            RestHighLevelClient client = registry.getHighLevelClient(DEFAULT_DATASOURCE);
-            org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest deleteRequest =
-                    new org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest(DOWNGRADE_LOG_INDEX_PREFIX + "*");
-            client.indices().delete(deleteRequest, RequestOptions.DEFAULT);
+            EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, DOWNGRADE_LOG_INDEX_PREFIX + "*");
             log.info("✓ 已清理所有 {} 索引", DOWNGRADE_LOG_INDEX_PREFIX + "*");
         } catch (Exception e) {
             log.warn("清理索引失败: {}", e.getMessage());
@@ -95,33 +90,29 @@ class IndexDowngradeEndToEndTest {
         log.info("========== 降级测试数据清理完成 ==========");
     }
 
-    private static void createLogIndices(RestHighLevelClient client,
-                                         LocalDate from, LocalDate to) throws Exception {
+    private static void createLogIndices(SimpleElasticsearchRouteRegistry registry,
+                                         LocalDate from, LocalDate to) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd");
         int count = 0;
         LocalDate current = from;
         while (!current.isAfter(to)) {
             String indexName = DOWNGRADE_LOG_INDEX_PREFIX + current.format(formatter);
-            if (!client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
-                CreateIndexRequest createRequest = new CreateIndexRequest(indexName);
-
+            if (!EsApiHelper.indexExists(registry, DEFAULT_DATASOURCE, indexName)) {
                 // 字段合并测试：2024-01 无 extraField/extraField2，2024-02/03 有
                 // LocalDate.of(2024, 1, 1) ~ 2024-01-31 为第一个月
                 boolean isMonth1 = current.getMonthValue() == 1;
                 if (isMonth1) {
                     // 月份1：基础字段，无 extraField/extraField2（模拟 2024 旧索引）
-                    createRequest.mapping(
+                    EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName,
                             "{\"properties\":{" +
                                     "\"user_id\":{\"type\":\"keyword\"}," +
                                     "\"action\":{\"type\":\"keyword\"}," +
                                     "\"message\":{\"type\":\"text\"}," +
                                     "\"timestamp\":{\"type\":\"date\"}" +
-                                    "}}",
-                            org.elasticsearch.xcontent.XContentType.JSON
-                    );
+                                    "}}");
                 } else {
                     // 月份2/3：有 extraField(text+keyword子字段) 和 extraField2(keyword)（模拟 2025/2026 新索引）
-                    createRequest.mapping(
+                    EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName,
                             "{\"properties\":{" +
                                     "\"user_id\":{\"type\":\"keyword\"}," +
                                     "\"action\":{\"type\":\"keyword\"}," +
@@ -129,11 +120,8 @@ class IndexDowngradeEndToEndTest {
                                     "\"timestamp\":{\"type\":\"date\"}," +
                                     "\"extraField\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\"}}}," +
                                     "\"extraField2\":{\"type\":\"keyword\"}" +
-                                    "}}",
-                            org.elasticsearch.xcontent.XContentType.JSON
-                    );
+                                    "}}");
                 }
-                client.indices().create(createRequest, RequestOptions.DEFAULT);
 
                 Map<String, Object> doc = new HashMap<>();
                 doc.put("user_id", "user" + (current.getDayOfMonth() % 10));
@@ -146,7 +134,7 @@ class IndexDowngradeEndToEndTest {
                     doc.put("extraField", "level-" + current.getMonthValue());
                     doc.put("extraField2", "v" + current.getMonthValue() + ".0");
                 }
-                client.index(new IndexRequest(indexName).id("1").source(doc), RequestOptions.DEFAULT);
+                EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, indexName, "1", doc);
             }
             current = current.plusDays(1);
             count++;

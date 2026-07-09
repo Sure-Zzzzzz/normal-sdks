@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.support;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchResponse;
 
@@ -45,15 +47,15 @@ public final class XContentReflectionHelper {
             try {
                 Class.forName(SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES7 + SimpleElasticsearchSearchConstant.XCONTENT_CLASS_TYPE);
                 detectedXContentPackage = SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES7;
-                log.info("Detected Elasticsearch client XContent API: {} (ES 7.x+)", SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES7);
+                log.info("检测到 Elasticsearch client XContent API：{}（ES 7.x+）", SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES7);
             } catch (ClassNotFoundException e) {
                 try {
                     Class.forName(SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES6 + SimpleElasticsearchSearchConstant.XCONTENT_CLASS_TYPE);
                     detectedXContentPackage = SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES6;
-                    log.info("Detected Elasticsearch client XContent API: {} (ES 6.x)", SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES6);
+                    log.info("检测到 Elasticsearch client XContent API：{}（ES 6.x）", SimpleElasticsearchSearchConstant.XCONTENT_PACKAGE_ES6);
                 } catch (ClassNotFoundException ex) {
-                    throw new IllegalStateException("Cannot find compatible XContent API classes. " +
-                            "Please check your Elasticsearch client version.", ex);
+                    throw new MappingException(ErrorCode.XCONTENT_API_NOT_FOUND,
+                            ErrorMessage.XCONTENT_API_NOT_FOUND, ex);
                 }
             }
             return detectedXContentPackage;
@@ -86,21 +88,22 @@ public final class XContentReflectionHelper {
                     try {
                         Constructor<?> ctor = searchModuleClass.getConstructor(settingsClass, List.class);
                         searchModule = ctor.newInstance(emptySettings, Collections.emptyList());
-                        log.debug("Created SearchModule with (Settings, List) constructor");
+                        log.debug("已使用 (Settings, List) 构造方法创建 SearchModule");
                     } catch (NoSuchMethodException e) {
-                        log.debug("SearchModule(Settings, List) constructor not found");
+                        log.debug("未找到 SearchModule(Settings, List) 构造方法");
                     }
                     if (searchModule == null) {
                         try {
                             Constructor<?> ctor = searchModuleClass.getConstructor(settingsClass, boolean.class, List.class);
                             searchModule = ctor.newInstance(emptySettings, false, Collections.emptyList());
-                            log.debug("Created SearchModule with (Settings, boolean, List) constructor");
+                            log.debug("已使用 (Settings, boolean, List) 构造方法创建 SearchModule");
                         } catch (NoSuchMethodException e) {
-                            log.debug("SearchModule(Settings, boolean, List) constructor not found");
+                            log.debug("未找到 SearchModule(Settings, boolean, List) 构造方法");
                         }
                     }
                     if (searchModule == null) {
-                        throw new Exception("No compatible SearchModule constructor found");
+                        throw new MappingException(ErrorCode.XCONTENT_REGISTRY_CREATE_FAILED,
+                                ErrorMessage.XCONTENT_SEARCH_MODULE_CONSTRUCTOR_NOT_FOUND);
                     }
 
                     Method getNamedXContentsMethod = searchModuleClass.getMethod(SimpleElasticsearchSearchConstant.METHOD_GET_NAMED_XCONTENTS);
@@ -109,15 +112,15 @@ public final class XContentReflectionHelper {
                     Constructor<?> registryConstructor = namedXContentRegistryClass.getConstructor(List.class);
                     namedXContentRegistry = registryConstructor.newInstance(namedXContents);
 
-                    log.info("Created NamedXContentRegistry with SearchModule ({} named XContent entries)",
+                    log.info("已通过 SearchModule 创建 NamedXContentRegistry（{} 个 named XContent 条目）",
                             namedXContents != null ? namedXContents.size() : 0);
                 } catch (Exception e) {
-                    log.warn("Failed to create NamedXContentRegistry with SearchModule: {}. " +
-                            "Will use EMPTY registry - aggregation parsing may fail.", e.getMessage());
+                    log.warn("通过 SearchModule 创建 NamedXContentRegistry 失败：{}，将使用 EMPTY registry，聚合解析可能失败", e.getMessage());
                     namedXContentRegistry = namedXContentRegistryClass.getField(SimpleElasticsearchSearchConstant.FIELD_EMPTY).get(null);
                 }
             } catch (Exception e) {
-                throw new IllegalStateException("Cannot create NamedXContentRegistry", e);
+                throw new MappingException(ErrorCode.XCONTENT_REGISTRY_CREATE_FAILED,
+                        ErrorMessage.XCONTENT_REGISTRY_CREATE_FAILED, e);
             }
             return namedXContentRegistry;
         }
@@ -165,7 +168,7 @@ public final class XContentReflectionHelper {
             try {
                 ((AutoCloseable) parser).close();
             } catch (Exception e) {
-                log.warn("Failed to close XContentParser", e);
+                log.warn("关闭 XContentParser 失败", e);
             }
         }
     }
@@ -191,11 +194,11 @@ public final class XContentReflectionHelper {
             T result = (T) fromXContentMethod.invoke(null, parser);
             return result;
         } catch (ClassNotFoundException e) {
-            throw new IOException("XContent API class not found: " + xContentPackage, e);
+            throw new IOException("未找到 XContent API 类：" + xContentPackage, e);
         } catch (ReflectiveOperationException e) {
             Throwable rootCause = e.getCause() != null ? e.getCause() : e;
-            throw new IOException("Failed to parse " + responseClass.getSimpleName() + " using XContent API: " + xContentPackage +
-                    ". Root cause: " + rootCause.getClass().getSimpleName() + ", Message: " + rootCause.getMessage(), e);
+            throw new IOException("使用 XContent API 解析 " + responseClass.getSimpleName() + " 失败：" + xContentPackage +
+                    "，根因：" + rootCause.getClass().getSimpleName() + "，消息：" + rootCause.getMessage(), e);
         } finally {
             closeParser(parser);
         }

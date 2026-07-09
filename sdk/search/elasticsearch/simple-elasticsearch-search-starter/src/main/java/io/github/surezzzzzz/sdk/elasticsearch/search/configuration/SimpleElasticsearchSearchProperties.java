@@ -131,7 +131,8 @@ public class SimpleElasticsearchSearchProperties {
             log.info("Configuration validation passed");
 
         } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(ErrorMessage.CONFIG_VALIDATION_FAILED, e);
+            throw new ConfigurationException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    ErrorMessage.CONFIG_VALIDATION_FAILED, e);
         }
     }
 

@@ -318,6 +318,26 @@ public class SimpleElasticsearchSearchConstant {
     public static final String ES_PARAM_ALLOW_NO_INDICES = "allow_no_indices";
 
     /**
+     * ES API 参数：expand_wildcards（通配符展开范围）
+     */
+    public static final String ES_PARAM_EXPAND_WILDCARDS = "expand_wildcards";
+
+    /**
+     * expand_wildcards 参数值：open（展开 open 状态的索引）
+     */
+    public static final String ES_WILDCARD_STATE_OPEN = "open";
+
+    /**
+     * expand_wildcards 参数值：closed（展开 closed 状态的索引）
+     */
+    public static final String ES_WILDCARD_STATE_CLOSED = "closed";
+
+    /**
+     * 逗号分隔符
+     */
+    public static final String COMMA = ",";
+
+    /**
      * ES API 参数值：true
      */
     public static final String ES_PARAM_VALUE_TRUE = "true";
@@ -375,6 +395,142 @@ public class SimpleElasticsearchSearchConstant {
      * Settings 类全名
      */
     public static final String ES_CLASS_SETTINGS = "org.elasticsearch.common.settings.Settings";
+
+    // ========== Java 反射相关常量（聚合类包路径，6.x/7.x 差异） ==========
+
+    /**
+     * ES 7.x metrics 顶层包（Stats / ExtendedStats / Percentiles 等提到顶层）
+     */
+    public static final String AGG_PACKAGE_METRICS_ES7 = "org.elasticsearch.search.aggregations.metrics";
+
+    /**
+     * ES 6.x metrics 子包（Stats 在 stats 子包，ExtendedStats 在 stats.extended，Percentiles 在 percentiles）
+     */
+    public static final String AGG_PACKAGE_STATS_ES6 = "org.elasticsearch.search.aggregations.metrics.stats";
+
+    /**
+     * ES 6.x ExtendedStats 子包
+     */
+    public static final String AGG_PACKAGE_EXTENDED_STATS_ES6 = "org.elasticsearch.search.aggregations.metrics.stats.extended";
+
+    /**
+     * ES 6.x Percentiles / PercentileRanks / Percentile 子包
+     */
+    public static final String AGG_PACKAGE_PERCENTILES_ES6 = "org.elasticsearch.search.aggregations.metrics.percentiles";
+
+    /**
+     * NumericMetricsAggregation$SingleValue 全名（6.x/7.x 同路径）
+     */
+    public static final String AGG_CLASS_NUMERIC_SINGLE_VALUE =
+            "org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation$SingleValue";
+
+    /**
+     * Stats 类名（不带包）
+     */
+    public static final String AGG_CLASS_NAME_STATS = "Stats";
+
+    /**
+     * ExtendedStats 类名（不带包）
+     */
+    public static final String AGG_CLASS_NAME_EXTENDED_STATS = "ExtendedStats";
+
+    /**
+     * ExtendedStats$Bounds 内部类名（不带包）
+     */
+    public static final String AGG_CLASS_NAME_EXTENDED_STATS_BOUNDS = "ExtendedStats$Bounds";
+
+    /**
+     * Percentiles 类名（不带包）
+     */
+    public static final String AGG_CLASS_NAME_PERCENTILES = "Percentiles";
+
+    /**
+     * Percentile 类名（不带包，Percentiles 聚合迭代元素）
+     */
+    public static final String AGG_CLASS_NAME_PERCENTILE = "Percentile";
+
+    /**
+     * PercentileRanks 类名（不带包）
+     */
+    public static final String AGG_CLASS_NAME_PERCENTILE_RANKS = "PercentileRanks";
+
+    // ========== 反射方法名常量 ==========
+
+    /**
+     * NumericMetricsAggregation.SingleValue.value() 方法名
+     */
+    public static final String AGG_METHOD_VALUE = "value";
+
+    /**
+     * Percentile.getValue() 方法名
+     */
+    public static final String AGG_METHOD_GET_VALUE = "getValue";
+
+    /**
+     * getCount / getMin / getMax / getAvg / getSum / getSumOfSquares / getVariance / getStdDeviation 方法名前缀
+     */
+    public static final String AGG_METHOD_GET_COUNT = "getCount";
+    public static final String AGG_METHOD_GET_MIN = "getMin";
+    public static final String AGG_METHOD_GET_MAX = "getMax";
+    public static final String AGG_METHOD_GET_AVG = "getAvg";
+    public static final String AGG_METHOD_GET_SUM = "getSum";
+    public static final String AGG_METHOD_GET_SUM_OF_SQUARES = "getSumOfSquares";
+    public static final String AGG_METHOD_GET_VARIANCE = "getVariance";
+    public static final String AGG_METHOD_GET_STD_DEVIATION = "getStdDeviation";
+    public static final String AGG_METHOD_GET_STD_DEVIATION_BOUND = "getStdDeviationBound";
+
+    /**
+     * Percentile.getPercent() / getValue() 方法名
+     */
+    public static final String AGG_METHOD_GET_PERCENT = "getPercent";
+
+    /**
+     * ExtendedStats.Bounds 枚举值：UPPER / LOWER
+     */
+    public static final String AGG_BOUNDS_UPPER = "UPPER";
+    public static final String AGG_BOUNDS_LOWER = "LOWER";
+
+    // ========== Java 反射相关常量（pipeline 聚合类包路径，6.x/7.x 差异） ==========
+
+    /**
+     * ES 7.x PipelineAggregatorBuilders 全名（aggregations 顶层）
+     */
+    public static final String AGG_CLASS_PIPELINE_BUILDERS_ES7 =
+            "org.elasticsearch.search.aggregations.PipelineAggregatorBuilders";
+
+    /**
+     * ES 6.x PipelineAggregatorBuilders 全名（pipeline 子包）
+     */
+    public static final String AGG_CLASS_PIPELINE_BUILDERS_ES6 =
+            "org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders";
+
+    /**
+     * ES 7.x BucketSortPipelineAggregationBuilder 全名（pipeline 包）
+     */
+    public static final String AGG_CLASS_BUCKET_SORT_ES7 =
+            "org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder";
+
+    /**
+     * ES 6.x BucketSortPipelineAggregationBuilder 全名（pipeline.bucketsort 子包）
+     */
+    public static final String AGG_CLASS_BUCKET_SORT_ES6 =
+            "org.elasticsearch.search.aggregations.pipeline.bucketsort.BucketSortPipelineAggregationBuilder";
+
+    /**
+     * PipelineAggregatorBuilders.bucketSort 方法名
+     */
+    public static final String AGG_METHOD_BUCKET_SORT = "bucketSort";
+
+    /**
+     * PipelineAggregatorBuilders.bucketSelector 方法名
+     */
+    public static final String AGG_METHOD_BUCKET_SELECTOR = "bucketSelector";
+
+    /**
+     * BucketSortPipelineAggregationBuilder.size / from 方法名
+     */
+    public static final String AGG_METHOD_SIZE = "size";
+    public static final String AGG_METHOD_FROM = "from";
 
     // ========== Java 反射相关常量（字段名） ==========
 

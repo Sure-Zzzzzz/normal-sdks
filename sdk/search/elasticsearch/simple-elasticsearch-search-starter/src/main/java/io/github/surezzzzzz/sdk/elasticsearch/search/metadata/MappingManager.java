@@ -20,7 +20,6 @@ import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequest;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.cluster.metadata.MappingMetadata;
 import org.springframework.scheduling.annotation.Scheduled;
 
 import javax.annotation.PostConstruct;
@@ -227,7 +226,7 @@ public class MappingManager {
             }
         }
 
-        Map<String, MappingMetadata> mappings = new ConcurrentHashMap<>();
+        Map<String, Object> mappings = new ConcurrentHashMap<>();
         response.mappings().forEach(indexEntry ->
                 indexEntry.value.forEach(typeEntry -> mappings.put(indexEntry.key, typeEntry.value)));
 
@@ -261,8 +260,8 @@ public class MappingManager {
         } else {
             LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
             for (String idx : actualIndices) {
-                MappingMetadata mappingMetadata = mappings.get(idx);
-                Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
+                Object mappingMetadata = mappings.get(idx);
+                Map<String, Object> sourceAsMap = getSourceAsMap(mappingMetadata);
                 if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
@@ -301,9 +300,9 @@ public class MappingManager {
      * @param indexConfig     索引配置
      * @return 字段元数据列表
      */
-    private List<FieldMetadata> parseSingleIndex(MappingMetadata mappingMetadata,
+    private List<FieldMetadata> parseSingleIndex(Object mappingMetadata,
                                                  SimpleElasticsearchSearchProperties.IndexConfig indexConfig) {
-        Map<String, Object> sourceAsMap = mappingMetadata.getSourceAsMap();
+        Map<String, Object> sourceAsMap = getSourceAsMap(mappingMetadata);
         if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
             @SuppressWarnings("unchecked")
             Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
@@ -311,6 +310,16 @@ public class MappingManager {
             return fieldMetadataParser.parse(propertiesMap, "", indexConfig);
         }
         return new ArrayList<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> getSourceAsMap(Object mappingMetadata) {
+        try {
+            return (Map<String, Object>) mappingMetadata.getClass().getMethod("getSourceAsMap").invoke(mappingMetadata);
+        } catch (Exception e) {
+            throw new MappingException(ErrorCode.LOAD_MAPPING_FAILED,
+                    "Failed to read mapping source via reflection", e);
+        }
     }
 
     private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient,

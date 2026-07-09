@@ -43,6 +43,7 @@
 | + 表达式 TEXT 字段精确匹配 / AND-OR 扁平化 | **1.6.5** | 1.0.10 | Bug Fix：`=` 操作符自动使用 `.keyword` 子字段；多条件 AND/OR 生成单层 bool |
 | + 独立计数查询（`countOnly=true`，走 `_count` API） | **1.6.6** | 1.0.10 | 仅返回 total，无文档 fetch/sort，性能远优于 `_search + size=0` |
 | + 通配符索引字段元数据合并 | **1.6.8** | 1.0.10 | Bug Fix：通配符索引 fields / query 探测从"取第一个"改为"合并全部匹配索引" |
+| + router 1.1.2 适配 / 多 SB 版本测试 | **1.6.9** | 1.1.2 | 维护版本：补齐 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 测试适配，无用户侧功能变更 |
 
 ### route-starter 各版本能力
 
@@ -55,18 +56,21 @@
 | 1.0.7 | Spring Boot 2.4.x CGLIB 兼容性修复 |
 | 1.0.8 | Spring Boot 2.2.5 / ES 6.8.x 兼容性修复 |
 | 1.0.9 | Spring Boot 2.3.12 启动报错修复 |
-| **1.0.10** | Registry 层 BootstrapMethodError 修复（**当前推荐**） |
+| 1.0.10 | Registry 层 BootstrapMethodError 修复 |
+| 1.1.0 | 日期分片 write-index-template / read-index-pattern、异步写 async-write、proxy-type AUTO/JDK/CGLIB、多 SB 版本兼容（2.2.x/2.3.12/2.4.5/2.7.9） |
+| 1.1.1 | 日期分片显式时区 + DateTimeFormatter 本地缓存 |
+| **1.1.2** | 写索引渲染能力抽取为 WriteIndexResolver 接口（**当前推荐**） |
 
 ### Spring Boot 版本兼容性
 
 | Spring Boot | ES Client | 单数据源 | 多数据源路由 | 推荐 route-starter |
 |-------------|-----------|---------|------------|-------------------|
-| 2.2.5 | 6.5.x | ✅ | ❌ | 1.0.10 |
-| 2.3.12 | 6.8.x | ✅ | ❌ | 1.0.10 |
-| 2.4.x | 7.9+ | ✅ | ❌ | 1.0.10 |
-| **2.7.x+** | **7.17+** | **✅** | **✅** | **1.0.10** |
+| 2.2.5 | 6.5.x | ✅ | ✅ | 1.1.2 |
+| 2.3.12 | 6.8.x | ✅ | ✅ | 1.1.2 |
+| 2.4.x | 7.9+ | ✅ | ✅ | 1.1.2 |
+| **2.7.x+** | **7.17+** | **✅** | **✅** | **1.1.2** |
 
-> 多数据源路由需要 Spring Boot 2.7.x+。低版本下 `RestHighLevelClient` 正常可用，但 `ElasticsearchRestTemplate` 代理创建失败，路由功能不可用。
+> 1.6.9 起随 route-starter 1.1.2 完成多 Spring Boot 版本测试适配，低版本 Spring Boot 下多数据源路由能力由 route-starter 提供。
 
 ---
 
@@ -76,7 +80,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.8'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.9'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -744,6 +748,8 @@ POST /api/agg
 ```
 
 `afterKey` 为 `null` 表示遍历完成。`size` 建议 500~2000，composite 内只允许嵌套 metrics 子聚合。
+
+> 注意：ES 6.2.2 的 composite 聚合实现较早，不保证在还有下一页时返回 `after_key`，因此 Spring Boot 2.2.x / ES 6.2.2 组合下不支持稳定的 composite 翻页游标。需要全量聚合遍历时建议使用 ES 7.x 服务端。
 
 ---
 
@@ -1473,6 +1479,7 @@ POST /api/query/expression
 - 指定 `server-version: 6.x.x` 让框架跳过版本探测，直接走低级 API 路径，减少启动时的探测请求
 - PIT 分页在 ES 6.x 服务端下自动禁用（validate 阶段报 400），改用 `search_after` none 模式或 scroll
 - `include-raw-response: true` 可在 ES 6.x 聚合响应解析失败时返回原始 JSON，便于排查
+- ES 6.2.2 下 composite 聚合不保证返回 `after_key`，因此不支持稳定的 composite 翻页游标；需要全量聚合遍历时建议使用 ES 7.x 服务端
 
 ---
 

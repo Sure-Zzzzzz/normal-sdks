@@ -11,14 +11,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
@@ -37,19 +35,16 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 class ExpressionTest {
 
     private static final String NL_USER_INDEX = "test_nl_user_index";
 
     @BeforeAll
-    static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
-        RestHighLevelClient client = registry.getHighLevelClient("primary");
-        if (client.indices().exists(new GetIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT)) {
-            client.indices().delete(new DeleteIndexRequest(NL_USER_INDEX), RequestOptions.DEFAULT);
-        }
-        CreateIndexRequest request = new CreateIndexRequest(NL_USER_INDEX);
-        request.mapping(
+    static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, "primary", NL_USER_INDEX);
+        EsApiHelper.createIndex(registry, "primary", NL_USER_INDEX,
                 "{\"properties\":{" +
                         "\"name\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\"}}}," +
                         "\"age\":{\"type\":\"long\"}," +
@@ -58,10 +53,7 @@ class ExpressionTest {
                         "\"points\":{\"type\":\"long\"}," +
                         "\"createTime\":{\"type\":\"date\"}," +
                         "\"orderId\":{\"type\":\"keyword\"}" +
-                        "}}",
-                org.elasticsearch.xcontent.XContentType.JSON
-        );
-        client.indices().create(request, RequestOptions.DEFAULT);
+                        "}}");
         log.info("✓ ExpressionTest: 已创建索引 {}", NL_USER_INDEX);
     }
 

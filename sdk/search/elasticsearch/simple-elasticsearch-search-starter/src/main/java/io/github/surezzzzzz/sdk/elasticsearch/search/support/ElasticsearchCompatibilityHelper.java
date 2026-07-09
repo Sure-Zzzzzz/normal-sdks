@@ -51,21 +51,21 @@ public class ElasticsearchCompatibilityHelper {
     public static long extractTotalHits(org.elasticsearch.search.SearchHits hits) {
         Object totalHitsObj = hits.getTotalHits();
         if (totalHitsObj instanceof Long) {
-            // ES 6.x: getTotalHits() 返回 long（自动装箱）
+                // ES 6.x 的 getTotalHits() 返回 long（自动装箱）
             return (Long) totalHitsObj;
         }
-        // ES 7.x+: getTotalHits() 返回 TotalHits 对象，通过反射取 value 字段
+        // ES 7.x+ 的 getTotalHits() 返回 TotalHits 对象，通过反射取 value 字段
         try {
             Method valueField = totalHitsObj.getClass().getMethod("value");
             return (Long) valueField.invoke(totalHitsObj);
         } catch (Exception e) {
-            log.warn("Failed to extract totalHits via reflection, falling back to direct field access: {}", e.getMessage());
+            log.warn("通过反射提取 totalHits 失败，改用字段兜底：{}", e.getMessage());
             // 最终兜底：直接访问 value 字段
             try {
                 java.lang.reflect.Field field = totalHitsObj.getClass().getField("value");
                 return (Long) field.get(totalHitsObj);
             } catch (Exception ex) {
-                log.warn("Failed to extract totalHits via field access: {}", ex.getMessage());
+                log.warn("通过字段兜底提取 totalHits 失败：{}", ex.getMessage());
                 return 0L;
             }
         }
@@ -92,14 +92,14 @@ public class ElasticsearchCompatibilityHelper {
         if (clusterInfo != null && clusterInfo.getEffectiveVersion() != null) {
             int majorVersion = clusterInfo.getEffectiveVersion().getMajor();
             isEs6x = (majorVersion == 6);
-            log.debug("Detected ES major version: {} for datasource [{}]", majorVersion, datasourceKey);
+            log.debug("检测到 ES 主版本：{}，数据源：{}", majorVersion, datasourceKey);
         } else {
             versionUnknown = true;
-            log.debug("Datasource [{}] version not yet detected, will try high-level API first", datasourceKey);
+            log.debug("数据源 [{}] 版本尚未探测，优先尝试高级 API", datasourceKey);
         }
 
         if (isEs6x) {
-            log.debug("Using low-level API for ES 6.x compatibility");
+            log.debug("使用低级 API 兼容 ES 6.x");
             return executeSearchViaLowLevelApi(client, searchRequest);
         } else {
             try {
@@ -107,7 +107,7 @@ public class ElasticsearchCompatibilityHelper {
             } catch (org.elasticsearch.ElasticsearchStatusException e) {
                 if (versionUnknown && e.getMessage() != null &&
                         e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_ERROR_UNRECOGNIZED_PARAMETER)) {
-                    log.warn("High-level API failed with ES 6.x compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
+                    log.warn("高级 API 遇到 ES 6.x 兼容问题，降级为低级 API 执行，数据源：{}", datasourceKey);
                     return executeSearchViaLowLevelApi(client, searchRequest);
                 } else {
                     throw e;
@@ -180,7 +180,7 @@ public class ElasticsearchCompatibilityHelper {
         String indices = String.join(",", searchRequest.indices());
         String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + indices + SimpleElasticsearchRouteConstant.ENDPOINT_SEARCH;
 
-        // scroll 参数追加到 URL（ES 6.x 低级 API 需要通过 query param 传递）
+        // scroll 参数追加到 URL（ES 6.x 低级 API 需要通过查询参数传递）
         if (searchRequest.scroll() != null && searchRequest.scroll().keepAlive() != null) {
             endpoint = endpoint + SimpleElasticsearchSearchConstant.ES_SCROLL_QUERY_PARAM
                     + searchRequest.scroll().keepAlive().getStringRep();
@@ -188,6 +188,9 @@ public class ElasticsearchCompatibilityHelper {
 
         org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
                 SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint);
+
+        // 低级 API 不会自动带 IndicesOptions，需手动转成 query param，否则 ignore_unavailable 等配置丢失
+        applyIndicesOptions(request, searchRequest.indicesOptions());
 
         if (searchRequest.source() != null) {
             String dsl = DslCompatibilityHelper.removeEs7OnlyCompositeFields(searchRequest.source().toString());
@@ -209,11 +212,47 @@ public class ElasticsearchCompatibilityHelper {
 
         String responseJson = new String(responseBytes, StandardCharsets.UTF_8);
         if (responseJson.contains("\"" + SimpleElasticsearchSearchConstant.ES_JSON_AGGREGATIONS + "\"")) {
-            log.debug("Detected aggregations in ES 6.x response, will use manual JSON parsing");
+            log.debug("检测到 ES 6.x 响应中包含聚合结果，改用手动 JSON 解析");
             throw new Es6xAggregationResponseException(responseJson);
         }
 
         String xContentPackage = XContentReflectionHelper.detectXContentPackage();
         return XContentReflectionHelper.parseSearchResponse(responseBytes, xContentPackage);
+    }
+
+    /**
+     * 将 SearchRequest.indicesOptions() 转成低级 API 的 query param。
+     *
+     * <p>低级 RestClient 不会自动序列化 IndicesOptions，必须手动转成
+     * ignore_unavailable / allow_no_indices / expand_wildcards 三个查询参数，
+     * 否则 ES 6.x 服务端对不存在的具体索引返回 404。</p>
+     */
+    private static void applyIndicesOptions(org.elasticsearch.client.Request request,
+                                            org.elasticsearch.action.support.IndicesOptions options) {
+        if (options == null) {
+            return;
+        }
+        if (options.ignoreUnavailable()) {
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_IGNORE_UNAVAILABLE,
+                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
+        }
+        if (options.allowNoIndices()) {
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_ALLOW_NO_INDICES,
+                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
+        }
+        // 通配符展开范围：open / closed 分别对应开启和关闭状态索引，lenientExpandOpen 只展开 open
+        StringBuilder expand = new StringBuilder();
+        if (options.expandWildcardsOpen()) {
+            expand.append(SimpleElasticsearchSearchConstant.ES_WILDCARD_STATE_OPEN);
+        }
+        if (options.expandWildcardsClosed()) {
+            if (expand.length() > 0) {
+                expand.append(SimpleElasticsearchSearchConstant.COMMA);
+            }
+            expand.append(SimpleElasticsearchSearchConstant.ES_WILDCARD_STATE_CLOSED);
+        }
+        if (expand.length() > 0) {
+            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_EXPAND_WILDCARDS, expand.toString());
+        }
     }
 }

@@ -308,6 +308,28 @@ public class ErrorCode {
      */
     public static final String AGG_PERCENTILE_RANKS_VALUES_REQUIRED = "SEARCH_AGG_012";
 
+    /**
+     * 聚合反射调用失败（6.x/7.x 跨版本兼容场景）
+     */
+    public static final String AGG_REFLECT_INVOKE_FAILED = "SEARCH_AGG_013";
+
+    /**
+     * 聚合类跨版本加载失败（6.x/7.x 均找不到目标类）
+     */
+    public static final String AGG_REFLECT_CLASS_NOT_FOUND = "SEARCH_AGG_014";
+
+    // ========== XContent 反射相关错误码 ==========
+
+    /**
+     * XContent API 类不存在
+     */
+    public static final String XCONTENT_API_NOT_FOUND = "SEARCH_XCONTENT_001";
+
+    /**
+     * NamedXContentRegistry 创建失败
+     */
+    public static final String XCONTENT_REGISTRY_CREATE_FAILED = "SEARCH_XCONTENT_002";
+
     // ========== 高级表达式相关错误码 ==========
 
     /**

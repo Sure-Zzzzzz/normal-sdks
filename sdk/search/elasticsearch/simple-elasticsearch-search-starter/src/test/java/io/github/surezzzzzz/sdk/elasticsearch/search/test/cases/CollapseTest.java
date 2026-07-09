@@ -1,22 +1,21 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.executor.QueryExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
+import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
-import org.elasticsearch.action.index.IndexRequest;
-import org.elasticsearch.client.RequestOptions;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.elasticsearch.client.indices.CreateIndexRequest;
-import org.elasticsearch.client.indices.GetIndexRequest;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -33,17 +32,29 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
+@ActiveProfiles(resolver = SearchTestProfilesResolver.class)
 @SpringBootTest(classes = SimpleElasticsearchSearchTestApplication.class)
 public class CollapseTest {
 
     @Autowired
     private QueryExecutor queryExecutor;
 
+    @Autowired
+    private SimpleElasticsearchRouteRegistry registry;
+
+    private boolean primarySupportsCollapseSearchAfter() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
+    }
+
     @BeforeAll
     static void setupTestData(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备 Collapse 测试数据 ==========");
 
-        RestHighLevelClient client = registry.getHighLevelClient("primary");
         LocalDateTime baseDate = LocalDateTime.now();
 
         // 创建最近3天的索引，每天10个不同的action，确保有足够的数据测试翻页
@@ -53,14 +64,9 @@ public class CollapseTest {
             LocalDateTime date = baseDate.minusDays(i);
             String indexName = "test_log_" + date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
 
-            // 删除旧索引
-            if (client.indices().exists(new GetIndexRequest(indexName), RequestOptions.DEFAULT)) {
-                client.indices().delete(new DeleteIndexRequest(indexName), RequestOptions.DEFAULT);
-            }
-
-            // 创建索引
-            CreateIndexRequest request = new CreateIndexRequest(indexName);
-            request.mapping(
+            // 删除旧索引并创建新索引
+            EsApiHelper.deleteIndex(registry, "primary", indexName);
+            EsApiHelper.createIndex(registry, "primary", indexName,
                     "{" +
                             "  \"properties\": {" +
                             "    \"user_id\": {\"type\": \"keyword\"}," +
@@ -68,25 +74,20 @@ public class CollapseTest {
                             "    \"message\": {\"type\": \"text\"}," +
                             "    \"createTime\": {\"type\": \"date\"}" +
                             "  }" +
-                            "}",
-                    org.elasticsearch.xcontent.XContentType.JSON
-            );
-            client.indices().create(request, RequestOptions.DEFAULT);
+                            "}");
             log.info("✓ 已创建索引: {}", indexName);
 
             // 插入该日期的测试数据，每个action创建一条记录
             for (int j = 0; j < actions.length; j++) {
-                Map<String, Object> log = createLog("user" + String.format("%03d", j + 1), actions[j],
+                Map<String, Object> logEntry = createLog("user" + String.format("%03d", j + 1), actions[j],
                         actions[j] + " 操作 - " + date.toLocalDate(), date);
-                IndexRequest indexRequest = new IndexRequest(indexName)
-                        .id(String.format("%d-%d", i, j + 1))
-                        .source(log);
-                client.index(indexRequest, RequestOptions.DEFAULT);
+                EsApiHelper.indexDoc(registry, "primary", indexName,
+                        String.format("%d-%d", i, j + 1), logEntry);
             }
         }
 
         // 刷新索引确保数据可见
-        client.indices().refresh(new org.elasticsearch.action.admin.indices.refresh.RefreshRequest("test_log_*"), RequestOptions.DEFAULT);
+        EsApiHelper.refresh(registry, "primary", "test_log_*");
 
         log.info("========== Collapse 测试数据准备完成：3天 × 10条 = 30条数据，10个不同的action ==========");
     }
@@ -153,6 +154,8 @@ public class CollapseTest {
      */
     @Test
     public void testCollapseWithSearchAfter() {
+        Assumptions.assumeTrue(primarySupportsCollapseSearchAfter(),
+                "ES < 7.10 不支持 collapse + search_after，跳过该能力测试");
         // 第一页：只取2条，确保能翻页
         QueryRequest firstPageRequest = QueryRequest.builder()
                 .index("test_log_*")

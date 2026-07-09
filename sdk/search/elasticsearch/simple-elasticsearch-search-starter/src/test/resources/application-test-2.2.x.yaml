@@ -1,0 +1,10 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              primary:
+                urls: http://localhost:9203
+                server-version: 6.2.2
