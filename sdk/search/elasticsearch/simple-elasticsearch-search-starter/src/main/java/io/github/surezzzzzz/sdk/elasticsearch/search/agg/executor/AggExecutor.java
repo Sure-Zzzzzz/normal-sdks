@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.agg.executor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.LowLevelSearchResult;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.builder.AggregationDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggResponse;
@@ -13,10 +16,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.exception.AggregationExcept
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.executor.AbstractExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
-import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.TimeRangeHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchRequest;
@@ -45,8 +48,8 @@ import java.util.Map;
  * 实现 agg 特有的 DSL 构建和响应编排逻辑。
  * 聚合响应解析委托给 {@link AggregationResponseParser}，职责分离。
  *
- * <p>ES 6.x 兼容性：{@link ElasticsearchCompatibilityHelper.Es6xAggregationResponseException}
- * 在 {@link #executeOnce} 内部捕获处理，不冒泡到基类。
+ * <p>ES 6.x 聚合响应由 route 低级搜索 helper 返回原始 JSON，
+ * 在本类转换为 search 模块的 {@link AggResponse}。
  *
  * @author surezzzzzz
  */
@@ -74,29 +77,33 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         validatorChain.validate(request, properties);
         // default-date-range 注入依赖 mappingManager，保留在此处
         String defaultDateRange = properties.getQueryLimits().getDefaultDateRange();
+        ResolvedIndexConfig resolvedIndexConfig = mappingManager.findResolvedIndexConfig(request.getIndex());
         if (StringUtils.hasText(defaultDateRange)
                 && request.getQuery() == null
-                && isWildcardIndex(request.getIndex())) {
+                && isWildcardIndex(resolvedIndexConfig, request.getIndex())) {
             QueryRequest.DateRange range = TimeRangeHelper.buildRecentRange(defaultDateRange);
-            request.setQuery(buildDateRangeQuery(range, request.getIndex()));
+            request.setQuery(buildDateRangeQuery(range, resolvedIndexConfig, request.getIndex()));
             log.debug("Applied default date range [{}] for wildcard index [{}]",
                     defaultDateRange, request.getIndex());
         }
     }
 
     @Override
-    protected boolean needsDowngradeRetry(AggRequest request, IndexMetadata metadata) {
+    protected boolean needsDowngradeRetry(AggRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                          IndexMetadata metadata) {
         QueryRequest.DateRange dateRange = resolveDateRange(request, metadata);
         return properties.getDowngrade().isEnabled()
+                && !resolvedIndexConfig.isWildcardMatched()
                 && metadata.isDateSplit()
                 && dateRange != null;
     }
 
     @Override
-    protected AggResponse executeOnce(AggRequest request, IndexMetadata metadata,
-                                      long startTime, DowngradeLevel level) throws IOException {
+    protected AggResponse executeOnce(AggRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                      IndexMetadata metadata, long startTime,
+                                      DowngradeLevel level) throws IOException {
         QueryRequest.DateRange dateRange = resolveDateRange(request, metadata);
-        SearchRequest searchRequest = buildSearchRequest(request, metadata, dateRange, level);
+        SearchRequest searchRequest = buildSearchRequest(request, resolvedIndexConfig, metadata, dateRange, level);
 
         log.debug("Executing aggregation: indices={}, dsl={}",
                 String.join(",", searchRequest.indices()),
@@ -106,24 +113,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
         RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-        AggResponse response;
-        try {
-            SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
-                    client, datasourceKey, searchRequest, registry);
-            response = processResponse(searchResponse);
-        } catch (ElasticsearchCompatibilityHelper.Es6xAggregationResponseException e) {
-            // ES 6.x 聚合响应在子类内部处理，不冒泡到基类的 catch(IOException)
-            log.debug("ES 6.x aggregation response detected, using manual JSON parsing for index [{}]",
-                    request.getIndex());
-            try {
-                response = parseEs6xAggregationResponse(e.getResponseJson());
-            } catch (Exception parseException) {
-                log.error("Failed to manually parse ES 6.x aggregation response", parseException);
-                throw new AggregationException(ErrorCode.AGG_EXECUTION_FAILED,
-                        "Failed to parse ES 6.x aggregation response: " + parseException.getMessage(),
-                        parseException);
-            }
-        }
+        AggResponse response = executeAggregationSearch(client, datasourceKey, searchRequest, request.getIndex());
 
         response.setTook(System.currentTimeMillis() - startTime);
         log.debug("Aggregation executed: index={}, downgradeLevel={}, took={}ms",
@@ -181,7 +171,8 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
     // ==================== 钩子方法覆盖 ====================
 
     @Override
-    protected DowngradeLevel estimateDowngradeLevel(AggRequest request, IndexMetadata metadata) {
+    protected DowngradeLevel estimateDowngradeLevel(AggRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                                    IndexMetadata metadata) {
         if (!properties.getDowngrade().isEnableEstimate()) {
             return DowngradeLevel.LEVEL_0;
         }
@@ -189,7 +180,7 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         if (dateRange == null) {
             return DowngradeLevel.LEVEL_0;
         }
-        String[] estimatedIndices = indexRouteProcessor.route(metadata, dateRange);
+        String[] estimatedIndices = indexRouteProcessor.route(resolvedIndexConfig, metadata, dateRange);
         DowngradeLevel level = indexRouteProcessor.detectDowngradeLevelFromIndices(estimatedIndices);
         if (level != DowngradeLevel.LEVEL_0) {
             log.info("Pre-estimated downgrade to {} for index [{}]", level, request.getIndex());
@@ -199,14 +190,18 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
 
     // ==================== 私有方法 ====================
 
-    private boolean isWildcardIndex(String index) {
+    private boolean isWildcardIndex(ResolvedIndexConfig resolvedIndexConfig, String index) {
         return index != null && (index.contains(SimpleElasticsearchSearchConstant.WILDCARD_STAR)
                 || index.contains(SimpleElasticsearchSearchConstant.WILDCARD_QUESTION));
     }
 
-    private QueryCondition buildDateRangeQuery(QueryRequest.DateRange range, String index) {
+    private QueryCondition buildDateRangeQuery(QueryRequest.DateRange range,
+                                               ResolvedIndexConfig resolvedIndexConfig,
+                                               String index) {
         try {
-            IndexMetadata metadata = mappingManager.getMetadata(index);
+            IndexMetadata metadata = resolvedIndexConfig == null
+                    ? mappingManager.getMetadata(index)
+                    : mappingManager.getMetadata(resolvedIndexConfig);
             String dateField = metadata.getDateField();
             if (dateField == null) {
                 return null;
@@ -222,9 +217,10 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
         }
     }
 
-    private SearchRequest buildSearchRequest(AggRequest request, IndexMetadata metadata,
-                                             QueryRequest.DateRange dateRange, DowngradeLevel level) {
-        String[] indices = indexRouteProcessor.routeWithDowngrade(metadata, dateRange, level);
+    private SearchRequest buildSearchRequest(AggRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                             IndexMetadata metadata, QueryRequest.DateRange dateRange,
+                                             DowngradeLevel level) {
+        String[] indices = indexRouteProcessor.routeWithDowngrade(resolvedIndexConfig, metadata, dateRange, level);
         SearchRequest searchRequest = new SearchRequest(indices);
 
         if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
@@ -233,12 +229,12 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = request.getQuery() != null
-                ? queryDslBuilder.build(request.getIndex(), request.getQuery())
+                ? queryDslBuilder.build(metadata, request.getQuery())
                 : QueryBuilders.matchAllQuery();
         sourceBuilder.query(queryBuilder);
 
         AggregationBuilder[] aggBuilders = aggDslBuilder.build(
-                request.getIndex(), request.getAggs(), request.getAfter());
+                metadata, request.getAggs(), request.getAfter());
         for (AggregationBuilder aggBuilder : aggBuilders) {
             sourceBuilder.aggregation(aggBuilder);
         }
@@ -284,6 +280,72 @@ public class AggExecutor extends AbstractExecutor<AggRequest, AggResponse> {
             }
         }
         return null;
+    }
+
+    private AggResponse executeAggregationSearch(RestHighLevelClient client, String datasourceKey,
+                                                 SearchRequest searchRequest, String index) throws IOException {
+        ClusterInfo clusterInfo = registry.getClusterInfo(datasourceKey);
+        if (ElasticsearchVersionHelper.isEs6(clusterInfo)) {
+            return executeLowLevelAggregation(client, searchRequest, index);
+        }
+        try {
+            return processResponse(client.search(searchRequest, org.elasticsearch.client.RequestOptions.DEFAULT));
+        } catch (org.elasticsearch.ElasticsearchStatusException e) {
+            if (ElasticsearchVersionHelper.isUnknown(clusterInfo)
+                    && ElasticsearchResponseHelper.shouldFallbackToLowLevel(e)) {
+                log.warn("高级 API 遇到版本兼容问题，降级为低级 API 执行聚合，数据源：{}", datasourceKey);
+                return executeLowLevelAggregation(client, searchRequest, index);
+            }
+            throw e;
+        }
+    }
+
+    private AggResponse executeLowLevelAggregation(RestHighLevelClient client,
+                                                   SearchRequest searchRequest,
+                                                   String index) throws IOException {
+        LowLevelSearchResult result = executeEs6AggregationSearch(client, searchRequest);
+        if (result.isRawAggregationResponse()) {
+            log.debug("ES 6.x aggregation response detected, using manual JSON parsing for index [{}]", index);
+            try {
+                return parseEs6xAggregationResponse(result.getRawResponseBody());
+            } catch (Exception parseException) {
+                log.error("Failed to manually parse ES 6.x aggregation response", parseException);
+                throw new AggregationException(ErrorCode.AGG_EXECUTION_FAILED,
+                        "Failed to parse ES 6.x aggregation response: " + parseException.getMessage(),
+                        parseException);
+            }
+        }
+        return processResponse(result.getSearchResponse());
+    }
+
+    private LowLevelSearchResult executeEs6AggregationSearch(RestHighLevelClient client,
+                                                             SearchRequest searchRequest) throws IOException {
+        String jsonBody = searchRequest != null && searchRequest.source() != null
+                ? searchRequest.source().toString()
+                : null;
+        jsonBody = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(jsonBody);
+        String[] indices = searchRequest == null ? null : searchRequest.indices();
+        org.elasticsearch.client.Request request = ElasticsearchLowLevelRequestHelper.newSearchRequest(indices, jsonBody, null);
+        if (searchRequest != null) {
+            ElasticsearchRequestOptionHelper.applyIndicesOptions(request, searchRequest.indicesOptions());
+        }
+        org.elasticsearch.client.Response response = ElasticsearchLowLevelRequestHelper.execute(client.getLowLevelClient(), request);
+        byte[] responseBytes = ElasticsearchLowLevelRequestHelper.readResponseBytes(response);
+        String responseBody = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
+        boolean containsAggregations = ElasticsearchLowLevelRequestHelper.containsAggregations(responseBody);
+        if (containsAggregations) {
+            return LowLevelSearchResult.builder()
+                    .rawResponseBody(responseBody)
+                    .containsAggregations(true)
+                    .rawAggregationResponse(true)
+                    .build();
+        }
+        return LowLevelSearchResult.builder()
+                .searchResponse(XContentCompatibilityHelper.parseSearchResponse(responseBytes))
+                .rawResponseBody(responseBody)
+                .containsAggregations(false)
+                .rawAggregationResponse(false)
+                .build();
     }
 
     private AggResponse processResponse(SearchResponse searchResponse) {

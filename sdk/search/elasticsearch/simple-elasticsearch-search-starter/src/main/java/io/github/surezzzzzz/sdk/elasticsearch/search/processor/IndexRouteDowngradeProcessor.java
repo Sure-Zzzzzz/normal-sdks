@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.IndexRouteException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.UnsupportedDowngradeLevelException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.downgrade.DowngradeStrategyRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.IndexDateHelper;
@@ -40,14 +41,27 @@ public class IndexRouteDowngradeProcessor {
      * @return 索引名称数组
      */
     public String[] route(IndexMetadata metadata, QueryRequest.DateRange dateRange) {
+        return route(null, metadata, dateRange);
+    }
+
+    /**
+     * 计算需要查询的索引列表（带降级预估）
+     *
+     * @param resolvedIndexConfig 解析后的索引配置
+     * @param metadata            索引元数据
+     * @param dateRange           日期范围（可选）
+     * @return 索引名称数组
+     */
+    public String[] route(ResolvedIndexConfig resolvedIndexConfig, IndexMetadata metadata,
+                          QueryRequest.DateRange dateRange) {
         if (properties.getDowngrade().isEnableEstimate() && metadata.isDateSplit() && dateRange != null) {
-            DowngradeLevel estimatedLevel = estimateDowngradeLevel(metadata, dateRange);
+            DowngradeLevel estimatedLevel = estimateDowngradeLevel(resolvedIndexConfig, metadata, dateRange);
             if (estimatedLevel != DowngradeLevel.LEVEL_0) {
                 log.info("Pre-estimated downgrade level: {} for index [{}]", estimatedLevel, metadata.getAlias());
-                return routeWithDowngrade(metadata, dateRange, estimatedLevel);
+                return routeWithDowngrade(resolvedIndexConfig, metadata, dateRange, estimatedLevel);
             }
         }
-        return routeWithDowngrade(metadata, dateRange, DowngradeLevel.LEVEL_0);
+        return routeWithDowngrade(resolvedIndexConfig, metadata, dateRange, DowngradeLevel.LEVEL_0);
     }
 
     /**
@@ -60,13 +74,28 @@ public class IndexRouteDowngradeProcessor {
      */
     public String[] routeWithDowngrade(IndexMetadata metadata, QueryRequest.DateRange dateRange,
                                        DowngradeLevel downgradeLevel) {
+        return routeWithDowngrade(null, metadata, dateRange, downgradeLevel);
+    }
+
+    /**
+     * 带降级支持的索引路由
+     *
+     * @param resolvedIndexConfig 解析后的索引配置
+     * @param metadata            索引元数据
+     * @param dateRange           日期范围
+     * @param downgradeLevel      降级级别
+     * @return 索引名称数组
+     */
+    public String[] routeWithDowngrade(ResolvedIndexConfig resolvedIndexConfig, IndexMetadata metadata,
+                                       QueryRequest.DateRange dateRange, DowngradeLevel downgradeLevel) {
         try {
-            if (!metadata.isDateSplit()) {
-                return new String[]{metadata.getIndexName()};
+            String routeIndex = resolveRouteIndex(resolvedIndexConfig, metadata);
+            if (isConcreteWildcardRequest(resolvedIndexConfig) || !metadata.isDateSplit()) {
+                return new String[]{routeIndex};
             }
             if (dateRange == null) {
                 log.warn("Date-split index [{}] without date range, will query all indices", metadata.getAlias());
-                return new String[]{metadata.getIndexName()};
+                return new String[]{routeIndex};
             }
 
             String datePattern = metadata.getDatePattern();
@@ -81,7 +110,7 @@ public class IndexRouteDowngradeProcessor {
             DateGranularity granularity = DateGranularity.detectFromPattern(datePattern);
             LocalDate fromDate = IndexDateHelper.parseDate(dateRange.getFrom());
             LocalDate toDate = IndexDateHelper.parseDate(dateRange.getTo());
-            String indexPrefix = IndexDateHelper.extractIndexPrefix(metadata.getIndexName());
+            String indexPrefix = IndexDateHelper.extractIndexPrefix(routeIndex);
 
             String[] indices = downgradeStrategyRegistry.resolve(granularity)
                     .apply(indexPrefix, fromDate, toDate, datePattern, downgradeLevel);
@@ -133,12 +162,18 @@ public class IndexRouteDowngradeProcessor {
     /**
      * 预估降级级别
      *
-     * @param metadata  索引元数据
-     * @param dateRange 日期范围
+     * @param resolvedIndexConfig 解析后的索引配置
+     * @param metadata            索引元数据
+     * @param dateRange           日期范围
      * @return 预估的降级级别
      */
-    private DowngradeLevel estimateDowngradeLevel(IndexMetadata metadata, QueryRequest.DateRange dateRange) {
+    private DowngradeLevel estimateDowngradeLevel(ResolvedIndexConfig resolvedIndexConfig,
+                                                  IndexMetadata metadata,
+                                                  QueryRequest.DateRange dateRange) {
         try {
+            if (isConcreteWildcardRequest(resolvedIndexConfig)) {
+                return DowngradeLevel.LEVEL_0;
+            }
             String datePattern = metadata.getDatePattern();
             if (datePattern == null) {
                 return DowngradeLevel.LEVEL_0;
@@ -147,7 +182,7 @@ public class IndexRouteDowngradeProcessor {
             DateGranularity granularity = DateGranularity.detectFromPattern(datePattern);
             LocalDate fromDate = IndexDateHelper.parseDate(dateRange.getFrom());
             LocalDate toDate = IndexDateHelper.parseDate(dateRange.getTo());
-            String indexPrefix = IndexDateHelper.extractIndexPrefix(metadata.getIndexName());
+            String indexPrefix = IndexDateHelper.extractIndexPrefix(resolveRouteIndex(resolvedIndexConfig, metadata));
 
             for (DowngradeLevel level : DowngradeLevel.values()) {
                 if (level.getValue() > properties.getDowngrade().getMaxLevel()) {
@@ -179,6 +214,17 @@ public class IndexRouteDowngradeProcessor {
             log.warn("Failed to estimate downgrade level for [{}], using LEVEL_0", metadata.getAlias(), e);
             return DowngradeLevel.LEVEL_0;
         }
+    }
+
+    private String resolveRouteIndex(ResolvedIndexConfig resolvedIndexConfig, IndexMetadata metadata) {
+        if (!isConcreteWildcardRequest(resolvedIndexConfig)) {
+            return metadata.getIndexName();
+        }
+        return resolvedIndexConfig.getRequestIndex();
+    }
+
+    private boolean isConcreteWildcardRequest(ResolvedIndexConfig resolvedIndexConfig) {
+        return resolvedIndexConfig != null && resolvedIndexConfig.isWildcardMatched();
     }
 
     /**

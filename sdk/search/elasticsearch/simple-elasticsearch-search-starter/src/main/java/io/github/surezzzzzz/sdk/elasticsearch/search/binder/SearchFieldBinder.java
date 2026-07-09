@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.binder;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import org.springframework.util.CollectionUtils;
 
 import java.util.*;
@@ -24,9 +25,11 @@ import java.util.*;
 public class SearchFieldBinder implements FieldBinder {
 
     private final SimpleElasticsearchSearchProperties properties;
+    private final MappingManager mappingManager;
 
-    public SearchFieldBinder(SimpleElasticsearchSearchProperties properties) {
+    public SearchFieldBinder(SimpleElasticsearchSearchProperties properties, MappingManager mappingManager) {
         this.properties = properties;
+        this.mappingManager = mappingManager;
     }
 
     @Override
@@ -60,12 +63,7 @@ public class SearchFieldBinder implements FieldBinder {
     }
 
     private SimpleElasticsearchSearchProperties.IndexConfig findIndexConfig(String dataSource) {
-        for (SimpleElasticsearchSearchProperties.IndexConfig cfg : properties.getIndices()) {
-            if (dataSource.equals(cfg.getName()) || dataSource.equals(cfg.getAlias())) {
-                return cfg;
-            }
-        }
-        return null;
+        return mappingManager.findIndexConfig(dataSource);
     }
 
     private String findMapping(Map<String, List<String>> fieldMapping, String fieldHint) {

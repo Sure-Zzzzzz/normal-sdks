@@ -159,7 +159,7 @@ public class ErrorMessage {
     /**
      * 索引未配置
      */
-    public static final String INDEX_NOT_CONFIGURED = "索引别名 [%s] 未配置";
+    public static final String INDEX_NOT_CONFIGURED = "查询索引未命中 search.indices 配置：%s；已配置：%s";
 
     /**
      * 索引不存在或没有 mapping

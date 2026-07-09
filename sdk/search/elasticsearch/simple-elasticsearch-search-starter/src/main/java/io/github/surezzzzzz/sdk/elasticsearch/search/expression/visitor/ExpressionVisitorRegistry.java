@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
@@ -30,6 +31,7 @@ public class ExpressionVisitorRegistry {
             new ExpressionToQueryConditionVisitor(null);
 
     private final SimpleElasticsearchSearchProperties properties;
+    private final MappingManager mappingManager;
 
     /**
      * key：索引别名（有 alias 用 alias，否则用 name）
@@ -81,7 +83,8 @@ public class ExpressionVisitorRegistry {
         if (!StringUtils.hasText(index)) {
             return DEFAULT_VISITOR;
         }
-        return registry.getOrDefault(index, DEFAULT_VISITOR);
+        String key = mappingManager.resolveConfigIdentifierOrSelf(index);
+        return registry.getOrDefault(key, DEFAULT_VISITOR);
     }
 
     /**
@@ -95,6 +98,7 @@ public class ExpressionVisitorRegistry {
         if (!StringUtils.hasText(index)) {
             return Collections.emptyMap();
         }
-        return labelMapRegistry.getOrDefault(index, Collections.emptyMap());
+        String key = mappingManager.resolveConfigIdentifierOrSelf(index);
+        return labelMapRegistry.getOrDefault(key, Collections.emptyMap());
     }
 }

@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.IndexRouteDowngradeProcessor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.ElasticsearchException;
@@ -60,11 +61,12 @@ public abstract class AbstractExecutor<Req, Resp> {
         long startTime = System.currentTimeMillis();
         try {
             validateRequest(request);
-            IndexMetadata metadata = mappingManager.getMetadata(getIndex(request));
-            if (needsDowngradeRetry(request, metadata)) {
-                return executeWithDowngradeRetry(request, metadata, startTime);
+            ResolvedIndexConfig resolvedIndexConfig = mappingManager.resolveIndexConfig(getIndex(request));
+            IndexMetadata metadata = mappingManager.getMetadata(resolvedIndexConfig);
+            if (needsDowngradeRetry(request, resolvedIndexConfig, metadata)) {
+                return executeWithDowngradeRetry(request, resolvedIndexConfig, metadata, startTime);
             }
-            return executeOnce(request, metadata, startTime, DowngradeLevel.LEVEL_0);
+            return executeOnce(request, resolvedIndexConfig, metadata, startTime, DowngradeLevel.LEVEL_0);
         } catch (IOException e) {
             log.error("Execution failed: index={}", getIndex(request), e);
             onExecutionError(request, e);
@@ -86,13 +88,15 @@ public abstract class AbstractExecutor<Req, Resp> {
     /**
      * 判断是否需要降级重试
      */
-    protected abstract boolean needsDowngradeRetry(Req request, IndexMetadata metadata);
+    protected abstract boolean needsDowngradeRetry(Req request, ResolvedIndexConfig resolvedIndexConfig,
+                                                   IndexMetadata metadata);
 
     /**
      * 执行一次查询/聚合
      */
-    protected abstract Resp executeOnce(Req request, IndexMetadata metadata,
-                                        long startTime, DowngradeLevel level) throws IOException;
+    protected abstract Resp executeOnce(Req request, ResolvedIndexConfig resolvedIndexConfig,
+                                        IndexMetadata metadata, long startTime,
+                                        DowngradeLevel level) throws IOException;
 
     /**
      * 获取请求中的索引名
@@ -110,7 +114,8 @@ public abstract class AbstractExecutor<Req, Resp> {
      * 预估降级级别，默认 LEVEL_0
      * 子类可覆盖以实现预估优化
      */
-    protected DowngradeLevel estimateDowngradeLevel(Req request, IndexMetadata metadata) {
+    protected DowngradeLevel estimateDowngradeLevel(Req request, ResolvedIndexConfig resolvedIndexConfig,
+                                                    IndexMetadata metadata) {
         return DowngradeLevel.LEVEL_0;
     }
 
@@ -127,12 +132,12 @@ public abstract class AbstractExecutor<Req, Resp> {
 
     // ==================== 内部通用逻辑 ====================
 
-    private Resp executeWithDowngradeRetry(Req request, IndexMetadata metadata,
-                                           long startTime) throws IOException {
-        DowngradeLevel currentLevel = estimateDowngradeLevel(request, metadata);
+    private Resp executeWithDowngradeRetry(Req request, ResolvedIndexConfig resolvedIndexConfig,
+                                           IndexMetadata metadata, long startTime) throws IOException {
+        DowngradeLevel currentLevel = estimateDowngradeLevel(request, resolvedIndexConfig, metadata);
         while (true) {
             try {
-                return executeOnce(request, metadata, startTime, currentLevel);
+                return executeOnce(request, resolvedIndexConfig, metadata, startTime, currentLevel);
             } catch (ElasticsearchException | IOException e) {
                 if (!isTooLongFrameException(e)) {
                     throw e;

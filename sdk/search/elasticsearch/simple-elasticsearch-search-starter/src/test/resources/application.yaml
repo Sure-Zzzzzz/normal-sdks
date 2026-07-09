@@ -60,6 +60,21 @@ io:
                 cache-mapping: true
                 lazy-load: true
 
+              # 业务方通配配置适配测试索引
+              - name: "test_wildcard--*"
+                date-split: true
+                date-pattern: "yyyy.MM.dd"
+                date-field: "eventTime"
+                cache-mapping: true
+                lazy-load: true
+                field-mapping:
+                  extraField:
+                    - 扩展字段
+                  extraField2:
+                    - 扩展字段二
+                  eventTime:
+                    - 事件时间
+
               # 降级测试索引（用于端到端降级测试）
               - name: "test_downgrade_log--*"
                 date-split: true

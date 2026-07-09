@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.metadata;
 
-import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchResponseHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchVersionHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
@@ -12,8 +14,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.parser.FieldMetadataParser;
-import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsRequest;
@@ -21,6 +23,8 @@ import org.elasticsearch.action.admin.indices.mapping.get.GetMappingsResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.util.PatternMatchUtils;
+import org.springframework.util.StringUtils;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
@@ -52,8 +56,7 @@ public class MappingManager {
     public void init() {
         log.info("MappingManager initializing...");
         for (SimpleElasticsearchSearchProperties.IndexConfig indexConfig : properties.getIndices()) {
-            String identifier = (indexConfig.getAlias() != null && !indexConfig.getAlias().isEmpty())
-                    ? indexConfig.getAlias() : indexConfig.getName();
+            String identifier = getConfigIdentifier(indexConfig);
             if (!indexConfig.isLazyLoad()) {
                 try {
                     loadMetadata(indexConfig, null);
@@ -84,7 +87,28 @@ public class MappingManager {
      * @return 索引元数据
      */
     public IndexMetadata getMetadata(String indexAlias) {
-        return getMetadata(indexAlias, null);
+        return getMetadata(resolveIndexConfig(indexAlias));
+    }
+
+    /**
+     * 获取索引元数据
+     *
+     * @param resolvedIndexConfig 解析后的索引配置
+     * @return 索引元数据
+     */
+    public IndexMetadata getMetadata(ResolvedIndexConfig resolvedIndexConfig) {
+        String cacheKey = resolvedIndexConfig.getConfigIdentifier();
+        IndexMetadata metadata = metadataCache.get(cacheKey);
+        if (metadata != null) {
+            return metadata;
+        }
+
+        try {
+            return loadMetadata(resolvedIndexConfig.getIndexConfig(), null);
+        } catch (Exception e) {
+            throw new MappingException(ErrorCode.LOAD_MAPPING_FAILED,
+                    String.format(ErrorMessage.LOAD_MAPPING_FAILED, resolvedIndexConfig.getRequestIndex()), e);
+        }
     }
 
     /**
@@ -95,25 +119,94 @@ public class MappingManager {
      * @return 索引元数据
      */
     public IndexMetadata getMetadata(String indexAlias, String specificIndexName) {
-        if (specificIndexName == null) {
-            IndexMetadata metadata = metadataCache.get(indexAlias);
-            if (metadata != null) {
-                return metadata;
-            }
+        ResolvedIndexConfig resolvedIndexConfig = findResolvedIndexConfig(indexAlias);
+        if (resolvedIndexConfig == null && StringUtils.hasText(specificIndexName)) {
+            resolvedIndexConfig = findResolvedIndexConfig(specificIndexName);
         }
-
-        SimpleElasticsearchSearchProperties.IndexConfig indexConfig = findIndexConfig(indexAlias);
-        if (indexConfig == null) {
-            throw new MappingException(ErrorCode.INDEX_NOT_CONFIGURED,
-                    String.format(ErrorMessage.INDEX_NOT_CONFIGURED, indexAlias));
+        if (resolvedIndexConfig == null) {
+            throw indexNotConfiguredException(indexAlias);
+        }
+        if (!StringUtils.hasText(specificIndexName)) {
+            return getMetadata(resolvedIndexConfig);
         }
 
         try {
-            return loadMetadata(indexConfig, specificIndexName);
+            return loadMetadata(resolvedIndexConfig.getIndexConfig(), specificIndexName);
         } catch (Exception e) {
             throw new MappingException(ErrorCode.LOAD_MAPPING_FAILED,
                     String.format(ErrorMessage.LOAD_MAPPING_FAILED, indexAlias), e);
         }
+    }
+
+    /**
+     * 解析请求索引命中的配置
+     *
+     * @param requestIndex 请求索引
+     * @return 解析后的索引配置
+     */
+    public ResolvedIndexConfig resolveIndexConfig(String requestIndex) {
+        ResolvedIndexConfig resolvedIndexConfig = findResolvedIndexConfig(requestIndex);
+        if (resolvedIndexConfig == null) {
+            throw indexNotConfiguredException(requestIndex);
+        }
+        return resolvedIndexConfig;
+    }
+
+    /**
+     * 查找请求索引命中的配置，不命中时返回 null
+     *
+     * @param requestIndex 请求索引
+     * @return 解析后的索引配置
+     */
+    public ResolvedIndexConfig findResolvedIndexConfig(String requestIndex) {
+        if (!StringUtils.hasText(requestIndex)) {
+            return null;
+        }
+
+        SimpleElasticsearchSearchProperties.IndexConfig exactConfig = findExactIndexConfig(requestIndex);
+        if (exactConfig != null) {
+            return buildResolvedIndexConfig(requestIndex, exactConfig, false);
+        }
+
+        List<SimpleElasticsearchSearchProperties.IndexConfig> wildcardMatches = new ArrayList<>();
+        for (SimpleElasticsearchSearchProperties.IndexConfig config : properties.getIndices()) {
+            String configName = config.getName();
+            if (StringUtils.hasText(configName) && isWildcardPattern(configName)
+                    && PatternMatchUtils.simpleMatch(configName, requestIndex)) {
+                wildcardMatches.add(config);
+            }
+        }
+
+        if (wildcardMatches.isEmpty()) {
+            return null;
+        }
+        if (wildcardMatches.size() > 1) {
+            log.warn("查询索引 [{}] 命中多个 search.indices wildcard name 配置，按配置顺序使用第一个：{}",
+                    requestIndex, formatConfiguredIdentifiers(wildcardMatches));
+        }
+        return buildResolvedIndexConfig(requestIndex, wildcardMatches.get(0), true);
+    }
+
+    /**
+     * 解析配置标识，不命中时返回原值
+     *
+     * @param requestIndex 请求索引
+     * @return 配置标识
+     */
+    public String resolveConfigIdentifierOrSelf(String requestIndex) {
+        ResolvedIndexConfig resolvedIndexConfig = findResolvedIndexConfig(requestIndex);
+        return resolvedIndexConfig == null ? requestIndex : resolvedIndexConfig.getConfigIdentifier();
+    }
+
+    /**
+     * 查找索引配置
+     *
+     * @param identifier 请求索引或配置标识
+     * @return 索引配置
+     */
+    public SimpleElasticsearchSearchProperties.IndexConfig findIndexConfig(String identifier) {
+        ResolvedIndexConfig resolvedIndexConfig = findResolvedIndexConfig(identifier);
+        return resolvedIndexConfig == null ? null : resolvedIndexConfig.getIndexConfig();
     }
 
     /**
@@ -122,13 +215,9 @@ public class MappingManager {
      * @param indexAlias 索引别名
      */
     public void refreshMetadata(String indexAlias) {
-        SimpleElasticsearchSearchProperties.IndexConfig indexConfig = findIndexConfig(indexAlias);
-        if (indexConfig == null) {
-            throw new MappingException(ErrorCode.INDEX_NOT_CONFIGURED,
-                    String.format(ErrorMessage.INDEX_NOT_CONFIGURED, indexAlias));
-        }
+        ResolvedIndexConfig resolvedIndexConfig = resolveIndexConfig(indexAlias);
         try {
-            loadMetadata(indexConfig, null);
+            loadMetadata(resolvedIndexConfig.getIndexConfig(), null);
             log.info("Refreshed mapping for index: {}", indexAlias);
         } catch (Exception e) {
             log.error("Failed to refresh mapping for index: {}", indexAlias, e);
@@ -150,7 +239,7 @@ public class MappingManager {
                 successCount++;
             } catch (Exception e) {
                 failCount++;
-                log.error("Failed to refresh mapping for index: {}", indexConfig.getAlias(), e);
+                log.error("Failed to refresh mapping for index: {}", getConfigIdentifier(indexConfig), e);
             }
         }
         log.info("Mapping refresh completed: {} success, {} failed", successCount, failCount);
@@ -177,7 +266,7 @@ public class MappingManager {
                                        String specificIndexName) throws IOException {
         String indexName = indexConfig.getName();
         String alias = indexConfig.getAlias();
-        String cacheKey = (alias != null && !alias.isEmpty()) ? alias : indexName;
+        String cacheKey = getConfigIdentifier(indexConfig);
 
         log.debug("Loading mapping for index: {} ({})", cacheKey, indexName);
 
@@ -186,45 +275,15 @@ public class MappingManager {
 
         RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
         ClusterInfo clusterInfo = registry.getClusterInfo(datasourceKey);
-        boolean isEs6x = false;
-        boolean versionUnknown = false;
-
-        if (clusterInfo != null && clusterInfo.getEffectiveVersion() != null) {
-            int majorVersion = clusterInfo.getEffectiveVersion().getMajor();
-            isEs6x = (majorVersion == 6);
-            log.debug("Detected ES major version: {} for datasource [{}]", majorVersion, datasourceKey);
-        } else {
-            versionUnknown = true;
-            log.warn("Datasource [{}] version not yet detected, will try high-level API first. " +
-                            "Recommend configuring 'sources.{}.server-version' to avoid compatibility issues.",
-                    datasourceKey, datasourceKey);
-        }
 
         GetMappingsRequest request = new GetMappingsRequest().indices(indexName);
+        org.elasticsearch.action.support.IndicesOptions indicesOptions = null;
         if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
-            request.indicesOptions(org.elasticsearch.action.support.IndicesOptions.lenientExpandOpen());
+            indicesOptions = org.elasticsearch.action.support.IndicesOptions.lenientExpandOpen();
+            request.indicesOptions(indicesOptions);
         }
 
-        GetMappingsResponse response;
-        if (isEs6x) {
-            log.debug("Using low-level API for ES 6.x compatibility");
-            response = getMappingViaLowLevelApi(client, indexName,
-                    properties.getQueryLimits().isIgnoreUnavailableIndices());
-        } else {
-            try {
-                response = client.indices().getMapping(request, RequestOptions.DEFAULT);
-            } catch (org.elasticsearch.ElasticsearchStatusException e) {
-                if (versionUnknown && e.getMessage() != null &&
-                        (e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_INCLUDE_TYPE_NAME) ||
-                                e.getMessage().contains(SimpleElasticsearchSearchConstant.ES_PARAM_MASTER_TIMEOUT))) {
-                    log.warn("High-level API failed with ES 6.x compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
-                    response = getMappingViaLowLevelApi(client, indexName,
-                            properties.getQueryLimits().isIgnoreUnavailableIndices());
-                } else {
-                    throw e;
-                }
-            }
-        }
+        GetMappingsResponse response = executeMapping(client, datasourceKey, clusterInfo, request, indexName, indicesOptions);
 
         Map<String, Object> mappings = new ConcurrentHashMap<>();
         response.mappings().forEach(indexEntry ->
@@ -261,7 +320,7 @@ public class MappingManager {
             LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
             for (String idx : actualIndices) {
                 Object mappingMetadata = mappings.get(idx);
-                Map<String, Object> sourceAsMap = getSourceAsMap(mappingMetadata);
+                Map<String, Object> sourceAsMap = ElasticsearchResponseHelper.extractMappingSourceAsMap(mappingMetadata);
                 if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
@@ -302,7 +361,7 @@ public class MappingManager {
      */
     private List<FieldMetadata> parseSingleIndex(Object mappingMetadata,
                                                  SimpleElasticsearchSearchProperties.IndexConfig indexConfig) {
-        Map<String, Object> sourceAsMap = getSourceAsMap(mappingMetadata);
+        Map<String, Object> sourceAsMap = ElasticsearchResponseHelper.extractMappingSourceAsMap(mappingMetadata);
         if (sourceAsMap.containsKey(SimpleElasticsearchSearchConstant.ES_MAPPING_PROPERTIES)) {
             @SuppressWarnings("unchecked")
             Map<String, Object> propertiesMap = (Map<String, Object>) sourceAsMap.get(
@@ -312,42 +371,87 @@ public class MappingManager {
         return new ArrayList<>();
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> getSourceAsMap(Object mappingMetadata) {
+    private GetMappingsResponse executeMapping(RestHighLevelClient client,
+                                               String datasourceKey,
+                                               ClusterInfo clusterInfo,
+                                               GetMappingsRequest request,
+                                               String indexName,
+                                               org.elasticsearch.action.support.IndicesOptions indicesOptions) throws IOException {
+        if (ElasticsearchVersionHelper.isEs6(clusterInfo)) {
+            log.debug("Using low-level mapping API for ES 6.x compatibility");
+            return ElasticsearchLowLevelRequestHelper.executeMapping(
+                    client.getLowLevelClient(), indexName, indicesOptions, GetMappingsResponse.class);
+        }
+        if (ElasticsearchVersionHelper.isUnknown(clusterInfo)) {
+            log.warn("Datasource [{}] version not yet detected, will try high-level API first. " +
+                            "Recommend configuring 'sources.{}.server-version' to avoid compatibility issues.",
+                    datasourceKey, datasourceKey);
+        }
         try {
-            return (Map<String, Object>) mappingMetadata.getClass().getMethod("getSourceAsMap").invoke(mappingMetadata);
-        } catch (Exception e) {
-            throw new MappingException(ErrorCode.LOAD_MAPPING_FAILED,
-                    "Failed to read mapping source via reflection", e);
+            return client.indices().getMapping(request, RequestOptions.DEFAULT);
+        } catch (org.elasticsearch.ElasticsearchStatusException e) {
+            if (ElasticsearchVersionHelper.isUnknown(clusterInfo)
+                    && ElasticsearchResponseHelper.shouldFallbackToLowLevel(e)) {
+                log.warn("High-level mapping API failed with compatibility issue, falling back to low-level API for datasource [{}]", datasourceKey);
+                return ElasticsearchLowLevelRequestHelper.executeMapping(
+                        client.getLowLevelClient(), indexName, indicesOptions, GetMappingsResponse.class);
+            }
+            throw e;
         }
     }
 
-    private GetMappingsResponse getMappingViaLowLevelApi(RestHighLevelClient highLevelClient,
-                                                         String indexName,
-                                                         boolean ignoreUnavailable) throws IOException {
-        org.elasticsearch.client.RestClient lowLevelClient = highLevelClient.getLowLevelClient();
-        String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + indexName + SimpleElasticsearchRouteConstant.ENDPOINT_MAPPING;
-        org.elasticsearch.client.Request request = new org.elasticsearch.client.Request(
-                SimpleElasticsearchRouteConstant.HTTP_METHOD_GET, endpoint);
-        if (ignoreUnavailable) {
-            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_IGNORE_UNAVAILABLE,
-                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
-            request.addParameter(SimpleElasticsearchSearchConstant.ES_PARAM_ALLOW_NO_INDICES,
-                    SimpleElasticsearchSearchConstant.ES_PARAM_VALUE_TRUE);
-        }
-        org.elasticsearch.client.Response response = lowLevelClient.performRequest(request);
-        return ElasticsearchCompatibilityHelper.parseResponse(response, GetMappingsResponse.class);
-    }
-
-    private SimpleElasticsearchSearchProperties.IndexConfig findIndexConfig(String identifier) {
+    private SimpleElasticsearchSearchProperties.IndexConfig findExactIndexConfig(String identifier) {
         for (SimpleElasticsearchSearchProperties.IndexConfig config : properties.getIndices()) {
-            if (config.getAlias() != null && config.getAlias().equals(identifier)) {
+            if (StringUtils.hasText(config.getAlias()) && config.getAlias().equals(identifier)) {
                 return config;
             }
+        }
+        for (SimpleElasticsearchSearchProperties.IndexConfig config : properties.getIndices()) {
             if (config.getName().equals(identifier)) {
                 return config;
             }
         }
         return null;
+    }
+
+    private ResolvedIndexConfig buildResolvedIndexConfig(String requestIndex,
+                                                         SimpleElasticsearchSearchProperties.IndexConfig config,
+                                                         boolean wildcardMatched) {
+        return ResolvedIndexConfig.builder()
+                .requestIndex(requestIndex)
+                .configIndex(config.getName())
+                .configIdentifier(getConfigIdentifier(config))
+                .indexConfig(config)
+                .wildcardMatched(wildcardMatched)
+                .build();
+    }
+
+    private boolean isWildcardPattern(String value) {
+        return value.contains(SimpleElasticsearchSearchConstant.WILDCARD_STAR)
+                || value.contains(SimpleElasticsearchSearchConstant.WILDCARD_QUESTION);
+    }
+
+    private MappingException indexNotConfiguredException(String requestIndex) {
+        return new MappingException(ErrorCode.INDEX_NOT_CONFIGURED,
+                String.format(ErrorMessage.INDEX_NOT_CONFIGURED, requestIndex, formatConfiguredIdentifiers(properties.getIndices())));
+    }
+
+    private String formatConfiguredIdentifiers(List<SimpleElasticsearchSearchProperties.IndexConfig> configs) {
+        List<String> identifiers = new ArrayList<>();
+        for (SimpleElasticsearchSearchProperties.IndexConfig config : configs) {
+            identifiers.add(formatConfigIdentifier(config));
+        }
+        return String.join(",", identifiers);
+    }
+
+    private String formatConfigIdentifier(SimpleElasticsearchSearchProperties.IndexConfig config) {
+        if (StringUtils.hasText(config.getAlias())) {
+            return config.getAlias() + "(" + config.getName() + ")";
+        }
+        return config.getName();
+    }
+
+    private String getConfigIdentifier(SimpleElasticsearchSearchProperties.IndexConfig config) {
+        return StringUtils.hasText(config.getAlias()) ? config.getAlias() : config.getName();
     }
 }

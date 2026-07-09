@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.core.event.EsQueryErrorEvent;
@@ -9,13 +10,13 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedEx
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.executor.AbstractExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.validator.CountOnlyValidator;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.validator.DefaultDateRangeValidator;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.validator.IndexAliasValidator;
-import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -59,17 +60,20 @@ public class CountExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     }
 
     @Override
-    protected boolean needsDowngradeRetry(QueryRequest request, IndexMetadata metadata) {
+    protected boolean needsDowngradeRetry(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                           IndexMetadata metadata) {
         return properties.getDowngrade().isEnabled()
+                && !resolvedIndexConfig.isWildcardMatched()
                 && metadata.isDateSplit()
                 && request.getDateRange() != null;
     }
 
     @Override
-    protected QueryResponse executeOnce(QueryRequest request, IndexMetadata metadata,
-                                        long startTime, DowngradeLevel level) throws IOException {
+    protected QueryResponse executeOnce(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                        IndexMetadata metadata, long startTime,
+                                        DowngradeLevel level) throws IOException {
         // 1. 索引路由
-        String[] indices = indexRouteProcessor.routeWithDowngrade(metadata, request.getDateRange(), level);
+        String[] indices = indexRouteProcessor.routeWithDowngrade(resolvedIndexConfig, metadata, request.getDateRange(), level);
 
         // 2. 构建 query DSL
         QueryBuilder queryBuilder = queryDslBuilder.build(metadata, request.getQuery());
@@ -84,12 +88,13 @@ public class CountExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         String queryJson = String.format(SimpleElasticsearchSearchConstant.ES_COUNT_QUERY_TEMPLATE,
                 queryBuilder.toString());
         String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
-        long count = ElasticsearchCompatibilityHelper.executeCount(
-                registry.getHighLevelClient(datasourceKey),
-                datasourceKey,
+        long count = ElasticsearchLowLevelRequestHelper.executeCount(
+                registry.getHighLevelClient(datasourceKey).getLowLevelClient(),
                 indices,
                 queryJson,
-                properties.getQueryLimits().isIgnoreUnavailableIndices());
+                properties.getQueryLimits().isIgnoreUnavailableIndices()
+                        ? org.elasticsearch.action.support.IndicesOptions.lenientExpandOpen()
+                        : null);
 
         // 5. 构建响应
         QueryResponse response = QueryResponse.builder()

@@ -43,14 +43,6 @@ public class SensitiveFieldProcessor {
     }
 
     private SimpleElasticsearchSearchProperties.IndexConfig findIndexConfig(String identifier) {
-        for (SimpleElasticsearchSearchProperties.IndexConfig config : mappingManager.getAllIndices()) {
-            if (config.getAlias() != null && config.getAlias().equals(identifier)) {
-                return config;
-            }
-            if (config.getName().equals(identifier)) {
-                return config;
-            }
-        }
-        return null;
+        return mappingManager.findIndexConfig(identifier);
     }
 }

@@ -1,6 +1,14 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.LowLevelSearchResult;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchEndpointHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchRequestOptionHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchResponseHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchVersionHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.XContentCompatibilityHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
@@ -13,6 +21,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.exception.DowngradeFailedEx
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.executor.AbstractExecutor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.processor.SensitiveFieldProcessor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
@@ -21,7 +30,6 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PaginationStrategy;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination.PaginationStrategyRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.validator.QueryRequestValidatorChain;
-import io.github.surezzzzzz.sdk.elasticsearch.search.support.ElasticsearchCompatibilityHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -71,22 +79,25 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     }
 
     @Override
-    protected boolean needsDowngradeRetry(QueryRequest request, IndexMetadata metadata) {
+    protected boolean needsDowngradeRetry(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                           IndexMetadata metadata) {
         return properties.getDowngrade().isEnabled()
+                && !resolvedIndexConfig.isWildcardMatched()
                 && metadata.isDateSplit()
                 && request.getDateRange() != null;
     }
 
     @Override
-    protected QueryResponse executeOnce(QueryRequest request, IndexMetadata metadata,
-                                        long startTime, DowngradeLevel level) throws IOException {
+    protected QueryResponse executeOnce(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                        IndexMetadata metadata, long startTime,
+                                        DowngradeLevel level) throws IOException {
         PaginationInfo pagination = request.getPagination();
 
         // scroll 后续翻页：使用 scroll API，不走 search API
         if (pagination != null && pagination.isScrollPagination()
                 && StringUtils.hasText(pagination.getScrollId())) {
             SearchResponse searchResponse = executeScrollRequest(request);
-            QueryResponse response = processResponse(request, searchResponse);
+            QueryResponse response = processResponse(request, resolvedIndexConfig, searchResponse);
             response.setTook(System.currentTimeMillis() - startTime);
 
             // 最后一页自动清除 scroll 上下文
@@ -112,7 +123,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
             return response;
         }
 
-        SearchRequest searchRequest = buildSearchRequest(request, metadata, level);
+        SearchRequest searchRequest = buildSearchRequest(request, resolvedIndexConfig, metadata, level);
 
         log.debug("Executing query: indices={}, dsl={}",
                 String.join(",", searchRequest.indices()),
@@ -122,10 +133,9 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         log.debug("Index [{}] routed to datasource [{}]", request.getIndex(), datasourceKey);
         RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-        SearchResponse searchResponse = ElasticsearchCompatibilityHelper.executeSearch(
-                client, datasourceKey, searchRequest, registry);
+        SearchResponse searchResponse = executeSearch(client, datasourceKey, searchRequest, request);
 
-        QueryResponse response = processResponse(request, searchResponse);
+        QueryResponse response = processResponse(request, resolvedIndexConfig, searchResponse);
         response.setTook(System.currentTimeMillis() - startTime);
 
         // scroll 第一页：如果 hasMore=false（数据量不足一页），也需要清除 scroll 上下文
@@ -191,11 +201,12 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
     // ==================== 钩子方法覆盖 ====================
 
     @Override
-    protected DowngradeLevel estimateDowngradeLevel(QueryRequest request, IndexMetadata metadata) {
+    protected DowngradeLevel estimateDowngradeLevel(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                                    IndexMetadata metadata) {
         if (!properties.getDowngrade().isEnableEstimate()) {
             return DowngradeLevel.LEVEL_0;
         }
-        String[] estimatedIndices = indexRouteProcessor.route(metadata, request.getDateRange());
+        String[] estimatedIndices = indexRouteProcessor.route(resolvedIndexConfig, metadata, request.getDateRange());
         DowngradeLevel level = indexRouteProcessor.detectDowngradeLevelFromIndices(estimatedIndices);
         if (level != DowngradeLevel.LEVEL_0) {
             log.info("Pre-estimated downgrade to {} for index [{}]", level, request.getIndex());
@@ -205,9 +216,9 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
     // ==================== 私有方法 ====================
 
-    private SearchRequest buildSearchRequest(QueryRequest request, IndexMetadata metadata,
-                                             DowngradeLevel level) {
-        String[] indices = indexRouteProcessor.routeWithDowngrade(metadata, request.getDateRange(), level);
+    private SearchRequest buildSearchRequest(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                             IndexMetadata metadata, DowngradeLevel level) {
+        String[] indices = indexRouteProcessor.routeWithDowngrade(resolvedIndexConfig, metadata, request.getDateRange(), level);
         SearchRequest searchRequest = new SearchRequest(indices);
 
         if (properties.getQueryLimits().isIgnoreUnavailableIndices()) {
@@ -215,7 +226,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         }
 
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        QueryBuilder queryBuilder = queryDslBuilder.build(request.getIndex(), request.getQuery());
+        QueryBuilder queryBuilder = queryDslBuilder.build(metadata, request.getQuery());
         sourceBuilder.query(queryBuilder);
 
         if (request.getDateRange() != null && metadata.isDateSplit() && metadata.getDateField() != null
@@ -271,9 +282,10 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         sourceBuilder.query(QueryBuilders.boolQuery().must(originalQuery).filter(dateFilter));
     }
 
-    private QueryResponse processResponse(QueryRequest request, SearchResponse searchResponse) {
+    private QueryResponse processResponse(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
+                                          SearchResponse searchResponse) {
         QueryResponse.QueryResponseBuilder builder = QueryResponse.builder();
-        builder.total(ElasticsearchCompatibilityHelper.extractTotalHits(searchResponse.getHits()));
+        builder.total(ElasticsearchResponseHelper.extractTotalHits(searchResponse.getHits()));
 
         PaginationInfo pagination = request.getPagination();
         builder.page(pagination.getPage());
@@ -282,7 +294,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         List<Map<String, Object>> items = new ArrayList<>();
         for (SearchHit hit : searchResponse.getHits().getHits()) {
             Map<String, Object> source = hit.getSourceAsMap();
-            sensitiveFieldProcessor.process(request.getIndex(), source);
+            sensitiveFieldProcessor.process(resolvedIndexConfig.getConfigIdentifier(), source);
             source.put(SimpleElasticsearchSearchConstant.ES_FIELD_ID, hit.getId());
             if (properties.getApi().isIncludeScore()) {
                 source.put(SimpleElasticsearchSearchConstant.ES_FIELD_SCORE, hit.getScore());
@@ -298,32 +310,73 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
         return builder.build();
     }
 
+    private SearchResponse executeSearch(RestHighLevelClient client, String datasourceKey,
+                                         SearchRequest searchRequest, QueryRequest request) throws IOException {
+        ClusterInfo clusterInfo = registry.getClusterInfo(datasourceKey);
+        if (ElasticsearchVersionHelper.isEs6(clusterInfo)) {
+            return executeLowLevelSearch(client, searchRequest, request);
+        }
+        try {
+            return client.search(searchRequest, org.elasticsearch.client.RequestOptions.DEFAULT);
+        } catch (org.elasticsearch.ElasticsearchStatusException e) {
+            if (ElasticsearchVersionHelper.isUnknown(clusterInfo)
+                    && ElasticsearchResponseHelper.shouldFallbackToLowLevel(e)) {
+                log.warn("高级 API 遇到版本兼容问题，降级为低级 API 执行，数据源：{}", datasourceKey);
+                return executeLowLevelSearch(client, searchRequest, request);
+            }
+            throw e;
+        }
+    }
+
+    private SearchResponse executeLowLevelSearch(RestHighLevelClient client,
+                                                 SearchRequest searchRequest,
+                                                 QueryRequest request) throws IOException {
+        String scrollKeepAlive = null;
+        PaginationInfo pagination = request == null ? null : request.getPagination();
+        if (pagination != null && pagination.isScrollPagination()) {
+            scrollKeepAlive = pagination.getScrollTtl();
+        }
+        String jsonBody = searchRequest != null && searchRequest.source() != null ? searchRequest.source().toString() : null;
+        String[] indices = searchRequest == null ? null : searchRequest.indices();
+        org.elasticsearch.client.Request lowLevelRequest = ElasticsearchLowLevelRequestHelper.newSearchRequest(
+                indices, jsonBody, scrollKeepAlive);
+        if (searchRequest != null) {
+            ElasticsearchRequestOptionHelper.applyIndicesOptions(lowLevelRequest, searchRequest.indicesOptions());
+        }
+        org.elasticsearch.client.Response response = ElasticsearchLowLevelRequestHelper.execute(
+                client.getLowLevelClient(), lowLevelRequest);
+        byte[] responseBytes = ElasticsearchLowLevelRequestHelper.readResponseBytes(response);
+        LowLevelSearchResult result = LowLevelSearchResult.builder()
+                .searchResponse(XContentCompatibilityHelper.parseSearchResponse(responseBytes))
+                .rawResponseBody(new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8))
+                .containsAggregations(false)
+                .rawAggregationResponse(false)
+                .build();
+        return result.getSearchResponse();
+    }
+
     private SearchResponse executeScrollRequest(QueryRequest request) throws IOException {
         PaginationInfo pagination = request.getPagination();
         String datasourceKey = routeResolver.resolveDataSource(request.getIndex());
         RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
 
-        // 使用低级 API 调用 scroll 接口（兼容 ES 6.x）
-        org.elasticsearch.client.Request scrollRequest = new org.elasticsearch.client.Request(
+        org.elasticsearch.client.Request scrollRequest = ElasticsearchLowLevelRequestHelper.newJsonRequest(
                 SimpleElasticsearchRouteConstant.HTTP_METHOD_POST,
-                SimpleElasticsearchSearchConstant.ES_API_SCROLL);
-        scrollRequest.setJsonEntity(String.format(
-                SimpleElasticsearchSearchConstant.ES_SCROLL_CONTINUE_TEMPLATE,
-                pagination.getScrollTtl(), pagination.getScrollId()));
+                ElasticsearchEndpointHelper.buildScrollEndpoint(),
+                ElasticsearchEndpointHelper.buildScrollContinueBody(pagination.getScrollId(), pagination.getScrollTtl()));
 
         org.elasticsearch.client.Response response = client.getLowLevelClient().performRequest(scrollRequest);
-        return ElasticsearchCompatibilityHelper.parseResponse(response, SearchResponse.class);
+        return XContentCompatibilityHelper.parseResponse(response, SearchResponse.class);
     }
 
     private void closeScrollQuietly(String scrollId, String index) {
         try {
             String datasourceKey = routeResolver.resolveDataSource(index);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
-            org.elasticsearch.client.Request closeRequest = new org.elasticsearch.client.Request(
+            org.elasticsearch.client.Request closeRequest = ElasticsearchLowLevelRequestHelper.newJsonRequest(
                     SimpleElasticsearchRouteConstant.HTTP_METHOD_DELETE,
-                    SimpleElasticsearchSearchConstant.ES_API_SCROLL);
-            closeRequest.setJsonEntity(String.format(
-                    SimpleElasticsearchSearchConstant.ES_SCROLL_DELETE_TEMPLATE, scrollId));
+                    ElasticsearchEndpointHelper.buildScrollEndpoint(),
+                    ElasticsearchEndpointHelper.buildScrollClearBody(scrollId));
             client.getLowLevelClient().performRequest(closeRequest);
             log.debug("Scroll context closed: index={}", index);
         } catch (Exception e) {

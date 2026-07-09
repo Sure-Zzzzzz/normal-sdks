@@ -89,6 +89,8 @@ class SearchEndToEndTest {
     private static final String NL_USER_INDEX = "test_nl_user_index";
     private static final String ORDER_INDEX = "test_order_index";
     private static final String LOG_INDEX_PREFIX = "test_log_";
+    private static final String WILDCARD_INDEX_PATTERN = "test_wildcard--*";
+    private static final String WILDCARD_CONCRETE_INDEX = "test_wildcard--2026.07.09";
     private static final String LOG_MAPPING_JSON = "{"
             + "  \"properties\": {"
             + "    \"user_id\": {\"type\": \"keyword\"},"
@@ -123,6 +125,9 @@ class SearchEndToEndTest {
 
         // 3. 创建多天的 log 索引（模拟日期分割，primary 数据源）
         createMultipleDateLogIndices(registry);
+
+        // 3.5 创建 concrete index 命中 wildcard 配置的测试索引
+        createWildcardConcreteIndex(registry);
 
         // 4. 创建 secondary 索引（secondary 数据源）- 测试多数据源路由
         createSecondaryIndex(registry);
@@ -178,6 +183,32 @@ class SearchEndToEndTest {
         return log;
     }
 
+    private static void createWildcardConcreteIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX,
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"extraField\": {\"type\": \"keyword\"}," +
+                        "    \"extraField2\": {\"type\": \"keyword\"}," +
+                        "    \"eventTime\": {\"type\": \"date\"}" +
+                        "  }" +
+                        "}");
+
+        EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX,
+                "doc-001", createWildcardDoc("alpha", "group-a", "2026-07-09T10:00:00"));
+        EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX,
+                "doc-002", createWildcardDoc("beta", "group-b", "2026-07-09T11:00:00"));
+        log.info("✓ 已创建 concrete wildcard 测试索引: {}", WILDCARD_CONCRETE_INDEX);
+    }
+
+    private static Map<String, Object> createWildcardDoc(String extraField, String extraField2, String eventTime) {
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("extraField", extraField);
+        doc.put("extraField2", extraField2);
+        doc.put("eventTime", eventTime);
+        return doc;
+    }
+
 
     @AfterAll
     static void cleanupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
@@ -196,6 +227,8 @@ class SearchEndToEndTest {
                 String indexName = LOG_INDEX_PREFIX + date.format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
                 deleteIndexIfExists(registry, DEFAULT_DATASOURCE, indexName);
             }
+
+            deleteIndexIfExists(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX);
 
             // 清理 secondary 数据源的索引
             deleteIndexIfExists(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
@@ -227,7 +260,7 @@ class SearchEndToEndTest {
         mockMvc.perform(get("/api/indices"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
-                .andExpect(jsonPath("$.data.length()").value(7))
+                .andExpect(jsonPath("$.data.length()").value(8))
                 .andExpect(jsonPath("$.error").doesNotExist())
                 .andDo(result -> {
                     log.info("✓ 获取索引列表成功");
@@ -1751,10 +1784,259 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 7. 多数据源路由测试 ====================
+    @Test
+    @Order(59)
+    @DisplayName("6.10 concrete index 命中 wildcard 配置 - Query 精确返回请求索引数据")
+    void testConcreteIndexMatchesWildcardConfigQuery() throws Exception {
+        QueryRequest request = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .query(QueryCondition.builder()
+                        .field("extraField")
+                        .op("EQ")
+                        .value("alpha")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("doc-001"))
+                .andExpect(jsonPath("$.data.items[0].extraField").value("alpha"))
+                .andExpect(jsonPath("$.data.items[0].extraField2").value("group-a"));
+    }
 
     @Test
     @Order(60)
+    @DisplayName("6.11 concrete index 命中 wildcard 配置 - _id IN 查询")
+    void testConcreteIndexMatchesWildcardConfigIdIn() throws Exception {
+        QueryRequest request = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("IN")
+                        .values(Arrays.asList("doc-001", "doc-002"))
+                        .build())
+                .pagination(PaginationInfo.builder().size(10).build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*]._id").value(org.hamcrest.Matchers.containsInAnyOrder("doc-001", "doc-002")))
+                .andExpect(jsonPath("$.data.items[*].extraField").value(org.hamcrest.Matchers.containsInAnyOrder("alpha", "beta")));
+    }
+
+    @Test
+    @Order(61)
+    @DisplayName("6.12 concrete index 命中 wildcard 配置 - countOnly 复用同一解析")
+    void testConcreteIndexMatchesWildcardConfigCountOnly() throws Exception {
+        QueryRequest request = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("IN")
+                        .values(Arrays.asList("doc-001", "doc-002"))
+                        .build())
+                .countOnly(true)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items").doesNotExist());
+    }
+
+    @Test
+    @Order(62)
+    @DisplayName("6.13 concrete index 命中 wildcard 配置 - 聚合使用配置元数据")
+    void testConcreteIndexMatchesWildcardConfigAgg() throws Exception {
+        AggRequest request = AggRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder()
+                                .name("by_extraField2")
+                                .type("TERMS")
+                                .field("extraField2")
+                                .size(10)
+                                .build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_extraField2").isArray())
+                .andExpect(jsonPath("$.data.aggregations.by_extraField2.length()").value(2))
+                .andExpect(jsonPath("$.data.aggregations.by_extraField2[*].key").value(org.hamcrest.Matchers.containsInAnyOrder("group-a", "group-b")))
+                .andExpect(jsonPath("$.data.aggregations.by_extraField2[*].count").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(1))));
+    }
+
+    @Test
+    @Order(63)
+    @DisplayName("6.14 concrete index 命中 wildcard 配置 - fields 和 refresh 入口")
+    void testConcreteIndexMatchesWildcardConfigFieldsAndRefresh() throws Exception {
+        mockMvc.perform(get("/api/indices/{alias}/fields", WILDCARD_CONCRETE_INDEX)
+                        .param("indexName", WILDCARD_CONCRETE_INDEX))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.indexName").value(WILDCARD_INDEX_PATTERN))
+                .andExpect(jsonPath("$.data.actualIndices", org.hamcrest.Matchers.hasItem(WILDCARD_CONCRETE_INDEX)))
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField2')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='eventTime')]").exists());
+
+        mockMvc.perform(post("/api/indices/{alias}/refresh", WILDCARD_CONCRETE_INDEX))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isString());
+    }
+
+    @Test
+    @Order(64)
+    @DisplayName("6.15 concrete index 命中 wildcard 配置 - 表达式 label、校验和提示")
+    void testConcreteIndexMatchesWildcardConfigExpression() throws Exception {
+        String body = "{\"index\":\"" + WILDCARD_CONCRETE_INDEX + "\",\"expression\":\"扩展字段 = \\\"alpha\\\"\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("doc-001"))
+                .andExpect(jsonPath("$.data.items[0].extraField").value("alpha"));
+
+        mockMvc.perform(get("/api/expression/validate")
+                        .param("index", WILDCARD_CONCRETE_INDEX)
+                        .param("expression", "扩展字段 = \"alpha\""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(true));
+
+        mockMvc.perform(get("/api/expression/hints")
+                        .param("index", WILDCARD_CONCRETE_INDEX))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField')]").exists())
+                .andExpect(jsonPath("$.data.fields[?(@.name=='extraField2')]").exists());
+    }
+
+    @Test
+    @Order(65)
+    @DisplayName("6.16 concrete index 命中 wildcard 配置 - search_after 游标翻页")
+    void testConcreteIndexMatchesWildcardConfigSearchAfter() throws Exception {
+        QueryRequest firstPage = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("none")
+                        .size(1)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("extraField").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("doc-001"))
+                .andExpect(jsonPath("$.data.items[0].extraField").value("alpha"))
+                .andExpect(jsonPath("$.data.pagination.type").value("search_after"))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter.length()").value(1))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        List<Object> firstSearchAfter = objectMapper.readTree(firstResponse)
+                .path("data").path("pagination").path("nextSearchAfter")
+                .traverse(objectMapper).readValueAs(List.class);
+        QueryRequest secondPage = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("none")
+                        .size(1)
+                        .searchAfter(firstSearchAfter)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("extraField").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        String secondResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(secondPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("doc-002"))
+                .andExpect(jsonPath("$.data.items[0].extraField").value("beta"))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter.length()").value(1))
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+        List<Object> secondSearchAfter = objectMapper.readTree(secondResponse)
+                .path("data").path("pagination").path("nextSearchAfter")
+                .traverse(objectMapper).readValueAs(List.class);
+        QueryRequest thirdPage = QueryRequest.builder()
+                .index(WILDCARD_CONCRETE_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("search_after")
+                        .searchAfterMode("none")
+                        .size(1)
+                        .searchAfter(secondSearchAfter)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("extraField").order("asc").build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(thirdPage)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.nextSearchAfter").doesNotExist());
+    }
+
+    @Test
+    @Order(79)
+    @DisplayName("6.17 未配置索引 - 错误文案包含请求索引和已配置列表")
+    void testIndexNotConfiguredMessageIncludesConfiguredList() throws Exception {
+        QueryRequest request = QueryRequest.builder()
+                .index("test_wildcard_unknown--2026.07.09")
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("test_wildcard_unknown--2026.07.09")))
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("search.indices")))
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString(WILDCARD_INDEX_PATTERN)));
+    }
+
+    // ==================== 7. 多数据源路由测试 ====================
+
+    @Test
+    @Order(66)
     @DisplayName("7.1 多数据源路由 - 查询 secondary 数据源索引")
     void testMultiDatasourceQuerySecondary() throws Exception {
         log.info("========== 测试：查询路由到 secondary 数据源的索引 ==========");
@@ -1786,7 +2068,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(61)
+    @Order(67)
     @DisplayName("7.2 多数据源路由 - secondary 索引范围查询")
     void testMultiDatasourceQueryRange() throws Exception {
         log.info("========== 测试：Secondary 数据源范围查询 ==========");
@@ -1819,7 +2101,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(62)
+    @Order(68)
     @DisplayName("7.3 多数据源路由 - secondary 索引聚合")
     void testMultiDatasourceAggregation() throws Exception {
         log.info("========== 测试：Secondary 数据源聚合 ==========");
@@ -1854,7 +2136,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(63)
+    @Order(69)
     @DisplayName("7.4 多数据源路由 - 获取 secondary 索引字段信息")
     void testMultiDatasourceGetFields() throws Exception {
         log.info("========== 测试：获取 Secondary 数据源索引字段信息 ==========");
@@ -1873,7 +2155,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(64)
+    @Order(76)
     @DisplayName("7.5 版本兼容性 - 验证 GetMappings 请求正常工作")
     void testVersionCompatibilityGetMappings() throws Exception {
         log.info("========== 测试：验证版本自适应客户端兼容性 ==========");
@@ -1899,7 +2181,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(65)
+    @Order(77)
     @DisplayName("8. Multi-fields（keyword 子字段）功能测试")
     void testMultiFieldsSupport() throws Exception {
         log.info("========== 测试：Multi-fields（keyword 子字段）功能 ==========");
@@ -2262,8 +2544,7 @@ class SearchEndToEndTest {
         log.info("========== 测试：composite 聚合 ES 6.x 路径 ==========");
 
         // secondary 是 ES 6.2.2，composite 是 beta 特性（6.1+）
-        // 使用 7.x Java client 构建的 composite 请求在 6.x 上可能因 DSL 差异返回 400
-        // 本测试验证：请求能正常发出，不抛出未处理异常（400 是 ES 侧拒绝，属于预期内行为）
+        // 本测试验证 ES 7.x client 生成的 DSL 会在 ES 6.x 路径移除不兼容字段后正常执行。
         AggRequest request = AggRequest.builder()
                 .index(SECONDARY_INDEX)
                 .aggs(Arrays.asList(
@@ -2283,19 +2564,15 @@ class SearchEndToEndTest {
                         .content(toJson(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aggregations.all_category").isArray())
+                .andExpect(jsonPath("$.data.aggregations.all_category.length()").value(1))
+                .andExpect(jsonPath("$.data.aggregations.all_category[0].key.category").value("Electronics"))
+                .andExpect(jsonPath("$.data.aggregations.all_category[0].count").value(5))
+                .andExpect(jsonPath("$.data.afterKey").doesNotExist())
                 .andReturn();
 
         String responseBody = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
         log.info("ES 6.x composite 响应: {}", responseBody);
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> resp = objectMapper.readValue(responseBody, Map.class);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) resp.get("data");
-
-        // secondary 索引只有 1 种 category（Electronics），afterKey 应为 null（已遍历完）
-        Object afterKey = data.get("afterKey");
-        log.info("ES 6.x composite afterKey: {}", afterKey);
         log.info("✓ ES 6.x composite 聚合成功");
     }
 

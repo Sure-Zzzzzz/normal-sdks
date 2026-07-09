@@ -52,11 +52,14 @@ public class AggregationDslBuilder {
      */
     public AggregationBuilder[] build(String indexAlias, List<AggDefinition> aggDefinitions,
                                       Map<String, Map<String, Object>> after) {
+        return build(mappingManager.getMetadata(indexAlias), aggDefinitions, after);
+    }
+
+    public AggregationBuilder[] build(IndexMetadata metadata, List<AggDefinition> aggDefinitions,
+                                      Map<String, Map<String, Object>> after) {
         if (aggDefinitions == null || aggDefinitions.isEmpty()) {
             return new AggregationBuilder[0];
         }
-
-        IndexMetadata metadata = mappingManager.getMetadata(indexAlias);
 
         AggregationBuilder[] builders = new AggregationBuilder[aggDefinitions.size()];
         for (int i = 0; i < aggDefinitions.size(); i++) {

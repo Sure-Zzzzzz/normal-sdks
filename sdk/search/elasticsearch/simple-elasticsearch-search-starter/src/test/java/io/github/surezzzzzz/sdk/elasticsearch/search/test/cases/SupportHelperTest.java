@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
-import io.github.surezzzzzz.sdk.elasticsearch.search.support.DslCompatibilityHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchDslCompatibilityHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.search.support.IndexDateHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * IndexDateHelper / DslCompatibilityHelper 单元测试
+ * IndexDateHelper / route DSL 兼容 helper 单元测试
  *
  * @author surezzzzzz
  */
@@ -135,12 +135,12 @@ class SupportHelperTest {
         assertEquals("yyyy", result);
     }
 
-    // ==================== DslCompatibilityHelper ====================
+    // ==================== ElasticsearchDslCompatibilityHelper ====================
 
     @Test
     @DisplayName("removeEs7OnlyCompositeFields - null 输入原样返回")
     void testRemoveEs7FieldsNull() {
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(null);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(null);
         log.info("removeEs7Fields null: {}", result);
         assertNull(result);
     }
@@ -149,7 +149,7 @@ class SupportHelperTest {
     @DisplayName("removeEs7OnlyCompositeFields - 不含 missing_bucket 原样返回")
     void testRemoveEs7FieldsNoMissingBucket() {
         String dsl = "{\"aggs\":{\"by_date\":{\"date_histogram\":{\"field\":\"@timestamp\"}}}}";
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(dsl);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(dsl);
         log.info("removeEs7Fields no missing_bucket: {}", result);
         assertEquals(dsl, result);
     }
@@ -158,7 +158,7 @@ class SupportHelperTest {
     @DisplayName("removeEs7OnlyCompositeFields - 移除 missing_bucket:false（前置逗号）")
     void testRemoveEs7FieldsMissingBucketFalseLeadingComma() {
         String dsl = "{\"terms\":{\"field\":\"status\"},\"missing_bucket\":false}";
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(dsl);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(dsl);
         log.info("removeEs7Fields missing_bucket false leading comma: {}", result);
         assertFalse(result.contains("missing_bucket"), "结果不应包含 missing_bucket");
     }
@@ -167,7 +167,7 @@ class SupportHelperTest {
     @DisplayName("removeEs7OnlyCompositeFields - 移除 missing_bucket:true（后置逗号）")
     void testRemoveEs7FieldsMissingBucketTrueTrailingComma() {
         String dsl = "{\"missing_bucket\":true,\"terms\":{\"field\":\"status\"}}";
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(dsl);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(dsl);
         log.info("removeEs7Fields missing_bucket true trailing comma: {}", result);
         assertFalse(result.contains("missing_bucket"), "结果不应包含 missing_bucket");
     }
@@ -176,7 +176,7 @@ class SupportHelperTest {
     @DisplayName("removeEs7OnlyCompositeFields - 移除 missing_bucket（无逗号）")
     void testRemoveEs7FieldsMissingBucketAlone() {
         String dsl = "{\"missing_bucket\":false}";
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(dsl);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(dsl);
         log.info("removeEs7Fields missing_bucket alone: {}", result);
         assertFalse(result.contains("missing_bucket"), "结果不应包含 missing_bucket");
     }
@@ -185,7 +185,7 @@ class SupportHelperTest {
     @DisplayName("removeEs7OnlyCompositeFields - 多个 missing_bucket 全部移除")
     void testRemoveEs7FieldsMultipleMissingBucket() {
         String dsl = "{\"sources\":[{\"missing_bucket\":false,\"field\":\"a\"},{\"missing_bucket\":true,\"field\":\"b\"}]}";
-        String result = DslCompatibilityHelper.removeEs7OnlyCompositeFields(dsl);
+        String result = ElasticsearchDslCompatibilityHelper.removeEs7CompositeUnsupportedFieldsForEs6(dsl);
         log.info("removeEs7Fields multiple: {}", result);
         assertFalse(result.contains("missing_bucket"), "结果不应包含任何 missing_bucket");
     }

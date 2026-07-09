@@ -712,22 +712,6 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String DEFAULT_PIT_MAX_KEEP_ALIVE = "5m";
 
-    /**
-     * ES PIT API 路径
-     */
-    public static final String ES_API_PIT = "/_pit";
-
-    /**
-     * ES PIT 查询参数：keep_alive
-     */
-    public static final String ES_PIT_KEEP_ALIVE_PARAM = "?keep_alive=";
-
-    /**
-     * ES PIT JSON 模板：关闭 PIT
-     * 参数: pitId
-     */
-    public static final String ES_PIT_CLOSE_TEMPLATE = "{\"id\":\"%s\"}";
-
     // ========== scroll 相关 ==========
 
     /**
@@ -735,36 +719,7 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String DEFAULT_SCROLL_MAX_TTL = "5m";
 
-    /**
-     * ES scroll API 路径
-     */
-    public static final String ES_API_SCROLL = "/_search/scroll";
-
-    /**
-     * ES scroll JSON 模板：续期翻页
-     * 参数: scrollTtl, scrollId
-     */
-    public static final String ES_SCROLL_CONTINUE_TEMPLATE = "{\"scroll\":\"%s\",\"scroll_id\":\"%s\"}";
-
-    /**
-     * ES scroll JSON 模板：清除上下文
-     * 参数: scrollId
-     */
-    public static final String ES_SCROLL_DELETE_TEMPLATE = "{\"scroll_id\":\"%s\"}";
-
-    /**
-     * ES scroll 查询参数（初始请求追加到 URL）
-     */
-    public static final String ES_SCROLL_QUERY_PARAM = "?scroll=";
-
     // ========== count 相关 ==========
-
-    /**
-     * ES count API 路径
-     *
-     * @since 1.6.6
-     */
-    public static final String ES_API_COUNT = "/_count";
 
     /**
      * ES _count API 空查询 JSON（match_all）

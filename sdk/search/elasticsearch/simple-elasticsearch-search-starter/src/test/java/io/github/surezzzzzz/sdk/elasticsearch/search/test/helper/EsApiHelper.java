@@ -1,30 +1,19 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.helper;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.client.Request;
-import org.elasticsearch.client.Response;
-import org.elasticsearch.client.ResponseException;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
+import org.elasticsearch.client.RestClient;
 
-import java.io.IOException;
-import java.time.temporal.TemporalAccessor;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * ES 测试 API 辅助工具。
  *
- * <p>测试侧统一走 low-level RestClient，避免依赖 ES 7.x 专属的
- * org.elasticsearch.client.indices.* / org.elasticsearch.xcontent.* 包路径。</p>
+ * <p>只保留 search 测试侧 registry/datasource 适配，ES API 细节委托 route helper。</p>
  *
  * @author surezzzzzz
  */
-@Slf4j
 public class EsApiHelper {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private EsApiHelper() {
     }
@@ -40,25 +29,7 @@ public class EsApiHelper {
     public static boolean indexExists(SimpleElasticsearchRouteRegistry registry,
                                       String datasource,
                                       String indexName) {
-        try {
-            Response response = registry.getLowLevelClient(datasource).performRequest(new Request("HEAD", "/" + indexName));
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode == 200) {
-                return true;
-            }
-            if (statusCode == 404) {
-                return false;
-            }
-            throw new EsApiTestException("检查索引是否存在失败：" + indexName
-                    + ", status=" + statusCode);
-        } catch (ResponseException e) {
-            if (e.getResponse().getStatusLine().getStatusCode() == 404) {
-                return false;
-            }
-            throw new EsApiTestException("检查索引是否存在失败：" + indexName, e);
-        } catch (IOException e) {
-            throw new EsApiTestException("检查索引是否存在失败：" + indexName, e);
-        }
+        return ElasticsearchLowLevelRequestHelper.indexExists(lowLevelClient(registry, datasource), indexName);
     }
 
     /**
@@ -71,17 +42,7 @@ public class EsApiHelper {
     public static void deleteIndex(SimpleElasticsearchRouteRegistry registry,
                                    String datasource,
                                    String indexName) {
-        try {
-            registry.getLowLevelClient(datasource).performRequest(new Request("DELETE", "/" + indexName));
-            log.debug("已删除索引 [{}]，数据源 [{}]", indexName, datasource);
-        } catch (ResponseException e) {
-            if (e.getResponse().getStatusLine().getStatusCode() == 404) {
-                return;
-            }
-            throw new EsApiTestException("删除索引失败：" + indexName, e);
-        } catch (IOException e) {
-            throw new EsApiTestException("删除索引失败：" + indexName, e);
-        }
+        ElasticsearchLowLevelRequestHelper.deleteIndex(lowLevelClient(registry, datasource), indexName);
     }
 
     /**
@@ -96,15 +57,8 @@ public class EsApiHelper {
                                    String datasource,
                                    String indexName,
                                    String mappingJson) {
-        String actualMapping = adaptMapping(registry, datasource, mappingJson);
-        Request request = new Request("PUT", "/" + indexName);
-        request.setJsonEntity(actualMapping);
-        try {
-            registry.getLowLevelClient(datasource).performRequest(request);
-            log.info("✓ 已创建索引 [{}]，数据源 [{}]", indexName, datasource);
-        } catch (IOException e) {
-            throw new EsApiTestException("创建索引失败：" + indexName, e);
-        }
+        ElasticsearchLowLevelRequestHelper.createIndex(lowLevelClient(registry, datasource), indexName, mappingJson,
+                registry.getClusterInfo(datasource));
     }
 
     /**
@@ -119,12 +73,8 @@ public class EsApiHelper {
                                    String datasource,
                                    String indexName,
                                    Map<String, Object> properties) {
-        try {
-            String mappingJson = "{\"properties\":" + OBJECT_MAPPER.writeValueAsString(properties) + "}";
-            createIndex(registry, datasource, indexName, mappingJson);
-        } catch (IOException e) {
-            throw new EsApiTestException("序列化 mapping properties 失败：" + indexName, e);
-        }
+        ElasticsearchLowLevelRequestHelper.createIndex(lowLevelClient(registry, datasource), indexName, properties,
+                registry.getClusterInfo(datasource));
     }
 
     /**
@@ -139,10 +89,8 @@ public class EsApiHelper {
                                      String datasource,
                                      String indexName,
                                      String mappingJson) {
-        if (indexExists(registry, datasource, indexName)) {
-            deleteIndex(registry, datasource, indexName);
-        }
-        createIndex(registry, datasource, indexName, mappingJson);
+        ElasticsearchLowLevelRequestHelper.recreateIndex(lowLevelClient(registry, datasource), indexName, mappingJson,
+                registry.getClusterInfo(datasource));
     }
 
     /**
@@ -159,14 +107,7 @@ public class EsApiHelper {
                                 String indexName,
                                 String id,
                                 Map<String, Object> source) {
-        Request request = new Request("PUT", "/" + indexName + "/_doc/" + id);
-        request.addParameter("refresh", "true");
-        try {
-            request.setJsonEntity(OBJECT_MAPPER.writeValueAsString(normalizeSource(source)));
-            registry.getLowLevelClient(datasource).performRequest(request);
-        } catch (IOException e) {
-            throw new EsApiTestException("写入文档失败：" + indexName + "/" + id, e);
-        }
+        ElasticsearchLowLevelRequestHelper.indexDoc(lowLevelClient(registry, datasource), indexName, id, source);
     }
 
     /**
@@ -181,18 +122,7 @@ public class EsApiHelper {
                                  String datasource,
                                  String indexName,
                                  String id) {
-        Request request = new Request("DELETE", "/" + indexName + "/_doc/" + id);
-        request.addParameter("refresh", "true");
-        try {
-            registry.getLowLevelClient(datasource).performRequest(request);
-        } catch (ResponseException e) {
-            if (e.getResponse().getStatusLine().getStatusCode() == 404) {
-                return;
-            }
-            throw new EsApiTestException("删除文档失败：" + indexName + "/" + id, e);
-        } catch (IOException e) {
-            throw new EsApiTestException("删除文档失败：" + indexName + "/" + id, e);
-        }
+        ElasticsearchLowLevelRequestHelper.deleteDoc(lowLevelClient(registry, datasource), indexName, id);
     }
 
     /**
@@ -205,34 +135,11 @@ public class EsApiHelper {
     public static void refresh(SimpleElasticsearchRouteRegistry registry,
                                String datasource,
                                String indexName) {
-        try {
-            registry.getLowLevelClient(datasource).performRequest(new Request("POST", "/" + indexName + "/_refresh"));
-        } catch (IOException e) {
-            throw new EsApiTestException("刷新索引失败：" + indexName, e);
-        }
+        ElasticsearchLowLevelRequestHelper.refresh(lowLevelClient(registry, datasource), indexName);
     }
 
-    private static Map<String, Object> normalizeSource(Map<String, Object> source) {
-        Map<String, Object> normalized = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : source.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof TemporalAccessor) {
-                normalized.put(entry.getKey(), value.toString());
-            } else {
-                normalized.put(entry.getKey(), value);
-            }
-        }
-        return normalized;
+    private static RestClient lowLevelClient(SimpleElasticsearchRouteRegistry registry, String datasource) {
+        return registry.getLowLevelClient(datasource);
     }
 
-    private static String adaptMapping(SimpleElasticsearchRouteRegistry registry,
-                                       String datasource,
-                                       String mappingJson) {
-        ClusterInfo clusterInfo = registry.getClusterInfo(datasource);
-        if (clusterInfo != null && clusterInfo.getEffectiveVersion() != null
-                && clusterInfo.getEffectiveVersion().getMajor() == 6) {
-            return "{\"mappings\":{\"_doc\":" + mappingJson + "}}";
-        }
-        return "{\"mappings\":" + mappingJson + "}";
-    }
 }

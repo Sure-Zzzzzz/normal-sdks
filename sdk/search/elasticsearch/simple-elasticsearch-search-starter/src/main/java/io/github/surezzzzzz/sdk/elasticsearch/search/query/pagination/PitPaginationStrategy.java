@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.query.pagination;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchEndpointHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
 import io.github.surezzzzzz.sdk.elasticsearch.route.resolver.RouteResolver;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
@@ -13,6 +15,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearc
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.ResolvedIndexConfig;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryResponse;
@@ -28,11 +31,8 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
@@ -206,18 +206,21 @@ public class PitPaginationStrategy implements PaginationStrategy {
 
     /**
      * 解析物理索引名
-     * PIT API 要求物理索引名/模式，需将 alias 转换为 {@link IndexMetadata#indexName}
+     * PIT API 要求物理索引名/模式，alias 使用配置 name，wildcard concrete 使用请求 index
      */
     private String resolvePhysicalIndex(String indexAlias) {
         try {
-            IndexMetadata metadata = mappingManager.getMetadata(indexAlias);
+            ResolvedIndexConfig resolvedIndexConfig = mappingManager.resolveIndexConfig(indexAlias);
+            if (resolvedIndexConfig.isWildcardMatched()) {
+                return resolvedIndexConfig.getRequestIndex();
+            }
+            IndexMetadata metadata = mappingManager.getMetadata(resolvedIndexConfig);
             if (metadata != null && StringUtils.hasText(metadata.getIndexName())) {
                 return metadata.getIndexName();
             }
         } catch (Exception e) {
             log.warn("Failed to resolve physical index for alias [{}]: {}", indexAlias, e.getMessage());
         }
-        // fallback：无法解析时使用原始值
         return indexAlias;
     }
 
@@ -231,21 +234,12 @@ public class PitPaginationStrategy implements PaginationStrategy {
             String keepAlive = pagination.getPitKeepAlive();
             // 解析物理索引名：alias -> IndexMetadata.indexName
             String physicalIndex = resolvePhysicalIndex(request.getIndex());
-            String endpoint = SimpleElasticsearchRouteConstant.ENDPOINT_ROOT + physicalIndex
-                    + SimpleElasticsearchSearchConstant.ES_API_PIT
-                    + SimpleElasticsearchSearchConstant.ES_PIT_KEEP_ALIVE_PARAM + keepAlive;
-            Request pitRequest = new Request(
-                    SimpleElasticsearchRouteConstant.HTTP_METHOD_POST, endpoint);
+            Request pitRequest = ElasticsearchLowLevelRequestHelper.newRequest(
+                    SimpleElasticsearchRouteConstant.HTTP_METHOD_POST,
+                    ElasticsearchEndpointHelper.buildOpenPitEndpoint(physicalIndex, keepAlive));
             Response pitResponse = client.getLowLevelClient().performRequest(pitRequest);
-            InputStream inputStream = pitResponse.getEntity().getContent();
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            byte[] chunk = new byte[4096];
-            int len;
-            while ((len = inputStream.read(chunk)) != -1) {
-                buffer.write(chunk, 0, len);
-            }
-            String body = buffer.toString(StandardCharsets.UTF_8.name());
-            return OBJECT_MAPPER.readTree(body).path("id").asText();
+            String body = ElasticsearchLowLevelRequestHelper.readResponseBody(pitResponse);
+            return OBJECT_MAPPER.readTree(body).path(SimpleElasticsearchRouteConstant.JSON_FIELD_ID).asText();
         } catch (Exception e) {
             log.warn("Failed to open PIT for index [{}]: {}", request.getIndex(), e.getMessage());
             return null;
@@ -261,11 +255,10 @@ public class PitPaginationStrategy implements PaginationStrategy {
             // 这里用 alias 做 route resolution 即可，与 openOrRenewPit 中物理名路由结果一致
             String datasourceKey = routeResolver.resolveDataSource(indexAlias);
             RestHighLevelClient client = registry.getHighLevelClient(datasourceKey);
-            Request closeRequest = new Request(
+            Request closeRequest = ElasticsearchLowLevelRequestHelper.newJsonRequest(
                     SimpleElasticsearchRouteConstant.HTTP_METHOD_DELETE,
-                    SimpleElasticsearchSearchConstant.ES_API_PIT);
-            closeRequest.setJsonEntity(String.format(
-                    SimpleElasticsearchSearchConstant.ES_PIT_CLOSE_TEMPLATE, pitId));
+                    ElasticsearchEndpointHelper.buildClosePitEndpoint(),
+                    ElasticsearchEndpointHelper.buildClosePitBody(pitId));
             client.getLowLevelClient().performRequest(closeRequest);
             log.debug("PIT closed: index={}", indexAlias);
         } catch (Exception e) {
