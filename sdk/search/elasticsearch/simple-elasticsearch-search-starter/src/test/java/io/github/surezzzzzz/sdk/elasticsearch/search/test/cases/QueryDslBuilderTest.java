@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.FieldException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.builder.QueryDslBuilder;
@@ -8,6 +10,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.index.query.BoolQueryBuilder;
+import org.elasticsearch.index.query.IdsQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -211,6 +214,293 @@ class QueryDslBuilderTest {
         // 单条件不包 bool，直接返回
         assertFalse(result instanceof BoolQueryBuilder,
                 "单条件不应包额外的 BoolQueryBuilder");
+    }
+
+    // ==================== _id 元字段测试 ====================
+
+    @Test
+    @DisplayName("_id EQ → idsQuery")
+    void testIdEqCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("eq")
+                .value("doc-001")
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id EQ 查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof IdsQueryBuilder,
+                "_id EQ 应生成 IdsQueryBuilder");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含目标文档 id");
+    }
+
+    @Test
+    @DisplayName("_id IN → idsQuery")
+    void testIdInCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("in")
+                .values(Arrays.asList("doc-001", "doc-002"))
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id IN 查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof IdsQueryBuilder,
+                "_id IN 应生成 IdsQueryBuilder");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含第一个文档 id");
+        assertTrue(dsl.contains("doc-002"),
+                "DSL 应包含第二个文档 id");
+    }
+
+    @Test
+    @DisplayName("_id NE → bool must_not idsQuery")
+    void testIdNeCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("ne")
+                .value("doc-001")
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id NE 查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof BoolQueryBuilder,
+                "_id NE 应生成 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) result;
+        assertEquals(1, boolQuery.mustNot().size(),
+                "must_not 中应有 1 个 ids 查询");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含被排除的文档 id");
+    }
+
+    @Test
+    @DisplayName("_id NOT_IN → bool must_not idsQuery")
+    void testIdNotInCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("not_in")
+                .values(Arrays.asList("doc-001", "doc-002"))
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id NOT_IN 查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof BoolQueryBuilder,
+                "_id NOT_IN 应生成 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) result;
+        assertEquals(1, boolQuery.mustNot().size(),
+                "must_not 中应有 1 个 ids 查询");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含第一个被排除的文档 id");
+        assertTrue(dsl.contains("doc-002"),
+                "DSL 应包含第二个被排除的文档 id");
+    }
+
+    @Test
+    @DisplayName("_id AND 普通字段 → bool must 同时包含 ids 和普通字段查询")
+    void testIdAndNormalFieldCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .logic("and")
+                .conditions(Arrays.asList(
+                        QueryCondition.builder()
+                                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                                .op("eq")
+                                .value("doc-001")
+                                .build(),
+                        QueryCondition.builder()
+                                .field("fieldA")
+                                .op("eq")
+                                .value("A")
+                                .build()
+                ))
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id AND 普通字段查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof BoolQueryBuilder,
+                "组合查询应生成 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) result;
+        assertEquals(2, boolQuery.must().size(),
+                "must 中应包含 _id 和普通字段两个条件");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含文档 id");
+        assertTrue(dsl.contains("fieldA"),
+                "DSL 应包含普通字段查询");
+    }
+
+    @Test
+    @DisplayName("_id OR 普通字段 → bool should 同时包含 ids 和普通字段查询")
+    void testIdOrNormalFieldCondition() {
+        QueryCondition condition = QueryCondition.builder()
+                .logic("or")
+                .conditions(Arrays.asList(
+                        QueryCondition.builder()
+                                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                                .op("eq")
+                                .value("doc-001")
+                                .build(),
+                        QueryCondition.builder()
+                                .field("fieldA")
+                                .op("eq")
+                                .value("A")
+                                .build()
+                ))
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id OR 普通字段查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof BoolQueryBuilder,
+                "组合查询应生成 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) result;
+        assertEquals(2, boolQuery.should().size(),
+                "should 中应包含 _id 和普通字段两个条件");
+        assertEquals("1", boolQuery.minimumShouldMatch(),
+                "OR 查询 minimumShouldMatch 应为 1");
+        assertTrue(dsl.contains("doc-001"),
+                "DSL 应包含文档 id");
+        assertTrue(dsl.contains("fieldA"),
+                "DSL 应包含普通字段查询");
+    }
+
+    @Test
+    @DisplayName("_id IN 数值 id → 转为 idsQuery 字符串值")
+    void testIdInNumericValues() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("in")
+                .values(Arrays.asList(1, 2))
+                .build();
+
+        QueryBuilder result = queryDslBuilder.build(indexMetadata, condition);
+        String dsl = result.toString();
+
+        log.info("======================================");
+        log.info("测试: _id IN 数值查询");
+        log.info("DSL: {}", dsl);
+        log.info("======================================");
+
+        assertTrue(result instanceof IdsQueryBuilder,
+                "_id IN 数值应生成 IdsQueryBuilder");
+        assertTrue(dsl.contains("1"),
+                "DSL 应包含第一个数值 id");
+        assertTrue(dsl.contains("2"),
+                "DSL 应包含第二个数值 id");
+    }
+
+    @Test
+    @DisplayName("_id LIKE → 抛字段异常")
+    void testIdUnsupportedOperator() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("like")
+                .value("doc")
+                .build();
+
+        FieldException exception = assertThrows(FieldException.class,
+                () -> queryDslBuilder.build(indexMetadata, condition),
+                "_id 不支持 LIKE 操作符");
+        assertTrue(exception.getMessage().contains("_id"),
+                "异常消息应包含 _id 字段名");
+    }
+
+    @Test
+    @DisplayName("_id EQ 空值 → 抛字段异常")
+    void testIdEqNullValue() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("eq")
+                .value(null)
+                .build();
+
+        FieldException exception = assertThrows(FieldException.class,
+                () -> queryDslBuilder.build(indexMetadata, condition),
+                "_id EQ 空值应抛异常");
+        assertTrue(exception.getMessage().contains("_id"),
+                "异常消息应包含 _id 字段名");
+    }
+
+    @Test
+    @DisplayName("_id IN 空列表 → 抛字段异常")
+    void testIdInEmptyValues() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("in")
+                .values(Collections.emptyList())
+                .build();
+
+        FieldException exception = assertThrows(FieldException.class,
+                () -> queryDslBuilder.build(indexMetadata, condition),
+                "_id IN 空列表应抛异常");
+        assertTrue(exception.getMessage().contains("_id"),
+                "异常消息应包含 _id 字段名");
+    }
+
+    @Test
+    @DisplayName("_id IN 全空值列表 → 抛字段异常")
+    void testIdInNullOnlyValues() {
+        QueryCondition condition = QueryCondition.builder()
+                .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                .op("in")
+                .values(Arrays.asList(null, null))
+                .build();
+
+        FieldException exception = assertThrows(FieldException.class,
+                () -> queryDslBuilder.build(indexMetadata, condition),
+                "_id IN 全空值列表应抛异常");
+        assertTrue(exception.getMessage().contains("_id"),
+                "异常消息应包含 _id 字段名");
+    }
+
+    @Test
+    @DisplayName("普通不存在字段仍抛字段不存在")
+    void testUnknownFieldStillRejected() {
+        QueryCondition condition = QueryCondition.builder()
+                .field("missingField")
+                .op("eq")
+                .value("test")
+                .build();
+
+        FieldException exception = assertThrows(FieldException.class,
+                () -> queryDslBuilder.build(indexMetadata, condition),
+                "普通不存在字段仍应抛字段异常");
+        assertTrue(exception.getMessage().contains("missingField"),
+                "异常消息应包含不存在的字段名");
     }
 
     // ==================== 复杂组合测试 ====================

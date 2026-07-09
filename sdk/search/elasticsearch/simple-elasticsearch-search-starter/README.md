@@ -25,6 +25,7 @@
 | **NL 直接查询** | **直接用中文自然语言发起查询/聚合，支持 pagination/dateRange/fields/collapse/after 参数覆盖，scroll 续页** | **v1.6.2+** |
 | 查询事件发布 | 查询/聚合后发布 Spring 事件，支持审计扩展 | v1.2.0+ |
 | **独立计数查询** | **`countOnly=true` 走 ES `_count` API，仅返回 total，性能远优于 `_search + size=0`** | **v1.6.6+** |
+| **`_id` 元字段查询** | **支持通过 `_id` 做 eq/in/ne/not_in 查询，countOnly 同步支持** | **v1.6.10+** |
 
 ---
 
@@ -44,6 +45,7 @@
 | + 独立计数查询（`countOnly=true`，走 `_count` API） | **1.6.6** | 1.0.10 | 仅返回 total，无文档 fetch/sort，性能远优于 `_search + size=0` |
 | + 通配符索引字段元数据合并 | **1.6.8** | 1.0.10 | Bug Fix：通配符索引 fields / query 探测从"取第一个"改为"合并全部匹配索引" |
 | + router 1.1.2 适配 / 多 SB 版本测试 | **1.6.9** | 1.1.2 | 维护版本：补齐 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 测试适配，无用户侧功能变更 |
+| + `_id` 元字段查询 / 通配符混合 mapping 查询兼容 / totalHits 日志修复 | **1.6.10** | 1.1.2 | Bug Fix：支持 `_id` eq/in/ne/not_in，修复 keyword/text.keyword 混合 mapping 查询漏数与 ES 7 totalHits 正常路径 warn |
 
 ### route-starter 各版本能力
 
@@ -80,7 +82,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.9'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.6.10'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -138,6 +140,22 @@ POST /api/query
 }
 ```
 
+### 4. 按 `_id` 查询（v1.6.10+）
+
+```bash
+POST /api/query
+{
+  "index": "test_wildcard",
+  "query": {
+    "field": "_id",
+    "op": "in",
+    "values": ["doc-001", "doc-002"]
+  }
+}
+```
+
+`_id` 支持 `eq` / `ne` / `in` / `not_in`，也支持 `countOnly=true`。
+
 ---
 
 ## API 参考
@@ -160,10 +178,10 @@ POST /api/query
 
 | 字段 | 说明 |
 |------|------|
-| `field` | 字段名 |
+| `field` | 字段名；v1.6.10 起支持 ES 元字段 `_id` |
 | `op` | 操作符（见操作符表） |
-| `value` | 单值 |
-| `values` | 多值（in/between/not_in 使用） |
+| `value` | 单值；`_id eq/ne` 使用 |
+| `values` | 多值（in/between/not_in 使用）；`_id in/not_in` 使用 |
 | `logic` | 逻辑操作符（and/or），用于嵌套条件 |
 | `conditions` | 子条件列表 |
 
@@ -466,6 +484,8 @@ GET /api/expression/hints?index=order
 | `is_null` | 字段为空 | — |
 | `is_not_null` | 字段不为空 | — |
 
+> **`_id` 元字段支持范围（v1.6.10+）**：`_id` 不参与 mapping 字段元数据，只支持 `eq` / `ne` / `in` / `not_in` 精确 id 查询；普通查询和 `countOnly=true` 共用该能力。
+>
 > **表达式语法支持范围**：`regex` / `not_regex` 仅通过 JSON API（`/api/query`）可用，表达式语法无 REGEX 关键字。`between` 仅由时间范围关键字（如 `最近7天`）自动生成，表达式无 BETWEEN 关键字。其余操作符均可通过表达式语法实现，详见[场景九](#场景九条件表达式查询-v152)。
 
 ---

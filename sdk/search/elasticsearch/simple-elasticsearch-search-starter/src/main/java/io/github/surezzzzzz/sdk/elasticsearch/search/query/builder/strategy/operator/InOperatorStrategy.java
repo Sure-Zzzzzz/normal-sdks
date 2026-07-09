@@ -36,6 +36,11 @@ public class InOperatorStrategy implements OperatorStrategy {
         if (values == null || values.isEmpty()) {
             throw new SimpleElasticsearchSearchException(ErrorCode.IN_VALUES_REQUIRED, ErrorMessage.IN_VALUES_REQUIRED);
         }
+        QueryBuilder queryBuilder = buildMergedInQuery(values,
+                fieldMetadata.getExactQueryFields(), fieldMetadata.getMatchQueryFields());
+        if (queryBuilder != null) {
+            return queryBuilder;
+        }
         if (fieldMetadata.getType() == FieldType.TEXT) {
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
             for (Object value : values) {
@@ -45,5 +50,34 @@ public class InOperatorStrategy implements OperatorStrategy {
             return boolQuery;
         }
         return QueryBuilders.termsQuery(fieldName, values);
+    }
+
+    private QueryBuilder buildMergedInQuery(List<Object> values, List<String> exactQueryFields,
+                                            List<String> matchQueryFields) {
+        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+        int queryCount = 0;
+        if (exactQueryFields != null) {
+            for (String exactQueryField : exactQueryFields) {
+                boolQuery.should(QueryBuilders.termsQuery(exactQueryField, values));
+                queryCount++;
+            }
+        }
+        if (matchQueryFields != null) {
+            for (String matchQueryField : matchQueryFields) {
+                for (Object value : values) {
+                    boolQuery.should(QueryBuilders.matchQuery(matchQueryField, value));
+                    queryCount++;
+                }
+            }
+        }
+        if (queryCount == 0) {
+            return null;
+        }
+        if (queryCount == 1 && exactQueryFields != null && exactQueryFields.size() == 1
+                && (matchQueryFields == null || matchQueryFields.isEmpty())) {
+            return QueryBuilders.termsQuery(exactQueryFields.get(0), values);
+        }
+        boolQuery.minimumShouldMatch(SimpleElasticsearchSearchConstant.OR_MINIMUM_SHOULD_MATCH);
+        return boolQuery;
     }
 }

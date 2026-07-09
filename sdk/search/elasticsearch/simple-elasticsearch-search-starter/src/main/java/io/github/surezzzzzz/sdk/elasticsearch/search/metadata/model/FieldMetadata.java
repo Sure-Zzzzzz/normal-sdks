@@ -1,11 +1,13 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,4 +77,16 @@ public class FieldMetadata {
      * value: 子字段元数据
      */
     private Map<String, FieldMetadata> subFields;
+
+    /**
+     * 精确查询字段路径
+     */
+    @JsonIgnore
+    private List<String> exactQueryFields;
+
+    /**
+     * 全文匹配查询字段路径
+     */
+    @JsonIgnore
+    private List<String> matchQueryFields;
 }

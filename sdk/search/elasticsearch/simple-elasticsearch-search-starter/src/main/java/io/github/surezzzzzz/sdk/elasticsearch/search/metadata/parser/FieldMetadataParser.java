@@ -76,6 +76,8 @@ public class FieldMetadataParser {
                             .aggregatable(!isForbidden && subFieldType.isAggregatable())
                             .sensitive(isSensitive)
                             .masked(isMasked)
+                            .exactQueryFields(buildExactQueryFields(fullSubFieldName, subFieldType, null))
+                            .matchQueryFields(buildMatchQueryFields(fullSubFieldName, subFieldType, null))
                             .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
                             .build());
                 }
@@ -93,6 +95,8 @@ public class FieldMetadataParser {
                     .format(fieldType == FieldType.DATE ? (String) fieldDef.get(SimpleElasticsearchSearchConstant.ES_MAPPING_FORMAT) : null)
                     .reason(isForbidden ? SimpleElasticsearchSearchConstant.SENSITIVE_FIELD_REASON : null)
                     .subFields(subFields)
+                    .exactQueryFields(buildExactQueryFields(fieldName, fieldType, subFields))
+                    .matchQueryFields(buildMatchQueryFields(fieldName, fieldType, subFields))
                     .build());
 
             // 递归处理嵌套字段
@@ -114,6 +118,26 @@ public class FieldMetadataParser {
             }
         }
         return null;
+    }
+
+    private List<String> buildExactQueryFields(String fieldName, FieldType fieldType, Map<String, FieldMetadata> subFields) {
+        List<String> exactQueryFields = new ArrayList<>();
+        if (fieldType == FieldType.TEXT) {
+            if (subFields != null && subFields.containsKey(SimpleElasticsearchSearchConstant.SUB_FIELD_KEYWORD)) {
+                exactQueryFields.add(String.format(SimpleElasticsearchSearchConstant.TEMPLATE_KEYWORD_SUB_FIELD, fieldName));
+            }
+            return exactQueryFields;
+        }
+        exactQueryFields.add(fieldName);
+        return exactQueryFields;
+    }
+
+    private List<String> buildMatchQueryFields(String fieldName, FieldType fieldType, Map<String, FieldMetadata> subFields) {
+        if (fieldType != FieldType.TEXT || (subFields != null
+                && subFields.containsKey(SimpleElasticsearchSearchConstant.SUB_FIELD_KEYWORD))) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(fieldName);
     }
 
     /**
@@ -164,7 +188,7 @@ public class FieldMetadataParser {
      */
     private FieldMetadata mergeFieldMetadata(FieldMetadata older, FieldMetadata newer, String newerIndexName) {
         if (older.getType() != newer.getType()) {
-            log.warn("字段 [{}] 类型在索引间不一致: {} -> {}，采用最新索引 [{}] 的定义",
+            log.warn("字段 [{}] 类型在索引间不一致: {} -> {}，展示属性采用最新索引 [{}] 的定义，查询路径合并兼容",
                     newer.getName(), older.getType(), newer.getType(), newerIndexName);
         }
         Map<String, FieldMetadata> mergedSubFields = new LinkedHashMap<>();
@@ -186,6 +210,19 @@ public class FieldMetadataParser {
                 .format(newer.getFormat())
                 .reason(newer.getReason())
                 .subFields(mergedSubFields.isEmpty() ? null : mergedSubFields)
+                .exactQueryFields(mergeQueryFields(older.getExactQueryFields(), newer.getExactQueryFields()))
+                .matchQueryFields(mergeQueryFields(older.getMatchQueryFields(), newer.getMatchQueryFields()))
                 .build();
+    }
+
+    private List<String> mergeQueryFields(List<String> olderFields, List<String> newerFields) {
+        LinkedHashSet<String> mergedFields = new LinkedHashSet<>();
+        if (olderFields != null) {
+            mergedFields.addAll(olderFields);
+        }
+        if (newerFields != null) {
+            mergedFields.addAll(newerFields);
+        }
+        return new ArrayList<>(mergedFields);
     }
 }

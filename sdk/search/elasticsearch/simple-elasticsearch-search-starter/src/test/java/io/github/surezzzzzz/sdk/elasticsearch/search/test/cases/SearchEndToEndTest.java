@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.PipelineAggDefinition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
@@ -473,7 +474,197 @@ class SearchEndToEndTest {
 
     @Test
     @Order(15)
-    @DisplayName("2.6 分页查询 - Offset")
+    @DisplayName("2.6 _id EQ 查询")
+    void testQueryByIdEq() throws Exception {
+        log.info("========== 测试：_id EQ 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("EQ")
+                        .value("1")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("1"))
+                .andExpect(jsonPath("$.data.items[0].name").value("张三"))
+                .andDo(result -> log.info("_id EQ 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(16)
+    @DisplayName("2.7 _id IN 查询")
+    void testQueryByIdIn() throws Exception {
+        log.info("========== 测试：_id IN 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("IN")
+                        .values(Arrays.asList("1", "2"))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*]._id").value(org.hamcrest.Matchers.containsInAnyOrder("1", "2")))
+                .andDo(result -> log.info("_id IN 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(17)
+    @DisplayName("2.8 _id NOT_IN 查询")
+    void testQueryByIdNotIn() throws Exception {
+        log.info("========== 测试：_id NOT_IN 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("NOT_IN")
+                        .values(Collections.singletonList("1"))
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(5)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andExpect(jsonPath("$.data.items[*]._id").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("1"))))
+                .andDo(result -> log.info("_id NOT_IN 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(18)
+    @DisplayName("2.9 _id IN + countOnly 查询")
+    void testQueryByIdCountOnly() throws Exception {
+        log.info("========== 测试：_id IN + countOnly 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                        .op("IN")
+                        .values(Arrays.asList("1", "2"))
+                        .build())
+                .countOnly(true)
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(2))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andDo(result -> log.info("_id IN + countOnly 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(19)
+    @DisplayName("2.10 _id + 普通字段 AND 查询")
+    void testQueryByIdAndNormalField() throws Exception {
+        log.info("========== 测试：_id + 普通字段 AND 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .logic("and")
+                        .conditions(Arrays.asList(
+                                QueryCondition.builder()
+                                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                                        .op("EQ")
+                                        .value("1")
+                                        .build(),
+                                QueryCondition.builder()
+                                        .field("city")
+                                        .op("EQ")
+                                        .value("北京")
+                                        .build()
+                        ))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0]._id").value("1"))
+                .andExpect(jsonPath("$.data.items[0].city").value("北京"))
+                .andDo(result -> log.info("_id + 普通字段 AND 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(20)
+    @DisplayName("2.11 _id + 普通字段 OR 查询")
+    void testQueryByIdOrNormalField() throws Exception {
+        log.info("========== 测试：_id + 普通字段 OR 查询 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .query(QueryCondition.builder()
+                        .logic("or")
+                        .conditions(Arrays.asList(
+                                QueryCondition.builder()
+                                        .field(SimpleElasticsearchSearchConstant.ES_FIELD_ID)
+                                        .op("EQ")
+                                        .value("1")
+                                        .build(),
+                                QueryCondition.builder()
+                                        .field("name")
+                                        .op("EQ")
+                                        .value("李四")
+                                        .build()
+                        ))
+                        .build())
+                .pagination(PaginationInfo.builder()
+                        .size(5)
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*]._id").value(org.hamcrest.Matchers.containsInAnyOrder("1", "2")))
+                .andDo(result -> log.info("_id + 普通字段 OR 查询成功: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    @Order(21)
+    @DisplayName("2.12 分页查询 - Offset")
     void testQueryPagination() throws Exception {
         log.info("========== 测试：Offset 分页 ==========");
 
@@ -503,8 +694,8 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(16)
-    @DisplayName("2.7 排序查询")
+    @Order(22)
+    @DisplayName("2.13 排序查询")
     void testQuerySort() throws Exception {
         log.info("========== 测试：排序查询 ==========");
 
@@ -541,7 +732,7 @@ class SearchEndToEndTest {
     // ==================== 3. 聚合查询测试 ====================
 
     @Test
-    @Order(20)
+    @Order(24)
     @DisplayName("3.1 Metrics 聚合 - AVG")
     void testAggAvg() throws Exception {
         log.info("========== 测试：AVG 聚合 ==========");
@@ -571,7 +762,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(21)
+    @Order(25)
     @DisplayName("3.2 Metrics 聚合 - STATS")
     void testAggStats() throws Exception {
         log.info("========== 测试：STATS 聚合 ==========");
@@ -604,7 +795,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(22)
+    @Order(26)
     @DisplayName("3.3 Bucket 聚合 - TERMS")
     void testAggTerms() throws Exception {
         log.info("========== 测试：TERMS 聚合 ==========");
@@ -644,7 +835,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(23)
+    @Order(27)
     @DisplayName("3.4 嵌套聚合 - TERMS + AVG")
     void testAggNested() throws Exception {
         log.info("========== 测试：嵌套聚合 ==========");

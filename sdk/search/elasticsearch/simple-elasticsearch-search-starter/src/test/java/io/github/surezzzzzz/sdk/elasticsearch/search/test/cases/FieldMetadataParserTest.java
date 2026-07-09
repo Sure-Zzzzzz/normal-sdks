@@ -241,7 +241,7 @@ class FieldMetadataParserTest {
                 fieldDef("status", "keyword"));
         Map<String, Object> idxB = properties(
                 fieldDef("name", "text"),  // 同名字段，新索引覆盖
-                fieldDef("aptLevel", "text"));  // 新增字段
+                fieldDef("extraField2", "text"));  // 新增字段
         LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
         indexProperties.put("idxA", idxA);
         indexProperties.put("idxB", idxB);
@@ -255,7 +255,7 @@ class FieldMetadataParserTest {
         assertEquals(FieldType.TEXT, nameField.getType());  // idxB 的类型
 
         assertTrue(result.stream().anyMatch(f -> f.getName().equals("status")));
-        assertTrue(result.stream().anyMatch(f -> f.getName().equals("aptLevel")));
+        assertTrue(result.stream().anyMatch(f -> f.getName().equals("extraField2")));
     }
 
     @Test
@@ -330,6 +330,55 @@ class FieldMetadataParserTest {
         assertNotNull(keywordSubField);
         assertEquals("level.keyword", keywordSubField.getName());
         assertEquals(FieldType.KEYWORD, keywordSubField.getType());
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：keyword 与 text.keyword 混用时保留双精确查询路径")
+    void testParseAndMergeKeywordAndTextKeywordExactPaths() {
+        Map<String, Object> levelA = fieldDef("keyword");
+        Map<String, Object> levelB = new HashMap<>();
+        levelB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        levelB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("extraField", levelA));
+        indexProperties.put("idxB", singleField("extraField", levelB));
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        FieldMetadata field = result.get(0);
+        log.info("keyword 与 text.keyword 混用合并结果：{}", field);
+        assertEquals(FieldType.TEXT, field.getType());
+        assertEquals(Arrays.asList("extraField", "extraField.keyword"), field.getExactQueryFields(),
+                "应同时保留主字段和 keyword 子字段精确查询路径");
+        assertTrue(field.getMatchQueryFields().isEmpty(),
+                "text.keyword 场景不应额外保留 match 查询路径");
+    }
+
+    @Test
+    @DisplayName("parseAndMerge：纯 text 与 text.keyword 混用时保留 match 与精确查询路径")
+    void testParseAndMergeTextAndTextKeywordMixedPaths() {
+        Map<String, Object> titleA = fieldDef("text");
+        Map<String, Object> titleB = new HashMap<>();
+        titleB.put("type", "text");
+        Map<String, Object> subFieldsB = new HashMap<>();
+        subFieldsB.put("keyword", fieldDef("keyword"));
+        titleB.put("fields", subFieldsB);
+
+        LinkedHashMap<String, Map<String, Object>> indexProperties = new LinkedHashMap<>();
+        indexProperties.put("idxA", singleField("extraField", titleA));
+        indexProperties.put("idxB", singleField("extraField", titleB));
+
+        List<FieldMetadata> result = parser.parseAndMerge(indexProperties, emptyConfig());
+
+        FieldMetadata field = result.get(0);
+        log.info("纯 text 与 text.keyword 混用合并结果：{}", field);
+        assertEquals(Collections.singletonList("extraField.keyword"), field.getExactQueryFields(),
+                "新索引 text.keyword 应保留精确查询路径");
+        assertEquals(Collections.singletonList("extraField"), field.getMatchQueryFields(),
+                "老索引纯 text 应保留 match 查询路径");
     }
 
     @Test

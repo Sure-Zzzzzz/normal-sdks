@@ -13,7 +13,6 @@ import org.elasticsearch.client.RestHighLevelClient;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -54,20 +53,16 @@ public class ElasticsearchCompatibilityHelper {
                 // ES 6.x 的 getTotalHits() 返回 long（自动装箱）
             return (Long) totalHitsObj;
         }
-        // ES 7.x+ 的 getTotalHits() 返回 TotalHits 对象，通过反射取 value 字段
+        return extractTotalHitsValue(totalHitsObj);
+    }
+
+    private static long extractTotalHitsValue(Object totalHitsObj) {
         try {
-            Method valueField = totalHitsObj.getClass().getMethod("value");
-            return (Long) valueField.invoke(totalHitsObj);
+            java.lang.reflect.Field field = totalHitsObj.getClass().getField(SimpleElasticsearchSearchConstant.ES_JSON_VALUE);
+            return (Long) field.get(totalHitsObj);
         } catch (Exception e) {
-            log.warn("通过反射提取 totalHits 失败，改用字段兜底：{}", e.getMessage());
-            // 最终兜底：直接访问 value 字段
-            try {
-                java.lang.reflect.Field field = totalHitsObj.getClass().getField("value");
-                return (Long) field.get(totalHitsObj);
-            } catch (Exception ex) {
-                log.warn("通过字段兜底提取 totalHits 失败：{}", ex.getMessage());
-                return 0L;
-            }
+            log.warn("通过字段提取 totalHits 失败：{}", e.getMessage());
+            return 0L;
         }
     }
 

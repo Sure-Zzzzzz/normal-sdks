@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 查询构建器
@@ -179,6 +180,10 @@ public class QueryDslBuilder {
     private QueryBuilder buildFieldCondition(QueryCondition condition, IndexMetadata metadata) {
         String fieldName = condition.getField();
 
+        if (SimpleElasticsearchSearchConstant.ES_FIELD_ID.equals(fieldName)) {
+            return buildIdFieldCondition(condition);
+        }
+
         FieldMetadata fieldMetadata = metadata.getField(fieldName);
         if (fieldMetadata == null) {
             throw new FieldException(ErrorCode.FIELD_NOT_FOUND,
@@ -191,5 +196,53 @@ public class QueryDslBuilder {
 
         QueryOperator operator = condition.getOperatorEnum();
         return operatorStrategyRegistry.resolve(operator).build(fieldName, condition, fieldMetadata);
+    }
+
+    private QueryBuilder buildIdFieldCondition(QueryCondition condition) {
+        QueryOperator operator = condition.getOperatorEnum();
+        if (operator == QueryOperator.EQ) {
+            return buildIdsQuery(condition.getValue());
+        }
+        if (operator == QueryOperator.IN) {
+            return buildIdsQuery(condition.getValues());
+        }
+        if (operator == QueryOperator.NE) {
+            return QueryBuilders.boolQuery().mustNot(buildIdsQuery(condition.getValue()));
+        }
+        if (operator == QueryOperator.NOT_IN) {
+            return QueryBuilders.boolQuery().mustNot(buildIdsQuery(condition.getValues()));
+        }
+        throw new FieldException(ErrorCode.FIELD_NOT_SEARCHABLE,
+                String.format(ErrorMessage.FIELD_NOT_SEARCHABLE,
+                        SimpleElasticsearchSearchConstant.ES_FIELD_ID,
+                        SimpleElasticsearchSearchConstant.ID_FIELD_UNSUPPORTED_OPERATOR_REASON));
+    }
+
+    private QueryBuilder buildIdsQuery(Object value) {
+        if (value == null) {
+            throw idFieldValueRequiredException();
+        }
+        return QueryBuilders.idsQuery().addIds(String.valueOf(value));
+    }
+
+    private QueryBuilder buildIdsQuery(List<Object> values) {
+        if (values == null || values.isEmpty()) {
+            throw idFieldValueRequiredException();
+        }
+        String[] ids = values.stream()
+                .filter(Objects::nonNull)
+                .map(String::valueOf)
+                .toArray(String[]::new);
+        if (ids.length == 0) {
+            throw idFieldValueRequiredException();
+        }
+        return QueryBuilders.idsQuery().addIds(ids);
+    }
+
+    private FieldException idFieldValueRequiredException() {
+        return new FieldException(ErrorCode.FIELD_NOT_SEARCHABLE,
+                String.format(ErrorMessage.FIELD_NOT_SEARCHABLE,
+                        SimpleElasticsearchSearchConstant.ES_FIELD_ID,
+                        SimpleElasticsearchSearchConstant.ID_FIELD_VALUE_REQUIRED_REASON));
     }
 }

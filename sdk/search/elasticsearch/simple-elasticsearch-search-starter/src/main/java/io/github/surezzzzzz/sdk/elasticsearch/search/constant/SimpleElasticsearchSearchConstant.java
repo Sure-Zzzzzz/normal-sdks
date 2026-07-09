@@ -80,6 +80,16 @@ public class SimpleElasticsearchSearchConstant {
      */
     public static final String ES_FIELD_SCORE = "_score";
 
+    /**
+     * _id 字段不支持的操作符原因
+     */
+    public static final String ID_FIELD_UNSUPPORTED_OPERATOR_REASON = "仅支持 eq、ne、in、not_in 操作符";
+
+    /**
+     * _id 字段查询值为空原因
+     */
+    public static final String ID_FIELD_VALUE_REQUIRED_REASON = "查询值不能为空";
+
     // ========== 聚合结果字段名 ==========
 
     /**
