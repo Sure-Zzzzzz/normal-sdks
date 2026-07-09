@@ -55,6 +55,21 @@ public final class ErrorMessage {
     public static final String ROUTE_INDEX_COORDINATES_CREATE_FAILED = "创建 IndexCoordinates 失败，index: %s";
     public static final String ROUTE_REFLECTION_INVOKE_FAILED = "反射调用 ElasticsearchRestTemplate 方法失败";
 
+    // ========== 兼容公共能力相关 ==========
+
+    public static final String ROUTE_COMPAT_REFLECT_CLASS_NOT_FOUND = "未找到 Elasticsearch 兼容类: %s";
+    public static final String ROUTE_COMPAT_REFLECT_METHOD_NOT_FOUND = "未找到 Elasticsearch 兼容方法: %s#%s";
+    public static final String ROUTE_COMPAT_REFLECT_FIELD_NOT_FOUND = "未找到 Elasticsearch 兼容字段: %s#%s";
+    public static final String ROUTE_COMPAT_REFLECT_CONSTRUCTOR_NOT_FOUND = "未找到 Elasticsearch 兼容构造方法: %s";
+    public static final String ROUTE_COMPAT_REFLECT_INVOKE_FAILED = "Elasticsearch 兼容反射调用失败: %s";
+    public static final String ROUTE_COMPAT_XCONTENT_API_NOT_FOUND = "未找到 Elasticsearch XContent API";
+    public static final String ROUTE_COMPAT_XCONTENT_REGISTRY_CREATE_FAILED = "创建 Elasticsearch NamedXContentRegistry 失败";
+    public static final String ROUTE_COMPAT_XCONTENT_PARSE_FAILED = "解析 Elasticsearch XContent 响应失败: %s";
+    public static final String ROUTE_COMPAT_LOW_LEVEL_REQUEST_FAILED = "执行 Elasticsearch low-level 请求失败: %s %s";
+    public static final String ROUTE_COMPAT_RESPONSE_READ_FAILED = "读取 Elasticsearch low-level 响应失败";
+    public static final String ROUTE_COMPAT_MAPPING_SOURCE_EXTRACT_FAILED = "提取 Elasticsearch mapping source 失败";
+    public static final String ROUTE_COMPAT_JSON_SERIALIZE_FAILED = "序列化 Elasticsearch low-level JSON 请求失败";
+
     // ========== 代理相关 ==========
 
     public static final String PROXY_JDK_INTERFACE_NOT_FOUND = "ElasticsearchRestTemplate 实现类 [%s] 及其父类均未实现任何接口，无法创建 JDK 代理";

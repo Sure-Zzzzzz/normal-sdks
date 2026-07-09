@@ -64,5 +64,45 @@ public class ServerVersion {
             return null;
         }
     }
+
+    public boolean isEs6() {
+        return isSameMajor(6);
+    }
+
+    public boolean isEs7() {
+        return isSameMajor(7);
+    }
+
+    public boolean isSameMajor(int targetMajor) {
+        return major == targetMajor;
+    }
+
+    public boolean isAtLeast(int targetMajor) {
+        return major >= targetMajor;
+    }
+
+    public boolean isAtLeast(int targetMajor, int targetMinor) {
+        if (major > targetMajor) {
+            return true;
+        }
+        if (major < targetMajor) {
+            return false;
+        }
+        return minor >= 0 && minor >= targetMinor;
+    }
+
+    public boolean isBefore(int targetMajor) {
+        return major < targetMajor;
+    }
+
+    public boolean isBefore(int targetMajor, int targetMinor) {
+        if (major < targetMajor) {
+            return true;
+        }
+        if (major > targetMajor) {
+            return false;
+        }
+        return minor < 0 || minor < targetMinor;
+    }
 }
 

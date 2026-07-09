@@ -127,6 +127,11 @@ public final class SimpleElasticsearchRouteConstant {
     public static final String HTTP_METHOD_GET = "GET";
 
     /**
+     * HTTP HEAD 方法
+     */
+    public static final String HTTP_METHOD_HEAD = "HEAD";
+
+    /**
      * HTTP POST 方法
      */
     public static final String HTTP_METHOD_POST = "POST";
@@ -162,6 +167,39 @@ public final class SimpleElasticsearchRouteConstant {
     public static final String ENDPOINT_DOC_TYPE = "/_doc/";
 
     /**
+     * Elasticsearch refresh 端点
+     */
+    public static final String ENDPOINT_REFRESH = "/_refresh";
+
+    public static final String ENDPOINT_COUNT = "/_count";
+    public static final String ENDPOINT_UPDATE_BY_QUERY = "/_update_by_query";
+    public static final String ENDPOINT_DELETE_BY_QUERY = "/_delete_by_query";
+    public static final String ENDPOINT_TASKS_TEMPLATE = "/_tasks/%s";
+    public static final String ENDPOINT_PIT = "/_pit";
+    public static final String ENDPOINT_OPEN_PIT = "/_pit";
+    public static final String ENDPOINT_SCROLL = "/_search/scroll";
+
+    public static final String PARAM_WAIT_FOR_COMPLETION = "wait_for_completion";
+    public static final String PARAM_IGNORE_THROTTLED = "ignore_throttled";
+    public static final String PARAM_IGNORE_UNAVAILABLE = "ignore_unavailable";
+    public static final String PARAM_ALLOW_NO_INDICES = "allow_no_indices";
+    public static final String PARAM_EXPAND_WILDCARDS = "expand_wildcards";
+    public static final String PARAM_INCLUDE_TYPE_NAME = "include_type_name";
+    public static final String PARAM_MASTER_TIMEOUT = "master_timeout";
+    public static final String PARAM_SCROLL = "scroll";
+    public static final String PARAM_SCROLL_SIZE = "scroll_size";
+    public static final String PARAM_KEEP_ALIVE = "keep_alive";
+    public static final String PARAM_REFRESH = "refresh";
+    public static final String PARAM_TIMEOUT = "timeout";
+    public static final String PARAM_SLICES = "slices";
+    public static final String PARAM_CONFLICTS = "conflicts";
+
+    public static final String PARAM_VALUE_TRUE = "true";
+    public static final String PARAM_VALUE_FALSE = "false";
+    public static final String PARAM_VALUE_OPEN = "open";
+    public static final String PARAM_VALUE_CLOSED = "closed";
+
+    /**
      * HTTP Content-Type 头
      */
     public static final String HTTP_HEADER_CONTENT_TYPE = "Content-Type";
@@ -185,6 +223,13 @@ public final class SimpleElasticsearchRouteConstant {
      * HTTP 404 状态码
      */
     public static final int HTTP_STATUS_NOT_FOUND = 404;
+
+    public static final int HTTP_STATUS_REQUEST_TIMEOUT = 408;
+    public static final int HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+    public static final int HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
+    public static final int HTTP_STATUS_BAD_GATEWAY = 502;
+    public static final int HTTP_STATUS_SERVICE_UNAVAILABLE = 503;
+    public static final int HTTP_STATUS_GATEWAY_TIMEOUT = 504;
 
     /**
      * HTTP 3xx 状态码下界
@@ -216,6 +261,42 @@ public final class SimpleElasticsearchRouteConstant {
      */
     public static final String JSON_FIELD_SOURCE = "_source";
 
+    public static final String JSON_FIELD_ID = "id";
+    public static final String JSON_FIELD_TOTAL = "total";
+    public static final String JSON_FIELD_VALUE = "value";
+    public static final String JSON_FIELD_COUNT = "count";
+    public static final String JSON_FIELD_COMPLETED = "completed";
+    public static final String JSON_FIELD_TASK = "task";
+    public static final String JSON_FIELD_STATUS = "status";
+    public static final String JSON_FIELD_RESPONSE = "response";
+    public static final String JSON_FIELD_FAILURES = "failures";
+    public static final String JSON_FIELD_VERSION_CONFLICTS = "version_conflicts";
+    public static final String JSON_FIELD_TOOK = "took";
+    public static final String JSON_FIELD_UPDATED = "updated";
+    public static final String JSON_FIELD_DELETED = "deleted";
+    public static final String JSON_FIELD_SCRIPT = "script";
+    public static final String JSON_FIELD_LANG = "lang";
+    public static final String JSON_FIELD_PARAMS = "params";
+    public static final String JSON_FIELD_CAUSE = "cause";
+    public static final String JSON_FIELD_REASON = "reason";
+    public static final String JSON_FIELD_INDEX = "index";
+    public static final String JSON_FIELD_NODE = "node";
+    public static final String JSON_FIELD_AGGREGATIONS = "aggregations";
+    public static final String JSON_FIELD_BUCKETS = "buckets";
+    public static final String JSON_FIELD_KEY = "key";
+    public static final String JSON_FIELD_KEY_AS_STRING = "key_as_string";
+    public static final String JSON_FIELD_DOC_COUNT = "doc_count";
+    public static final String JSON_FIELD_MIN = "min";
+    public static final String JSON_FIELD_MAX = "max";
+    public static final String JSON_FIELD_AVG = "avg";
+    public static final String JSON_FIELD_SUM = "sum";
+    public static final String JSON_FIELD_AFTER_KEY = "after_key";
+    public static final String JSON_FIELD_MAPPINGS = "mappings";
+    public static final String JSON_FIELD_PROPERTIES = "properties";
+    public static final String JSON_FIELD_TYPE = "type";
+    public static final String JSON_FIELD_FORMAT = "format";
+    public static final String JSON_FIELD_FIELDS = "fields";
+
     /**
      * JSON hits 字段名
      */
@@ -240,6 +321,19 @@ public final class SimpleElasticsearchRouteConstant {
      * 索引已存在异常类型
      */
     public static final String ES_EXCEPTION_RESOURCE_ALREADY_EXISTS = "resource_already_exists_exception";
+
+    public static final String MAPPING_TYPE_DOC = "_doc";
+    public static final String TIMEOUT_MS_SUFFIX = "ms";
+
+    public static final String REFRESH_POLICY_TRUE = "true";
+    public static final String REFRESH_POLICY_FALSE = "false";
+    public static final String REFRESH_POLICY_WAIT_FOR = "wait_for";
+
+    public static final String ES_RESULT_CREATED = "created";
+    public static final String ES_RESULT_UPDATED = "updated";
+    public static final String ES_RESULT_DELETED = "deleted";
+    public static final String ES_RESULT_NOT_FOUND = "not_found";
+    public static final String ES_RESULT_NOOP = "noop";
 
     /**
      * 从 GET / 响应中提取版本号的正则表达式
@@ -294,6 +388,41 @@ public final class SimpleElasticsearchRouteConstant {
      */
     public static final String CLASS_JACKSON_DESERIALIZATION_FEATURE = "com.fasterxml.jackson.databind.DeserializationFeature";
 
+    public static final String CLASS_XCONTENT_TYPE_7X = "org.elasticsearch.xcontent.XContentType";
+    public static final String CLASS_XCONTENT_TYPE_6X = "org.elasticsearch.common.xcontent.XContentType";
+    public static final String CLASS_XCONTENT_FACTORY_7X = "org.elasticsearch.xcontent.XContentFactory";
+    public static final String CLASS_XCONTENT_FACTORY_6X = "org.elasticsearch.common.xcontent.XContentFactory";
+    public static final String CLASS_NAMED_XCONTENT_REGISTRY_7X = "org.elasticsearch.xcontent.NamedXContentRegistry";
+    public static final String CLASS_NAMED_XCONTENT_REGISTRY_6X = "org.elasticsearch.common.xcontent.NamedXContentRegistry";
+    public static final String CLASS_DEPRECATION_HANDLER_7X = "org.elasticsearch.xcontent.DeprecationHandler";
+    public static final String CLASS_DEPRECATION_HANDLER_6X = "org.elasticsearch.common.xcontent.DeprecationHandler";
+    public static final String CLASS_XCONTENT_PARSER_7X = "org.elasticsearch.xcontent.XContentParser";
+    public static final String CLASS_XCONTENT_PARSER_6X = "org.elasticsearch.common.xcontent.XContentParser";
+    public static final String CLASS_POINT_IN_TIME_BUILDER = "org.elasticsearch.search.builder.PointInTimeBuilder";
+    public static final String CLASS_SEARCH_MODULE = "org.elasticsearch.search.SearchModule";
+    public static final String CLASS_SETTINGS = "org.elasticsearch.common.settings.Settings";
+
+    public static final String AGG_PACKAGE_METRICS_ES7 = "org.elasticsearch.search.aggregations.metrics";
+    public static final String AGG_PACKAGE_STATS_ES6 = "org.elasticsearch.search.aggregations.metrics.stats";
+    public static final String AGG_PACKAGE_EXTENDED_STATS_ES6 = "org.elasticsearch.search.aggregations.metrics.stats.extended";
+    public static final String AGG_PACKAGE_PERCENTILES_ES6 = "org.elasticsearch.search.aggregations.metrics.percentiles";
+    public static final String AGG_CLASS_NUMERIC_SINGLE_VALUE =
+            "org.elasticsearch.search.aggregations.metrics.NumericMetricsAggregation$SingleValue";
+    public static final String AGG_CLASS_NAME_STATS = "Stats";
+    public static final String AGG_CLASS_NAME_EXTENDED_STATS = "ExtendedStats";
+    public static final String AGG_CLASS_NAME_EXTENDED_STATS_BOUNDS = "ExtendedStats$Bounds";
+    public static final String AGG_CLASS_NAME_PERCENTILES = "Percentiles";
+    public static final String AGG_CLASS_NAME_PERCENTILE_RANKS = "PercentileRanks";
+    public static final String AGG_CLASS_NAME_PERCENTILE = "Percentile";
+    public static final String AGG_CLASS_PIPELINE_BUILDERS_ES7 =
+            "org.elasticsearch.search.aggregations.PipelineAggregatorBuilders";
+    public static final String AGG_CLASS_PIPELINE_BUILDERS_ES6 =
+            "org.elasticsearch.search.aggregations.pipeline.PipelineAggregatorBuilders";
+    public static final String AGG_CLASS_BUCKET_SORT_ES7 =
+            "org.elasticsearch.search.aggregations.pipeline.BucketSortPipelineAggregationBuilder";
+    public static final String AGG_CLASS_BUCKET_SORT_ES6 =
+            "org.elasticsearch.search.aggregations.pipeline.bucketsort.BucketSortPipelineAggregationBuilder";
+
     /**
      * ElasticsearchRestTemplate client 字段名
      */
@@ -303,6 +432,16 @@ public final class SimpleElasticsearchRouteConstant {
      * Jackson FAIL_ON_UNKNOWN_PROPERTIES 字段名
      */
     public static final String FIELD_FAIL_ON_UNKNOWN_PROPERTIES = "FAIL_ON_UNKNOWN_PROPERTIES";
+
+    public static final String FIELD_EMPTY = "EMPTY";
+    public static final String FIELD_JSON = "JSON";
+    public static final String FIELD_THROW_UNSUPPORTED_OPERATION = "THROW_UNSUPPORTED_OPERATION";
+    public static final String FIELD_TOKEN_FIELD_NAME = "FIELD_NAME";
+
+    public static final String AGG_BOUNDS_UPPER = "UPPER";
+    public static final String AGG_BOUNDS_LOWER = "LOWER";
+    public static final String AGG_COMPOSITE_FIELD_MISSING_BUCKET = "missing_bucket";
+    public static final String AGG_COMPOSITE_FIELD_MISSING_ORDER = "missing_order";
 
     // ==================== 模板常量 ====================
 
@@ -472,6 +611,8 @@ public final class SimpleElasticsearchRouteConstant {
      */
     public static final String METHOD_READ_TREE = "readTree";
 
+    public static final String METHOD_READ_VALUE = "readValue";
+
     /**
      * configure 方法名
      */
@@ -481,6 +622,36 @@ public final class SimpleElasticsearchRouteConstant {
      * treeToValue 方法名
      */
     public static final String METHOD_TREE_TO_VALUE = "treeToValue";
+
+    public static final String METHOD_XCONTENT = "xContent";
+    public static final String METHOD_CREATE_PARSER = "createParser";
+    public static final String METHOD_FROM_XCONTENT = "fromXContent";
+    public static final String METHOD_GET_NAMED_XCONTENTS = "getNamedXContents";
+    public static final String METHOD_NEXT_TOKEN = "nextToken";
+    public static final String METHOD_CURRENT_NAME = "currentName";
+    public static final String METHOD_LONG_VALUE = "longValue";
+    public static final String METHOD_GET_TOTAL_HITS = "getTotalHits";
+    public static final String METHOD_VALUE = "value";
+    public static final String METHOD_POINT_IN_TIME_BUILDER = "pointInTimeBuilder";
+    public static final String METHOD_SET_KEEP_ALIVE = "setKeepAlive";
+    public static final String METHOD_GET_SOURCE_AS_MAP = "getSourceAsMap";
+
+    public static final String AGG_METHOD_VALUE = "value";
+    public static final String AGG_METHOD_GET_VALUE = "getValue";
+    public static final String AGG_METHOD_GET_PERCENT = "getPercent";
+    public static final String AGG_METHOD_GET_COUNT = "getCount";
+    public static final String AGG_METHOD_GET_MIN = "getMin";
+    public static final String AGG_METHOD_GET_MAX = "getMax";
+    public static final String AGG_METHOD_GET_AVG = "getAvg";
+    public static final String AGG_METHOD_GET_SUM = "getSum";
+    public static final String AGG_METHOD_GET_SUM_OF_SQUARES = "getSumOfSquares";
+    public static final String AGG_METHOD_GET_VARIANCE = "getVariance";
+    public static final String AGG_METHOD_GET_STD_DEVIATION = "getStdDeviation";
+    public static final String AGG_METHOD_GET_STD_DEVIATION_BOUND = "getStdDeviationBound";
+    public static final String AGG_METHOD_BUCKET_SORT = "bucketSort";
+    public static final String AGG_METHOD_BUCKET_SELECTOR = "bucketSelector";
+    public static final String AGG_METHOD_SIZE = "size";
+    public static final String AGG_METHOD_FROM = "from";
 
     /**
      * 写操作方法名单
