@@ -14,21 +14,25 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.1.0 | 多数据源路由（日期分片 + 异步写 + 可配置代理） | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
+| [simple-elasticsearch-route-starter](sdk/route/elasticsearch/simple-elasticsearch-route-starter) | 1.2.0 | 多数据源路由（日期分片 + 异步写 + 可配置代理 + ES 兼容公共 Helper） | [README](sdk/route/elasticsearch/simple-elasticsearch-route-starter/README.md) |
 
 #### 搜索
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-elasticsearch-search-core](sdk/search/elasticsearch/simple-elasticsearch-search-core) | 1.0.12 | 搜索核心库（事件发布） | - |
-| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.6.7 | 查询框架（API / NL / 表达式 / countOnly），内置集成 route-starter | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
+| [simple-elasticsearch-search-starter](sdk/search/elasticsearch/simple-elasticsearch-search-starter) | 1.7.0 | 查询框架（API / NL / 表达式 / countOnly / `_id` 查询 / 通配符具体索引匹配） | [README](sdk/search/elasticsearch/simple-elasticsearch-search-starter/README.md) |
 | [simple-elasticsearch-search-metrics-starter](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter) | 1.0.2 | 指标采集 | [README](sdk/metrics/elasticsearch/simple-elasticsearch-search-metrics-starter/README.md) |
 | [simple-elasticsearch-search-audit-listener-starter](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter) | 1.0.4 | 审计事件 | [README](sdk/audit/search/elasticsearch/simple-elasticsearch-search-audit-listener-starter/README.md) |
 
-**版本兼容**：
+**Search 版本兼容**：
 
 | search-starter | search-core | route-starter | metrics-starter | audit-listener-starter |
 |----------------|-------------|---------------|-----------------|----------------------|
+| 1.7.0 | 1.0.12 | 1.2.0         | 1.0.2 | 1.0.4 |
+| 1.6.10 | 1.0.12 | 1.1.2         | 1.0.2 | 1.0.4 |
+| 1.6.9 | 1.0.12 | 1.1.2         | 1.0.2 | 1.0.4 |
+| 1.6.8 | 1.0.12 | 1.0.10        | 1.0.2 | 1.0.4 |
 | 1.6.7 | 1.0.12 | 1.0.10        | 1.0.2 | 1.0.4 |
 | 1.6.6 | 1.0.11 | 1.0.10        | 1.0.1 | 1.0.3 |
 | 1.6.5 | 1.0.10 | 1.0.10        | 1.0.0 | 1.0.2 |
@@ -59,6 +63,32 @@
 - 零代码配置驱动的查询和聚合
 - RESTful API 自动生成
 - 查询/聚合执行后自动发布事件，支持审计和监控扩展
+
+#### 写入
+
+| SDK | 版本 | 说明 | 文档 |
+|-----|------|------|------|
+| [simple-elasticsearch-persistence-core](sdk/persistence/elasticsearch/simple-elasticsearch-persistence-core) | 1.0.2 | 写入核心模型（request / option / result / query） | - |
+| [simple-elasticsearch-persistence-starter](sdk/persistence/elasticsearch/simple-elasticsearch-persistence-starter) | 1.1.0 | 写侧框架（index / create / update / delete / bulk / byQuery / create 冲突转 update），内置集成 route-starter | [README](sdk/persistence/elasticsearch/simple-elasticsearch-persistence-starter/README.md) |
+| [simple-elasticsearch-persistence-audit-listener-starter](sdk/audit/persistence/elasticsearch/simple-elasticsearch-persistence-audit-listener-starter) | 1.0.0 | 写侧审计事件监听器 | [README](sdk/audit/persistence/elasticsearch/simple-elasticsearch-persistence-audit-listener-starter/README.md) |
+
+**Persistence 版本兼容**：
+
+| persistence-starter | persistence-core | route-starter | audit-listener-starter |
+|---------------------|------------------|---------------|------------------------|
+| 1.1.0 | 1.0.2 | 1.2.0 | 1.0.0 |
+| 1.0.2 | 1.0.2 | 1.1.2 | - |
+| 1.0.1 | 1.0.1 | 1.1.2 | - |
+| 1.0.0 | 1.0.1 | 1.1.2 | - |
+
+**Persistence 核心特性**：
+- 统一写侧入口：index / create / update / delete / bulk / updateByQuery / deleteByQuery
+- 自动继承 route 的多数据源路由、日期分片索引渲染和 async-write 规则
+- 支持 `DocumentPreProcessor` 写入前扩展链、稳定 ID 生成和字段标准化 Helper
+- 支持 routing / pipeline / refreshPolicy / retryOnConflict / detectNoop 等写入参数透传
+- 支持 bulk 分批、失败后停止、失败明细与可重试分类
+- 支持写侧审计监听，覆盖单条写入、bulk、byQuery 和错误事件
+- 支持 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9，覆盖 ES 6.x / 7.x
 
 ---
 
@@ -275,10 +305,15 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [s3-client-starter](sdk/oss/s3-client-starter) | 1.0.1-SNAPSHOT | AWS S3 兼容存储客户端（支持 S3 / MinIO / 阿里云 OSS） | [README](sdk/oss/s3-client-starter/README.md) |
+| [s3](sdk/oss/s3) | 1.0.0 | S3 回调事件实体类 | [README](sdk/oss/s3/README.md) |
+| [s3-client-starter](sdk/oss/s3-client-starter) | 2.0.2 | AWS S3 兼容存储客户端（支持 S3 / MinIO / 阿里云 OSS） | [README](sdk/oss/s3-client-starter/README.md) |
 
 **核心特性**：
-- 文件上传下载、预签名 URL、自动分片上传
+- `s3` 模块提供对象存储回调事件实体，不是 `s3-client-starter` 的基础依赖
+- `s3-client-starter` 支持存储桶管理、文件夹管理、对象上传下载、删除、查询和复制
+- 支持对象版本历史、STS 临时凭证、预签名下载 URL 和预签名上传 URL
+- 支持对象标签、自动分段上传、手动分段上传、分段列表查询和中止分段上传
+- `s3-client-starter` 2.x 包名统一为 `io.github.surezzzzzz.sdk.oss.s3`，1.x 旧包名已封版
 
 ---
 
