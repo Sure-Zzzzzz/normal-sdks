@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: mail-client-test
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mail:
+          enable: true
+          send:
+            default-provider: normal
+            normal:
+              enable: true
+              protocol: smtp
+              default-encoding: UTF-8
+          read:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.mail: DEBUG
