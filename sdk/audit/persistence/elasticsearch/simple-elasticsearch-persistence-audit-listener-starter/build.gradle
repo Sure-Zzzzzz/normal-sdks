@@ -1,0 +1,14 @@
+dependencies {
+    api "${group}:simple-elasticsearch-persistence-core:1.0.2"
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-context'
+
+    testImplementation "${group}:simple-elasticsearch-persistence-starter:1.1.0"
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.apache.httpcomponents:httpclient'
+    testImplementation 'org.apache.httpcomponents:httpcore'
+}

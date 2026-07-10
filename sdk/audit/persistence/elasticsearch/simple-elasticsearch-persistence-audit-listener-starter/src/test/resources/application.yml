@@ -1,0 +1,59 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            enable: true
+            default-source: primary
+            write-index:
+              zone-id: Asia/Shanghai
+            sources:
+              primary:
+                urls: http://localhost:9202
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+              secondary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+            rules:
+              - pattern: "test_persistence_*"
+                datasource: secondary
+                type: wildcard
+                priority: 10
+          persistence:
+            enable: true
+        audit:
+          persistence:
+            elasticsearch:
+              listener:
+                enable: true
+                executor:
+                  core-size: 1
+                  max-size: 1
+                  queue-capacity: 16
+                  keep-alive-seconds: 30
+                  reject-policy: CALLER_RUNS
+                record:
+                  max-failure-size: 1
+
+test:
+  es:
+    persistence:
+      audit:
+        use-mock-provider: true
+        throwing-handler: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch: DEBUG
+    io.github.surezzzzzz.sdk.audit.persistence.elasticsearch: DEBUG
