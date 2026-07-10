@@ -1,163 +1,99 @@
-# S3 SDK
+# S3 Callback Event Model
 
-S3对象存储基础SDK模块，提供S3相关的基础数据模型和实体定义。
+`s3` 是对象存储回调事件实体模块，当前只提供 `S3Event`，用于反序列化 S3 / MinIO / 阿里云 OSS 等兼容 S3 事件通知的回调 JSON。
 
-## 功能概述
+本模块不是 `s3-client-starter` 的基础依赖；`s3-client-starter` 的对象存储客户端能力独立提供。
 
-本模块是S3对象存储服务的基础模块，主要包含：
+## 版本
 
-- **S3事件模型**: 定义S3相关的事件数据结构
-- **基础实体**: 提供S3操作所需的基础实体类
-- **数据模型**: 定义S3对象存储相关的数据模型
+| 模块 | 版本 |
+|---|---|
+| s3 | 1.0.0 |
 
-## 模块结构
+## 定位
 
-```
-s3/
-├── src/
-│   └── main/
-│       └── java/
-│           └── io/
-│               └── github/
-│                   └── surezzzzzz/
-│                       └── sdk/
-│                           └── oss/
-│                               └── s3/
-│                                   └── data/
-│                                       └── model/
-│                                           └── entity/
-│                                               └── S3Event.java
-├── build.gradle
-├── version.properties
-└── README.md
-```
+- 提供对象存储事件回调实体类
+- 适用于接收 Bucket 事件通知后的 JSON 反序列化
+- 不提供上传、下载、桶管理、预签名 URL 等客户端能力
+- 不作为 `s3-client-starter` 的依赖前置
 
-## 数据模型
+## 核心实体
 
 ### S3Event
 
-`S3Event`是本模块目前提供的核心数据模型，用于表示S3相关的事件信息。
+路径：`io.github.surezzzzzz.sdk.oss.s3.data.model.entity.S3Event`
 
-```java
-package io.github.surezzzzzz.sdk.oss.s3.data.model.entity;
+对应兼容 S3 事件通知的顶层结构：
 
-/**
- * S3事件实体类
- * 用于封装S3对象存储相关的事件数据
- */
-public class S3Event {
-    // 事件相关属性和方法
+```json
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "eventTime": "2026-07-10T00:00:00.000Z",
+      "eventName": "ObjectCreated:Put",
+      "userIdentity": {
+        "principalId": "principal"
+      },
+      "requestParameters": {
+        "sourceIPAddress": "127.0.0.1"
+      },
+      "responseElements": {
+        "xAmzRequestId": "request-id",
+        "xAmzId2": "host-id"
+      },
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "config-id",
+        "bucket": {
+          "name": "test-bucket",
+          "arn": "arn:aws:s3:::test-bucket",
+          "ownerIdentity": {
+            "principalId": "owner"
+          }
+        },
+        "object": {
+          "key": "demo/object.txt",
+          "size": 1024,
+          "etag": "etag",
+          "versionId": "version-id",
+          "sequencer": "sequencer"
+        }
+      }
+    }
+  ]
 }
 ```
 
-## 使用方式
-
-本模块主要作为`s3-client-starter`模块的基础依赖，提供数据模型支持。
-
-### 添加依赖
-
-在`build.gradle`中添加依赖：
-
-```gradle
-dependencies {
-    implementation project(':sdk:oss:s3')
-}
-```
-
-### 使用数据模型
+## 使用示例
 
 ```java
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.oss.s3.data.model.entity.S3Event;
 
-public class YourService {
-    
-    public void handleS3Event(S3Event event) {
-        // 处理S3事件
-        // 可以根据实际需求扩展S3Event的功能
+public class S3CallbackController {
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public void handleCallback(String body) throws Exception {
+        S3Event event = objectMapper.readValue(body, S3Event.class);
+        for (S3Event.Record record : event.getRecords()) {
+            String bucketName = record.getS3().getBucket().getName();
+            String objectKey = record.getS3().getObject().getKey();
+            String eventName = record.getEventName();
+            // 按业务需要处理回调事件
+        }
     }
-}
-```
-
-## 扩展开发
-
-本模块设计为轻量级的基础模块，您可以根据实际需求：
-
-1. **扩展现有模型**: 在`S3Event`中添加更多属性和方法
-2. **添加新模型**: 在`data.model.entity`包下创建新的数据模型
-3. **添加枚举类**: 定义S3相关的枚举类型
-4. **添加工具类**: 提供数据模型的工具类支持
-
-### 扩展示例
-
-```java
-// 添加新的数据模型
-package io.github.surezzzzzz.sdk.oss.s3.data.model.entity;
-
-public class S3ObjectMetadata {
-    private String bucketName;
-    private String objectKey;
-    private long size;
-    private String contentType;
-    private Map<String, String> metadata;
-    
-    // getter和setter方法
-}
-
-// 添加枚举类
-package io.github.surezzzzzz.sdk.oss.s3.data.model.enums;
-
-public enum S3EventType {
-    OBJECT_CREATED,
-    OBJECT_DELETED,
-    BUCKET_CREATED,
-    BUCKET_DELETED
 }
 ```
 
 ## 依赖说明
 
-本模块作为基础模块，依赖非常轻量：
-
-- **无外部依赖**: 仅依赖Java标准库
-- **可扩展性**: 设计上支持灵活扩展
-
-## 版本管理
-
-版本信息定义在`version.properties`文件中：
-
-```properties
-version=1.0.0
-```
-
-## 构建配置
-
-`build.gradle`配置：
-
 ```gradle
-plugins {
-    id 'java-library'
-}
-
-group = 'io.github.surezzzzzz.sdk.oss'
-version = '1.0.0'
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
-
 dependencies {
-    // 无外部依赖，保持轻量级
+    compileOnly "com.fasterxml.jackson.core:jackson-databind"
 }
 ```
 
-## 注意事项
-
-1. **保持轻量**: 本模块设计为轻量级基础模块，避免添加过多复杂逻辑
-2. **向前兼容**: 扩展数据模型时，注意保持向前兼容性
-3. **文档完善**: 添加新模型时，请同步更新相关文档
-4. **测试覆盖**: 扩展功能时，建议添加相应的单元测试
-
-## 维护与支持
-
-本模块作为S3对象存储服务的基础模块，由开发团队统一维护。如有扩展需求或问题，请联系开发团队。
+`S3Event` 使用 Jackson 的 `@JsonProperty("Records")` 适配回调 JSON 顶层字段。
