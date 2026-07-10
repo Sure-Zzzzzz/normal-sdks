@@ -1,24 +1,23 @@
 # Task Retry Starter
 
-通用任务重试执行器Starter，提供灵活的重试机制和退避策略。
+进程内同步任务重试 SDK，提供默认策略、显式策略、固定延迟、指数退避、快速重试和慢速重试能力。
 
 ## 版本信息
 
-当前版本：`1.0.0`
+当前版本：`2.0.0`
+
+`2.0.0` 是破坏性规范化重构版本：包结构、自动配置、配置前缀、异常体系和公共延迟单位均已调整。
 
 ## 依赖引用
 
-由于本组件使用`compileOnly`依赖，使用时需要显式引入相关依赖：
+由于本组件使用 `compileOnly` 依赖，调用方需要显式引入运行时依赖。
 
 ### Gradle
 
 ```gradle
 dependencies {
-    implementation "io.github.surezzzzzz:task-retry-starter:1.0.0"
-    
-    // 必须显式引入以下依赖
+    implementation "io.github.surezzzzzz:task-retry-starter:2.0.0"
     implementation "org.springframework.boot:spring-boot-autoconfigure"
-    implementation "org.springframework.boot:spring-boot-configuration-processor"
 }
 ```
 
@@ -28,204 +27,180 @@ dependencies {
 <dependency>
     <groupId>io.github.surezzzzzz</groupId>
     <artifactId>task-retry-starter</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
 </dependency>
-
-<!-- 必须显式引入以下依赖 -->
 <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-autoconfigure</artifactId>
 </dependency>
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-configuration-processor</artifactId>
-</dependency>
 ```
 
-## 核心功能
+## 快速开始
 
-- **灵活的重试机制**：支持自定义重试次数、初始延迟、退避系数和最大延迟
-- **多种重试策略**：提供指数退避、固定延迟、快速重试、慢速重试等多种策略
-- **异常处理**：支持所有类型的异常，任务执行失败时自动重试
-- **返回值支持**：支持各种返回值类型的任务重试
-- **线程安全**：所有重试操作都是线程安全的
+默认引包即用，不需要编写 `application.yml`。
 
-## 主要API
-
-### TaskRetryExecutor
+### 默认策略
 
 ```java
-@Autowired
-private TaskRetryExecutor taskRetryExecutor;
-```
+import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
+import org.springframework.stereotype.Service;
 
-#### 基础重试方法
-```java
-// 完整参数的重试方法
-T result = taskRetryExecutor.executeWithRetry(Callable<T> task, int maxRetries, 
-                                             long initialDelay, double backoffMultiplier, 
-                                             long maxDelay);
-
-// 简化版重试方法（默认退避策略）
-T result = taskRetryExecutor.executeWithRetry(Callable<T> task, int maxRetries, long initialDelay);
-
-// 默认重试配置（3次重试，1秒初始延迟）
-T result = taskRetryExecutor.executeWithRetry(Callable<T> task);
-```
-
-#### 固定延迟重试
-```java
-T result = taskRetryExecutor.executeWithFixedDelay(Callable<T> task, int maxRetries, long delay);
-```
-
-#### 预定义重试策略
-```java
-// 快速重试（2次重试，500ms延迟）
-T result = taskRetryExecutor.executeWithFastRetry(Callable<T> task);
-
-// 慢速重试（5次重试，5秒初始延迟，2倍退避，60秒最大延迟）
-T result = taskRetryExecutor.executeWithSlowRetry(Callable<T> task);
-```
-
-## 使用示例
-
-### 基础使用
-
-```java
 @Service
-public class BusinessService {
-    
-    @Autowired
-    private TaskRetryExecutor taskRetryExecutor;
-    
-    public String processWithRetry(String param) {
-        try {
-            return taskRetryExecutor.executeWithRetry(() -> {
-                // 执行业务逻辑
-                return callExternalService(param);
-            }, 3, 1000); // 最多重试3次，初始延迟1秒
-            
-        } catch (Exception e) {
-            // 所有重试都失败后的处理
-            log.error("处理失败，参数: {}", param, e);
-            throw new RuntimeException("处理失败", e);
-        }
+public class RetryDemoService {
+
+    private final TaskRetryExecutor taskRetryExecutor;
+
+    public RetryDemoService(TaskRetryExecutor taskRetryExecutor) {
+        this.taskRetryExecutor = taskRetryExecutor;
+    }
+
+    public String execute() throws Exception {
+        return taskRetryExecutor.execute(() -> callExternalService());
     }
 }
 ```
 
-### 高级配置
+### 显式指数退避
 
 ```java
-public void processWithAdvancedRetry() {
-    String result = taskRetryExecutor.executeWithRetry(() -> {
-        // 执行业务逻辑
-        return performComplexOperation();
-    }, 
-    5,           // 最多重试5次
-    2000,        // 初始延迟2秒
-    1.5,         // 退避系数1.5倍
-    30000        // 最大延迟30秒
-    );
+String result = taskRetryExecutor.executeWithRetry(
+        () -> callExternalService(),
+        3,
+        1000L,
+        1.5D,
+        10000L
+);
+```
+
+`retryTimes` 表示失败后最多重试次数，总执行次数为 `retryTimes + 1`。所有延迟参数单位均为毫秒。
+
+### 固定延迟
+
+```java
+String result = taskRetryExecutor.executeWithFixedDelay(
+        () -> callExternalService(),
+        3,
+        1000L
+);
+```
+
+### 预置策略
+
+```java
+String fastResult = taskRetryExecutor.executeWithFastRetry(() -> callExternalService());
+String slowResult = taskRetryExecutor.executeWithSlowRetry(() -> callExternalService());
+```
+
+### 显式请求模型
+
+```java
+import io.github.surezzzzzz.sdk.retry.task.constant.RetryStrategyType;
+import io.github.surezzzzzz.sdk.retry.task.model.RetryRequest;
+
+RetryRequest request = RetryRequest.builder()
+        .retryTimes(3)
+        .initialDelayMillis(1000L)
+        .backoffMultiplier(2.0D)
+        .maxDelayMillis(10000L)
+        .strategyType(RetryStrategyType.EXPONENTIAL)
+        .build();
+
+String result = taskRetryExecutor.execute(() -> callExternalService(), request);
+```
+
+## 可选配置
+
+一般情况下不需要配置文件；只有需要统一覆盖默认策略、快速策略、慢速策略，或显式关闭自动装配时才需要配置。
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        retry:
+          task:
+            default-policy:
+              retry-times: 5
+              initial-delay-millis: 5000
+              backoff-multiplier: 1.5
+              max-delay-millis: 30000
+            fast-policy:
+              retry-times: 5
+              initial-delay-millis: 2000
+              backoff-multiplier: 1.2
+              max-delay-millis: 10000
+            slow-policy:
+              retry-times: 5
+              initial-delay-millis: 10000
+              backoff-multiplier: 2.0
+              max-delay-millis: 60000
+```
+
+如果需要关闭默认自动装配：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        retry:
+          task:
+            enable: false
+```
+
+## 扩展点
+
+- `RetryPredicate`：判断异常是否继续重试，默认所有 `Exception` 都允许重试。
+- `RetrySleeper`：执行等待，默认使用 `TimeUnit.MILLISECONDS.sleep`，测试或调用方可替换为自定义 Bean。
+- `RetryListener`：重试过程回调，默认空实现。
+
+### 自定义 RetryPredicate
+
+```java
+import io.github.surezzzzzz.sdk.retry.task.predicate.RetryPredicate;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RetryDemoConfiguration {
+
+    @Bean
+    public RetryPredicate retryPredicate() {
+        return (exception, attempt, request) -> !(exception instanceof IllegalArgumentException);
+    }
 }
 ```
 
-### 固定延迟重试
+### 自定义 RetrySleeper
 
 ```java
-public void processWithFixedDelay() {
-    taskRetryExecutor.executeWithFixedDelay(() -> {
-        // 每3秒重试一次，最多重试4次
-        return executeTask();
-    }, 4, 3000);
+import io.github.surezzzzzz.sdk.retry.task.sleeper.RetrySleeper;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RetryDemoConfiguration {
+
+    @Bean
+    public RetrySleeper retrySleeper() {
+        return delayMillis -> {
+        };
+    }
 }
 ```
 
-### 使用预定义策略
+## 1.x 升级到 2.0.0
 
-```java
-public void processWithPredefinedStrategy() {
-    // 使用快速重试策略
-    String fastResult = taskRetryExecutor.executeWithFastRetry(() -> {
-        return quickOperation();
-    });
-    
-    // 使用慢速重试策略
-    String slowResult = taskRetryExecutor.executeWithSlowRetry(() -> {
-        return slowOperation();
-    });
-}
-```
-
-### 处理不同类型的返回值
-
-```java
-public void processDifferentTypes() {
-    // Integer返回值
-    Integer count = taskRetryExecutor.executeWithRetry(() -> {
-        return getDataCount();
-    }, 3, 1000);
-    
-    // Boolean返回值
-    Boolean success = taskRetryExecutor.executeWithRetry(() -> {
-        return validateData();
-    }, 3, 1000);
-    
-    // 自定义对象返回值
-    User user = taskRetryExecutor.executeWithRetry(() -> {
-        return fetchUserInfo(userId);
-    }, 3, 1000);
-}
-```
-
-## 重试策略说明
-
-### 指数退避策略
-延迟时间 = min(初始延迟 × 退避系数^(重试次数-1), 最大延迟)
-
-例如：初始延迟1秒，退避系数2，最大延迟30秒
-- 第1次重试：延迟1秒
-- 第2次重试：延迟2秒
-- 第3次重试：延迟4秒
-- 第4次重试：延迟8秒
-- 第5次重试：延迟16秒
-
-### 固定延迟策略
-每次重试都使用相同的延迟时间。
-
-### 预定义策略参数
-- **快速重试**：2次重试，500ms固定延迟
-- **慢速重试**：5次重试，5秒初始延迟，2倍退避，60秒最大延迟
-- **默认重试**：3次重试，1秒初始延迟，1.5倍退避，30秒最大延迟
-
-## 配置说明
-
-本组件会自动配置，无需额外配置。如果需要自定义配置，可以创建对应的配置类。
-
-## 测试参考
-
-详细的API使用示例请参考单元测试：
-- `TaskRetryExecutorTest.java` - 完整的API使用示例
-
-测试用例覆盖了以下场景：
-- 首次执行成功
-- 重试后成功
-- 所有重试都失败
-- 指数退避计算
-- 固定延迟重试
-- 默认重试策略
-- 快速重试策略
-- 慢速重试策略
-- 零重试次数
-- 不同类型异常处理
-- 最大延迟限制
-- 不同返回值类型
+- `RetryPackage` 改为 `TaskRetryPackage`。
+- `configuration.RetryComponent` 改为 `annotation.TaskRetryComponent`。
+- `RetryConfiguration` 改为 `TaskRetryAutoConfiguration`。
+- 新增配置前缀 `io.github.surezzzzzz.sdk.retry.task`，默认零配置启用；显式配置 `enable=false` 时关闭默认 Bean。
+- `retryInterval` 语义改为 `initialDelayMillis`，`maxDelaySeconds` 语义改为 `maxDelayMillis`。
+- 2.0.0 公共 API 延迟单位统一为毫秒；如果 1.x 调用方按秒传参，升级时需要换算为毫秒。
+- 参数校验失败抛 `TaskRetryValidationException`，最终执行失败仍抛出任务最后一次原始异常。
 
 ## 注意事项
 
-1. 由于使用`compileOnly`依赖，必须显式引入所有相关依赖
-2. 重试次数包含初始执行，所以`maxRetries=3`表示最多执行4次（初始1次 + 重试3次）
-3. 延迟时间单位为毫秒
-4. 退避系数必须大于等于1
-5. 最大延迟必须大于等于初始延迟
-6. 所有重试操作都是线程安全的
+- 本模块只做进程内同步重试，不保存任务状态，不做跨实例协调，不替代分布式重试能力。
+- `RetryListener` 异常只记录 debug 日志，不覆盖任务异常。
+- 线程等待被中断时会恢复中断标记，并继续抛出 `InterruptedException`。
