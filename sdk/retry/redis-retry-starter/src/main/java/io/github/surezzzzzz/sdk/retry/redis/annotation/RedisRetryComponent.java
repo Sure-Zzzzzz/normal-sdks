@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.retry.redis.configuration;
+package io.github.surezzzzzz.sdk.retry.redis.annotation;
 
 import org.springframework.stereotype.Component;
 
@@ -10,8 +10,7 @@ import java.lang.annotation.Target;
 /**
  * Redis 重试组件注解
  *
- * @author: Sure.
- * @Date: 2025/3/11
+ * @author surezzzzzz
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

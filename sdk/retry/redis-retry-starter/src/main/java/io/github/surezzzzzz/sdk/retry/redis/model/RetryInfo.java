@@ -9,8 +9,7 @@ import java.util.Map;
 /**
  * 重试信息模型
  *
- * @author: Sure.
- * @Date: 2025/3/11
+ * @author surezzzzzz
  */
 @Data
 @NoArgsConstructor
@@ -23,12 +22,12 @@ public class RetryInfo {
     private Integer count;
 
     /**
-     * ✅ 最大重试次数
+     * 最大重试次数
      */
     private Integer maxRetryTimes;
 
     /**
-     * ✅ 重试间隔（毫秒）
+     * 重试间隔，单位毫秒
      */
     private Long retryIntervalMs;
 
@@ -38,22 +37,22 @@ public class RetryInfo {
     private Long firstFailTime;
 
     /**
-     * 最后一次失败时间
+     * 最近失败时间
      */
     private Long lastFailTime;
 
     /**
-     * ✅ 下次可以重试的时间
+     * 下次可以重试的时间
      */
     private Long nextRetryTime;
 
     /**
-     * 最后一次错误信息
+     * 最近错误信息
      */
     private String lastError;
 
     /**
-     * ✅ 上下文信息（存储 job、record 等）
+     * 上下文信息
      */
     private Map<String, Object> context;
 }

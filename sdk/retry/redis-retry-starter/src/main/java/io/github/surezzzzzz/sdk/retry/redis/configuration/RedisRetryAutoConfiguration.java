@@ -1,9 +1,12 @@
 package io.github.surezzzzzz.sdk.retry.redis.configuration;
 
 import io.github.surezzzzzz.sdk.retry.redis.RedisRetryPackage;
+import io.github.surezzzzzz.sdk.retry.redis.annotation.RedisRetryComponent;
+import io.github.surezzzzzz.sdk.retry.redis.constant.RedisRetryConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -15,9 +18,9 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 /**
  * Redis 重试自动配置
  *
- * @author: Sure.
- * @Date: 2025/3/11
+ * @author surezzzzzz
  */
+@Slf4j
 @Configuration
 @ConditionalOnClass(RedisTemplate.class)
 @EnableConfigurationProperties(RedisRetryProperties.class)
@@ -25,7 +28,10 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
         basePackageClasses = RedisRetryPackage.class,
         includeFilters = @ComponentScan.Filter(RedisRetryComponent.class)
 )
-@Slf4j
+@ConditionalOnProperty(prefix = RedisRetryConstant.CONFIG_PREFIX,
+        name = RedisRetryConstant.PROPERTY_ENABLE,
+        havingValue = RedisRetryConstant.PROPERTY_TRUE,
+        matchIfMissing = true)
 public class RedisRetryAutoConfiguration {
 
     /**

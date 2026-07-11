@@ -1,70 +1,55 @@
 package io.github.surezzzzzz.sdk.retry.redis.configuration;
 
+import io.github.surezzzzzz.sdk.retry.redis.constant.RedisRetryConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
-
-import javax.validation.constraints.Min;
 
 /**
  * Redis 重试配置属性
  *
- * @author: Sure.
- * @Date: 2025/3/11
+ * @author surezzzzzz
  */
 @Data
-@Validated
-@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.retry.redis")
+@ConfigurationProperties(RedisRetryConstant.CONFIG_PREFIX)
 public class RedisRetryProperties {
+
+    /**
+     * 是否启用
+     */
+    private boolean enable = RedisRetryConstant.DEFAULT_ENABLE;
+
+    /**
+     * Redis Key 前缀
+     */
+    private String keyPrefix = RedisRetryConstant.DEFAULT_KEY_PREFIX;
+
+    /**
+     * 应用实例标识
+     */
+    private String me = RedisRetryConstant.DEFAULT_ME;
 
     /**
      * 最大重试次数
      */
-    @Min(value = 1, message = "最大重试次数不能小于1")
-    private int maxRetryCount = 3;
+    private int maxRetryCount = RedisRetryConstant.DEFAULT_MAX_RETRY_COUNT;
 
     /**
-     * 重试记录TTL（秒）
+     * 重试记录 TTL，单位秒
      */
-    @Min(value = 60, message = "重试记录TTL不能小于60秒")
-    private int retryRecordTtlSeconds = 24 * 60 * 60; // 24小时
+    private int retryRecordTtlSeconds = RedisRetryConstant.DEFAULT_RETRY_RECORD_TTL_SECONDS;
 
     /**
-     * 基础延迟时间（毫秒）
+     * 基础延迟时间，单位毫秒
      */
-    @Min(value = 100, message = "基础延迟时间不能小于100毫秒")
-    private int baseDelayMs = 1000;
+    private int baseDelayMs = RedisRetryConstant.DEFAULT_BASE_DELAY_MS;
 
     /**
-     * 最大延迟时间（毫秒）
+     * 最大延迟时间，单位毫秒
      */
-    @Min(value = 1000, message = "最大延迟时间不能小于1000毫秒")
-    private int maxDelayMs = 30000;
+    private int maxDelayMs = RedisRetryConstant.DEFAULT_MAX_DELAY_MS;
 
     /**
-     * 强制使用hash tag策略
-     * null: 自动检测Redis环境类型
-     * true: 强制使用hash tag（适用于Redis Cluster）
-     * false: 强制不使用hash tag（适用于单机Redis）
+     * 强制使用 hash tag 策略，null 表示自动检测 Redis 环境
      */
     private Boolean forceHashTag = null;
-
-    /**
-     * 验证配置合理性
-     */
-    public void validate() {
-        if (baseDelayMs >= maxDelayMs) {
-            throw new IllegalArgumentException("基础延迟时间必须小于最大延迟时间");
-        }
-    }
-
-    @Override
-    public String toString() {
-        return String.format("RedisRetryProperties{" +
-                        "maxRetryCount=%d, retryRecordTtlSeconds=%d, " +
-                        "baseDelayMs=%d, maxDelayMs=%d, forceHashTag=%s" +
-                        "}",
-                maxRetryCount, retryRecordTtlSeconds,
-                baseDelayMs, maxDelayMs, forceHashTag);
-    }
 }
