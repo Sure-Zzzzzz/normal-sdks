@@ -1,0 +1,37 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        lock:
+          redis:
+            route:
+              enable: true
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              lock:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 1
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+            rules:
+              - pattern: "lock:"
+                type: prefix
+                datasource: lock
+                priority: 1
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.lock.redis: DEBUG
+    io.github.surezzzzzz.sdk.redis.route: DEBUG

@@ -1,15 +1,15 @@
 # Simple Redis Lock Starter
 
-基于Redis的分布式锁Spring Boot Starter，提供简单易用的分布式锁功能。
+基于 Redis 的分布式锁 Spring Boot Starter，提供默认单 Redis 模式，并支持通过 `simple-redis-route-starter` 按锁 key 路由到不同 Redis datasource。
 
 ## 功能特性
 
-- 🚀 **简单易用** - 基于Spring Boot自动配置，开箱即用
-- 🔒 **分布式锁** - 基于Redis实现可靠的分布式锁
-- ⏰ **自动过期** - 支持锁自动过期，防止死锁
-- 🔒 **互斥锁** - 确保同一时刻只有一个客户端持有锁
-- 🧪 **完整测试** - 包含embedded-redis单元测试，无需外部Redis环境
-- 📊 **监控日志** - 详细的操作日志，便于问题排查
+- 开箱即用：基于 Spring Boot 自动配置，默认接入项目已有 `RedisConnectionFactory`。
+- 安全解锁：使用 Lua 脚本按 `lockValue` 原子校验并删除锁。
+- 自动过期：加锁时必须设置过期时间，降低死锁风险。
+- route 模式：可选按 `lockKey` 路由到不同 Redis datasource，实现锁流量隔离。
+- 故障显性暴露：Redis 命令异常不吞掉，调用方可感知释放失败。
+- 多版本验证：覆盖 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9。
 
 ## 快速开始
 
@@ -17,13 +17,13 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.0.0'
+    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.1.0'
 }
 ```
 
-### 2. 配置Redis连接
+`simple-redis-lock-starter:1.1.0` 会传递引入 `simple-redis-route-starter:1.1.0`。默认不开启 route，仍按单 Redis 模式运行。
 
-在`application.yml`中配置Redis连接信息：
+### 2. 默认单 Redis 配置
 
 ```yaml
 spring:
@@ -38,232 +38,136 @@ spring:
 
 ```java
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
 @Service
-public class OrderService {
-    
-    @Autowired
-    private SimpleRedisLock simpleRedisLock;
-    
-    public void processOrder(String orderId) {
-        String lockKey = "order:" + orderId;
-        String requestId = UUID.randomUUID().toString();
-        int expireTime = 30; // 30秒过期时间
-        
+public class TaskService {
+
+    private final SimpleRedisLock simpleRedisLock;
+
+    public TaskService(SimpleRedisLock simpleRedisLock) {
+        this.simpleRedisLock = simpleRedisLock;
+    }
+
+    public void process(String taskId) {
+        String lockKey = "lock:task:" + taskId;
+        String lockValue = UUID.randomUUID().toString();
+
+        if (!simpleRedisLock.tryLock(lockKey, lockValue, 30, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("任务正在处理中");
+        }
+
         try {
-            // 尝试获取锁
-            if (simpleRedisLock.tryLock(lockKey, requestId, expireTime)) {
-                try {
-                    // 执行业务逻辑
-                    doBusiness(orderId);
-                } finally {
-                    // 释放锁
-                    simpleRedisLock.unlock(lockKey, requestId);
-                }
-            } else {
-                // 获取锁失败的处理
-                throw new RuntimeException("获取锁失败，订单正在处理中");
-            }
-        } catch (Exception e) {
-            log.error("处理订单失败", e);
-            throw e;
+            doBusiness(taskId);
+        } finally {
+            simpleRedisLock.unlock(lockKey, lockValue);
         }
     }
 }
 ```
 
-## API文档
-
-### tryLock方法
+## API
 
 ```java
-/**
- * 尝试获取分布式锁
- * @param lockKey 锁的键名
- * @param requestId 请求标识（用于解锁时验证）
- * @param expireTime 过期时间（秒）
- * @return 是否成功获取锁
- */
-boolean tryLock(String lockKey, String requestId, int expireTime)
-
-/**
- * 尝试获取分布式锁（支持时间单位）
- * @param lockKey 锁的键名
- * @param requestId 请求标识
- * @param expireTime 过期时间
- * @param timeUnit 时间单位
- * @return 是否成功获取锁
- */
-boolean tryLock(String lockKey, String requestId, long expireTime, TimeUnit timeUnit)
+boolean tryLock(String lockKey, String lockValue, long expireTime, TimeUnit timeUnit)
 ```
 
-### unlock方法
+| 参数 | 说明 |
+|------|------|
+| `lockKey` | 锁 key，同一个资源必须使用同一个 key |
+| `lockValue` | 锁持有者标识，解锁时必须传入同一个值 |
+| `expireTime` | 过期时间 |
+| `timeUnit` | 过期时间单位 |
+
+返回 `true` 表示加锁成功，返回 `false` 表示锁已被持有。
 
 ```java
-/**
- * 释放分布式锁
- * @param lockKey 锁的键名
- * @param requestId 请求标识（必须和加锁时的requestId一致）
- * @return 是否成功释放锁
- */
-boolean unlock(String lockKey, String requestId)
+boolean unlock(String lockKey, String lockValue)
 ```
 
-## 使用示例
+只有 Redis 中当前 value 与传入 `lockValue` 匹配时才删除 key。返回 `true` 表示释放成功，返回 `false` 表示锁已过期或持有者不匹配；Redis 命令执行异常会向外抛出。
 
-### 基本使用
+## route 模式
 
-```java
-// 获取锁
-boolean locked = simpleRedisLock.tryLock("user:123", "request-001", 30);
-if (locked) {
-    try {
-        // 执行业务逻辑
-        processUser(123);
-    } finally {
-        // 释放锁
-        simpleRedisLock.unlock("user:123", "request-001");
-    }
-}
-```
-
-### 带时间单位的使用
-
-```java
-// 设置5分钟过期时间
-boolean locked = simpleRedisLock.tryLock("task:execute", "worker-1", 5, TimeUnit.MINUTES);
-```
-
-### 错误处理
-
-```java
-public void safeProcess(String key) {
-    String lockKey = "lock:" + key;
-    String requestId = Thread.currentThread().getId() + "-" + System.currentTimeMillis();
-    
-    try {
-        if (simpleRedisLock.tryLock(lockKey, requestId, 10)) {
-            // 业务逻辑
-            doSomething(key);
-        } else {
-            log.warn("获取锁失败，key: {}", key);
-            throw new BusinessException("系统繁忙，请稍后重试");
-        }
-    } finally {
-        // 确保锁被释放
-        simpleRedisLock.unlock(lockKey, requestId);
-    }
-}
-```
-
-## 配置说明
-
-### Redis配置
+当锁流量需要与默认 Redis 隔离，或不同锁域需要落到不同 Redis 时，可以开启 lock route。
 
 ```yaml
-spring:
-  redis:
-    host: localhost          # Redis服务器地址
-    port: 6379              # Redis服务器端口
-    database: 0             # 数据库索引
-    timeout: 2000ms         # 连接超时时间
-    password:               # 密码（如果有）
-    lettuce:
-      pool:
-        max-active: 8       # 最大连接数
-        max-idle: 8         # 最大空闲连接数
-        min-idle: 0         # 最小空闲连接数
-        max-wait: -1ms      # 最大等待时间
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        lock:
+          redis:
+            route:
+              enable: true
+        redis:
+          route:
+            enable: true
+            default-datasource: default
+            datasources:
+              default:
+                host: localhost
+                port: 6379
+                database: 0
+              lock:
+                host: localhost
+                port: 6379
+                database: 1
+            rules:
+              - pattern: "lock:"
+                type: prefix
+                datasource: lock
+                priority: 1
 ```
 
-### 日志配置
+开启后：
 
-```yaml
-logging:
-  level:
-    io.github.surezzzzzz.sdk.lock.redis: DEBUG  # 开启调试日志
+- `tryLock` 和 `unlock` 都使用同一个 `lockKey` 做 route key。
+- 命中 `lock:` 前缀的锁会路由到 `lock` datasource。
+- 未命中规则的锁走 route 默认 datasource。
+- SDK 不再注册 `simpleRedisLockRedisTemplate`，避免 route-only 项目被迫提供全局 `RedisConnectionFactory`。
+- 如果 `lock.redis.route.enable=true` 但缺少 `RedisRouteTemplate`，启动会失败并明确提示配置 route。
+
+## Cluster 语义
+
+当前锁脚本只操作单个 key：
+
+```text
+KEYS[1] = lockKey
+ARGV[1] = lockValue
 ```
 
-## 最佳实践
+因此 Redis Cluster 下不涉及多 key cross-slot。SDK 不修改业务传入的 `lockKey`，如果业务需要 hash tag，应直接在锁 key 中声明。
 
-### 1. 锁键命名规范
+## 自动配置边界
 
-- 使用业务前缀，如：`order:`, `user:`, `payment:`
-- 包含唯一标识，如订单ID、用户ID
-- 示例：`order:12345`, `user:67890:profile`
-
-### 2. 过期时间设置
-
-- 根据业务处理时间设置合理的过期时间
-- 一般建议30-300秒
-- 避免设置过短导致业务未完成锁就过期
-- 避免设置过长导致死锁风险
-
-### 3. 请求ID生成
-
-```java
-// 推荐方式：UUID
-String requestId = UUID.randomUUID().toString();
-
-// 或者：线程ID + 时间戳
-String requestId = Thread.currentThread().getId() + "-" + System.currentTimeMillis();
-
-// 或者：业务相关ID
-String requestId = "order-" + orderId + "-" + System.currentTimeMillis();
-```
-
-### 4. 异常处理
-
-```java
-public void processWithLock(String key) {
-    String lockKey = "lock:" + key;
-    String requestId = UUID.randomUUID().toString();
-    
-    try {
-        if (simpleRedisLock.tryLock(lockKey, requestId, 30)) {
-            try {
-                // 业务逻辑
-                doBusiness(key);
-            } catch (Exception e) {
-                log.error("业务处理失败", e);
-                throw e;
-            } finally {
-                // 确保释放锁
-                simpleRedisLock.unlock(lockKey, requestId);
-            }
-        } else {
-            log.warn("获取锁失败，key: {}", key);
-            throw new RuntimeException("系统繁忙，请稍后重试");
-        }
-    } catch (Exception e) {
-        log.error("处理失败", e);
-        throw e;
-    }
-}
-```
+- 默认模式：注册 `simpleRedisLockRedisTemplate` 和 `DefaultRedisLockExecutor`。
+- route 模式：存在 `RedisRouteTemplate` 时注册 `RouteRedisLockExecutor`。
+- 业务自定义 `RedisLockExecutor` 时，SDK 默认 executor、route executor、失败型 executor 都会退让。
+- route 模式不会回退默认 Redis，避免同一个锁 key 在不同 Redis 间漂移导致互斥失效。
 
 ## 测试
 
-项目包含完整的单元测试，使用embedded-redis，无需外部Redis环境：
+本模块测试依赖真实 Redis，不使用 embedded-redis。
 
 ```bash
-./gradlew test
+./gradlew :sdk:lock:redis:simple-redis-lock-starter:test
 ```
 
 测试覆盖：
-- ✅ 基础加锁解锁功能
-- ✅ 锁的互斥性验证
-- ✅ 锁过期机制测试
-- ✅ 并发竞争测试
-- ✅ 异常场景测试
+
+- 默认单 Redis 模式加锁、重复加锁、过期、解锁与并发互斥。
+- route 模式下 key 路由到指定 datasource，默认 key 与 lock key 数据隔离。
+- route 矩阵环境下 Redis 3.2.12 / 5.0.14 / 7.2.6 standalone + cluster 的单 key 锁场景。
+- Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 自动配置边界。
 
 ## 注意事项
 
-1. **非可重入锁** - 当前实现不支持同一线程重复获取锁，同一线程第二次获取会失败
-2. **锁的粒度**：尽量使用细粒度锁，避免大范围锁定
-3. **过期时间**：必须设置合理的过期时间，防止死锁
-4. **解锁验证**：解锁时必须使用相同的requestId，防止误解锁
-5. **异常处理**：确保在finally块中释放锁，避免死锁
-6. **性能考虑**：高并发场景下注意Redis连接池配置
+1. 当前实现是非可重入锁，同一个 `lockKey` 重复加锁会失败。
+2. `lockValue` 必须唯一并妥善保存，解锁时必须传入同一个值。
+3. 过期时间应覆盖正常业务耗时，避免业务未完成锁已过期。
+4. `unlock` 返回 `false` 时表示没有释放任何锁，调用方不应按成功处理。
+5. route 模式必须保证同一个 `lockKey` 加锁和解锁路由规则一致。

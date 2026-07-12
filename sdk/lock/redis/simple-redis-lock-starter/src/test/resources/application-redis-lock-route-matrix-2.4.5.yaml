@@ -1,0 +1,13 @@
+redis-lock:
+  route:
+    matrix:
+      expectation:
+        known-datasources:
+          - redis3Standalone
+          - redis5Standalone
+          - redis7Standalone
+          - redis3Cluster
+          - redis5Cluster
+          - redis7Cluster
+        unknown-datasources: []
+        compatibility-boundary: "Spring Boot 2.4.5 + Lettuce 6.x 支持 Redis 3.2.12 / 5.0.14 / 7.2.6 standalone 与 cluster 全矩阵。"

@@ -1,68 +1,60 @@
 package io.github.surezzzzzz.sdk.lock.redis;
 
 import io.github.surezzzzzz.sdk.lock.redis.configuration.LockComponent;
+import io.github.surezzzzzz.sdk.lock.redis.executor.RedisLockExecutor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 
-import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @author: Sure.
- * @description
- * @Date: 2024/12/11 11:23
+ * Redis 分布式锁，支持单 Redis 与 route 两种执行模式。
+ *
+ * @author surezzzzzz
  */
-@LockComponent
 @Slf4j
+@LockComponent
+@RequiredArgsConstructor
 public class SimpleRedisLock {
-    @Autowired
-    @Qualifier("simpleRedisLockRedisTemplate")
-    protected RedisTemplate<String, String> simpleRedisLockRedisTemplate;
 
-    // Lua脚本：原子性地检查并删除锁
-    private static final String UNLOCK_SCRIPT =
-            "if redis.call('get', KEYS[1]) == ARGV[1] then " +
-                    "    return redis.call('del', KEYS[1]) " +
-                    "else " +
-                    "    return 0 " +
-                    "end";
+    private final RedisLockExecutor redisLockExecutor;
 
-    private static final DefaultRedisScript<Long> UNLOCK_REDIS_SCRIPT = new DefaultRedisScript<>(UNLOCK_SCRIPT, Long.class);
-
-    // 尝试获取锁
+    /**
+     * 尝试加锁。
+     *
+     * @param lockKey    锁 key
+     * @param lockValue  锁 value（持有者标识，建议使用唯一 ID）
+     * @param expireTime 过期时间
+     * @param timeUnit   过期时间单位
+     * @return true 表示加锁成功
+     */
     public boolean tryLock(String lockKey, String lockValue, long expireTime, TimeUnit timeUnit) {
-        log.debug("开始尝试加锁，lockKey:{}", lockKey);
-        ValueOperations<String, String> ops = simpleRedisLockRedisTemplate.opsForValue();
-        Boolean success = ops.setIfAbsent(lockKey, lockValue, expireTime, timeUnit);
-        if (success != null && success) {
-            log.info("成功获取锁，lockKey={}, lockValue={}, expireTime={}{}", lockKey, lockValue, expireTime, timeUnit);
-            return true;
+        log.debug("尝试加锁，lockKey={}", lockKey);
+        boolean success = redisLockExecutor.tryLock(lockKey, lockValue, expireTime, timeUnit);
+        if (success) {
+            log.info("加锁成功，lockKey={}, expireTime={}{}", lockKey, expireTime, timeUnit);
         } else {
-            log.info("获取锁失败，lockKey={} 已存在", lockKey);
-            return false;
+            log.info("加锁失败，lockKey={} 已被持有", lockKey);
         }
+        return success;
     }
 
-    // 释放锁
-    public void unlock(String lockKey, String lockValue) {
-        log.debug("开始尝试解锁，lockKey:{}", lockKey);
-        try {
-            Long result = simpleRedisLockRedisTemplate.execute(
-                    UNLOCK_REDIS_SCRIPT,
-                    Collections.singletonList(lockKey),
-                    lockValue
-            );
-            if (result != null && result == 1) {
-                log.info("成功释放锁，lockKey={}, lockValue={}", lockKey, lockValue);
-            } else {
-                log.info("释放锁失败，lockKey={} 的持有者与当前持有者不匹配或锁已过期", lockKey);
-            }
-        } catch (Exception e) {
-            log.error("释放锁异常，lockKey={}, lockValue={}", lockKey, lockValue, e);
+    /**
+     * 释放锁。只有 lockValue 与当前持有者匹配时才删除 key。
+     * Redis 命令执行失败时抛出异常，不吞掉。
+     *
+     * @param lockKey   锁 key
+     * @param lockValue 锁 value（持有者标识）
+     * @return true 表示成功释放，false 表示 value 不匹配或锁已过期
+     */
+    public boolean unlock(String lockKey, String lockValue) {
+        log.debug("尝试解锁，lockKey={}", lockKey);
+        boolean released = redisLockExecutor.unlock(lockKey, lockValue);
+        if (released) {
+            log.info("解锁成功，lockKey={}", lockKey);
+        } else {
+            log.info("解锁未生效，lockKey={} 持有者不匹配或锁已过期", lockKey);
         }
+        return released;
     }
 }

@@ -3,12 +3,14 @@ package io.github.surezzzzzz.sdk.lock.redis.cases;
 import io.github.surezzzzzz.sdk.lock.redis.LockApplication;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -18,181 +20,86 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * @author: Sure.
- * @description: Redis分布式锁测试类
- * @Date: 2024/12/3 14:01
+ * Redis 分布式锁默认单 Redis 模式端到端测试。
+ *
+ * @author surezzzzzz
  */
 @Slf4j
 @SpringBootTest(classes = LockApplication.class)
 public class SimpleRedisLockTest {
 
+    private static final String LOCK_KEY = "test:lock:simple";
+    private static final String LOCK_VALUE = "test-client-id";
+    private static final String WRONG_VALUE = "test-client-wrong";
+    private static final List<String> TEST_KEYS = Arrays.asList(
+            LOCK_KEY,
+            "test:lock:mutex",
+            "test:lock:expire",
+            "test:lock:concurrent"
+    );
+
     @Autowired
     private SimpleRedisLock simpleRedisLock;
 
     @Autowired
-    private RedisTemplate<String, String> simpleRedisLockRedisTemplate;
+    private StringRedisTemplate simpleRedisLockRedisTemplate;
 
-    @BeforeEach
-    void setUp() {
-        // 清理测试数据
-        try {
-            simpleRedisLockRedisTemplate.delete("test:lock:simple");
-            simpleRedisLockRedisTemplate.delete("test:mutex:lock");
-            simpleRedisLockRedisTemplate.delete("test:expire:lock");
-            simpleRedisLockRedisTemplate.delete("test:concurrent:lock");
-        } catch (Exception e) {
-            log.warn("清理测试数据失败，可能 Redis 未启动: {}", e.getMessage());
-        }
+    @AfterEach
+    public void cleanUp() {
+        simpleRedisLockRedisTemplate.delete(TEST_KEYS);
     }
-
-    private static final String TEST_LOCK_KEY = "test:lock:simple";
-    private static final String TEST_LOCK_VALUE = "test-client-id";
-    private static final long EXPIRE_TIME = 10;
-    private static final TimeUnit TIME_UNIT = TimeUnit.SECONDS;
 
     @Test
-//    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
-    public void smokeTest() throws Exception {
-        log.info("开始Redis分布式锁基础功能测试");
+    public void testTryLockSuccessAndDuplicateFails() {
+        log.info("验证默认模式加锁成功后重复加锁失败，lockKey={}", LOCK_KEY);
+        boolean first = simpleRedisLock.tryLock(LOCK_KEY, LOCK_VALUE, 10, TimeUnit.SECONDS);
+        assertTrue(first, "第一次加锁应成功");
+        assertEquals(LOCK_VALUE, simpleRedisLockRedisTemplate.opsForValue().get(LOCK_KEY), "Redis 中锁 value 必须匹配持有者");
+        Long ttl = simpleRedisLockRedisTemplate.getExpire(LOCK_KEY, TimeUnit.SECONDS);
+        log.info("默认模式加锁后 TTL=[{}] 秒", ttl);
+        assertNotNull(ttl, "TTL 不应为 null");
+        assertTrue(ttl > 0 && ttl <= 10, "锁 TTL 必须在有效范围内");
 
-        // 测试1: 基础加锁解锁
-        testBasicLockUnlock();
-
-        // 测试2: 锁的互斥性
-        testLockMutualExclusion();
-
-        // 测试3: 锁的过期机制
-        testLockExpiration();
-
-        // 测试4: 并发竞争测试
-        testConcurrentLockCompetition();
-
-        log.info("Redis分布式锁基础功能测试完成");
+        boolean second = simpleRedisLock.tryLock(LOCK_KEY, WRONG_VALUE, 10, TimeUnit.SECONDS);
+        assertFalse(second, "重复加锁应失败");
+        assertEquals(LOCK_VALUE, simpleRedisLockRedisTemplate.opsForValue().get(LOCK_KEY), "重复加锁失败后原 value 不应变化");
     }
 
-    private void testBasicLockUnlock() {
-        log.info("=== 测试1: 基础加锁解锁 ===");
-
-        // 尝试加锁
-        boolean lockResult = simpleRedisLock.tryLock(TEST_LOCK_KEY, TEST_LOCK_VALUE, EXPIRE_TIME, TIME_UNIT);
-        assertTrue(lockResult, "加锁应该成功");
-        log.info("成功获取锁: key={}, value={}", TEST_LOCK_KEY, TEST_LOCK_VALUE);
-
-        // 再次尝试加锁（应该失败）
-        boolean secondLockResult = simpleRedisLock.tryLock(TEST_LOCK_KEY, "other-value", EXPIRE_TIME, TIME_UNIT);
-        assertFalse(secondLockResult, "重复加锁应该失败");
-        log.info("重复加锁失败，符合预期");
-
-        // 释放锁
-        simpleRedisLock.unlock(TEST_LOCK_KEY, TEST_LOCK_VALUE);
-        log.info("成功释放锁: key={}, value={}", TEST_LOCK_KEY, TEST_LOCK_VALUE);
-
-        // 验证锁已释放（重新加锁应该成功）
-        boolean afterUnlockResult = simpleRedisLock.tryLock(TEST_LOCK_KEY, "new-value", EXPIRE_TIME, TIME_UNIT);
-        assertTrue(afterUnlockResult, "锁释放后重新加锁应该成功");
-        log.info("锁释放后重新加锁成功");
-
-        // 清理
-        simpleRedisLock.unlock(TEST_LOCK_KEY, "new-value");
-        log.info("基础加锁解锁测试通过");
+    @Test
+    public void testUnlockWithOwnerValueDeletesLock() {
+        log.info("验证正确 lockValue 解锁会删除锁，lockKey={}", LOCK_KEY);
+        assertTrue(simpleRedisLock.tryLock(LOCK_KEY, LOCK_VALUE, 10, TimeUnit.SECONDS), "加锁应成功");
+        boolean unlocked = simpleRedisLock.unlock(LOCK_KEY, LOCK_VALUE);
+        assertTrue(unlocked, "正确 lockValue 解锁应返回 true");
+        assertFalse(Boolean.TRUE.equals(simpleRedisLockRedisTemplate.hasKey(LOCK_KEY)), "正确解锁后 key 应被删除");
     }
 
-    private void testLockMutualExclusion() throws InterruptedException {
-        log.info("=== 测试2: 锁的互斥性 ===");
-
-        String mutexKey = "test:mutex:lock";
-        CountDownLatch startLatch = new CountDownLatch(1);
-        CountDownLatch completeLatch = new CountDownLatch(2);
-        AtomicInteger successCount = new AtomicInteger(0);
-
-        ExecutorService executor = Executors.newFixedThreadPool(2);
-
-        // 线程1
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                boolean locked = simpleRedisLock.tryLock(mutexKey, "client1", EXPIRE_TIME, TIME_UNIT);
-                if (locked) {
-                    successCount.incrementAndGet();
-                    log.info("线程1获取锁成功");
-                    Thread.sleep(1000); // 持有锁1秒
-                    simpleRedisLock.unlock(mutexKey, "client1");
-                    log.info("线程1释放锁");
-                } else {
-                    log.info("线程1获取锁失败");
-                }
-            } catch (Exception e) {
-                log.error("线程1执行异常", e);
-            } finally {
-                completeLatch.countDown();
-            }
-        });
-
-        // 线程2
-        executor.submit(() -> {
-            try {
-                startLatch.await();
-                Thread.sleep(100); // 稍微延迟，确保线程1先尝试
-                boolean locked = simpleRedisLock.tryLock(mutexKey, "client2", EXPIRE_TIME, TIME_UNIT);
-                if (locked) {
-                    successCount.incrementAndGet();
-                    log.info("线程2获取锁成功");
-                    simpleRedisLock.unlock(mutexKey, "client2");
-                    log.info("线程2释放锁");
-                } else {
-                    log.info("线程2获取锁失败");
-                }
-            } catch (Exception e) {
-                log.error("线程2执行异常", e);
-            } finally {
-                completeLatch.countDown();
-            }
-        });
-
-        // 启动测试
-        startLatch.countDown();
-        completeLatch.await(5, TimeUnit.SECONDS);
-        executor.shutdown();
-
-        assertEquals(1, successCount.get(), "互斥测试中应该只有一个线程能获取锁");
-        log.info("锁的互斥性测试通过");
+    @Test
+    public void testUnlockWithWrongValueKeepsLock() {
+        log.info("验证错误 lockValue 解锁不会删除锁，lockKey={}", LOCK_KEY);
+        assertTrue(simpleRedisLock.tryLock(LOCK_KEY, LOCK_VALUE, 10, TimeUnit.SECONDS), "加锁应成功");
+        boolean unlocked = simpleRedisLock.unlock(LOCK_KEY, WRONG_VALUE);
+        assertFalse(unlocked, "错误 lockValue 解锁应返回 false");
+        assertEquals(LOCK_VALUE, simpleRedisLockRedisTemplate.opsForValue().get(LOCK_KEY), "错误解锁后锁仍应存在");
     }
 
-    private void testLockExpiration() throws InterruptedException {
-        log.info("=== 测试3: 锁的过期机制 ===");
-
-        String expireKey = "test:expire:lock";
-        String expireValue = "expire-test";
-
-        // 加锁，设置较短的过期时间
-        boolean locked = simpleRedisLock.tryLock(expireKey, expireValue, 2, TimeUnit.SECONDS);
-        assertTrue(locked, "加锁应该成功");
-        log.info("获取锁成功，设置2秒过期时间");
-
-        // 等待锁过期
-        log.info("等待锁过期...");
-        Thread.sleep(2500);
-
-        // 尝试再次加锁，应该成功（因为原锁已过期）
-        boolean afterExpireResult = simpleRedisLock.tryLock(expireKey, "new-client", EXPIRE_TIME, TIME_UNIT);
-        assertTrue(afterExpireResult, "锁过期后重新加锁应该成功");
-        log.info("锁过期后重新加锁成功");
-
-        // 清理
-        simpleRedisLock.unlock(expireKey, "new-client");
-        log.info("锁过期机制测试通过");
+    @Test
+    public void testLockExpirationAllowsRelock() throws Exception {
+        String lockKey = "test:lock:expire";
+        log.info("验证锁过期后可重新加锁，lockKey={}", lockKey);
+        assertTrue(simpleRedisLock.tryLock(lockKey, LOCK_VALUE, 1, TimeUnit.SECONDS), "首次加锁应成功");
+        Thread.sleep(1500L);
+        assertTrue(simpleRedisLock.tryLock(lockKey, WRONG_VALUE, 10, TimeUnit.SECONDS), "锁过期后重新加锁应成功");
+        assertEquals(WRONG_VALUE, simpleRedisLockRedisTemplate.opsForValue().get(lockKey), "重新加锁后 value 应更新为新持有者");
     }
 
-    private void testConcurrentLockCompetition() throws InterruptedException {
-        log.info("=== 测试4: 并发竞争测试 ===");
-
-        String concurrentKey = "test:concurrent:lock";
+    @Test
+    public void testConcurrentLockOnlyOneOwner() throws Exception {
+        String lockKey = "test:lock:concurrent";
         int threadCount = 10;
         CountDownLatch startLatch = new CountDownLatch(1);
         CountDownLatch completeLatch = new CountDownLatch(threadCount);
-        AtomicInteger totalAttempts = new AtomicInteger(0);
         AtomicInteger successCount = new AtomicInteger(0);
-
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         for (int i = 0; i < threadCount; i++) {
@@ -200,36 +107,23 @@ public class SimpleRedisLockTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
-                    totalAttempts.incrementAndGet();
-
-                    String clientId = "client-" + threadId;
-                    boolean locked = simpleRedisLock.tryLock(concurrentKey, clientId, EXPIRE_TIME, TIME_UNIT);
-
+                    boolean locked = simpleRedisLock.tryLock(lockKey, "client-" + threadId, 10, TimeUnit.SECONDS);
                     if (locked) {
                         successCount.incrementAndGet();
-                        log.info("线程{}获取锁成功", threadId);
-                        Thread.sleep(100); // 模拟业务处理
-                        simpleRedisLock.unlock(concurrentKey, clientId);
-                        log.info("线程{}释放锁", threadId);
-                    } else {
-                        log.info("线程{}获取锁失败", threadId);
                     }
                 } catch (Exception e) {
-                    log.error("线程{}执行异常", threadId, e);
+                    log.error("并发加锁线程异常，threadId={}", threadId, e);
                 } finally {
                     completeLatch.countDown();
                 }
             });
         }
 
-        // 启动测试
         startLatch.countDown();
-        completeLatch.await(10, TimeUnit.SECONDS);
-        executor.shutdown();
-
-        log.info("并发测试完成: 总尝试次数={}, 成功次数={}", totalAttempts.get(), successCount.get());
-        assertTrue(successCount.get() > 0, "至少应该有一个线程能获取锁");
-        assertTrue(successCount.get() < threadCount, "不可能所有线程都同时获取锁");
-        log.info("并发竞争测试通过");
+        assertTrue(completeLatch.await(10, TimeUnit.SECONDS), "并发测试线程必须在 10 秒内结束");
+        executor.shutdownNow();
+        log.info("并发加锁完成，成功次数={}", successCount.get());
+        assertEquals(1, successCount.get(), "同一个 lockKey 并发竞争时只能有一个持有者");
+        assertNotNull(simpleRedisLockRedisTemplate.opsForValue().get(lockKey), "成功加锁后 Redis 中必须存在锁 value");
     }
 }
