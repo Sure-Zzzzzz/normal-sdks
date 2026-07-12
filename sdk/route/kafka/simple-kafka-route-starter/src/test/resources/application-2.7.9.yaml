@@ -1,0 +1,11 @@
+# Spring Boot 2.7.9 / Spring Kafka 2.8.x 基线测试 profile。
+# 普通单元测试不应触网；端到端专属覆盖项放在 application-kafka-e2e.yaml / application-kafka-e2e-2.7.9.yaml。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: false

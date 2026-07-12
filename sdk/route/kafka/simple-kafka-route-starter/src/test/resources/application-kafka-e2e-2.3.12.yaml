@@ -1,0 +1,15 @@
+# Spring Boot 2.3.12 / Spring Kafka 2.5.x 端到端兼容 profile。
+# 2.5.x 的 ProducerFactory 已公开 getTransactionIdPrefix，事务配置无需降级。
+# 仍保留独立 profile，后续若 Kafka client 默认参数变化，可以只在这里覆盖。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 6000

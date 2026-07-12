@@ -1,0 +1,14 @@
+# Spring Boot 2.7.9 / Spring Kafka 2.8.x 端到端基线 profile。
+# 当前与 application-kafka-e2e.yaml 一致；保留独立文件用于显式标记基线矩阵入口。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 5000

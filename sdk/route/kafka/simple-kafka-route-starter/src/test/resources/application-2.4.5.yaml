@@ -1,0 +1,12 @@
+# Spring Boot 2.4.5 / Spring Kafka 2.6.x 测试 profile。
+# 普通单元测试不应触网；版本兼容差异由代码兼容层覆盖。
+# 端到端专属覆盖项放在 application-kafka-e2e-2.4.5.yaml。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: false

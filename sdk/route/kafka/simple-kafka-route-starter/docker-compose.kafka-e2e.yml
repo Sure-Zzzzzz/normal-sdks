@@ -1,0 +1,189 @@
+services:
+
+  # ─── ZooKeeper × 4 ───────────────────────────────────────────────────────────
+
+  kafka-route-zookeeper-v110:
+    image: zookeeper:3.6.4
+    container_name: kafka-route-zookeeper-v110
+    ports:
+      - "12281:2181"
+    environment:
+      - ZOO_4LW_COMMANDS_WHITELIST=ruok,stat,mntr
+
+  kafka-route-zookeeper-v28:
+    image: zookeeper:3.6.4
+    container_name: kafka-route-zookeeper-v28
+    ports:
+      - "12282:2181"
+    environment:
+      - ZOO_4LW_COMMANDS_WHITELIST=ruok,stat,mntr
+
+  kafka-route-zookeeper-v37:
+    image: zookeeper:3.6.4
+    container_name: kafka-route-zookeeper-v37
+    ports:
+      - "12283:2181"
+    environment:
+      - ZOO_4LW_COMMANDS_WHITELIST=ruok,stat,mntr
+
+  kafka-route-zookeeper-cluster:
+    image: zookeeper:3.6.4
+    container_name: kafka-route-zookeeper-cluster
+    ports:
+      - "12284:2181"
+    environment:
+      - ZOO_4LW_COMMANDS_WHITELIST=ruok,stat,mntr
+
+  # ─── Kafka 1.1.0（wurstmeister，ZooKeeper 模式）────────────────────────────────
+
+  kafka-route-v110:
+    image: wurstmeister/kafka:2.11-1.1.0
+    container_name: kafka-route-v110
+    depends_on:
+      - kafka-route-zookeeper-v110
+    ports:
+      - "18091:9094"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=kafka-route-zookeeper-v110:2181
+      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-route-v110:9092,EXTERNAL://localhost:18091
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+
+  # ─── Kafka 2.8.1（wurstmeister，ZooKeeper 模式）────────────────────────────────
+
+  kafka-route-v28:
+    image: wurstmeister/kafka:2.13-2.8.1
+    container_name: kafka-route-v28
+    depends_on:
+      - kafka-route-zookeeper-v28
+    ports:
+      - "18092:9094"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=kafka-route-zookeeper-v28:2181
+      - KAFKA_LISTENERS=INTERNAL://:9092,EXTERNAL://:9094
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka-route-v28:9092,EXTERNAL://localhost:18092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+
+  # ─── Kafka 3.7.1 单节点（apache，ZooKeeper 模式，绕过 KRaft wrapper）───────────
+
+  kafka-route-v37:
+    image: apache/kafka:3.7.1
+    container_name: kafka-route-v37
+    depends_on:
+      - kafka-route-zookeeper-v37
+    ports:
+      - "18094:9094"
+    command:
+      - bash
+      - -lc
+      - |
+        cat > /tmp/kafka-zk.properties <<'EOF'
+        broker.id=1
+        zookeeper.connect=kafka-route-zookeeper-v37:2181
+        listeners=INTERNAL://:9092,EXTERNAL://:9094
+        advertised.listeners=INTERNAL://kafka-route-v37:9092,EXTERNAL://localhost:18094
+        listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+        inter.broker.listener.name=INTERNAL
+        num.partitions=1
+        auto.create.topics.enable=true
+        offsets.topic.replication.factor=1
+        transaction.state.log.replication.factor=1
+        transaction.state.log.min.isr=1
+        log.dirs=/tmp/kafka-logs
+        EOF
+        exec /opt/kafka/bin/kafka-server-start.sh /tmp/kafka-zk.properties
+
+  # ─── Kafka 3.7.1 × 3 broker cluster（apache，ZooKeeper 模式）────────────────
+
+  kafka-route-cluster-1:
+    image: apache/kafka:3.7.1
+    container_name: kafka-route-cluster-1
+    depends_on:
+      - kafka-route-zookeeper-cluster
+    ports:
+      - "19192:9094"
+    command:
+      - bash
+      - -lc
+      - |
+        cat > /tmp/kafka-zk.properties <<'EOF'
+        broker.id=1
+        zookeeper.connect=kafka-route-zookeeper-cluster:2181
+        listeners=INTERNAL://:9092,EXTERNAL://:9094
+        advertised.listeners=INTERNAL://kafka-route-cluster-1:9092,EXTERNAL://localhost:19192
+        listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+        inter.broker.listener.name=INTERNAL
+        num.partitions=3
+        auto.create.topics.enable=true
+        offsets.topic.replication.factor=3
+        transaction.state.log.replication.factor=3
+        transaction.state.log.min.isr=2
+        log.dirs=/tmp/kafka-logs
+        EOF
+        exec /opt/kafka/bin/kafka-server-start.sh /tmp/kafka-zk.properties
+
+  kafka-route-cluster-2:
+    image: apache/kafka:3.7.1
+    container_name: kafka-route-cluster-2
+    depends_on:
+      - kafka-route-zookeeper-cluster
+    ports:
+      - "19193:9094"
+    command:
+      - bash
+      - -lc
+      - |
+        cat > /tmp/kafka-zk.properties <<'EOF'
+        broker.id=2
+        zookeeper.connect=kafka-route-zookeeper-cluster:2181
+        listeners=INTERNAL://:9092,EXTERNAL://:9094
+        advertised.listeners=INTERNAL://kafka-route-cluster-2:9092,EXTERNAL://localhost:19193
+        listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+        inter.broker.listener.name=INTERNAL
+        num.partitions=3
+        auto.create.topics.enable=true
+        offsets.topic.replication.factor=3
+        transaction.state.log.replication.factor=3
+        transaction.state.log.min.isr=2
+        log.dirs=/tmp/kafka-logs
+        EOF
+        exec /opt/kafka/bin/kafka-server-start.sh /tmp/kafka-zk.properties
+
+  kafka-route-cluster-3:
+    image: apache/kafka:3.7.1
+    container_name: kafka-route-cluster-3
+    depends_on:
+      - kafka-route-zookeeper-cluster
+    ports:
+      - "19194:9094"
+    command:
+      - bash
+      - -lc
+      - |
+        cat > /tmp/kafka-zk.properties <<'EOF'
+        broker.id=3
+        zookeeper.connect=kafka-route-zookeeper-cluster:2181
+        listeners=INTERNAL://:9092,EXTERNAL://:9094
+        advertised.listeners=INTERNAL://kafka-route-cluster-3:9092,EXTERNAL://localhost:19194
+        listener.security.protocol.map=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+        inter.broker.listener.name=INTERNAL
+        num.partitions=3
+        auto.create.topics.enable=true
+        offsets.topic.replication.factor=3
+        transaction.state.log.replication.factor=3
+        transaction.state.log.min.isr=2
+        log.dirs=/tmp/kafka-logs
+        EOF
+        exec /opt/kafka/bin/kafka-server-start.sh /tmp/kafka-zk.properties

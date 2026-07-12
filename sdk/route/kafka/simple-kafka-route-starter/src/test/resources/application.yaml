@@ -1,0 +1,13 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            enable: false
+            diagnostics:
+              enable: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.kafka.route: DEBUG

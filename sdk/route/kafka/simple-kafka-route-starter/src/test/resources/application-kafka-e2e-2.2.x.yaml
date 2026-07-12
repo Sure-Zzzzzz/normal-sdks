@@ -1,0 +1,47 @@
+# Spring Boot 2.2.x / Spring Kafka 2.3.x 端到端兼容 profile。
+# Spring Kafka 2.3.x 已支持 DefaultKafkaProducerFactory#setTransactionIdPrefix，
+# 但 ProducerFactory#getTransactionIdPrefix 仍不是 public API；相关断言走代码兼容层，配置不绕开事务。
+# AdminClient feature API 不可用时 diagnostics 会降级为 UNKNOWN，只要 broker 可达就不阻断。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 7000
+            sources:
+              v110:
+                producer:
+                  request-timeout-ms: 7000
+                consumer:
+                  properties:
+                    session.timeout.ms: 10000
+              v28:
+                producer:
+                  request-timeout-ms: 7000
+                consumer:
+                  properties:
+                    session.timeout.ms: 10000
+              v37:
+                producer:
+                  request-timeout-ms: 7000
+                consumer:
+                  properties:
+                    session.timeout.ms: 10000
+              tx37:
+                producer:
+                  request-timeout-ms: 7000
+                consumer:
+                  properties:
+                    session.timeout.ms: 10000
+              cluster:
+                producer:
+                  request-timeout-ms: 7000
+                consumer:
+                  properties:
+                    session.timeout.ms: 10000

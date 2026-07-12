@@ -1,0 +1,122 @@
+# Kafka route 大而全端到端测试 profile。
+# 配合 -Dkafka.route.e2e.test=true 启用，覆盖 Kafka 1.1.0 / 2.8.1 / 3.7.1 以及 3 broker cluster。
+# 这里显式重写 application.yaml 中 default/event 两个 datasource，避免 profile 合并后诊断误探测 19092/19093。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            enable: true
+            default-source: v110
+            sources:
+              default:
+                bootstrap-servers:
+                  - localhost:18091
+                client-id: kafka-route-e2e-default
+                producer:
+                  client-id: kafka-route-e2e-default-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-e2e-default-consumer
+                  group-id: kafka-route-e2e-default-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              event:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: kafka-route-e2e-event
+                producer:
+                  client-id: kafka-route-e2e-event-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-e2e-event-consumer
+                  group-id: kafka-route-e2e-event-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v110:
+                bootstrap-servers:
+                  - localhost:18091
+                client-id: kafka-route-v110
+                producer:
+                  client-id: kafka-route-v110-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-v110-consumer
+                  group-id: kafka-route-v110-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v28:
+                bootstrap-servers:
+                  - localhost:18092
+                client-id: kafka-route-v28
+                producer:
+                  client-id: kafka-route-v28-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-v28-consumer
+                  group-id: kafka-route-v28-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v37:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: kafka-route-v37
+                producer:
+                  client-id: kafka-route-v37-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-v37-consumer
+                  group-id: kafka-route-v37-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              tx37:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: kafka-route-tx37
+                producer:
+                  client-id: kafka-route-tx37-producer
+                  acks: all
+                  transaction-id-prefix: kafka-route-tx37-
+                consumer:
+                  client-id: kafka-route-tx37-consumer
+                  group-id: kafka-route-tx37-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              cluster:
+                bootstrap-servers:
+                  - localhost:19192
+                  - localhost:19193
+                  - localhost:19194
+                client-id: kafka-route-cluster
+                producer:
+                  client-id: kafka-route-cluster-producer
+                  acks: all
+                consumer:
+                  client-id: kafka-route-cluster-consumer
+                  group-id: kafka-route-cluster-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 5000
+            rules:
+              - pattern: "event.v28."
+                type: prefix
+                datasource: v28
+                priority: 1
+              - pattern: "event.v37."
+                type: prefix
+                datasource: v37
+                priority: 2
+              - pattern: "tenant-v37-*"
+                type: wildcard
+                datasource: v37
+                priority: 3
+              - pattern: "cluster."
+                type: prefix
+                datasource: cluster
+                priority: 4

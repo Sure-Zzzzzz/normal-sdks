@@ -1,0 +1,14 @@
+# Spring Boot 2.4.5 / Spring Kafka 2.6.x 端到端兼容 profile。
+# 2.6.x 与 2.7.x 的 route 用法一致；保留独立 profile 作为矩阵入口和后续差异覆盖点。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 6000
