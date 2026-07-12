@@ -30,7 +30,7 @@ public class RedisConfigurationCompatibilityHelperTest {
     @Test
     public void testApplyPassword() {
         RedisStandaloneConfiguration configuration = new RedisStandaloneConfiguration();
-        RedisConfigurationCompatibilityHelper.applyPassword(configuration, "mock-password");
+        RedisConfigurationCompatibilityHelper.applyPassword(configuration, "OPAQUE-CREDENTIAL-CONTENT");
         assertTrue(configuration.getPassword().isPresent());
     }
 

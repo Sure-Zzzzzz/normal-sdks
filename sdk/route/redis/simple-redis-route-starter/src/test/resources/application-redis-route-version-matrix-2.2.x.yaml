@@ -1,0 +1,12 @@
+redis-route:
+  matrix:
+    expectation:
+      known-datasources:
+        - redis3Standalone
+        - redis5Standalone
+        - redis7Standalone
+        - redis3Cluster
+        - redis5Cluster
+      unknown-datasources:
+        - redis7Cluster
+      compatibility-boundary: "Spring Boot 2.2.x + Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 cluster 的 CLUSTER SLOTS 新节点 metadata，redis7Cluster 预期 known=false。"

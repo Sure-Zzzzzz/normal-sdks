@@ -18,6 +18,21 @@ public final class ErrorCode {
     public static final String REDIS_ROUTE_009 = "REDIS_ROUTE_009";
     public static final String REDIS_ROUTE_010 = "REDIS_ROUTE_010";
 
+    /**
+     * Redis Server info 探测失败
+     */
+    public static final String REDIS_ROUTE_011 = "REDIS_ROUTE_011";
+
+    /**
+     * Redis Server 版本号格式不合法
+     */
+    public static final String REDIS_ROUTE_012 = "REDIS_ROUTE_012";
+
+    /**
+     * Redis Server 能力不满足要求
+     */
+    public static final String REDIS_ROUTE_013 = "REDIS_ROUTE_013";
+
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class");
     }

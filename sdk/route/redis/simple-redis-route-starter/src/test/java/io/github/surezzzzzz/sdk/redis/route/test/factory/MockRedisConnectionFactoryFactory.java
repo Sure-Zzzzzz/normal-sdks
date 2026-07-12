@@ -16,11 +16,15 @@ public class MockRedisConnectionFactoryFactory implements RedisConnectionFactory
 
     private final Map<String, MockRedisConnectionFactory> factories = new LinkedHashMap<>();
     private String failDatasourceKey;
+    private String nullDatasourceKey;
 
     @Override
     public RedisConnectionFactory create(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
         if (datasourceKey.equals(failDatasourceKey)) {
             throw new IllegalStateException("mock create failed: " + datasourceKey);
+        }
+        if (datasourceKey.equals(nullDatasourceKey)) {
+            return null;
         }
         MockRedisConnectionFactory factory = new MockRedisConnectionFactory(datasourceKey);
         factories.put(datasourceKey, factory);
@@ -33,5 +37,9 @@ public class MockRedisConnectionFactoryFactory implements RedisConnectionFactory
 
     public void setFailDatasourceKey(String failDatasourceKey) {
         this.failDatasourceKey = failDatasourceKey;
+    }
+
+    public void setNullDatasourceKey(String nullDatasourceKey) {
+        this.nullDatasourceKey = nullDatasourceKey;
     }
 }

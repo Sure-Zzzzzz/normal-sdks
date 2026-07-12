@@ -87,11 +87,46 @@ public class RedisRoutePropertiesValidatorTest {
     }
 
     @Test
-    public void testDatasourceConfigToStringDoesNotLeakPassword() {
+    public void testDatasourceConfigToStringDoesNotLeakCredential() {
         SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
-        config.setPassword("secret-password");
+        String opaqueCredential = "OPAQUE-" + "CREDENTIAL-CONTENT";
+        config.setPassword(opaqueCredential);
         String text = config.toString();
-        assertFalse(text.contains("secret-password"));
+        assertFalse(text.contains(opaqueCredential), "toString 不得包含原始认证内容");
+    }
+
+    @Test
+    public void testDefaultSourceMustNotBeBlank() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        properties.setDefaultSource("  ");
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties),
+                "default-source 空白时应抛 ConfigurationException");
+        log.info("errorCode={}, message={}", exception.getErrorCode(), exception.getMessage());
+        assertEquals(ErrorCode.REDIS_ROUTE_002, exception.getErrorCode(), "errorCode 应为 REDIS_ROUTE_002");
+        assertTrue(exception.getMessage().contains("default-source"), "消息应包含 default-source");
+    }
+
+    @Test
+    public void testRouteDatasourceMustNotBeBlank() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.RouteRule ruleWithBlankDs = rule("prefix:", "prefix", "  ", 1);
+        properties.getRules().add(ruleWithBlankDs);
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties),
+                "rule datasource 空白时应抛 ConfigurationException");
+        log.info("errorCode={}, message={}", exception.getErrorCode(), exception.getMessage());
+        assertEquals(ErrorCode.REDIS_ROUTE_004, exception.getErrorCode(), "errorCode 应为 REDIS_ROUTE_004");
+        assertTrue(exception.getMessage().contains("第 0 条"), "消息应包含规则下标");
+        assertTrue(exception.getMessage().contains("datasource"), "消息应包含 datasource");
+    }
+
+    @Test
+    public void testRouteDatasourceMissingStillShowsConfiguredSources() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        properties.getRules().add(rule("prefix:", "prefix", "nonexistent", 1));
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties),
+                "datasource 不存在时应抛 ConfigurationException");
+        log.info("errorCode={}, message={}", exception.getErrorCode(), exception.getMessage());
+        assertTrue(exception.getMessage().contains("default"), "消息应包含已配置 datasource 列表");
     }
 
     private SimpleRedisRouteProperties baseProperties() {

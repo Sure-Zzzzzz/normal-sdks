@@ -1,0 +1,70 @@
+services:
+
+  # Redis 3.2.12 standalone - 端口 16379
+  redis3-standalone:
+    image: redis:3.2.12
+    container_name: redis-matrix-3-standalone
+    ports:
+      - "16379:6379"
+    command: redis-server --protected-mode no
+
+  # Redis 5.0.14 standalone - 端口 16380
+  redis5-standalone:
+    image: redis:5.0.14
+    container_name: redis-matrix-5-standalone
+    ports:
+      - "16380:6379"
+    command: redis-server --protected-mode no
+
+  # Redis 7.2.6 standalone - 端口 16381
+  redis7-standalone:
+    image: redis:7.2.6
+    container_name: redis-matrix-7-standalone
+    ports:
+      - "16381:6379"
+    command: redis-server --protected-mode no
+
+  # Redis 3.2.12 cluster - 端口 17000-17005
+  redis3-cluster:
+    image: redis:3.2.12
+    container_name: redis-matrix-3-cluster
+    ports:
+      - "17000:17000"
+      - "17001:17001"
+      - "17002:17002"
+      - "17003:17003"
+      - "17004:17004"
+      - "17005:17005"
+    volumes:
+      - ./redis-matrix-cluster-entrypoint.sh:/redis-matrix-cluster-entrypoint.sh:ro
+    entrypoint: ["sh", "/redis-matrix-cluster-entrypoint.sh", "3.2.12", "17000"]
+
+  # Redis 5.0.14 cluster - 端口 17010-17015
+  redis5-cluster:
+    image: redis:5.0.14
+    container_name: redis-matrix-5-cluster
+    ports:
+      - "17010:17010"
+      - "17011:17011"
+      - "17012:17012"
+      - "17013:17013"
+      - "17014:17014"
+      - "17015:17015"
+    volumes:
+      - ./redis-matrix-cluster-entrypoint.sh:/redis-matrix-cluster-entrypoint.sh:ro
+    entrypoint: ["sh", "/redis-matrix-cluster-entrypoint.sh", "5.0.14", "17010"]
+
+  # Redis 7.2.6 cluster - 端口 17020-17025
+  redis7-cluster:
+    image: redis:7.2.6
+    container_name: redis-matrix-7-cluster
+    ports:
+      - "17020:17020"
+      - "17021:17021"
+      - "17022:17022"
+      - "17023:17023"
+      - "17024:17024"
+      - "17025:17025"
+    volumes:
+      - ./redis-matrix-cluster-entrypoint.sh:/redis-matrix-cluster-entrypoint.sh:ro
+    entrypoint: ["sh", "/redis-matrix-cluster-entrypoint.sh", "7.2.6", "17020"]

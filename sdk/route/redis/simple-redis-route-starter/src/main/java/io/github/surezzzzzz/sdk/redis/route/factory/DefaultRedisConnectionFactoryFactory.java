@@ -23,6 +23,28 @@ import java.time.Duration;
  */
 public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFactoryFactory {
 
+    private static final String LETTUCE_SOCKET_OPTIONS_CLASS = "io.lettuce.core.SocketOptions";
+    private static final String LETTUCE_CLIENT_OPTIONS_CLASS = "io.lettuce.core.ClientOptions";
+    private static final String LETTUCE_CLUSTER_CLIENT_OPTIONS_CLASS = "io.lettuce.core.cluster.ClusterClientOptions";
+    private static final String LETTUCE_CLUSTER_TOPOLOGY_REFRESH_OPTIONS_CLASS = "io.lettuce.core.cluster.ClusterTopologyRefreshOptions";
+    private static final String LETTUCE_DISCONNECTED_BEHAVIOR_CLASS = "io.lettuce.core.ClientOptions$DisconnectedBehavior";
+
+    private static final String METHOD_BUILDER = "builder";
+    private static final String METHOD_BUILD = "build";
+    private static final String METHOD_CONNECT_TIMEOUT = "connectTimeout";
+    private static final String METHOD_SOCKET_OPTIONS = "socketOptions";
+    private static final String METHOD_AUTO_RECONNECT = "autoReconnect";
+    private static final String METHOD_REQUEST_QUEUE_SIZE = "requestQueueSize";
+    private static final String METHOD_TOPOLOGY_REFRESH_OPTIONS = "topologyRefreshOptions";
+    private static final String METHOD_ENABLE_ALL_ADAPTIVE_REFRESH_TRIGGERS = "enableAllAdaptiveRefreshTriggers";
+    private static final String METHOD_ENABLE_PERIODIC_REFRESH = "enablePeriodicRefresh";
+    private static final String METHOD_REFRESH_PERIOD = "refreshPeriod";
+    private static final String METHOD_DISCONNECTED_BEHAVIOR = "disconnectedBehavior";
+    private static final String METHOD_CLIENT_OPTIONS = "clientOptions";
+
+    private static final String DISCONNECTED_BEHAVIOR_REJECT_COMMANDS = "REJECT_COMMANDS";
+    private static final String DISCONNECTED_BEHAVIOR_DEFAULT = "DEFAULT";
+
     @Override
     public RedisConnectionFactory create(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
         try {
@@ -78,6 +100,7 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private void applyClientOptions(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
                                     SimpleRedisRouteProperties.DataSourceConfig config,
                                     RedisSourceMode mode) {
+        // Lettuce 5.x / 6.x 的 builder API 有差异，生产安全默认值通过反射按可用方法设置。
         try {
             Object socketOptions = createSocketOptions(config.getConnectTimeoutMs());
             Object clientOptions = mode == RedisSourceMode.CLUSTER
@@ -90,65 +113,65 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     }
 
     private Object createSocketOptions(long connectTimeoutMs) throws Exception {
-        Class<?> socketOptionsClass = Class.forName("io.lettuce.core.SocketOptions");
-        Object socketBuilder = invokeStatic(socketOptionsClass, "builder");
-        invoke(socketBuilder, "connectTimeout", Duration.ofMillis(connectTimeoutMs));
-        return invoke(socketBuilder, "build");
+        Class<?> socketOptionsClass = Class.forName(LETTUCE_SOCKET_OPTIONS_CLASS);
+        Object socketBuilder = invokeStatic(socketOptionsClass, METHOD_BUILDER);
+        invoke(socketBuilder, METHOD_CONNECT_TIMEOUT, Duration.ofMillis(connectTimeoutMs));
+        return invoke(socketBuilder, METHOD_BUILD);
     }
 
     private Object createClientOptions(SimpleRedisRouteProperties.DataSourceConfig config,
                                        Object socketOptions) throws Exception {
-        Class<?> clientOptionsClass = Class.forName("io.lettuce.core.ClientOptions");
-        Object clientBuilder = invokeStatic(clientOptionsClass, "builder");
+        Class<?> clientOptionsClass = Class.forName(LETTUCE_CLIENT_OPTIONS_CLASS);
+        Object clientBuilder = invokeStatic(clientOptionsClass, METHOD_BUILDER);
         applyBaseClientOptions(clientBuilder, config, socketOptions);
-        return invoke(clientBuilder, "build");
+        return invoke(clientBuilder, METHOD_BUILD);
     }
 
     private Object createClusterClientOptions(SimpleRedisRouteProperties.DataSourceConfig config,
                                               Object socketOptions) throws Exception {
-        Class<?> clusterClientOptionsClass = Class.forName("io.lettuce.core.cluster.ClusterClientOptions");
-        Object clusterBuilder = invokeStatic(clusterClientOptionsClass, "builder");
+        Class<?> clusterClientOptionsClass = Class.forName(LETTUCE_CLUSTER_CLIENT_OPTIONS_CLASS);
+        Object clusterBuilder = invokeStatic(clusterClientOptionsClass, METHOD_BUILDER);
         applyBaseClientOptions(clusterBuilder, config, socketOptions);
         Object topologyRefreshOptions = createClusterTopologyRefreshOptions(config);
-        invoke(clusterBuilder, "topologyRefreshOptions", topologyRefreshOptions);
-        return invoke(clusterBuilder, "build");
+        invoke(clusterBuilder, METHOD_TOPOLOGY_REFRESH_OPTIONS, topologyRefreshOptions);
+        return invoke(clusterBuilder, METHOD_BUILD);
     }
 
     private void applyBaseClientOptions(Object clientBuilder,
                                         SimpleRedisRouteProperties.DataSourceConfig config,
                                         Object socketOptions) throws Exception {
-        invoke(clientBuilder, "socketOptions", socketOptions);
-        invokeIfPresent(clientBuilder, "autoReconnect", config.getLettuce().isAutoReconnect());
-        invokeIfPresent(clientBuilder, "requestQueueSize", config.getLettuce().getRequestQueueSize());
+        invoke(clientBuilder, METHOD_SOCKET_OPTIONS, socketOptions);
+        invokeIfPresent(clientBuilder, METHOD_AUTO_RECONNECT, config.getLettuce().isAutoReconnect());
+        invokeIfPresent(clientBuilder, METHOD_REQUEST_QUEUE_SIZE, config.getLettuce().getRequestQueueSize());
         applyDisconnectedBehavior(clientBuilder, config.getLettuce().isRejectCommandsWhenDisconnected());
     }
 
     private Object createClusterTopologyRefreshOptions(SimpleRedisRouteProperties.DataSourceConfig config) throws Exception {
-        Class<?> refreshOptionsClass = Class.forName("io.lettuce.core.cluster.ClusterTopologyRefreshOptions");
-        Object refreshBuilder = invokeStatic(refreshOptionsClass, "builder");
+        Class<?> refreshOptionsClass = Class.forName(LETTUCE_CLUSTER_TOPOLOGY_REFRESH_OPTIONS_CLASS);
+        Object refreshBuilder = invokeStatic(refreshOptionsClass, METHOD_BUILDER);
         if (config.getLettuce().isClusterAdaptiveRefresh()) {
-            invokeIfPresent(refreshBuilder, "enableAllAdaptiveRefreshTriggers");
+            invokeIfPresent(refreshBuilder, METHOD_ENABLE_ALL_ADAPTIVE_REFRESH_TRIGGERS);
         }
         if (config.getLettuce().isClusterPeriodicRefresh()) {
             Duration refreshPeriod = Duration.ofMillis(config.getLettuce().getClusterRefreshPeriodMs());
-            if (!invokeIfPresent(refreshBuilder, "enablePeriodicRefresh", refreshPeriod)) {
-                invokeIfPresent(refreshBuilder, "enablePeriodicRefresh", true);
-                invokeIfPresent(refreshBuilder, "refreshPeriod", refreshPeriod);
+            if (!invokeIfPresent(refreshBuilder, METHOD_ENABLE_PERIODIC_REFRESH, refreshPeriod)) {
+                invokeIfPresent(refreshBuilder, METHOD_ENABLE_PERIODIC_REFRESH, true);
+                invokeIfPresent(refreshBuilder, METHOD_REFRESH_PERIOD, refreshPeriod);
             }
         }
-        return invoke(refreshBuilder, "build");
+        return invoke(refreshBuilder, METHOD_BUILD);
     }
 
     private void applyDisconnectedBehavior(Object clientBuilder, boolean rejectCommandsWhenDisconnected) throws Exception {
-        Class<?> behaviorClass = Class.forName("io.lettuce.core.ClientOptions$DisconnectedBehavior");
-        String behaviorName = rejectCommandsWhenDisconnected ? "REJECT_COMMANDS" : "DEFAULT";
+        Class<?> behaviorClass = Class.forName(LETTUCE_DISCONNECTED_BEHAVIOR_CLASS);
+        String behaviorName = rejectCommandsWhenDisconnected ? DISCONNECTED_BEHAVIOR_REJECT_COMMANDS : DISCONNECTED_BEHAVIOR_DEFAULT;
         Object behavior = Enum.valueOf((Class<Enum>) behaviorClass.asSubclass(Enum.class), behaviorName);
-        invokeIfPresent(clientBuilder, "disconnectedBehavior", behavior);
+        invokeIfPresent(clientBuilder, METHOD_DISCONNECTED_BEHAVIOR, behavior);
     }
 
     private void applyClientOptions(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
                                     Object clientOptions) {
-        Method method = findCompatibleMethod(builder.getClass(), "clientOptions", new Object[]{clientOptions});
+        Method method = findCompatibleMethod(builder.getClass(), METHOD_CLIENT_OPTIONS, new Object[]{clientOptions});
         if (method != null) {
             ReflectionUtils.makeAccessible(method);
             ReflectionUtils.invokeMethod(method, builder, clientOptions);

@@ -10,6 +10,9 @@
 - 多匹配模式：支持 exact / prefix / suffix / wildcard / regex。
 - 规则优先级：priority 数字越小越优先，同 priority 按配置声明顺序匹配。
 - 多 key 保护：批量 key 必须命中同一 datasource，跨 datasource 会直接抛出路由异常。
+- Server 信息探测：datasource 初始化后探测 Redis Server 版本和模式，探测失败不阻断启动。
+- 命令能力判断：按 Redis 版本保守判断 ACL / UNLINK / GETEX / SET GET / KEEPTTL / ZPOP / LMOVE 等能力。
+- 安全兼容 helper：仅提供语义等价的 `UNLINK` 优先删除和显式能力断言，不做透明命令降级。
 - 不污染业务上下文：不注册全局 `RedisConnectionFactory` / `RedisTemplate` / `StringRedisTemplate`。
 - 可扩展：`RedisRouteResolver`、`RedisConnectionFactoryFactory`、`RedisRouteTemplate` 支持业务侧覆盖。
 - 兼容 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9。
@@ -18,7 +21,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 ```
@@ -149,6 +152,35 @@ StringRedisTemplate routedTemplate = redisRouteTemplate.stringTemplateByKey("cac
 RedisConnectionFactory lockFactory = redisRouteTemplate.connectionFactoryByKey("lock:order:001");
 ```
 
+### 读取 Redis Server 信息
+
+```java
+RedisServerInfo defaultInfo = redisRouteTemplate.serverInfo();
+RedisServerInfo cacheInfo = redisRouteTemplate.serverInfo("cache");
+RedisServerInfo routedInfo = redisRouteTemplate.serverInfoByKey("cache:user:001");
+
+if (cacheInfo.isKnown()) {
+    String version = cacheInfo.getVersion().getRaw();
+    String mode = cacheInfo.getRedisMode();
+}
+```
+
+### 判断命令能力
+
+```java
+RedisServerInfo info = redisRouteTemplate.serverInfo("cache");
+
+if (RedisCommandCapabilityHelper.supportsGetEx(info)) {
+    // 可以使用 Redis 6.2+ GETEX 语义
+}
+
+RedisCommandCompatibilityHelper.requireCapability(
+        info,
+        RedisCommandCapabilityHelper.CAPABILITY_UNLINK);
+```
+
+`RedisCommandCapabilityHelper` 对 `null`、`known=false` 一律保守返回 `false`。`RedisCommandCompatibilityHelper` 只提供语义安全的 helper：`deletePreferUnlink` 会在 Redis 4.0+ 优先使用 `UNLINK`，低版本或未知版本使用 `DEL`；不提供非原子的透明降级。
+
 ### 多 key 操作
 
 ```java
@@ -228,7 +260,7 @@ io:
                 priority: 1
 ```
 
-混合部署是本模块的主要端到端场景：同一个 `RedisRouteTemplate` 可以把默认 key 路由到 cluster 数据源，把指定前缀 key 路由到 standalone 数据源。1.0.0 不支持 Sentinel；如后续有真实场景，需要补固定 Sentinel 环境和端到端测试后再引入。
+混合部署是本模块的主要端到端场景：同一个 `RedisRouteTemplate` 可以把默认 key 路由到 cluster 数据源，把指定前缀 key 路由到 standalone 数据源。
 
 ## 配置说明
 
@@ -251,8 +283,6 @@ io:
 | `nodes` | 空 | cluster 节点，格式为 `host:port` |
 | `max-redirects` | `3` | cluster 最大重定向次数 |
 | `database` | `0` | Redis database，cluster 模式必须为 0 |
-| `username` | 空 | Redis data node 用户名 |
-| `password` | 空 | Redis data node 密码 |
 | `ssl` | `false` | 是否启用 SSL |
 | `timeout-ms` | `3000` | 命令超时时间，毫秒 |
 | `connect-timeout-ms` | `3000` | 连接超时时间，毫秒 |
@@ -265,7 +295,15 @@ io:
 | `lettuce.cluster-periodic-refresh` | `true` | cluster 模式是否启用周期性拓扑刷新 |
 | `lettuce.cluster-refresh-period-ms` | `60000` | cluster 周期性拓扑刷新间隔，毫秒 |
 
-空白的 `username` / `password` / `client-name` 会按未配置处理。`password` 不会出现在配置对象 `toString()` 中。
+空白的认证信息和 `client-name` 会按未配置处理，认证内容不会出现在配置对象 `toString()` 中。
+
+### Server 信息探测配置
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `probe.server-info` | `true` | datasource 初始化后是否执行 `INFO server` 探测 Redis Server 信息 |
+
+探测失败不会阻断 datasource 注册，`RedisServerInfo.known=false`，命令能力判断 helper 会保守返回 `false`。如果环境禁用 `INFO` 命令，可以设置 `probe.server-info=false`。
 
 ### 路由规则配置
 
@@ -327,18 +365,31 @@ io:
 
 默认端到端测试是 `RedisRouteEndToEndTest`，覆盖链路为：配置绑定 → 自动配置 → 组件扫描 / Bean 组装 → 路由解析 → registry 获取数据源 → `RedisRouteTemplate` 写读真实 Redis。
 
-Cluster / Mixed 端到端测试默认跳过；需要先通过 [docker-compose.redis-cluster.yml](docker-compose.redis-cluster.yml) 启动固定本地 Redis Cluster，再用 `-Dredis.route.cluster.test=true` 显式运行。
+多版本矩阵端到端测试默认跳过；需要先通过 [docker-compose.redis-version-matrix.yml](docker-compose.redis-version-matrix.yml) 启动 Redis 3 / 5 / 7 的 standalone + cluster 矩阵，再通过 `JAVA_TOOL_OPTIONS` 显式开启 `redis.route.version.matrix.test=true`。
 
-- `RedisRouteMixedEndToEndTest` 是主要混合部署端到端测试，覆盖 `primary=cluster` + `secondary=standalone` 的真实路由、写读隔离、连接工厂模式和跨 datasource multi-key 拦截。
-- `RedisRouteClusterEndToEndTest` 是补充 Cluster 端到端测试，覆盖全 Cluster 数据源和 Cluster slot 语义边界。
+`RedisRouteMultiVersionMatrixEndToEndTest` 是唯一重型端到端入口，覆盖 Redis 版本探测、命令能力判断、standalone / cluster 写读隔离、cluster route、同 slot multi-key、cross-slot 真实异常、跨 datasource multi-key 拦截和 Spring Boot 2.2.x Redis 7 cluster 兼容边界。
 
-多版本本地测试命令、Cluster 维护结论和 1.0.0 不支持 Sentinel 的说明见 [LOCAL_TEST_COMMANDS.md](LOCAL_TEST_COMMANDS.md)。
+矩阵测试配置拆分为公共 profile 和 Spring Boot 版本专属 profile：`application-redis-route-version-matrix.yaml` 只放公共 datasource / rule，`application-redis-route-version-matrix-2.7.9.yaml`、`application-redis-route-version-matrix-2.4.5.yaml`、`application-redis-route-version-matrix-2.3.12.yaml`、`application-redis-route-version-matrix-2.2.x.yaml` 负责声明该 Spring Boot 版本下哪些 datasource 应 `known=true`、哪些 datasource 是兼容边界。
+
+多版本本地测试命令见 [LOCAL_TEST_COMMANDS.md](LOCAL_TEST_COMMANDS.md)。
+
+## Redis 版本能力矩阵
+
+| Redis Server | 授权边界 | 已验证形态 | 关键能力判断 |
+|--------------|----------|------------|--------------|
+| 3.2.12 | BSD-3-Clause Redis OSS | standalone / cluster | 不假设 UNLINK、ZPOP、GETEX、ACL、LMOVE、KEEPTTL |
+| 5.0.14 | BSD-3-Clause Redis OSS | standalone / cluster | 支持 UNLINK、ZPOP；不假设 GETEX、ACL、LMOVE、KEEPTTL |
+| 7.2.6 | BSD-3-Clause Redis OSS | standalone / cluster | 支持当前 helper 覆盖的现代命令能力 |
+
+默认测试矩阵不使用 Redis 7.4+ 或 8.x。Redis 7.4+ 已不属于原 BSD 宽松授权线，除非完成许可证评估，不作为本模块默认测试和推荐基线。
 
 ## 版本兼容
 
-| Spring Boot | Java | 状态 |
-|-------------|------|------|
-| 2.7.9 | 11 | 已验证 |
-| 2.4.5 | 8 | 已验证 |
-| 2.3.12 | 8 | 已验证 |
-| 2.2.x | 8 | 已验证 |
+| Spring Boot | Java | Redis 矩阵验证 | 状态 |
+|-------------|------|----------------|------|
+| 2.7.9 | 11 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
+| 2.4.5 | 8 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
+| 2.3.12 | 8 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
+| 2.2.x | 8 | 3.2.12 / 5.0.14 cluster + 3.2.12 / 5.0.14 / 7.2.6 standalone 通过；7.2.6 cluster 是旧 Lettuce 5.2 兼容边界 | 已验证 |
+
+Spring Boot 2.2.x 自带 Lettuce 5.2.2.RELEASE 无法解析 Redis 7 cluster `CLUSTER SLOTS` 的新节点 metadata 结构，`redis7Cluster` 探测会保守返回 `known=false`。这不是 route 透明修复范围；升级到 2.3.12+ 后同一 Redis 7 cluster 矩阵已验证通过。

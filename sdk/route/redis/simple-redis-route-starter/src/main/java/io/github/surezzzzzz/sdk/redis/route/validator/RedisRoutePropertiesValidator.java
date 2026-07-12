@@ -36,6 +36,9 @@ public class RedisRoutePropertiesValidator {
         if (properties.getSources() == null || properties.getSources().isEmpty()) {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_001, ErrorMessage.CONFIG_SOURCES_EMPTY);
         }
+        if (!RedisRouteStringHelper.hasText(properties.getDefaultSource())) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_002, ErrorMessage.CONFIG_DEFAULT_SOURCE_EMPTY);
+        }
         if (!properties.getSources().containsKey(properties.getDefaultSource())) {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_002,
                     String.format(ErrorMessage.CONFIG_DEFAULT_SOURCE_NOT_FOUND,
@@ -164,6 +167,11 @@ public class RedisRoutePropertiesValidator {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_007,
                     String.format(ErrorMessage.CONFIG_ROUTE_TYPE_INVALID,
                             index, rule.getType(), rule.getPattern(), rule.getDatasource(), join(RouteMatchType.getAllCodes())));
+        }
+        if (!RedisRouteStringHelper.hasText(rule.getDatasource())) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_004,
+                    String.format(ErrorMessage.CONFIG_ROUTE_DATASOURCE_EMPTY,
+                            index, rule.getPattern(), rule.getType()));
         }
         if (!sources.containsKey(rule.getDatasource())) {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_004,

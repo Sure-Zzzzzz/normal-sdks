@@ -42,6 +42,11 @@ public class SimpleRedisRouteProperties {
     private List<RouteRule> rules = new ArrayList<>();
 
     /**
+     * 探测配置
+     */
+    private ProbeConfig probe = new ProbeConfig();
+
+    /**
      * Redis 数据源配置
      */
     @Data
@@ -154,6 +159,18 @@ public class SimpleRedisRouteProperties {
          * Redis Cluster 周期性拓扑刷新间隔，毫秒
          */
         private long clusterRefreshPeriodMs = SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_REFRESH_PERIOD_MS;
+    }
+
+    /**
+     * 探测配置
+     */
+    @Data
+    public static class ProbeConfig {
+
+        /**
+         * 是否在启动时探测 Redis Server 信息（版本号、部署模式）
+         */
+        private boolean serverInfo = SimpleRedisRouteConstant.DEFAULT_PROBE_SERVER_INFO;
     }
 
     /**
