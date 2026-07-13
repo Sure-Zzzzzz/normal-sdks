@@ -1,7 +1,8 @@
-package io.github.surezzzzzz.sdk.lock.redis.cases;
+package io.github.surezzzzzz.sdk.lock.redis.test.cases;
 
-import io.github.surezzzzzz.sdk.lock.redis.LockApplication;
+import io.github.surezzzzzz.sdk.lock.redis.test.SimpleRedisLockTestApplication;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
+import io.github.surezzzzzz.sdk.lock.redis.constant.SimpleRedisLockConstant;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RedisLockExecutor;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RouteRedisLockExecutor;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -28,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @ActiveProfiles("redis-lock-route")
-@SpringBootTest(classes = LockApplication.class)
+@SpringBootTest(classes = SimpleRedisLockTestApplication.class)
 public class SimpleRedisLockRouteEndToEndTest {
 
     private static final String LOCK_KEY = "lock:test:route:001";
@@ -65,7 +66,7 @@ public class SimpleRedisLockRouteEndToEndTest {
         log.info("验证 route 模式使用 RouteRedisLockExecutor，且不注册 simpleRedisLockRedisTemplate");
         assertTrue(redisLockExecutor instanceof RouteRedisLockExecutor, "route 模式必须使用 RouteRedisLockExecutor");
         assertThrows(NoSuchBeanDefinitionException.class,
-                () -> applicationContext.getBean("simpleRedisLockRedisTemplate"),
+                () -> applicationContext.getBean(SimpleRedisLockConstant.SIMPLE_REDIS_LOCK_REDIS_TEMPLATE_BEAN_NAME),
                 "route 模式不应注册 simpleRedisLockRedisTemplate");
     }
 

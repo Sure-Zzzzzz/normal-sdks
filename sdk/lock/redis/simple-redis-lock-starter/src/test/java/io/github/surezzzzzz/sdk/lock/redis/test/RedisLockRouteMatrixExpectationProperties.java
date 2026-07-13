@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.lock.redis;
+package io.github.surezzzzzz.sdk.lock.redis.test;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

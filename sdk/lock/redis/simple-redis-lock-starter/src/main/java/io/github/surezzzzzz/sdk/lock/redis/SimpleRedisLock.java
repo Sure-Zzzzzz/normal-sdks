@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.lock.redis;
 
-import io.github.surezzzzzz.sdk.lock.redis.configuration.LockComponent;
+import io.github.surezzzzzz.sdk.lock.redis.annotation.SimpleRedisLockComponent;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RedisLockExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  * @author surezzzzzz
  */
 @Slf4j
-@LockComponent
+@SimpleRedisLockComponent
 @RequiredArgsConstructor
 public class SimpleRedisLock {
 

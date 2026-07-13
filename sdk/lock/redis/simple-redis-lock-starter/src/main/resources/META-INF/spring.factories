@@ -1,4 +1,4 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-  io.github.surezzzzzz.sdk.lock.redis.configuration.LockConfiguration,\
-  io.github.surezzzzzz.sdk.lock.redis.configuration.RedisLockRouteConfiguration,\
-  io.github.surezzzzzz.sdk.lock.redis.configuration.RedisLockRouteMissingConfiguration
+  io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockConfiguration,\
+  io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockRouteConfiguration,\
+  io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockRouteMissingConfiguration

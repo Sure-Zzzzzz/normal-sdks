@@ -1,8 +1,8 @@
-package io.github.surezzzzzz.sdk.lock.redis.cases;
+package io.github.surezzzzzz.sdk.lock.redis.test.cases;
 
-import io.github.surezzzzzz.sdk.lock.redis.LockApplication;
-import io.github.surezzzzzz.sdk.lock.redis.RedisLockRouteMatrixExpectationProperties;
-import io.github.surezzzzzz.sdk.lock.redis.RedisLockRouteMatrixProfilesResolver;
+import io.github.surezzzzzz.sdk.lock.redis.test.SimpleRedisLockTestApplication;
+import io.github.surezzzzzz.sdk.lock.redis.test.RedisLockRouteMatrixExpectationProperties;
+import io.github.surezzzzzz.sdk.lock.redis.test.RedisLockRouteMatrixProfilesResolver;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import io.github.surezzzzzz.sdk.redis.route.model.RedisServerInfo;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @ActiveProfiles(resolver = RedisLockRouteMatrixProfilesResolver.class)
-@SpringBootTest(classes = LockApplication.class)
+@SpringBootTest(classes = SimpleRedisLockTestApplication.class)
 public class SimpleRedisLockRouteMatrixEndToEndTest {
 
     private static final List<String> ALL_DS = Arrays.asList(

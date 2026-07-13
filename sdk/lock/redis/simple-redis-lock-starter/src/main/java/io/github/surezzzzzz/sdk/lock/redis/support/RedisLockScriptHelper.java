@@ -1,18 +1,15 @@
-package io.github.surezzzzzz.sdk.lock.redis.executor;
+package io.github.surezzzzzz.sdk.lock.redis.support;
 
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 /**
- * Redis 分布式锁 Lua 脚本常量，供所有 executor 共用。
+ * Redis 分布式锁脚本 Helper
  *
  * @author surezzzzzz
  */
-public final class RedisLockScripts {
+public final class RedisLockScriptHelper {
 
-    /**
-     * 原子解锁脚本：只有 value 匹配时才删除 key，避免误删其他持有者的锁。
-     */
-    public static final DefaultRedisScript<Long> UNLOCK = new DefaultRedisScript<>(
+    public static final DefaultRedisScript<Long> UNLOCK_SCRIPT = new DefaultRedisScript<>(
             "if redis.call('get', KEYS[1]) == ARGV[1] then " +
                     "return redis.call('del', KEYS[1]) " +
                     "else " +
@@ -21,7 +18,7 @@ public final class RedisLockScripts {
             Long.class
     );
 
-    private RedisLockScripts() {
+    private RedisLockScriptHelper() {
         throw new UnsupportedOperationException("Utility class");
     }
 }

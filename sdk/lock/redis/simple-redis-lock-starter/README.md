@@ -17,11 +17,16 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.1.0'
+    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.2.0'
 }
 ```
 
-`simple-redis-lock-starter:1.1.0` 会传递引入 `simple-redis-route-starter:1.1.0`。默认不开启 route，仍按单 Redis 模式运行。
+`simple-redis-lock-starter:1.2.0` 会传递引入 `simple-redis-route-starter:1.1.0`。默认不开启 route，仍按单 Redis 模式运行。
+
+| 版本 | 定位 | 说明 |
+|------|------|------|
+| `1.1.0` | route 接入版本 | 接入 `simple-redis-route-starter:1.1.0`，支持可选 route 模式 |
+| `1.2.0` | 结构规范化版本 | 对齐 SDK 包结构、常量、异常和测试规范，锁 API 与运行行为不变 |
 
 ### 2. 默认单 Redis 配置
 
@@ -44,24 +49,24 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
-public class TaskService {
+public class ResourceService {
 
     private final SimpleRedisLock simpleRedisLock;
 
-    public TaskService(SimpleRedisLock simpleRedisLock) {
+    public ResourceService(SimpleRedisLock simpleRedisLock) {
         this.simpleRedisLock = simpleRedisLock;
     }
 
-    public void process(String taskId) {
-        String lockKey = "lock:task:" + taskId;
+    public void process(String resourceId) {
+        String lockKey = "lock:resource:" + resourceId;
         String lockValue = UUID.randomUUID().toString();
 
         if (!simpleRedisLock.tryLock(lockKey, lockValue, 30, TimeUnit.SECONDS)) {
-            throw new IllegalStateException("任务正在处理中");
+            throw new IllegalStateException("资源正在处理中");
         }
 
         try {
-            doBusiness(taskId);
+            doBusiness(resourceId);
         } finally {
             simpleRedisLock.unlock(lockKey, lockValue);
         }

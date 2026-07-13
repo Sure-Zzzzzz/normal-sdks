@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.lock.redis.configuration;
 
-import io.github.surezzzzzz.sdk.lock.redis.LockPackage;
+import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLockPackage;
+import io.github.surezzzzzz.sdk.lock.redis.annotation.SimpleRedisLockComponent;
+import io.github.surezzzzzz.sdk.lock.redis.constant.SimpleRedisLockConstant;
 import io.github.surezzzzzz.sdk.lock.redis.executor.DefaultRedisLockExecutor;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RedisLockExecutor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -14,28 +16,25 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
- * Redis 分布式锁默认自动配置（单 Redis 模式）。
+ * Simple Redis Lock 默认自动配置
  *
  * @author surezzzzzz
  */
 @Configuration
 @EnableConfigurationProperties(SimpleRedisLockProperties.class)
 @ComponentScan(
-        basePackageClasses = LockPackage.class,
+        basePackageClasses = SimpleRedisLockPackage.class,
         useDefaultFilters = false,
-        includeFilters = @ComponentScan.Filter(LockComponent.class)
+        includeFilters = @ComponentScan.Filter(SimpleRedisLockComponent.class)
 )
-public class LockConfiguration {
+public class SimpleRedisLockConfiguration {
 
-    /**
-     * 默认单 Redis 模板，route 模式开启时不注册，避免要求全局 RedisConnectionFactory。
-     */
     @Bean
-    @ConditionalOnMissingBean(name = "simpleRedisLockRedisTemplate")
+    @ConditionalOnMissingBean(name = SimpleRedisLockConstant.SIMPLE_REDIS_LOCK_REDIS_TEMPLATE_BEAN_NAME)
     @ConditionalOnProperty(
-            prefix = "io.github.surezzzzzz.sdk.lock.redis.route",
-            name = "enable",
-            havingValue = "false",
+            prefix = SimpleRedisLockConstant.ROUTE_CONFIG_PREFIX,
+            name = SimpleRedisLockConstant.PROPERTY_ENABLE,
+            havingValue = SimpleRedisLockConstant.PROPERTY_VALUE_FALSE,
             matchIfMissing = true
     )
     public StringRedisTemplate simpleRedisLockRedisTemplate(RedisConnectionFactory redisConnectionFactory) {
@@ -46,15 +45,12 @@ public class LockConfiguration {
         return redisTemplate;
     }
 
-    /**
-     * 默认单 Redis 执行器，route 模式开启时不注册。
-     */
     @Bean
     @ConditionalOnMissingBean(RedisLockExecutor.class)
     @ConditionalOnProperty(
-            prefix = "io.github.surezzzzzz.sdk.lock.redis.route",
-            name = "enable",
-            havingValue = "false",
+            prefix = SimpleRedisLockConstant.ROUTE_CONFIG_PREFIX,
+            name = SimpleRedisLockConstant.PROPERTY_ENABLE,
+            havingValue = SimpleRedisLockConstant.PROPERTY_VALUE_FALSE,
             matchIfMissing = true
     )
     public RedisLockExecutor defaultRedisLockExecutor(StringRedisTemplate simpleRedisLockRedisTemplate) {

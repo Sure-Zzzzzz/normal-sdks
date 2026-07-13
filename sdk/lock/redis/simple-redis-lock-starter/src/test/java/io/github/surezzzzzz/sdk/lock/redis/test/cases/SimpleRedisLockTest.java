@@ -1,6 +1,6 @@
-package io.github.surezzzzzz.sdk.lock.redis.cases;
+package io.github.surezzzzzz.sdk.lock.redis.test.cases;
 
-import io.github.surezzzzzz.sdk.lock.redis.LockApplication;
+import io.github.surezzzzzz.sdk.lock.redis.test.SimpleRedisLockTestApplication;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = LockApplication.class)
+@SpringBootTest(classes = SimpleRedisLockTestApplication.class)
 public class SimpleRedisLockTest {
 
     private static final String LOCK_KEY = "test:lock:simple";

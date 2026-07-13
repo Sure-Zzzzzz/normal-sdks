@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.lock.redis.executor;
 
+import io.github.surezzzzzz.sdk.lock.redis.support.RedisLockScriptHelper;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class RouteRedisLockExecutor implements RedisLockExecutor {
     public boolean unlock(String lockKey, String lockValue) {
         Long result = redisRouteTemplate.execute(lockKey, template ->
                 template.execute(
-                        RedisLockScripts.UNLOCK,
+                        RedisLockScriptHelper.UNLOCK_SCRIPT,
                         Collections.singletonList(lockKey),
                         lockValue
                 )

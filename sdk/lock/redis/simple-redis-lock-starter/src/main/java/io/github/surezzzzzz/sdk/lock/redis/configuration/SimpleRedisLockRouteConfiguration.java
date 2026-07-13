@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.lock.redis.configuration;
 
+import io.github.surezzzzzz.sdk.lock.redis.constant.SimpleRedisLockConstant;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RedisLockExecutor;
 import io.github.surezzzzzz.sdk.lock.redis.executor.RouteRedisLockExecutor;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -12,21 +13,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Redis 分布式锁 route 模式自动配置。
- * 需要同时满足：引入了 simple-redis-route-starter、RedisRouteTemplate Bean 存在、route.enable=true。
+ * Simple Redis Lock route 模式自动配置
  *
  * @author surezzzzzz
  */
 @Configuration
-@AutoConfigureAfter(name = "io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteConfiguration")
-@ConditionalOnClass(name = "io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate")
-@ConditionalOnBean(type = "io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate")
+@AutoConfigureAfter(name = SimpleRedisLockConstant.SIMPLE_REDIS_ROUTE_CONFIGURATION_CLASS_NAME)
+@ConditionalOnClass(name = SimpleRedisLockConstant.REDIS_ROUTE_TEMPLATE_CLASS_NAME)
+@ConditionalOnBean(type = SimpleRedisLockConstant.REDIS_ROUTE_TEMPLATE_CLASS_NAME)
 @ConditionalOnProperty(
-        prefix = "io.github.surezzzzzz.sdk.lock.redis.route",
-        name = "enable",
-        havingValue = "true"
+        prefix = SimpleRedisLockConstant.ROUTE_CONFIG_PREFIX,
+        name = SimpleRedisLockConstant.PROPERTY_ENABLE,
+        havingValue = SimpleRedisLockConstant.PROPERTY_VALUE_TRUE
 )
-public class RedisLockRouteConfiguration {
+public class SimpleRedisLockRouteConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(RedisLockExecutor.class)

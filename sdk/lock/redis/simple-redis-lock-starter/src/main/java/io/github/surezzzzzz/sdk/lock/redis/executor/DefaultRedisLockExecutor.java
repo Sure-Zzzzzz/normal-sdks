@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.lock.redis.executor;
 
+import io.github.surezzzzzz.sdk.lock.redis.support.RedisLockScriptHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -27,7 +28,7 @@ public class DefaultRedisLockExecutor implements RedisLockExecutor {
     @Override
     public boolean unlock(String lockKey, String lockValue) {
         Long result = redisTemplate.execute(
-                RedisLockScripts.UNLOCK,
+                RedisLockScriptHelper.UNLOCK_SCRIPT,
                 Collections.singletonList(lockKey),
                 lockValue
         );
