@@ -70,6 +70,38 @@ public class SmartRedisLimiterRecord {
      */
     private boolean passed;
 
+    // ==================== 路由信息 ====================
+
+    /**
+     * 路由 Key
+     */
+    private String routeKey;
+
+    /**
+     * Redis datasource key
+     */
+    private String datasourceKey;
+
+    /**
+     * Redis 模式：standalone / cluster / unknown
+     */
+    private String redisMode;
+
+    /**
+     * 是否要求通过 redis-route 执行
+     */
+    private boolean routeRequired;
+
+    /**
+     * 是否成功解析到 datasource
+     */
+    private boolean routeResolved;
+
+    /**
+     * 降级原因
+     */
+    private String fallbackReason;
+
     // ==================== 来源信息 ====================
 
     /**

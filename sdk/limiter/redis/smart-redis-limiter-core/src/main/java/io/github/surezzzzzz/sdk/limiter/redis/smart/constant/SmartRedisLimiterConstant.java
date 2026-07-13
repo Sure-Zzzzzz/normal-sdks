@@ -49,6 +49,22 @@ public final class SmartRedisLimiterConstant {
     public static final long DEFAULT_COMMAND_TIMEOUT = 3000L;
 
     /**
+     * 默认：是否使用 Redis Cluster Hash Tag
+     */
+    public static final boolean DEFAULT_USE_HASH_TAG = true;
+
+    /**
+     * 默认：限流执行超时保护线程池大小
+     */
+    public static final int DEFAULT_TIMEOUT_EXECUTOR_THREADS =
+            Math.max(4, Runtime.getRuntime().availableProcessors() * 2);
+
+    /**
+     * 默认：限流执行超时保护队列容量
+     */
+    public static final int DEFAULT_TIMEOUT_EXECUTOR_QUEUE_CAPACITY = 1024;
+
+    /**
      * Redis 命令超时下限警告阈值（毫秒）
      */
     public static final long COMMAND_TIMEOUT_MIN_WARNING = 100L;
@@ -82,9 +98,77 @@ public final class SmartRedisLimiterConstant {
 
     /**
      * 事件 keyStrategy 字段中标识自定义 KeyProvider 的前缀
-     * <p>实际值为 EVENT_KEY_STRATEGY_CUSTOM_PREFIX + keyProviderName，例如 "custom:aksClientIdKeyProvider"。</p>
+     * <p>实际值为 EVENT_KEY_STRATEGY_CUSTOM_PREFIX + keyProviderName。</p>
      */
     public static final String EVENT_KEY_STRATEGY_CUSTOM_PREFIX = "custom:";
+
+    // ==================== Redis 模式 ====================
+
+    /**
+     * 单机模式
+     */
+    public static final String REDIS_MODE_STANDALONE = "standalone";
+
+    /**
+     * 集群模式
+     */
+    public static final String REDIS_MODE_CLUSTER = "cluster";
+
+    /**
+     * 未知模式
+     */
+    public static final String REDIS_MODE_UNKNOWN = "unknown";
+
+    // ==================== 降级原因 ====================
+
+    /**
+     * Redis Route 异常
+     */
+    public static final String FALLBACK_REASON_ROUTE_ERROR = "route_error";
+
+    /**
+     * Redis 执行异常
+     */
+    public static final String FALLBACK_REASON_REDIS_ERROR = "redis_error";
+
+    /**
+     * Lua 脚本返回异常
+     */
+    public static final String FALLBACK_REASON_SCRIPT_ERROR = "script_error";
+
+    /**
+     * KeyProvider 执行异常
+     */
+    public static final String FALLBACK_REASON_KEY_PROVIDER_ERROR = "key_provider_error";
+
+    /**
+     * Redis 执行超时
+     */
+    public static final String FALLBACK_REASON_TIMEOUT = "timeout";
+
+    /**
+     * 执行线程中断
+     */
+    public static final String FALLBACK_REASON_INTERRUPTED = "interrupted";
+
+    /**
+     * 未知异常
+     */
+    public static final String FALLBACK_REASON_UNKNOWN = "unknown";
+
+    // ==================== Redis Route 类名 ====================
+
+    /**
+     * RedisRouteTemplate 全限定类名
+     */
+    public static final String REDIS_ROUTE_TEMPLATE_CLASS_NAME =
+            "io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate";
+
+    /**
+     * SimpleRedisRouteConfiguration 全限定类名
+     */
+    public static final String REDIS_ROUTE_CONFIGURATION_CLASS_NAME =
+            "io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteConfiguration";
 
     // ==================== 注解 ====================
 
@@ -248,43 +332,63 @@ public final class SmartRedisLimiterConstant {
      */
     public static final long MILLIS_PER_SECOND = 1000L;
 
-    // ==================== 错误码 ====================
+    // ==================== 兼容错误码 ====================
 
     /**
      * 错误码：限流超限
+     *
+     * @deprecated 使用 {@link ErrorCode#RATE_LIMIT_EXCEEDED}
      */
-    public static final String ERROR_CODE_RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED";
+    @Deprecated
+    public static final String ERROR_CODE_RATE_LIMIT_EXCEEDED = ErrorCode.RATE_LIMIT_EXCEEDED;
 
-    // ==================== 异常消息 ====================
+    // ==================== 兼容异常消息 ====================
 
     /**
      * 消息：未找到 KeyGenerator
+     *
+     * @deprecated 使用 {@link ErrorMessage#KEY_GENERATOR_NOT_FOUND}
      */
-    public static final String MSG_KEY_GENERATOR_NOT_FOUND = "未找到KeyGenerator: ";
+    @Deprecated
+    public static final String MSG_KEY_GENERATOR_NOT_FOUND = ErrorMessage.KEY_GENERATOR_NOT_FOUND_PREFIX;
 
     /**
      * 消息：ClientIp 不能为 null
+     *
+     * @deprecated 使用 {@link ErrorMessage#CLIENT_IP_NULL}
      */
-    public static final String MSG_CLIENT_IP_NULL = "ClientIp不能为null";
+    @Deprecated
+    public static final String MSG_CLIENT_IP_NULL = ErrorMessage.CLIENT_IP_NULL;
 
     /**
      * 消息：RequestPath 不能为 null
+     *
+     * @deprecated 使用 {@link ErrorMessage#REQUEST_PATH_NULL}
      */
-    public static final String MSG_REQUEST_PATH_NULL = "RequestPath不能为null";
+    @Deprecated
+    public static final String MSG_REQUEST_PATH_NULL = ErrorMessage.REQUEST_PATH_NULL;
 
     /**
      * 消息：Method 不能为 null
+     *
+     * @deprecated 使用 {@link ErrorMessage#METHOD_NULL}
      */
-    public static final String MSG_METHOD_NULL = "Method不能为null";
+    @Deprecated
+    public static final String MSG_METHOD_NULL = ErrorMessage.METHOD_NULL;
 
     /**
      * 消息：RequestPath 和 MatchedPathPattern 都为 null
+     *
+     * @deprecated 使用 {@link ErrorMessage#PATH_PATTERN_NULL}
      */
-    public static final String MSG_PATH_PATTERN_NULL = "RequestPath和MatchedPathPattern都为null";
+    @Deprecated
+    public static final String MSG_PATH_PATTERN_NULL = ErrorMessage.PATH_PATTERN_NULL;
 
     /**
      * 消息：限流触发
-     * 参数: key, retryAfterSeconds
+     *
+     * @deprecated 使用 {@link ErrorMessage#RATE_LIMIT_EXCEEDED}
      */
-    public static final String MSG_RATE_LIMIT_EXCEEDED = "Rate limit exceeded for key: %s, retry after %d seconds";
+    @Deprecated
+    public static final String MSG_RATE_LIMIT_EXCEEDED = ErrorMessage.RATE_LIMIT_EXCEEDED;
 }

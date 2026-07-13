@@ -50,7 +50,37 @@ public enum SmartRedisLimiterContextAttribute {
     /**
      * 由自定义 KeyProvider 预先计算好的 key 片段（拦截器写入，算法/事件构建器读取）
      */
-    PRECOMPUTED_KEY_PART("precomputedKeyPart", "自定义KeyProvider预计算的key片段");
+    PRECOMPUTED_KEY_PART("precomputedKeyPart", "自定义KeyProvider预计算的key片段"),
+
+    /**
+     * 路由 Key
+     */
+    ROUTE_KEY("routeKey", "路由Key"),
+
+    /**
+     * Redis datasource key
+     */
+    DATASOURCE_KEY("datasourceKey", "Redis数据源Key"),
+
+    /**
+     * Redis 模式
+     */
+    REDIS_MODE("redisMode", "Redis模式"),
+
+    /**
+     * 是否要求通过 redis-route 执行
+     */
+    ROUTE_REQUIRED("routeRequired", "是否要求Redis Route"),
+
+    /**
+     * 是否成功解析到 datasource
+     */
+    ROUTE_RESOLVED("routeResolved", "是否成功解析路由"),
+
+    /**
+     * 降级原因
+     */
+    FALLBACK_REASON("fallbackReason", "降级原因");
 
     private final String code;
     private final String desc;

@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.exception;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorMessage;
 import lombok.Getter;
 
 /**
@@ -39,7 +40,7 @@ public class SmartRedisLimitExceededException extends SmartRedisLimiterException
     private final long resetAt;
 
     public SmartRedisLimitExceededException(String key, long retryAfter) {
-        super(SmartRedisLimiterConstant.ERROR_CODE_RATE_LIMIT_EXCEEDED, String.format(SmartRedisLimiterConstant.MSG_RATE_LIMIT_EXCEEDED, key, retryAfter));
+        super(ErrorCode.RATE_LIMIT_EXCEEDED, String.format(ErrorMessage.RATE_LIMIT_EXCEEDED, key, retryAfter));
         this.key = key;
         this.retryAfter = retryAfter;
         this.limit = 0;
@@ -48,7 +49,7 @@ public class SmartRedisLimitExceededException extends SmartRedisLimiterException
     }
 
     public SmartRedisLimitExceededException(String key, long retryAfter, long limit, long remaining, long resetAt) {
-        super(SmartRedisLimiterConstant.ERROR_CODE_RATE_LIMIT_EXCEEDED, String.format(SmartRedisLimiterConstant.MSG_RATE_LIMIT_EXCEEDED, key, retryAfter));
+        super(ErrorCode.RATE_LIMIT_EXCEEDED, String.format(ErrorMessage.RATE_LIMIT_EXCEEDED, key, retryAfter));
         this.key = key;
         this.retryAfter = retryAfter;
         this.limit = limit;
