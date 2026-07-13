@@ -1,19 +1,22 @@
 package io.github.surezzzzzz.sdk.kafka.route.test.cases;
 
+import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
+import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerCapability;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerDiagnosticResult;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteDiagnosticStatus;
+import io.github.surezzzzzz.sdk.kafka.route.support.KafkaAdminCompatibilityHelper;
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
 import io.github.surezzzzzz.sdk.kafka.route.test.KafkaEndToEndProfilesResolver;
 import io.github.surezzzzzz.sdk.kafka.route.test.SimpleKafkaRouteTestApplication;
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteEndToEndHelper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.support.SendResult;
@@ -21,6 +24,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,7 +35,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@EnabledIfSystemProperty(named = "kafka.route.e2e.test", matches = "true")
 @SpringBootTest(classes = SimpleKafkaRouteTestApplication.class)
 @ActiveProfiles(resolver = KafkaEndToEndProfilesResolver.class)
 public class KafkaRouteEndToEndTest {
@@ -47,21 +50,22 @@ public class KafkaRouteEndToEndTest {
         assertDiagnosticsReady();
 
         String suffix = KafkaRouteEndToEndHelper.suffix();
-        String v110Topic = "mock.route.v110.e2e." + suffix;
-        String v28Topic = "event.v28.route.e2e." + suffix;
-        String v37Topic = "event.v37.route.e2e." + suffix;
-        String routeKeyTopic = "mock.route.key.e2e." + suffix;
-        String explicitTopic = "event.v37.explicit.e2e." + suffix;
-        String recordTopic = "event.v37.record.e2e." + suffix;
-        String callbackRouteInputTopic = "event.v28.callback.route.e2e." + suffix;
-        String callbackInnerTopic = "event.v37.callback.inner.e2e." + suffix;
-        String transactionTopic = "mock.route.tx37.e2e." + suffix;
-        String rollbackTopic = "mock.route.tx37.rollback.e2e." + suffix;
-        String clusterTopic = "cluster.route.e2e." + suffix;
+        String v110Topic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_V110_PREFIX, suffix);
+        String v28Topic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_V28_PREFIX, suffix);
+        String v37Topic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_V37_PREFIX, suffix);
+        String routeKeyTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_ROUTE_KEY_PREFIX, suffix);
+        String explicitTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_EXPLICIT_PREFIX, suffix);
+        String recordTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_RECORD_PREFIX, suffix);
+        String callbackRouteInputTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_CALLBACK_ROUTE_PREFIX, suffix);
+        String callbackInnerTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_CALLBACK_INNER_PREFIX, suffix);
+        String transactionTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_TRANSACTION_PREFIX, suffix);
+        String rollbackTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_ROLLBACK_PREFIX, suffix);
+        String clusterTopic = KafkaRouteEndToEndHelper.topicWithSuffix(KafkaRouteEndToEndHelper.TOPIC_CLUSTER_PREFIX, suffix);
         createOnAllVersionDatasources(v110Topic, v28Topic, v37Topic, routeKeyTopic, explicitTopic,
                 recordTopic, callbackRouteInputTopic, callbackInnerTopic, transactionTopic, rollbackTopic);
         KafkaRouteEndToEndHelper.createTopic(KafkaRouteEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS,
-                clusterTopic, 3, (short) 3);
+                clusterTopic, KafkaRouteEndToEndHelper.CLUSTER_TOPIC_PARTITION_COUNT,
+                KafkaRouteEndToEndHelper.CLUSTER_TOPIC_REPLICATION_FACTOR);
 
         assertTopicRouteAcrossBrokerVersions(suffix, v110Topic, v28Topic, v37Topic);
         assertRouteKeyAndExplicitDatasourceIsolation(suffix, routeKeyTopic, explicitTopic);
@@ -73,204 +77,275 @@ public class KafkaRouteEndToEndTest {
 
     private void assertDiagnosticsReady() {
         Map<String, KafkaRouteBrokerDiagnosticResult> results = diagnostics.getDiagnosticResults();
-        assertDiagnosticSuccess(results, "default");
-        assertDiagnosticSuccess(results, "event");
-        assertDiagnosticSuccess(results, "v110");
-        assertDiagnosticSuccess(results, "v28");
-        assertDiagnosticSuccess(results, "v37");
-        assertDiagnosticSuccess(results, "tx37");
-        KafkaRouteBrokerDiagnosticResult clusterResult = assertDiagnosticSuccess(results, "cluster");
-        assertTrue(clusterResult.getNodeCount() >= 3, "cluster 诊断应看到至少 3 个 broker");
+        assertEquals(KafkaRouteEndToEndHelper.EXPECTED_DATASOURCE_COUNT, results.size(),
+                KafkaRouteEndToEndHelper.ASSERT_DATASOURCE_COUNT_MESSAGE);
+        KafkaRouteBrokerCapability v28Capability = expectedCapabilityForFeatureApiBroker(
+                KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS);
+        KafkaRouteBrokerCapability v37Capability = expectedCapabilityForFeatureApiBroker(
+                KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS);
+        KafkaRouteBrokerCapability clusterCapability = expectedCapabilityForFeatureApiBroker(
+                KafkaRouteEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS);
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_DEFAULT,
+                KafkaRouteBrokerCapability.UNKNOWN, KafkaRouteDiagnosticStatus.SUCCESS);
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_EVENT,
+                v37Capability, KafkaRouteDiagnosticStatus.SUCCESS);
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_V110,
+                KafkaRouteBrokerCapability.UNKNOWN, KafkaRouteDiagnosticStatus.SUCCESS);
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_V28, v28Capability, KafkaRouteDiagnosticStatus.SUCCESS);
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_V37, v37Capability, KafkaRouteDiagnosticStatus.SUCCESS);
+        KafkaRouteDiagnosticStatus tx37Status = v37Capability == KafkaRouteBrokerCapability.SUPPORTED
+                ? KafkaRouteDiagnosticStatus.SUCCESS : KafkaRouteDiagnosticStatus.WARN;
+        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_TX37, v37Capability, tx37Status);
+        KafkaRouteBrokerDiagnosticResult clusterResult = assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_CLUSTER, clusterCapability,
+                KafkaRouteDiagnosticStatus.SUCCESS);
+        assertTrue(clusterResult.getNodeCount() >= KafkaRouteEndToEndHelper.CLUSTER_MIN_NODE_COUNT,
+                KafkaRouteEndToEndHelper.ASSERT_CLUSTER_NODE_COUNT_MESSAGE);
     }
 
-    private KafkaRouteBrokerDiagnosticResult assertDiagnosticSuccess(
-            Map<String, KafkaRouteBrokerDiagnosticResult> results, String datasourceKey) {
+    private KafkaRouteBrokerCapability expectedCapabilityForFeatureApiBroker(String bootstrapServers) {
+        Properties properties = new Properties();
+        properties.put(SimpleKafkaRouteConstant.PROPERTY_BOOTSTRAP_SERVERS, bootstrapServers);
+        Object adminClient = null;
+        try {
+            adminClient = AdminClient.create(properties);
+            Object features = KafkaAdminCompatibilityHelper.describeFeaturesIfAvailable(adminClient,
+                    KafkaRouteEndToEndHelper.FEATURE_API_PROBE_TIMEOUT_MS);
+            return features == null ? KafkaRouteBrokerCapability.UNKNOWN : KafkaRouteBrokerCapability.SUPPORTED;
+        } catch (RuntimeException e) {
+            return KafkaRouteBrokerCapability.UNKNOWN;
+        } finally {
+            KafkaAdminCompatibilityHelper.closeAdminClient(adminClient);
+        }
+    }
+
+    private void assertCapabilities(KafkaRouteBrokerDiagnosticResult result,
+                                    KafkaRouteBrokerCapability expectedFeatureCapability,
+                                    String datasourceKey) {
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getAdminApiLevel(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_ADMIN_API_CAPABILITY_MESSAGE, datasourceKey));
+        assertEquals(expectedFeatureCapability, result.getTransactionSupported(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_TRANSACTION_CAPABILITY_MESSAGE, datasourceKey));
+        assertEquals(expectedFeatureCapability, result.getIdempotenceSupported(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_IDEMPOTENCE_CAPABILITY_MESSAGE, datasourceKey));
+        assertEquals(expectedFeatureCapability, result.getZstdSupported(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_ZSTD_CAPABILITY_MESSAGE, datasourceKey));
+    }
+
+    private KafkaRouteBrokerDiagnosticResult assertDiagnosticResult(
+            Map<String, KafkaRouteBrokerDiagnosticResult> results,
+            String datasourceKey,
+            KafkaRouteBrokerCapability expectedFeatureCapability,
+            KafkaRouteDiagnosticStatus expectedStatus) {
         KafkaRouteBrokerDiagnosticResult result = results.get(datasourceKey);
-        assertNotNull(result, "未获取到 datasource 诊断结果: " + datasourceKey);
-        assertTrue(result.getStatus() == KafkaRouteDiagnosticStatus.SUCCESS
-                        || result.getStatus() == KafkaRouteDiagnosticStatus.WARN,
-                "datasource 诊断必须成功或仅 capability 告警: " + datasourceKey);
-        assertTrue(result.getNodeCount() > 0, "datasource 诊断应看到 broker 节点: " + datasourceKey);
-        assertTrue(result.isControllerVisible(), "datasource 诊断应看到 controller: " + datasourceKey);
-        assertNull(result.getFailureReason(), "datasource 成功诊断不应带失败原因: " + datasourceKey);
+        assertNotNull(result, String.format(KafkaRouteEndToEndHelper.ASSERT_DIAGNOSTIC_MISSING_MESSAGE, datasourceKey));
+        assertEquals(expectedStatus, result.getStatus(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_DIAGNOSTIC_STATUS_MESSAGE, datasourceKey));
+        assertTrue(result.getNodeCount() > KafkaRouteEndToEndHelper.MIN_NODE_COUNT,
+                String.format(KafkaRouteEndToEndHelper.ASSERT_NODE_COUNT_MESSAGE, datasourceKey));
+        assertTrue(result.isControllerVisible(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_CONTROLLER_VISIBLE_MESSAGE, datasourceKey));
+        assertNull(result.getFailureReason(),
+                String.format(KafkaRouteEndToEndHelper.ASSERT_FAILURE_REASON_MESSAGE, datasourceKey));
+        assertCapabilities(result, expectedFeatureCapability, datasourceKey);
         return result;
     }
 
     private void assertTopicRouteAcrossBrokerVersions(String suffix, String v110Topic,
                                                        String v28Topic, String v37Topic) throws Exception {
-        SendResult<String, String> v110Result = template.send(v110Topic, "v110-key-" + suffix,
-                "v110-value").get(30, TimeUnit.SECONDS);
-        SendResult<String, String> v28Result = template.send(v28Topic, "v28-key-" + suffix,
-                "v28-value").get(30, TimeUnit.SECONDS);
-        SendResult<String, String> v37Result = template.send(v37Topic, "v37-key-" + suffix,
-                "v37-value").get(30, TimeUnit.SECONDS);
+        SendResult<String, String> v110Result = template.send(v110Topic, KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V110_PREFIX, suffix),
+                KafkaRouteEndToEndHelper.VALUE_V110).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        SendResult<String, String> v28Result = template.send(v28Topic, KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V28_PREFIX, suffix),
+                KafkaRouteEndToEndHelper.VALUE_V28).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        SendResult<String, String> v37Result = template.send(v37Topic, KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V37_PREFIX, suffix),
+                KafkaRouteEndToEndHelper.VALUE_V37).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
-        log.info("多版本发送 metadata: v110={}, v28={}, v37={}", v110Result.getRecordMetadata(),
+        log.info(KafkaRouteEndToEndHelper.LOG_MULTI_VERSION_METADATA_MESSAGE, v110Result.getRecordMetadata(),
                 v28Result.getRecordMetadata(), v37Result.getRecordMetadata());
         assertEquals(v110Topic, v110Result.getRecordMetadata().topic());
         assertEquals(v28Topic, v28Result.getRecordMetadata().topic());
         assertEquals(v37Topic, v37Result.getRecordMetadata().topic());
-        assertSame(template.kafkaTemplate("v110"), template.kafkaTemplateByTopic(v110Topic));
-        assertSame(template.kafkaTemplate("v28"), template.kafkaTemplateByTopic(v28Topic));
-        assertSame(template.kafkaTemplate("v37"), template.kafkaTemplateByTopic(v37Topic));
+        assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_V110), template.kafkaTemplateByTopic(v110Topic));
+        assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_V28), template.kafkaTemplateByTopic(v28Topic));
+        assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_V37), template.kafkaTemplateByTopic(v37Topic));
 
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, v110Topic,
-                "v110-key-" + suffix, "v110-value");
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V110_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_V110);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, v110Topic,
-                "v110-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V110_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, v110Topic,
-                "v110-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V110_PREFIX, suffix));
 
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, v28Topic,
-                "v28-key-" + suffix, "v28-value");
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V28_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_V28);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, v28Topic,
-                "v28-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V28_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, v28Topic,
-                "v28-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V28_PREFIX, suffix));
 
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, v37Topic,
-                "v37-key-" + suffix, "v37-value");
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V37_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_V37);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, v37Topic,
-                "v37-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V37_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, v37Topic,
-                "v37-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_V37_PREFIX, suffix));
     }
 
     private void assertRouteKeyAndExplicitDatasourceIsolation(String suffix, String routeKeyTopic,
                                                                String explicitTopic) throws Exception {
-        SendResult<String, String> routeKeyResult = template.sendByRouteKey("tenant-v37-a", routeKeyTopic,
-                "route-key-" + suffix, "route-key-value").get(30, TimeUnit.SECONDS);
-        SendResult<String, String> explicitResult = template.sendOn("v28", explicitTopic,
-                "explicit-key-" + suffix, "explicit-value").get(30, TimeUnit.SECONDS);
+        SendResult<String, String> routeKeyResult = template.sendByRouteKey(KafkaRouteEndToEndHelper.ROUTE_KEY_V37, routeKeyTopic,
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_ROUTE_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_ROUTE).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        SendResult<String, String> explicitResult = template.sendOn(KafkaRouteEndToEndHelper.DATASOURCE_V28, explicitTopic,
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_EXPLICIT_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_EXPLICIT).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(routeKeyTopic, routeKeyResult.getRecordMetadata().topic());
         assertEquals(explicitTopic, explicitResult.getRecordMetadata().topic());
-        assertSame(template.kafkaTemplate("v37"), template.kafkaTemplateByRouteKey("tenant-v37-a"));
+        assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_V37), template.kafkaTemplateByRouteKey(KafkaRouteEndToEndHelper.ROUTE_KEY_V37));
 
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, routeKeyTopic,
-                "route-key-" + suffix, "route-key-value");
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_ROUTE_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_ROUTE);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, routeKeyTopic,
-                "route-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_ROUTE_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, routeKeyTopic,
-                "route-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_ROUTE_PREFIX, suffix));
 
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, explicitTopic,
-                "explicit-key-" + suffix, "explicit-value");
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_EXPLICIT_PREFIX, suffix), KafkaRouteEndToEndHelper.VALUE_EXPLICIT);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, explicitTopic,
-                "explicit-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_EXPLICIT_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, explicitTopic,
-                "explicit-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_EXPLICIT_PREFIX, suffix));
     }
 
     private void assertProducerRecordPreservesHeadersPartitionAndTimestamp(String suffix,
                                                                            String recordTopic) throws Exception {
-        ProducerRecord<String, String> producerRecord = new ProducerRecord<>(recordTopic, 0, 1000L,
-                "record-key-" + suffix, "record-value",
-                Collections.singletonList(new RecordHeader("mock-header", "mock-header-value".getBytes("UTF-8"))));
+        ProducerRecord<String, String> producerRecord = new ProducerRecord<>(recordTopic,
+                KafkaRouteEndToEndHelper.PARTITION_ZERO, KafkaRouteEndToEndHelper.RECORD_TIMESTAMP,
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_RECORD_PREFIX, suffix),
+                KafkaRouteEndToEndHelper.VALUE_RECORD,
+                Collections.singletonList(new RecordHeader(KafkaRouteEndToEndHelper.HEADER_NAME,
+                        KafkaRouteEndToEndHelper.HEADER_VALUE_BYTES)));
 
-        SendResult<String, String> result = template.send(producerRecord).get(30, TimeUnit.SECONDS);
+        SendResult<String, String> result = template.send(producerRecord).get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(recordTopic, result.getRecordMetadata().topic());
-        assertEquals(0, result.getRecordMetadata().partition());
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_ZERO, result.getRecordMetadata().partition());
         ConsumerRecord<String, String> record = assertRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS,
-                recordTopic, "record-key-" + suffix, "record-value");
-        assertEquals(1000L, record.timestamp());
-        Header header = record.headers().lastHeader("mock-header");
+                recordTopic, KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_RECORD_PREFIX, suffix),
+                KafkaRouteEndToEndHelper.VALUE_RECORD);
+        assertEquals(KafkaRouteEndToEndHelper.RECORD_TIMESTAMP, record.timestamp());
+        Header header = record.headers().lastHeader(KafkaRouteEndToEndHelper.HEADER_NAME);
         assertNotNull(header);
-        assertArrayEquals("mock-header-value".getBytes("UTF-8"), header.value());
+        assertArrayEquals(KafkaRouteEndToEndHelper.HEADER_VALUE_BYTES, header.value());
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, recordTopic,
-                "record-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_RECORD_PREFIX, suffix));
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, recordTopic,
-                "record-key-" + suffix);
+                KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_RECORD_PREFIX, suffix));
     }
 
     private void assertCallbackUsesSelectedDatasourceOnly(String suffix, String routeInputTopic,
                                                            String innerTopic) throws Exception {
+        String callbackKey = KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_CALLBACK_PREFIX, suffix);
         String selectedDatasource = template.execute(routeInputTopic, kafkaTemplate -> {
-            assertSame(template.kafkaTemplate("v28"), kafkaTemplate);
+            assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_V28), kafkaTemplate);
             try {
-                kafkaTemplate.send(innerTopic, "callback-key-" + suffix, "callback-value")
-                        .get(30, TimeUnit.SECONDS);
+                kafkaTemplate.send(innerTopic, callbackKey, KafkaRouteEndToEndHelper.VALUE_CALLBACK)
+                        .get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } catch (Exception e) {
-                throw new IllegalStateException("callback 内部发送失败", e);
+                throw new IllegalStateException(KafkaRouteEndToEndHelper.CALLBACK_SEND_FAILED_MESSAGE, e);
             }
-            return "v28";
+            return KafkaRouteEndToEndHelper.DATASOURCE_V28;
         });
 
-        assertEquals("v28", selectedDatasource);
+        assertEquals(KafkaRouteEndToEndHelper.DATASOURCE_V28, selectedDatasource);
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, innerTopic,
-                "callback-key-" + suffix, "callback-value");
+                callbackKey, KafkaRouteEndToEndHelper.VALUE_CALLBACK);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, innerTopic,
-                "callback-key-" + suffix);
+                callbackKey);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, innerTopic,
-                "callback-key-" + suffix);
+                callbackKey);
     }
 
     private void assertNativeTransactionWorksWithinSelectedDatasource(String suffix,
                                                                        String transactionTopic,
                                                                        String rollbackTopic) throws Exception {
-        Boolean result = template.executeOn("tx37", kafkaTemplate -> kafkaTemplate.executeInTransaction(operations -> {
-            operations.send(transactionTopic, "tx-key-" + suffix, "tx-value");
+        String transactionKey = KafkaRouteEndToEndHelper.keyWithSuffix(
+                KafkaRouteEndToEndHelper.KEY_TRANSACTION_PREFIX, suffix);
+        String rollbackKey = KafkaRouteEndToEndHelper.keyWithSuffix(
+                KafkaRouteEndToEndHelper.KEY_ROLLBACK_PREFIX, suffix);
+        Boolean result = template.executeOn(KafkaRouteEndToEndHelper.DATASOURCE_TX37, kafkaTemplate -> kafkaTemplate.executeInTransaction(operations -> {
+            operations.send(transactionTopic, transactionKey, KafkaRouteEndToEndHelper.VALUE_TRANSACTION);
             return Boolean.TRUE;
         }));
 
         assertEquals(Boolean.TRUE, result);
         assertRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, transactionTopic,
-                "tx-key-" + suffix, "tx-value");
+                transactionKey, KafkaRouteEndToEndHelper.VALUE_TRANSACTION);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, transactionTopic,
-                "tx-key-" + suffix);
+                transactionKey);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, transactionTopic,
-                "tx-key-" + suffix);
+                transactionKey);
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> template.executeOn("tx37", kafkaTemplate -> kafkaTemplate.executeInTransaction(operations -> {
-                    operations.send(rollbackTopic, "tx-rollback-key-" + suffix, "tx-rollback-value");
-                    throw new IllegalStateException("mock transaction rollback");
+                () -> template.executeOn(KafkaRouteEndToEndHelper.DATASOURCE_TX37, kafkaTemplate -> kafkaTemplate.executeInTransaction(operations -> {
+                    operations.send(rollbackTopic, rollbackKey, KafkaRouteEndToEndHelper.VALUE_ROLLBACK);
+                    throw new IllegalStateException(KafkaRouteEndToEndHelper.TX_ROLLBACK_MESSAGE);
                 })));
-        assertEquals("mock transaction rollback", exception.getMessage());
+        assertEquals(KafkaRouteEndToEndHelper.TX_ROLLBACK_MESSAGE, exception.getMessage());
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS, rollbackTopic,
-                "tx-rollback-key-" + suffix);
+                rollbackKey);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS, rollbackTopic,
-                "tx-rollback-key-" + suffix);
+                rollbackKey);
         assertNoRecord(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS, rollbackTopic,
-                "tx-rollback-key-" + suffix);
+                rollbackKey);
     }
 
     private void assertClusterDatasourceCanSendToExplicitPartitions(String suffix, String clusterTopic) throws Exception {
-        SendResult<String, String> first = template.send(clusterTopic, 0, "cluster-key-0-" + suffix,
-                "cluster-value-0").get(30, TimeUnit.SECONDS);
-        SendResult<String, String> second = template.send(clusterTopic, 1, "cluster-key-1-" + suffix,
-                "cluster-value-1").get(30, TimeUnit.SECONDS);
-        SendResult<String, String> third = template.send(clusterTopic, 2, "cluster-key-2-" + suffix,
-                "cluster-value-2").get(30, TimeUnit.SECONDS);
+        SendResult<String, String> first = template.send(clusterTopic, KafkaRouteEndToEndHelper.PARTITION_ZERO,
+                KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_ZERO, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_ZERO))
+                .get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        SendResult<String, String> second = template.send(clusterTopic, KafkaRouteEndToEndHelper.PARTITION_ONE,
+                KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_ONE, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_ONE))
+                .get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        SendResult<String, String> third = template.send(clusterTopic, KafkaRouteEndToEndHelper.PARTITION_TWO,
+                KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_TWO, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_TWO))
+                .get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
         assertEquals(clusterTopic, first.getRecordMetadata().topic());
         assertEquals(clusterTopic, second.getRecordMetadata().topic());
         assertEquals(clusterTopic, third.getRecordMetadata().topic());
-        assertEquals(0, first.getRecordMetadata().partition());
-        assertEquals(1, second.getRecordMetadata().partition());
-        assertEquals(2, third.getRecordMetadata().partition());
-        assertSame(template.kafkaTemplate("cluster"), template.kafkaTemplateByTopic(clusterTopic));
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_ZERO, first.getRecordMetadata().partition());
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_ONE, second.getRecordMetadata().partition());
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_TWO, third.getRecordMetadata().partition());
+        assertSame(template.kafkaTemplate(KafkaRouteEndToEndHelper.DATASOURCE_CLUSTER), template.kafkaTemplateByTopic(clusterTopic));
 
         ConsumerRecord<String, String> firstRecord = assertRecord(KafkaRouteEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS,
-                clusterTopic, "cluster-key-0-" + suffix, "cluster-value-0");
+                clusterTopic, KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_ZERO, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_ZERO));
         ConsumerRecord<String, String> secondRecord = assertRecord(KafkaRouteEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS,
-                clusterTopic, "cluster-key-1-" + suffix, "cluster-value-1");
+                clusterTopic, KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_ONE, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_ONE));
         ConsumerRecord<String, String> thirdRecord = assertRecord(KafkaRouteEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS,
-                clusterTopic, "cluster-key-2-" + suffix, "cluster-value-2");
-        assertEquals(0, firstRecord.partition());
-        assertEquals(1, secondRecord.partition());
-        assertEquals(2, thirdRecord.partition());
+                clusterTopic, KafkaRouteEndToEndHelper.clusterKey(KafkaRouteEndToEndHelper.PARTITION_TWO, suffix),
+                KafkaRouteEndToEndHelper.clusterValue(KafkaRouteEndToEndHelper.PARTITION_TWO));
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_ZERO, firstRecord.partition());
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_ONE, secondRecord.partition());
+        assertEquals(KafkaRouteEndToEndHelper.PARTITION_TWO, thirdRecord.partition());
     }
 
     private void createOnAllVersionDatasources(String... topics) {
         for (String topic : topics) {
             KafkaRouteEndToEndHelper.createTopic(KafkaRouteEndToEndHelper.KAFKA_V110_BOOTSTRAP_SERVERS,
-                    topic, 1, (short) 1);
+                    topic, KafkaRouteEndToEndHelper.SINGLE_TOPIC_PARTITION_COUNT,
+                    KafkaRouteEndToEndHelper.SINGLE_TOPIC_REPLICATION_FACTOR);
             KafkaRouteEndToEndHelper.createTopic(KafkaRouteEndToEndHelper.KAFKA_V28_BOOTSTRAP_SERVERS,
-                    topic, 1, (short) 1);
+                    topic, KafkaRouteEndToEndHelper.SINGLE_TOPIC_PARTITION_COUNT,
+                    KafkaRouteEndToEndHelper.SINGLE_TOPIC_REPLICATION_FACTOR);
             KafkaRouteEndToEndHelper.createTopic(KafkaRouteEndToEndHelper.KAFKA_V37_BOOTSTRAP_SERVERS,
-                    topic, 1, (short) 1);
+                    topic, KafkaRouteEndToEndHelper.SINGLE_TOPIC_PARTITION_COUNT,
+                    KafkaRouteEndToEndHelper.SINGLE_TOPIC_REPLICATION_FACTOR);
         }
     }
 
@@ -278,7 +353,8 @@ public class KafkaRouteEndToEndTest {
                                                         String expectedKey, String expectedValue) {
         ConsumerRecord<String, String> record = KafkaRouteEndToEndHelper.consumeRecord(bootstrapServers, topic,
                 expectedKey, KafkaRouteEndToEndHelper.CONSUME_TIMEOUT_MS);
-        assertNotNull(record, "未在指定 Kafka datasource 消费到消息，bootstrapServers=" + bootstrapServers + ", topic=" + topic);
+        assertNotNull(record, String.format(KafkaRouteEndToEndHelper.ASSERT_RECORD_MISSING_MESSAGE,
+                bootstrapServers, topic));
         assertEquals(expectedKey, record.key());
         assertEquals(expectedValue, record.value());
         return record;
@@ -287,6 +363,7 @@ public class KafkaRouteEndToEndTest {
     private void assertNoRecord(String bootstrapServers, String topic, String expectedKey) {
         ConsumerRecord<String, String> record = KafkaRouteEndToEndHelper.consumeRecord(bootstrapServers, topic,
                 expectedKey, KafkaRouteEndToEndHelper.NO_MESSAGE_TIMEOUT_MS);
-        assertNull(record, "不应在该 Kafka datasource 消费到消息，bootstrapServers=" + bootstrapServers + ", topic=" + topic);
+        assertNull(record, String.format(KafkaRouteEndToEndHelper.ASSERT_RECORD_UNEXPECTED_MESSAGE,
+                bootstrapServers, topic));
     }
 }

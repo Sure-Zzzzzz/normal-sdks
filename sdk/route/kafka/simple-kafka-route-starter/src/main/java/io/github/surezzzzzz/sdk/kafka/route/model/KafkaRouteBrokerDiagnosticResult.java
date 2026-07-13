@@ -55,7 +55,7 @@ public class KafkaRouteBrokerDiagnosticResult {
     private final KafkaRouteBrokerCapability zstdSupported;
 
     /**
-     * Admin API 探测能力
+     * 基础 Admin API 探测能力
      */
     private final KafkaRouteBrokerCapability adminApiLevel;
 

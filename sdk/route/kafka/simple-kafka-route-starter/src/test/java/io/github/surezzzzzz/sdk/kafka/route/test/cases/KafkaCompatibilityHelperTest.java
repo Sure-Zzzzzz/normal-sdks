@@ -83,15 +83,10 @@ public class KafkaCompatibilityHelperTest {
         assertNotNull(version);
         // KafkaTemplate#isTransactional 在 2.x 全程为 public，能力探测应返回 true
         assertTrue(KafkaSpringVersionHelper.supportsKafkaTemplateIsTransactional());
-        // ProducerFactory#getTransactionIdPrefix：2.3.x 未在接口声明（仅 DefaultKafkaProducerFactory protected），
-        // 2.5+ 才提升为接口 public；能力探测结果取决于 classpath，不硬编码，只验证与版本一致。
+        // route 实际使用 DefaultKafkaProducerFactory；2.3.x 方法为 protected，兼容层通过反射可访问。
         boolean supports = KafkaSpringVersionHelper.supportsGetTransactionIdPrefix();
-        log.info("ProducerFactory#getTransactionIdPrefix 接口能力: {}, version: {}", supports, version);
-        if (version.startsWith("2.2.") || version.startsWith("2.3.")) {
-            assertFalse(supports, "2.2.x/2.3.x ProducerFactory 接口未声明 getTransactionIdPrefix");
-        } else {
-            assertTrue(supports, "2.5+ ProducerFactory 接口已声明 getTransactionIdPrefix");
-        }
+        log.info("DefaultKafkaProducerFactory#getTransactionIdPrefix 实际可访问能力: {}, version: {}", supports, version);
+        assertTrue(supports, "DefaultKafkaProducerFactory#getTransactionIdPrefix 在支持版本中必须可反射访问");
     }
 
     @Test

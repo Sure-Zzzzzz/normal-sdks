@@ -2,8 +2,9 @@ package io.github.surezzzzzz.sdk.kafka.route.support;
 
 import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import org.springframework.kafka.core.ConsumerFactory;
-import org.springframework.kafka.core.ProducerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.core.ProducerFactory;
 
 /**
  * Spring Kafka 版本兼容 Helper
@@ -12,7 +13,6 @@ import org.springframework.kafka.core.KafkaTemplate;
  */
 public final class KafkaSpringVersionHelper {
 
-    private static final String UNKNOWN_VERSION = "unknown";
     private static volatile String detectedVersion;
 
     private KafkaSpringVersionHelper() {
@@ -42,16 +42,17 @@ public final class KafkaSpringVersionHelper {
      */
     public static boolean isSpringKafka2x() {
         String version = detectSpringKafkaVersion();
-        return version != null && version.startsWith("2.");
+        return version != null && version.startsWith(SimpleKafkaRouteConstant.SPRING_KAFKA_2_VERSION_PREFIX);
     }
 
     /**
-     * 判断 ProducerFactory 是否支持 getTransactionIdPrefix
+     * 判断默认 ProducerFactory 实现是否可读取 transactionIdPrefix
      *
-     * @return true 表示支持
+     * @return true 表示可读取
      */
     public static boolean supportsGetTransactionIdPrefix() {
-        return KafkaReflectionHelper.findMethod(ProducerFactory.class, SimpleKafkaRouteConstant.REFLECT_METHOD_GET_TRANSACTION_ID_PREFIX) != null;
+        return KafkaReflectionHelper.findMethod(DefaultKafkaProducerFactory.class,
+                SimpleKafkaRouteConstant.REFLECT_METHOD_GET_TRANSACTION_ID_PREFIX) != null;
     }
 
     /**
@@ -60,7 +61,8 @@ public final class KafkaSpringVersionHelper {
      * @return true 表示支持
      */
     public static boolean supportsCopyWithConfigurationOverride() {
-        return KafkaReflectionHelper.findMethod(ProducerFactory.class, "copyWithConfigurationOverride", java.util.Map.class) != null;
+        return KafkaReflectionHelper.findMethod(ProducerFactory.class,
+                SimpleKafkaRouteConstant.REFLECT_METHOD_COPY_WITH_CONFIGURATION_OVERRIDE, java.util.Map.class) != null;
     }
 
     /**
@@ -84,7 +86,7 @@ public final class KafkaSpringVersionHelper {
     private static String doDetectSpringKafkaVersion() {
         Package kafkaPackage = KafkaTemplate.class.getPackage();
         if (kafkaPackage == null || !KafkaRouteStringHelper.hasText(kafkaPackage.getImplementationVersion())) {
-            return UNKNOWN_VERSION;
+            return SimpleKafkaRouteConstant.UNKNOWN_VERSION;
         }
         return kafkaPackage.getImplementationVersion();
     }

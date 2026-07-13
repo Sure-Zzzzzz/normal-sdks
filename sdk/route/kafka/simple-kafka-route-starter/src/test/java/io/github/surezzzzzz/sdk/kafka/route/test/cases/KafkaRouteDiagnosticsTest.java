@@ -3,11 +3,14 @@ package io.github.surezzzzzz.sdk.kafka.route.test.cases;
 import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteConfiguration;
 import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteProperties;
 import io.github.surezzzzzz.sdk.kafka.route.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.DefaultKafkaRouteDiagnostics;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
 import io.github.surezzzzzz.sdk.kafka.route.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerCapability;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerDiagnosticResult;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteDiagnosticStatus;
+import io.github.surezzzzzz.sdk.kafka.route.support.KafkaAdminCompatibilityHelper;
 import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaConsumerFactoryFactory;
 import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaProducerFactoryFactory;
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelper;
@@ -18,6 +21,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.lang.reflect.Method;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,6 +100,176 @@ public class KafkaRouteDiagnosticsTest {
     }
 
     @Test
+    public void testSuccessResultReportsUnknownWhenFeaturesNull() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("feature API 不可用时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.SUCCESS, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getAdminApiLevel(),
+                "describeCluster 成功后基础 Admin API 应视为可用");
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getTransactionSupported());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
+        assertEquals("mock-cluster", result.getClusterId());
+        assertEquals(1, result.getNodeCount());
+        assertTrue(result.isControllerVisible());
+        assertNull(result.getFailureReason());
+    }
+
+    @Test
+    public void testSuccessResultReportsSupportedWhenFeaturesAvailable() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                new Object(), config);
+        log.info("feature API 可用时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.SUCCESS, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getAdminApiLevel());
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getTransactionSupported());
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getIdempotenceSupported());
+        assertEquals(KafkaRouteBrokerCapability.SUPPORTED, result.getZstdSupported());
+        assertEquals("mock-cluster", result.getClusterId());
+        assertEquals(1, result.getNodeCount());
+        assertTrue(result.isControllerVisible());
+        assertNull(result.getFailureReason());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenTransactionRequiredButFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setTransactionIdPrefix("mock-tx-");
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("事务能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getTransactionSupported());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenTypedIdempotenceRequiredButFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setEnableIdempotence(Boolean.TRUE);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("幂等能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenRawIdempotenceRequiredButFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().getProperties().put(SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE,
+                SimpleKafkaRouteConstant.BOOLEAN_TRUE);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("raw properties 幂等能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenTypedZstdRequiredButFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setCompressionType(SimpleKafkaRouteConstant.COMPRESSION_TYPE_ZSTD);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("zstd 能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenRawZstdOverridesTypedConfigAndFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setCompressionType(SimpleKafkaRouteConstant.COMPRESSION_TYPE_GZIP);
+        config.getProducer().getProperties().put(SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE,
+                SimpleKafkaRouteConstant.COMPRESSION_TYPE_ZSTD);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("raw properties zstd 覆盖 typed 配置时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
+    }
+
+    @Test
+    public void testSuccessResultUsesDatasourceRawPropertiesForCapabilityWarning() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProperties().put(SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE,
+                SimpleKafkaRouteConstant.COMPRESSION_TYPE_ZSTD);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("datasource raw properties zstd 能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
+    }
+
+    @Test
+    public void testSuccessResultWarnsWhenDatasourceRawIdempotenceRequiredAndFeatureUnknown() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProperties().put(SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE,
+                SimpleKafkaRouteConstant.BOOLEAN_TRUE);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("datasource raw properties 幂等能力未知时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+    }
+
+    @Test
+    public void testSuccessResultDoesNotWarnWhenRawPropertiesDisableTypedIdempotence() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setEnableIdempotence(Boolean.TRUE);
+        config.getProducer().getProperties().put(SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE,
+                SimpleKafkaRouteConstant.BOOLEAN_FALSE);
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic",
+                null, config);
+        log.info("raw properties 关闭 typed 幂等配置时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.SUCCESS, result.getStatus());
+        assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+    }
+
+    @Test
     public void testCustomDiagnosticsBeanOverridesDefaultDiagnostics() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(SimpleKafkaRouteConfiguration.class))
@@ -116,6 +291,24 @@ public class KafkaRouteDiagnosticsTest {
                             context.getBean(KafkaRouteDiagnostics.class));
                     assertTrue(context.getBean(KafkaRouteDiagnostics.class).getDiagnosticResults().isEmpty());
                 });
+    }
+
+    private KafkaRouteBrokerDiagnosticResult invokeSuccessResult(DefaultKafkaRouteDiagnostics diagnostics,
+                                                                 String datasourceKey,
+                                                                 Object features,
+                                                                 SimpleKafkaRouteProperties.DataSourceConfig config) throws Exception {
+        Method method = DefaultKafkaRouteDiagnostics.class.getDeclaredMethod("successResult",
+                String.class, Map.class, Object.class, SimpleKafkaRouteProperties.DataSourceConfig.class);
+        method.setAccessible(true);
+        return (KafkaRouteBrokerDiagnosticResult) method.invoke(diagnostics, datasourceKey, clusterDesc(), features, config);
+    }
+
+    private Map<String, Object> clusterDesc() {
+        Map<String, Object> clusterDesc = new LinkedHashMap<>();
+        clusterDesc.put(KafkaAdminCompatibilityHelper.CLUSTER_ID, "mock-cluster");
+        clusterDesc.put(KafkaAdminCompatibilityHelper.NODE_COUNT, 1);
+        clusterDesc.put(KafkaAdminCompatibilityHelper.CONTROLLER_VISIBLE, Boolean.TRUE);
+        return clusterDesc;
     }
 
     @Configuration

@@ -99,7 +99,8 @@ public final class KafkaAdminCompatibilityHelper {
         }
         try {
             Object describeResult = KafkaReflectionHelper.invoke(method, adminClient);
-            return getKafkaFutureValue(describeResult, SimpleKafkaRouteConstant.REFLECT_METHOD_FEATURE_METADATA, timeoutMs);
+            Object features = getKafkaFutureValue(describeResult, SimpleKafkaRouteConstant.REFLECT_METHOD_FEATURE_METADATA, timeoutMs);
+            return hasFeatureMetadata(features) ? features : null;
         } catch (RuntimeException e) {
             log.warn("Kafka route describeFeatures 探测失败，已降级为 UNKNOWN，exception=[{}]", e.getClass().getSimpleName());
             return null;
@@ -145,6 +146,19 @@ public final class KafkaAdminCompatibilityHelper {
             return false;
         }
         return Boolean.TRUE.equals(clusterDesc.get(CONTROLLER_VISIBLE));
+    }
+
+    private static boolean hasFeatureMetadata(Object features) {
+        if (features == null) {
+            return false;
+        }
+        Object finalizedFeatures = KafkaReflectionHelper.invokeIfPresent(features,
+                SimpleKafkaRouteConstant.REFLECT_METHOD_FINALIZED_FEATURES);
+        return isNonEmptyMap(finalizedFeatures);
+    }
+
+    private static boolean isNonEmptyMap(Object value) {
+        return value instanceof Map && !((Map<?, ?>) value).isEmpty();
     }
 
     private static Object getKafkaFutureValue(Object target, String methodName, long timeoutMs) {

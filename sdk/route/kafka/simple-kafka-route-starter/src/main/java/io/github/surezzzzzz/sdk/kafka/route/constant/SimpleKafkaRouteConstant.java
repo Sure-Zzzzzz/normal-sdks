@@ -14,6 +14,11 @@ public final class SimpleKafkaRouteConstant {
 
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.kafka.route";
     public static final String CONFIG_PREFIX_DIAGNOSTICS = CONFIG_PREFIX + ".diagnostics";
+    public static final String CONFIG_PROPERTY_ENABLE = "enable";
+
+    public static final String CLASS_NAME_KAFKA_TEMPLATE = "org.springframework.kafka.core.KafkaTemplate";
+    public static final String SPRING_KAFKA_2_VERSION_PREFIX = "2.";
+    public static final String UNKNOWN_VERSION = "unknown";
 
     public static final String DEFAULT_DATASOURCE_KEY = "default";
     public static final int DEFAULT_RULE_PRIORITY = 1000;
@@ -41,10 +46,12 @@ public final class SimpleKafkaRouteConstant {
     public static final String REFLECT_METHOD_IS_TRANSACTIONAL = "isTransactional";
     public static final String REFLECT_METHOD_GET_TRANSACTION_ID_PREFIX = "getTransactionIdPrefix";
     public static final String REFLECT_METHOD_SET_TRANSACTION_ID_PREFIX = "setTransactionIdPrefix";
+    public static final String REFLECT_METHOD_COPY_WITH_CONFIGURATION_OVERRIDE = "copyWithConfigurationOverride";
     public static final String REFLECT_METHOD_GET_CONFIGURATION_PROPERTIES = "getConfigurationProperties";
     public static final String REFLECT_METHOD_DESCRIBE_CLUSTER = "describeCluster";
     public static final String REFLECT_METHOD_DESCRIBE_FEATURES = "describeFeatures";
     public static final String REFLECT_METHOD_FEATURE_METADATA = "featureMetadata";
+    public static final String REFLECT_METHOD_FINALIZED_FEATURES = "finalizedFeatures";
     public static final String REFLECT_METHOD_CLUSTER_ID = "clusterId";
     public static final String REFLECT_METHOD_NODES = "nodes";
     public static final String REFLECT_METHOD_CONTROLLER = "controller";
@@ -73,6 +80,31 @@ public final class SimpleKafkaRouteConstant {
     public static final String PROPERTY_ENABLE_AUTO_COMMIT = "enable.auto.commit";
     public static final String PROPERTY_MAX_POLL_RECORDS = "max.poll.records";
     public static final String PROPERTY_TRANSACTIONAL_ID = "transactional.id";
+    public static final String PROPERTY_ISOLATION_LEVEL = "isolation.level";
+    public static final String PROPERTY_ALLOW_AUTO_CREATE_TOPICS = "allow.auto.create.topics";
+
+    public static final String ACKS_ZERO = "0";
+    public static final String ACKS_ONE = "1";
+    public static final String ACKS_ALL = "all";
+    public static final String ACKS_MINUS_ONE = "-1";
+
+    public static final String AUTO_OFFSET_RESET_EARLIEST = "earliest";
+    public static final String AUTO_OFFSET_RESET_LATEST = "latest";
+    public static final String AUTO_OFFSET_RESET_NONE = "none";
+
+    public static final String SECURITY_PROTOCOL_PLAINTEXT = "PLAINTEXT";
+    public static final String SECURITY_PROTOCOL_SSL = "SSL";
+    public static final String SECURITY_PROTOCOL_SASL_PLAINTEXT = "SASL_PLAINTEXT";
+    public static final String SECURITY_PROTOCOL_SASL_SSL = "SASL_SSL";
+
+    public static final String COMPRESSION_TYPE_NONE = "none";
+    public static final String COMPRESSION_TYPE_GZIP = "gzip";
+    public static final String COMPRESSION_TYPE_SNAPPY = "snappy";
+    public static final String COMPRESSION_TYPE_LZ4 = "lz4";
+    public static final String COMPRESSION_TYPE_ZSTD = "zstd";
+    public static final String ISOLATION_LEVEL_READ_COMMITTED = "read_committed";
+    public static final String BOOLEAN_TRUE = "true";
+    public static final String BOOLEAN_FALSE = "false";
 
     public static final String PROPERTY_SECURITY_PROTOCOL = "security.protocol";
     public static final String PROPERTY_SASL_MECHANISM = "sasl.mechanism";
@@ -120,19 +152,31 @@ public final class SimpleKafkaRouteConstant {
     )));
 
     public static final Set<String> VALID_ACKS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
-            "0", "1", "all", "-1"
+            ACKS_ZERO,
+            ACKS_ONE,
+            ACKS_ALL,
+            ACKS_MINUS_ONE
     )));
 
     public static final Set<String> VALID_COMPRESSION_TYPES = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
-            "none", "gzip", "snappy", "lz4", "zstd"
+            COMPRESSION_TYPE_NONE,
+            COMPRESSION_TYPE_GZIP,
+            COMPRESSION_TYPE_SNAPPY,
+            COMPRESSION_TYPE_LZ4,
+            COMPRESSION_TYPE_ZSTD
     )));
 
     public static final Set<String> VALID_SECURITY_PROTOCOLS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
-            "PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"
+            SECURITY_PROTOCOL_PLAINTEXT,
+            SECURITY_PROTOCOL_SSL,
+            SECURITY_PROTOCOL_SASL_PLAINTEXT,
+            SECURITY_PROTOCOL_SASL_SSL
     )));
 
     public static final Set<String> VALID_AUTO_OFFSET_RESET = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
-            "earliest", "latest", "none"
+            AUTO_OFFSET_RESET_EARLIEST,
+            AUTO_OFFSET_RESET_LATEST,
+            AUTO_OFFSET_RESET_NONE
     )));
 
     private SimpleKafkaRouteConstant() {

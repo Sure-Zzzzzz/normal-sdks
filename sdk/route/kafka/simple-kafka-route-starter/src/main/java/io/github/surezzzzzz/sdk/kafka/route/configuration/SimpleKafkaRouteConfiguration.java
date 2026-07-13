@@ -36,8 +36,10 @@ import org.springframework.context.annotation.Configuration;
         useDefaultFilters = false,
         includeFilters = @ComponentScan.Filter(SimpleKafkaRouteComponent.class)
 )
-@ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
-@ConditionalOnProperty(prefix = SimpleKafkaRouteConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
+@ConditionalOnClass(name = SimpleKafkaRouteConstant.CLASS_NAME_KAFKA_TEMPLATE)
+@ConditionalOnProperty(prefix = SimpleKafkaRouteConstant.CONFIG_PREFIX,
+        name = SimpleKafkaRouteConstant.CONFIG_PROPERTY_ENABLE,
+        havingValue = SimpleKafkaRouteConstant.BOOLEAN_TRUE)
 public class SimpleKafkaRouteConfiguration {
 
     @Bean

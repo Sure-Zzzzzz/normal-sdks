@@ -140,13 +140,14 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
     private KafkaRouteBrokerDiagnosticResult successResult(String datasourceKey, Map<String, Object> clusterDesc,
                                                            Object features,
                                                            SimpleKafkaRouteProperties.DataSourceConfig config) {
-        KafkaRouteBrokerCapability adminApiLevel = features == null
+        KafkaRouteBrokerCapability adminApiLevel = KafkaRouteBrokerCapability.SUPPORTED;
+        KafkaRouteBrokerCapability capabilityInferredFromFeatureApi = features == null
                 ? KafkaRouteBrokerCapability.UNKNOWN : KafkaRouteBrokerCapability.SUPPORTED;
-        KafkaRouteBrokerCapability idempotenceSupported = KafkaRouteBrokerCapability.SUPPORTED;
-        KafkaRouteBrokerCapability zstdSupported = KafkaRouteBrokerCapability.SUPPORTED;
-        KafkaRouteBrokerCapability transactionSupported = features == null
-                ? KafkaRouteBrokerCapability.UNKNOWN : KafkaRouteBrokerCapability.SUPPORTED;
-        KafkaRouteDiagnosticStatus status = hasCapabilityWarning(config, transactionSupported, zstdSupported)
+        KafkaRouteBrokerCapability idempotenceSupported = capabilityInferredFromFeatureApi;
+        KafkaRouteBrokerCapability zstdSupported = capabilityInferredFromFeatureApi;
+        KafkaRouteBrokerCapability transactionSupported = capabilityInferredFromFeatureApi;
+        KafkaRouteDiagnosticStatus status = hasCapabilityWarning(config, transactionSupported,
+                idempotenceSupported, zstdSupported)
                 ? KafkaRouteDiagnosticStatus.WARN : KafkaRouteDiagnosticStatus.SUCCESS;
         return KafkaRouteBrokerDiagnosticResult.builder()
                 .datasourceKey(datasourceKey)
@@ -163,18 +164,84 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
 
     private boolean hasCapabilityWarning(SimpleKafkaRouteProperties.DataSourceConfig config,
                                          KafkaRouteBrokerCapability transactionSupported,
+                                         KafkaRouteBrokerCapability idempotenceSupported,
                                          KafkaRouteBrokerCapability zstdSupported) {
-        SimpleKafkaRouteProperties.ProducerConfig producer = config.getProducer();
-        if (producer == null) {
+        if (config == null) {
             return false;
         }
+        SimpleKafkaRouteProperties.ProducerConfig producer = config.getProducer() == null
+                ? new SimpleKafkaRouteProperties.ProducerConfig() : config.getProducer();
         if (KafkaRouteStringHelper.hasText(producer.getTransactionIdPrefix())
                 && transactionSupported != KafkaRouteBrokerCapability.SUPPORTED) {
             return true;
         }
-        return KafkaRouteStringHelper.hasText(producer.getCompressionType())
-                && "zstd".equalsIgnoreCase(producer.getCompressionType().trim())
+        if (isEffectiveIdempotenceEnabled(config, producer)
+                && idempotenceSupported != KafkaRouteBrokerCapability.SUPPORTED) {
+            return true;
+        }
+        return isEffectiveZstdCompression(config, producer)
                 && zstdSupported != KafkaRouteBrokerCapability.SUPPORTED;
+    }
+
+    private boolean isEffectiveIdempotenceEnabled(SimpleKafkaRouteProperties.DataSourceConfig config,
+                                                  SimpleKafkaRouteProperties.ProducerConfig producer) {
+        Object value = getEffectiveProducerProperty(config, producer,
+                SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE);
+        if (value instanceof Boolean) {
+            return Boolean.TRUE.equals(value);
+        }
+        return value != null && SimpleKafkaRouteConstant.BOOLEAN_TRUE.equalsIgnoreCase(String.valueOf(value).trim());
+    }
+
+    private boolean isEffectiveZstdCompression(SimpleKafkaRouteProperties.DataSourceConfig config,
+                                               SimpleKafkaRouteProperties.ProducerConfig producer) {
+        Object value = getEffectiveProducerProperty(config, producer,
+                SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE);
+        return value != null && SimpleKafkaRouteConstant.COMPRESSION_TYPE_ZSTD.equalsIgnoreCase(String.valueOf(value).trim());
+    }
+
+    private Object getEffectiveProducerProperty(SimpleKafkaRouteProperties.DataSourceConfig config,
+                                                SimpleKafkaRouteProperties.ProducerConfig producer,
+                                                String key) {
+        Object value = hasRawProperty(config.getProperties(), key) ? rawProperty(config.getProperties(), key) : null;
+        Object producerTypedValue = producerTypedProperty(producer, key);
+        if (producerTypedValue != null) {
+            value = producerTypedValue;
+        }
+        return hasRawProperty(producer.getProperties(), key) ? rawProperty(producer.getProperties(), key) : value;
+    }
+
+    private Object producerTypedProperty(SimpleKafkaRouteProperties.ProducerConfig producer, String key) {
+        if (SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE.equals(key)) {
+            return KafkaRouteStringHelper.hasText(producer.getCompressionType())
+                    ? producer.getCompressionType().trim().toLowerCase() : null;
+        }
+        if (SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE.equals(key)) {
+            return producer.getEnableIdempotence();
+        }
+        return null;
+    }
+
+    private boolean hasRawProperty(Map<String, String> properties, String key) {
+        return rawPropertyEntry(properties, key) != null;
+    }
+
+    private Object rawProperty(Map<String, String> properties, String key) {
+        Map.Entry<String, String> entry = rawPropertyEntry(properties, key);
+        return entry == null ? null : entry.getValue();
+    }
+
+    private Map.Entry<String, String> rawPropertyEntry(Map<String, String> properties, String key) {
+        if (properties == null || properties.isEmpty()) {
+            return null;
+        }
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            if (KafkaRouteStringHelper.hasText(entry.getKey())
+                    && key.equals(entry.getKey().trim())) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     private KafkaRouteBrokerDiagnosticResult failedResult(String datasourceKey, RuntimeException e) {

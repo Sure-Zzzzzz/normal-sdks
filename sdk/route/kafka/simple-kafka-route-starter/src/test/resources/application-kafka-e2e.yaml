@@ -1,5 +1,5 @@
 # Kafka route 大而全端到端测试 profile。
-# 配合 -Dkafka.route.e2e.test=true 启用，覆盖 Kafka 1.1.0 / 2.8.1 / 3.7.1 以及 3 broker cluster。
+# 默认随测试执行，覆盖 Kafka 1.1.0 / 2.8.1 / 3.7.1 以及 3 broker cluster。
 # 这里显式重写 application.yaml 中 default/event 两个 datasource，避免 profile 合并后诊断误探测 19092/19093。
 
 io:

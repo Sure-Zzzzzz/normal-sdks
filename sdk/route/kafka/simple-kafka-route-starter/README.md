@@ -20,7 +20,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.1'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.kafka:spring-kafka'
 }
@@ -295,7 +295,11 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 
 ## 测试
 
-单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离与事务边界。端到端测试通过 `-Dkafka.route.e2e.test=true` 开启，默认不跑。
+单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界与诊断 capability 准确性。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
+
+## 升级说明
+
+1.0.1 是 1.0.0 后的诊断准确性补丁版本，仅修复 broker capability 与 Spring Kafka transactionIdPrefix 能力探测口径，不新增配置项，不改变路由核心 API。从 1.0.0 升级到 1.0.1 只需要替换依赖版本。
 
 ## 版本兼容
 
