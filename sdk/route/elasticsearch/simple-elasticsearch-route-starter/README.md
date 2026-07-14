@@ -21,7 +21,7 @@
 ### Gradle
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.2.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.2.1'
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
     implementation "org.apache.httpcomponents:httpclient"
     implementation "org.apache.httpcomponents:httpcore"
@@ -410,45 +410,42 @@ route 1.2.0 将 search-starter / persistence-starter 中可复用、且不依赖
 
 这些 helper 均为无状态静态工具，不新增 Spring bean，不改变现有自动配置和路由行为。
 
-### 2. RestClient 索引与文档协议 helper
+## 🛠️ 1.2.1 by-query URL 参数修复
 
-`ElasticsearchLowLevelRequestHelper` 新增索引和文档级 RestClient 协议操作：
+1.2.1 为 low-level `_update_by_query` / `_delete_by_query` 请求提供参数对象和统一 URL query parameter 映射：
 
-- index exists / create / delete / recreate
-- ES6 typed mapping body 与 ES7 mappings body 自适配
-- index doc / delete doc
-- doc exists / get doc `_source`
-- refresh index
-- 404 语义归一：exists 返回 false，get doc 返回 null，delete 忽略缺失资源
+```java
+Request request = new Request("POST", "/test_index/_delete_by_query");
+ByQueryRequestOptions options = ByQueryRequestOptions.builder()
+        .waitForCompletion(false)
+        .refresh(false)
+        .timeoutMs(30000L)
+        .slices(2)
+        .conflicts("proceed")
+        .scrollSize(500)
+        .build();
 
-这部分只提供 ES 协议级能力，不引入 persistence request/result/executor/event 语义。
+ElasticsearchRequestOptionHelper.applyByQueryRequestOptions(request, options);
+```
 
-### 3. 搜索上下文、聚合协议和响应结构兼容
+字段映射：
 
-1.2.0 还补齐以下公共兼容能力：
+| 参数对象字段 | URL 参数 |
+|--------------|----------|
+| `waitForCompletion` | `wait_for_completion` |
+| `refresh` | `refresh` |
+| `timeoutMs` | `timeout`，转换为 `ms` 格式 |
+| `slices` | `slices` |
+| `conflicts` | `conflicts` |
+| `scrollSize` | `scroll_size` |
+| `requestsPerSecond` | `requests_per_second` |
+| `maxDocs` | `max_docs` |
+| `waitForActiveShards` | `wait_for_active_shards` |
+| `routing` | `routing` |
 
-- PIT 支持版本判断与 `PointInTimeBuilder` 反射探测
-- open PIT / close PIT / scroll 第一页 / scroll 续页 / scroll 清理协议构造
-- `_count` low-level 执行并完整应用 `IndicesOptions`
-- `_mapping` low-level fallback 与 mapping sourceAsMap 提取
-- ES6/ES7 XContent 包路径与 `SearchResponse` 解析
-- ES6 聚合响应 raw response 分流
-- metrics / pipeline 聚合类包路径和方法签名兼容
-- composite `missing_bucket` / `missing_order` 机械清理
-- bulk failure reason、`totalHits`、task Map、doc write result 等响应结构提取
+执行参数必须通过 URL query parameter 传递，JSON body 只承载 `query` / `script` 等请求内容。旧的 `applyByQueryBodyOptions(...)` 为兼容 1.2.0 调用方暂时保留并已标记废弃，新代码不得继续使用。
 
-分页策略、聚合 DSL、聚合结果模型、persistence 请求/结果/事件仍留在下游模块。
-
-### 4. route 兼容异常体系
-
-新增兼容公共能力异常：
-
-- `ElasticsearchCompatibilityException`
-- `ElasticsearchReflectionException`
-- `ElasticsearchXContentException`
-- `ElasticsearchLowLevelRequestException`
-
-helper 失败统一进入 route 自定义异常体系，并提供 `ROUTE_COMPAT_*` 错误码和中文错误消息。
+本版本只提供 route 层协议能力。
 
 ---
 
@@ -919,7 +916,8 @@ Map<String, ElasticsearchRestTemplate> templates = registry.getTemplates();
 
 ## 🔗 相关链接
 
-- [CHANGELOG 1.2.0](./CHANGELOG.1.2.0.md) - **最新版本**
+- [CHANGELOG 1.2.1](./CHANGELOG.1.2.1.md) - **最新版本**
+- [CHANGELOG 1.2.0](./CHANGELOG.1.2.0.md)
 - [CHANGELOG 1.1.2](./CHANGELOG.1.1.2.md)
 - [CHANGELOG 1.1.1](./CHANGELOG.1.1.1.md)
 - [CHANGELOG 1.1.0](./CHANGELOG.1.1.0.md)

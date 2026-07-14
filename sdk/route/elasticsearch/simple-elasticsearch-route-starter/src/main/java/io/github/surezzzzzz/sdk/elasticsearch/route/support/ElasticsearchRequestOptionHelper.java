@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.route.support;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.route.model.ByQueryRequestOptions;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.action.support.WriteRequest;
@@ -177,6 +178,72 @@ public final class ElasticsearchRequestOptionHelper {
         }
     }
 
+    /**
+     * 向 by-query low-level 请求添加 URL 查询参数。
+     *
+     * @param request low-level 请求，为 null 时不执行任何操作
+     * @param options 请求选项，为 null 时不添加参数
+     */
+    public static void applyByQueryRequestOptions(Request request, ByQueryRequestOptions options) {
+        if (request == null || options == null) {
+            return;
+        }
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_WAIT_FOR_COMPLETION,
+                toBooleanParam(options.getWaitForCompletion()));
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_REFRESH,
+                toBooleanParam(options.getRefresh()));
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_TIMEOUT,
+                toTimeoutMs(options.getTimeoutMs()));
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_SLICES,
+                options.getSlices());
+        if (options.getConflicts() != null && !options.getConflicts().trim().isEmpty()) {
+            ElasticsearchLowLevelRequestHelper.addParameter(request,
+                    SimpleElasticsearchRouteConstant.PARAM_CONFLICTS,
+                    options.getConflicts());
+        }
+        ElasticsearchLowLevelRequestHelper.addParameter(request,
+                SimpleElasticsearchRouteConstant.PARAM_SCROLL_SIZE,
+                options.getScrollSize());
+        if (options.getRequestsPerSecond() != null) {
+            ElasticsearchLowLevelRequestHelper.addParameter(request,
+                    SimpleElasticsearchRouteConstant.PARAM_REQUESTS_PER_SECOND,
+                    options.getRequestsPerSecond());
+        }
+        if (options.getMaxDocs() != null) {
+            ElasticsearchLowLevelRequestHelper.addParameter(request,
+                    SimpleElasticsearchRouteConstant.PARAM_MAX_DOCS,
+                    options.getMaxDocs());
+        }
+        if (options.getWaitForActiveShards() != null) {
+            ElasticsearchLowLevelRequestHelper.addParameter(request,
+                    SimpleElasticsearchRouteConstant.PARAM_WAIT_FOR_ACTIVE_SHARDS,
+                    options.getWaitForActiveShards());
+        }
+        if (options.getRouting() != null && !options.getRouting().trim().isEmpty()) {
+            ElasticsearchLowLevelRequestHelper.addParameter(request,
+                    SimpleElasticsearchRouteConstant.PARAM_ROUTING,
+                    options.getRouting());
+        }
+    }
+
+    /**
+     * 向 by-query JSON body 添加执行选项。
+     *
+     * @param body       JSON body
+     * @param refresh    完成后是否刷新
+     * @param timeoutMs  超时时间，单位毫秒
+     * @param slices     并行切片数
+     * @param conflicts  版本冲突策略
+     * @param scrollSize 每批滚动查询数量
+     * @deprecated 自 1.2.1 起废弃。by-query 执行选项应通过 URL 查询参数传递，请使用
+     * {@link #applyByQueryRequestOptions(Request, ByQueryRequestOptions)}。
+     * 本方法仅为兼容 1.2.0 调用方保留，后续 major 版本再考虑删除。
+     */
+    @Deprecated
     public static void applyByQueryBodyOptions(Map<String, Object> body,
                                                Boolean refresh, Long timeoutMs,
                                                Integer slices, String conflicts,

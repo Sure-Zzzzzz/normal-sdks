@@ -194,6 +194,26 @@ public final class SimpleElasticsearchRouteConstant {
     public static final String PARAM_SLICES = "slices";
     public static final String PARAM_CONFLICTS = "conflicts";
 
+    /**
+     * by-query 任务节流参数
+     */
+    public static final String PARAM_REQUESTS_PER_SECOND = "requests_per_second";
+
+    /**
+     * by-query 最大文档数限制
+     */
+    public static final String PARAM_MAX_DOCS = "max_docs";
+
+    /**
+     * by-query 开始前活跃分片数
+     */
+    public static final String PARAM_WAIT_FOR_ACTIVE_SHARDS = "wait_for_active_shards";
+
+    /**
+     * by-query 路由参数
+     */
+    public static final String PARAM_ROUTING = "routing";
+
     public static final String PARAM_VALUE_TRUE = "true";
     public static final String PARAM_VALUE_FALSE = "false";
     public static final String PARAM_VALUE_OPEN = "open";
