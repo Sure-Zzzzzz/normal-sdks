@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.persistence.test.cases;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.BulkItemType;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.exception.SimpleElasticsearchPersistenceException;
+import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.ByQueryOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.IndexOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.UpdateOptions;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.query.PersistenceQuery;
@@ -418,6 +419,13 @@ class PersistenceEngineIntegrationTest {
                                 .termMap(Collections.<String, Object>singletonMap("name.keyword", "ubq-target"))
                                 .build())
                         .scriptSource("ctx._source.ts = 99")
+                        .options(ByQueryOptions.builder()
+                                .conflicts("proceed")
+                                .refresh(false)
+                                .timeoutMs(30000L)
+                                .slices(1)
+                                .scrollSize(100)
+                                .build())
                         .build());
         log.info("updateByQuery 结果={}", result);
         assertTrue(result.isCompleted(), "同步 updateByQuery 应 completed=true");
@@ -458,6 +466,13 @@ class PersistenceEngineIntegrationTest {
                         .query(PersistenceQuery.builder()
                                 .termMap(Collections.<String, Object>singletonMap("name.keyword", "dbq-target"))
                                 .build())
+                        .options(ByQueryOptions.builder()
+                                .conflicts("proceed")
+                                .refresh(false)
+                                .timeoutMs(30000L)
+                                .slices(1)
+                                .scrollSize(100)
+                                .build())
                         .build());
         log.info("deleteByQuery 结果={}", result);
         assertTrue(result.isCompleted(), "同步 deleteByQuery 应 completed=true");
@@ -467,6 +482,156 @@ class PersistenceEngineIntegrationTest {
         assertFalse(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-1"), "dbq-1 应被删除");
         assertFalse(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-2"), "dbq-2 应被删除");
         assertTrue(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-3"), "dbq-3 应保留");
+    }
+
+    @Test
+    @DisplayName("updateByQuery 异步：wait_for_completion=false 返回 taskId，轮询到完成，scrollSize 覆盖 batchSize")
+    void testUpdateByQueryAsync() throws Exception {
+        TestDoc d1 = new TestDoc();
+        d1.setId("e2e-ubq-async-1");
+        d1.setName("ubq-async-target");
+        d1.setTs(1L);
+        TestDoc d2 = new TestDoc();
+        d2.setId("e2e-ubq-async-2");
+        d2.setName("ubq-async-target");
+        d2.setTs(2L);
+        engine.index(d1);
+        engine.index(d2);
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+
+        ByQueryTaskResult result = engine.updateByQuery(
+                UpdateByQueryRequest.builder()
+                        .index(INDEX)
+                        .query(PersistenceQuery.builder()
+                                .termMap(Collections.<String, Object>singletonMap("name.keyword", "ubq-async-target"))
+                                .build())
+                        .scriptSource("ctx._source.ts = 77")
+                        .options(ByQueryOptions.builder()
+                                .waitForCompletion(false)
+                                .conflicts("proceed")
+                                .refresh(false)
+                                .timeoutMs(30000L)
+                                .slices(1)
+                                .scrollSize(100)
+                                .batchSize(50)
+                                .build())
+                        .build());
+        log.info("异步 updateByQuery 提交结果={}", result);
+        assertNotNull(result.getTaskId(), "异步提交应返回非空 taskId");
+        assertFalse(result.isCompleted(), "异步提交后应 completed=false");
+
+        ByQueryTaskResult finalResult = awaitTaskCompleted(DATASOURCE, result.getTaskId(), 30000L);
+        log.info("异步 updateByQuery 轮询结果={}", finalResult);
+        assertTrue(finalResult.isCompleted(), "任务应在超时前完成");
+        assertEquals(2L, finalResult.getUpdated(), "应更新 2 条");
+
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+        Map<String, Object> s1 = EsApiHelper.getDoc(secondaryClient(), INDEX, "e2e-ubq-async-1");
+        assertEquals(77L, ((Number) s1.get("ts")).longValue(), "ubq-async-1 的 ts 应被更新为 77");
+    }
+
+    @Test
+    @DisplayName("deleteByQuery 异步：wait_for_completion=false 返回 taskId，轮询到完成，batchSize fallback 为 scroll_size")
+    void testDeleteByQueryAsync() throws Exception {
+        TestDoc d1 = new TestDoc();
+        d1.setId("e2e-dbq-async-1");
+        d1.setName("dbq-async-target");
+        d1.setTs(1L);
+        TestDoc d2 = new TestDoc();
+        d2.setId("e2e-dbq-async-2");
+        d2.setName("dbq-async-target");
+        d2.setTs(2L);
+        TestDoc d3 = new TestDoc();
+        d3.setId("e2e-dbq-async-3");
+        d3.setName("dbq-async-other");
+        d3.setTs(3L);
+        engine.index(d1);
+        engine.index(d2);
+        engine.index(d3);
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+
+        ByQueryTaskResult result = engine.deleteByQuery(
+                DeleteByQueryRequest.builder()
+                        .index(INDEX)
+                        .query(PersistenceQuery.builder()
+                                .termMap(Collections.<String, Object>singletonMap("name.keyword", "dbq-async-target"))
+                                .build())
+                        .options(ByQueryOptions.builder()
+                                .waitForCompletion(false)
+                                .conflicts("proceed")
+                                .refresh(false)
+                                .timeoutMs(30000L)
+                                .slices(1)
+                                .batchSize(80)
+                                .build())
+                        .build());
+        log.info("异步 deleteByQuery 提交结果={}", result);
+        assertNotNull(result.getTaskId(), "异步提交应返回非空 taskId");
+        assertFalse(result.isCompleted(), "异步提交后应 completed=false");
+
+        ByQueryTaskResult finalResult = awaitTaskCompleted(DATASOURCE, result.getTaskId(), 30000L);
+        log.info("异步 deleteByQuery 轮询结果={}", finalResult);
+        assertTrue(finalResult.isCompleted(), "任务应在超时前完成");
+        assertEquals(2L, finalResult.getDeleted(), "应删除 2 条");
+
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+        assertFalse(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-async-1"), "dbq-async-1 应被删除");
+        assertFalse(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-async-2"), "dbq-async-2 应被删除");
+        assertTrue(EsApiHelper.docExists(secondaryClient(), INDEX, "e2e-dbq-async-3"), "dbq-async-3 应保留");
+    }
+
+    @Test
+    @DisplayName("getTask 任务不存在：抛 EXECUTION_FAILED（空 nodes 感知）")
+    void testGetTaskNotExistsThrows() {
+        SimpleElasticsearchPersistenceException ex = assertThrows(
+                SimpleElasticsearchPersistenceException.class,
+                () -> engine.getTask(DATASOURCE, "nonexistent:999999"));
+        assertEquals(ErrorCode.EXECUTION_FAILED, ex.getErrorCode(), "不存在的任务应抛 EXECUTION_FAILED");
+        log.info("任务不存在异常信息={}", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("updateByQuery 异步任务失败：非法 script 触发任务级 error，提交或 getTask 抛 EXECUTION_FAILED")
+    void testUpdateByQueryAsyncTaskFailure() throws Exception {
+        TestDoc d1 = new TestDoc();
+        d1.setId("e2e-ubq-fail-1");
+        d1.setName("ubq-fail-target");
+        d1.setTs(1L);
+        engine.index(d1);
+        EsApiHelper.refreshIndex(secondaryClient(), INDEX);
+
+        String taskId;
+        try {
+            ByQueryTaskResult result = engine.updateByQuery(
+                    UpdateByQueryRequest.builder()
+                            .index(INDEX)
+                            .query(PersistenceQuery.builder()
+                                    .termMap(Collections.<String, Object>singletonMap("name.keyword", "ubq-fail-target"))
+                                    .build())
+                            .scriptSource("ctx._source.ts = )")
+                            .options(ByQueryOptions.builder()
+                                    .waitForCompletion(false)
+                                    .conflicts("proceed")
+                                    .refresh(false)
+                                    .timeoutMs(30000L)
+                                    .slices(1)
+                                    .build())
+                            .build());
+            taskId = result.getTaskId();
+            log.info("异步失败任务提交结果 taskId={}", taskId);
+        } catch (SimpleElasticsearchPersistenceException e) {
+            assertEquals(ErrorCode.EXECUTION_FAILED, e.getErrorCode(), "提交期 script 失败应抛 EXECUTION_FAILED");
+            log.info("提交期失败异常信息={}", e.getMessage());
+            return;
+        }
+
+        assertNotNull(taskId, "异步提交应返回非空 taskId");
+        final String failureTaskId = taskId;
+        SimpleElasticsearchPersistenceException ex = assertThrows(
+                SimpleElasticsearchPersistenceException.class,
+                () -> awaitTaskCompleted(DATASOURCE, failureTaskId, 30000L));
+        assertEquals(ErrorCode.EXECUTION_FAILED, ex.getErrorCode(), "任务级失败应抛 EXECUTION_FAILED");
+        log.info("任务级失败异常信息={}", ex.getMessage());
     }
 
     @Test
@@ -494,6 +659,24 @@ class PersistenceEngineIntegrationTest {
 
     private RestClient secondaryClient() {
         return registry.getLowLevelClient(DATASOURCE);
+    }
+
+    /**
+     * 轮询服务端异步任务直到完成或超时。
+     * <p>任务不存在或任务级失败时 getTask 会直接抛 PersistenceExecutionException，本方法自然传播；
+     * 超时未完成则抛带 taskId 的断言错误。</p>
+     */
+    private ByQueryTaskResult awaitTaskCompleted(String datasource, String taskId, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        ByQueryTaskResult result = engine.getTask(datasource, taskId);
+        while (!result.isCompleted() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(500L);
+            result = engine.getTask(datasource, taskId);
+        }
+        if (!result.isCompleted()) {
+            throw new AssertionError("异步任务 " + taskId + " 在 " + timeoutMs + "ms 内未完成");
+        }
+        return result;
     }
 
     private String buildCauseChain(Throwable t) {

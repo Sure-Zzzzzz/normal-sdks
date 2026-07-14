@@ -134,6 +134,14 @@ public final class PersistenceEsRequestHelper {
         return esRequest;
     }
 
+    /**
+     * 构造 High Level Client 的 update-by-query 请求。
+     * <p>非实际执行路径：当前 by-query 同步/异步执行走 low-level REST（见 {@link ElasticsearchWriteApiHelper}），
+     * 本方法无调用方，且未透传 scrollSize，仅为 HL Client 兼容保留。新代码勿用。</p>
+     *
+     * @deprecated by-query 执行路径已切换到 low-level REST，请使用 {@link ElasticsearchWriteApiHelper#updateByQuerySync}
+     */
+    @Deprecated
     public static UpdateByQueryRequest buildUpdateByQueryRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.UpdateByQueryRequest request) {
         UpdateByQueryRequest esRequest = new UpdateByQueryRequest(request.getIndex());
         esRequest.setQuery(buildQuery(request.getQuery()));
@@ -144,6 +152,14 @@ public final class PersistenceEsRequestHelper {
         return esRequest;
     }
 
+    /**
+     * 构造 High Level Client 的 delete-by-query 请求。
+     * <p>非实际执行路径：当前 by-query 同步/异步执行走 low-level REST（见 {@link ElasticsearchWriteApiHelper}），
+     * 本方法无调用方，仅为 HL Client 兼容保留。新代码勿用。</p>
+     *
+     * @deprecated by-query 执行路径已切换到 low-level REST，请使用 {@link ElasticsearchWriteApiHelper#deleteByQuerySync}
+     */
+    @Deprecated
     public static DeleteByQueryRequest buildDeleteByQueryRequest(io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.DeleteByQueryRequest request) {
         DeleteByQueryRequest esRequest = new DeleteByQueryRequest(request.getIndex());
         esRequest.setQuery(buildQuery(request.getQuery()));
@@ -265,6 +281,11 @@ public final class PersistenceEsRequestHelper {
         return item != null && (BulkItemType.INDEX == item.getType() || BulkItemType.CREATE == item.getType());
     }
 
+    /**
+     * 将 by-query 选项应用到 High Level Client 请求。
+     * <p>非实际执行路径：当前 by-query 同步/异步执行走 low-level REST（见 {@link ElasticsearchWriteApiHelper}），
+     * 本方法不在此执行链路上，仅为 HL Client 兼容保留。</p>
+     */
     private static void applyByQueryOptions(UpdateByQueryRequest request, ByQueryOptions options) {
         if (options == null) {
             return;
@@ -273,6 +294,11 @@ public final class PersistenceEsRequestHelper {
                 options.getConflicts(), options.getRefresh(), options.getTimeoutMs());
     }
 
+    /**
+     * 将 by-query 选项应用到 High Level Client 请求。
+     * <p>非实际执行路径：当前 by-query 同步/异步执行走 low-level REST（见 {@link ElasticsearchWriteApiHelper}），
+     * 本方法不在此执行链路上，仅为 HL Client 兼容保留。</p>
+     */
     private static void applyByQueryOptions(DeleteByQueryRequest request, ByQueryOptions options) {
         if (options == null) {
             return;
