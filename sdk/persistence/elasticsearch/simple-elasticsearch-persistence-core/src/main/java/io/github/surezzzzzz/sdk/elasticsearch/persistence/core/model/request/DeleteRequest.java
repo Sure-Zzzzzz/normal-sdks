@@ -17,12 +17,20 @@ public class DeleteRequest extends PersistenceRequest {
 
     private static final long serialVersionUID = 1L;
 
-    /** 目标索引。 */
+    /**
+     * 目标索引。
+     */
     private String index;
-    /** 文档 ID。 */
+    /**
+     * 文档 ID。
+     */
     private String id;
-    /** 文档类型。 */
+    /**
+     * 文档类型。
+     */
     private Class<?> documentClass;
-    /** Delete 写入选项。 */
+    /**
+     * Delete 写入选项。
+     */
     private DeleteOptions options;
 }

@@ -14,10 +14,16 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class DeleteOptions extends WriteOptions {
 
-    /** 版本号。 */
+    /**
+     * 版本号。
+     */
     private Long version;
-    /** 版本类型。 */
+    /**
+     * 版本类型。
+     */
     private String versionType;
-    /** 删除目标不存在时是否视为成功。 */
+    /**
+     * 删除目标不存在时是否视为成功。
+     */
     private Boolean notFoundAsSuccess;
 }

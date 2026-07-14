@@ -15,8 +15,12 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class IndexOptions extends WriteOptions {
 
-    /** 索引操作类型。 */
+    /**
+     * 索引操作类型。
+     */
     private IndexOperationType operationType;
-    /** 写入时使用的 ingest pipeline。 */
+    /**
+     * 写入时使用的 ingest pipeline。
+     */
     private String pipeline;
 }

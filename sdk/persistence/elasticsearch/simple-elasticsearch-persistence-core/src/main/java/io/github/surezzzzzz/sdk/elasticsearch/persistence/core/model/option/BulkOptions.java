@@ -14,10 +14,16 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode(callSuper = true)
 public class BulkOptions extends WriteOptions {
 
-    /** 分批大小。 */
+    /**
+     * 分批大小。
+     */
     private Integer batchSize;
-    /** 是否在存在 item 失败时继续提交后续批次。 */
+    /**
+     * 是否在存在 item 失败时继续提交后续批次。
+     */
     private Boolean continueOnFailure;
-    /** Bulk 请求级 ingest pipeline。 */
+    /**
+     * Bulk 请求级 ingest pipeline。
+     */
     private String pipeline;
 }

@@ -8,8 +8,8 @@
 
 ## 版本
 
-- 当前版本：`1.0.2`
-- 依赖方：`simple-elasticsearch-persistence-starter:1.0.1+`；1.0.2 新增字段由 starter 1.0.2 起落地执行语义
+- 当前版本：`1.0.3`
+- 依赖方：`simple-elasticsearch-persistence-starter:1.0.1+`；1.0.3 新增 by-query 执行参数字段由 starter 1.1.1 起落地执行语义
 
 ## 包结构
 
@@ -204,6 +204,9 @@ Bulk item 失败明细。
 | `slices` | `Integer` | 并行切片数 |
 | `conflicts` | `String` | 冲突策略（proceed / abort） |
 | `routing` | `String` | 路由值 |
+| `requestsPerSecond` | `Float` | 每秒请求数节流，null 不限制，0 暂停 |
+| `maxDocs` | `Long` | 限制处理的最大文档数，0 处理 0 个 |
+| `waitForActiveShards` | `Integer` | 执行前要求的活跃分片数，0 要求全部必需分片就绪 |
 
 ### PersistenceQuery
 
@@ -249,6 +252,7 @@ Bulk item 失败明细。
 
 ## 版本历史
 
+- `1.0.3`：`ByQueryOptions` 新增 `requestsPerSecond`、`maxDocs`、`waitForActiveShards` 三个 by-query 执行参数字段；`routing` 由 `WriteOptions` 继承复用，by-query 搜索阶段路由复用该字段
 - `1.0.2`：补充业务写入增强模型，新增 `refreshPolicy`、`pipeline`、`retryOnConflict`、`detectNoop`、delete `notFoundAsSuccess`、bulk item 级 upsert/scriptedUpsert、bulk 失败明细和分批结果字段
 - `1.0.1`：`UpdateOptions` 新增 `upsertDoc`（兜底初始化文档）和 `scriptedUpsert`（scripted_upsert 语义），支持文档不存在时通过 Painless 脚本初始化字段
 - `1.0.0`：初始版本，提供写操作核心模型、枚举常量、事件定义
