@@ -1,0 +1,83 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            enable: true
+            default-source: v110
+            sources:
+              v110:
+                bootstrap-servers:
+                  - localhost:18091
+                producer:
+                  acks: all
+              v28:
+                bootstrap-servers:
+                  - localhost:18092
+                producer:
+                  acks: all
+              v37:
+                bootstrap-servers:
+                  - localhost:18094
+                producer:
+                  acks: all
+              cluster:
+                bootstrap-servers:
+                  - localhost:19192
+                  - localhost:19193
+                  - localhost:19194
+                producer:
+                  acks: all
+              dead:
+                bootstrap-servers:
+                  - localhost:29999
+                producer:
+                  acks: all
+                  retries: 0
+                  request-timeout-ms: 1000
+                  delivery-timeout-ms: 3000
+            diagnostics:
+              enable: false
+            rules:
+              - pattern: "mock.publisher.v28."
+                type: prefix
+                datasource: v28
+                priority: 1
+              - pattern: "mock.publisher.v37."
+                type: prefix
+                datasource: v37
+                priority: 2
+              - pattern: "mock-route-v37-*"
+                type: wildcard
+                datasource: v37
+                priority: 3
+              - pattern: "mock.publisher.cluster."
+                type: prefix
+                datasource: cluster
+                priority: 4
+              - pattern: "mock.publisher.route."
+                type: prefix
+                datasource: v37
+                priority: 5
+              - pattern: "mock.publisher.dead."
+                type: prefix
+                datasource: dead
+                priority: 6
+        messaging:
+          kafka:
+            publisher:
+              enable: true
+              app-name: mock-publisher-app
+              envelope:
+                enable: true
+                include-null-payload: false
+              headers:
+                enable-default-headers: true
+                allow-header-override: false
+              send:
+                timeout-ms: 30000
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.messaging.kafka.publisher: DEBUG

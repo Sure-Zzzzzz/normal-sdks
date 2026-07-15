@@ -1,0 +1,40 @@
+package io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishSerializeContext;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Jackson Kafka 发布序列化器
+ *
+ * @author surezzzzzz
+ */
+@RequiredArgsConstructor
+public class JacksonKafkaPublishSerializer implements KafkaPublishSerializer {
+
+    private final ObjectMapper objectMapper;
+
+    /**
+     * 序列化发布内容
+     *
+     * @param context 序列化上下文
+     * @return 序列化后的字符串
+     */
+    @Override
+    public String serialize(KafkaPublishSerializeContext context) {
+        Object target = context.isEnvelopeEnabled() ? context.getEnvelope() : context.getPayload();
+        if (!context.isEnvelopeEnabled() && target instanceof String) {
+            return (String) target;
+        }
+        try {
+            return objectMapper.writeValueAsString(target);
+        } catch (JsonProcessingException e) {
+            throw new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_006,
+                    String.format(ErrorMessage.SERIALIZE_FAILED, context.getMessageType(), context.getMessageId()), e);
+        }
+    }
+}
