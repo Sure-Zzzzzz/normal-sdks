@@ -41,7 +41,7 @@ public final class KafkaPublishStringHelper {
     }
 
     /**
-     * 判断是否包含控制字符
+     * 判断是否包含控制字符或 Unicode 换行字符
      *
      * @param value 字符串
      * @return true 包含，false 不包含
@@ -50,11 +50,34 @@ public final class KafkaPublishStringHelper {
         if (value == null) {
             return false;
         }
-        for (int i = 0; i < value.length(); i++) {
-            if (Character.isISOControl(value.charAt(i))) {
+        for (int offset = 0; offset < value.length(); ) {
+            int codePoint = value.codePointAt(offset);
+            int type = Character.getType(codePoint);
+            if (Character.isISOControl(codePoint)
+                    || type == Character.FORMAT
+                    || type == Character.LINE_SEPARATOR
+                    || type == Character.PARAGRAPH_SEPARATOR) {
                 return true;
             }
+            offset += Character.charCount(codePoint);
         }
         return false;
+    }
+
+    /**
+     * 转换为可安全写入错误消息的字符串
+     *
+     * @param value 原始字符串
+     * @return 安全展示值
+     */
+    public static String safeForErrorMessage(String value) {
+        if (value == null) {
+            return null;
+        }
+        if (value.length() > SimpleKafkaPublisherConstant.MAX_ERROR_DISPLAY_LENGTH
+                || containsControlCharacter(value)) {
+            return SimpleKafkaPublisherConstant.ERROR_VALUE_UNSAFE_DISPLAY;
+        }
+        return value;
     }
 }

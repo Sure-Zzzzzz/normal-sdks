@@ -58,14 +58,17 @@ public class KafkaPublisherEndToEndCustomizerTest {
         assertNotNull(record, "应消费到 customizer 测试消息");
         JsonNode envelope = objectMapper.readTree(record.value());
 
-        log.info("customizer E2E header 值: {}", new String(
-                record.headers().lastHeader("x-e2e-custom-header").value(), StandardCharsets.UTF_8));
+        org.apache.kafka.common.header.Header customHeader =
+                record.headers().lastHeader("x-e2e-custom-header");
+        assertNotNull(customHeader, "消费端应收到 header customizer 添加的 header");
+        log.info("customizer E2E header 值: {}", new String(customHeader.value(), StandardCharsets.UTF_8));
         log.info("customizer E2E envelope: {}", record.value());
-        assertArrayEquals("custom-header-value".getBytes(StandardCharsets.UTF_8),
-                record.headers().lastHeader("x-e2e-custom-header").value(),
+        assertArrayEquals("custom-header-value".getBytes(StandardCharsets.UTF_8), customHeader.value(),
                 "header customizer 添加的 header 应到达消费端");
         assertNotNull(envelope.get("attributes"),
                 "消费端 envelope 应包含 attributes 对象");
+        assertNotNull(envelope.get("attributes").get("e2eAttribute"),
+                "消费端 envelope attributes 应包含 e2eAttribute");
         assertEquals("custom-attribute-value", envelope.get("attributes").get("e2eAttribute").asText(),
                 "envelope customizer 补充的 attribute 应进入消费端 envelope attributes JSON");
     }

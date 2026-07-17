@@ -168,8 +168,7 @@ public class DefaultKafkaPublisherTest {
         when(resolver.resolveRouteKey(any(KafkaPublishMessage.class)))
                 .thenReturn(KafkaPublisherTestHelper.ROUTE_KEY);
         DefaultKafkaPublisher publisherWithResolver = new DefaultKafkaPublisher(routeTemplate, properties,
-                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(
-                        new com.fasterxml.jackson.databind.ObjectMapper()),
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTopicResolver(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishKeyResolver(),
                 resolver,
@@ -208,8 +207,7 @@ public class DefaultKafkaPublisherTest {
         io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties properties =
                 KafkaPublisherTestHelper.properties();
         DefaultKafkaPublisher publisherWithBlankGenerator = new DefaultKafkaPublisher(routeTemplate, properties,
-                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(
-                        new com.fasterxml.jackson.databind.ObjectMapper()),
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTopicResolver(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishKeyResolver(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishRouteKeyResolver(),
@@ -242,8 +240,7 @@ public class DefaultKafkaPublisherTest {
         io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublishEnvelopeCustomizer customizer =
                 context -> context.getAttributes().put("customized", Boolean.TRUE);
         DefaultKafkaPublisher publisherWithCustomizer = new DefaultKafkaPublisher(routeTemplate, properties,
-                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(
-                        new com.fasterxml.jackson.databind.ObjectMapper()),
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTopicResolver(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishKeyResolver(),
                 new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishRouteKeyResolver(),
@@ -259,11 +256,121 @@ public class DefaultKafkaPublisherTest {
         publisherWithCustomizer.publish(message)
                 .get(KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
+        com.fasterxml.jackson.databind.JsonNode envelope =
+                new com.fasterxml.jackson.databind.ObjectMapper().readTree(recordRef.get().value());
         log.info("customizer 后原 attributes: {}", originalAttributes.keySet());
         assertEquals(Collections.singletonMap("original", Boolean.TRUE), originalAttributes,
                 "customizer 不应回写调用方原始 attributes map");
-        assertTrue(recordRef.get().value().contains("customized"),
+        assertNotNull(envelope.get("attributes"), "最终 Envelope 应包含 attributes 对象");
+        assertEquals(Boolean.TRUE, envelope.get("attributes").get("customized").asBoolean(),
                 "customizer 补充的 attribute 应进入本次 envelope");
+        assertEquals(Boolean.TRUE, envelope.get("attributes").get("original").asBoolean(),
+                "原始 attribute 应保留在本次 envelope");
+    }
+
+    @Test
+    public void testSerializerNullRejectedBeforeAllRouteModes() {
+        DefaultKafkaPublisher nullSerializerPublisher = publisherWithSerializer(context -> null);
+
+        KafkaPublishException autoException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publish(KafkaPublisherTestHelper.message()));
+        KafkaPublishException topicException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publish(
+                        KafkaPublisherTestHelper.TOPIC, KafkaPublisherTestHelper.PAYLOAD));
+        KafkaPublishException topicWithKeyException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publish(KafkaPublisherTestHelper.TOPIC,
+                        KafkaPublisherTestHelper.KEY, KafkaPublisherTestHelper.PAYLOAD));
+        KafkaPublishException routeException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publishByRouteKey(
+                        KafkaPublisherTestHelper.ROUTE_KEY, KafkaPublisherTestHelper.message()));
+        KafkaPublishException datasourceException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publishOn(
+                        KafkaPublisherTestHelper.DATASOURCE_KEY, KafkaPublisherTestHelper.message()));
+        KafkaPublishException waitException = assertThrows(KafkaPublishException.class,
+                () -> nullSerializerPublisher.publishAndWait(KafkaPublisherTestHelper.message()));
+
+        log.info("serializer 返回 null 错误消息: {}", autoException.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, autoException.getErrorCode(),
+                "自动路由模式应作为序列化失败");
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, topicException.getErrorCode(),
+                "topic 模式应作为序列化失败");
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, topicWithKeyException.getErrorCode(),
+                "topic + key 模式应作为序列化失败");
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, routeException.getErrorCode(),
+                "routeKey 模式应作为序列化失败");
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, datasourceException.getErrorCode(),
+                "datasource 模式应作为序列化失败");
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, waitException.getErrorCode(),
+                "同步等待模式应在发送前作为序列化失败");
+        verifyNoInteractions(routeTemplate);
+    }
+
+    @Test
+    public void testSerializerEmptyStringIsAllowed() throws Exception {
+        AtomicReference<ProducerRecord<String, String>> recordRef = new AtomicReference<>();
+        when(routeTemplate.send(any(ProducerRecord.class))).thenAnswer(invocation -> {
+            ProducerRecord<String, String> record = invocation.getArgument(0);
+            recordRef.set(record);
+            return KafkaPublisherTestHelper.successFuture(record);
+        });
+        DefaultKafkaPublisher emptySerializerPublisher = publisherWithSerializer(context -> "");
+
+        emptySerializerPublisher.publish(KafkaPublisherTestHelper.message())
+                .get(KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        log.info("serializer 返回空字符串后的 record value 长度: {}", recordRef.get().value().length());
+        assertEquals("", recordRef.get().value(),
+                "serializer 空字符串返回值合法，不应被按 blank 拒绝");
+        verify(routeTemplate).send(any(ProducerRecord.class));
+    }
+
+    @Test
+    public void testSerializerRuntimeExceptionWrappedWithoutMessageLeak() {
+        RuntimeException cause = new IllegalStateException("secret-payload-value");
+        DefaultKafkaPublisher exceptionPublisher = publisherWithSerializer(context -> {
+            throw cause;
+        });
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> exceptionPublisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("serializer RuntimeException 包装错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_006, exception.getErrorCode(),
+                "serializer RuntimeException 应包装为序列化失败");
+        assertNull(exception.getCause(), "不可信 serializer 异常不应作为 cause 泄漏完整异常栈");
+        assertFalse(exception.getMessage().contains("secret-payload-value"),
+                "顶层错误消息不应包含原异常 message");
+        verifyNoInteractions(routeTemplate);
+    }
+
+    @Test
+    public void testSerializerKafkaPublishExceptionPropagated() {
+        KafkaPublishException expected = new KafkaPublishException(
+                ErrorCode.KAFKA_PUBLISHER_006, "mock-safe-error");
+        DefaultKafkaPublisher exceptionPublisher = publisherWithSerializer(context -> {
+            throw expected;
+        });
+
+        KafkaPublishException actual = assertThrows(KafkaPublishException.class,
+                () -> exceptionPublisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("serializer KafkaPublishException 传播结果: {}", actual.getMessage());
+        assertSame(expected, actual, "serializer 抛出的 KafkaPublishException 应原样传播");
+        verifyNoInteractions(routeTemplate);
+    }
+
+    private DefaultKafkaPublisher publisherWithSerializer(
+            io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.KafkaPublishSerializer serializer) {
+        io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties properties =
+                KafkaPublisherTestHelper.properties();
+        return new DefaultKafkaPublisher(routeTemplate, properties, serializer,
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTopicResolver(),
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishKeyResolver(),
+                new io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishRouteKeyResolver(),
+                () -> KafkaPublisherTestHelper.MESSAGE_ID,
+                () -> KafkaPublisherTestHelper.TRACE_ID,
+                () -> KafkaPublisherTestHelper.RECORD_TIMESTAMP,
+                Collections.emptyList(), Collections.emptyList());
     }
 
     @Test
@@ -289,11 +396,13 @@ public class DefaultKafkaPublisherTest {
                 () -> publisher.publish(KafkaPublisherTestHelper.message())
                         .get(KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
 
-        log.info("空底层 Future 错误: {}", exception.getCause().getMessage());
-        assertTrue(exception.getCause() instanceof KafkaPublishException,
+        Throwable cause = exception.getCause();
+        log.info("空底层 Future 错误: {}", cause == null ? null : cause.getMessage());
+        assertNotNull(cause, "空底层 Future 的 ExecutionException 应保留 cause");
+        assertTrue(cause instanceof KafkaPublishException,
                 "空底层 Future 应包装为 KafkaPublishException");
         assertEquals(ErrorCode.KAFKA_PUBLISHER_007,
-                ((KafkaPublishException) exception.getCause()).getErrorCode(), "错误码应为发送失败");
+                ((KafkaPublishException) cause).getErrorCode(), "错误码应为发送失败");
     }
 
     @Test
@@ -307,11 +416,13 @@ public class DefaultKafkaPublisherTest {
                 () -> publisher.publish(KafkaPublisherTestHelper.message())
                         .get(KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS, TimeUnit.SECONDS));
 
-        log.info("空底层发送结果错误: {}", exception.getCause().getMessage());
-        assertTrue(exception.getCause() instanceof KafkaPublishException,
+        Throwable cause = exception.getCause();
+        log.info("空底层发送结果错误: {}", cause == null ? null : cause.getMessage());
+        assertNotNull(cause, "空底层发送结果的 ExecutionException 应保留 cause");
+        assertTrue(cause instanceof KafkaPublishException,
                 "空底层发送结果应包装为 KafkaPublishException");
         assertEquals(ErrorCode.KAFKA_PUBLISHER_007,
-                ((KafkaPublishException) exception.getCause()).getErrorCode(), "错误码应为发送失败");
+                ((KafkaPublishException) cause).getErrorCode(), "错误码应为发送失败");
     }
 
     @Test

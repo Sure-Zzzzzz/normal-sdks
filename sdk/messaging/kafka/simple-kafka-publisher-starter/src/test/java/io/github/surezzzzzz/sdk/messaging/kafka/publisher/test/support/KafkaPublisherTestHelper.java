@@ -1,6 +1,5 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.DefaultKafkaPublisher;
@@ -71,7 +70,7 @@ public final class KafkaPublisherTestHelper {
     public static DefaultKafkaPublisher publisher(KafkaRouteTemplate routeTemplate) {
         SimpleKafkaPublisherProperties properties = properties();
         return new DefaultKafkaPublisher(routeTemplate, properties,
-                new JacksonKafkaPublishSerializer(new ObjectMapper()),
+                new JacksonKafkaPublishSerializer(),
                 new DefaultKafkaPublishTopicResolver(),
                 new DefaultKafkaPublishKeyResolver(),
                 new DefaultKafkaPublishRouteKeyResolver(),

@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishEnvelope;
@@ -14,7 +14,13 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Jackson Kafka 发布序列化器测试
@@ -26,7 +32,7 @@ public class JacksonKafkaPublishSerializerTest {
 
     @Test
     public void testStringPayloadPassesThrough() {
-        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer(new ObjectMapper());
+        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer();
         String result = serializer.serialize(KafkaPublishSerializeContext.builder()
                 .topic(KafkaPublisherTestHelper.TOPIC)
                 .messageId(KafkaPublisherTestHelper.MESSAGE_ID)
@@ -40,10 +46,8 @@ public class JacksonKafkaPublishSerializerTest {
     }
 
     @Test
-    public void testUsesInjectedObjectMapperConfiguration() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer(objectMapper);
+    public void testUsesPrivateDefaultObjectMapper() {
+        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer();
         String result = serializer.serialize(KafkaPublishSerializeContext.builder()
                 .topic(KafkaPublisherTestHelper.TOPIC)
                 .messageId(KafkaPublisherTestHelper.MESSAGE_ID)
@@ -52,14 +56,40 @@ public class JacksonKafkaPublishSerializerTest {
                 .envelopeEnabled(false)
                 .build());
 
-        log.info("ObjectMapper 配置序列化结果: {}", result);
-        assertEquals("{\"mock_value\":\"mock-value\"}", result,
-                "应精确使用注入 ObjectMapper 的命名策略和字段值");
+        log.info("私有 ObjectMapper 序列化结果: {}", result);
+        assertEquals("{\"mockValue\":\"mock-value\"}", result,
+                "默认序列化器应使用自身 ObjectMapper 的默认命名策略");
+    }
+
+    @Test
+    public void testJavaTimePayloadUsesIso8601() throws Exception {
+        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer();
+        JavaTimePayload payload = new JavaTimePayload(
+                LocalDate.of(2026, 7, 17),
+                LocalDateTime.of(2026, 7, 17, 14, 30, 45),
+                Instant.parse("2026-07-17T06:30:45Z"));
+
+        String result = serializer.serialize(KafkaPublishSerializeContext.builder()
+                .topic(KafkaPublisherTestHelper.TOPIC)
+                .messageId(KafkaPublisherTestHelper.MESSAGE_ID)
+                .messageType(KafkaPublisherTestHelper.MESSAGE_TYPE)
+                .payload(payload)
+                .envelopeEnabled(false)
+                .build());
+        JsonNode json = new ObjectMapper().readTree(result);
+
+        log.info("Java 8 时间类型序列化结果: {}", result);
+        assertEquals("2026-07-17", json.get("localDate").asText(),
+                "LocalDate 应使用 ISO-8601 字符串");
+        assertEquals("2026-07-17T14:30:45", json.get("localDateTime").asText(),
+                "LocalDateTime 应使用 ISO-8601 字符串");
+        assertEquals("2026-07-17T06:30:45Z", json.get("instant").asText(),
+                "Instant 应使用 ISO-8601 UTC 字符串");
     }
 
     @Test
     public void testEnvelopeSerialized() throws Exception {
-        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer(new ObjectMapper());
+        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer();
         KafkaPublishEnvelope<String> envelope = KafkaPublishEnvelope.<String>builder()
                 .messageId(KafkaPublisherTestHelper.MESSAGE_ID)
                 .messageType(KafkaPublisherTestHelper.MESSAGE_TYPE)
@@ -74,7 +104,7 @@ public class JacksonKafkaPublishSerializerTest {
                 .envelopeEnabled(true)
                 .build());
 
-        com.fasterxml.jackson.databind.JsonNode json = new ObjectMapper().readTree(result);
+        JsonNode json = new ObjectMapper().readTree(result);
         log.info("Envelope 序列化结果: {}", result);
         assertEquals(KafkaPublisherTestHelper.MESSAGE_ID, json.get("messageId").asText(),
                 "Envelope messageId 应精确一致");
@@ -86,8 +116,7 @@ public class JacksonKafkaPublishSerializerTest {
 
     @Test
     public void testSerializeFailureDoesNotExposePayload() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer(objectMapper);
+        JacksonKafkaPublishSerializer serializer = new JacksonKafkaPublishSerializer();
         SelfReference payload = new SelfReference();
         payload.setSelf(payload);
 
@@ -109,6 +138,14 @@ public class JacksonKafkaPublishSerializerTest {
     @AllArgsConstructor
     static class MockPayload {
         private final String mockValue;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    static class JavaTimePayload {
+        private final LocalDate localDate;
+        private final LocalDateTime localDateTime;
+        private final Instant instant;
     }
 
     @Getter

@@ -1,6 +1,5 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
@@ -92,6 +91,24 @@ public class KafkaPublishHeaderTest {
     }
 
     @Test
+    public void testCustomizerCannotRenameReservedHeaderByCaseByDefault() {
+        KafkaPublishHeaderCustomizer customizer = context -> {
+            String value = context.getHeaders().remove(
+                    SimpleKafkaPublisherConstant.DEFAULT_HEADER_MESSAGE_ID);
+            context.getHeaders().put("X-MESSAGE-ID", value);
+        };
+        DefaultKafkaPublisher publisher = publisher(Collections.singletonList(customizer));
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("customizer 修改默认 header 大小写错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(),
+                "默认禁止覆盖时，修改保留 header 大小写也应被拒绝");
+        org.mockito.Mockito.verifyNoInteractions(routeTemplate);
+    }
+
+    @Test
     public void testHeaderNameIsTrimmedBeforeRecordCreation() throws Exception {
         KafkaPublishMessage<String> message = KafkaPublisherTestHelper.message();
         message.setHeaders(Collections.singletonMap("  " + KafkaPublisherTestHelper.CUSTOM_HEADER + "  ",
@@ -173,6 +190,88 @@ public class KafkaPublishHeaderTest {
     }
 
     @Test
+    public void testControlCharacterHeaderKeyUsesSafeErrorDisplay() {
+        KafkaPublishMessage<String> message = KafkaPublisherTestHelper.message();
+        message.setHeaders(Collections.singletonMap("\nforged-log", "secret-value"));
+        DefaultKafkaPublisher publisher = publisher(Collections.emptyList());
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(message));
+
+        log.info("控制字符 header key 错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(), "错误码应为 header 非法");
+        assertTrue(exception.getMessage().contains(SimpleKafkaPublisherConstant.ERROR_VALUE_UNSAFE_DISPLAY),
+                "不安全 header key 应使用固定占位符");
+        assertFalse(exception.getMessage().contains("forged-log"), "错误消息不应包含原始 header key");
+        assertFalse(exception.getMessage().contains("secret-value"), "错误消息不应包含 header value");
+    }
+
+    @Test
+    public void testCustomizerControlCharacterHeaderKeyUsesSafeErrorDisplay() {
+        String unicodeLineSeparator = Character.toString((char) 0x2028);
+        KafkaPublishHeaderCustomizer customizer = context ->
+                context.getHeaders().put("mock" + unicodeLineSeparator + "forged", "secret-value");
+        DefaultKafkaPublisher publisher = publisher(Collections.singletonList(customizer));
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("customizer Unicode 换行 header key 错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(), "错误码应为 header 非法");
+        assertTrue(exception.getMessage().contains(SimpleKafkaPublisherConstant.ERROR_VALUE_UNSAFE_DISPLAY),
+                "Unicode 换行 header key 应使用固定占位符");
+        assertFalse(exception.getMessage().contains("forged"), "错误消息不应包含原始 header key");
+    }
+
+    @Test
+    public void testRuntimeDefaultHeaderMutationCannotBypassRawValidation() {
+        properties.getHeaders().setMessageIdHeader("\nx-message-id");
+        DefaultKafkaPublisher publisher = publisher(Collections.emptyList());
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("运行期默认 header 配置变更错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(),
+                "运行期默认 header 原始控制字符应被拒绝");
+        assertTrue(exception.getMessage().contains(SimpleKafkaPublisherConstant.ERROR_VALUE_UNSAFE_DISPLAY),
+                "不安全默认 header 名应使用固定占位符");
+    }
+
+    @Test
+    public void testRuntimeDuplicateDefaultHeaderMutationRejected() {
+        properties.getHeaders().setMessageTypeHeader("X-Message-Id");
+        DefaultKafkaPublisher publisher = publisher(Collections.emptyList());
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(KafkaPublisherTestHelper.message()));
+
+        log.info("运行期默认 header 重名错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(),
+                "运行期默认 header 重名应被拒绝");
+        assertTrue(exception.getMessage().contains(SimpleKafkaPublisherConstant.REASON_HEADER_DUPLICATE),
+                "运行期默认 header 重名不应被静默覆盖");
+    }
+
+    @Test
+    public void testTrimmedDuplicateHeaderRejectedBeforeOverwrite() {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("mock-duplicate", "value-1");
+        headers.put("  mock-duplicate  ", "value-2");
+        KafkaPublishMessage<String> message = KafkaPublisherTestHelper.message();
+        message.setHeaders(headers);
+        DefaultKafkaPublisher publisher = publisher(Collections.emptyList());
+
+        KafkaPublishException exception = assertThrows(KafkaPublishException.class,
+                () -> publisher.publish(message));
+
+        log.info("trim 后重复 header 错误消息: {}", exception.getMessage());
+        assertEquals(ErrorCode.KAFKA_PUBLISHER_009, exception.getErrorCode(), "错误码应为 header 非法");
+        assertTrue(exception.getMessage().contains(SimpleKafkaPublisherConstant.REASON_HEADER_DUPLICATE),
+                "trim 后重名不应被静默覆盖");
+    }
+
+    @Test
     public void testCaseInsensitiveDuplicateHeaderReportsDuplicateReason() {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("X-Duplicate-Header", "value-1");
@@ -202,7 +301,7 @@ public class KafkaPublishHeaderTest {
 
     private DefaultKafkaPublisher publisher(java.util.List<KafkaPublishHeaderCustomizer> customizers) {
         return new DefaultKafkaPublisher(routeTemplate, properties,
-                new JacksonKafkaPublishSerializer(new ObjectMapper()),
+                new JacksonKafkaPublishSerializer(),
                 new DefaultKafkaPublishTopicResolver(),
                 new DefaultKafkaPublishKeyResolver(),
                 new DefaultKafkaPublishRouteKeyResolver(),

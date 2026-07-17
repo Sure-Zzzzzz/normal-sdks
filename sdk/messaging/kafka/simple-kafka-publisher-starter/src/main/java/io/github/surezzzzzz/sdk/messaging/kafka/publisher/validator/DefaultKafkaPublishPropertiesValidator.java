@@ -66,12 +66,12 @@ public class DefaultKafkaPublishPropertiesValidator implements KafkaPublishPrope
     }
 
     private void validateHeaderName(String headerName, Set<String> normalizedNames) {
+        if (KafkaPublishStringHelper.containsControlCharacter(headerName)) {
+            throw configurationInvalid(SimpleKafkaPublisherConstant.REASON_CONFIG_HEADER_NAME_CONTROL);
+        }
         String normalized = KafkaPublishHeaderHelper.normalizeHeaderName(headerName);
         if (!KafkaPublishStringHelper.hasText(normalized)) {
             throw configurationInvalid(SimpleKafkaPublisherConstant.REASON_CONFIG_HEADER_NAME_EMPTY);
-        }
-        if (KafkaPublishStringHelper.containsControlCharacter(normalized)) {
-            throw configurationInvalid(SimpleKafkaPublisherConstant.REASON_CONFIG_HEADER_NAME_CONTROL);
         }
         if (!normalizedNames.add(normalized.toLowerCase(Locale.ROOT))) {
             throw configurationInvalid(SimpleKafkaPublisherConstant.REASON_CONFIG_HEADER_NAME_DUPLICATE);

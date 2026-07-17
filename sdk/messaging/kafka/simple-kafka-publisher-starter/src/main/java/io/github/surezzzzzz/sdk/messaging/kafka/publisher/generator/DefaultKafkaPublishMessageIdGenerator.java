@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.messaging.kafka.publisher.support;
+package io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator;
 
 import java.util.UUID;
 

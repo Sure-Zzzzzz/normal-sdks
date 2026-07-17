@@ -35,18 +35,18 @@ Kafka 集群连接仍由 `simple-kafka-route-starter` 创建和管理。publishe
 
 | 组件 | 版本 |
 |------|------|
-| simple-kafka-publisher-starter | 1.0.0 |
+| simple-kafka-publisher-starter | 1.1.0 |
 | simple-kafka-route-starter | 1.0.1 |
 | Spring Boot | 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 |
 | Spring Kafka | 2.x（随 Spring Boot 依赖管理） |
 | Java | 8+ |
 
-1.0.0 已在上述四套 Spring Boot 版本下完成全量测试，并使用 Kafka 1.1.0、2.8.1、3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群完成真实发送、消费与隔离验证。
+1.1.0 已在上述四套 Spring Boot 版本下完成全量测试，并使用 Kafka 1.1.0、2.8.1、3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群完成真实发送、消费、隔离及同一 Publisher 多路由往返切换验证。
 
 ## 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-kafka-publisher-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-kafka-publisher-starter:1.1.0'
 implementation 'org.springframework.kafka:spring-kafka'
 ```
 
@@ -319,7 +319,7 @@ Header 名称可配置，value 统一按 UTF-8 转为 Kafka byte array。
 | `KAFKA_PUBLISHER_003` | payload 非法 |
 | `KAFKA_PUBLISHER_004` | 无法确定最终 topic |
 | `KAFKA_PUBLISHER_005` | partition 或 timestamp 非法 |
-| `KAFKA_PUBLISHER_006` | 默认 Jackson 序列化失败 |
+| `KAFKA_PUBLISHER_006` | 消息序列化失败或自定义 serializer 违反契约 |
 | `KAFKA_PUBLISHER_007` | 底层发送失败 |
 | `KAFKA_PUBLISHER_008` | 同步等待超时，发送状态未知 |
 | `KAFKA_PUBLISHER_009` | Kafka header 非法 |
@@ -334,7 +334,7 @@ Header 名称可配置，value 统一按 UTF-8 转为 Kafka byte array。
 
 | 接口 | 默认行为 |
 |------|----------|
-| `KafkaPublishSerializer` | 使用 Spring `ObjectMapper` 序列化 Envelope 或非 String payload |
+| `KafkaPublishSerializer` | 使用 SDK 私有静态 `ObjectMapper` 序列化 Envelope 或非 String payload |
 | `KafkaPublishTopicResolver` | 默认返回 null，交给 `default-topic` 兜底 |
 | `KafkaPublishKeyResolver` | 默认返回 `message.key` |
 | `KafkaPublishRouteKeyResolver` | 默认返回 `message.routeKey` |
@@ -343,7 +343,7 @@ Header 名称可配置，value 统一按 UTF-8 转为 Kafka byte array。
 | `KafkaPublishClock` | 默认调用 `System.currentTimeMillis()` |
 | `KafkaPublishPropertiesValidator` | 启动期校验嵌套配置、timeout、默认 header 名和 app-name |
 
-默认 Bean 均使用 `@ConditionalOnMissingBean`，调用方可直接注册自定义实现覆盖。
+默认 SPI Bean 均使用 `@ConditionalOnMissingBean`，调用方可直接注册自定义实现覆盖。调用方提供自定义 `KafkaPublisher` 后，默认 publisher、properties、serializer、resolver、generator、clock、validator 和配置校验触发器整条链路全部退场。
 
 示例：按 messageType 解析 topic。
 
@@ -388,16 +388,16 @@ Envelope customizer 只能修改 attributes；上下文不暴露 payload。publi
 
 ## ObjectMapper
 
-默认 `JacksonKafkaPublishSerializer` 使用 Spring 容器现有的 `ObjectMapper`，不会自行创建或注册全局 ObjectMapper，因此会保留调用方配置的 JavaTime、枚举和命名策略等模块。
+默认 `JacksonKafkaPublishSerializer` 使用类内 `private static final ObjectMapper`，不读取、不修改也不注册 Spring 容器中的全局 `ObjectMapper`。因此应用的命名策略、模块注册或其他全局 Jackson 配置不会改变 publisher 的默认消息协议；应用没有 `ObjectMapper` Bean 时，默认 publisher 也能正常启动。
 
-若应用排除了 Jackson 自动配置，需要自行提供 `ObjectMapper` 或自定义 `KafkaPublishSerializer`；否则 publisher 启动时抛 `KAFKA_PUBLISHER_001`。
+默认 mapper 内置 `JavaTimeModule`，并关闭 `WRITE_DATES_AS_TIMESTAMPS`，`LocalDate`、`LocalDateTime`、`Instant` 等 Java 8 时间类型固定使用 ISO-8601 字符串。若 payload 需要其他 Jackson 模块、命名策略或协议定制，请注册自定义 `KafkaPublishSerializer` 完整接管序列化。自定义 serializer 必须返回非 null String；空字符串合法，返回 null 或抛出非 `KafkaPublishException` 的运行时异常时统一按 `KAFKA_PUBLISHER_006` 处理。
 
 ## 安全边界
 
 - payload、key、headers、attributes 不进入消息模型 `toString()`。
 - key 不进入发布结果 `toString()`。
 - 序列化和发送错误不打印 payload、key、header value 或 attributes 内容。
-- header 校验错误只打印 header key。
+- header key、topic、messageType、messageId 含控制字符、Unicode 分隔字符或超长内容时统一显示 `<unsafe>`，不直接回显不可信值。
 - Header customizer 不直接接触 Kafka 原生 byte array。
 - Envelope customizer 不接触 payload。
 
@@ -409,12 +409,13 @@ Envelope customizer 只能修改 attributes；上下文不暴露 payload。publi
 
 ## 测试基线
 
-1.0.0 封版前完成：
+1.1.0 封版前完成：
 
-- 13 个测试类、70 个测试。
+- 16 个测试类、96 个测试。
 - 0 skipped、0 failures、0 errors。
-- Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 全量矩阵通过。
+- Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 四套全量矩阵通过。
 - Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群真实 E2E 通过。
+- 同一 `KafkaPublisher` 按 Kafka 1.1.0 → 2.8.1 → 3.7.1 → 三 Broker 集群 → Kafka 1.1.0 往返切换，使用同名 topic 精确验证消息只落入目标 datasource。
 - E2E 直接复用 `simple-kafka-route-starter/docker-compose.kafka-e2e.yml`，publisher 不维护重复 Kafka compose。
 
-首发 1.0.0 不提供测试跳过开关，也不使用 `@EnabledIfSystemProperty` 静默跳过 E2E。
+测试不提供跳过开关，也不使用 `@EnabledIfSystemProperty` 静默跳过 E2E。

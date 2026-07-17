@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -274,6 +275,57 @@ public class KafkaPublisherResolutionTest {
                 "自定义 topic resolver 返回非空时应优先于 defaultTopic");
     }
 
+    @Test
+    public void testCustomTraceResolverResultNormalizedByPublisher() throws Exception {
+        SimpleKafkaPublisherProperties properties = KafkaPublisherTestHelper.properties();
+        properties.getEnvelope().setEnable(true);
+        AtomicReference<ProducerRecord<String, String>> recordRef = captureRecord();
+        DefaultKafkaPublisher publisher = new DefaultKafkaPublisher(routeTemplate, properties,
+                new JacksonKafkaPublishSerializer(),
+                new DefaultKafkaPublishTopicResolver(), new DefaultKafkaPublishKeyResolver(),
+                new DefaultKafkaPublishRouteKeyResolver(),
+                () -> KafkaPublisherTestHelper.MESSAGE_ID,
+                () -> "  mock-custom-trace  ",
+                () -> KafkaPublisherTestHelper.RECORD_TIMESTAMP,
+                Collections.emptyList(), Collections.emptyList());
+        KafkaPublishMessage<String> message = KafkaPublisherTestHelper.message();
+        message.setEnvelopeEnabled(true);
+
+        publisher.publish(message).get(KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS,
+                java.util.concurrent.TimeUnit.SECONDS);
+
+        com.fasterxml.jackson.databind.JsonNode envelope =
+                new com.fasterxml.jackson.databind.ObjectMapper().readTree(recordRef.get().value());
+        log.info("自定义 trace resolver 标准化 value: {}", recordRef.get().value());
+        assertEquals("mock-custom-trace", envelope.get("traceId").asText(),
+                "发布引擎应对自定义 resolver 结果再次 trim");
+        assertArrayEquals("mock-custom-trace".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                recordRef.get().headers().lastHeader(properties.getHeaders().getTraceIdHeader()).value(),
+                "Envelope 与默认 trace header 应使用同一标准化值");
+    }
+
+    @Test
+    public void testBlankCustomTraceResolverDoesNotCreateTraceHeader() throws Exception {
+        SimpleKafkaPublisherProperties properties = KafkaPublisherTestHelper.properties();
+        AtomicReference<ProducerRecord<String, String>> recordRef = captureRecord();
+        DefaultKafkaPublisher publisher = new DefaultKafkaPublisher(routeTemplate, properties,
+                new JacksonKafkaPublishSerializer(),
+                new DefaultKafkaPublishTopicResolver(), new DefaultKafkaPublishKeyResolver(),
+                new DefaultKafkaPublishRouteKeyResolver(),
+                () -> KafkaPublisherTestHelper.MESSAGE_ID,
+                () -> "  ",
+                () -> KafkaPublisherTestHelper.RECORD_TIMESTAMP,
+                Collections.emptyList(), Collections.emptyList());
+
+        publisher.publish(KafkaPublisherTestHelper.message()).get(
+                KafkaPublisherTestHelper.FUTURE_TIMEOUT_SECONDS, java.util.concurrent.TimeUnit.SECONDS);
+
+        log.info("blank 自定义 trace resolver header: {}",
+                recordRef.get().headers().lastHeader(properties.getHeaders().getTraceIdHeader()));
+        assertNull(recordRef.get().headers().lastHeader(properties.getHeaders().getTraceIdHeader()),
+                "blank traceId 标准化为 null 后不应生成默认 trace header");
+    }
+
     private AtomicReference<ProducerRecord<String, String>> captureRecord() {
         AtomicReference<ProducerRecord<String, String>> recordRef = new AtomicReference<>();
         when(routeTemplate.send(any(ProducerRecord.class))).thenAnswer(invocation -> {
@@ -288,7 +340,7 @@ public class KafkaPublisherResolutionTest {
                                             KafkaPublishTopicResolver topicResolver,
                                             KafkaPublishKeyResolver keyResolver) {
         return new DefaultKafkaPublisher(routeTemplate, properties,
-                new JacksonKafkaPublishSerializer(new com.fasterxml.jackson.databind.ObjectMapper()),
+                new JacksonKafkaPublishSerializer(),
                 topicResolver, keyResolver, new DefaultKafkaPublishRouteKeyResolver(),
                 () -> KafkaPublisherTestHelper.MESSAGE_ID,
                 () -> KafkaPublisherTestHelper.TRACE_ID,

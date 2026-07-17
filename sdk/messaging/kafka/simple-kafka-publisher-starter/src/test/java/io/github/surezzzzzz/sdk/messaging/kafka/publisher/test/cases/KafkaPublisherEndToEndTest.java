@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.SimpleKafkaPublisherConstant;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishMessage;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishResult;
@@ -14,12 +15,16 @@ import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Header;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -42,6 +47,11 @@ public class KafkaPublisherEndToEndTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @AfterEach
+    public void clearMdc() {
+        MDC.clear();
+    }
+
     @Test
     public void testPublishAcrossKafkaVersionsAndCluster() throws Exception {
         String suffix = KafkaPublisherEndToEndHelper.suffix();
@@ -59,6 +69,55 @@ public class KafkaPublisherEndToEndTest {
         assertExplicitDatasourceIsolation(suffix, topicV28);
         assertRouteKeyIsolation(suffix, topicV37Route);
         assertClusterPartitions(suffix, topicCluster);
+    }
+
+    @Test
+    public void testPublisherCanSwitchAcrossRoutesAndClustersWithoutStickyState() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_SWITCH_PREFIX, suffix);
+        createSharedTopicOnAllClusters(topic);
+        String keyV110First = KafkaPublisherEndToEndHelper.key(suffix + "-v110-first");
+        String keyV28 = KafkaPublisherEndToEndHelper.key(suffix + "-v28");
+        String keyV37 = KafkaPublisherEndToEndHelper.key(suffix + "-v37");
+        String keyCluster = KafkaPublisherEndToEndHelper.key(suffix + "-cluster");
+        String keyV110Return = KafkaPublisherEndToEndHelper.key(suffix + "-v110-return");
+        Set<String> allKeys = new LinkedHashSet<>();
+        Collections.addAll(allKeys, keyV110First, keyV28, keyV37, keyCluster, keyV110Return);
+
+        publisher.publish(message(topic, keyV110First, "message-switch-v110-first-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishOn(KafkaPublisherEndToEndHelper.DATASOURCE_V28,
+                        message(topic, keyV28, "message-switch-v28-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishByRouteKey(KafkaPublisherEndToEndHelper.ROUTE_KEY_V37,
+                        message(topic, keyV37, "message-switch-v37-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishOn(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER,
+                        message(topic, keyCluster, "message-switch-cluster-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publish(message(topic, keyV110Return, "message-switch-v110-return-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        Set<String> v110Keys = consumeCandidateKeys(
+                KafkaPublisherEndToEndHelper.V110_BOOTSTRAP_SERVERS, topic, allKeys);
+        Set<String> v28Keys = consumeCandidateKeys(
+                KafkaPublisherEndToEndHelper.V28_BOOTSTRAP_SERVERS, topic, allKeys);
+        Set<String> v37Keys = consumeCandidateKeys(
+                KafkaPublisherEndToEndHelper.V37_BOOTSTRAP_SERVERS, topic, allKeys);
+        Set<String> clusterKeys = consumeCandidateKeys(
+                KafkaPublisherEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS, topic, allKeys);
+
+        log.info("多路由往返切换结果: v110={}, v28={}, v37={}, cluster={}",
+                v110Keys, v28Keys, v37Keys, clusterKeys);
+        assertEquals(new LinkedHashSet<>(java.util.Arrays.asList(keyV110First, keyV110Return)),
+                v110Keys, "默认路由切回 v110 后，两条消息都应且只能落在 v110");
+        assertEquals(Collections.singleton(keyV28), v28Keys,
+                "显式 v28 路由消息应且只能落在 v28");
+        assertEquals(Collections.singleton(keyV37), v37Keys,
+                "routeKey 路由消息应且只能落在 v37");
+        assertEquals(Collections.singleton(keyCluster), clusterKeys,
+                "显式 cluster 路由消息应且只能落在三 Broker 集群");
     }
 
     @Test
@@ -168,6 +227,8 @@ public class KafkaPublisherEndToEndTest {
 
     private void assertTopicPublisherEnvelopeAndHeaders(String suffix, String topic) throws Exception {
         String key = KafkaPublisherEndToEndHelper.key(suffix + "-v110");
+        String traceId = "trace-v110-" + suffix;
+        MDC.put(SimpleKafkaPublisherConstant.MDC_TRACE_ID, traceId);
         KafkaPublishMessage<String> message = message(topic, key, "message-v110-" + suffix);
         message.setHeaders(Collections.singletonMap(KafkaPublisherEndToEndHelper.CUSTOM_HEADER,
                 KafkaPublisherEndToEndHelper.CUSTOM_HEADER_VALUE));
@@ -190,12 +251,17 @@ public class KafkaPublisherEndToEndTest {
                 "envelope source 应精确一致");
         assertEquals(KafkaPublisherEndToEndHelper.PAYLOAD, envelope.get("payload").asText(),
                 "envelope payload 应精确一致");
+        assertEquals(traceId, envelope.get("traceId").asText(),
+                "envelope traceId 应与发布线程 MDC 一致");
         assertEquals(message.getMessageId(), headerText(record,
                 KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_ID),
                 "messageId header 应与 envelope 一致");
         assertEquals(KafkaPublisherEndToEndHelper.MESSAGE_TYPE, headerText(record,
                 KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_TYPE),
                 "messageType header 应与 envelope 一致");
+        assertEquals(traceId, headerText(record,
+                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_TRACE_ID),
+                "traceId header 应与 envelope 一致");
         assertEquals(KafkaPublisherEndToEndHelper.APP_NAME, headerText(record,
                 KafkaPublisherEndToEndHelper.DEFAULT_HEADER_SOURCE),
                 "source header 应与 envelope 一致");
@@ -207,6 +273,7 @@ public class KafkaPublisherEndToEndTest {
                 "自定义 Unicode header 应按 UTF-8 原样消费");
         assertNoRecord(KafkaPublisherEndToEndHelper.V28_BOOTSTRAP_SERVERS, topic, key);
         assertNoRecord(KafkaPublisherEndToEndHelper.V37_BOOTSTRAP_SERVERS, topic, key);
+        MDC.remove(SimpleKafkaPublisherConstant.MDC_TRACE_ID);
     }
 
     private void assertExplicitDatasourceIsolation(String suffix, String topic) throws Exception {
@@ -257,6 +324,27 @@ public class KafkaPublisherEndToEndTest {
             assertEquals(partition, result.getPartition(), "结果 partition 应精确一致");
             assertEquals(partition, record.partition(), "消费记录 partition 应精确一致");
         }
+    }
+
+    private void createSharedTopicOnAllClusters(String topic) {
+        KafkaPublisherEndToEndHelper.createTopic(KafkaPublisherEndToEndHelper.V110_BOOTSTRAP_SERVERS,
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(KafkaPublisherEndToEndHelper.V28_BOOTSTRAP_SERVERS,
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(KafkaPublisherEndToEndHelper.V37_BOOTSTRAP_SERVERS,
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(KafkaPublisherEndToEndHelper.CLUSTER_BOOTSTRAP_SERVERS,
+                topic, KafkaPublisherEndToEndHelper.CLUSTER_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.CLUSTER_REPLICATION_FACTOR);
+    }
+
+    private Set<String> consumeCandidateKeys(String bootstrapServers, String topic,
+                                             Set<String> candidateKeys) {
+        return KafkaPublisherEndToEndHelper.consumeKeys(bootstrapServers, topic, candidateKeys,
+                KafkaPublisherEndToEndHelper.CONSUME_TIMEOUT_MS);
     }
 
     private void createTopics(String topicV110, String topicV28, String topicV37Route,

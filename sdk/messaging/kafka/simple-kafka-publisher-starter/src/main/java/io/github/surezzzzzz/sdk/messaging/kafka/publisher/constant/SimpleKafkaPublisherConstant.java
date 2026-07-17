@@ -39,6 +39,11 @@ public final class SimpleKafkaPublisherConstant {
     public static final String DEFAULT_HEADER_PUBLISHED_AT = "x-published-at";
     public static final String HEADER_VALUE_EMPTY = "";
 
+    // ==================== 错误展示常量 ====================
+
+    public static final String ERROR_VALUE_UNSAFE_DISPLAY = "<unsafe>";
+    public static final int MAX_ERROR_DISPLAY_LENGTH = 256;
+
     // ==================== 字符集常量 ====================
 
     public static final String UTF_8 = "UTF-8";
@@ -67,7 +72,6 @@ public final class SimpleKafkaPublisherConstant {
     public static final String REASON_HEADER_VALUE_NULL = "header value 不能为 null";
     public static final String REASON_HEADER_RESERVED = "默认 header 不允许被覆盖";
     public static final String REASON_HEADER_DUPLICATE = "header 名大小写不敏感重复";
-    public static final String REASON_OBJECT_MAPPER_MISSING = "缺少 ObjectMapper Bean，请提供 ObjectMapper 或自定义 KafkaPublishSerializer";
     public static final String REASON_PROPERTIES_EMPTY = "publisher 配置不能为空";
     public static final String REASON_ENVELOPE_CONFIG_EMPTY = "envelope 配置不能为空";
     public static final String REASON_HEADER_CONFIG_EMPTY = "headers 配置不能为空";

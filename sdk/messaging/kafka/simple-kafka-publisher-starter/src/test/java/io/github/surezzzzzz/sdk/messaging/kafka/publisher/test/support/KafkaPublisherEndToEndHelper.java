@@ -11,7 +11,9 @@ import org.apache.kafka.common.errors.TopicExistsException;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -33,6 +35,7 @@ public final class KafkaPublisherEndToEndHelper {
     public static final String TOPIC_V28_PREFIX = "mock.publisher.v28.e2e.";
     public static final String TOPIC_V37_ROUTE_PREFIX = "mock.publisher.route.e2e.";
     public static final String TOPIC_CLUSTER_PREFIX = "mock.publisher.cluster.e2e.";
+    public static final String TOPIC_SWITCH_PREFIX = "mock.publisher.switch.e2e.";
     public static final String MESSAGE_TYPE = "mock.message.created";
     public static final String PAYLOAD = "mock-payload";
     public static final String CUSTOM_HEADER = "mock-unicode-header";
@@ -40,6 +43,7 @@ public final class KafkaPublisherEndToEndHelper {
     public static final String APP_NAME = "mock-publisher-app";
     public static final String DEFAULT_HEADER_MESSAGE_ID = "x-message-id";
     public static final String DEFAULT_HEADER_MESSAGE_TYPE = "x-message-type";
+    public static final String DEFAULT_HEADER_TRACE_ID = "x-trace-id";
     public static final String DEFAULT_HEADER_SOURCE = "x-source";
     public static final String DEFAULT_HEADER_PUBLISHED_AT = "x-published-at";
     public static final String GROUP_PREFIX = "kafka-publisher-e2e-";
@@ -52,6 +56,7 @@ public final class KafkaPublisherEndToEndHelper {
     public static final long CONSUME_TIMEOUT_MS = 15000L;
     public static final long NO_MESSAGE_TIMEOUT_MS = 3000L;
     public static final long POLL_INTERVAL_MS = 500L;
+    public static final long ROUTE_SWITCH_SETTLE_MS = 2000L;
     public static final long SEND_TIMEOUT_SECONDS = 30L;
     public static final int SINGLE_PARTITION_COUNT = 1;
     public static final short SINGLE_REPLICATION_FACTOR = 1;
@@ -100,6 +105,40 @@ public final class KafkaPublisherEndToEndHelper {
                 }
             }
             return null;
+        }
+    }
+
+    /**
+     * 消费指定 topic 中属于候选集合的消息 key
+     *
+     * @param bootstrapServers Kafka 集群地址
+     * @param topic            topic
+     * @param candidateKeys    候选消息 key
+     * @param timeoutMs        消费等待时间
+     * @return 实际消费到的候选消息 key
+     */
+    public static Set<String> consumeKeys(String bootstrapServers, String topic,
+                                          Set<String> candidateKeys, long timeoutMs) {
+        Set<String> foundKeys = new LinkedHashSet<>();
+        Properties properties = consumerProperties(bootstrapServers, GROUP_PREFIX + suffix());
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            Long settleDeadline = null;
+            while (System.currentTimeMillis() < deadline
+                    && (settleDeadline == null || System.currentTimeMillis() < settleDeadline)) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
+                for (ConsumerRecord<String, String> record : records) {
+                    if (candidateKeys.contains(record.key())) {
+                        foundKeys.add(record.key());
+                    }
+                }
+                if (!foundKeys.isEmpty() && settleDeadline == null) {
+                    settleDeadline = Math.min(deadline,
+                            System.currentTimeMillis() + ROUTE_SWITCH_SETTLE_MS);
+                }
+            }
+            return foundKeys;
         }
     }
 

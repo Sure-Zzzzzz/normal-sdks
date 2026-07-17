@@ -9,12 +9,16 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublis
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublishHeaderCustomizer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishConfigurationException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator.KafkaPublishMessageIdGenerator;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.*;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishKeyResolver;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishRouteKeyResolver;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTopicResolver;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTraceResolver;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.KafkaPublishSerializer;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.*;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishClock;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishHeaderHelper;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishStringHelper;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -60,8 +64,8 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
      * @param messageIdGenerator  messageId 生成器
      * @param traceResolver       traceId 解析器
      * @param clock               发布时钟
-     * @param headerCustomizers   header 自定义器
-     * @param envelopeCustomizers envelope 自定义器
+     * @param headerCustomizers   消息头自定义器
+     * @param envelopeCustomizers 消息封装自定义器
      */
     public DefaultKafkaPublisher(KafkaRouteTemplate kafkaRouteTemplate,
                                  SimpleKafkaPublisherProperties properties,
@@ -186,13 +190,13 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
             return send(context).get(properties.getSend().getTimeoutMs(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             throw new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_008,
-                    String.format(ErrorMessage.SEND_TIMEOUT, context.topic, context.messageType,
-                            context.messageId, properties.getSend().getTimeoutMs()), e);
+                    String.format(ErrorMessage.SEND_TIMEOUT, safe(context.topic), safe(context.messageType),
+                            safe(context.messageId), properties.getSend().getTimeoutMs()), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_011,
-                    String.format(ErrorMessage.SEND_INTERRUPTED, context.topic, context.messageType,
-                            context.messageId, SimpleKafkaPublisherConstant.REASON_SEND_INTERRUPTED), e);
+                    String.format(ErrorMessage.SEND_INTERRUPTED, safe(context.topic), safe(context.messageType),
+                            safe(context.messageId), SimpleKafkaPublisherConstant.REASON_SEND_INTERRUPTED), e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
             if (cause instanceof KafkaPublishException) {
@@ -220,7 +224,7 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         context.key = resolveKey(key, message);
         context.messageId = resolveMessageId(message);
         context.messageType = message.getMessageType();
-        context.traceId = traceResolver.resolveTraceId();
+        context.traceId = KafkaPublishStringHelper.trimToNull(traceResolver.resolveTraceId());
         context.publishedAt = clock.currentTimeMillis();
         context.envelopeEnabled = resolveEnvelopeEnabled(message);
         validateAppName(context.envelopeEnabled);
@@ -316,14 +320,26 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
                     .build();
             customizeEnvelope(envelope);
         }
-        return serializer.serialize(KafkaPublishSerializeContext.builder()
+        KafkaPublishSerializeContext serializeContext = KafkaPublishSerializeContext.builder()
                 .topic(context.topic)
                 .messageId(context.messageId)
                 .messageType(context.messageType)
                 .payload(context.message.getPayload())
                 .envelope(envelope)
                 .envelopeEnabled(context.envelopeEnabled)
-                .build());
+                .build();
+        final String value;
+        try {
+            value = serializer.serialize(serializeContext);
+        } catch (KafkaPublishException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw serializeFailed(context);
+        }
+        if (value == null) {
+            throw serializeFailed(context);
+        }
+        return value;
     }
 
     private void customizeEnvelope(KafkaPublishEnvelope<?> envelope) {
@@ -349,6 +365,7 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         Map<String, String> headers = new LinkedHashMap<>();
         Map<String, String> defaultHeaders = new LinkedHashMap<>();
         if (properties.getHeaders().isEnableDefaultHeaders()) {
+            validateDefaultHeaderNames();
             putDefaultHeader(defaultHeaders, properties.getHeaders().getMessageIdHeader(), context.messageId);
             putDefaultHeader(defaultHeaders, properties.getHeaders().getMessageTypeHeader(), context.messageType);
             putDefaultHeader(defaultHeaders, properties.getHeaders().getTraceIdHeader(), context.traceId);
@@ -367,9 +384,27 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         return recordHeaders;
     }
 
+    private void validateDefaultHeaderNames() {
+        Set<String> normalizedNames = new LinkedHashSet<>();
+        validateDefaultHeaderName(properties.getHeaders().getMessageIdHeader(), normalizedNames);
+        validateDefaultHeaderName(properties.getHeaders().getMessageTypeHeader(), normalizedNames);
+        validateDefaultHeaderName(properties.getHeaders().getTraceIdHeader(), normalizedNames);
+        validateDefaultHeaderName(properties.getHeaders().getSourceHeader(), normalizedNames);
+        validateDefaultHeaderName(properties.getHeaders().getPublishedAtHeader(), normalizedNames);
+    }
+
+    private void validateDefaultHeaderName(String headerName, Set<String> normalizedNames) {
+        validateRawHeaderName(headerName);
+        String normalized = KafkaPublishHeaderHelper.normalizeHeaderName(headerName);
+        validateHeaderName(normalized);
+        if (!normalizedNames.add(normalized.toLowerCase(Locale.ROOT))) {
+            throw headerInvalid(normalized, SimpleKafkaPublisherConstant.REASON_HEADER_DUPLICATE);
+        }
+    }
+
     private void putDefaultHeader(Map<String, String> headers, String headerName, String headerValue) {
         String normalized = KafkaPublishHeaderHelper.normalizeHeaderName(headerName);
-        if (normalized != null && headerValue != null) {
+        if (headerValue != null) {
             headers.put(normalized, headerValue);
         }
     }
@@ -380,13 +415,16 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
             return;
         }
         for (Map.Entry<String, String> entry : messageHeaders.entrySet()) {
+            validateRawHeaderName(entry.getKey());
             String headerName = KafkaPublishHeaderHelper.normalizeHeaderName(entry.getKey());
             validateHeaderName(headerName);
             validateHeaderValue(headerName, entry.getValue());
-            if (!properties.getHeaders().isAllowHeaderOverride()
-                    && KafkaPublishHeaderHelper.isReservedHeader(headerName, properties)
-                    && containsNormalized(defaultHeaders, headerName)) {
-                throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_RESERVED);
+            if (!properties.getHeaders().isAllowHeaderOverride() && containsNormalized(headers, headerName)) {
+                if (KafkaPublishHeaderHelper.isReservedHeader(headerName, properties)
+                        && containsNormalized(defaultHeaders, headerName)) {
+                    throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_RESERVED);
+                }
+                throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_DUPLICATE);
             }
             headers.put(headerName, entry.getValue());
         }
@@ -413,10 +451,11 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         Map<String, String> normalizedHeaders = new LinkedHashMap<>();
         Map<String, String> normalizedNames = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : headers.entrySet()) {
+            validateRawHeaderName(entry.getKey());
             String headerName = KafkaPublishHeaderHelper.normalizeHeaderName(entry.getKey());
             validateHeaderName(headerName);
             validateHeaderValue(headerName, entry.getValue());
-            String normalizedKey = headerName.toLowerCase(java.util.Locale.ROOT);
+            String normalizedKey = headerName.toLowerCase(Locale.ROOT);
             String previousName = normalizedNames.get(normalizedKey);
             if (previousName != null) {
                 if (!properties.getHeaders().isAllowHeaderOverride()) {
@@ -459,7 +498,7 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
     private boolean defaultHeaderChanged(Map<String, String> defaultHeaders, String headerName, String value) {
         for (Map.Entry<String, String> entry : defaultHeaders.entrySet()) {
             if (entry.getKey().equalsIgnoreCase(headerName)) {
-                return !entry.getValue().equals(value);
+                return !entry.getKey().equals(headerName) || !entry.getValue().equals(value);
             }
         }
         return KafkaPublishHeaderHelper.isReservedHeader(headerName, properties);
@@ -474,12 +513,15 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         return false;
     }
 
+    private void validateRawHeaderName(String headerName) {
+        if (KafkaPublishStringHelper.containsControlCharacter(headerName)) {
+            throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_KEY_CONTROL);
+        }
+    }
+
     private void validateHeaderName(String headerName) {
         if (!KafkaPublishStringHelper.hasText(headerName)) {
             throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_KEY_EMPTY);
-        }
-        if (KafkaPublishStringHelper.containsControlCharacter(headerName)) {
-            throw headerInvalid(headerName, SimpleKafkaPublisherConstant.REASON_HEADER_KEY_CONTROL);
         }
     }
 
@@ -491,7 +533,8 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
 
     private KafkaPublishException headerInvalid(String headerName, String reason) {
         return new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_009,
-                String.format(ErrorMessage.HEADER_INVALID, headerName, reason));
+                String.format(ErrorMessage.HEADER_INVALID,
+                        KafkaPublishStringHelper.safeForErrorMessage(headerName), reason));
     }
 
     private <T> String resolveTopic(String apiTopic, KafkaPublishMessage<T> message) {
@@ -603,7 +646,7 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
     private void validatePayload(KafkaPublishMessage<?> message, String messageId) {
         if (message.getPayload() == null && !properties.getEnvelope().isIncludeNullPayload()) {
             throw new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_003,
-                    String.format(ErrorMessage.PAYLOAD_INVALID, message.getMessageType(), messageId,
+                    String.format(ErrorMessage.PAYLOAD_INVALID, safe(message.getMessageType()), safe(messageId),
                             SimpleKafkaPublisherConstant.REASON_PAYLOAD_EMPTY));
         }
     }
@@ -624,9 +667,20 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         }
     }
 
+    private KafkaPublishException serializeFailed(PublishContext<?> context) {
+        return new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_006,
+                String.format(ErrorMessage.SERIALIZE_FAILED,
+                        safe(context.messageType), safe(context.messageId)));
+    }
+
     private KafkaPublishException sendFailed(PublishContext<?> context, Throwable cause) {
         return new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_007,
-                String.format(ErrorMessage.SEND_FAILED, context.topic, context.messageType, context.messageId), cause);
+                String.format(ErrorMessage.SEND_FAILED,
+                        safe(context.topic), safe(context.messageType), safe(context.messageId)), cause);
+    }
+
+    private String safe(String value) {
+        return KafkaPublishStringHelper.safeForErrorMessage(value);
     }
 
     private enum PublishMode {

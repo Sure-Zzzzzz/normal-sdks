@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 public class KafkaPublisherSyncBoundaryTest {
 
     @Test
-    public void testAsyncPublishDoesNotReadOrApplyWaitTimeout() {
+    public void testAsyncPublishDoesNotReadOrApplyWaitTimeout() throws Exception {
         KafkaRouteTemplate routeTemplate = mock(KafkaRouteTemplate.class);
         SettableListenableFuture<SendResult<String, String>> sendFuture = new SettableListenableFuture<>();
         when(routeTemplate.send(any(ProducerRecord.class))).thenReturn(sendFuture);
@@ -50,8 +50,10 @@ public class KafkaPublisherSyncBoundaryTest {
 
         ListenableFuture<?> resultFuture = publisher.publish(KafkaPublisherTestHelper.message());
 
-        log.info("异步发布立即返回 Future: {}", resultFuture);
-        assertFalse(resultFuture.isDone(), "异步 publish 不应按 send.timeout-ms 自动超时或阻塞");
+        Thread.sleep(20L);
+        log.info("异步发布超过配置 timeout 后 Future 状态: {}", resultFuture.isDone());
+        assertFalse(resultFuture.isDone(),
+                "异步 publish 超过 send.timeout-ms 后仍不应自动超时、阻塞或完成");
     }
 
     @Test
@@ -128,11 +130,14 @@ public class KafkaPublisherSyncBoundaryTest {
 
         java.util.concurrent.atomic.AtomicReference<Throwable> errorRef =
                 new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicReference<Boolean> interruptedRef =
+                new java.util.concurrent.atomic.AtomicReference<>(Boolean.FALSE);
         Thread worker = new Thread(() -> {
             try {
                 publisher.publishAndWait(KafkaPublisherTestHelper.message());
             } catch (Throwable t) {
                 errorRef.set(t);
+                interruptedRef.set(Thread.currentThread().isInterrupted());
             }
         });
         worker.start();
@@ -149,6 +154,7 @@ public class KafkaPublisherSyncBoundaryTest {
 
         Throwable error = errorRef.get();
         log.info("中断错误: {}", error == null ? null : error.getMessage());
+        assertFalse(worker.isAlive(), "中断后 worker 应在 join 超时前退出");
         assertNotNull(error, "同步等待被中断应抛出异常");
         assertTrue(error instanceof KafkaPublishException, "应抛 KafkaPublishException");
         KafkaPublishException exception = (KafkaPublishException) error;
@@ -156,12 +162,14 @@ public class KafkaPublisherSyncBoundaryTest {
                 "中断应使用 011 错误码，不应误报发送失败诱发重试");
         assertTrue(exception.getCause() instanceof InterruptedException,
                 "cause 应为 InterruptedException");
+        assertEquals(Boolean.TRUE, interruptedRef.get(),
+                "publisher 捕获 InterruptedException 后应恢复 worker 的中断标记");
     }
 
     private DefaultKafkaPublisher publisher(KafkaRouteTemplate routeTemplate,
                                             SimpleKafkaPublisherProperties properties) {
         return new DefaultKafkaPublisher(routeTemplate, properties,
-                new JacksonKafkaPublishSerializer(new com.fasterxml.jackson.databind.ObjectMapper()),
+                new JacksonKafkaPublishSerializer(),
                 new DefaultKafkaPublishTopicResolver(), new DefaultKafkaPublishKeyResolver(),
                 new DefaultKafkaPublishRouteKeyResolver(),
                 () -> KafkaPublisherTestHelper.MESSAGE_ID,

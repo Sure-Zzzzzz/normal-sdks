@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,11 +49,13 @@ public class KafkaPublisherEndToEndFailureTest {
                 () -> publisher.publishOn(DEAD_DATASOURCE, message)
                         .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS));
 
-        log.info("真实 broker 失败 cause: {}", exception.getCause().getMessage());
-        assertTrue(exception.getCause() instanceof KafkaPublishException,
+        Throwable cause = exception.getCause();
+        assertNotNull(cause, "真实 broker 失败的 ExecutionException 应保留 cause");
+        log.info("真实 broker 失败 cause: {}", cause.getMessage());
+        assertTrue(cause instanceof KafkaPublishException,
                 "真实 broker 失败应通过 Future 传播为 KafkaPublishException");
         assertEquals(ErrorCode.KAFKA_PUBLISHER_007,
-                ((KafkaPublishException) exception.getCause()).getErrorCode(),
+                ((KafkaPublishException) cause).getErrorCode(),
                 "真实 broker 失败应使用发送失败错误码");
     }
 

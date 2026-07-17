@@ -75,7 +75,7 @@ public class KafkaPublishPropertiesValidatorTest {
         SimpleKafkaPublisherProperties blankProperties = KafkaPublisherTestHelper.properties();
         blankProperties.getHeaders().setTraceIdHeader(" ");
         SimpleKafkaPublisherProperties controlProperties = KafkaPublisherTestHelper.properties();
-        controlProperties.getHeaders().setSourceHeader("x-source\ninvalid");
+        controlProperties.getHeaders().setSourceHeader("\nx-source");
 
         KafkaPublishConfigurationException blankException = assertThrows(
                 KafkaPublishConfigurationException.class, () -> validator.validate(blankProperties));

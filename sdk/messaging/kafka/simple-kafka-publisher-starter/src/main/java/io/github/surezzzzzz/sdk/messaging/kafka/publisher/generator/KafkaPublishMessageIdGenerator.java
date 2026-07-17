@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.messaging.kafka.publisher.support;
+package io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator;
 
 /**
  * Kafka 发布 messageId 生成器

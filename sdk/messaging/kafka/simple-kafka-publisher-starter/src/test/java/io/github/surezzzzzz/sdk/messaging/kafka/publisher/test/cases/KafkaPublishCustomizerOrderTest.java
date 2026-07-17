@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublishEnvelopeCustomizer;
@@ -20,7 +22,8 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -50,7 +53,7 @@ public class KafkaPublishCustomizerOrderTest {
         KafkaPublishEnvelopeCustomizer lateEnvelope = new OrderedEnvelopeCustomizer(2, "late");
         KafkaPublishEnvelopeCustomizer earlyEnvelope = new OrderedEnvelopeCustomizer(1, "early");
         DefaultKafkaPublisher publisher = new DefaultKafkaPublisher(routeTemplate, properties,
-                new JacksonKafkaPublishSerializer(new com.fasterxml.jackson.databind.ObjectMapper()),
+                new JacksonKafkaPublishSerializer(),
                 new DefaultKafkaPublishTopicResolver(), new DefaultKafkaPublishKeyResolver(),
                 new DefaultKafkaPublishRouteKeyResolver(),
                 () -> KafkaPublisherTestHelper.MESSAGE_ID,
@@ -65,11 +68,15 @@ public class KafkaPublishCustomizerOrderTest {
                 java.util.concurrent.TimeUnit.SECONDS);
         ProducerRecord<String, String> record = recordRef.get();
 
+        JsonNode envelope = new ObjectMapper().readTree(record.value());
         log.info("自定义器顺序后的 record value: {}", record.value());
+        assertNotNull(record.headers().lastHeader("customizer-order"),
+                "最终 record 应包含 customizer-order header");
         assertArrayEquals("early,late".getBytes(java.nio.charset.StandardCharsets.UTF_8),
                 record.headers().lastHeader("customizer-order").value(),
                 "header customizer 应按 Ordered 从小到大执行");
-        assertTrue(record.value().contains("\"envelope-order\":\"early,late\""),
+        assertNotNull(envelope.get("attributes"), "Envelope 应包含 attributes 对象");
+        assertEquals("early,late", envelope.get("attributes").get("envelope-order").asText(),
                 "envelope customizer 应按 Ordered 从小到大执行");
     }
 

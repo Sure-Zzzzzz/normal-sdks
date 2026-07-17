@@ -2,21 +2,24 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishSerializeContext;
-import lombok.RequiredArgsConstructor;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishStringHelper;
 
 /**
  * Jackson Kafka 发布序列化器
  *
  * @author surezzzzzz
  */
-@RequiredArgsConstructor
 public class JacksonKafkaPublishSerializer implements KafkaPublishSerializer {
 
-    private final ObjectMapper objectMapper;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     /**
      * 序列化发布内容
@@ -31,10 +34,12 @@ public class JacksonKafkaPublishSerializer implements KafkaPublishSerializer {
             return (String) target;
         }
         try {
-            return objectMapper.writeValueAsString(target);
+            return OBJECT_MAPPER.writeValueAsString(target);
         } catch (JsonProcessingException e) {
             throw new KafkaPublishException(ErrorCode.KAFKA_PUBLISHER_006,
-                    String.format(ErrorMessage.SERIALIZE_FAILED, context.getMessageType(), context.getMessageId()), e);
+                    String.format(ErrorMessage.SERIALIZE_FAILED,
+                            KafkaPublishStringHelper.safeForErrorMessage(context.getMessageType()),
+                            KafkaPublishStringHelper.safeForErrorMessage(context.getMessageId())), e);
         }
     }
 }

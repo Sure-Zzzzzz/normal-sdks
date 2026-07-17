@@ -2,7 +2,6 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.support;
 
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.SimpleKafkaPublisherConstant;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishStringHelper;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;

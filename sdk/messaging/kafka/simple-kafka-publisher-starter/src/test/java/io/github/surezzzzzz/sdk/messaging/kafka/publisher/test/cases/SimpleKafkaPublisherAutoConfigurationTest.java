@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherConfiguration;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.configuration.SimpleKafkaPublisherProperties;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.DefaultKafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishConfigurationException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishKeyResolver;
@@ -10,8 +12,8 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishR
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTopicResolver;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.KafkaPublishSerializer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishClock;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishMessageIdGenerator;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishTraceResolver;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator.KafkaPublishMessageIdGenerator;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTraceResolver;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.validator.KafkaPublishPropertiesValidator;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPublisherTestHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -123,17 +125,47 @@ public class SimpleKafkaPublisherAutoConfigurationTest {
     }
 
     @Test
-    public void testMissingObjectMapperReportsConfigurationException() {
+    public void testDefaultSerializerDoesNotRequireObjectMapper() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(SimpleKafkaPublisherConfiguration.class))
                 .withBean(KafkaRouteTemplate.class, () -> mock(KafkaRouteTemplate.class))
                 .withPropertyValues(ENABLE_PROPERTY)
                 .run(context -> {
-                    Throwable failure = context.getStartupFailure();
-                    log.info("缺少 ObjectMapper 启动失败: {}", failure == null ? null : failure.getMessage());
-                    assertNotNull(failure, "缺少 ObjectMapper 且无自定义 serializer 时应启动失败");
-                    assertTrue(hasCause(failure, KafkaPublishConfigurationException.class),
-                            "根因应包含 KafkaPublishConfigurationException");
+                    log.info("无 ObjectMapper Bean 时启动失败: {}", context.getStartupFailure());
+                    assertNull(context.getStartupFailure(), "默认 serializer 不应依赖 ObjectMapper Bean");
+                    assertEquals(1, context.getBeansOfType(KafkaPublisher.class).size(),
+                            "无 ObjectMapper Bean 时仍应创建默认 publisher");
+                    assertEquals(0, context.getBeansOfType(ObjectMapper.class).size(),
+                            "publisher 不应注册全局 ObjectMapper Bean");
+                });
+    }
+
+    @Test
+    public void testGlobalObjectMapperConfigurationDoesNotAffectDefaultSerializer() {
+        ObjectMapper globalObjectMapper = new ObjectMapper();
+        globalObjectMapper.setPropertyNamingStrategy(
+                com.fasterxml.jackson.databind.PropertyNamingStrategies.SNAKE_CASE);
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(SimpleKafkaPublisherConfiguration.class))
+                .withBean(KafkaRouteTemplate.class, () -> mock(KafkaRouteTemplate.class))
+                .withBean(ObjectMapper.class, () -> globalObjectMapper)
+                .withPropertyValues(ENABLE_PROPERTY)
+                .run(context -> {
+                    KafkaPublishSerializer serializer = context.getBean(KafkaPublishSerializer.class);
+                    String result = serializer.serialize(
+                            io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishSerializeContext.builder()
+                                    .topic(KafkaPublisherTestHelper.TOPIC)
+                                    .messageId(KafkaPublisherTestHelper.MESSAGE_ID)
+                                    .messageType(KafkaPublisherTestHelper.MESSAGE_TYPE)
+                                    .payload(new MockNamingPayload("mock-value"))
+                                    .envelopeEnabled(false)
+                                    .build());
+
+                    log.info("全局 ObjectMapper 隔离序列化结果: {}", result);
+                    assertSame(globalObjectMapper, context.getBean(ObjectMapper.class),
+                            "publisher 不应替换调用方全局 ObjectMapper");
+                    assertEquals("{\"mockValue\":\"mock-value\"}", result,
+                            "默认 serializer 不应继承全局 ObjectMapper 的 snake_case 策略");
                 });
     }
 
@@ -151,6 +183,44 @@ public class SimpleKafkaPublisherAutoConfigurationTest {
                             "自定义 serializer 应覆盖默认实现");
                     assertEquals(1, context.getBeansOfType(KafkaPublisher.class).size(),
                             "自定义 serializer 场景应正常创建 publisher");
+                });
+    }
+
+    @Test
+    public void testCustomPublisherRetiresDefaultChain() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(SimpleKafkaPublisherConfiguration.class))
+                .withUserConfiguration(CustomPublisherConfiguration.class)
+                .withBean(KafkaRouteTemplate.class, () -> mock(KafkaRouteTemplate.class))
+                .withPropertyValues(ENABLE_PROPERTY,
+                        "io.github.surezzzzzz.sdk.messaging.kafka.publisher.send.timeout-ms=0")
+                .run(context -> {
+                    log.info("自定义 publisher 完整接管启动失败: {}", context.getStartupFailure());
+                    assertNull(context.getStartupFailure(), "完整接管后默认配置校验不应执行");
+                    assertSame(context.getBean("customPublisher"), context.getBean(KafkaPublisher.class),
+                            "容器应使用调用方自定义 KafkaPublisher");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishSerializer.class).size(),
+                            "完整接管后不应注册默认 serializer");
+                    assertEquals(0, context.getBeansOfType(DefaultKafkaPublisher.class).size(),
+                            "完整接管后不应注册 DefaultKafkaPublisher");
+                    assertEquals(0, context.getBeansOfType(SimpleKafkaPublisherProperties.class).size(),
+                            "完整接管后不应注册默认 publisher properties");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishTopicResolver.class).size(),
+                            "完整接管后不应注册默认 topic resolver");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishKeyResolver.class).size(),
+                            "完整接管后不应注册默认 key resolver");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishRouteKeyResolver.class).size(),
+                            "完整接管后不应注册默认 routeKey resolver");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishMessageIdGenerator.class).size(),
+                            "完整接管后不应注册默认 messageId generator");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishTraceResolver.class).size(),
+                            "完整接管后不应注册默认 trace resolver");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishClock.class).size(),
+                            "完整接管后不应注册默认 clock");
+                    assertEquals(0, context.getBeansOfType(KafkaPublishPropertiesValidator.class).size(),
+                            "完整接管后不应注册默认 validator");
+                    assertFalse(context.containsBean("kafkaPublishPropertiesValidationInitializer"),
+                            "完整接管后不应注册配置校验触发器");
                 });
     }
 
@@ -195,6 +265,12 @@ public class SimpleKafkaPublisherAutoConfigurationTest {
                 });
     }
 
+    @lombok.Getter
+    @lombok.AllArgsConstructor
+    static class MockNamingPayload {
+        private final String mockValue;
+    }
+
     @Configuration
     static class CustomSpiConfiguration {
 
@@ -236,6 +312,15 @@ public class SimpleKafkaPublisherAutoConfigurationTest {
         @Bean
         public KafkaPublishClock customClock() {
             return () -> KafkaPublisherTestHelper.RECORD_TIMESTAMP;
+        }
+    }
+
+    @Configuration
+    static class CustomPublisherConfiguration {
+
+        @Bean
+        public KafkaPublisher customPublisher() {
+            return mock(KafkaPublisher.class);
         }
     }
 
