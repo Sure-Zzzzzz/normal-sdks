@@ -1,0 +1,124 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: redis3Standalone
+            sources:
+              redis3Standalone:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis5Standalone:
+                mode: standalone
+                host: localhost
+                port: 16380
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis7Standalone:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis5Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis7Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+            rules:
+              - pattern: "sure-smart-redis-retry:retry:retry-redis3-standalone:"
+                type: prefix
+                datasource: redis3Standalone
+                priority: 1
+              - pattern: "sure-smart-redis-retry:retry:retry-redis5-standalone:"
+                type: prefix
+                datasource: redis5Standalone
+                priority: 2
+              - pattern: "sure-smart-redis-retry:retry:retry-redis7-standalone:"
+                type: prefix
+                datasource: redis7Standalone
+                priority: 3
+              - pattern: "sure-smart-redis-retry:retry:retry-business-order-compensation:"
+                type: prefix
+                datasource: redis3Cluster
+                priority: 4
+              - pattern: "sure-smart-redis-retry:retry:retry-business-inventory-compensation:"
+                type: prefix
+                datasource: redis5Cluster
+                priority: 5
+              - pattern: "sure-smart-redis-retry:retry:retry-business-notification-compensation:"
+                type: prefix
+                datasource: redis7Cluster
+                priority: 6
+        retry:
+          redis:
+            smart:
+              enable: true
+              redis:
+                key-prefix: sure-smart-redis-retry
+                me: default
+                use-hash-tag: true
+                scan-count: 500
+                record-ttl-seconds: 86400
+                retain-exhausted: true
+              guard:
+                max-retry-key-length: 512
+                max-context-json-length: 4096
+                redis-failure-strategy: fail_closed
+              policy:
+                default:
+                  max-retry-times: 3
+                  retry-interval-millis: 1000
+                  max-interval-millis: 30000
+                  backoff-multiplier: 1.5
+                  jitter-ratio: 0.1
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.retry.redis.smart: DEBUG
+    io.github.surezzzzzz.sdk.redis.route: DEBUG

@@ -1,0 +1,48 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        retry:
+          redis:
+            smart:
+              enable: true
+              redis:
+                key-prefix: sure-smart-redis-retry
+                me: default
+                use-hash-tag: true
+                scan-count: 500
+                record-ttl-seconds: 86400
+                retain-exhausted: true
+              guard:
+                max-retry-key-length: 512
+                max-context-json-length: 4096
+                redis-failure-strategy: fail_closed
+              policy:
+                default:
+                  max-retry-times: 3
+                  retry-interval-millis: 1000
+                  max-interval-millis: 30000
+                  backoff-multiplier: 1.5
+                  jitter-ratio: 0.1
+                scene:
+                  test-compensation:
+                    max-retry-times: 20
+                    retry-interval-millis: 60000
+                    max-interval-millis: 1800000
+                    backoff-multiplier: 2.0
+                    jitter-ratio: 0.2
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.retry.redis.smart: DEBUG
