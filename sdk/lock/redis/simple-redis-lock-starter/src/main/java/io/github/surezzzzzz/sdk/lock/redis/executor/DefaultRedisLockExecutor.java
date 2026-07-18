@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.lock.redis.executor;
 
+import io.github.surezzzzzz.sdk.lock.redis.constant.SimpleRedisLockConstant;
 import io.github.surezzzzzz.sdk.lock.redis.support.RedisLockScriptHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,17 @@ public class DefaultRedisLockExecutor implements RedisLockExecutor {
                 Collections.singletonList(lockKey),
                 lockValue
         );
-        return Long.valueOf(1).equals(result);
+        return SimpleRedisLockConstant.REDIS_SCRIPT_SUCCESS_RESULT.equals(result);
+    }
+
+    @Override
+    public boolean renew(String lockKey, String lockValue, long leaseTime, TimeUnit timeUnit) {
+        Long result = redisTemplate.execute(
+                RedisLockScriptHelper.RENEW_SCRIPT,
+                Collections.singletonList(lockKey),
+                lockValue,
+                String.valueOf(timeUnit.toMillis(leaseTime))
+        );
+        return SimpleRedisLockConstant.REDIS_SCRIPT_SUCCESS_RESULT.equals(result);
     }
 }

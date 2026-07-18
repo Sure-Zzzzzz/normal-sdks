@@ -13,7 +13,7 @@ public class RedisLockRouteMatrixProfilesResolver implements ActiveProfilesResol
     public String[] resolve(Class<?> testClass) {
         String activeProfiles = System.getProperty("spring.profiles.active");
         if (activeProfiles == null) {
-            return new String[]{"redis-lock-route-matrix"};
+            return new String[]{"redis-lock-route-matrix", "2.7.9", "redis-lock-route-matrix-2.7.9"};
         }
         String[] profiles = activeProfiles.split(",");
         for (String profile : profiles) {

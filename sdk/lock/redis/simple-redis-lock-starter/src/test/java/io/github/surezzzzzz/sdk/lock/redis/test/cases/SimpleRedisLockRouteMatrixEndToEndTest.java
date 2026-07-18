@@ -1,9 +1,10 @@
 package io.github.surezzzzzz.sdk.lock.redis.test.cases;
 
-import io.github.surezzzzzz.sdk.lock.redis.test.SimpleRedisLockTestApplication;
+import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
+import io.github.surezzzzzz.sdk.lock.redis.model.RedisLockLease;
 import io.github.surezzzzzz.sdk.lock.redis.test.RedisLockRouteMatrixExpectationProperties;
 import io.github.surezzzzzz.sdk.lock.redis.test.RedisLockRouteMatrixProfilesResolver;
-import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
+import io.github.surezzzzzz.sdk.lock.redis.test.SimpleRedisLockTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.model.RedisServerInfo;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -14,10 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,6 +41,9 @@ public class SimpleRedisLockRouteMatrixEndToEndTest {
     private static final String LOCK5_KEY = "lock5:matrix:lock:001";
     private static final String CLUSTER_KEY = "cluster:{lock-matrix}:001";
     private static final String LOCK_VALUE = "matrix-client-id";
+    private static final String DEFAULT_LEASE_KEY = "matrix:lock:default:lease";
+    private static final String LOCK5_LEASE_KEY = "lock5:matrix:lock:lease";
+    private static final String CLUSTER_LEASE_KEY = "cluster:{lock-matrix-lease}:001";
 
     @Autowired
     private SimpleRedisLock simpleRedisLock;
@@ -59,15 +60,16 @@ public class SimpleRedisLockRouteMatrixEndToEndTest {
     @AfterEach
     public void cleanUp() {
         redisRouteTemplate.executeOn("redis3Standalone", template -> {
-            template.delete(DEFAULT_LOCK_KEY);
+            template.delete(Arrays.asList(DEFAULT_LOCK_KEY, DEFAULT_LEASE_KEY));
             return null;
         });
         redisRouteTemplate.executeOn("redis5Standalone", template -> {
-            template.delete(LOCK5_KEY);
+            template.delete(Arrays.asList(LOCK5_KEY, LOCK5_LEASE_KEY));
             return null;
         });
         redisRouteTemplate.executeOn("redis5Cluster", template -> {
             template.delete(CLUSTER_KEY);
+            template.delete(CLUSTER_LEASE_KEY);
             return null;
         });
     }
@@ -140,5 +142,62 @@ public class SimpleRedisLockRouteMatrixEndToEndTest {
         assertTrue(simpleRedisLock.unlock(CLUSTER_KEY, LOCK_VALUE), "cluster route 单 key 解锁应成功");
         assertNull(redisRouteTemplate.executeOn("redis5Cluster", t -> t.opsForValue().get(CLUSTER_KEY)),
                 "cluster route 解锁后 key 应删除");
+    }
+
+    @Test
+    public void testStandaloneRouteLeaseLifecycleByKey() {
+        verifyLeaseLifecycle(DEFAULT_LEASE_KEY, "redis3Standalone", "redis5Standalone");
+        verifyLeaseLifecycle(LOCK5_LEASE_KEY, "redis5Standalone", "redis3Standalone");
+    }
+
+    @Test
+    public void testClusterRouteSingleKeyLeaseLifecycle() {
+        verifyLeaseLifecycle(CLUSTER_LEASE_KEY, "redis5Cluster", "redis3Standalone");
+    }
+
+    private void verifyLeaseLifecycle(String lockKey, String expectedDatasource, String otherDatasource) {
+        log.info("验证矩阵租约完整生命周期，lockKey={}，expectedDatasource={}，otherDatasource={}",
+                lockKey, expectedDatasource, otherDatasource);
+        Optional<RedisLockLease> optionalLease = simpleRedisLock.tryLockWithLease(
+                lockKey, 1, TimeUnit.SECONDS);
+        Boolean expectedExistsAfterAcquire = redisRouteTemplate.executeOn(
+                expectedDatasource, template -> template.hasKey(lockKey));
+        Boolean otherExistsAfterAcquire = otherDatasource == null ? null : redisRouteTemplate.executeOn(
+                otherDatasource, template -> template.hasKey(lockKey));
+        log.info("矩阵租约获取后，leasePresent={}，expectedExists={}，otherExists={}",
+                optionalLease.isPresent(), expectedExistsAfterAcquire, otherExistsAfterAcquire);
+        assertTrue(optionalLease.isPresent(), "矩阵预期 datasource 首次获取租约应成功");
+        assertTrue(Boolean.TRUE.equals(expectedExistsAfterAcquire), "租约获取后 key 必须存在于预期 datasource");
+        if (otherDatasource != null) {
+            assertFalse(Boolean.TRUE.equals(otherExistsAfterAcquire), "租约获取后 key 不得写入另一 standalone datasource");
+        }
+
+        RedisLockLease lease = optionalLease.get();
+        boolean renewed = lease.renew(2, TimeUnit.SECONDS);
+        Long pttl = redisRouteTemplate.executeOn(
+                expectedDatasource, template -> template.getExpire(lockKey, TimeUnit.MILLISECONDS));
+        Boolean otherExistsAfterRenew = otherDatasource == null ? null : redisRouteTemplate.executeOn(
+                otherDatasource, template -> template.hasKey(lockKey));
+        log.info("矩阵租约续租后，renewed={}，expectedPttl={}，otherExists={}",
+                renewed, pttl, otherExistsAfterRenew);
+        assertTrue(renewed, "矩阵预期 datasource 中当前 owner 应能续租");
+        assertNotNull(pttl, "矩阵预期 datasource 续租后 PTTL 不应为 null");
+        assertTrue(pttl > 1000L, "矩阵租约续租后的 PTTL 应体现新的租约时长");
+        if (otherDatasource != null) {
+            assertFalse(Boolean.TRUE.equals(otherExistsAfterRenew), "矩阵租约续租不得错误写入另一 standalone datasource");
+        }
+
+        boolean released = lease.release();
+        Boolean expectedExistsAfterRelease = redisRouteTemplate.executeOn(
+                expectedDatasource, template -> template.hasKey(lockKey));
+        Boolean otherExistsAfterRelease = otherDatasource == null ? null : redisRouteTemplate.executeOn(
+                otherDatasource, template -> template.hasKey(lockKey));
+        log.info("矩阵租约释放后，released={}，expectedExists={}，otherExists={}",
+                released, expectedExistsAfterRelease, otherExistsAfterRelease);
+        assertTrue(released, "矩阵预期 datasource 中当前 owner 应能释放租约");
+        assertFalse(Boolean.TRUE.equals(expectedExistsAfterRelease), "矩阵租约释放后预期 datasource 中 key 应删除");
+        if (otherDatasource != null) {
+            assertFalse(Boolean.TRUE.equals(otherExistsAfterRelease), "矩阵租约释放不得影响另一 standalone datasource");
+        }
     }
 }

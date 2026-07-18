@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.lock.redis.executor;
 
+import io.github.surezzzzzz.sdk.lock.redis.constant.ErrorMessage;
+
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -28,4 +30,17 @@ public interface RedisLockExecutor {
      * @return true 表示成功释放，false 表示 value 不匹配或锁已过期
      */
     boolean unlock(String lockKey, String lockValue);
+
+    /**
+     * 续租。自定义执行器未实现时应明确失败，避免误判为锁已失效。
+     *
+     * @param lockKey   锁 key
+     * @param lockValue 锁 value（持有者标识）
+     * @param leaseTime 新租约时长
+     * @param timeUnit  租约时间单位
+     * @return true 表示续租成功，false 表示 value 不匹配或锁已过期
+     */
+    default boolean renew(String lockKey, String lockValue, long leaseTime, TimeUnit timeUnit) {
+        throw new UnsupportedOperationException(ErrorMessage.EXECUTOR_UNSUPPORTED_LEASE_RENEW);
+    }
 }

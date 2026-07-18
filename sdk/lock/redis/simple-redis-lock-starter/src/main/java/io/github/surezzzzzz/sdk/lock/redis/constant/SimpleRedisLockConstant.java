@@ -7,8 +7,11 @@ package io.github.surezzzzzz.sdk.lock.redis.constant;
  */
 public final class SimpleRedisLockConstant {
 
+    public static final String UTILITY_CLASS_ERROR_MESSAGE = "Utility class";
+    public static final long MIN_LEASE_MILLIS = 1L;
+
     private SimpleRedisLockConstant() {
-        throw new UnsupportedOperationException("Utility class");
+        throw new UnsupportedOperationException(UTILITY_CLASS_ERROR_MESSAGE);
     }
 
     // ==================== 配置相关常量 ====================
@@ -20,6 +23,20 @@ public final class SimpleRedisLockConstant {
     public static final String PROPERTY_VALUE_FALSE = "false";
 
     public static final boolean DEFAULT_ROUTE_ENABLE = false;
+
+    // ==================== Redis 脚本常量 ====================
+
+    public static final Long REDIS_SCRIPT_SUCCESS_RESULT = 1L;
+    public static final String REDIS_UNLOCK_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            + "return redis.call('del', KEYS[1]) "
+            + "else "
+            + "return 0 "
+            + "end";
+    public static final String REDIS_RENEW_SCRIPT = "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            + "return redis.call('pexpire', KEYS[1], ARGV[2]) "
+            + "else "
+            + "return 0 "
+            + "end";
 
     // ==================== Bean 名称常量 ====================
 
