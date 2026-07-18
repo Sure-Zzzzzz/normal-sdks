@@ -1,0 +1,1 @@
+{"protocol":"simple-data-permission","version":"1.0","grants":[{"resource":"test_resource","actions":["export","read"],"all":false,"constraints":[{"dimension":"scope_a","operator":"IN","values":["value-a"]},{"dimension":"scope_b","operator":"IN","values":["value-b"]}]}]}
