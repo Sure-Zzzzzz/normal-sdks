@@ -1,5 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.constant;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * SmartRedisLimiter 常量定义
  *
@@ -83,6 +87,131 @@ public final class SmartRedisLimiterConstant {
      * 时间窗口上限警告阈值（秒，即24小时）
      */
     public static final long MAX_WINDOW_SECONDS_WARNING = 86400L;
+
+    // ==================== 动态策略协议 ====================
+
+    /**
+     * 动态策略协议版本
+     */
+    public static final String POLICY_SCHEMA_VERSION = "1";
+
+    /**
+     * 服务编码最大长度
+     */
+    public static final int MAX_SERVICE_CODE_LENGTH = 128;
+
+    /**
+     * 资源编码最大长度
+     */
+    public static final int MAX_RESOURCE_CODE_LENGTH = 128;
+
+    /**
+     * 限流对象标识最大长度
+     */
+    public static final int MAX_SUBJECT_LENGTH = 256;
+
+    /**
+     * 操作人标识最大长度
+     */
+    public static final int MAX_OPERATOR_LENGTH = 128;
+
+    /**
+     * 单条策略最大窗口数
+     */
+    public static final int MAX_LIMITS_PER_POLICY = 16;
+
+    /**
+     * 服务编码和资源编码格式
+     */
+    public static final String STABLE_CODE_PATTERN = "[A-Za-z0-9][A-Za-z0-9._-]*";
+
+    /**
+     * 策略来源：本地配置
+     */
+    public static final String POLICY_SOURCE_LOCAL = "local";
+
+    /**
+     * 策略来源：远程配置
+     */
+    public static final String POLICY_SOURCE_REMOTE = "remote";
+
+    /**
+     * 策略字段：服务编码
+     */
+    public static final String POLICY_FIELD_SERVICE_CODE = "serviceCode";
+
+    /**
+     * 策略字段：资源编码
+     */
+    public static final String POLICY_FIELD_RESOURCE_CODE = "resourceCode";
+
+    /**
+     * 策略字段：限流对象标识
+     */
+    public static final String POLICY_FIELD_SUBJECT = "subject";
+
+    /**
+     * 策略字段：操作人标识
+     */
+    public static final String POLICY_FIELD_OPERATOR = "operator";
+
+    /**
+     * 策略字段：限流次数
+     */
+    public static final String POLICY_FIELD_COUNT = "count";
+
+    /**
+     * 策略字段：时间窗口
+     */
+    public static final String POLICY_FIELD_WINDOW = "window";
+
+    // ==================== JSON 协议字段 ====================
+
+    public static final String JSON_FIELD_SCHEMA_VERSION = "schemaVersion";
+    public static final String JSON_FIELD_SERVICE_CODE = "serviceCode";
+    public static final String JSON_FIELD_RESOURCE_CODE = "resourceCode";
+    public static final String JSON_FIELD_SUBJECT = "subject";
+    public static final String JSON_FIELD_REVISION = "revision";
+    public static final String JSON_FIELD_PUBLISHED_AT = "publishedAt";
+    public static final String JSON_FIELD_POLICIES = "policies";
+    public static final String JSON_FIELD_KEY = "key";
+    public static final String JSON_FIELD_LIMITS = "limits";
+    public static final String JSON_FIELD_COUNT = "count";
+    public static final String JSON_FIELD_WINDOW = "window";
+    public static final String JSON_FIELD_UNIT = "unit";
+    public static final String JSON_FIELD_OPERATION = "operation";
+    public static final String JSON_FIELD_POLICY_KEY = "policyKey";
+    public static final String JSON_FIELD_BEFORE_POLICY = "beforePolicy";
+    public static final String JSON_FIELD_AFTER_POLICY = "afterPolicy";
+    public static final String JSON_FIELD_BEFORE_ENABLED = "beforeEnabled";
+    public static final String JSON_FIELD_AFTER_ENABLED = "afterEnabled";
+    public static final String JSON_FIELD_OPERATOR = "operator";
+    public static final String JSON_FIELD_OCCURRED_AT = "occurredAt";
+    public static final String JSON_FIELD_ATTRIBUTES = "attributes";
+    public static final String JSON_FIELD_LIMIT_KEY = "limitKey";
+    public static final String JSON_FIELD_ROUTE_KEY = "routeKey";
+    public static final String JSON_FIELD_DATASOURCE_KEY = "datasourceKey";
+    public static final String JSON_FIELD_REDIS_MODE = "redisMode";
+    public static final String JSON_FIELD_ROUTE_REQUIRED = "routeRequired";
+    public static final String JSON_FIELD_ROUTE_RESOLVED = "routeResolved";
+    public static final String JSON_FIELD_KEY_STRATEGY = "keyStrategy";
+    public static final String JSON_FIELD_ALGORITHM = "algorithm";
+    public static final String JSON_FIELD_LIMIT_RULES = "limitRules";
+    public static final String JSON_FIELD_PASSED = "passed";
+    public static final String JSON_FIELD_SOURCE_TYPE = "sourceType";
+    public static final String JSON_FIELD_REQUEST_URI = "requestUri";
+    public static final String JSON_FIELD_HTTP_METHOD = "httpMethod";
+    public static final String JSON_FIELD_CLIENT_IP = "clientIp";
+    public static final String JSON_FIELD_MATCHED_PATH_PATTERN = "matchedPathPattern";
+    public static final String JSON_FIELD_METHOD_NAME = "methodName";
+    public static final String JSON_FIELD_METHOD_QUALIFIED_NAME = "methodQualifiedName";
+    public static final String JSON_FIELD_LIMIT = "limit";
+    public static final String JSON_FIELD_REMAINING = "remaining";
+    public static final String JSON_FIELD_RESET_AT = "resetAt";
+    public static final String JSON_FIELD_DURATION_NANOS = "durationNanos";
+    public static final String JSON_FIELD_FALLBACK_REASON = "fallbackReason";
+    public static final String JSON_FIELD_POLICY_SOURCE = "policySource";
+    public static final String JSON_FIELD_POLICY_REVISION = "policyRevision";
 
     // ==================== 来源标识 ====================
 
@@ -322,8 +451,17 @@ public final class SmartRedisLimiterConstant {
 
     /**
      * 默认排除路径模式
+     *
+     * @deprecated 公开数组内容可被修改，新代码使用 {@link #DEFAULT_EXCLUDE_PATTERN_LIST}
      */
+    @Deprecated
     public static final String[] DEFAULT_EXCLUDE_PATTERNS = {"/actuator/**", "/actuator", "/health", "/health/**"};
+
+    /**
+     * 不可变默认排除路径模式
+     */
+    public static final List<String> DEFAULT_EXCLUDE_PATTERN_LIST = Collections.unmodifiableList(
+            Arrays.asList("/actuator/**", "/actuator", "/health", "/health/**"));
 
     // ==================== 时间换算 ====================
 

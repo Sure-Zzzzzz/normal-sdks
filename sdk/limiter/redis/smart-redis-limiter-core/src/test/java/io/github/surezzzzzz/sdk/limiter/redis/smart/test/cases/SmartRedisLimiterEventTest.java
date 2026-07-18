@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.test.cases;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterEventPayload;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,9 @@ public class SmartRedisLimiterEventTest {
                 .resetAt(100)
                 .durationNanos(2000)
                 .fallbackReason(SmartRedisLimiterConstant.FALLBACK_REASON_REDIS_ERROR)
+                .resourceCode("test-resource")
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_REMOTE)
+                .policyRevision(3L)
                 .build();
 
         SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(publisher, payload);
@@ -60,7 +65,14 @@ public class SmartRedisLimiterEventTest {
         assertTrue(event.isRouteRequired());
         assertTrue(event.isRouteResolved());
         assertEquals(SmartRedisLimiterConstant.FALLBACK_REASON_REDIS_ERROR, event.getFallbackReason());
-        assertThrows(IllegalArgumentException.class, () -> new SmartRedisLimiterEvent(publisher, null));
+        assertEquals("test-resource", event.getResourceCode());
+        assertEquals(SmartRedisLimiterConstant.POLICY_SOURCE_REMOTE, event.getPolicySource());
+        assertEquals(3L, event.getPolicyRevision());
+        SmartRedisLimiterException nullPayload = assertThrows(SmartRedisLimiterException.class,
+                () -> new SmartRedisLimiterEvent(publisher, null),
+                "执行事件 payload 为空时应使用统一异常体系");
+        assertEquals(ErrorCode.EXECUTION_EVENT_PAYLOAD_INVALID, nullPayload.getErrorCode(),
+                "执行事件 payload 为空应使用标准错误码");
         log.info("事件 payload 构造器和 getter 委托测试通过");
     }
 
@@ -93,6 +105,9 @@ public class SmartRedisLimiterEventTest {
         assertNull(event.getDatasourceKey());
         assertEquals(SmartRedisLimiterConstant.REDIS_MODE_UNKNOWN, event.getRedisMode());
         assertNull(event.getFallbackReason());
+        assertNull(event.getResourceCode());
+        assertEquals(SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL, event.getPolicySource());
+        assertNull(event.getPolicyRevision());
         assertEquals(SmartRedisLimiterConstant.SOURCE_INTERCEPTOR, event.getSource());
         assertSame(publisher, event.getRawSource());
         log.info("旧构造器兼容桥测试通过");

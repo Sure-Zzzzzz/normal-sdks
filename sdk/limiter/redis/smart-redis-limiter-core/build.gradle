@@ -1,3 +1,7 @@
 dependencies {
     compileOnly 'org.springframework:spring-context'
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 }

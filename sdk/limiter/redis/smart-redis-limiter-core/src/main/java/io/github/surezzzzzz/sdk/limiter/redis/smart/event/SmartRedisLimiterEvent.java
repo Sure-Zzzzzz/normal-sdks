@@ -1,6 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.event;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterEventPayload;
 import org.springframework.context.ApplicationEvent;
 
@@ -39,7 +42,10 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
     public SmartRedisLimiterEvent(Object source, SmartRedisLimiterEventPayload payload) {
         super(source);
         if (payload == null) {
-            throw new IllegalArgumentException("payload must not be null");
+            throw new SmartRedisLimiterException(
+                    ErrorCode.EXECUTION_EVENT_PAYLOAD_INVALID,
+                    String.format(ErrorMessage.EXECUTION_EVENT_PAYLOAD_INVALID,
+                            ErrorMessage.REASON_EXECUTION_PAYLOAD_REQUIRED));
         }
         this.payload = payload;
     }
@@ -222,5 +228,32 @@ public class SmartRedisLimiterEvent extends ApplicationEvent {
 
     public String getFallbackReason() {
         return payload.getFallbackReason();
+    }
+
+    /**
+     * 获取稳定资源编码
+     *
+     * @return 稳定资源编码
+     */
+    public String getResourceCode() {
+        return payload.getResourceCode();
+    }
+
+    /**
+     * 获取策略来源
+     *
+     * @return 策略来源
+     */
+    public String getPolicySource() {
+        return payload.getPolicySource();
+    }
+
+    /**
+     * 获取远程策略快照版本
+     *
+     * @return 远程策略快照版本，本地策略返回 null
+     */
+    public Long getPolicyRevision() {
+        return payload.getPolicyRevision();
     }
 }
