@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheWarmUp;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.exception.CacheWarmUpException;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -20,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Collections;
@@ -28,17 +32,12 @@ import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Smart Cache 租约策略测试
@@ -235,6 +234,296 @@ class SmartCacheLeasePolicyTest {
         assertWarmupWriteSuppressed(true, new IllegalStateException("测试预热续租异常"));
     }
 
+    @Test
+    @DisplayName("fail-fast 在预热续租异常时抛出 CacheWarmUpException")
+    void shouldFailFastWhenWarmupLeaseRenewThrows() {
+        LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
+        executor.setRenewFailure(new IllegalStateException("测试预热续租异常"));
+        SmartCacheWarmUpProcessor processor = newWarmupProcessor(executor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getLock().setTimeoutSeconds(SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS);
+        properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        ReflectionTestUtils.setField(processor, "properties", properties);
+        ReflectionTestUtils.setField(processor, "cacheManager", mock(SmartCacheManager.class));
+        ReflectionTestUtils.setField(processor, "redisRouteTemplate", mock(RedisRouteTemplate.class));
+
+        CacheWarmUpException exception;
+        try {
+            processor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext()));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+
+        log.info("严格预热续租异常错误码：{}，续租次数：{}，释放次数：{}",
+                exception == null ? null : exception.getErrorCode(), executor.getRenewCount(), executor.getUnlockCount());
+        assertNotNull(exception, "严格预热在续租异常时必须阻断启动");
+        assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+        assertEquals(1, executor.getRenewCount(), "写入前应尝试续租一次");
+        assertEquals(1, executor.getUnlockCount(), "失败后仍应释放租约");
+    }
+
+    @Test
+    @DisplayName("fail-fast 在预热续租失效时抛出 CacheWarmUpException")
+    void shouldFailFastWhenWarmupLeaseCannotRenew() {
+        LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
+        executor.setRenewResult(false);
+        SmartCacheWarmUpProcessor processor = newWarmupProcessor(executor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getLock().setTimeoutSeconds(SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS);
+        properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        ReflectionTestUtils.setField(processor, "properties", properties);
+        ReflectionTestUtils.setField(processor, "cacheManager", mock(SmartCacheManager.class));
+        ReflectionTestUtils.setField(processor, "redisRouteTemplate", mock(RedisRouteTemplate.class));
+
+        CacheWarmUpException exception;
+        try {
+            processor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext()));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+
+        log.info("严格预热续租失败错误码：{}，续租次数：{}，释放次数：{}",
+                exception == null ? null : exception.getErrorCode(), executor.getRenewCount(), executor.getUnlockCount());
+        assertNotNull(exception, "严格预热在续租失败时必须阻断启动");
+        assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+        assertEquals(1, executor.getRenewCount(), "写入前应尝试续租一次");
+        assertEquals(1, executor.getUnlockCount(), "失败后仍应释放租约");
+    }
+
+    @Test
+    @DisplayName("预热完成元数据写入失败按策略决定是否进入后续 order")
+    void shouldApplyPolicyWhenWarmupMetadataWriteFails() {
+        LeaseRecordingExecutor continueExecutor = new LeaseRecordingExecutor();
+        SmartCacheWarmUpProcessor continueProcessor = newWarmupProcessor(continueExecutor);
+        SmartCacheManager continueManager = mock(SmartCacheManager.class);
+        RedisRouteTemplate continueRouteTemplate = mock(RedisRouteTemplate.class);
+        doThrow(new IllegalStateException("测试预热完成元数据写入异常"))
+                .when(continueRouteTemplate).execute(any(String.class), any());
+        ReflectionTestUtils.setField(continueProcessor, "cacheManager", continueManager);
+        ReflectionTestUtils.setField(continueProcessor, "redisRouteTemplate", continueRouteTemplate);
+        PolicyLeaseWarmupFixture continueFixture = new PolicyLeaseWarmupFixture();
+
+        continueProcessor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext(continueFixture)));
+
+        log.info("continue 元数据写入失败后续 order 执行次数：{}，续租次数：{}，释放次数：{}",
+                continueFixture.getLaterOrderCount(), continueExecutor.getRenewCount(), continueExecutor.getUnlockCount());
+        assertEquals(1, continueFixture.getLaterOrderCount(), "默认 continue 应继续执行后续 order");
+        assertEquals(1, continueExecutor.getRenewCount(), "失败任务写缓存前应完成一次续租");
+        assertEquals(2, continueExecutor.getUnlockCount(), "continue 的失败任务和后续任务都应关闭各自租约");
+        verify(continueManager).putAll(CACHE_NAME, Collections.<String, Object>singletonMap(CACHE_KEY, CACHE_VALUE));
+
+        LeaseRecordingExecutor failFastExecutor = new LeaseRecordingExecutor();
+        SmartCacheWarmUpProcessor failFastProcessor = newWarmupProcessor(failFastExecutor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getLock().setTimeoutSeconds(SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS);
+        properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        ReflectionTestUtils.setField(failFastProcessor, "properties", properties);
+        SmartCacheManager failFastManager = mock(SmartCacheManager.class);
+        RedisRouteTemplate failFastRouteTemplate = mock(RedisRouteTemplate.class);
+        doThrow(new IllegalStateException("测试预热完成元数据写入异常"))
+                .when(failFastRouteTemplate).execute(any(String.class), any());
+        ReflectionTestUtils.setField(failFastProcessor, "cacheManager", failFastManager);
+        ReflectionTestUtils.setField(failFastProcessor, "redisRouteTemplate", failFastRouteTemplate);
+        PolicyLeaseWarmupFixture failFastFixture = new PolicyLeaseWarmupFixture();
+
+        CacheWarmUpException exception;
+        try {
+            failFastProcessor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext(failFastFixture)));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+
+        log.info("fail-fast 元数据写入失败错误码：{}，错误消息：{}，后续 order 执行次数：{}，释放次数：{}",
+                exception == null ? null : exception.getErrorCode(), exception == null ? null : exception.getMessage(),
+                failFastFixture.getLaterOrderCount(), failFastExecutor.getUnlockCount());
+        assertNotNull(exception, "严格模式在完成元数据写入失败后必须阻断启动");
+        assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+        assertTrue(exception.getMessage().contains("PolicyLeaseWarmupFixture.first"), "错误消息必须包含失败预热任务名称");
+        assertEquals(0, failFastFixture.getLaterOrderCount(), "严格模式不应进入后续 order");
+        assertEquals(1, failFastExecutor.getUnlockCount(), "失败任务应关闭一次租约");
+        verify(failFastManager).putAll(CACHE_NAME, Collections.<String, Object>singletonMap(CACHE_KEY, CACHE_VALUE));
+    }
+
+    @Test
+    @DisplayName("竞争实例回填 L1 失败按策略决定是否进入后续 order")
+    void shouldApplyPolicyWhenWarmupL1RefillFails() {
+        assertWarmupL1RefillFailurePolicy(false);
+        assertWarmupL1RefillFailurePolicy(true);
+    }
+
+    @Test
+    @DisplayName("等待竞争实例完成标记超时按策略决定是否进入后续 order")
+    void shouldApplyPolicyWhenWaitingForWarmupCompletionTimesOut() {
+        assertWarmupCompletionTimeoutPolicy(false);
+        assertWarmupCompletionTimeoutPolicy(true);
+    }
+
+    @Test
+    @DisplayName("竞争实例读取完成元数据失败按策略决定是否进入后续 order")
+    void shouldApplyPolicyWhenReadingWarmupMetadataFails() {
+        assertWarmupMetadataReadFailurePolicy(false);
+        assertWarmupMetadataReadFailurePolicy(true);
+    }
+
+    private void assertWarmupL1RefillFailurePolicy(boolean failFast) {
+        LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
+        executor.setLockResults(false, true);
+        SmartCacheWarmUpProcessor processor = newWarmupProcessor(executor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getLock().setTimeoutSeconds(SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS);
+        if (failFast) {
+            properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        }
+        ReflectionTestUtils.setField(processor, "properties", properties);
+        RedisRouteTemplate routeTemplate = warmupCompletedRouteTemplate();
+        L2Cache l2Cache = mock(L2Cache.class);
+        L1Cache l1Cache = mock(L1Cache.class);
+        doThrow(new IllegalStateException("测试预热 L1 回填异常"))
+                .when(l1Cache).put(CACHE_NAME, CACHE_KEY, CACHE_VALUE);
+        when(l2Cache.get(CACHE_NAME, CACHE_KEY)).thenReturn(CACHE_VALUE);
+        ReflectionTestUtils.setField(processor, "redisRouteTemplate", routeTemplate);
+        ReflectionTestUtils.setField(processor, "l2Cache", l2Cache);
+        ReflectionTestUtils.setField(processor, "l1Cache", l1Cache);
+        PolicyLeaseWarmupFixture fixture = new PolicyLeaseWarmupFixture();
+
+        CacheWarmUpException exception;
+        try {
+            processor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext(fixture)));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+
+        log.info("竞争实例 L1 回填失败策略：{}，错误码：{}，后续 order 执行次数：{}，锁获取次数：{}",
+                failFast ? "fail-fast" : "continue", exception == null ? null : exception.getErrorCode(),
+                fixture.getLaterOrderCount(), executor.getLockAttemptCount());
+        verify(l2Cache).get(CACHE_NAME, CACHE_KEY);
+        verify(l1Cache).put(CACHE_NAME, CACHE_KEY, CACHE_VALUE);
+        assertEquals(failFast ? 1 : 2, executor.getLockAttemptCount(), "continue 仅在后续 order 额外尝试一次预热锁");
+        if (failFast) {
+            assertNotNull(exception, "严格模式在 L1 回填失败后必须阻断启动");
+            assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+            assertTrue(exception.getMessage().contains("PolicyLeaseWarmupFixture.first"), "错误消息必须包含失败预热任务名称");
+            assertEquals(0, fixture.getLaterOrderCount(), "严格模式不应进入后续 order");
+        } else {
+            assertNull(exception, "默认 continue 在 L1 回填失败后不应阻断启动");
+            assertEquals(1, fixture.getLaterOrderCount(), "默认 continue 应继续执行后续 order");
+        }
+    }
+
+    private void assertWarmupMetadataReadFailurePolicy(boolean failFast) {
+        LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
+        executor.setLockResults(false, true);
+        SmartCacheWarmUpProcessor processor = newWarmupProcessor(executor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        if (failFast) {
+            properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        }
+        ReflectionTestUtils.setField(processor, "properties", properties);
+        RedisRouteTemplate routeTemplate = mock(RedisRouteTemplate.class);
+        doThrow(new IllegalStateException("测试预热完成元数据读取异常"))
+                .when(routeTemplate).execute(any(String.class), any());
+        ReflectionTestUtils.setField(processor, "redisRouteTemplate", routeTemplate);
+        PolicyLeaseWarmupFixture fixture = new PolicyLeaseWarmupFixture();
+
+        CacheWarmUpException exception;
+        try {
+            processor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext(fixture)));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+
+        log.info("竞争实例元数据读取失败策略：{}，错误码：{}，后续 order 执行次数：{}，锁获取次数：{}",
+                failFast ? "fail-fast" : "continue", exception == null ? null : exception.getErrorCode(),
+                fixture.getLaterOrderCount(), executor.getLockAttemptCount());
+        assertEquals(failFast ? 1 : 2, executor.getLockAttemptCount(), "continue 仅在后续 order 额外尝试一次预热锁");
+        if (failFast) {
+            assertNotNull(exception, "严格模式在完成元数据读取失败后必须阻断启动");
+            assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+            assertTrue(exception.getMessage().contains("PolicyLeaseWarmupFixture.first"), "错误消息必须包含失败预热任务名称");
+            assertEquals(0, fixture.getLaterOrderCount(), "严格模式不应进入后续 order");
+        } else {
+            assertNull(exception, "默认 continue 在完成元数据读取失败后不应阻断启动");
+            assertEquals(1, fixture.getLaterOrderCount(), "默认 continue 应继续执行后续 order");
+        }
+    }
+
+    private void assertWarmupCompletionTimeoutPolicy(boolean failFast) {
+        LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
+        executor.setLockResults(false, true);
+        SmartCacheWarmUpProcessor processor = newWarmupProcessor(executor);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        if (failFast) {
+            properties.getWarmUp().setFailurePolicy(SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST);
+        }
+        ReflectionTestUtils.setField(processor, "properties", properties);
+        ReflectionTestUtils.setField(processor, "redisRouteTemplate", warmupIncompleteRouteTemplate());
+        PolicyLeaseWarmupFixture fixture = new PolicyLeaseWarmupFixture();
+
+        long startTime = System.nanoTime();
+        CacheWarmUpException exception;
+        try {
+            processor.onApplicationEvent(new ContextRefreshedEvent(newWarmupContext(fixture)));
+            exception = null;
+        } catch (CacheWarmUpException e) {
+            exception = e;
+        }
+        long elapsedSeconds = TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - startTime);
+
+        log.info("竞争实例完成标记超时策略：{}，等待秒数：{}，错误码：{}，后续 order 执行次数：{}",
+                failFast ? "fail-fast" : "continue", elapsedSeconds, exception == null ? null : exception.getErrorCode(),
+                fixture.getLaterOrderCount());
+        assertTrue(elapsedSeconds >= SmartCacheConstant.WARMUP_WAIT_TIMEOUT_SECONDS - 1,
+                "竞争实例完成标记必须等待完整超时窗口");
+        assertEquals(failFast ? 1 : 2, executor.getLockAttemptCount(), "continue 仅在后续 order 额外尝试一次预热锁");
+        if (failFast) {
+            assertNotNull(exception, "严格模式在等待完成标记超时后必须阻断启动");
+            assertEquals(ErrorCode.SMART_CACHE_WARMUP_FAILED, exception.getErrorCode(), "应使用统一预热错误码");
+            assertTrue(exception.getMessage().contains("PolicyLeaseWarmupFixture.first"), "错误消息必须包含失败预热任务名称");
+            assertEquals(0, fixture.getLaterOrderCount(), "严格模式不应进入后续 order");
+        } else {
+            assertNull(exception, "默认 continue 在等待完成标记超时后不应阻断启动");
+            assertEquals(1, fixture.getLaterOrderCount(), "默认 continue 应继续执行后续 order");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private RedisRouteTemplate warmupIncompleteRouteTemplate() {
+        RedisRouteTemplate routeTemplate = mock(RedisRouteTemplate.class);
+        StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(any(String.class))).thenReturn(null);
+        when(routeTemplate.execute(any(String.class), any(Function.class))).thenAnswer(invocation -> {
+            Function<StringRedisTemplate, Object> callback = invocation.getArgument(1);
+            return callback.apply(stringRedisTemplate);
+        });
+        return routeTemplate;
+    }
+
+    @SuppressWarnings("unchecked")
+    private RedisRouteTemplate warmupCompletedRouteTemplate() {
+        RedisRouteTemplate routeTemplate = mock(RedisRouteTemplate.class);
+        StringRedisTemplate stringRedisTemplate = mock(StringRedisTemplate.class);
+        ValueOperations<String, String> valueOperations = mock(ValueOperations.class);
+        when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(any(String.class))).thenAnswer(invocation -> {
+            String key = invocation.getArgument(0);
+            return key.endsWith(SmartCacheConstant.WARMUP_COMPLETE_KEY_SUFFIX)
+                    ? SmartCacheConstant.WARMUP_COMPLETE_MARK_VALUE
+                    : "[\"lease-key\"]";
+        });
+        when(routeTemplate.execute(any(String.class), any(Function.class))).thenAnswer(invocation -> {
+            Function<StringRedisTemplate, Object> callback = invocation.getArgument(1);
+            return callback.apply(stringRedisTemplate);
+        });
+        return routeTemplate;
+    }
+
     private void assertPreloadWriteSuppressed(boolean renewThrows, RuntimeException renewFailure) {
         LeaseRecordingExecutor executor = new LeaseRecordingExecutor();
         executor.setRenewResult(false);
@@ -304,10 +593,14 @@ class SmartCacheLeasePolicyTest {
     }
 
     private ApplicationContext newWarmupContext() {
+        return newWarmupContext(new LeaseWarmupFixture());
+    }
+
+    private ApplicationContext newWarmupContext(Object fixture) {
         ApplicationContext context = mock(ApplicationContext.class);
         when(context.getParent()).thenReturn(null);
         when(context.getBeanDefinitionNames()).thenReturn(new String[]{"leaseWarmupFixture"});
-        when(context.getBean("leaseWarmupFixture")).thenReturn(new LeaseWarmupFixture());
+        when(context.getBean("leaseWarmupFixture")).thenReturn(fixture);
         return context;
     }
 
@@ -328,20 +621,44 @@ class SmartCacheLeasePolicyTest {
         return manager;
     }
 
+    static class PolicyLeaseWarmupFixture {
+
+        private final AtomicInteger laterOrderCount = new AtomicInteger();
+
+        @SmartCacheWarmUp(cacheName = CACHE_NAME, order = 1)
+        public Map<String, Object> first() {
+            return Collections.<String, Object>singletonMap(CACHE_KEY, CACHE_VALUE);
+        }
+
+        @SmartCacheWarmUp(cacheName = CACHE_NAME, order = 2)
+        public Map<String, Object> second() {
+            laterOrderCount.incrementAndGet();
+            return Collections.emptyMap();
+        }
+
+        int getLaterOrderCount() {
+            return laterOrderCount.get();
+        }
+    }
+
     static class LeaseRecordingExecutor implements RedisLockExecutor {
 
+        private final AtomicInteger lockAttemptCount = new AtomicInteger();
         private final AtomicInteger renewCount = new AtomicInteger();
         private final AtomicInteger unlockCount = new AtomicInteger();
         private volatile RuntimeException unlockFailure;
         private volatile long lastAcquireLeaseSeconds;
         private volatile long lastRenewLeaseSeconds;
+        private volatile boolean lockAcquired = true;
+        private volatile boolean[] lockResults;
         private volatile boolean renewResult = true;
         private volatile RuntimeException renewFailure;
 
         @Override
         public boolean tryLock(String lockKey, String lockValue, long expireTime, TimeUnit timeUnit) {
+            int attempt = lockAttemptCount.incrementAndGet();
             lastAcquireLeaseSeconds = timeUnit.toSeconds(expireTime);
-            return true;
+            return lockResults != null && attempt <= lockResults.length ? lockResults[attempt - 1] : lockAcquired;
         }
 
         @Override
@@ -363,6 +680,10 @@ class SmartCacheLeasePolicyTest {
             return renewResult;
         }
 
+        int getLockAttemptCount() {
+            return lockAttemptCount.get();
+        }
+
         int getRenewCount() {
             return renewCount.get();
         }
@@ -377,6 +698,15 @@ class SmartCacheLeasePolicyTest {
 
         long getLastRenewLeaseSeconds() {
             return lastRenewLeaseSeconds;
+        }
+
+        void setLockAcquired(boolean lockAcquired) {
+            this.lockAcquired = lockAcquired;
+            this.lockResults = null;
+        }
+
+        void setLockResults(boolean... lockResults) {
+            this.lockResults = lockResults;
         }
 
         void setRenewResult(boolean renewResult) {

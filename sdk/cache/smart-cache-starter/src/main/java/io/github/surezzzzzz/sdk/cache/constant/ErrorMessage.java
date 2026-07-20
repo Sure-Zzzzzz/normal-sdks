@@ -57,6 +57,36 @@ public final class ErrorMessage {
      */
     public static final String SMART_CACHE_WARMUP_FAILED = "缓存预热执行失败：%s";
 
+    /**
+     * 预热任务名称
+     */
+    public static final String SMART_CACHE_WARMUP_TASK_NAME = "%s.%s";
+
+    /**
+     * 预热失败详情
+     */
+    public static final String SMART_CACHE_WARMUP_FAILURE_DETAIL = "%s，原因：%s";
+
+    /**
+     * 等待其他实例预热超时
+     */
+    public static final String SMART_CACHE_WARMUP_WAIT_TIMEOUT = "等待其他实例完成缓存预热超时";
+
+    /**
+     * 预热租约续租失败
+     */
+    public static final String SMART_CACHE_WARMUP_LEASE_RENEW_FAILED = "缓存预热租约续租失败";
+
+    /**
+     * 预热方法返回类型无效
+     */
+    public static final String SMART_CACHE_WARMUP_RETURN_TYPE_INVALID = "预热方法必须返回 Map<String, Object>";
+
+    /**
+     * 预热 Map 键类型无效
+     */
+    public static final String SMART_CACHE_WARMUP_MAP_KEY_INVALID = "预热方法返回的 Map key 必须为 String";
+
     private ErrorMessage() {
         throw new UnsupportedOperationException("常量类不能实例化");
     }

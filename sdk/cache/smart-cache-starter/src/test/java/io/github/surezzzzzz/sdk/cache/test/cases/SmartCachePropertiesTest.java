@@ -9,9 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Smart Cache 配置测试
@@ -64,6 +62,32 @@ class SmartCachePropertiesTest {
         properties.validate();
 
         assertEquals(SmartCacheConstant.PUBSUB_MODE_ROUTED, properties.getPubsub().getMode(), "非法 Pub/Sub 模式应回退为 routed");
+    }
+
+    @Test
+    @DisplayName("非法预热失败策略回退为 continue")
+    void shouldFallbackInvalidWarmUpFailurePolicy() {
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getWarmUp().setFailurePolicy("invalid-policy");
+
+        properties.validate();
+
+        log.info("非法预热失败策略回退结果：{}", properties.getWarmUp().getFailurePolicy());
+        assertEquals(SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY, properties.getWarmUp().getFailurePolicy(),
+                "非法预热失败策略应回退为 continue");
+    }
+
+    @Test
+    @DisplayName("空白预热失败策略回退为 continue")
+    void shouldFallbackBlankWarmUpFailurePolicy() {
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.getWarmUp().setFailurePolicy("  ");
+
+        properties.validate();
+
+        log.info("空白预热失败策略回退结果：{}", properties.getWarmUp().getFailurePolicy());
+        assertEquals(SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY, properties.getWarmUp().getFailurePolicy(),
+                "空白预热失败策略应回退为 continue");
     }
 
     @Test

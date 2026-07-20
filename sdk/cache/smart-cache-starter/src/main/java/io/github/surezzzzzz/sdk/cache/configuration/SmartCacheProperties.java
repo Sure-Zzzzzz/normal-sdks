@@ -216,6 +216,15 @@ public class SmartCacheProperties {
                     SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY);
             warmUp.executorQueueCapacity = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY;
         }
+        if (warmUp.failurePolicy == null || warmUp.failurePolicy.trim().isEmpty()) {
+            log.warn("预热失败策略为空，使用默认值 {}", SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY);
+            warmUp.failurePolicy = SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY;
+        } else if (!SmartCacheConstant.WARMUP_FAILURE_POLICY_CONTINUE.equals(warmUp.failurePolicy)
+                && !SmartCacheConstant.WARMUP_FAILURE_POLICY_FAIL_FAST.equals(warmUp.failurePolicy)) {
+            log.warn("预热失败策略 {} 无效，使用默认值 {}", warmUp.failurePolicy,
+                    SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY);
+            warmUp.failurePolicy = SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY;
+        }
     }
 
     private void validateLock() {
@@ -401,6 +410,11 @@ public class SmartCacheProperties {
          * 队列容量
          */
         private int executorQueueCapacity = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY;
+
+        /**
+         * 预热失败策略
+         */
+        private String failurePolicy = SmartCacheConstant.DEFAULT_WARMUP_FAILURE_POLICY;
     }
 
     @Data

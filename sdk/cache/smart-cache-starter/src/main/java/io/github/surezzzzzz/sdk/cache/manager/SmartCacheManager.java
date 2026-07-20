@@ -112,11 +112,11 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
             if (value != null) {
-                if (isNullPlaceholder(value)) {
-                    return null;
-                }
                 if (statsCollector != null) {
                     statsCollector.recordL1Hit(cacheName);
+                }
+                if (isNullPlaceholder(value)) {
+                    return null;
                 }
                 return value;
             }
@@ -210,11 +210,11 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
             if (value != null) {
-                if (isNullPlaceholder(value)) {
-                    return null;
-                }
                 if (statsCollector != null) {
                     statsCollector.recordL1Hit(cacheName);
+                }
+                if (isNullPlaceholder(value)) {
+                    return null;
                 }
                 return value;
             }
@@ -541,17 +541,23 @@ public class SmartCacheManager {
         }
 
         Map<String, T> result = new HashMap<>();
+        Set<String> l1HitKeys = new HashSet<>();
 
         // 先从 L1 批量获取
         if (l1Cache != null) {
             Map<String, T> l1Result = l1Cache.getAll(cacheName, keys);
-            result.putAll(l1Result);
+            for (Map.Entry<String, T> entry : l1Result.entrySet()) {
+                l1HitKeys.add(entry.getKey());
+                if (!isNullPlaceholder(entry.getValue())) {
+                    result.put(entry.getKey(), entry.getValue());
+                }
+            }
         }
 
         // 找出 L1 未命中的 key
         List<String> missedKeys = new ArrayList<>();
         for (String key : keys) {
-            if (!result.containsKey(key)) {
+            if (!l1HitKeys.contains(key)) {
                 missedKeys.add(key);
             }
         }
@@ -559,16 +565,22 @@ public class SmartCacheManager {
         // 如果有未命中的 key，从 L2 批量获取
         if (!missedKeys.isEmpty() && l2Cache != null) {
             Map<String, T> l2Result = l2Cache.getAll(cacheName, missedKeys, valueType);
-            result.putAll(l2Result);
+            Map<String, T> actualL2Result = new HashMap<>();
+            for (Map.Entry<String, T> entry : l2Result.entrySet()) {
+                if (!isNullPlaceholder(entry.getValue())) {
+                    actualL2Result.put(entry.getKey(), entry.getValue());
+                }
+            }
+            result.putAll(actualL2Result);
 
             // 回写 L1
-            if (l1Cache != null && !l2Result.isEmpty()) {
-                l1Cache.putAll(cacheName, (Map<String, Object>) (Map<?, ?>) l2Result);
+            if (l1Cache != null && !actualL2Result.isEmpty()) {
+                l1Cache.putAll(cacheName, (Map<String, Object>) (Map<?, ?>) actualL2Result);
             }
 
             // 记录统计
             if (statsCollector != null) {
-                int l2HitCount = l2Result.size();
+                int l2HitCount = actualL2Result.size();
                 int missCount = missedKeys.size() - l2HitCount;
                 for (int i = 0; i < l2HitCount; i++) {
                     statsCollector.recordL2Hit(cacheName);
@@ -581,8 +593,7 @@ public class SmartCacheManager {
 
         // 记录 L1 命中统计
         if (statsCollector != null && l1Cache != null) {
-            int l1HitCount = keys.size() - missedKeys.size();
-            for (int i = 0; i < l1HitCount; i++) {
+            for (int i = 0; i < l1HitKeys.size(); i++) {
                 statsCollector.recordL1Hit(cacheName);
             }
         }

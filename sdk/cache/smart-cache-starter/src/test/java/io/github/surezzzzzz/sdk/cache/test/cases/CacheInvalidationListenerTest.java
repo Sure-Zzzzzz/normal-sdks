@@ -18,14 +18,12 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -43,9 +41,9 @@ class CacheInvalidationListenerTest {
 
     private void injectField(Object target, String fieldName, Object value) {
         try {
-            Field f = target.getClass().getDeclaredField(fieldName);
-            f.setAccessible(true);
-            f.set(target, value);
+            Field field = target.getClass().getDeclaredField(fieldName);
+            field.setAccessible(true);
+            field.set(target, value);
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("无法注入字段 " + fieldName + "：" + e.getMessage(), e);
         }
@@ -54,75 +52,105 @@ class CacheInvalidationListenerTest {
     @Test
     @DisplayName("SmartCacheProperties.validatePubSub() 在 strong + disabled 时抛出 CacheConfigurationException")
     void shouldFailValidationWhenStrongWithDisabledPubsub() {
-        SmartCacheProperties p = new SmartCacheProperties();
-        p.setMe("test");
-        p.getConsistency().setMode(SmartCacheConstant.CONSISTENCY_MODE_STRONG);
-        p.getPubsub().setMode(SmartCacheConstant.PUBSUB_MODE_DISABLED);
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.setMe("test");
+        properties.getConsistency().setMode(SmartCacheConstant.CONSISTENCY_MODE_STRONG);
+        properties.getPubsub().setMode(SmartCacheConstant.PUBSUB_MODE_DISABLED);
 
-        CacheConfigurationException ex = assertThrows(CacheConfigurationException.class,
-                p::validate,
+        CacheConfigurationException exception = org.junit.jupiter.api.Assertions.assertThrows(CacheConfigurationException.class,
+                properties::validate,
                 "strong + disabled 必须抛出配置异常");
 
-        assertEquals("SMART_CACHE_001", ex.getErrorCode(),
-                "错误码应为 SMART_CACHE_001");
-        assertTrue(ex.getMessage().contains("强一致性模式不能关闭 Pub/Sub"),
-                "错误消息应包含配置语义，实际：" + ex.getMessage());
-        log.info("验证通过：strong + disabled 在配置校验阶段正确抛出 CacheConfigurationException，错误码：{}，消息：{}",
-                ex.getErrorCode(), ex.getMessage());
+        assertEquals("SMART_CACHE_001", exception.getErrorCode(), "错误码应为 SMART_CACHE_001");
+        assertTrue(exception.getMessage().contains("强一致性模式不能关闭 Pub/Sub"),
+                "错误消息应包含配置语义，实际：" + exception.getMessage());
     }
 
     @Test
-    @DisplayName("消息线程池使用 AbortPolicy，队列饱和时 onMessage 捕获 RejectedExecutionException 不传播且丢弃溢出消息")
-    void shouldNotPropagateRejectionFromListenerThread() throws Exception {
-        // 核心数=1、最大=1、队列=1，配合 AbortPolicy：1 个线程跑阻塞任务，1 个任务入队，再提交必然被拒绝
-        ThreadPoolExecutor saturatedExecutor = new ThreadPoolExecutor(
-                1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(1),
-                r -> {
-                    Thread t = new Thread(r, "saturation-test-");
-                    t.setDaemon(true);
-                    return t;
-                },
-                new ThreadPoolExecutor.AbortPolicy()
-        );
-
+    @DisplayName("消息队列饱和时由监听线程背压处理所有已接收失效消息")
+    void shouldProcessAllDeliveredMessagesWithCallerRunsBackpressure() throws Exception {
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(1),
+                runnable -> {
+                    Thread thread = new Thread(runnable, "saturation-test-");
+                    thread.setDaemon(true);
+                    return thread;
+                }, new ThreadPoolExecutor.CallerRunsPolicy());
         try {
             CountDownLatch blocker = new CountDownLatch(1);
-            saturatedExecutor.submit(() -> {
-                try {
-                    blocker.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+            CountDownLatch workerStarted = new CountDownLatch(1);
+            executor.submit(() -> {
+                workerStarted.countDown();
+                await(blocker);
             });
+            boolean workerOccupied = workerStarted.await(5, TimeUnit.SECONDS);
+            log.info("失效监听器背压测试工作线程是否已占用：{}", workerOccupied);
+            assertTrue(workerOccupied, "阻塞任务应先占用唯一工作线程");
 
-            CacheInvalidationListener l = new CacheInvalidationListener();
-            SmartCacheProperties p = new SmartCacheProperties();
-            p.setMe("test");
-            p.getConsistency().setMode(SmartCacheConstant.CONSISTENCY_MODE_STRONG);
-            p.getPubsub().setMode(SmartCacheConstant.PUBSUB_MODE_ROUTED);
-
-            // 用 mock L1Cache 观察实际被处理的消息数量，区分“入队后被处理”与“被拒绝丢弃”
-            CountDownLatch oneProcessed = new CountDownLatch(1);
-            AtomicInteger processedCount = new AtomicInteger(0);
-            L1Cache mockL1 = mock(L1Cache.class);
-            doAnswer(inv -> {
-                processedCount.incrementAndGet();
-                oneProcessed.countDown();
+            CacheInvalidationListener listener = new CacheInvalidationListener();
+            L1Cache l1Cache = mock(L1Cache.class);
+            AtomicInteger processed = new AtomicInteger();
+            AtomicReference<String> overflowThread = new AtomicReference<>();
+            String callerThread = Thread.currentThread().getName();
+            doAnswer(invocation -> {
+                int count = processed.incrementAndGet();
+                if (count == 1) {
+                    overflowThread.set(Thread.currentThread().getName());
+                }
                 return null;
-            }).when(mockL1).evict(anyString(), anyString());
+            }).when(l1Cache).evict(anyString(), anyString());
+            injectField(listener, "properties", strongProperties());
+            injectField(listener, "smartCacheObjectMapper", objectMapper);
+            injectField(listener, "messageExecutor", executor);
+            injectField(listener, "l1Cache", l1Cache);
 
-            injectField(l, "properties", p);
-            injectField(l, "smartCacheObjectMapper", objectMapper);
-            injectField(l, "messageExecutor", saturatedExecutor);
-            injectField(l, "l1Cache", mockL1);
+            Message message = evictionMessage();
+            listener.onMessage(message, new byte[0]);
+            listener.onMessage(message, new byte[0]);
 
-            byte[] pattern = "test".getBytes(StandardCharsets.UTF_8);
-            CacheInvalidationMessage msg = new CacheInvalidationMessage("c", "k",
-                    SmartCacheConstant.OPERATION_EVICT, "sender-1");
-            String payload = objectMapper.writeValueAsString(msg);
-            Message redisMessage = new Message() {
+            log.info("队列饱和后同步处理数：{}，同步处理线程：{}", processed.get(), overflowThread.get());
+            assertEquals(1, processed.get(), "队列饱和后的消息应由当前监听线程同步处理");
+            assertEquals(callerThread, overflowThread.get(), "溢出消息应在 onMessage 调用线程执行");
+
+            blocker.countDown();
+            assertTrue(awaitProcessed(processed, 2), "队列中的消息释放后也应完成处理");
+            assertEquals(2, processed.get(), "所有已接收消息均应触发 L1 失效");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("监听器关闭后跳过新消息且不访问 L1")
+    void shouldSkipMessageWhenExecutorIsShutdown() {
+        ThreadPoolExecutor executor = new ThreadPoolExecutor(
+                1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(1));
+        executor.shutdown();
+        CacheInvalidationListener listener = new CacheInvalidationListener();
+        L1Cache l1Cache = mock(L1Cache.class);
+        injectField(listener, "properties", strongProperties());
+        injectField(listener, "smartCacheObjectMapper", objectMapper);
+        injectField(listener, "messageExecutor", executor);
+        injectField(listener, "l1Cache", l1Cache);
+
+        assertDoesNotThrow(() -> listener.onMessage(evictionMessage(), new byte[0]),
+                "关闭阶段收到消息不应向监听线程传播异常");
+        org.mockito.Mockito.verifyNoInteractions(l1Cache);
+    }
+
+    private SmartCacheProperties strongProperties() {
+        SmartCacheProperties properties = new SmartCacheProperties();
+        properties.setMe("test");
+        properties.getConsistency().setMode(SmartCacheConstant.CONSISTENCY_MODE_STRONG);
+        properties.getPubsub().setMode(SmartCacheConstant.PUBSUB_MODE_ROUTED);
+        return properties;
+    }
+
+    private Message evictionMessage() {
+        try {
+            String payload = objectMapper.writeValueAsString(new CacheInvalidationMessage("cache", "key",
+                    SmartCacheConstant.OPERATION_EVICT, "other-instance"));
+            return new Message() {
                 @Override
                 public byte[] getBody() {
                     return payload.getBytes(StandardCharsets.UTF_8);
@@ -130,35 +158,30 @@ class CacheInvalidationListenerTest {
 
                 @Override
                 public byte[] getChannel() {
-                    return "ch".getBytes(StandardCharsets.UTF_8);
+                    return "channel".getBytes(StandardCharsets.UTF_8);
                 }
             };
-
-            // 5 条消息：1 条入队、4 条被 AbortPolicy 拒绝；onMessage 必须捕获拒绝异常，不能传播到 Redis listener 线程
-            int propagated = 0;
-            for (int i = 0; i < 5; i++) {
-                try {
-                    l.onMessage(redisMessage, pattern);
-                } catch (RejectedExecutionException e) {
-                    propagated++;
-                }
-            }
-            assertEquals(0, propagated,
-                    "onMessage 必须捕获 RejectedExecutionException，不能传播到 Redis listener 线程");
-
-            // 释放阻塞任务，让唯一入队的消息得以处理
-            blocker.countDown();
-            assertTrue(oneProcessed.await(5, TimeUnit.SECONDS),
-                    "入队的消息应在线程释放后被处理");
-
-            // 5 条消息只有 1 条被处理，其余 4 条被拒绝并丢弃（非 CallerRuns，未在调用线程执行）
-            assertEquals(1, processedCount.get(),
-                    "5 条消息中仅 1 条入队并处理，4 条应被 AbortPolicy 拒绝并丢弃，而不是 CallerRuns");
-
-            log.info("验证通过：5 条消息 1 入队 4 拒绝，onMessage 未传播异常，溢出消息被丢弃而非 CallerRuns");
-        } finally {
-            saturatedExecutor.shutdownNow();
+        } catch (Exception e) {
+            throw new RuntimeException("无法构造缓存失效消息：" + e.getMessage(), e);
         }
     }
 
+    private void await(CountDownLatch blocker) {
+        try {
+            blocker.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private boolean awaitProcessed(AtomicInteger processed, int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            if (processed.get() >= expected) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return false;
+    }
 }

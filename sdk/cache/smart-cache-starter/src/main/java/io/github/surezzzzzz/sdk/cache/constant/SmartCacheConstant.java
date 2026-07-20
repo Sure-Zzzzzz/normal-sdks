@@ -383,6 +383,21 @@ public final class SmartCacheConstant {
     // ==================== 预热默认值 ====================
 
     /**
+     * 预热失败策略：继续启动
+     */
+    public static final String WARMUP_FAILURE_POLICY_CONTINUE = "continue";
+
+    /**
+     * 预热失败策略：快速失败
+     */
+    public static final String WARMUP_FAILURE_POLICY_FAIL_FAST = "fail-fast";
+
+    /**
+     * 默认预热失败策略
+     */
+    public static final String DEFAULT_WARMUP_FAILURE_POLICY = WARMUP_FAILURE_POLICY_CONTINUE;
+
+    /**
      * 预热完成标记默认 TTL（秒）
      */
     public static final int DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS = 600;

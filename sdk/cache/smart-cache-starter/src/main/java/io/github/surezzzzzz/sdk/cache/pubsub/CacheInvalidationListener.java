@@ -63,7 +63,7 @@ public class CacheInvalidationListener implements MessageListener, InitializingB
                 thread.setDaemon(true);
                 return thread;
             },
-            new ThreadPoolExecutor.AbortPolicy()
+            new ThreadPoolExecutor.CallerRunsPolicy()
     );
 
     @Override
@@ -120,10 +120,14 @@ public class CacheInvalidationListener implements MessageListener, InitializingB
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
+        if (messageExecutor.isShutdown()) {
+            log.warn("缓存失效监听器正在关闭，跳过新消息处理");
+            return;
+        }
         try {
             messageExecutor.submit(() -> processMessage(message));
         } catch (RejectedExecutionException e) {
-            log.warn("缓存失效消息已丢弃，处理线程池已饱和");
+            log.warn("缓存失效监听器无法提交消息处理任务，原因：{}", e.getMessage());
         }
     }
 

@@ -1,10 +1,10 @@
 # Smart Cache Starter
 
-基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.0.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
+基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.1.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
 
 ## 版本与兼容性
 
-当前版本：`2.0.0`
+当前版本：`2.1.0`
 
 | 项目 | 支持版本 |
 | --- | --- |
@@ -15,14 +15,14 @@
 
 ### 兼容性验证
 
-`2.0.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
+`2.1.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
 
 | Spring Boot | JUnit 结果 | Redis 7 Cluster 锁边界 |
 | --- | --- | --- |
-| 2.2.x | 178 tests，5 skipped，0 failures，0 errors | Spring Boot 2.2.x 的 Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 Cluster 节点 metadata；仅缓存击穿锁、显式 lease、预刷新锁与启动预热相关的 5 条 E2E 跳过。L2、批量、SCAN、Pub/Sub 及强一致性 `put` / `putAll` 仍在 Redis 3/5 Cluster 实际执行。 |
-| 2.3.12 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
-| 2.4.5 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
-| 2.7.9 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行，并完成最终干净回归。 |
+| 2.2.x | 196 tests，5 skipped，0 failures，0 errors | Spring Boot 2.2.x 的 Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 Cluster 节点 metadata；仅缓存击穿锁、显式 lease、预刷新锁与启动预热相关的 5 条 E2E 跳过。L2、批量、SCAN、Pub/Sub 及强一致性 `put` / `putAll` 仍在 Redis 3/5 Cluster 实际执行。 |
+| 2.3.12 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.4.5 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.7.9 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行，并完成最终干净回归。 |
 
 `1.x` 已封版，历史使用说明见 [README.1.x.md](README.1.x.md)。
 
@@ -42,7 +42,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.0.0'
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
 
     // L1 与注解式 API 由使用方按需提供
     implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
@@ -63,7 +63,7 @@ dependencies {
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
         <artifactId>smart-cache-starter</artifactId>
-        <version>2.0.0</version>
+        <version>2.1.0</version>
     </dependency>
 
     <!-- L1 与注解式 API 按需提供 -->
@@ -185,6 +185,7 @@ io:
 | `consistency.mode` | `strong` | `strong` 或 `eventual`。 |
 | `pubsub.mode` | `routed` | `routed` 或 `disabled`。 |
 | `pubsub.channel-prefix` | `cache:pubsub` | Pub/Sub channel 前缀。 |
+| `warm-up.failure-policy` | `continue` | `continue` 记录失败并继续后续预热；`fail-fast` 阻断当前启动。 |
 | `route.scan-enabled` | `false` | 是否允许 `clear` / `size` 对 L2 使用 SCAN。 |
 | `route.scan-count` | `100` | SCAN 的 count 提示值。 |
 
@@ -197,7 +198,7 @@ io:
 
 路由型 Pub/Sub 使用 `{channel-prefix}:{me}:route-probe` 选择一个连接工厂，并在 `{channel-prefix}:{me}:*` 上订阅。实现只有一个监听容器，因而同一 `me` 下的全部 Pub/Sub channel 必须路由到该探测 key 选出的同一个数据源；不支持按 channel 自动创建多数据源订阅容器。发布也经由探测 key 的路由执行。
 
-失效消息处理使用独立的有界线程池（核心 2、最大 4、队列 1000）。队列满时，新到的失效消息会被记录警告并丢弃；应结合实例数、失效峰值和一致性要求评估容量。
+失效消息处理使用独立的有界线程池（核心 2、最大 4、队列 1000）。队列满且监听器仍运行时，由 Redis listener 回调线程同步处理该消息形成背压，避免已经送达 JVM 的失效消息被本地队列主动丢弃；关闭阶段收到的新消息会跳过，避免与 L1 销毁竞争。Redis Pub/Sub 仍不提供离线重放、持久化或 exactly-once 承诺。
 
 `2.0.0` 不再支持 `consistency.pubsub-channel-prefix`。升级时必须将该旧配置迁移为 `pubsub.channel-prefix`；未配置新字段时使用默认值 `cache:pubsub`。
 
@@ -269,7 +270,7 @@ L2 命中后，若启用状态下的 `CachePreloadHandler` 判断需要续期，
 
 ### 启动预热
 
-使用 `@SmartCacheWarmUp` 标记返回 `Map<String, Object>` 的方法。组件仅在根 `ContextRefreshedEvent` 执行预热，按 `order` 顺序运行：相同 `order` 并行，不同 `order` 串行。返回 `List` 或其他类型的预热方法会被跳过并记录警告。
+使用 `@SmartCacheWarmUp` 标记返回 `Map<String, Object>` 的方法。组件仅在根 `ContextRefreshedEvent` 执行预热，按 `order` 顺序运行：相同 `order` 并行，不同 `order` 串行。`null` 或空 Map 代表无数据预热；其他返回类型视为失败。
 
 ```yaml
 io:
@@ -281,15 +282,18 @@ io:
             completion-mark-ttl-seconds: 600
             executor-threads: 4
             executor-queue-capacity: 1024
+            failure-policy: continue
 ```
 
-启用 L2 和 Redis 锁时，一个实例获取预热 lease 后执行预热方法；只有在写入前续租成功时才写入 L2/L1、预热完成标记及 key 列表。续租返回 `false` 或抛出异常时丢弃本次预热数据，不发布完成信号；未获取 lease 的实例会等待其他实例的完成标记，再从 L2 回填 L1。缺少 L2 或分布式锁时，预热仅在本地执行。预热线程池同样有界并使用 `AbortPolicy`；线程池饱和会使对应 `order` 的预热失败并抛出 `IllegalStateException`，不会静默丢弃任务。
+启用 L2 和 Redis 锁时，一个实例获取预热 lease 后执行预热方法；只有在写入前续租成功时才写入 L2/L1、预热完成标记及 key 列表。续租返回 `false` 或抛出异常时丢弃本次预热数据，不发布完成信号；未获取 lease 的实例会等待其他实例的完成标记，再从 L2 回填 L1。缺少 L2 或分布式锁时，预热仅在本地执行。
+
+`warm-up.failure-policy` 默认为 `continue`：单个任务的方法异常、返回类型错误、lease/metadata/L1 回填失败、等待完成标记超时或执行器拒绝时会记录失败，当前 order 的其他任务与后续 order 仍继续执行。关键预热可显式配置 `fail-fast`：任务失败会在当前 order 已提交任务完成后抛出 `CacheWarmUpException`（`SMART_CACHE_009`），阻断后续 order 与应用启动；不会中断已开始的调用方回调。
 
 lease 不是 watchdog：组件不会创建后台线程、调度器或自动续租。loader、reload 和预热方法是不可中断的调用方回调，lease 在回调执行期间仍可能到期并与新 owner 并行；本组件只保证重新获得控制权后，续租失败时不再写入共享缓存或预热元数据。该机制不提供 fencing token、跨实例写入排序或分布式事务，调用方回调需要能接受独立重跑。
 
 ## 从 1.x 升级
 
-1. 将依赖升级为 `smart-cache-starter:2.0.0`，并使用 Redis Route `1.1.0`、Redis Lock `1.2.1`、task-retry `2.0.0`。
+1. 将依赖升级为 `smart-cache-starter:2.1.0`，并使用 Redis Route `1.1.0`、Redis Lock `1.2.1`、task-retry `2.0.0`。
 2. 配置并启用 `io.github.surezzzzzz.sdk.redis.route.enable=true`，同时启用 `io.github.surezzzzzz.sdk.lock.redis.route.enable=true`；为 L2 key、锁 key、Pub/Sub 探测 key / channel 和预热元数据配置匹配的路由规则。
 3. 移除对 `smartCacheRedisTemplate`、应用主对象型 `RedisTemplate` 以及 1.x L2 直连路径的依赖；生产 L2 统一使用 Route 原生的 JSON 字符串路径。
 4. 将旧的 `l2.key-prefix` 配置迁移为根级 `key-prefix`，将 `consistency.pubsub-channel-prefix` 迁移为 `pubsub.channel-prefix`，并确认同一副本组的 `me` 一致。
