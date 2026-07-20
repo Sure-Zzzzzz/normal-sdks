@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
+import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -28,14 +29,15 @@ import java.util.function.Function;
 @Slf4j
 @SmartCacheComponent
 @ConditionalOnClass(Caffeine.class)
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.cache.l1", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = SmartCacheConstant.CONFIG_PREFIX + ".l1", name = SmartCacheConstant.PROPERTY_ENABLED,
+        havingValue = SmartCacheConstant.PROPERTY_VALUE_TRUE, matchIfMissing = true)
 public class L1Cache {
 
     private final SmartCacheProperties properties;
     private final Map<String, Cache<String, Object>> cacheMap = new ConcurrentHashMap<>();
     private final AtomicInteger threadCounter = new AtomicInteger(0);
-    private final Executor refreshExecutor = Executors.newFixedThreadPool(2, r -> {
-        Thread t = new Thread(r, "l1-cache-refresh-" + threadCounter.incrementAndGet());
+    private final Executor refreshExecutor = Executors.newFixedThreadPool(SmartCacheConstant.L1_REFRESH_EXECUTOR_THREADS, r -> {
+        Thread t = new Thread(r, SmartCacheConstant.L1_REFRESH_THREAD_NAME_PREFIX + threadCounter.incrementAndGet());
         t.setDaemon(true);
         return t;
     });
@@ -72,17 +74,17 @@ public class L1Cache {
                         try {
                             Object value = l2Cache.get(cacheName, key);
                             if (value != null) {
-                                log.debug("L1 cache async refresh from L2: cacheName={}, key={}", cacheName, key);
+                                log.debug("L1 从 L2 异步刷新成功，cacheName：{}，key：{}", cacheName, key);
                                 return value;
                             }
                         } catch (Exception e) {
-                            log.warn("L1 cache async refresh from L2 failed: cacheName={}, key={}, error={}",
+                            log.warn("L1 从 L2 异步刷新失败，cacheName：{}，key：{}，原因：{}",
                                     cacheName, key, e.getMessage());
                         }
                     }
                     // L2 也没有或加载失败，返回 null 让 Caffeine 保留旧值
                     // 注意：Caffeine 的 refreshAfterWrite 在 loader 返回 null 时会保留旧值
-                    log.debug("L1 cache async refresh: no data from L2, keeping old value: cacheName={}, key={}",
+                    log.debug("L1 异步刷新未从 L2 读取到数据，保留旧值，cacheName：{}，key：{}",
                             cacheName, key);
                     return null;
                 });
@@ -205,7 +207,7 @@ public class L1Cache {
      */
     @PreDestroy
     public void destroy() {
-        log.info("L1 Cache destroying...");
+        log.info("开始销毁 L1 缓存");
 
         // 先清理所有缓存，停止新的刷新任务
         cacheMap.values().forEach(Cache::invalidateAll);
@@ -217,21 +219,23 @@ public class L1Cache {
             executorService.shutdown();
             try {
                 // 等待正在执行的任务完成
-                if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
-                    log.warn("L1 Cache refresh executor did not terminate in time, forcing shutdown");
+                if (!executorService.awaitTermination(SmartCacheConstant.L1_REFRESH_SHUTDOWN_AWAIT_SECONDS,
+                        TimeUnit.SECONDS)) {
+                    log.warn("L1 刷新线程池未按时关闭，执行强制关闭");
                     executorService.shutdownNow();
                     // 等待强制关闭完成
-                    if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
-                        log.error("L1 Cache refresh executor did not terminate after forced shutdown");
+                    if (!executorService.awaitTermination(SmartCacheConstant.EXECUTOR_SHUTDOWN_AWAIT_SECONDS,
+                            TimeUnit.SECONDS)) {
+                        log.error("L1 刷新线程池强制关闭后仍未退出");
                     }
                 }
             } catch (InterruptedException e) {
-                log.error("L1 Cache destroy interrupted, forcing shutdown", e);
+                log.error("L1 缓存销毁被中断，执行强制关闭", e);
                 executorService.shutdownNow();
                 Thread.currentThread().interrupt();
             }
         }
 
-        log.info("L1 Cache destroyed successfully");
+        log.info("L1 缓存销毁完成");
     }
 }

@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.cache.annotation;
 import java.lang.annotation.*;
 
 /**
- * Smart Cache WarmUp Annotation
+ * Smart Cache 预热注解
  * <p>
  * 预热注解
  * </p>

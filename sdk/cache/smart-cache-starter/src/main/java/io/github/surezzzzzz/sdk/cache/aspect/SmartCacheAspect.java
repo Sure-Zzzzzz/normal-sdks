@@ -4,6 +4,9 @@ import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheEvict;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCachePut;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheable;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.exception.SmartCacheException;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper;
@@ -17,7 +20,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import java.lang.reflect.Method;
 
 /**
- * Smart Cache Aspect
+ * Smart Cache 切面
  * <p>
  * 缓存注解 AOP 切面
  * </p>
@@ -56,7 +59,7 @@ public class SmartCacheAspect {
         // 解析 key
         String key = SpELExpressionHelper.parseExpression(annotation.key(), method, args, null);
         if (key == null || key.isEmpty()) {
-            log.warn("Cache key is null or empty, skip caching: {}.{}",
+            log.warn("缓存 key 为空，跳过缓存写入：{}.{}",
                     method.getDeclaringClass().getSimpleName(), method.getName());
             return joinPoint.proceed();
         }
@@ -69,6 +72,8 @@ public class SmartCacheAspect {
             }
         }
 
+        Class<?> returnType = method.getReturnType();
+
         // 从缓存获取
         return cacheManager.get(cacheName, key, () -> {
             try {
@@ -77,12 +82,13 @@ public class SmartCacheAspect {
                 throw e;
             } catch (Throwable e) {
                 throw new SmartCacheException(
-                        "Cache operation failed: " + method.getDeclaringClass().getSimpleName() + "." + method.getName()
-                                + " (caused by: " + e.getClass().getSimpleName() + ")",
+                        ErrorCode.SMART_CACHE_LOAD_FAILED,
+                        String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
+                                method.getDeclaringClass().getSimpleName() + SmartCacheConstant.KEY_SEPARATOR + method.getName()),
                         e
                 );
             }
-        }, annotation.l2TtlSeconds());
+        }, annotation.l2TtlSeconds(), returnType);
     }
 
     /**
@@ -108,7 +114,7 @@ public class SmartCacheAspect {
         // 解析 key
         String key = SpELExpressionHelper.parseExpression(annotation.key(), method, args, result);
         if (key == null || key.isEmpty()) {
-            log.warn("Cache key is null or empty, skip caching: {}.{}",
+            log.warn("缓存 key 为空，跳过缓存写入：{}.{}",
                     method.getDeclaringClass().getSimpleName(), method.getName());
             return result;
         }
@@ -144,8 +150,12 @@ public class SmartCacheAspect {
         String cacheName = annotation.cacheName();
         Object[] args = joinPoint.getArgs();
 
-        // 如果 beforeInvocation=true，在方法执行前删除缓存
+        // 如果 beforeInvocation=true，在方法执行前按条件删除缓存
         if (annotation.beforeInvocation()) {
+            if (!annotation.condition().isEmpty()
+                    && !SpELExpressionHelper.parseCondition(annotation.condition(), method, args, null)) {
+                return joinPoint.proceed();
+            }
             evictCache(annotation, cacheName, method, args, null);
             return joinPoint.proceed();
         }
@@ -181,7 +191,7 @@ public class SmartCacheAspect {
         } else {
             String key = SpELExpressionHelper.parseExpression(annotation.key(), method, args, result);
             if (key == null || key.isEmpty()) {
-                log.warn("Cache key is null or empty, skip eviction: {}.{}",
+                log.warn("缓存 key 为空，跳过缓存删除：{}.{}",
                         method.getDeclaringClass().getSimpleName(), method.getName());
                 return;
             }

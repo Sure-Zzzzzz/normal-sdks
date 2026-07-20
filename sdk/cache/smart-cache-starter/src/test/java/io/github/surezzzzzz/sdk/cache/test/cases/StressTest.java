@@ -29,17 +29,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * @since 1.0.0
  */
 @Slf4j
-@SpringBootTest(classes = SmartCacheTestApplication.class)
+@SpringBootTest(
+        classes = SmartCacheTestApplication.class,
+        properties = {
+                "io.github.surezzzzzz.sdk.cache.consistency.mode=eventual",
+                "io.github.surezzzzzz.sdk.cache.pubsub.mode=disabled"
+        }
+)
 public class StressTest extends BaseSmartCacheTest {
 
     @Autowired
     private SmartCacheManager cacheManager;
 
-    @Autowired
-    private io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties properties;
-
     @BeforeEach
     public void setUp() {
+        requireRedisAvailable();
         log.info("========== 初始化压力测试环境 ==========");
         cacheManager.clear("stress-test");
         log.info("压力测试环境初始化完成");
@@ -55,16 +59,12 @@ public class StressTest extends BaseSmartCacheTest {
 
         String cacheName = "stress-test";
 
-        // 根据Redis可用性和L1容量调整测试规模
-        boolean redisAvailable = isRedisAvailable();
-        int l1MaxSize = properties.getL1().getMaxSize();
-        int threadCount = redisAvailable ? 100 : 20;
-        int operationsPerThread = redisAvailable ? 1000 : 100;
-        // keyRange应该小于L1容量，避免频繁驱逐
-        int keyRange = redisAvailable ? 100 : Math.min(20, (int) (l1MaxSize * 0.2));
+        int threadCount = 100;
+        int operationsPerThread = 1000;
+        int keyRange = 100;
 
-        log.info("Redis可用: {}, L1容量: {}, 测试规模: {}线程 × {}操作 = {}总操作",
-                redisAvailable, l1MaxSize, threadCount, operationsPerThread, threadCount * operationsPerThread);
+        log.info("测试规模: {}线程 × {}操作 = {}总操作",
+                threadCount, operationsPerThread, threadCount * operationsPerThread);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
@@ -144,13 +144,12 @@ public class StressTest extends BaseSmartCacheTest {
         // 断言
         assertEquals(totalOperations, actualOperations, "实际操作数应该等于预期操作数");
 
-        // 根据Redis可用性调整性能要求
-        double expectedSuccessRate = redisAvailable ? 99.0 : 90.0;
-        double expectedMaxLatency = redisAvailable ? 60 : 150;
-        double expectedMinThroughput = redisAvailable ? 1000 : 100;  // 进一步降低要求
+        double expectedSuccessRate = 99.0;
+        double expectedMaxLatency = 60;
+        double expectedMinThroughput = 1000;
 
-        log.info("Redis可用: {}, 性能要求: 成功率>={}%, 延迟<{}ms, 吞吐量>{}ops/s",
-                redisAvailable, expectedSuccessRate, expectedMaxLatency, expectedMinThroughput);
+        log.info("性能要求: 成功率>={}%, 延迟<{}ms, 吞吐量>{}ops/s",
+                expectedSuccessRate, expectedMaxLatency, expectedMinThroughput);
 
         assertTrue(successRate >= expectedSuccessRate,
                 "成功率应该至少" + expectedSuccessRate + "%，实际: " + successRate + "%");
@@ -171,13 +170,9 @@ public class StressTest extends BaseSmartCacheTest {
 
         String cacheName = "stress-test";
 
-        // 根据Redis可用性和L1容量调整测试规模
-        boolean redisAvailable = isRedisAvailable();
-        int l1MaxSize = properties.getL1().getMaxSize();
-        // 数据量应该考虑L1容量限制
-        int dataCount = redisAvailable ? 10000 : Math.min(1000, (int) (l1MaxSize * 0.8));
+        int dataCount = 10000;
 
-        log.info("Redis可用: {}, L1容量: {}, 测试数据量: {}", redisAvailable, l1MaxSize, dataCount);
+        log.info("测试数据量: {}", dataCount);
 
         long start = System.currentTimeMillis();
 
@@ -210,15 +205,12 @@ public class StressTest extends BaseSmartCacheTest {
         log.info("读取速度: {} records/s", String.format("%.2f", readSpeed));
         log.info("数据完整性: {}/{}", verifiedCount, dataCount);
 
-        // 根据Redis可用性调整性能要求
-        double expectedMinWriteSpeed = redisAvailable ? 500 : 200;
-        double expectedMinReadSpeed = redisAvailable ? 1000 : 500;
+        double expectedMinWriteSpeed = 500;
+        double expectedMinReadSpeed = 1000;
+        double expectedDataIntegrity = 1.0;
 
-        // 数据完整性：Redis可用时100%，不可用时根据数据量与L1容量比例调整
-        double expectedDataIntegrity = redisAvailable ? 1.0 : Math.min(1.0, (double) l1MaxSize / dataCount);
-
-        log.info("Redis可用: {}, 性能要求: 写入速度>{}records/s, 读取速度>{}records/s, 数据完整性>={}%",
-                redisAvailable, expectedMinWriteSpeed, expectedMinReadSpeed, expectedDataIntegrity * 100);
+        log.info("性能要求: 写入速度>{}records/s, 读取速度>{}records/s, 数据完整性>={}%",
+                expectedMinWriteSpeed, expectedMinReadSpeed, expectedDataIntegrity * 100);
 
         // 断言
         double actualIntegrity = (double) verifiedCount / dataCount;
@@ -399,15 +391,11 @@ public class StressTest extends BaseSmartCacheTest {
 
         String cacheName = "stress-test";
 
-        // 根据Redis可用性和L1容量调整测试规模
-        boolean redisAvailable = isRedisAvailable();
-        int l1MaxSize = properties.getL1().getMaxSize();
-        // 批量大小应该考虑L1容量，避免单批次就超过容量
-        int batchSize = redisAvailable ? 5000 : Math.min(1000, (int) (l1MaxSize * 0.8));
-        int batchCount = redisAvailable ? 10 : 5;
+        int batchSize = 5000;
+        int batchCount = 10;
 
-        log.info("Redis可用: {}, L1容量: {}, 测试规模: {}批次 × {}条/批 = {}总记录",
-                redisAvailable, l1MaxSize, batchCount, batchSize, batchCount * batchSize);
+        log.info("测试规模: {}批次 × {}条/批 = {}总记录",
+                batchCount, batchSize, batchCount * batchSize);
 
         long totalWriteTime = 0;
         long totalReadTime = 0;
@@ -432,18 +420,7 @@ public class StressTest extends BaseSmartCacheTest {
             totalReadTime += readTime;
 
             // 验证读取结果
-            // Redis可用时应该读取到所有数据
-            // Redis不可用时，由于L1容量限制和多批次写入，后续批次会挤出前面的数据
-            if (redisAvailable) {
-                assertEquals(batchSize, result.size(), "批次" + batch + "应该读取到所有数据");
-            } else {
-                // 计算期望的最小数据量：考虑L1容量和当前批次
-                // 如果单批次数据量小于L1容量，应该能读取到大部分数据
-                double expectedMinRatio = batchSize <= l1MaxSize ? 0.8 : Math.max(0.3, (double) l1MaxSize / batchSize);
-                int expectedMinSize = (int) (batchSize * expectedMinRatio);
-                assertTrue(result.size() >= expectedMinSize,
-                        "批次" + batch + "至少应该读取到" + (expectedMinRatio * 100) + "%的数据，实际: " + result.size() + "/" + batchSize);
-            }
+            assertEquals(batchSize, result.size(), "批次" + batch + "应该读取到所有数据");
         }
 
         double avgWriteTime = (double) totalWriteTime / batchCount;
@@ -458,14 +435,13 @@ public class StressTest extends BaseSmartCacheTest {
         log.info("平均写入速度: {} records/s", String.format("%.2f", avgWriteSpeed));
         log.info("平均读取速度: {} records/s", String.format("%.2f", avgReadSpeed));
 
-        // 根据Redis可用性调整性能要求
-        double expectedMaxWriteTime = redisAvailable ? 2000 : 3000;      // 无Redis时放宽写入时间
-        double expectedMaxReadTime = redisAvailable ? 500 : 1000;        // 无Redis时放宽读取时间
-        double expectedMinWriteSpeed = redisAvailable ? 2500 : 1500;     // 无Redis时降低写入速度要求
-        double expectedMinReadSpeed = redisAvailable ? 10000 : 5000;     // 无Redis时降低读取速度要求
+        double expectedMaxWriteTime = 2000;
+        double expectedMaxReadTime = 500;
+        double expectedMinWriteSpeed = 2500;
+        double expectedMinReadSpeed = 10000;
 
-        log.info("Redis可用: {}, 性能要求: 写入<{}ms, 读取<{}ms, 写入速度>{}records/s, 读取速度>{}records/s",
-                redisAvailable, expectedMaxWriteTime, expectedMaxReadTime, expectedMinWriteSpeed, expectedMinReadSpeed);
+        log.info("性能要求: 写入<{}ms, 读取<{}ms, 写入速度>{}records/s, 读取速度>{}records/s",
+                expectedMaxWriteTime, expectedMaxReadTime, expectedMinWriteSpeed, expectedMinReadSpeed);
 
         // 断言
         assertTrue(avgWriteTime < expectedMaxWriteTime,

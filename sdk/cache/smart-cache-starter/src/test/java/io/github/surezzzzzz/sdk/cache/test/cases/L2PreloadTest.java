@@ -62,6 +62,7 @@ class L2PreloadTest extends BaseSmartCacheTest {
 
     @BeforeEach
     void setUp() {
+        requireRedisAvailable();
         cacheManager.clear(CACHE_NAME);
         testHandler.reset();
     }
@@ -76,8 +77,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     @DisplayName("框架查 TTL 触发 preload，返回旧值，续期后返回新值")
     void testPreloadViaFrameworkTtlCheck() throws Exception {
         log.info("========== 测试：框架查 TTL 触发 preload ==========");
-
-        if (shouldSkipRedisTest("testPreloadViaFrameworkTtlCheck")) return;
 
         String key = "ttl-trigger-key";
         testHandler.setNextValue("new-value");
@@ -112,8 +111,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     void testPreloadViaNeedPreloadOverride() throws Exception {
         log.info("========== 测试：覆盖 needPreload() 直接触发 ==========");
 
-        if (shouldSkipRedisTest("testPreloadViaNeedPreloadOverride")) return;
-
         String key = "need-preload-override-key";
         testHandler.setNextValue("refreshed-value");
         testHandler.setNeedPreloadResult(Optional.of(true)); // 覆盖：直接触发，不查 TTL
@@ -140,8 +137,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     void testPreloadSuppressedByNeedPreload() throws Exception {
         log.info("========== 测试：覆盖 needPreload() 返回 false，不触发 ==========");
 
-        if (shouldSkipRedisTest("testPreloadSuppressedByNeedPreload")) return;
-
         String key = "need-preload-false-key";
         testHandler.setNeedPreloadResult(Optional.of(false)); // 覆盖：不触发
 
@@ -164,8 +159,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     void testPreloadHandlerFailureReturnsOldValue() throws Exception {
         log.info("========== 测试：handler.reload() 失败时旧值仍可返回 ==========");
 
-        if (shouldSkipRedisTest("testPreloadHandlerFailureReturnsOldValue")) return;
-
         String key = "preload-failure-key";
         testHandler.setThrowOnReload(true);
 
@@ -186,8 +179,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     @DisplayName("getReloadTtlSeconds >0 时续期后 L2 TTL 应接近指定值")
     void testPreloadWithCustomReloadTtl() throws Exception {
         log.info("========== 测试：getReloadTtlSeconds >0 时续期 TTL ==========");
-
-        if (shouldSkipRedisTest("testPreloadWithCustomReloadTtl")) return;
 
         String key = "reload-ttl-key";
         int reloadTtl = 60;
@@ -226,8 +217,6 @@ class L2PreloadTest extends BaseSmartCacheTest {
     @DisplayName("getReloadTtlSeconds=0 时续期后 L2 TTL 应与全局配置一致")
     void testPreloadWithDefaultReloadTtl() throws Exception {
         log.info("========== 测试：getReloadTtlSeconds=0 时续期 TTL ==========");
-
-        if (shouldSkipRedisTest("testPreloadWithDefaultReloadTtl")) return;
 
         String key = "reload-default-ttl-key";
         // getReloadTtlSeconds 默认 0，使用全局配置（10s）

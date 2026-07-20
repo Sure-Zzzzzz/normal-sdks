@@ -43,8 +43,8 @@ public interface CachePreloadHandler {
     /**
      * 是否需要触发 preload（可选覆盖）
      *
-     * <p>默认返回 {@link Optional#empty()}，表示交给框架查 L2 TTL 决定（接受一次额外 Redis IO）。
-     * 业务侧可覆盖此方法，返回 {@code Optional.of(true/false)} 完全替代框架的 TTL 查询。
+     * <p>仅在 {@code l2.preload.enabled=true} 时生效。默认返回 {@link Optional#empty()}，表示交给框架查 L2 TTL 决定（接受一次额外 Redis IO）。
+     * 业务侧可覆盖此方法，返回 {@code Optional.of(true/false)} 完全替代框架的 TTL 查询，但不能绕过预刷新总开关。
      *
      * <p>适用场景：业务侧有更高效的判断方式时覆盖，例如 token manager 直接解析 JWT：
      * <pre>{@code

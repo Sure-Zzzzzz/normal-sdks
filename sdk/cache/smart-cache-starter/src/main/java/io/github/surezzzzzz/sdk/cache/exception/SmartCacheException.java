@@ -3,27 +3,27 @@ package io.github.surezzzzzz.sdk.cache.exception;
 import lombok.Getter;
 
 /**
- * Smart Cache Exception
- * <p>
- * 缓存基础异常
- * </p>
+ * Smart Cache 基础异常
  *
  * @author surezzzzzz
  */
 @Getter
 public class SmartCacheException extends RuntimeException {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
-    public SmartCacheException(String message) {
+    /**
+     * 错误码
+     */
+    private final String errorCode;
+
+    public SmartCacheException(String errorCode, String message) {
         super(message);
+        this.errorCode = errorCode;
     }
 
-    public SmartCacheException(String message, Throwable cause) {
+    public SmartCacheException(String errorCode, String message, Throwable cause) {
         super(message, cause);
-    }
-
-    public SmartCacheException(Throwable cause) {
-        super(cause);
+        this.errorCode = errorCode;
     }
 }

@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
@@ -8,14 +9,12 @@ import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationMessage;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
 import io.github.surezzzzzz.sdk.cache.test.SmartCacheTestApplication;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -30,8 +29,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since 1.0.0
  */
 @Slf4j
-@SpringBootTest(classes = SmartCacheTestApplication.class)
-@ActiveProfiles("strong")
+@SpringBootTest(
+        classes = SmartCacheTestApplication.class,
+        properties = {
+                "io.github.surezzzzzz.sdk.cache.me=test-instance-strong",
+                "io.github.surezzzzzz.sdk.cache.consistency.mode=strong",
+                "io.github.surezzzzzz.sdk.cache.pubsub.channel-prefix=test-cache-sync"
+        }
+)
 public class PubSubVerificationTest extends BaseSmartCacheTest {
 
     @Autowired
@@ -44,14 +49,17 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
     private CacheInvalidationListener invalidationListener;
 
     @Autowired
-    @Qualifier("smartCacheRedisTemplate")
-    private RedisTemplate<String, Object> redisTemplate;
+    private RedisRouteTemplate redisRouteTemplate;
+
+    @Autowired
+    private ObjectMapper smartCacheObjectMapper;
 
     @BeforeEach
     public void setUp() {
         log.info("========== 初始化 Pub/Sub 验证测试环境 ==========");
         l1Cache.clear("pubsub-test");
-        log.info("测试环境初始化完成，Redis可用: {}", isRedisAvailable());
+        requireRedisAvailable();
+        log.info("测试环境初始化完成，Redis route 可用");
     }
 
     /**
@@ -60,11 +68,6 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
      */
     @Test
     public void testCrossInstanceEvictMessage() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testCrossInstanceEvictMessage")) {
-            return;
-        }
-
         log.info("========== 测试：跨实例 evict 消息 ==========");
 
         String cacheName = "pubsub-test";
@@ -91,7 +94,7 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
                 cacheName, key, SmartCacheConstant.OPERATION_EVICT, "other-instance");
 
         log.info("发送 Pub/Sub 消息到频道: {}, sender: {}", channel, "other-instance");
-        redisTemplate.convertAndSend(channel, msg);
+        publish(channel, msg);
 
         // 步骤3: 等待 Pub/Sub 消息传播和处理
         Thread.sleep(300);
@@ -109,11 +112,6 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
      */
     @Test
     public void testCrossInstanceClearMessage() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testCrossInstanceClearMessage")) {
-            return;
-        }
-
         log.info("========== 测试：跨实例 clear 消息 ==========");
 
         String cacheName = "pubsub-test";
@@ -140,7 +138,7 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
                 cacheName, null, SmartCacheConstant.OPERATION_CLEAR, "other-instance");
 
         log.info("发送 Pub/Sub clear 消息到频道: {}", channel);
-        redisTemplate.convertAndSend(channel, msg);
+        publish(channel, msg);
 
         // 步骤3: 等待 Pub/Sub 消息传播和处理
         Thread.sleep(300);
@@ -159,11 +157,6 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
      */
     @Test
     public void testSelfSentMessagesAreIgnored() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testSelfSentMessagesAreIgnored")) {
-            return;
-        }
-
         log.info("========== 测试：自己发送的消息会被忽略 ==========");
 
         String cacheName = "pubsub-test";
@@ -187,7 +180,7 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
                 cacheName, key, SmartCacheConstant.OPERATION_EVICT, invalidationListener.getInstanceId());
 
         log.info("发送 Pub/Sub 消息，sender: {} (当前实例)", invalidationListener.getInstanceId());
-        redisTemplate.convertAndSend(channel, msg);
+        publish(channel, msg);
 
         // 步骤3: 等待消息处理
         Thread.sleep(300);
@@ -205,11 +198,6 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
      */
     @Test
     public void testPubSubUnderHighConcurrency() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testPubSubUnderHighConcurrency")) {
-            return;
-        }
-
         log.info("========== 测试：高并发 Pub/Sub 消息处理 ==========");
 
         String cacheName = "pubsub-test";
@@ -232,7 +220,7 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
             new Thread(() -> {
                 CacheInvalidationMessage msg = new CacheInvalidationMessage(
                         cacheName, "key-" + index, SmartCacheConstant.OPERATION_EVICT, "concurrent-instance-" + index);
-                redisTemplate.convertAndSend(channel, msg);
+                publish(channel, msg);
             }).start();
         }
 
@@ -260,11 +248,6 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
      */
     @Test
     public void testPubSubMessageIsolation() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testPubSubMessageIsolation")) {
-            return;
-        }
-
         log.info("========== 测试：Pub/Sub 消息隔离 ==========");
 
         // 步骤1: 在不同缓存空间写入数据
@@ -285,7 +268,7 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
         CacheInvalidationMessage msg = new CacheInvalidationMessage(
                 "cache1", null, SmartCacheConstant.OPERATION_CLEAR, "other-instance");
 
-        redisTemplate.convertAndSend(channel1, msg);
+        publish(channel1, msg);
 
         // 步骤3: 等待消息处理
         Thread.sleep(300);
@@ -296,5 +279,19 @@ public class PubSubVerificationTest extends BaseSmartCacheTest {
         assertEquals("value1-cache2", l1Cache.get("cache2", "key1"), "cache2 不应该受影响");
 
         log.info("✓ Pub/Sub 消息隔离验证通过");
+    }
+
+    private void publish(String channel, CacheInvalidationMessage message) {
+        try {
+            String routeProbeChannel = KeyHelper.buildPubSubChannel(properties.getPubsubChannelPrefix(), properties.getMe(),
+                    SmartCacheConstant.PUBSUB_ROUTE_PROBE_KEY);
+            String payload = smartCacheObjectMapper.writeValueAsString(message);
+            redisRouteTemplate.execute(routeProbeChannel, template -> {
+                template.convertAndSend(channel, payload);
+                return null;
+            });
+        } catch (Exception e) {
+            throw new IllegalStateException("发布缓存失效测试消息失败", e);
+        }
     }
 }

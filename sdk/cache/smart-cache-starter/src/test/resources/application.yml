@@ -2,9 +2,27 @@ io:
   github:
     surezzzzzz:
       sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        lock:
+          redis:
+            route:
+              enable: true
         cache:
           enabled: true
           me: test-instance
+          route:
+            scan-enabled: true
           l1:
             enabled: true
             max-size: 10000
@@ -14,6 +32,8 @@ io:
             enabled: true
             expire-seconds: 300
             ttl-random-offset-ratio: 0.1
+          consistency:
+            mode: strong
           stats:
             enabled: true
 

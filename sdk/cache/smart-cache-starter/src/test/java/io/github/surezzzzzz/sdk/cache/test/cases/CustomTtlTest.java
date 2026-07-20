@@ -13,7 +13,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SmartCacheTestApplication.class)
+@Import(CustomTtlTest.TestFixturesConfiguration.class)
 public class CustomTtlTest extends BaseSmartCacheTest {
 
     private static final String CACHE_NAME = "ttl-test";
@@ -54,6 +57,7 @@ public class CustomTtlTest extends BaseSmartCacheTest {
 
     @BeforeEach
     void setUp() {
+        requireRedisAvailable();
         cacheManager.clear(CACHE_NAME);
         cacheManager.clear("ttl-annotation-test");
     }
@@ -69,8 +73,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("put(ttlSeconds) 写入后 L2 TTL 应接近指定值（含随机偏移）")
     void testPutWithCustomTtl() {
-        if (shouldSkipRedisTest("testPutWithCustomTtl")) return;
-
         String key = "put-ttl-key";
         int ttlSeconds = 60;
         // offset = ttlSeconds * 0.1 = 6, 范围 [54, 66]
@@ -84,15 +86,13 @@ public class CustomTtlTest extends BaseSmartCacheTest {
         assertTrue(actualTtl > 0, "TTL 应大于 0");
         assertTrue(actualTtl <= ttlSeconds + expectedOffset,
                 "TTL 不应超过 " + (ttlSeconds + expectedOffset) + "s（含偏移）");
-        assertTrue(actualTtl >= ttlSeconds - expectedOffset,
-                "TTL 不应低于 " + (ttlSeconds - expectedOffset) + "s（含偏移）");
+        assertTrue(actualTtl >= ttlSeconds - expectedOffset - 1,
+                "TTL 不应低于 " + (ttlSeconds - expectedOffset - 1) + "s（含偏移及整数 TTL 取整）");
     }
 
     @Test
     @DisplayName("put(ttlSeconds=0) 应 fallback 到全局配置")
     void testPutWithZeroTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testPutWithZeroTtlFallsBackToGlobal")) return;
-
         String keyCustom = "put-zero-ttl-key";
         String keyGlobal = "put-global-ttl-key";
 
@@ -113,8 +113,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("put(ttlSeconds<0) 应 fallback 到全局配置")
     void testPutWithNegativeTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testPutWithNegativeTtlFallsBackToGlobal")) return;
-
         String keyCustom = "put-negative-ttl-key";
         String keyGlobal = "put-global-ttl-key-2";
 
@@ -134,8 +132,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("get(loader, ttlSeconds) cache miss 后 L2 TTL 应接近指定值（含随机偏移）")
     void testGetWithLoaderAndCustomTtl() {
-        if (shouldSkipRedisTest("testGetWithLoaderAndCustomTtl")) return;
-
         String key = "get-ttl-key";
         int ttlSeconds = 120;
         // offset = ttlSeconds * 0.1 = 12, 范围 [108, 132]
@@ -150,15 +146,13 @@ public class CustomTtlTest extends BaseSmartCacheTest {
         assertTrue(actualTtl > 0, "TTL 应大于 0");
         assertTrue(actualTtl <= ttlSeconds + expectedOffset,
                 "TTL 不应超过 " + (ttlSeconds + expectedOffset) + "s（含偏移）");
-        assertTrue(actualTtl >= ttlSeconds - expectedOffset,
-                "TTL 不应低于 " + (ttlSeconds - expectedOffset) + "s（含偏移）");
+        assertTrue(actualTtl >= ttlSeconds - expectedOffset - 1,
+                "TTL 不应低于 " + (ttlSeconds - expectedOffset - 1) + "s（含偏移及整数 TTL 取整）");
     }
 
     @Test
     @DisplayName("get(loader, ttlSeconds) cache hit 时直接返回，不重新写入")
     void testGetWithLoaderAndCustomTtlOnCacheHit() {
-        if (shouldSkipRedisTest("testGetWithLoaderAndCustomTtlOnCacheHit")) return;
-
         String key = "get-ttl-hit-key";
 
         // 先写入，TTL=60
@@ -177,8 +171,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("get(loader, ttlSeconds=0) 应 fallback 到全局配置")
     void testGetWithLoaderAndZeroTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testGetWithLoaderAndZeroTtlFallsBackToGlobal")) return;
-
         String keyCustom = "get-zero-ttl-key";
         String keyGlobal = "get-global-ttl-key";
 
@@ -198,8 +190,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("get(loader, ttlSeconds<0) 应 fallback 到全局配置")
     void testGetWithLoaderAndNegativeTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testGetWithLoaderAndNegativeTtlFallsBackToGlobal")) return;
-
         String keyCustom = "get-negative-ttl-key";
         String keyGlobal = "get-global-ttl-key-2";
 
@@ -219,8 +209,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("不同 key 可以有不同 TTL")
     void testDifferentKeysCanHaveDifferentTtl() {
-        if (shouldSkipRedisTest("testDifferentKeysCanHaveDifferentTtl")) return;
-
         cacheManager.put(CACHE_NAME, "short-ttl-key", "value", 30);
         cacheManager.put(CACHE_NAME, "long-ttl-key", "value", 3600);
 
@@ -240,8 +228,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("@SmartCacheable(l2TtlSeconds) cache miss 后 L2 TTL 应接近指定值（含随机偏移）")
     void testCacheableWithCustomTtl() {
-        if (shouldSkipRedisTest("testCacheableWithCustomTtl")) return;
-
         String key = "anno-1";
         ttlTestService.getWithCustomTtl(key);
 
@@ -251,14 +237,12 @@ public class CustomTtlTest extends BaseSmartCacheTest {
         // 90s * 0.1 = 9s offset, 范围 [81, 99]
         assertTrue(actualTtl > 0, "TTL 应大于 0");
         assertTrue(actualTtl <= 99, "TTL 不应超过 99s（含偏移）");
-        assertTrue(actualTtl >= 81, "TTL 不应低于 81s（含偏移）");
+        assertTrue(actualTtl >= 80, "TTL 不应低于 80s（含偏移及整数 TTL 取整）");
     }
 
     @Test
     @DisplayName("@SmartCachePut(l2TtlSeconds) 写入后 L2 TTL 应接近指定值（含随机偏移）")
     void testCachePutWithCustomTtl() {
-        if (shouldSkipRedisTest("testCachePutWithCustomTtl")) return;
-
         String key = "anno-put-1";
         ttlTestService.putWithCustomTtl(key, "put-value");
 
@@ -268,14 +252,12 @@ public class CustomTtlTest extends BaseSmartCacheTest {
         // 45s * 0.1 = 4s offset, 范围 [41, 49]
         assertTrue(actualTtl > 0, "TTL 应大于 0");
         assertTrue(actualTtl <= 49, "TTL 不应超过 49s（含偏移）");
-        assertTrue(actualTtl >= 40, "TTL 不应低于 40s（含偏移）");
+        assertTrue(actualTtl >= 39, "TTL 不应低于 39s（含偏移及整数 TTL 取整）");
     }
 
     @Test
     @DisplayName("@SmartCacheable(l2TtlSeconds=0) 应 fallback 到全局配置")
     void testCacheableWithZeroTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testCacheableWithZeroTtlFallsBackToGlobal")) return;
-
         String keyZero = "anno-zero-ttl";
         String keyDefault = "anno-default-ttl";
 
@@ -295,8 +277,6 @@ public class CustomTtlTest extends BaseSmartCacheTest {
     @Test
     @DisplayName("@SmartCachePut(l2TtlSeconds=0) 应 fallback 到全局配置")
     void testCachePutWithZeroTtlFallsBackToGlobal() {
-        if (shouldSkipRedisTest("testCachePutWithZeroTtlFallsBackToGlobal")) return;
-
         String keyZero = "anno-put-zero-ttl";
         String keyDefault = "anno-put-default-ttl";
 
@@ -313,12 +293,20 @@ public class CustomTtlTest extends BaseSmartCacheTest {
                 "l2TtlSeconds=0 时应与全局配置一致（含随机偏移），差值: " + Math.abs(ttlZero - ttlDefault));
     }
 
+    @TestConfiguration
+    static class TestFixturesConfiguration {
+
+        @Bean
+        TtlTestService ttlTestService() {
+            return new TtlTestService();
+        }
+    }
+
     // ==================== 测试用 Service ====================
 
     /**
      * 测试用 Service，提供带不同 ttlSeconds 的注解方法
      */
-    @Service
     static class TtlTestService {
 
         @SmartCacheable(cacheName = "ttl-annotation-test", key = "#key", l2TtlSeconds = 90)

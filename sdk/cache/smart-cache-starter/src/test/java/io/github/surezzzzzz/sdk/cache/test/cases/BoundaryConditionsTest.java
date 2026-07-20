@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper;
 import io.github.surezzzzzz.sdk.cache.test.BaseSmartCacheTest;
 import io.github.surezzzzzz.sdk.cache.test.SmartCacheTestApplication;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -36,16 +37,16 @@ public class BoundaryConditionsTest extends BaseSmartCacheTest {
     @Autowired(required = false)
     private RedisTemplate<String, Object> redisTemplate;
 
+    @BeforeEach
+    void setUp() {
+        requireRedisAvailable();
+    }
+
     /**
      * 测试 L2Cache 在 properties 为 null 时的行为
      */
     @Test
     public void testL2CacheWithNullProperties() {
-        // 只在Redis可用时运行此测试
-        if (shouldSkipRedisTest("testL2CacheWithNullProperties")) {
-            return;
-        }
-
         // L2Cache 应该使用默认值，不应该抛出 NPE
         assertDoesNotThrow(() -> {
             l2Cache.put("test-cache", "key1", "value1");
@@ -143,11 +144,6 @@ public class BoundaryConditionsTest extends BaseSmartCacheTest {
      */
     @Test
     public void testL2CacheClearWithManyKeys() {
-        // 只在Redis可用时运行此测试
-        if (shouldSkipRedisTest("testL2CacheClearWithManyKeys")) {
-            return;
-        }
-
         String cacheName = "clear-test";
 
         // 写入大量数据
@@ -236,14 +232,12 @@ public class BoundaryConditionsTest extends BaseSmartCacheTest {
 
         // 测试 L2Cache 对 null key 的处理
         // Redis 会将 null key 转换为字符串 "null" 进行存储
-        if (!shouldSkipRedisTest("testNullKey")) {
-            assertDoesNotThrow(() -> {
-                l2Cache.put(cacheName, null, "value");
-                Object value = l2Cache.get(cacheName, null);
-                // null key 会被转换为字符串，所以可以正常存取
-                assertEquals("value", value);
-            });
-        }
+        assertDoesNotThrow(() -> {
+            l2Cache.put(cacheName, null, "value");
+            Object value = l2Cache.get(cacheName, null);
+            // null key 会被转换为字符串，所以可以正常存取
+            assertEquals("value", value);
+        });
 
         // 测试 CacheManager 对 null key 的处理
         // 由于 L1Cache 会抛出异常，CacheManager 也会抛出异常
@@ -268,13 +262,11 @@ public class BoundaryConditionsTest extends BaseSmartCacheTest {
         });
 
         // 测试 L2Cache 对空字符串 key 的处理
-        if (!shouldSkipRedisTest("testEmptyStringKey")) {
-            assertDoesNotThrow(() -> {
-                l2Cache.put(cacheName, emptyKey, "value2");
-                Object value = l2Cache.get(cacheName, emptyKey);
-                assertEquals("value2", value);
-            });
-        }
+        assertDoesNotThrow(() -> {
+            l2Cache.put(cacheName, emptyKey, "value2");
+            Object value = l2Cache.get(cacheName, emptyKey);
+            assertEquals("value2", value);
+        });
 
         // 测试 CacheManager 对空字符串 key 的处理
         assertDoesNotThrow(() -> {

@@ -1,0 +1,76 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 16379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              cache:
+                mode: standalone
+                host: localhost
+                port: 16380
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              lock:
+                mode: standalone
+                host: localhost
+                port: 16381
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+            rules:
+              - pattern: "smart-cache-route-it:preload-lock:"
+                type: prefix
+                datasource: lock
+                priority: 1
+              - pattern: "smart-cache-route-it-lock:"
+                type: prefix
+                datasource: lock
+                priority: 2
+              - pattern: "smart-cache-route-it:route-cross:route-it::{smart-cache-route-it:route-cross:route-it}default-key"
+                type: exact
+                datasource: default
+                priority: 3
+              - pattern: "route-cache-sync:route-it:route-probe"
+                type: exact
+                datasource: default
+                priority: 4
+              - pattern: "smart-cache-route-it:"
+                type: prefix
+                datasource: cache
+                priority: 10
+        lock:
+          redis:
+            route:
+              enable: true
+        cache:
+          me: route-it
+          key-prefix: smart-cache-route-it
+          pubsub:
+            channel-prefix: route-cache-sync
+          l2:
+            expire-seconds: 60
+            ttl-random-offset-ratio: 0
+            preload:
+              enabled: true
+              before-expire-seconds: 5
+          route:
+            scan-enabled: true
+            scan-count: 100
+
+spring:
+  redis:
+    host: localhost
+    port: 16379
+    database: 0
+    timeout: 3000

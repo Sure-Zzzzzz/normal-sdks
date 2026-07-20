@@ -1,27 +1,19 @@
 dependencies {
-    // Caffeine 本地缓存（compileOnly，用户项目需自行引入）
     compileOnly 'com.github.ben-manes.caffeine:caffeine:2.9.3'
-
-    // Spring Boot Starter
     compileOnly 'org.springframework.boot:spring-boot-starter'
-
-    // Spring Data Redis（compileOnly，用户项目需自行引入）
-    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
-
-    // Spring AOP（用于注解式 API）
     compileOnly 'org.springframework.boot:spring-boot-starter-aop'
 
-    // Jackson JSR310 模块，支持 Java 8 时间类型序列化（Instant、LocalDateTime 等）
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
+    api 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
 
-    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.0.1'
-    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.1'
-
-    // 测试依赖
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    runtimeOnly 'org.apache.commons:commons-pool2'
     testImplementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 }

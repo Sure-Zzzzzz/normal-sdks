@@ -1,434 +1,303 @@
 # Smart Cache Starter
 
-一个基于 Spring Boot 的智能二级缓存框架,提供 L1(Caffeine) + L2(Redis) 双层缓存,支持缓存穿透/击穿/雪崩防护、L2 异步续期、自定义 TTL、循环依赖检测、缓存预热等企业级特性。
+基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.0.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
 
-## 核心特性
+## 版本与兼容性
 
-### 双层缓存架构
-- **L1 缓存 (Caffeine)**: 进程内高速缓存,微秒级响应
-- **L2 缓存 (Redis)**: 分布式缓存,支持集群共享
-- **智能降级**: L1 未命中自动查询 L2,L2 未命中触发数据加载
-- **Redis 降级**: Redis 不可用时自动切换到 L1-only 模式,保证服务可用性
-- **L2 异步续期 (Preload)**: L2 条目快过期时异步提前续期,当前请求返回旧值不阻塞,提供容错窗口
+当前版本：`2.0.0`
 
-### 缓存三大问题防护
-- **缓存穿透**: 空值缓存(L1),防止恶意查询击穿数据库
-- **缓存击穿**: 分布式锁 + 重试机制,高并发下只有一个线程访问数据库
-- **缓存雪崩**: TTL 随机偏移,避免大量缓存同时失效
+| 项目 | 支持版本 |
+| --- | --- |
+| Java | 8 |
+| Spring Boot | 2.2.x、2.3.12、2.4.5、2.7.9 |
 
-### 一致性保障
-- **强一致性模式(默认)**: Redis Pub/Sub 实时同步缓存失效,多实例间秒级同步,单实例也可用
-- **最终一致性模式**: L1 短 TTL + L2 长 TTL,平衡性能与一致性
+本版本基于 `javax` 体系实现，不支持 Spring Boot 3、Spring Framework 6 或 Jakarta API。
 
-### 企业级功能
-- **自定义 L2 TTL**: 业务侧可为特定场景覆盖全局 `l2.expire-seconds`，编程式和注解式 API 均支持
-- **循环依赖检测**: ThreadLocal 追踪加载链,防止死锁
-- **缓存预热**: 应用启动时自动加载热点数据,支持顺序控制和分布式协调
-- **统计监控**: L1/L2 命中率、未命中次数实时统计
-- **SpEL 支持**: 动态 key 生成,支持复杂表达式
-- **条件缓存**: 基于 SpEL 的条件判断,灵活控制缓存行为
-- **Redis Key 格式自定义**: 支持自定义 key 格式模板,兼容不同 key 规范
-- **L2 异步续期**: 实现 `CachePreloadHandler` 接口即可接入,支持覆盖 TTL 判断逻辑
+### 兼容性验证
 
----
+`2.0.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
 
-## 快速开始
+| Spring Boot | JUnit 结果 | Redis 7 Cluster 锁边界 |
+| --- | --- | --- |
+| 2.2.x | 178 tests，5 skipped，0 failures，0 errors | Spring Boot 2.2.x 的 Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 Cluster 节点 metadata；仅缓存击穿锁、显式 lease、预刷新锁与启动预热相关的 5 条 E2E 跳过。L2、批量、SCAN、Pub/Sub 及强一致性 `put` / `putAll` 仍在 Redis 3/5 Cluster 实际执行。 |
+| 2.3.12 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.4.5 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.7.9 | 178 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行，并完成最终干净回归。 |
 
-### 1. 添加依赖
+`1.x` 已封版，历史使用说明见 [README.1.x.md](README.1.x.md)。
 
-**本框架通过 `compileOnly` 声明了部分依赖，使用方必须自行引入，否则启动会报错。**
+## 核心行为
 
-#### Gradle
+- L1 使用 Caffeine，L2 将缓存值序列化为 JSON 字符串后通过 `RedisRouteTemplate` 写入 Redis。
+- L2、Pub/Sub、预热完成标记和预热 key 列表均按实际 Redis key 路由；生产路径不再创建或使用 `smartCacheRedisTemplate`，也不再使用对象型 `RedisTemplate` 作为 L2 底座。
+- 读路径依次查询 L1、L2；缓存未命中时使用 Redis 分布式锁防止击穿，锁不可用时仅回退到当前进程本地锁。
+- 缓存击穿、L2 异步预刷新与启动预热均使用显式 lease；业务回调完成、准备写入共享状态前会主动续租一次。续租失败时，缓存击穿仅返回未缓存的计算结果，预刷新丢弃 reload 结果，预热不写缓存数据或完成元数据。
+- `put`、`putAll`、`evict`、`clear` 在强一致性模式下发布 L1 失效通知。写入实例保留刚更新的本地 L1；`put` / `putAll` 向其他实例发布逐 key `evict`，其他实例仅删除旧 L1，下一次读取从共享 L2 获取新值。该通知不是分布式读写事务。
+- loader 返回 `null` 时仅在 L1 写入短期空值占位，避免将匿名对象写入 L2。
+- 注解 `@SmartCacheable`、`@SmartCachePut`、`@SmartCacheEvict` 和编程式 `SmartCacheManager` API 均可使用；`@SmartCacheEvict(beforeInvocation = true)` 会在执行原方法前计算 `condition`，条件只能依赖方法参数，不能依赖尚不存在的返回值。需要从 L2 恢复具体类型时，优先使用带 `Class<T>` 的编程式重载。
+
+## 依赖
+
+### Gradle
 
 ```gradle
-// 框架本身
-implementation 'io.github.sure-zzzzzz:smart-cache-starter:1.1.1'
+dependencies {
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.0.0'
 
-// 必须自行引入（框架 compileOnly，不会传递）
-implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'          // L1 缓存
-implementation 'org.springframework.boot:spring-boot-starter-data-redis' // L2 缓存
-implementation 'org.springframework.boot:spring-boot-starter-aop'        // 注解式 API（仅使用注解时需要）
+    // L1 与注解式 API 由使用方按需提供
+    implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+
+    // L2、路由、锁和续期重试所需依赖
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
+    implementation 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
+}
 ```
 
-#### Maven
+### Maven
 
 ```xml
-<!-- 框架本身 -->
-<dependency>
-    <groupId>io.github.sure-zzzzzz</groupId>
-    <artifactId>smart-cache-starter</artifactId>
-    <version>1.1.1</version>
-</dependency>
+<dependencies>
+    <dependency>
+        <groupId>io.github.sure-zzzzzz</groupId>
+        <artifactId>smart-cache-starter</artifactId>
+        <version>2.0.0</version>
+    </dependency>
 
-<!-- 必须自行引入（框架 compileOnly，不会传递） -->
-<!-- L1 缓存 -->
-<dependency>
-    <groupId>com.github.ben-manes.caffeine</groupId>
-    <artifactId>caffeine</artifactId>
-    <version>2.9.3</version>
-</dependency>
-<!-- L2 缓存 -->
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-data-redis</artifactId>
-</dependency>
-<!-- 注解式 API（仅使用注解时需要） -->
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-aop</artifactId>
-</dependency>
+    <!-- L1 与注解式 API 按需提供 -->
+    <dependency>
+        <groupId>com.github.ben-manes.caffeine</groupId>
+        <artifactId>caffeine</artifactId>
+        <version>2.9.3</version>
+    </dependency>
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+
+    <!-- L2、路由、锁和续期重试所需依赖 -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.github.sure-zzzzzz</groupId>
+        <artifactId>simple-redis-route-starter</artifactId>
+        <version>1.1.0</version>
+    </dependency>
+    <dependency>
+        <groupId>io.github.sure-zzzzzz</groupId>
+        <artifactId>simple-redis-lock-starter</artifactId>
+        <version>1.2.1</version>
+    </dependency>
+    <dependency>
+        <groupId>io.github.sure-zzzzzz</groupId>
+        <artifactId>task-retry-starter</artifactId>
+        <version>2.0.0</version>
+    </dependency>
+</dependencies>
 ```
 
-> **说明**：`jackson-datatype-jsr310` 已通过 `api` 传递，无需手动引入。
+`smart-cache-starter` 已传递 `spring-boot-starter-data-redis`、`jackson-datatype-jsr310`、Redis Route、Redis Lock 和 task-retry；上方显式列出相关依赖，便于锁定使用版本。Caffeine 与 AOP 在模块中为 `compileOnly`，使用 L1 或注解式 API 时需要由应用自行提供。
 
----
+在旧版 Spring Boot 运行时，如 Lettuce 连接工厂需要 Apache Commons Pool 相关类，可按运行环境补充：
 
-### 2. 配置文件
+```gradle
+runtimeOnly 'org.apache.commons:commons-pool2'
+```
+
+这只解决旧运行环境的类路径需求；是否启用 Redis 连接池仍由 Spring Boot / Lettuce 的连接池配置决定，添加该依赖本身不会开启连接池。
+
+## 配置
+
+### 最小路由配置
+
+L2 默认开启，启动时必须存在 `RedisRouteTemplate`；强一致性 Pub/Sub 同样依赖 `RedisRouteTemplate`。因此启用缓存的默认配置需要同时启用 Redis Route；只有 `l2.enabled=false` 且 `consistency.mode=eventual` 的 L1-only 组合不要求 Route。以下示例使用中性数据源和中性 key 前缀：
 
 ```yaml
-spring:
-  redis:
-    host: localhost
-    port: 6379
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: cache-data
+            sources:
+              cache-data:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+            rules:
+              - pattern: "demo-cache:"
+                type: prefix
+                datasource: cache-data
+                priority: 1
+                enable: true
+        lock:
+          redis:
+            route:
+              enable: true
+        cache:
+          enabled: true
+          key-prefix: demo-cache
+          me: sample-group
+          l1:
+            enabled: true
+            max-size: 10000
+            expire-seconds: 300
+            refresh-seconds: 270
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            ttl-random-offset-ratio: 0.1
+            key-format: "{keyPrefix}:{cacheName}:{me}::{key}"
+          consistency:
+            mode: strong
+          pubsub:
+            mode: routed
+            channel-prefix: cache:pubsub
+```
 
+`me` 是同一缓存应用组的标识。共享同一 L2 与失效通知的所有实例必须使用相同的 `me`；不同组使用不同的 `me`，会隔离 L2、缓存击穿锁、预刷新锁、预热 lease、预热完成标记、预热 key 列表和 Pub/Sub channel。
+
+缓存 L2 key 默认格式为 `{keyPrefix}:{cacheName}:{me}::{key}`，同一缓存命名空间自动使用 `{keyPrefix:cacheName:me}` 作为 Redis Cluster hash tag。路由规则还应覆盖缓存锁 key、预刷新锁 key、Pub/Sub 探测 key / channel 以及启用预热时的预热元数据 key。若它们需要路由至不同数据源，请在 Redis Route 中分别配置对应前缀规则；缓存组件不会自行定义数据源或路由规则。
+
+### 常用配置项
+
+| 配置 | 默认值 | 说明 |
+| --- | --- | --- |
+| `enabled` | `true` | 缓存总开关。 |
+| `key-prefix` | `sure-cache` | L2、锁和预热相关 key 的基础前缀。 |
+| `me` | `default` | 缓存应用组标识；同组副本必须一致。 |
+| `l1.enabled` | `true` | 是否启用 Caffeine L1。L1、L2 都关闭时会自动开启 L1。 |
+| `l2.enabled` | `true` | 是否启用路由型 L2；启用时必须有 `RedisRouteTemplate`。 |
+| `l2.expire-seconds` | `3600` | L2 基础 TTL（秒）。 |
+| `l2.ttl-random-offset-ratio` | `0.1` | L2 TTL 的随机偏移比例，范围为 0 到 1。 |
+| `l2.preload.enabled` | `false` | 异步预刷新总开关；关闭后不调用 handler、不查询 TTL、不申请预刷新锁。 |
+| `l2.preload.before-expire-seconds` | `300` | 开启预刷新后，L2 剩余 TTL 小于该值时可触发预刷新。 |
+| `lock.timeout-seconds` | `30` | 缓存击穿、预刷新和预热 lease 的初始及成功续租时长，范围为 5–300。 |
+| `consistency.mode` | `strong` | `strong` 或 `eventual`。 |
+| `pubsub.mode` | `routed` | `routed` 或 `disabled`。 |
+| `pubsub.channel-prefix` | `cache:pubsub` | Pub/Sub channel 前缀。 |
+| `route.scan-enabled` | `false` | 是否允许 `clear` / `size` 对 L2 使用 SCAN。 |
+| `route.scan-count` | `100` | SCAN 的 count 提示值。 |
+
+## 一致性与 Pub/Sub
+
+### 强一致性与最终一致性
+
+- `consistency.mode=strong`：`put`、`putAll`、`evict`、`clear` 通过路由型 Redis Pub/Sub 通知同组其他实例清理 L1。写入仅让其他实例精确失效旧 L1；写入实例保留新 L1，其他实例在后续读取时从共享 L2 获取新值。`strong` 必须提供 `RedisRouteTemplate`，且与 `pubsub.mode=disabled` 的组合非法；两者都会在启动时失败，避免以强一致性名义静默运行。
+- `consistency.mode=eventual`：不初始化 Pub/Sub 订阅；`pubsub.mode=disabled` 合法。该模式依赖 L1 过期和后续读取收敛，不提供跨实例即时 L1 失效保证。
+
+路由型 Pub/Sub 使用 `{channel-prefix}:{me}:route-probe` 选择一个连接工厂，并在 `{channel-prefix}:{me}:*` 上订阅。实现只有一个监听容器，因而同一 `me` 下的全部 Pub/Sub channel 必须路由到该探测 key 选出的同一个数据源；不支持按 channel 自动创建多数据源订阅容器。发布也经由探测 key 的路由执行。
+
+失效消息处理使用独立的有界线程池（核心 2、最大 4、队列 1000）。队列满时，新到的失效消息会被记录警告并丢弃；应结合实例数、失效峰值和一致性要求评估容量。
+
+`2.0.0` 不再支持 `consistency.pubsub-channel-prefix`。升级时必须将该旧配置迁移为 `pubsub.channel-prefix`；未配置新字段时使用默认值 `cache:pubsub`。
+
+## 批量操作与扫描
+
+### `getAll` / `putAll`
+
+`SmartCacheManager.getAll` 会先批量读取 L1，再将未命中 key 一次性交给 L2；`putAll` 先写 L2 后写 L1。
+
+L2 的 `getAll` 使用单次 `MGET`，`putAll` 使用非事务性的 TTL `SET` pipeline。二者都要求本次参与的最终 Redis key 路由到同一个数据源：组件不会按数据源拆分请求。跨数据源时会抛出路由异常；同一缓存命名空间的 L2 key 自动共享 Redis Cluster hash tag，批量操作可落在同一个槽位。`putAll` 会对整个批次计算一次实际 TTL，空值条目不会写入 L2。
+
+### `clear` / `size`
+
+`route.scan-enabled` 默认 `false`。关闭时，`clear` 只清理 L1 并跳过 L2 扫描，`size` 的 L2 部分返回 0；这是为了避免无意执行高成本 Redis 扫描。
+
+开启后，`clear` 和 `size` 仅在缓存命名空间路由到的单个数据源上执行 `SCAN MATCH`，并受 `route.scan-count` 影响，不会跨数据源汇总。SCAN 仍会遍历目标数据源的 key 空间并造成 Redis 负载，`clear` 的匹配 key 也会逐个删除；仅在确实需要按缓存名称清理或统计且已评估成本时启用。
+
+## 序列化安全边界
+
+L2 使用 JSON 字符串信封保存类型与数据，默认 `ObjectMapper` 注册 Java Time 模块且不启用 Jackson 默认类型。读取时若调用方未提供具体类型而使用 `Object.class`，载荷中的类型名必须经 `SmartCacheTypeValidator` 校验后才会加载。
+
+默认可信包为：
+
+- `java.lang`
+- `java.time`
+- `java.util`
+
+使用业务对象的 `Object.class` 读取时，需要显式加入中性 DTO 包前缀：
+
+```yaml
 io:
   github:
     surezzzzzz:
       sdk:
         cache:
-          key-prefix: my-app              # Redis key 前缀（默认 sure-cache）
-          me: instance-1                  # 应用实例标识，同一应用多实例保持一致
-          l1:
-            enabled: true                 # 启用 L1 缓存（默认 true）
-            max-size: 10000               # L1 最大条目数（默认 10000）
-            expire-seconds: 300           # L1 过期时间，秒（默认 300）
-            refresh-seconds: 240          # L1 异步刷新时间，秒（默认 270）
+          serializer:
+            trusted-packages:
+              - java.lang
+              - java.time
+              - java.util
+              - com.example.cache.dto
+```
+
+`trusted-packages` 是反序列化安全边界，不应为方便配置而使用 `*`；只有在完全受控的本地测试环境才可考虑该值。应用可通过自定义 `SmartCacheSerializer` 或 `SmartCacheTypeValidator` Bean 覆盖默认实现。
+
+## 异步续期与启动预热
+
+### L2 异步续期
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        cache:
           l2:
-            enabled: true                 # 启用 L2 缓存（默认 true）
-            expire-seconds: 3600          # L2 过期时间，秒（默认 3600）
-            ttl-random-offset-ratio: 0.1  # TTL 随机偏移比例，防雪崩（默认 0.1）
-            key-format: "{keyPrefix}:{cacheName}:{me}::{key}"  # key 格式模板（默认值如左）
             preload:
-              enabled: false              # 启用 L2 异步续期（默认 false）
-              before-expire-seconds: 300  # 提前多少秒触发续期，需 < expire-seconds
-          consistency:
-            mode: strong                  # strong（强一致，默认）/ eventual（最终一致）
-          stats:
-            enabled: true                 # 启用统计（默认 true）
+              enabled: true
+              before-expire-seconds: 300
+              executor-threads: 4
+              executor-queue-capacity: 1024
 ```
 
-**Redis Key 格式说明**
+`l2.preload.enabled` 是全部异步预刷新的总开关。关闭时，L2 命中直接返回，既不调用 `CachePreloadHandler`，也不查询 TTL、申请预刷新锁或提交异步任务。开启后，`CachePreloadHandler.needPreload` 的 `Optional.of(true/false)` 可替代 TTL 判断；返回 `Optional.empty()` 时才按剩余 TTL 与预刷新窗口决定。
 
-`key-format` 支持以下占位符：
+L2 命中后，若启用状态下的 `CachePreloadHandler` 判断需要续期，或剩余 TTL 落入预刷新窗口，当前请求仍返回旧值；持有 lease 的实例在后台重载。reload 返回非空结果后，只有写入前续租成功才会写回 L2、L1 并发布失效通知；续租返回 `false` 或抛出异常时丢弃 reload 结果。重载使用 `task-retry-starter`，最多重试 6 次，退避比为 1.5。
 
-| 占位符 | 说明 |
-|--------|------|
-| `{keyPrefix}` | key 前缀，来自 `key-prefix` 配置 |
-| `{cacheName}` | 缓存名称 |
-| `{me}` | 实例标识，来自 `me` 配置 |
-| `{key}` | 缓存 key，自动添加 hash tag `{xxx}`，确保 Redis Cluster 同一 cacheName 的 key 在同一 slot |
+预刷新线程池是固定大小的有界队列执行器，拒绝策略为 `AbortPolicy`。队列饱和时本次预刷新被跳过并关闭 lease，当前读请求不会失败；应结合重载耗时和峰值访问量设置线程数与队列容量。
 
-常见格式示例：
+### 启动预热
+
+使用 `@SmartCacheWarmUp` 标记返回 `Map<String, Object>` 的方法。组件仅在根 `ContextRefreshedEvent` 执行预热，按 `order` 顺序运行：相同 `order` 并行，不同 `order` 串行。返回 `List` 或其他类型的预热方法会被跳过并记录警告。
 
 ```yaml
-# 默认格式
-key-format: "{keyPrefix}:{cacheName}:{me}::{key}"
-# 生成: my-app:userCache:instance-1::{userId}
-
-# me 和 cacheName 位置互换（兼容老格式）
-key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
-# 生成: my-app:instance-1:userCache::{userId}
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        cache:
+          warm-up:
+            completion-mark-ttl-seconds: 600
+            executor-threads: 4
+            executor-queue-capacity: 1024
 ```
 
----
-
-### 3. 使用注解
-
-```java
-@Service
-public class UserService {
-
-    @SmartCacheable(cacheName = "userCache", key = "#userId")
-    public User getUserById(Long userId) {
-        return userRepository.findById(userId);
-    }
-
-    @SmartCachePut(cacheName = "userCache", key = "#user.id")
-    public User updateUser(User user) {
-        return userRepository.save(user);
-    }
-
-    @SmartCacheEvict(cacheName = "userCache", key = "#userId")
-    public void deleteUser(Long userId) {
-        userRepository.deleteById(userId);
-    }
-
-    @SmartCacheEvict(cacheName = "userCache", allEntries = true)
-    public void clearAllUsers() {
-        userRepository.deleteAll();
-    }
-}
-```
-
-### 4. 编程式 API
-
-```java
-@Service
-public class ProductService {
-
-    @Autowired
-    private SmartCacheManager cacheManager;
-
-    public Product getProduct(Long productId) {
-        return cacheManager.get("productCache", String.valueOf(productId),
-            () -> productRepository.findById(productId));
-    }
-
-    public void updateProduct(Product product) {
-        productRepository.save(product);
-        cacheManager.put("productCache", String.valueOf(product.getId()), product);
-    }
-
-    public void deleteProduct(Long productId) {
-        productRepository.deleteById(productId);
-        cacheManager.evict("productCache", String.valueOf(productId));
-    }
-}
-```
-
----
-
-## 最佳实践
-
-### 场景一：不同数据使用不同 L2 TTL
-
-全局 `l2.expire-seconds` 是合理的默认值，但某些数据的变化频率差异很大。比如用户基本资料很少变，而验证码几秒就失效，可以用自定义 TTL 覆盖全局配置：
-
-**注解式：**
-
-```java
-// 用户资料：L2 缓存 2 小时
-@SmartCacheable(cacheName = "userCache", key = "#userId", l2TtlSeconds = 7200)
-public User getUser(Long userId) {
-    return userRepository.findById(userId);
-}
-
-// 验证码：L2 缓存 60 秒
-@SmartCacheable(cacheName = "verifyCodeCache", key = "#phone", l2TtlSeconds = 60)
-public String getVerifyCode(String phone) {
-    return smsService.generateCode(phone);
-}
-```
-
-**编程式：**
-
-```java
-// 写入时指定 TTL
-cacheManager.put("tokenCache", token, tokenData, 1800);  // token 缓存 30 分钟
-
-// cache miss 时指定 TTL
-String code = cacheManager.get("verifyCodeCache", phone,
-    () -> smsService.generateCode(phone), 60);  // 验证码缓存 60 秒
-```
-
-> **说明**：`l2TtlSeconds = 0`（默认）表示使用全局配置 `l2.expire-seconds`，不填时行为与之前完全一致。指定的 TTL 也会加随机偏移（防雪崩），偏移量 = `l2TtlSeconds × ttl-random-offset-ratio`。
-
-### 场景二：强一致性多实例缓存同步
-
-多实例部署时，默认的强一致性模式通过 Redis Pub/Sub 实时同步缓存失效：
-
-```yaml
-io.github.surezzzzzz.sdk.cache:
-  consistency:
-    mode: strong  # 默认值
-```
-
-实例 A 执行 `evict` 或 `put` 后，实例 B/C 的 L1 对应条目自动失效，下次请求从 L2 获取最新值。
-
-### 场景三：防止缓存击穿（热点 key 高并发）
-
-框架内置分布式锁 + 重试机制。当某个热点 key 缓存失效时，只有一个线程加载数据，其他线程等待并重试获取缓存：
-
-```java
-// 无需额外配置，框架自动处理
-@SmartCacheable(cacheName = "hotDataCache", key = "#id")
-public HotData getHotData(Long id) {
-    return hotDataRepository.findById(id);
-}
-```
-
-当 Redis 不可用时，自动降级到本地锁，保证同实例内不击穿。
-
-### 场景四：防止缓存穿透（空值查询）
-
-当数据库查询返回 null 时，框架在 L1 写入空值占位符，后续相同 key 的请求直接返回 null 而不穿透到数据库：
-
-```java
-// 无需额外配置，框架自动处理
-@SmartCacheable(cacheName = "userCache", key = "#userId")
-public User getUserById(Long userId) {
-    return userRepository.findById(userId).orElse(null);
-}
-```
-
-### 场景五：防止缓存雪崩（TTL 随机偏移）
-
-框架对 L2 的所有 TTL（包括全局配置和自定义 `l2TtlSeconds`）自动添加随机偏移：
-
-```yaml
-l2:
-  expire-seconds: 3600
-  ttl-random-offset-ratio: 0.1  # 实际 TTL 在 [3240, 3960] 范围内
-```
-
-即使大量 key 在同一时刻写入，也不会同时失效。
-
-### 场景六：L2 异步续期（Preload）
-
-实现 `CachePreloadHandler` 接口并注册为 Spring Bean，当 L2 条目剩余 TTL 进入预刷新窗口时，框架异步调用 `reload()` 提前续期：
-
-```java
-@Component
-public class ProductCachePreloadHandler implements CachePreloadHandler {
-
-    @Autowired
-    private ProductRepository productRepository;
-
-    @Override
-    public boolean support(String cacheName) {
-        return "productCache".equals(cacheName);
-    }
-
-    @Override
-    public Object reload(String cacheName, String key) {
-        Long productId = Long.parseLong(key);
-        return productRepository.findById(productId);
-    }
-
-    // 可选：覆盖此方法替代框架的 TTL 查询，避免额外 Redis IO
-    @Override
-    public Optional<Boolean> needPreload(String cacheName, String key, Object cachedValue) {
-        return Optional.empty();
-    }
-
-    // 可选：覆盖此方法指定续期后写 L2 的 TTL
-    // 默认返回 0（使用全局配置），返回 >0 表示业务侧覆盖
-    @Override
-    public int getReloadTtlSeconds(String cacheName, String key) {
-        return 0;
-    }
-}
-```
-
-同时开启配置：
-
-```yaml
-io.github.surezzzzzz.sdk.cache.l2.preload:
-  enabled: true
-  before-expire-seconds: 300  # L2 剩余 TTL < 300s 时触发
-```
-
-**行为说明**：
-- 触发时当前请求返回旧值，不阻塞
-- `reload()` 失败时使用指数退避重试，旧值在容错窗口内仍可返回
-- 使用分布式锁防止多实例重复触发同一 key
-- 无 handler 注册时静默跳过
-
-### 场景七：条件缓存
-
-使用 `condition` 属性基于 SpEL 表达式控制缓存行为：
-
-```java
-// 仅当用户等级 >= 3 时才缓存
-@SmartCacheable(cacheName = "userCache", key = "#userId",
-    condition = "#user.level >= 3")
-public User getUser(Long userId) {
-    return userRepository.findById(userId);
-}
-
-// 仅当结果不为空时才更新缓存
-@SmartCachePut(cacheName = "userCache", key = "#user.id",
-    condition = "#result != null")
-public User updateUser(User user) {
-    return userRepository.save(user);
-}
-```
-
-### 场景八：应用启动预热
-
-实现 `CachePreloadHandler` 并在启动时触发数据加载，避免冷启动时大量请求打到数据库：
-
-```java
-@Component
-public class UserCachePreloadHandler implements CachePreloadHandler {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Override
-    public boolean support(String cacheName) {
-        return "userCache".equals(cacheName);
-    }
-
-    @Override
-    public Object reload(String cacheName, String key) {
-        return userRepository.findById(Long.parseLong(key));
-    }
-}
-```
-
-配合 `CacheWarmUpHandler` 可在应用启动时自动加载热点数据，支持顺序控制和分布式协调。
-
----
-
-## 依赖说明
-
-| 依赖 | 声明方式 | 说明 |
-|------|----------|------|
-| `caffeine` | `compileOnly` | L1 缓存实现，**使用方必须自行引入** |
-| `spring-boot-starter-data-redis` | `compileOnly` | L2 缓存实现，**使用方必须自行引入** |
-| `spring-boot-starter-aop` | `compileOnly` | 注解式 API 支持，**使用注解时必须自行引入** |
-| `jackson-datatype-jsr310` | `api` | Java 8 时间类型序列化支持，自动传递 |
-| `simple-redis-lock-starter` | `api` | 分布式锁，防缓存击穿，自动传递 |
-| `task-retry-starter` | `api` | 重试机制，自动传递 |
-
-> `compileOnly` 依赖不会传递给使用方，必须手动引入；`api` 依赖会自动传递，无需重复声明。
-
----
-
-## 测试覆盖
-
-框架提供了完整的测试覆盖（共 **111 个测试用例**，100% 通过），包括：
-
-- **端到端测试**: 14 个
-- **注解 API 测试**: 7 个
-- **缓存管理器测试**: 8 个
-- **强一致性测试**: 6 个
-- **最终一致性测试**: 3 个
-- **Pub/Sub 验证测试**: 5 个
-- **并发测试**: 8 个
-- **压力测试**: 5 个
-- **L1/L2 集成测试**: 6 个
-- **边界条件测试**: 10 个
-- **批量操作和统计测试**: 5 个
-- **循环依赖测试**: 3 个
-- **缓存预热测试**: 2 个
-- **降级和异常测试**: 4 个
-- **Key 格式自定义测试**: 7 个（v1.0.2+）
-- **L2 异步续期测试**: 6 个（v1.1.0+）
-- **自定义 TTL 测试**: 12 个（v1.1.1+）
-
-所有测试支持 Redis 可用/不可用两种场景，Redis 不可用时自动降级到 L1-only 模式，测试依然通过。
-
----
-
-## 技术栈
-
-- Spring Boot 2.7.9
-- Caffeine 2.9.3
-- Spring Data Redis 2.7.9
-- Jackson 2.x（含 JSR310 模块）
-- Lombok
+启用 L2 和 Redis 锁时，一个实例获取预热 lease 后执行预热方法；只有在写入前续租成功时才写入 L2/L1、预热完成标记及 key 列表。续租返回 `false` 或抛出异常时丢弃本次预热数据，不发布完成信号；未获取 lease 的实例会等待其他实例的完成标记，再从 L2 回填 L1。缺少 L2 或分布式锁时，预热仅在本地执行。预热线程池同样有界并使用 `AbortPolicy`；线程池饱和会使对应 `order` 的预热失败并抛出 `IllegalStateException`，不会静默丢弃任务。
+
+lease 不是 watchdog：组件不会创建后台线程、调度器或自动续租。loader、reload 和预热方法是不可中断的调用方回调，lease 在回调执行期间仍可能到期并与新 owner 并行；本组件只保证重新获得控制权后，续租失败时不再写入共享缓存或预热元数据。该机制不提供 fencing token、跨实例写入排序或分布式事务，调用方回调需要能接受独立重跑。
+
+## 从 1.x 升级
+
+1. 将依赖升级为 `smart-cache-starter:2.0.0`，并使用 Redis Route `1.1.0`、Redis Lock `1.2.1`、task-retry `2.0.0`。
+2. 配置并启用 `io.github.surezzzzzz.sdk.redis.route.enable=true`，同时启用 `io.github.surezzzzzz.sdk.lock.redis.route.enable=true`；为 L2 key、锁 key、Pub/Sub 探测 key / channel 和预热元数据配置匹配的路由规则。
+3. 移除对 `smartCacheRedisTemplate`、应用主对象型 `RedisTemplate` 以及 1.x L2 直连路径的依赖；生产 L2 统一使用 Route 原生的 JSON 字符串路径。
+4. 将旧的 `l2.key-prefix` 配置迁移为根级 `key-prefix`，将 `consistency.pubsub-channel-prefix` 迁移为 `pubsub.channel-prefix`，并确认同一副本组的 `me` 一致。
+5. 检查所有批量 `getAll` / `putAll` 调用，保证一批 key 路由至同一数据源；组件不会自动按数据源分组。
+6. 若依赖 `clear` 或 L2 `size`，显式评估 SCAN 成本后再开启 `route.scan-enabled`。
+7. 为 `Object.class` 读取涉及的 DTO 添加 `serializer.trusted-packages` 白名单，避免放宽到通配符。
+8. 强一致性场景必须保持 `pubsub.mode=routed`；如选择 `eventual`，才可以关闭 Pub/Sub。
+9. 清理 1.x 遗留的全部 L2 缓存载荷后再切换流量。2.0.0 使用 JSON 字符串信封，不能读取 1.x 的旧 L2 值，也不提供双格式兼容读取器。
 
 ## 许可证
 

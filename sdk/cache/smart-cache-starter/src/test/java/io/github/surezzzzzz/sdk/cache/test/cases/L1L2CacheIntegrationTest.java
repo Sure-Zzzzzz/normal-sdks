@@ -33,9 +33,10 @@ public class L1L2CacheIntegrationTest extends BaseSmartCacheTest {
 
     @BeforeEach
     public void setUp() {
+        requireRedisAvailable();
         log.info("========== 初始化测试环境 ==========");
         cacheManager.clear("testCache");
-        log.info("测试环境初始化完成，Redis可用: {}", isRedisAvailable());
+        log.info("测试环境初始化完成");
     }
 
     @Test
@@ -44,22 +45,13 @@ public class L1L2CacheIntegrationTest extends BaseSmartCacheTest {
 
         // Then
         assertNotNull(l1Cache, "L1 缓存应该启用");
-        if (isRedisAvailable()) {
-            assertNotNull(l2Cache, "L2 缓存应该启用");
-            log.info("验证通过：L1 和 L2 缓存都已启用");
-        } else {
-            log.info("验证通过：L1 缓存已启用，L2 降级");
-        }
+        assertNotNull(l2Cache, "L2 缓存应该启用");
+        log.info("验证通过：L1 和 L2 缓存都已启用");
         log.info("测试通过");
     }
 
     @Test
     public void testL1MissL2HitShouldBackfillL1() {
-        // 只在Redis可用时运行此测试
-        if (shouldSkipRedisTest("testL1MissL2HitShouldBackfillL1")) {
-            return;
-        }
-
         log.info("========== 测试：L1 未命中，L2 命中，应该回写 L1 ==========");
 
         // Given
@@ -194,13 +186,9 @@ public class L1L2CacheIntegrationTest extends BaseSmartCacheTest {
         cacheManager.put(cacheName, key, value);
         log.info("已写入缓存");
 
-        // 清空 L2（模拟 L2 故障）- 只在Redis可用时执行
-        if (isRedisAvailable()) {
-            l2Cache.evict(cacheName, key);
-            log.info("已清空 L2（模拟故障）");
-        } else {
-            log.info("Redis不可用，跳过L2清空步骤");
-        }
+        // 清空 L2（模拟 L2 故障）
+        l2Cache.evict(cacheName, key);
+        log.info("已清空 L2（模拟故障）");
 
         // 从缓存管理器获取（应该从 L1 获取）
         String result = cacheManager.get(cacheName, key);

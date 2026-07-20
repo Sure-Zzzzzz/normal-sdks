@@ -39,6 +39,7 @@ public class SmartCacheManagerTest extends BaseSmartCacheTest {
 
     @BeforeEach
     public void setUp() {
+        requireRedisAvailable();
         log.info("初始化测试环境...");
         // 清理测试缓存
         cacheManager.clear("testCache");
@@ -46,7 +47,7 @@ public class SmartCacheManagerTest extends BaseSmartCacheTest {
         if (statsCollector != null) {
             statsCollector.resetStats("testCache");
         }
-        log.info("测试环境初始化完成，Redis可用: {}", isRedisAvailable());
+        log.info("测试环境初始化完成");
     }
 
     @Test
@@ -262,13 +263,7 @@ public class SmartCacheManagerTest extends BaseSmartCacheTest {
 
         // Then
         // size() 返回 L1 + L2 的总大小
-        // 如果Redis可用：L1有2个 + L2有2个 = 4
-        // 如果Redis不可用：只有L1的2个 = 2
-        if (isRedisAvailable()) {
-            assertEquals(4, size, "缓存大小应该是4（L1有2个key + L2有2个key）");
-        } else {
-            assertEquals(2, size, "缓存大小应该是2（只有L1的2个key）");
-        }
+        assertEquals(4, size, "缓存大小应该是4（L1有2个key + L2有2个key）");
         log.info("验证通过：缓存大小正确");
         log.info("测试通过");
     }

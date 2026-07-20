@@ -6,9 +6,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Smart Cache Component Annotation
+ * Smart Cache 组件标记注解
  *
- * @author Sure
+ * @author surezzzzzz
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)

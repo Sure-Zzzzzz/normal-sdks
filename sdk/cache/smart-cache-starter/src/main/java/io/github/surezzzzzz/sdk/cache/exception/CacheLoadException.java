@@ -1,24 +1,19 @@
 package io.github.surezzzzzz.sdk.cache.exception;
 
 /**
- * Cache Load Exception
- * <p>
  * 缓存加载异常
- * </p>
  *
- * @author Sure
+ * @author surezzzzzz
  */
 public class CacheLoadException extends SmartCacheException {
 
-    public CacheLoadException(String message) {
-        super(message);
+    private static final long serialVersionUID = 2L;
+
+    public CacheLoadException(String errorCode, String message) {
+        super(errorCode, message);
     }
 
-    public CacheLoadException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public CacheLoadException(Throwable cause) {
-        super(cause);
+    public CacheLoadException(String errorCode, String message, Throwable cause) {
+        super(errorCode, message, cause);
     }
 }

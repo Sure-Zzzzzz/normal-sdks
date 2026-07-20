@@ -1,25 +1,28 @@
 package io.github.surezzzzzz.sdk.cache.configuration;
 
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.exception.CacheConfigurationException;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import javax.annotation.PostConstruct;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
- * Smart Cache Properties
- * <p>
- * 全局配置类
- * </p>
+ * Smart Cache 配置
  *
- * @author Sure
+ * @author surezzzzzz
  */
 @Slf4j
 @Data
 @NoArgsConstructor
-@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.cache")
+@ConfigurationProperties(SmartCacheConstant.CONFIG_PREFIX)
 public class SmartCacheProperties {
 
     /**
@@ -28,12 +31,12 @@ public class SmartCacheProperties {
     private boolean enabled = true;
 
     /**
-     * Redis Key 前缀（用于数据存储、分布式锁等）
+     * Redis Key 前缀
      */
     private String keyPrefix = SmartCacheConstant.REDIS_KEY_PREFIX;
 
     /**
-     * 应用实例标识（用于 Redis Key 构建）
+     * 应用实例标识
      */
     private String me = SmartCacheConstant.DEFAULT_INSTANCE_ID;
 
@@ -68,114 +71,180 @@ public class SmartCacheProperties {
     private LockConfig lock = new LockConfig();
 
     /**
-     * 配置校验
+     * Pub/Sub 配置
      */
+    private PubSubConfig pubsub = new PubSubConfig();
+
+    /**
+     * route 配置
+     */
+    private RouteConfig route = new RouteConfig();
+
+    /**
+     * 序列化配置
+     */
+    private SerializerConfig serializer = new SerializerConfig();
+
     @PostConstruct
     public void validate() {
-        // 校验 keyPrefix
         if (keyPrefix == null || keyPrefix.trim().isEmpty()) {
-            log.warn("keyPrefix is null or empty, using default: {}", SmartCacheConstant.REDIS_KEY_PREFIX);
+            log.warn("keyPrefix 为空，使用默认值：{}", SmartCacheConstant.REDIS_KEY_PREFIX);
             keyPrefix = SmartCacheConstant.REDIS_KEY_PREFIX;
         }
-
-        // 校验 me
         if (me == null || me.trim().isEmpty()) {
-            log.warn("me (instance id) is null or empty, using default: {}", SmartCacheConstant.DEFAULT_INSTANCE_ID);
+            log.warn("me 为空，使用默认值：{}", SmartCacheConstant.DEFAULT_INSTANCE_ID);
             me = SmartCacheConstant.DEFAULT_INSTANCE_ID;
         }
-
-        // 校验至少启用一个缓存层
         if (!l1.enabled && !l2.enabled) {
-            log.error("Both L1 and L2 cache are disabled, enabling L1 cache by default");
+            log.warn("L1 和 L2 都已关闭，自动启用 L1");
             l1.enabled = true;
         }
+        validateL1();
+        validateL2();
+        validateConsistency();
+        validatePubSub();
+        validateWarmUp();
+        validateLock();
+        validateRoute();
+        validateSerializer();
+        log.info("Smart Cache 配置校验完成");
+    }
 
-        // 校验 L1 配置
+    private void validateL1() {
         if (l1.maxSize < 1 || l1.maxSize > SmartCacheConstant.MAX_L1_MAX_SIZE) {
-            log.warn("L1 maxSize {} is out of range [1, {}], using default {}",
-                    l1.maxSize, SmartCacheConstant.MAX_L1_MAX_SIZE, SmartCacheConstant.DEFAULT_L1_MAX_SIZE);
+            log.warn("L1 maxSize {} 超出范围，使用默认值 {}", l1.maxSize, SmartCacheConstant.DEFAULT_L1_MAX_SIZE);
             l1.maxSize = SmartCacheConstant.DEFAULT_L1_MAX_SIZE;
         }
         if (l1.expireSeconds < 1) {
-            log.warn("L1 expireSeconds {} is invalid, using default {}", l1.expireSeconds, SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS);
+            log.warn("L1 expireSeconds {} 无效，使用默认值 {}", l1.expireSeconds,
+                    SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS);
             l1.expireSeconds = SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS;
         }
-        if (l1.refreshSeconds < 1) {
-            log.warn("L1 refreshSeconds {} is invalid, using default {}", l1.refreshSeconds, SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS);
-            l1.refreshSeconds = SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS;
-        }
         if (l1.refreshSeconds < SmartCacheConstant.MIN_L1_REFRESH_SECONDS) {
-            log.warn("L1 refreshSeconds {} is too small (< {}s), adjusting to {}",
-                    l1.refreshSeconds, SmartCacheConstant.MIN_L1_REFRESH_SECONDS, SmartCacheConstant.MIN_L1_REFRESH_SECONDS);
+            log.warn("L1 refreshSeconds {} 过小，调整为 {}", l1.refreshSeconds,
+                    SmartCacheConstant.MIN_L1_REFRESH_SECONDS);
             l1.refreshSeconds = SmartCacheConstant.MIN_L1_REFRESH_SECONDS;
         }
         if (l1.refreshSeconds >= l1.expireSeconds) {
-            log.warn("L1 refreshSeconds {} should be less than expireSeconds {}, adjusting",
-                    l1.refreshSeconds, l1.expireSeconds);
-            l1.refreshSeconds = Math.max(SmartCacheConstant.MIN_L1_REFRESH_SECONDS, l1.expireSeconds - SmartCacheConstant.L1_REFRESH_EXPIRE_BUFFER_SECONDS);
+            log.warn("L1 refreshSeconds {} 不应大于等于 expireSeconds {}，自动调整", l1.refreshSeconds,
+                    l1.expireSeconds);
+            l1.refreshSeconds = Math.max(SmartCacheConstant.MIN_L1_REFRESH_SECONDS,
+                    l1.expireSeconds - SmartCacheConstant.L1_REFRESH_EXPIRE_BUFFER_SECONDS);
         }
+    }
 
-        // 校验 L2 配置
+    private void validateL2() {
         if (l2.expireSeconds < 1) {
-            log.warn("L2 expireSeconds {} is invalid, using default {}", l2.expireSeconds, SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS);
+            log.warn("L2 expireSeconds {} 无效，使用默认值 {}", l2.expireSeconds,
+                    SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS);
             l2.expireSeconds = SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS;
         }
+        if (l2.keyFormat == null || l2.keyFormat.trim().isEmpty()) {
+            log.warn("L2 keyFormat 为空，使用默认值 {}", SmartCacheConstant.DEFAULT_L2_KEY_FORMAT);
+            l2.keyFormat = SmartCacheConstant.DEFAULT_L2_KEY_FORMAT;
+        }
         if (l2.ttlRandomOffsetRatio < 0 || l2.ttlRandomOffsetRatio > 1) {
-            log.warn("L2 ttlRandomOffsetRatio {} is out of range [0, 1], using default {}",
-                    l2.ttlRandomOffsetRatio, SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO);
+            log.warn("L2 ttlRandomOffsetRatio {} 超出范围，使用默认值 {}", l2.ttlRandomOffsetRatio,
+                    SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO);
             l2.ttlRandomOffsetRatio = SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO;
         }
-
-        // 校验 L2 preload 配置
         if (l2.preload.enabled) {
-            if (l2.preload.beforeExpireSeconds <= 0) {
-                log.warn("L2 preload.before-expire-seconds {} is invalid (must be > 0), disabling preload",
-                        l2.preload.beforeExpireSeconds);
-                l2.preload.enabled = false;
-            } else if (l2.preload.beforeExpireSeconds >= l2.expireSeconds) {
-                log.warn("L2 preload.before-expire-seconds {} must be < expire-seconds {}, disabling preload",
-                        l2.preload.beforeExpireSeconds, l2.expireSeconds);
+            if (l2.preload.beforeExpireSeconds <= 0 || l2.preload.beforeExpireSeconds >= l2.expireSeconds) {
+                log.warn("L2 preload.beforeExpireSeconds {} 无效，关闭异步续期", l2.preload.beforeExpireSeconds);
                 l2.preload.enabled = false;
             }
         }
+        if (l2.preload.executorThreads < 1) {
+            log.warn("L2 preload.executorThreads {} 无效，使用默认值 {}", l2.preload.executorThreads,
+                    SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_THREADS);
+            l2.preload.executorThreads = SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_THREADS;
+        }
+        if (l2.preload.executorQueueCapacity < 1) {
+            log.warn("L2 preload.executorQueueCapacity {} 无效，使用默认值 {}", l2.preload.executorQueueCapacity,
+                    SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_QUEUE_CAPACITY);
+            l2.preload.executorQueueCapacity = SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_QUEUE_CAPACITY;
+        }
+    }
 
-        // 校验一致性模式
+    private void validateConsistency() {
         if (consistency.mode == null || consistency.mode.trim().isEmpty()) {
-            log.warn("Consistency mode is null or empty, using default: {}", SmartCacheConstant.CONSISTENCY_MODE_STRONG);
+            log.warn("一致性模式为空，使用默认值 {}", SmartCacheConstant.CONSISTENCY_MODE_STRONG);
             consistency.mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
-        } else if (!consistency.mode.equals(SmartCacheConstant.CONSISTENCY_MODE_EVENTUAL)
-                && !consistency.mode.equals(SmartCacheConstant.CONSISTENCY_MODE_STRONG)) {
-            log.warn("Invalid consistency mode: {}, must be '{}' or '{}', using default: {}",
-                    consistency.mode,
-                    SmartCacheConstant.CONSISTENCY_MODE_EVENTUAL,
-                    SmartCacheConstant.CONSISTENCY_MODE_STRONG,
+        } else if (!SmartCacheConstant.CONSISTENCY_MODE_EVENTUAL.equals(consistency.mode)
+                && !SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(consistency.mode)) {
+            log.warn("一致性模式 {} 无效，使用默认值 {}", consistency.mode,
                     SmartCacheConstant.CONSISTENCY_MODE_STRONG);
             consistency.mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
         }
+    }
 
-        // 校验预热配置
+    private void validatePubSub() {
+        if (pubsub.mode == null || pubsub.mode.trim().isEmpty()) {
+            pubsub.mode = SmartCacheConstant.PUBSUB_MODE_ROUTED;
+        }
+        if (!SmartCacheConstant.PUBSUB_MODE_ROUTED.equals(pubsub.mode)
+                && !SmartCacheConstant.PUBSUB_MODE_DISABLED.equals(pubsub.mode)) {
+            log.warn("Pub/Sub 模式 {} 无效，使用默认值 {}", pubsub.mode, SmartCacheConstant.PUBSUB_MODE_ROUTED);
+            pubsub.mode = SmartCacheConstant.PUBSUB_MODE_ROUTED;
+        }
+        if (pubsub.channelPrefix == null || pubsub.channelPrefix.trim().isEmpty()) {
+            pubsub.channelPrefix = SmartCacheConstant.DEFAULT_PUBSUB_CHANNEL_PREFIX;
+        }
+        if (SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(consistency.mode)
+                && SmartCacheConstant.PUBSUB_MODE_DISABLED.equals(pubsub.mode)) {
+            throw new CacheConfigurationException(
+                    ErrorCode.SMART_CACHE_CONFIG_ERROR,
+                    String.format(ErrorMessage.SMART_CACHE_CONFIG_ERROR, "强一致性模式不能关闭 Pub/Sub")
+            );
+        }
+    }
+
+    private void validateWarmUp() {
         if (warmUp.completionMarkTtlSeconds < SmartCacheConstant.MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS
                 || warmUp.completionMarkTtlSeconds > SmartCacheConstant.MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS) {
-            log.warn("WarmUp completionMarkTtlSeconds {} is out of range [{}, {}], using default {}",
-                    warmUp.completionMarkTtlSeconds,
-                    SmartCacheConstant.MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS,
-                    SmartCacheConstant.MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS,
+            log.warn("预热完成标记 TTL {} 超出范围，使用默认值 {}", warmUp.completionMarkTtlSeconds,
                     SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS);
             warmUp.completionMarkTtlSeconds = SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS;
         }
+        if (warmUp.executorThreads < 1) {
+            log.warn("预热线程数 {} 无效，使用默认值 {}", warmUp.executorThreads,
+                    SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_THREADS);
+            warmUp.executorThreads = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_THREADS;
+        }
+        if (warmUp.executorQueueCapacity < 1) {
+            log.warn("预热队列容量 {} 无效，使用默认值 {}", warmUp.executorQueueCapacity,
+                    SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY);
+            warmUp.executorQueueCapacity = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY;
+        }
+    }
 
-        // 校验分布式锁配置
+    private void validateLock() {
         if (lock.timeoutSeconds < SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS
                 || lock.timeoutSeconds > SmartCacheConstant.MAX_LOCK_TIMEOUT_SECONDS) {
-            log.warn("Lock timeoutSeconds {} is out of range [{}, {}], using default {}",
-                    lock.timeoutSeconds,
-                    SmartCacheConstant.MIN_LOCK_TIMEOUT_SECONDS,
-                    SmartCacheConstant.MAX_LOCK_TIMEOUT_SECONDS,
+            log.warn("分布式锁超时时间 {} 超出范围，使用默认值 {}", lock.timeoutSeconds,
                     SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS);
             lock.timeoutSeconds = SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
         }
+    }
 
-        log.info("Smart Cache Properties validated successfully");
+    private void validateRoute() {
+        if (route.scanCount == null || route.scanCount < 1) {
+            route.scanCount = SmartCacheConstant.DEFAULT_SCAN_COUNT;
+        }
+    }
+
+    private void validateSerializer() {
+        if (serializer.trustedPackages == null || serializer.trustedPackages.isEmpty()) {
+            serializer.trustedPackages = new ArrayList<>(Arrays.asList(
+                    SmartCacheConstant.TRUSTED_PACKAGE_JAVA_LANG,
+                    SmartCacheConstant.TRUSTED_PACKAGE_JAVA_TIME,
+                    SmartCacheConstant.TRUSTED_PACKAGE_JAVA_UTIL
+            ));
+        }
+    }
+
+    public String getPubsubChannelPrefix() {
+        return pubsub.channelPrefix;
     }
 
     @Data
@@ -197,7 +266,7 @@ public class SmartCacheProperties {
         private int expireSeconds = SmartCacheConstant.DEFAULT_L1_EXPIRE_SECONDS;
 
         /**
-         * 刷新时间（秒），用于异步刷新
+         * 刷新时间（秒）
          */
         private int refreshSeconds = SmartCacheConstant.DEFAULT_L1_REFRESH_SECONDS;
     }
@@ -216,43 +285,17 @@ public class SmartCacheProperties {
         private int expireSeconds = SmartCacheConstant.DEFAULT_L2_EXPIRE_SECONDS;
 
         /**
-         * TTL 随机偏移比例（0-1），用于防止缓存雪崩
+         * TTL 随机偏移比例
          */
         private double ttlRandomOffsetRatio = SmartCacheConstant.DEFAULT_L2_TTL_RANDOM_OFFSET_RATIO;
 
         /**
-         * Redis Key 前缀（已废弃，请使用 keyFormat）
-         *
-         * @deprecated 使用 keyFormat 替代
+         * Redis Key 格式模板
          */
-        @Deprecated
-        private String keyPrefix;
-
-        /**
-         * Redis Key 格式模板，支持占位符：
-         * <ul>
-         *   <li>{keyPrefix} - key 前缀（来自全局配置 io.github.surezzzzzz.sdk.cache.keyPrefix）</li>
-         *   <li>{cacheName} - 缓存名称</li>
-         *   <li>{me} - 实例标识（来自全局配置 io.github.surezzzzzz.sdk.cache.me）</li>
-         *   <li>{key} - 缓存 key（带 hash tag）</li>
-         * </ul>
-         * 默认格式：{keyPrefix}:{cacheName}:{me}::{key}
-         * <p>
-         * 示例：
-         * <ul>
-         *   <li>{keyPrefix}:{cacheName}:{me}::{key} - 默认格式（SmartCache 标准格式）</li>
-         *   <li>{keyPrefix}:{me}:{cacheName}::{key} - AKSK 老格式</li>
-         *   <li>custom-prefix:{cacheName}:{me}::{key} - 自定义前缀</li>
-         * </ul>
-         */
-        private String keyFormat = "{keyPrefix}:{cacheName}:{me}::{key}";
+        private String keyFormat = SmartCacheConstant.DEFAULT_L2_KEY_FORMAT;
 
         /**
          * L2 异步续期配置
-         * <p>
-         * L2 条目剩余 TTL &lt; before-expire-seconds 时，异步触发 loader 提前续期，
-         * 当前请求返回旧值，续期完成后写回 L2（同时更新 L1）。
-         * 目的：在 L2 TTL 到期前提供容错窗口，避免 loader 失败时请求直接失败。
          */
         private PreloadConfig preload = new PreloadConfig();
 
@@ -260,47 +303,76 @@ public class SmartCacheProperties {
         @NoArgsConstructor
         public static class PreloadConfig {
             /**
-             * 是否启用异步续期，默认关闭
+             * 异步预刷新总开关
              */
             private boolean enabled = false;
 
             /**
-             * 提前多少秒触发续期，需 &lt; l2.expire-seconds
+             * 提前多少秒触发续期
              */
             private int beforeExpireSeconds = SmartCacheConstant.DEFAULT_L2_PRELOAD_BEFORE_EXPIRE_SECONDS;
-        }
-    }
 
-    /**
-     * 获取 Pub/Sub 频道前缀
-     * 如果未配置，则使用 keyPrefix + PUBSUB_CHANNEL_SUFFIX
-     *
-     * @return Pub/Sub 频道前缀
-     */
-    public String getPubsubChannelPrefix() {
-        if (consistency != null) {
-            String customPrefix = consistency.getPubsubChannelPrefix();
-            if (customPrefix != null && !customPrefix.isEmpty()) {
-                return customPrefix;
-            }
+            /**
+             * 线程数
+             */
+            private int executorThreads = SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_THREADS;
+
+            /**
+             * 队列容量
+             */
+            private int executorQueueCapacity = SmartCacheConstant.DEFAULT_PRELOAD_EXECUTOR_QUEUE_CAPACITY;
         }
-        return keyPrefix + SmartCacheConstant.PUBSUB_CHANNEL_SUFFIX;
     }
 
     @Data
     @NoArgsConstructor
     public static class ConsistencyConfig {
         /**
-         * 一致性模式：eventual（最终一致性）、strong（强一致性）
-         * 默认：strong（推荐，适合多实例部署，单实例也可用）
+         * 一致性模式
          */
         private String mode = SmartCacheConstant.CONSISTENCY_MODE_STRONG;
 
+    }
+
+    @Data
+    @NoArgsConstructor
+    public static class PubSubConfig {
         /**
-         * Pub/Sub 频道前缀
-         * 如果不设置，默认使用 {keyPrefix}-cache-invalidation
+         * Pub/Sub 模式
          */
-        private String pubsubChannelPrefix;
+        private String mode = SmartCacheConstant.PUBSUB_MODE_ROUTED;
+
+        /**
+         * channel 前缀
+         */
+        private String channelPrefix;
+    }
+
+    @Data
+    @NoArgsConstructor
+    public static class RouteConfig {
+        /**
+         * clear / size 是否允许扫描 Redis
+         */
+        private Boolean scanEnabled = SmartCacheConstant.DEFAULT_ROUTE_SCAN_ENABLED;
+
+        /**
+         * SCAN count
+         */
+        private Integer scanCount = SmartCacheConstant.DEFAULT_SCAN_COUNT;
+    }
+
+    @Data
+    @NoArgsConstructor
+    public static class SerializerConfig {
+        /**
+         * 可信包名前缀
+         */
+        private List<String> trustedPackages = new ArrayList<>(Arrays.asList(
+                SmartCacheConstant.TRUSTED_PACKAGE_JAVA_LANG,
+                SmartCacheConstant.TRUSTED_PACKAGE_JAVA_TIME,
+                SmartCacheConstant.TRUSTED_PACKAGE_JAVA_UTIL
+        ));
     }
 
     @Data
@@ -317,9 +389,18 @@ public class SmartCacheProperties {
     public static class WarmUpConfig {
         /**
          * 预热完成标记 TTL（秒）
-         * 用于防止滚动发布时重复预热
          */
         private int completionMarkTtlSeconds = SmartCacheConstant.DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS;
+
+        /**
+         * 线程数
+         */
+        private int executorThreads = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_THREADS;
+
+        /**
+         * 队列容量
+         */
+        private int executorQueueCapacity = SmartCacheConstant.DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY;
     }
 
     @Data
@@ -327,7 +408,6 @@ public class SmartCacheProperties {
     public static class LockConfig {
         /**
          * 分布式锁超时时间（秒）
-         * 用于防止缓存击穿时的并发加载
          */
         private int timeoutSeconds = SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
     }

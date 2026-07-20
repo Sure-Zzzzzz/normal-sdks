@@ -14,8 +14,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -39,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SmartCacheTestApplication.class)
-@Import(TestWarmUpConfiguration.class)
+@Import({TestWarmUpConfiguration.class, EndToEndTest.TestFixturesConfiguration.class})
 public class EndToEndTest extends BaseSmartCacheTest {
 
     @Autowired
@@ -53,6 +54,7 @@ public class EndToEndTest extends BaseSmartCacheTest {
 
     @BeforeEach
     public void setUp() {
+        requireRedisAvailable();
         log.info("========== 初始化测试环境 ==========");
         cacheManager.clear("userCache");
         UserService.dbCallCount.set(0);
@@ -370,28 +372,14 @@ public class EndToEndTest extends BaseSmartCacheTest {
             log.info("统计信息: L1命中={}, L2命中={}, 未命中={}",
                     stats.getL1HitCount(), stats.getL2HitCount(), stats.getMissCount());
 
-            // 根据Redis可用性调整断言
-            boolean redisAvailable = isRedisAvailable();
-
             // 基本统计验证 - 总请求数可能包含clear操作，所以使用范围判断
             assertTrue(stats.getTotalRequests() >= 3 && stats.getTotalRequests() <= 4,
                     "总请求数应该在 3-4 之间，实际: " + stats.getTotalRequests());
-
-            if (redisAvailable) {
-                // Redis可用时，统计应该精确
-                assertEquals(2, stats.getL1HitCount(), "L1 应该命中 2 次");
-                assertEquals(0, stats.getL2HitCount(), "L2 应该命中 0 次");
-                assertEquals(1, stats.getMissCount(), "应该有 1 次未命中");
-                assertEquals(66.67, stats.getHitRate(), 0.01, "命中率应该是 66.67%");
-                log.info("Redis可用: 命中率 = 66.67%");
-            } else {
-                // Redis不可用时，统计可能略有不同
-                assertTrue(stats.getL1HitCount() >= 2, "L1 至少应该命中 2 次");
-                assertTrue(stats.getMissCount() >= 1, "至少应该有 1 次未命中");
-                assertTrue(stats.getHitRate() >= 50 && stats.getHitRate() <= 70,
-                        "命中率应该在 50-70% 之间，实际: " + stats.getHitRate() + "%");
-                log.info("Redis不可用: 命中率 = {}%", String.format("%.2f", stats.getHitRate()));
-            }
+            assertEquals(2, stats.getL1HitCount(), "L1 应该命中 2 次");
+            assertEquals(0, stats.getL2HitCount(), "L2 应该命中 0 次");
+            assertEquals(1, stats.getMissCount(), "应该有 1 次未命中");
+            assertEquals(66.67, stats.getHitRate(), 0.01, "命中率应该是 66.67%");
+            log.info("命中率 = 66.67%");
 
             log.info("✓ 统计信息验证通过");
         } else {
@@ -421,26 +409,16 @@ public class EndToEndTest extends BaseSmartCacheTest {
 
         log.info("预热数据: config:1={}, config:2={}, config:3={}", config1, config2, config3);
 
-        // Then - 验证预热的数据已存在
-        // 根据Redis可用性调整断言
-        boolean redisAvailable = isRedisAvailable();
-        if (redisAvailable) {
-            // Redis可用时，预热数据应该存在于L2缓存
-            assertNotNull(config1, "config:1 应该已被预热");
-            assertNotNull(config2, "config:2 应该已被预热");
-            assertNotNull(config3, "config:3 应该已被预热");
+        // Then - 验证预热的数据已存在于 L2 缓存
+        assertNotNull(config1, "config:1 应该已被预热");
+        assertNotNull(config2, "config:2 应该已被预热");
+        assertNotNull(config3, "config:3 应该已被预热");
 
-            assertEquals("ConfigValue1", config1, "config:1 的值应该正确");
-            assertEquals("ConfigValue2", config2, "config:2 的值应该正确");
-            assertEquals("ConfigValue3", config3, "config:3 的值应该正确");
+        assertEquals("ConfigValue1", config1, "config:1 的值应该正确");
+        assertEquals("ConfigValue2", config2, "config:2 的值应该正确");
+        assertEquals("ConfigValue3", config3, "config:3 的值应该正确");
 
-            log.info("Redis可用: 预热数据验证通过");
-        } else {
-            // Redis不可用时，预热数据无法持久化到L2，可能不存在
-            // 这是正常的降级行为
-            log.info("Redis不可用: 预热数据无法持久化到L2缓存（符合预期）");
-            log.info("config:1={}, config:2={}, config:3={}", config1, config2, config3);
-        }
+        log.info("预热数据验证通过");
 
         log.info("✓ 预热数据验证通过");
 
@@ -599,10 +577,23 @@ public class EndToEndTest extends BaseSmartCacheTest {
         log.info("✓ 异常处理测试通过");
     }
 
+    @TestConfiguration
+    static class TestFixturesConfiguration {
+
+        @Bean
+        AnnotationService annotationService() {
+            return new AnnotationService();
+        }
+
+        @Bean
+        UserService userService() {
+            return new UserService();
+        }
+    }
+
     /**
      * 注解测试服务
      */
-    @Service
     public static class AnnotationService {
 
         @SmartCachePut(cacheName = "annotationCache", key = "'user:' + #userId")
@@ -634,7 +625,6 @@ public class EndToEndTest extends BaseSmartCacheTest {
     /**
      * 测试服务
      */
-    @Service
     public static class UserService {
 
         public static AtomicInteger dbCallCount = new AtomicInteger(0);

@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.cache.manager;
 import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.exception.CacheLoadException;
 import io.github.surezzzzzz.sdk.cache.exception.SmartCacheException;
@@ -13,18 +15,17 @@ import io.github.surezzzzzz.sdk.cache.stats.CacheStats;
 import io.github.surezzzzzz.sdk.cache.stats.CacheStatsCollector;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
+import io.github.surezzzzzz.sdk.lock.redis.model.RedisLockLease;
 import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
- * Smart Cache Manager
+ * Smart Cache 管理器
  * <p>
  * 缓存管理器，提供编程式 API
  * </p>
@@ -58,6 +59,10 @@ public class SmartCacheManager {
 
     @Autowired(required = false)
     private List<CachePreloadHandler> preloadHandlers;
+
+    @Autowired(required = false)
+    @Qualifier(SmartCacheConstant.SMART_CACHE_PRELOAD_EXECUTOR_BEAN_NAME)
+    private Executor preloadExecutor;
 
     /**
      * 使用 ThreadLocal 记录当前线程正在加载的 key，用于循环依赖检测
@@ -94,8 +99,16 @@ public class SmartCacheManager {
     /**
      * 获取缓存值
      */
+    @SuppressWarnings("unchecked")
     public <T> T get(String cacheName, String key) {
-        // 先查 L1
+        return (T) get(cacheName, key, Object.class);
+    }
+
+    /**
+     * 获取缓存值
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T get(String cacheName, String key, Class<T> valueType) {
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
             if (value != null) {
@@ -109,9 +122,8 @@ public class SmartCacheManager {
             }
         }
 
-        // 再查 L2
         if (l2Cache != null) {
-            T value = l2Cache.get(cacheName, key);
+            T value = l2Cache.get(cacheName, key, valueType);
             if (value != null) {
                 return handleL2Hit(cacheName, key, value);
             }
@@ -127,7 +139,14 @@ public class SmartCacheManager {
      * 获取缓存值，如果不存在则加载
      */
     public <T> T get(String cacheName, String key, Callable<T> loader) {
-        return get(cacheName, key, loader, 0);
+        return get(cacheName, key, loader, 0, Object.class);
+    }
+
+    /**
+     * 获取缓存值，如果不存在则加载
+     */
+    public <T> T get(String cacheName, String key, Callable<T> loader, Class<?> valueType) {
+        return get(cacheName, key, loader, 0, valueType);
     }
 
     /**
@@ -142,22 +161,32 @@ public class SmartCacheManager {
      * @return 缓存值或 loader 返回值
      */
     public <T> T get(String cacheName, String key, Callable<T> loader, int ttlSeconds) {
+        return get(cacheName, key, loader, ttlSeconds, Object.class);
+    }
+
+    /**
+     * 获取缓存值，如果不存在则加载，并使用指定 TTL 写入 L2
+     */
+    public <T> T get(String cacheName, String key, Callable<T> loader, int ttlSeconds, Class<?> valueType) {
         String fullKey = cacheName + SmartCacheConstant.KEY_SEPARATOR + key;
         Set<String> loadingKeys = LOADING_KEYS.get();
 
         if (loadingKeys.contains(fullKey)) {
-            throw new SmartCacheException("检测到循环依赖: " + fullKey +
-                    ", 当前加载链: " + loadingKeys);
+            throw new SmartCacheException(
+                    ErrorCode.SMART_CACHE_CIRCULAR_DEPENDENCY,
+                    String.format(ErrorMessage.SMART_CACHE_CIRCULAR_DEPENDENCY,
+                            fullKey + SmartCacheConstant.KEY_SEPARATOR + loadingKeys)
+            );
         }
 
-        if (loadingKeys.size() > 10) {
+        if (loadingKeys.size() > SmartCacheConstant.CACHE_DEPENDENCY_WARN_DEPTH) {
             log.error("检测到异常的缓存依赖深度: {}, 加载链: {}",
                     loadingKeys.size(), loadingKeys);
         }
 
         try {
             loadingKeys.add(fullKey);
-            return doGet(cacheName, key, loader, ttlSeconds);
+            return doGet(cacheName, key, loader, ttlSeconds, valueType);
         } finally {
             loadingKeys.remove(fullKey);
             if (loadingKeys.isEmpty()) {
@@ -170,13 +199,13 @@ public class SmartCacheManager {
      * 实际获取缓存值的逻辑
      */
     private <T> T doGet(String cacheName, String key, Callable<T> loader) {
-        return doGet(cacheName, key, loader, 0);
+        return doGet(cacheName, key, loader, 0, Object.class);
     }
 
     /**
      * 实际获取缓存值的逻辑（支持自定义 L2 TTL）
      */
-    private <T> T doGet(String cacheName, String key, Callable<T> loader, int ttlSeconds) {
+    private <T> T doGet(String cacheName, String key, Callable<T> loader, int ttlSeconds, Class<?> valueType) {
         // 先查 L1
         if (l1Cache != null) {
             T value = l1Cache.get(cacheName, key);
@@ -193,27 +222,27 @@ public class SmartCacheManager {
 
         // 再查 L2
         if (l2Cache != null) {
-            T value = l2Cache.get(cacheName, key);
+            T value = l2Cache.get(cacheName, key, valueType);
             if (value != null) {
                 return handleL2Hit(cacheName, key, value);
             }
         }
 
         // L1 和 L2 都未命中，使用分布式锁加载数据（防止缓存击穿）
-        return loadWithLock(cacheName, key, loader, ttlSeconds);
+        return loadWithLock(cacheName, key, loader, ttlSeconds, valueType);
     }
 
     /**
      * 使用分布式锁加载数据（防止缓存击穿）
      */
     private <T> T loadWithLock(String cacheName, String key, Callable<T> loader) {
-        return loadWithLock(cacheName, key, loader, 0);
+        return loadWithLock(cacheName, key, loader, 0, Object.class);
     }
 
     /**
      * 使用分布式锁加载数据（防止缓存击穿，支持自定义 L2 TTL）
      */
-    private <T> T loadWithLock(String cacheName, String key, Callable<T> loader, int ttlSeconds) {
+    private <T> T loadWithLock(String cacheName, String key, Callable<T> loader, int ttlSeconds, Class<?> valueType) {
         String keyPrefix = properties != null ? properties.getKeyPrefix() : SmartCacheConstant.REDIS_KEY_PREFIX;
         String me = properties != null ? properties.getMe() : SmartCacheConstant.DEFAULT_INSTANCE_ID;
         String lockKey = KeyHelper.buildLockKey(
@@ -222,84 +251,84 @@ public class SmartCacheManager {
                 me,
                 key
         );
-        String requestId = UUID.randomUUID().toString();
 
         // 如果没有分布式锁，使用本地锁兜底
         if (redisLock == null) {
-            return loadWithLocalLock(cacheName, key, loader, ttlSeconds);
+            return loadWithLocalLock(cacheName, key, loader, ttlSeconds, valueType);
         }
 
-        // 尝试获取分布式锁
-        boolean locked = false;
+        int lockTimeout = getLockTimeoutSeconds();
+        Optional<RedisLockLease> optionalLease;
         try {
-            int lockTimeout = properties != null && properties.getLock() != null
-                    ? properties.getLock().getTimeoutSeconds()
-                    : SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
-            locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
-            if (locked) {
-                // 获取锁成功，双重检查
-                if (l2Cache != null) {
-                    T value = l2Cache.get(cacheName, key);
-                    if (value != null) {
-                        return handleL2Hit(cacheName, key, value);
-                    }
-                }
+            optionalLease = redisLock.tryLockWithLease(lockKey, lockTimeout, TimeUnit.SECONDS);
+        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
+            log.warn("Redis 连接失败，降级使用本地锁兜底。原因：{}", e.getMessage());
+            return loadWithLocalLock(cacheName, key, loader, ttlSeconds, valueType);
+        } catch (Exception e) {
+            log.warn("获取分布式锁租约失败，降级使用本地锁兜底。原因：{}", e.getMessage());
+            return loadWithLocalLock(cacheName, key, loader, ttlSeconds, valueType);
+        }
 
-                // 加载数据
-                return loadAndCache(cacheName, key, loader, ttlSeconds);
-            } else {
-                // 获取锁失败，使用重试机制循环查询缓存
-                if (retryExecutor != null && l2Cache != null) {
-                    try {
-                        T value = retryExecutor.executeWithFixedDelay(() -> {
-                            T v = l2Cache.get(cacheName, key);
-                            if (v != null) {
-                                return v;
-                            }
-                            throw new RuntimeException("Cache not ready yet");
-                        }, lockTimeout / 5, 1);
+        if (!optionalLease.isPresent()) {
+            return loadAfterLeaseContention(cacheName, key, loader, ttlSeconds, valueType, lockTimeout);
+        }
 
-                        return handleL2Hit(cacheName, key, value);
-                    } catch (Exception e) {
-                        // 重试多次后还是没有，使用本地锁兜底（避免同一实例内缓存击穿）
-                        log.warn("Failed to get cache after retries, using local lock as fallback");
-                        return loadWithLocalLock(cacheName, key, loader, ttlSeconds);
-                    }
-                } else {
-                    // 如果没有重试器或 L2 缓存，使用本地锁兜底
-                    return loadWithLocalLock(cacheName, key, loader, ttlSeconds);
+        RedisLockLease lease = optionalLease.get();
+        try {
+            if (l2Cache != null) {
+                T value = l2Cache.get(cacheName, key, valueType);
+                if (value != null) {
+                    return handleL2Hit(cacheName, key, value);
                 }
             }
-        } catch (org.springframework.data.redis.RedisConnectionFailureException e) {
-            // Redis连接失败，降级到本地锁
-            log.warn("Redis connection failed, fallback to local lock. Error: {}", e.getMessage());
-            return loadWithLocalLock(cacheName, key, loader, ttlSeconds);
-        } catch (Exception e) {
-            // 其他异常也降级到本地锁
-            log.warn("Failed to acquire distributed lock, fallback to local lock. Error: {}", e.getMessage());
-            return loadWithLocalLock(cacheName, key, loader, ttlSeconds);
+
+            T value = loadValue(cacheName, key, loader);
+            if (!renewLeaseBeforeWrite(lease, lockTimeout, "缓存击穿", cacheName, key)) {
+                return value;
+            }
+            cacheLoadedValue(cacheName, key, value, ttlSeconds);
+            return value;
         } finally {
-            if (locked) {
-                try {
-                    redisLock.unlock(lockKey, requestId);
-                } catch (Exception e) {
-                    log.warn("Failed to unlock distributed lock: {}", e.getMessage());
-                }
+            closeLease(lease, "缓存击穿", cacheName, key);
+        }
+    }
+
+    private <T> T loadAfterLeaseContention(String cacheName, String key, Callable<T> loader, int ttlSeconds,
+                                           Class<?> valueType, int lockTimeout) {
+        if (retryExecutor != null && l2Cache != null) {
+            try {
+                int retryTimes = Math.max(1, lockTimeout / 5);
+                long retryDelayMillis = SmartCacheConstant.MIN_RETRY_DELAY_MILLIS;
+                T value = retryExecutor.executeWithFixedDelay(() -> {
+                    T cachedValue = l2Cache.get(cacheName, key, valueType);
+                    if (cachedValue != null) {
+                        return cachedValue;
+                    }
+                    throw new SmartCacheException(
+                            ErrorCode.SMART_CACHE_L2_OPERATION_FAILED,
+                            String.format(ErrorMessage.SMART_CACHE_L2_OPERATION_FAILED,
+                                    cacheName + SmartCacheConstant.KEY_SEPARATOR + key)
+                    );
+                }, retryTimes, retryDelayMillis);
+                return handleL2Hit(cacheName, key, value);
+            } catch (Exception e) {
+                log.warn("重试读取缓存仍未命中，降级使用本地锁兜底");
             }
         }
+        return loadWithLocalLock(cacheName, key, loader, ttlSeconds, valueType);
     }
 
     /**
      * 使用本地锁加载数据（兜底机制，防止同一实例内缓存击穿）
      */
     private <T> T loadWithLocalLock(String cacheName, String key, Callable<T> loader) {
-        return loadWithLocalLock(cacheName, key, loader, 0);
+        return loadWithLocalLock(cacheName, key, loader, 0, Object.class);
     }
 
     /**
      * 使用本地锁加载数据（兜底机制，防止同一实例内缓存击穿，支持自定义 L2 TTL）
      */
-    private <T> T loadWithLocalLock(String cacheName, String key, Callable<T> loader, int ttlSeconds) {
+    private <T> T loadWithLocalLock(String cacheName, String key, Callable<T> loader, int ttlSeconds, Class<?> valueType) {
         String localLockKey = cacheName + SmartCacheConstant.KEY_SEPARATOR + key;
         LockHolder holder = localLocks.computeIfAbsent(localLockKey, k -> new LockHolder());
         holder.acquire();
@@ -307,8 +336,8 @@ public class SmartCacheManager {
         try {
             synchronized (holder.getLock()) {
                 // 双重检查缓存
-                T value = get(cacheName, key);
-                if (value != null || (l2Cache != null && isNullPlaceholder(l2Cache.get(cacheName, key)))) {
+                T value = (T) get(cacheName, key, valueType);
+                if (value != null || (l2Cache != null && isNullPlaceholder(l2Cache.get(cacheName, key, valueType)))) {
                     return value;
                 }
                 // 加载数据
@@ -335,38 +364,72 @@ public class SmartCacheManager {
      * <p>{@code ttlSeconds <= 0} 时使用全局配置。
      */
     private <T> T loadAndCache(String cacheName, String key, Callable<T> loader, int ttlSeconds) {
+        T value = loadValue(cacheName, key, loader);
+        cacheLoadedValue(cacheName, key, value, ttlSeconds);
+        return value;
+    }
+
+    private <T> T loadValue(String cacheName, String key, Callable<T> loader) {
         try {
             T value = loader.call();
             if (statsCollector != null) {
                 statsCollector.recordMiss(cacheName);
             }
-            if (value != null) {
-                // 写入 L2，ttlSeconds > 0 时使用指定 TTL，否则使用全局配置
-                if (l2Cache != null) {
-                    if (ttlSeconds > 0) {
-                        l2Cache.put(cacheName, key, value, ttlSeconds);
-                    } else {
-                        l2Cache.put(cacheName, key, value);
-                    }
-                }
-                // 写入 L1
-                if (l1Cache != null) {
-                    l1Cache.put(cacheName, key, value);
-                }
-            } else {
-                // 缓存空值防穿透：仅写 L1，不写 L2
-                // L2（Redis）存匿名占位符会导致序列化失败，且分布式场景下防穿透意义有限
-                Object placeholder = SmartCacheConstant.NULL_PLACEHOLDER;
-                if (l1Cache != null) {
-                    l1Cache.put(cacheName, key, placeholder);
-                }
-            }
             return value;
         } catch (SmartCacheException e) {
-            // 循环依赖等业务异常直接抛出，不包装
             throw e;
         } catch (Exception e) {
-            throw new CacheLoadException("缓存加载失败" + SmartCacheConstant.KEY_SEPARATOR + " " + cacheName + SmartCacheConstant.KEY_SEPARATOR + key, e);
+            throw new CacheLoadException(
+                    ErrorCode.SMART_CACHE_LOAD_FAILED,
+                    String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
+                            cacheName + SmartCacheConstant.KEY_SEPARATOR + key),
+                    e
+            );
+        }
+    }
+
+    private void cacheLoadedValue(String cacheName, String key, Object value, int ttlSeconds) {
+        if (value != null) {
+            if (l2Cache != null) {
+                if (ttlSeconds > 0) {
+                    l2Cache.put(cacheName, key, value, ttlSeconds);
+                } else {
+                    l2Cache.put(cacheName, key, value);
+                }
+            }
+            if (l1Cache != null) {
+                l1Cache.put(cacheName, key, value);
+            }
+        } else if (l1Cache != null) {
+            l1Cache.put(cacheName, key, SmartCacheConstant.NULL_PLACEHOLDER);
+        }
+    }
+
+    private int getLockTimeoutSeconds() {
+        return properties != null && properties.getLock() != null
+                ? properties.getLock().getTimeoutSeconds()
+                : SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
+    }
+
+    private boolean renewLeaseBeforeWrite(RedisLockLease lease, int lockTimeout, String operation,
+                                          String cacheName, String key) {
+        try {
+            if (lease.renew(lockTimeout, TimeUnit.SECONDS)) {
+                return true;
+            }
+            log.warn("{}租约已失效，丢弃共享缓存写入，cacheName：{}，key：{}", operation, cacheName, key);
+        } catch (Exception e) {
+            log.warn("{}租约续租失败，丢弃共享缓存写入，cacheName：{}，key：{}，原因：{}",
+                    operation, cacheName, key, e.getMessage());
+        }
+        return false;
+    }
+
+    private void closeLease(RedisLockLease lease, String operation, String cacheName, String key) {
+        try {
+            lease.close();
+        } catch (Exception e) {
+            log.warn("{}租约释放失败，cacheName：{}，key：{}，原因：{}", operation, cacheName, key, e.getMessage());
         }
     }
 
@@ -404,6 +467,11 @@ public class SmartCacheManager {
         // 写入 L1
         if (l1Cache != null) {
             l1Cache.put(cacheName, key, value);
+        }
+
+        // 通知其他实例删除旧 L1，后续读取从已更新的 L2 获取新值
+        if (invalidationListener != null) {
+            invalidationListener.publishInvalidation(cacheName, key, SmartCacheConstant.OPERATION_EVICT);
         }
     }
 
@@ -459,7 +527,15 @@ public class SmartCacheManager {
     /**
      * 批量获取缓存值
      */
+    @SuppressWarnings("unchecked")
     public <T> Map<String, T> getAll(String cacheName, List<String> keys) {
+        return (Map<String, T>) getAll(cacheName, keys, Object.class);
+    }
+
+    /**
+     * 批量获取缓存值
+     */
+    public <T> Map<String, T> getAll(String cacheName, List<String> keys, Class<T> valueType) {
         if (keys == null || keys.isEmpty()) {
             return new HashMap<>();
         }
@@ -482,7 +558,7 @@ public class SmartCacheManager {
 
         // 如果有未命中的 key，从 L2 批量获取
         if (!missedKeys.isEmpty() && l2Cache != null) {
-            Map<String, T> l2Result = l2Cache.getAll(cacheName, missedKeys);
+            Map<String, T> l2Result = l2Cache.getAll(cacheName, missedKeys, valueType);
             result.putAll(l2Result);
 
             // 回写 L1
@@ -531,6 +607,15 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             l1Cache.putAll(cacheName, entries);
         }
+
+        // 通知其他实例删除每个已更新 key 的旧 L1
+        if (invalidationListener != null) {
+            entries.forEach((key, value) -> {
+                if (value != null) {
+                    invalidationListener.publishInvalidation(cacheName, key, SmartCacheConstant.OPERATION_EVICT);
+                }
+            });
+        }
     }
 
     /**
@@ -572,6 +657,11 @@ public class SmartCacheManager {
         if (l1Cache != null) {
             l1Cache.put(cacheName, key, rawValue);
         }
+        // 关闭预刷新时不触发 handler、TTL 查询或异步任务
+        if (properties == null || !properties.getL2().getPreload().isEnabled()) {
+            return (T) rawValue;
+        }
+
         // 检查是否需要异步续期
         CachePreloadHandler handler = findHandler(cacheName);
         if (handler != null) {
@@ -598,23 +688,26 @@ public class SmartCacheManager {
      */
     private void asyncPreload(String cacheName, String key, CachePreloadHandler handler) {
         if (redisLock == null) {
-            log.debug("L2 preload skipped: no distributed lock available for key={}", key);
+            log.debug("跳过 L2 预刷新，未配置分布式锁，key：{}", key);
             return;
         }
         String keyPrefix = properties != null ? properties.getKeyPrefix() : SmartCacheConstant.REDIS_KEY_PREFIX;
-        String lockKey = keyPrefix + SmartCacheConstant.PRELOAD_LOCK_KEY_SUFFIX
-                + cacheName + SmartCacheConstant.KEY_SEPARATOR + key;
-        String lockValue = UUID.randomUUID().toString();
-
-        int lockTimeout = properties != null && properties.getLock() != null
-                ? properties.getLock().getTimeoutSeconds()
-                : SmartCacheConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
-        if (!redisLock.tryLock(lockKey, lockValue, lockTimeout, TimeUnit.SECONDS)) {
-            log.debug("L2 preload skipped: another instance is preloading key={}", key);
+        String me = properties != null ? properties.getMe() : SmartCacheConstant.DEFAULT_INSTANCE_ID;
+        String lockKey = KeyHelper.buildPreloadLockKey(keyPrefix, cacheName, me, key);
+        int lockTimeout = getLockTimeoutSeconds();
+        Optional<RedisLockLease> optionalLease;
+        try {
+            optionalLease = redisLock.tryLockWithLease(lockKey, lockTimeout, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            log.warn("跳过 L2 预刷新，获取租约失败，cacheName：{}，key：{}，原因：{}", cacheName, key, e.getMessage());
+            return;
+        }
+        if (!optionalLease.isPresent()) {
+            log.debug("跳过 L2 预刷新，其他实例正在刷新，key：{}", key);
             return;
         }
 
-        // 根据 before-expire-seconds 反推初始重试间隔，保证总等待时间 <= beforeExpireSeconds
+        RedisLockLease lease = optionalLease.get();
         int beforeExpireSeconds = properties != null
                 ? properties.getL2().getPreload().getBeforeExpireSeconds()
                 : SmartCacheConstant.DEFAULT_L2_PRELOAD_BEFORE_EXPIRE_SECONDS;
@@ -622,30 +715,42 @@ public class SmartCacheManager {
         int maxRetries = SmartCacheConstant.PRELOAD_MAX_RETRIES;
         int initialIntervalSeconds = (int) Math.max(1L,
                 (long) (beforeExpireSeconds * (ratio - 1) / (Math.pow(ratio, maxRetries) - 1)));
+        long initialIntervalMillis = TimeUnit.SECONDS.toMillis(initialIntervalSeconds);
+        long maxDelayMillis = TimeUnit.SECONDS.toMillis(beforeExpireSeconds);
+        if (preloadExecutor == null) {
+            closeLease(lease, "L2 预刷新", cacheName, key);
+            log.warn("跳过 L2 预刷新，未配置预刷新线程池，cacheName：{}，key：{}", cacheName, key);
+            return;
+        }
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                log.debug("L2 preload triggered: cacheName={}, key={}, maxRetries={}, initialInterval={}s",
-                        cacheName, key, maxRetries, initialIntervalSeconds);
-                Object newValue = retryExecutor != null
-                        ? retryExecutor.executeWithRetry(
-                        () -> handler.reload(cacheName, key),
-                        maxRetries,
-                        initialIntervalSeconds,
-                        ratio,
-                        (long) beforeExpireSeconds)
-                        : handler.reload(cacheName, key);
-                if (newValue != null) {
-                    int reloadTtl = handler.getReloadTtlSeconds(cacheName, key);
-                    put(cacheName, key, newValue, reloadTtl);
-                    log.debug("L2 preload completed: cacheName={}, key={}, reloadTtl={}", cacheName, key, reloadTtl);
+        try {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    log.debug("触发 L2 预刷新，cacheName：{}，key：{}，maxRetries：{}，initialIntervalMillis：{}",
+                            cacheName, key, maxRetries, initialIntervalMillis);
+                    Object newValue = retryExecutor != null
+                            ? retryExecutor.executeWithRetry(
+                            () -> handler.reload(cacheName, key),
+                            maxRetries,
+                            initialIntervalMillis,
+                            ratio,
+                            maxDelayMillis)
+                            : handler.reload(cacheName, key);
+                    if (newValue != null && renewLeaseBeforeWrite(lease, lockTimeout, "L2 预刷新", cacheName, key)) {
+                        int reloadTtl = handler.getReloadTtlSeconds(cacheName, key);
+                        put(cacheName, key, newValue, reloadTtl);
+                        log.debug("L2 预刷新完成，cacheName：{}，key：{}，reloadTtl：{}", cacheName, key, reloadTtl);
+                    }
+                } catch (Exception e) {
+                    log.warn("L2 预刷新重试后仍失败，maxRetries：{}，cacheName：{}，key：{}", maxRetries, cacheName, key, e);
+                } finally {
+                    closeLease(lease, "L2 预刷新", cacheName, key);
                 }
-            } catch (Exception e) {
-                log.warn("L2 preload failed after {} retries: cacheName={}, key={}", maxRetries, cacheName, key, e);
-            } finally {
-                redisLock.unlock(lockKey, lockValue);
-            }
-        });
+            }, preloadExecutor);
+        } catch (RejectedExecutionException e) {
+            closeLease(lease, "L2 预刷新", cacheName, key);
+            log.warn("跳过 L2 预刷新，线程池已饱和，cacheName：{}，key：{}", cacheName, key);
+        }
     }
 
     private CachePreloadHandler findHandler(String cacheName) {

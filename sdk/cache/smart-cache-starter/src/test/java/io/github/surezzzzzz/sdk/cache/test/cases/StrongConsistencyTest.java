@@ -9,7 +9,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -29,8 +28,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * @since 1.0.0
  */
 @Slf4j
-@SpringBootTest(classes = SmartCacheTestApplication.class)
-@ActiveProfiles("strong")
+@SpringBootTest(
+        classes = SmartCacheTestApplication.class,
+        properties = {
+                "io.github.surezzzzzz.sdk.cache.me=test-instance-strong",
+                "io.github.surezzzzzz.sdk.cache.consistency.mode=strong",
+                "io.github.surezzzzzz.sdk.cache.pubsub.channel-prefix=test-cache-sync"
+        }
+)
 public class StrongConsistencyTest extends BaseSmartCacheTest {
 
     @Autowired
@@ -43,7 +48,8 @@ public class StrongConsistencyTest extends BaseSmartCacheTest {
     public void setUp() {
         log.info("========== 初始化测试环境 ==========");
         cacheManager.clear("testCache");
-        log.info("测试环境初始化完成，Redis可用: {}", isRedisAvailable());
+        requireRedisAvailable();
+        log.info("测试环境初始化完成，Redis route 可用");
     }
 
     /**
@@ -51,12 +57,6 @@ public class StrongConsistencyTest extends BaseSmartCacheTest {
      */
     @Test
     public void testStrongConsistency() throws Exception {
-        // 如果Redis不可用，测试降级行为
-        if (!isRedisAvailable()) {
-            testDegradationBehavior();
-            return;
-        }
-
         log.info("========== 端到端测试：强一致性模式 ==========");
 
         // Given - 写入缓存数据
@@ -84,35 +84,10 @@ public class StrongConsistencyTest extends BaseSmartCacheTest {
     }
 
     /**
-     * 降级行为测试：Redis不可用时的基本功能验证
-     */
-    private void testDegradationBehavior() {
-        log.info("========== 测试：强一致性降级行为 ==========");
-
-        // 验证基本缓存功能仍然可用
-        cacheManager.put("testCache", "key1", "value1");
-        assertEquals("value1", cacheManager.get("testCache", "key1"));
-
-        // 验证L1工作正常
-        assertNotNull(l1Cache.get("testCache", "key1"));
-
-        // 验证删除功能
-        cacheManager.evict("testCache", "key1");
-        assertNull(cacheManager.get("testCache", "key1"));
-
-        log.info("✓ 降级行为验证通过：基本缓存功能正常，但不保证跨实例一致性");
-    }
-
-    /**
      * 测试场景：强一致性模式下的缓存清空
      */
     @Test
     public void testStrongConsistencyClear() throws Exception {
-        // Redis不可用时跳过
-        if (shouldSkipRedisTest("testStrongConsistencyClear")) {
-            return;
-        }
-
         log.info("========== 端到端测试：强一致性清空 ==========");
 
         // Given - 写入多个缓存数据

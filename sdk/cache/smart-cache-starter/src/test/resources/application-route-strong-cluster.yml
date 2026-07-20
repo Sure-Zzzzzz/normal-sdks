@@ -1,0 +1,100 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              cache:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              lock:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+            rules:
+              - pattern: "strong-write-route-it:preload-lock:"
+                type: prefix
+                datasource: lock
+                priority: 1
+              - pattern: "strong-write-route-it-lock:"
+                type: prefix
+                datasource: lock
+                priority: 2
+              - pattern: "strong-write-route-sync:strong-write-route-group:route-probe"
+                type: exact
+                datasource: default
+                priority: 3
+              - pattern: "strong-write-route-it:"
+                type: prefix
+                datasource: cache
+                priority: 10
+        lock:
+          redis:
+            route:
+              enable: true
+        cache:
+          me: strong-write-route-group
+          key-prefix: strong-write-route-it
+          consistency:
+            mode: strong
+          pubsub:
+            mode: routed
+            channel-prefix: strong-write-route-sync
+          l2:
+            expire-seconds: 60
+            ttl-random-offset-ratio: 0
+            preload:
+              enabled: false
+
+spring:
+  redis:
+    cluster:
+      nodes:
+        - localhost:17000
+        - localhost:17001
+        - localhost:17002
+        - localhost:17003
+        - localhost:17004
+        - localhost:17005
+    timeout: 3000

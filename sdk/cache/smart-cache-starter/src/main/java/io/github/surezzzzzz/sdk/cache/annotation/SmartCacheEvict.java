@@ -40,7 +40,7 @@ public @interface SmartCacheEvict {
     boolean beforeInvocation() default false;
 
     /**
-     * 条件（支持 SpEL 表达式）
+     * 条件（支持 SpEL 表达式）。beforeInvocation=true 时只能使用方法参数，不能使用返回值。
      */
     String condition() default "";
 }

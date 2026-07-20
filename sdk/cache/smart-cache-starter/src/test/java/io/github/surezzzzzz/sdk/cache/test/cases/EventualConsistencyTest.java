@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -23,8 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * @since 1.0.0
  */
 @Slf4j
-@SpringBootTest(classes = SmartCacheTestApplication.class)
-@ActiveProfiles("eventual")
+@SpringBootTest(
+        classes = SmartCacheTestApplication.class,
+        properties = {
+                "io.github.surezzzzzz.sdk.cache.me=test-instance-eventual",
+                "io.github.surezzzzzz.sdk.cache.consistency.mode=eventual",
+                "io.github.surezzzzzz.sdk.cache.pubsub.mode=disabled"
+        }
+)
 public class EventualConsistencyTest extends BaseSmartCacheTest {
 
     @Autowired
@@ -119,17 +124,8 @@ public class EventualConsistencyTest extends BaseSmartCacheTest {
         log.info("【步骤 3】验证缓存状态");
         String value = cacheManager.get("testCache", "ttl-key");
 
-        // 根据Redis可用性调整断言
-        boolean redisAvailable = isRedisAvailable();
-        if (redisAvailable) {
-            // 最终一致性模式下，L1过期后会从L2重新加载
-            assertEquals("ttl-value", value, "L2缓存应该仍然存在");
-            log.info("Redis可用: L2缓存仍然存在，数据从L2重新加载到L1");
-        } else {
-            // Redis不可用时，L1过期后无法从L2加载
-            assertNull(value, "Redis不可用时，L1过期后应该返回null");
-            log.info("Redis不可用: L1过期后无法从L2加载，返回null（符合预期）");
-        }
+        assertEquals("ttl-value", value, "最终一致性模式下 L1 过期后应从 L2 重新加载");
+        log.info("L2 缓存仍然存在，数据已从 L2 重新加载到 L1");
 
         log.info("✓ 最终一致性TTL过期测试通过");
     }

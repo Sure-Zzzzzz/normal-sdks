@@ -1,43 +1,35 @@
 package io.github.surezzzzzz.sdk.cache.pubsub;
 
-import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
+import io.github.surezzzzzz.sdk.cache.exception.CacheConfigurationException;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.PatternTopic;
 import org.springframework.data.redis.listener.RedisMessageListenerContainer;
-import org.springframework.data.redis.serializer.RedisSerializer;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Cache Invalidation Listener
- * <p>
- * 缓存失效监听器（Pub/Sub）
- * </p>
+ * 缓存失效监听器
  *
- * @author Sure
+ * @author surezzzzzz
  */
 @Slf4j
-@SmartCacheComponent
-@ConditionalOnClass(RedisMessageListenerContainer.class)
-public class CacheInvalidationListener implements MessageListener {
+public class CacheInvalidationListener implements MessageListener, InitializingBean {
 
     @Autowired(required = false)
     private L1Cache l1Cache;
@@ -46,160 +38,137 @@ public class CacheInvalidationListener implements MessageListener {
     private SmartCacheProperties properties;
 
     @Autowired
-    @Qualifier("smartCacheRedisTemplate")
-    private RedisTemplate<String, Object> redisTemplate;
+    private RedisRouteTemplate redisRouteTemplate;
 
-    @Autowired(required = false)
-    private RedisMessageListenerContainer listenerContainer;
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
+    private ObjectMapper smartCacheObjectMapper;
 
-    /**
-     * 实例唯一标识，用于 Pub/Sub 消息的"忽略自己"判断
-     * 使用 UUID 而非 me（应用名），确保同一应用的多副本能正确区分
-     */
     @Getter
     private final String instanceId = UUID.randomUUID().toString();
 
-    /**
-     * 线程计数器，用于生成唯一的线程名称
-     */
+    private RedisMessageListenerContainer listenerContainer;
+
     private final AtomicInteger threadCounter = new AtomicInteger(0);
 
-    /**
-     * 异步消息处理线程池
-     * 核心线程数 2，最大线程数 4，队列容量 1000
-     */
     private final ExecutorService messageExecutor = new ThreadPoolExecutor(
-            2, 4,
-            60L, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(1000),
+            SmartCacheConstant.INVALIDATION_EXECUTOR_CORE_THREADS,
+            SmartCacheConstant.INVALIDATION_EXECUTOR_MAX_THREADS,
+            SmartCacheConstant.INVALIDATION_EXECUTOR_KEEP_ALIVE_SECONDS,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(SmartCacheConstant.INVALIDATION_EXECUTOR_QUEUE_CAPACITY),
             r -> {
-                Thread t = new Thread(r, "cache-invalidation-" + threadCounter.incrementAndGet());
-                t.setDaemon(true);
-                return t;
+                Thread thread = new Thread(r, SmartCacheConstant.INVALIDATION_THREAD_NAME_PREFIX
+                        + threadCounter.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
             },
-            new ThreadPoolExecutor.CallerRunsPolicy()
+            new ThreadPoolExecutor.AbortPolicy()
     );
 
-    /**
-     * 缓存序列化器实例，避免每次反序列化时都获取
-     */
-    private RedisSerializer<?> serializer;
-
-    @PostConstruct
-    public void init() {
-        // 缓存序列化器实例
-        if (redisTemplate != null) {
-            serializer = redisTemplate.getValueSerializer();
-        }
-
-        // 只有强一致性模式才启动 Pub/Sub 订阅
+    @Override
+    public void afterPropertiesSet() {
         if (properties == null || !SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(properties.getConsistency().getMode())) {
-            log.info("Cache invalidation listener skipped (consistency mode is not strong)");
+            log.info("缓存强一致性未开启，跳过 Pub/Sub 订阅初始化");
             return;
         }
-
-        if (listenerContainer != null) {
-            try {
-                String channelPrefix = properties.getPubsubChannelPrefix();
-                String me = properties.getMe();
-                String channel = channelPrefix + SmartCacheConstant.KEY_SEPARATOR + me + SmartCacheConstant.KEY_SEPARATOR + "*";
-                listenerContainer.addMessageListener(this, new PatternTopic(channel));
-
-                // 手动启动容器，并捕获可能的连接异常
-                try {
-                    listenerContainer.start();
-                    log.info("Cache invalidation listener initialized successfully, instanceId: {}, channel: {}", instanceId, channel);
-                } catch (Exception startEx) {
-                    log.warn("Failed to start Redis Pub/Sub listener, strong consistency will not work. " +
-                            "This is expected if Redis is not available. Error: {}", startEx.getMessage());
-                    // 不抛出异常，允许容器继续启动
-                }
-            } catch (Exception e) {
-                log.warn("Failed to subscribe to Redis Pub/Sub channel, strong consistency will not work. " +
-                        "This is expected if Redis is not available. Error: {}", e.getMessage());
-                // 不抛出异常，允许容器继续启动
-            }
-        } else {
-            log.info("RedisMessageListenerContainer is not available, Pub/Sub will not work");
+        if (SmartCacheConstant.PUBSUB_MODE_DISABLED.equals(properties.getPubsub().getMode())) {
+            throw new CacheConfigurationException(
+                    ErrorCode.SMART_CACHE_CONFIG_ERROR,
+                    String.format(ErrorMessage.SMART_CACHE_CONFIG_ERROR, "强一致性模式不能关闭 Pub/Sub")
+            );
+        }
+        try {
+            String routeProbeChannel = KeyHelper.buildPubSubChannel(properties.getPubsubChannelPrefix(), properties.getMe(),
+                    SmartCacheConstant.PUBSUB_ROUTE_PROBE_KEY);
+            String channelPattern = KeyHelper.buildPubSubChannel(properties.getPubsubChannelPrefix(), properties.getMe(), "*");
+            listenerContainer = new RedisMessageListenerContainer();
+            listenerContainer.setConnectionFactory(redisRouteTemplate.connectionFactoryByKey(routeProbeChannel));
+            listenerContainer.addMessageListener(this, new PatternTopic(channelPattern));
+            listenerContainer.afterPropertiesSet();
+            listenerContainer.start();
+            log.info("缓存失效 Pub/Sub 订阅初始化完成，channelPattern：{}", channelPattern);
+        } catch (Exception e) {
+            throw new CacheConfigurationException(
+                    ErrorCode.SMART_CACHE_PUBSUB_INIT_FAILED,
+                    String.format(ErrorMessage.SMART_CACHE_PUBSUB_INIT_FAILED, e.getMessage()),
+                    e
+            );
         }
     }
 
     @PreDestroy
     public void destroy() {
-        if (messageExecutor != null) {
-            messageExecutor.shutdown();
+        if (listenerContainer != null) {
             try {
-                if (!messageExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                    messageExecutor.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                messageExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
+                listenerContainer.stop();
+                listenerContainer.destroy();
+            } catch (Exception e) {
+                log.warn("销毁缓存失效 Pub/Sub 监听容器失败：{}", e.getMessage());
             }
+        }
+        messageExecutor.shutdown();
+        try {
+            if (!messageExecutor.awaitTermination(SmartCacheConstant.EXECUTOR_SHUTDOWN_AWAIT_SECONDS, TimeUnit.SECONDS)) {
+                messageExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            messageExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        // 异步处理消息，避免阻塞 Redis 监听线程
-        messageExecutor.submit(() -> processMessage(message));
+        try {
+            messageExecutor.submit(() -> processMessage(message));
+        } catch (RejectedExecutionException e) {
+            log.warn("缓存失效消息已丢弃，处理线程池已饱和");
+        }
     }
 
-    /**
-     * 处理缓存失效消息
-     */
     private void processMessage(Message message) {
         try {
-            // 使用缓存的序列化器实例
-            CacheInvalidationMessage msg = (CacheInvalidationMessage) serializer.deserialize(message.getBody());
-
-            if (msg == null) {
+            CacheInvalidationMessage msg = smartCacheObjectMapper.readValue(message.getBody(), CacheInvalidationMessage.class);
+            if (msg == null || instanceId.equals(msg.getSender())) {
                 return;
             }
-
-            // 忽略自己发送的消息（用 instanceId 而非 me，支持同应用多副本）
-            if (instanceId.equals(msg.getSender())) {
-                return;
-            }
-
-            // 处理失效消息
             if (SmartCacheConstant.OPERATION_EVICT.equals(msg.getOperation())) {
                 if (l1Cache != null) {
                     l1Cache.evict(msg.getCacheName(), msg.getKey());
-                    log.debug("Received cache evict message: cacheName={}, key={}", msg.getCacheName(), msg.getKey());
+                    log.debug("收到缓存删除消息，cacheName：{}，key：{}", msg.getCacheName(), msg.getKey());
                 }
             } else if (SmartCacheConstant.OPERATION_CLEAR.equals(msg.getOperation())) {
                 if (l1Cache != null) {
                     l1Cache.clear(msg.getCacheName());
-                    log.debug("Received cache clear message: cacheName={}", msg.getCacheName());
+                    log.debug("收到缓存清空消息，cacheName：{}", msg.getCacheName());
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to process cache invalidation message", e);
+            log.error("处理缓存失效消息失败", e);
         }
     }
 
-    /**
-     * 发布缓存失效消息
-     *
-     * @param cacheName 缓存名称
-     * @param key       缓存键
-     * @param operation 操作类型（evict/clear）
-     */
     public void publishInvalidation(String cacheName, String key, String operation) {
         if (properties == null || !SmartCacheConstant.CONSISTENCY_MODE_STRONG.equals(properties.getConsistency().getMode())) {
             return;
         }
+        if (SmartCacheConstant.PUBSUB_MODE_DISABLED.equals(properties.getPubsub().getMode())) {
+            return;
+        }
         try {
-            String channelPrefix = properties.getPubsubChannelPrefix();
-            String me = properties.getMe();
-            String channel = KeyHelper.buildPubSubChannel(channelPrefix, me, cacheName);
-            CacheInvalidationMessage msg = new CacheInvalidationMessage(
-                    cacheName, key, operation, instanceId);
-            redisTemplate.convertAndSend(channel, msg);
-            log.debug("Published cache invalidation message: cacheName={}, key={}, operation={}", cacheName, key, operation);
+            String channel = KeyHelper.buildPubSubChannel(properties.getPubsubChannelPrefix(), properties.getMe(), cacheName);
+            CacheInvalidationMessage msg = new CacheInvalidationMessage(cacheName, key, operation, instanceId);
+            String payload = smartCacheObjectMapper.writeValueAsString(msg);
+            String routeProbeChannel = KeyHelper.buildPubSubChannel(properties.getPubsubChannelPrefix(), properties.getMe(),
+                    SmartCacheConstant.PUBSUB_ROUTE_PROBE_KEY);
+            redisRouteTemplate.execute(routeProbeChannel, template -> {
+                template.convertAndSend(channel, payload);
+                return null;
+            });
+            log.debug("发布缓存失效消息，cacheName：{}，key：{}，operation：{}", cacheName, key, operation);
         } catch (Exception e) {
-            log.error("Failed to publish cache invalidation message", e);
+            log.error("发布缓存失效消息失败", e);
         }
     }
 }

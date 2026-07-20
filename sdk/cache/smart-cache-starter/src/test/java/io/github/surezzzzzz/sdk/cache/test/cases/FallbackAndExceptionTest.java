@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheable;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.cache.exception.SmartCacheException;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.test.SmartCacheTestApplication;
@@ -9,7 +11,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
@@ -31,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SmartCacheTestApplication.class)
+@Import(FallbackAndExceptionTest.TestFixturesConfiguration.class)
 public class FallbackAndExceptionTest {
 
     @Autowired
@@ -101,10 +106,10 @@ public class FallbackAndExceptionTest {
         });
 
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
-        assertTrue(exception.getMessage().contains("Cache operation failed"),
-                "异常消息应该包含 'Cache operation failed'");
-        assertTrue(exception.getMessage().contains("RuntimeException"),
-                "异常消息应该包含原始异常类型 'RuntimeException'");
+        assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
+        assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
+                TestService.class.getSimpleName() + ":methodThrowsRuntimeException"), exception.getMessage(),
+                "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof RuntimeException, "原始异常应该是 RuntimeException");
         assertEquals("Runtime exception", exception.getCause().getMessage());
@@ -122,10 +127,10 @@ public class FallbackAndExceptionTest {
         });
 
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
-        assertTrue(exception.getMessage().contains("Cache operation failed"),
-                "异常消息应该包含 'Cache operation failed'");
-        assertTrue(exception.getMessage().contains("Error"),
-                "异常消息应该包含原始异常类型 'Error'");
+        assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
+        assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
+                TestService.class.getSimpleName() + ":methodThrowsError"), exception.getMessage(),
+                "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof Error, "原始异常应该是 Error");
         assertEquals("Error occurred", exception.getCause().getMessage());
@@ -143,10 +148,10 @@ public class FallbackAndExceptionTest {
         });
 
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
-        assertTrue(exception.getMessage().contains("Cache operation failed"),
-                "异常消息应该包含 'Cache operation failed'");
-        assertTrue(exception.getMessage().contains("IOException"),
-                "异常消息应该包含原始异常类型 'IOException'");
+        assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
+        assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
+                TestService.class.getSimpleName() + ":methodThrowsCheckedException"), exception.getMessage(),
+                "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof IOException, "原始异常应该是 IOException");
         assertEquals("Checked exception", exception.getCause().getMessage());
@@ -154,10 +159,18 @@ public class FallbackAndExceptionTest {
         log.info("测试通过");
     }
 
+    @TestConfiguration
+    static class TestFixturesConfiguration {
+
+        @Bean
+        TestService testService() {
+            return new TestService();
+        }
+    }
+
     /**
      * 测试服务
      */
-    @Service
     public static class TestService {
 
         public static AtomicInteger loadCount = new AtomicInteger(0);

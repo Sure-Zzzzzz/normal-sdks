@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.cache.stats;
 
 import io.github.surezzzzzz.sdk.cache.annotation.SmartCacheComponent;
+import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +22,8 @@ import java.util.concurrent.atomic.LongAdder;
  */
 @Slf4j
 @SmartCacheComponent
-@ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.cache.stats", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = SmartCacheConstant.CONFIG_PREFIX + ".stats", name = SmartCacheConstant.PROPERTY_ENABLED,
+        havingValue = SmartCacheConstant.PROPERTY_VALUE_TRUE, matchIfMissing = true)
 public class CacheStatsCollector {
 
     @Autowired(required = false)

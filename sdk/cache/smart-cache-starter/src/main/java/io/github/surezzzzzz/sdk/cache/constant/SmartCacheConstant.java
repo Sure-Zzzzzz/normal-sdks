@@ -1,14 +1,75 @@
 package io.github.surezzzzzz.sdk.cache.constant;
 
 /**
- * Smart Cache Constants
- * <p>
- * 缓存相关常量定义
- * </p>
+ * Smart Cache 常量
  *
- * @author Sure
+ * @author surezzzzzz
  */
 public final class SmartCacheConstant {
+
+    // ==================== 配置相关常量 ====================
+
+    /**
+     * 配置前缀
+     */
+    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.cache";
+
+    /**
+     * 属性：enabled
+     */
+    public static final String PROPERTY_ENABLED = "enabled";
+
+    /**
+     * 属性值：true
+     */
+    public static final String PROPERTY_VALUE_TRUE = "true";
+
+    /**
+     * RedisRouteTemplate 类名
+     */
+    public static final String REDIS_ROUTE_TEMPLATE_CLASS_NAME =
+            "io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate";
+
+    /**
+     * Redis Route 自动配置类名
+     */
+    public static final String REDIS_ROUTE_CONFIGURATION_CLASS_NAME =
+            "io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteConfiguration";
+
+    /**
+     * Redis Lock 自动配置类名
+     */
+    public static final String SIMPLE_REDIS_LOCK_CONFIGURATION_CLASS_NAME =
+            "io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockConfiguration";
+
+    // ==================== Bean 名称常量 ====================
+
+    /**
+     * Smart Cache 专用 ObjectMapper Bean 名称
+     */
+    public static final String SMART_CACHE_OBJECT_MAPPER_BEAN_NAME = "smartCacheObjectMapper";
+
+    /**
+     * 缓存序列化器 Bean 名称
+     */
+    public static final String SMART_CACHE_SERIALIZER_BEAN_NAME = "smartCacheSerializer";
+
+    /**
+     * 类型校验器 Bean 名称
+     */
+    public static final String SMART_CACHE_TYPE_VALIDATOR_BEAN_NAME = "smartCacheTypeValidator";
+
+    /**
+     * 预刷新线程池 Bean 名称
+     */
+    public static final String SMART_CACHE_PRELOAD_EXECUTOR_BEAN_NAME = "smartCachePreloadExecutor";
+
+    /**
+     * 启动预热线程池 Bean 名称
+     */
+    public static final String SMART_CACHE_WARMUP_EXECUTOR_BEAN_NAME = "smartCacheWarmUpExecutor";
+
+    // ==================== 缓存默认值 ====================
 
     /**
      * Redis Key 前缀
@@ -24,6 +85,141 @@ public final class SmartCacheConstant {
      * 默认实例标识
      */
     public static final String DEFAULT_INSTANCE_ID = "default";
+
+    /**
+     * 默认 L2 Key 格式
+     */
+    public static final String DEFAULT_L2_KEY_FORMAT = "{keyPrefix}:{cacheName}:{me}::{key}";
+
+    /**
+     * 默认 Pub/Sub channel 前缀
+     */
+    public static final String DEFAULT_PUBSUB_CHANNEL_PREFIX = "cache:pubsub";
+
+    /**
+     * 默认 route 探测 Key
+     */
+    public static final String PUBSUB_ROUTE_PROBE_KEY = "route-probe";
+
+    /**
+     * route 扫描默认关闭
+     */
+    public static final boolean DEFAULT_ROUTE_SCAN_ENABLED = false;
+
+    /**
+     * 默认 SCAN count
+     */
+    public static final int DEFAULT_SCAN_COUNT = 100;
+
+    /**
+     * 默认预刷新线程数
+     */
+    public static final int DEFAULT_PRELOAD_EXECUTOR_THREADS = 4;
+
+    /**
+     * 默认预刷新队列容量
+     */
+    public static final int DEFAULT_PRELOAD_EXECUTOR_QUEUE_CAPACITY = 1024;
+
+    /**
+     * 默认预热线程数
+     */
+    public static final int DEFAULT_WARMUP_EXECUTOR_THREADS = 4;
+
+    /**
+     * 默认预热队列容量
+     */
+    public static final int DEFAULT_WARMUP_EXECUTOR_QUEUE_CAPACITY = 1024;
+
+    /**
+     * L1 刷新线程数
+     */
+    public static final int L1_REFRESH_EXECUTOR_THREADS = 2;
+
+    /**
+     * 缓存失效消息线程池核心线程数
+     */
+    public static final int INVALIDATION_EXECUTOR_CORE_THREADS = 2;
+
+    /**
+     * 缓存失效消息线程池最大线程数
+     */
+    public static final int INVALIDATION_EXECUTOR_MAX_THREADS = 4;
+
+    /**
+     * 缓存失效消息线程池队列容量
+     */
+    public static final int INVALIDATION_EXECUTOR_QUEUE_CAPACITY = 1000;
+
+    /**
+     * 缓存失效消息线程池空闲线程保留时间（秒）
+     */
+    public static final long INVALIDATION_EXECUTOR_KEEP_ALIVE_SECONDS = 60L;
+
+    /**
+     * L1 刷新线程名前缀
+     */
+    public static final String L1_REFRESH_THREAD_NAME_PREFIX = "l1-cache-refresh-";
+
+    /**
+     * L2 预刷新线程名前缀
+     */
+    public static final String PRELOAD_THREAD_NAME_PREFIX = "smart-cache-preload-";
+
+    /**
+     * 缓存预热线程名前缀
+     */
+    public static final String WARMUP_THREAD_NAME_PREFIX = "smart-cache-warmup-";
+
+    /**
+     * 缓存失效消息线程名前缀
+     */
+    public static final String INVALIDATION_THREAD_NAME_PREFIX = "cache-invalidation-";
+
+    /**
+     * 线程池优雅关闭等待时间（秒）
+     */
+    public static final long EXECUTOR_SHUTDOWN_AWAIT_SECONDS = 5L;
+
+    /**
+     * L1 刷新线程池首次关闭等待时间（秒）
+     */
+    public static final long L1_REFRESH_SHUTDOWN_AWAIT_SECONDS = 10L;
+
+    /**
+     * 缓存依赖链告警深度
+     */
+    public static final int CACHE_DEPENDENCY_WARN_DEPTH = 10;
+
+    /**
+     * 重试最小延迟（毫秒）
+     */
+    public static final long MIN_RETRY_DELAY_MILLIS = 1000L;
+
+    /**
+     * 默认可信包：java.lang
+     */
+    public static final String TRUSTED_PACKAGE_JAVA_LANG = "java.lang";
+
+    /**
+     * 默认可信包：java.time
+     */
+    public static final String TRUSTED_PACKAGE_JAVA_TIME = "java.time";
+
+    /**
+     * 默认可信包：java.util
+     */
+    public static final String TRUSTED_PACKAGE_JAVA_UTIL = "java.util";
+
+    /**
+     * Pub/Sub 模式：路由模式
+     */
+    public static final String PUBSUB_MODE_ROUTED = "routed";
+
+    /**
+     * Pub/Sub 模式：关闭
+     */
+    public static final String PUBSUB_MODE_DISABLED = "disabled";
 
     /**
      * Redis Hash Tag 前缀
@@ -51,21 +247,17 @@ public final class SmartCacheConstant {
     public static final String OPERATION_CLEAR = "clear";
 
     /**
-     * 一致性模式：强一致性（Pub/Sub 实时同步）
+     * 一致性模式：强一致性
      */
     public static final String CONSISTENCY_MODE_STRONG = "strong";
 
     /**
-     * 一致性模式：最终一致性（依赖 TTL）
+     * 一致性模式：最终一致性
      */
     public static final String CONSISTENCY_MODE_EVENTUAL = "eventual";
 
     /**
-     * 空值占位符（防止缓存穿透）
-     * <p>
-     * 使用单例对象作为标记，避免字符串比较开销
-     * 该对象仅用于内部标识，不会被序列化到 Redis
-     * </p>
+     * 空值占位符
      */
     public static final Object NULL_PLACEHOLDER = new Object() {
         @Override
@@ -75,12 +267,12 @@ public final class SmartCacheConstant {
     };
 
     /**
-     * 空值缓存TTL（秒）
+     * 空值缓存 TTL（秒）
      */
     public static final int NULL_CACHE_TTL_SECONDS = 60;
 
     /**
-     * 分布式锁Key后缀
+     * 分布式锁 Key 后缀
      */
     public static final String LOCK_KEY_SUFFIX = "-lock";
 
@@ -105,11 +297,6 @@ public final class SmartCacheConstant {
     public static final String WARMUP_COMPLETE_MARK_VALUE = "1";
 
     /**
-     * 预热锁等待超时时间（秒）
-     */
-    public static final int WARMUP_LOCK_TIMEOUT_SECONDS = 30;
-
-    /**
      * 预热完成标记等待超时时间（秒）
      */
     public static final int WARMUP_WAIT_TIMEOUT_SECONDS = 60;
@@ -125,7 +312,7 @@ public final class SmartCacheConstant {
     public static final String SPEL_RESULT_VARIABLE = "result";
 
     /**
-     * Pub/Sub 频道后缀（用于缓存失效通知）
+     * Pub/Sub 频道后缀
      */
     public static final String PUBSUB_CHANNEL_SUFFIX = "-cache-invalidation";
 
@@ -173,7 +360,6 @@ public final class SmartCacheConstant {
 
     /**
      * L1 刷新时间调整时距过期时间的保留缓冲（秒）
-     * 当 refreshSeconds >= expireSeconds 时，自动调整为 expireSeconds - 此值
      */
     public static final int L1_REFRESH_EXPIRE_BUFFER_SECONDS = 30;
 
@@ -202,9 +388,13 @@ public final class SmartCacheConstant {
     public static final int DEFAULT_WARMUP_COMPLETION_MARK_TTL_SECONDS = 600;
 
     /**
-     * 预热完成标记 TTL 范围
+     * 预热完成标记 TTL 最小值（秒）
      */
     public static final int MIN_WARMUP_COMPLETION_MARK_TTL_SECONDS = 60;
+
+    /**
+     * 预热完成标记 TTL 最大值（秒）
+     */
     public static final int MAX_WARMUP_COMPLETION_MARK_TTL_SECONDS = 3600;
 
     // ==================== 分布式锁默认值 ====================
@@ -215,12 +405,16 @@ public final class SmartCacheConstant {
     public static final int DEFAULT_LOCK_TIMEOUT_SECONDS = 30;
 
     /**
-     * 分布式锁超时范围
+     * 分布式锁超时最小值（秒）
      */
     public static final int MIN_LOCK_TIMEOUT_SECONDS = 5;
+
+    /**
+     * 分布式锁超时最大值（秒）
+     */
     public static final int MAX_LOCK_TIMEOUT_SECONDS = 300;
 
     private SmartCacheConstant() {
-        throw new UnsupportedOperationException("Constant class cannot be instantiated");
+        throw new UnsupportedOperationException("常量类不能实例化");
     }
 }

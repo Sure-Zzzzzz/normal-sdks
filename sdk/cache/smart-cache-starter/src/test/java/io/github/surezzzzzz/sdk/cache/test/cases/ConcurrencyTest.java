@@ -32,6 +32,7 @@ public class ConcurrencyTest extends BaseSmartCacheTest {
 
     @org.junit.jupiter.api.BeforeEach
     public void setUp() {
+        requireRedisAvailable();
         // 清理所有测试缓存
         cacheManager.clear("concurrent-test");
         cacheManager.clear("concurrent-diff-test");
@@ -257,22 +258,8 @@ public class ConcurrencyTest extends BaseSmartCacheTest {
             }
         }
 
-        // 根据Redis可用性调整断言
-        boolean redisAvailable = isRedisAvailable();
-        if (redisAvailable) {
-            // Redis可用时，所有数据都应该存在
-            assertEquals(totalKeys, successCount, "所有key都应该存在");
-            log.info("Redis可用: 所有 {} 个key都成功写入和读取", totalKeys);
-        } else {
-            // Redis不可用时，只有L1缓存，可能因为容量限制导致部分数据被驱逐
-            // L1缓存默认容量是1000，而我们写入了2000个key，所以会有大量驱逐
-            // 只要有一部分数据存在就说明缓存功能正常
-            double successRate = (double) successCount / totalKeys * 100;
-            assertTrue(successRate >= 40,
-                    "Redis不可用时，至少40%的数据应该存在（L1容量限制），实际: " + successRate + "%");
-            log.info("Redis不可用: {} / {} 个key成功写入和读取 ({}%)",
-                    successCount, totalKeys, String.format("%.2f", successRate));
-        }
+        assertEquals(totalKeys, successCount, "所有key都应该存在");
+        log.info("所有 {} 个key都成功写入和读取", totalKeys);
     }
 
     /**

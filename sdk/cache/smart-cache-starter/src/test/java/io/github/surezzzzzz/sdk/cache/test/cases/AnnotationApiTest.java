@@ -10,7 +10,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.stereotype.Service;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 import java.lang.reflect.Method;
 
@@ -27,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SmartCacheTestApplication.class)
+@Import(AnnotationApiTest.TestFixturesConfiguration.class)
 public class AnnotationApiTest {
 
     @Autowired
@@ -56,9 +59,9 @@ public class AnnotationApiTest {
         log.info("第一次调用结果: {}, 调用次数: {}", result1, TestService.callCount);
 
         // Then
-        assertNotNull(result1);
-        assertEquals("User-1", result1);
-        assertEquals(1, TestService.callCount);
+        assertNotNull(result1, "首次调用应返回用户数据");
+        assertEquals("User-1", result1, "首次调用应返回加载结果");
+        assertEquals(1, TestService.callCount, "首次调用应访问一次数据源");
         log.info("验证通过：第一次调用成功");
 
         // When - 第二次调用（应该从缓存获取）
@@ -66,9 +69,9 @@ public class AnnotationApiTest {
         log.info("第二次调用结果: {}, 调用次数: {}", result2, TestService.callCount);
 
         // Then
-        assertNotNull(result2);
-        assertEquals("User-1", result2);
-        assertEquals(1, TestService.callCount); // 调用次数不变，说明从缓存获取
+        assertNotNull(result2, "二次调用应返回用户数据");
+        assertEquals("User-1", result2, "二次调用应返回相同缓存值");
+        assertEquals(1, TestService.callCount, "二次调用应命中缓存且不访问数据源");
         log.info("验证通过：第二次从缓存获取");
         log.info("测试通过");
     }
@@ -91,14 +94,14 @@ public class AnnotationApiTest {
         log.info("更新后返回值: {}", result2);
 
         // Then
-        assertEquals(newName, result2);
+        assertEquals(newName, result2, "更新方法应返回新缓存值");
         log.info("验证通过：更新成功");
 
         // 再次获取（应该是更新后的值）
         String result3 = testService.getUser(userId);
         log.info("再次获取: {}, 调用次数: {}", result3, TestService.callCount);
-        assertEquals(newName, result3);
-        assertEquals(1, TestService.callCount); // 只调用了一次 getUser，说明第二次从缓存获取
+        assertEquals(newName, result3, "更新后读取应命中最新缓存值");
+        assertEquals(1, TestService.callCount, "更新后的读取不应再次访问数据源");
         log.info("验证通过：缓存已更新");
         log.info("测试通过");
     }
@@ -114,7 +117,7 @@ public class AnnotationApiTest {
         // When - 先获取（缓存）
         String result1 = testService.getUser(userId);
         log.info("初始值: {}, 调用次数: {}", result1, TestService.callCount);
-        assertEquals(1, TestService.callCount);
+        assertEquals(1, TestService.callCount, "首次读取应访问一次数据源");
 
         // 删除缓存
         testService.deleteUser(userId);
@@ -125,8 +128,8 @@ public class AnnotationApiTest {
         log.info("删除后再次获取: {}, 调用次数: {}", result2, TestService.callCount);
 
         // Then
-        assertNotNull(result2);
-        assertEquals(2, TestService.callCount); // 调用次数增加，说明重新加载了
+        assertNotNull(result2, "删除缓存后应重新返回用户数据");
+        assertEquals(2, TestService.callCount, "删除缓存后应重新访问一次数据源");
         log.info("验证通过：缓存已删除并重新加载");
         log.info("测试通过");
     }
@@ -140,7 +143,7 @@ public class AnnotationApiTest {
         testService.getUser(2L);
         testService.getUser(3L);
         log.info("已缓存 3 个用户，调用次数: {}", TestService.callCount);
-        assertEquals(3, TestService.callCount);
+        assertEquals(3, TestService.callCount, "预置三个用户时应各访问一次数据源");
 
         // When - 清空所有缓存
         testService.clearAllUsers();
@@ -153,7 +156,7 @@ public class AnnotationApiTest {
         log.info("清空后再次获取，调用次数: {}", TestService.callCount);
 
         // Then
-        assertEquals(6, TestService.callCount); // 调用次数翻倍，说明重新加载了
+        assertEquals(6, TestService.callCount, "清空后再次读取三个用户应全部重新加载");
         log.info("验证通过：所有缓存已清空并重新加载");
         log.info("测试通过");
     }
@@ -166,8 +169,8 @@ public class AnnotationApiTest {
         Long userId = 4L;
         String result1 = testService.getUser(userId);
         log.info("初始缓存值: {}, 调用次数: {}", result1, TestService.callCount);
-        assertEquals("User-4", result1);
-        assertEquals(1, TestService.callCount);
+        assertEquals("User-4", result1, "首次读取应加载待删除缓存值");
+        assertEquals(1, TestService.callCount, "首次读取应访问一次数据源");
 
         // When - 调用 beforeInvocation=true 的删除方法（该方法会抛出异常）
         try {
@@ -175,15 +178,51 @@ public class AnnotationApiTest {
             fail("应该抛出异常");
         } catch (RuntimeException e) {
             log.info("方法执行失败（预期行为）: {}", e.getMessage());
-            assertEquals("模拟删除失败", e.getMessage());
+            assertEquals("模拟删除失败", e.getMessage(), "异常消息应保持业务方法原值");
         }
 
         // Then - 即使方法执行失败，缓存也应该被删除（因为 beforeInvocation=true）
         String result2 = testService.getUser(userId);
         log.info("删除后再次获取: {}, 调用次数: {}", result2, TestService.callCount);
-        assertEquals(2, TestService.callCount); // 调用次数增加，说明缓存已被删除
+        assertEquals(2, TestService.callCount, "前置删除后再次读取应重新访问数据源");
         log.info("验证通过：beforeInvocation=true 在方法执行前删除了缓存");
         log.info("测试通过");
+    }
+
+    @Test
+    public void testBeforeInvocationConditionFalseShouldKeepCacheWhenMethodFails() {
+        log.info("========== 测试：beforeInvocation=true 且 condition=false 应保留缓存 ==========");
+
+        Long userId = 6L;
+        assertEquals("User-6", testService.getUser(userId), "应先写入待验证缓存");
+        assertEquals(1, TestService.callCount, "首次读取应加载一次");
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> testService.deleteUserBeforeInvocationWhenConditionFalse(userId),
+                "业务方法仍应按原语义抛出异常");
+        assertEquals("模拟删除失败", ex.getMessage(), "异常应来自业务方法");
+
+        assertEquals("User-6", testService.getUser(userId), "condition=false 时缓存不应被删除");
+        assertEquals(1, TestService.callCount, "缓存保留后不应重新加载");
+        log.info("验证通过：前置删除遵守 false condition，即使业务方法失败也保留缓存");
+    }
+
+    @Test
+    public void testBeforeInvocationConditionTrueShouldEvictBeforeMethodFails() {
+        log.info("========== 测试：beforeInvocation=true 且 condition=true 应删除缓存 ==========");
+
+        Long userId = 7L;
+        assertEquals("User-7", testService.getUser(userId), "应先写入待验证缓存");
+        assertEquals(1, TestService.callCount, "首次读取应加载一次");
+
+        RuntimeException ex = assertThrows(RuntimeException.class,
+                () -> testService.deleteUserBeforeInvocationWhenConditionTrue(userId),
+                "业务方法仍应按原语义抛出异常");
+        assertEquals("模拟删除失败", ex.getMessage(), "异常应来自业务方法");
+
+        assertEquals("User-7", testService.getUser(userId), "删除后应重新从数据源加载");
+        assertEquals(2, TestService.callCount, "condition=true 时应在业务方法前删除缓存");
+        log.info("验证通过：前置删除遵守 true condition，即使业务方法失败也完成删除");
     }
 
     @Test
@@ -194,8 +233,8 @@ public class AnnotationApiTest {
         Long userId = 5L;
         String result1 = testService.getUser(userId);
         log.info("初始缓存值: {}, 调用次数: {}", result1, TestService.callCount);
-        assertEquals("User-5", result1);
-        assertEquals(1, TestService.callCount);
+        assertEquals("User-5", result1, "首次读取应加载待验证缓存值");
+        assertEquals(1, TestService.callCount, "首次读取应访问一次数据源");
 
         // When - 调用 beforeInvocation=false（默认）的删除方法（该方法会抛出异常）
         try {
@@ -203,13 +242,13 @@ public class AnnotationApiTest {
             fail("应该抛出异常");
         } catch (RuntimeException e) {
             log.info("方法执行失败（预期行为）: {}", e.getMessage());
-            assertEquals("模拟删除失败", e.getMessage());
+            assertEquals("模拟删除失败", e.getMessage(), "异常消息应保持业务方法原值");
         }
 
         // Then - 方法执行失败，缓存不应该被删除（因为 beforeInvocation=false）
         String result2 = testService.getUser(userId);
         log.info("删除失败后再次获取: {}, 调用次数: {}", result2, TestService.callCount);
-        assertEquals(1, TestService.callCount); // 调用次数不变，说明缓存未被删除
+        assertEquals(1, TestService.callCount, "后置删除方法失败后应继续命中原缓存");
         log.info("验证通过：beforeInvocation=false 在方法失败时保留了缓存");
         log.info("测试通过");
     }
@@ -227,39 +266,47 @@ public class AnnotationApiTest {
         assertDoesNotThrow(() -> {
             String result = io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper
                     .parseExpression("#userId", method, args, null);
-            assertEquals("999", result);
-            log.info("正常 SpEL 表达式工作正常: {}", result);
-        });
+            log.info("正常 SpEL 表达式结果: {}", result);
+            assertEquals("999", result, "合法 SpEL 表达式应解析出用户 ID");
+        }, "合法 SpEL 表达式不应抛出异常");
 
         // 测试2：尝试类型引用 - 应该抛出异常（SimpleEvaluationContext 不支持）
         assertThrows(Exception.class, () -> {
             io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper
                     .parseExpression("T(java.lang.Runtime).getRuntime().exec('calc')", method, args, null);
-        });
+        }, "类型引用应被 SimpleEvaluationContext 拒绝");
         log.info("验证通过：类型引用被阻止");
 
         // 测试3：尝试构造函数调用 - 应该抛出异常
         assertThrows(Exception.class, () -> {
             io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper
                     .parseExpression("new java.lang.String('test')", method, args, null);
-        });
+        }, "构造函数调用应被 SimpleEvaluationContext 拒绝");
         log.info("验证通过：构造函数调用被阻止");
 
         // 测试4：尝试反射操作 - 应该抛出异常
         assertThrows(Exception.class, () -> {
             io.github.surezzzzzz.sdk.cache.support.SpELExpressionHelper
                     .parseExpression("#userId.getClass().forName('java.lang.Runtime')", method, args, null);
-        });
+        }, "反射调用应被 SimpleEvaluationContext 拒绝");
         log.info("验证通过：反射操作被阻止");
 
         log.info("验证通过：SimpleEvaluationContext 提供了完整的 SpEL 注入防护");
         log.info("测试通过");
     }
 
+    @TestConfiguration
+    static class TestFixturesConfiguration {
+
+        @Bean
+        TestService testService() {
+            return new TestService();
+        }
+    }
+
     /**
      * 测试服务
      */
-    @Service
     public static class TestService {
 
         public static int callCount = 0;
@@ -285,6 +332,18 @@ public class AnnotationApiTest {
         @SmartCacheEvict(cacheName = "userCache", key = "#userId", beforeInvocation = true)
         public void deleteUserBeforeInvocation(Long userId) {
             log.info("删除用户（beforeInvocation=true）: {}", userId);
+            throw new RuntimeException("模拟删除失败");
+        }
+
+        @SmartCacheEvict(cacheName = "userCache", key = "#userId", beforeInvocation = true, condition = "#userId < 0")
+        public void deleteUserBeforeInvocationWhenConditionFalse(Long userId) {
+            log.info("删除用户（beforeInvocation=true, condition=false）: {}", userId);
+            throw new RuntimeException("模拟删除失败");
+        }
+
+        @SmartCacheEvict(cacheName = "userCache", key = "#userId", beforeInvocation = true, condition = "#userId > 0")
+        public void deleteUserBeforeInvocationWhenConditionTrue(Long userId) {
+            log.info("删除用户（beforeInvocation=true, condition=true）: {}", userId);
             throw new RuntimeException("模拟删除失败");
         }
 
