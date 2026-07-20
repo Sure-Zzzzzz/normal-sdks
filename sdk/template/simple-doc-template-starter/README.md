@@ -9,8 +9,18 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.2.2'
+implementation 'io.github.sure-zzzzzz:simple-doc-template-starter:1.3.0'
 ```
+
+DOCX 渲染依赖 Apache POI。starter 不内置、shade、relocate 或强制 POI 版本；应用必须维护一套完整且兼容的 POI runtime。
+
+主线运行时使用 POI 5.2.2：
+
+```gradle
+implementation 'org.apache.poi:poi-ooxml:5.2.2'
+```
+
+同一应用中不要混用不同 POI 版本的 `poi`、`poi-ooxml`、OOXML schemas 或 XMLBeans 组件。
 
 ### 2. 开启配置
 

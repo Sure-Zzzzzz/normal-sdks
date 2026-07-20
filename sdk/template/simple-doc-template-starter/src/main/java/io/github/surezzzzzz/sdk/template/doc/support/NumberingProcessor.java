@@ -1,16 +1,15 @@
 package io.github.surezzzzzz.sdk.template.doc.support;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xwpf.usermodel.XWPFAbstractNum;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFNum;
-import org.apache.poi.xwpf.usermodel.XWPFNumbering;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.*;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTAbstractNum;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTLvl;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTNum;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -61,7 +60,7 @@ public class NumberingProcessor {
             if (numbering == null) return np;
 
             // abstract num
-            for (XWPFAbstractNum xwpfAbs : numbering.getAbstractNums()) {
+            for (XWPFAbstractNum xwpfAbs : getAbstractNums(numbering)) {
                 if (xwpfAbs == null) continue;
                 CTAbstractNum abs = xwpfAbs.getCTAbstractNum();
                 if (abs == null) continue;
@@ -88,7 +87,7 @@ public class NumberingProcessor {
                 np.abstractNumLevels.put(absId, levels);
             }
             // num → abstractNum
-            for (XWPFNum xwpfNum : numbering.getNums()) {
+            for (XWPFNum xwpfNum : getNums(numbering)) {
                 if (xwpfNum == null) continue;
                 CTNum num = xwpfNum.getCTNum();
                 if (num == null) continue;
@@ -102,6 +101,41 @@ public class NumberingProcessor {
             log.debug("解析 numbering.xml 失败，列表编号将退化为空: {}", e.getMessage());
         }
         return np;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Iterable<XWPFAbstractNum> getAbstractNums(XWPFNumbering numbering) {
+        return getNumberingItems(numbering, "getAbstractNums", "abstractNums");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Iterable<XWPFNum> getNums(XWPFNumbering numbering) {
+        return getNumberingItems(numbering, "getNums", "nums");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Iterable<T> getNumberingItems(XWPFNumbering numbering, String methodName, String fieldName) {
+        try {
+            Method method = XWPFNumbering.class.getMethod(methodName);
+            Object result = method.invoke(numbering);
+            if (result instanceof Iterable) {
+                return (Iterable<T>) result;
+            }
+        } catch (NoSuchMethodException ignored) {
+        } catch (Exception e) {
+            log.debug("调用 XWPFNumbering.{} 失败: {}", methodName, e.getMessage());
+        }
+        try {
+            Field field = XWPFNumbering.class.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            Object result = field.get(numbering);
+            if (result instanceof Iterable) {
+                return (Iterable<T>) result;
+            }
+        } catch (Exception e) {
+            log.debug("读取 XWPFNumbering.{} 失败: {}", fieldName, e.getMessage());
+        }
+        return Collections.emptyList();
     }
 
     /**

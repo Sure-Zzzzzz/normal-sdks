@@ -1219,8 +1219,13 @@ public class WordRenderer implements Renderer {
         if (tc.isSetTcPr()) {
             CTTcPr tcPr = tc.getTcPr();
             if (tcPr.isSetTcW()) {
-                Object wObj = tcPr.getTcW().getW();
-                return new java.math.BigInteger(wObj.toString()).longValue();
+                try {
+                    Object tcWidth = tcPr.getTcW();
+                    Object width = tcWidth.getClass().getMethod("getW").invoke(tcWidth);
+                    return new java.math.BigInteger(width.toString()).longValue();
+                } catch (Exception e) {
+                    log.debug("读取表格单元格宽度失败: {}", e.getMessage());
+                }
             }
         }
         return DEFAULT_CONTENT_WIDTH_PX * EMUS_PER_PX;

@@ -15,6 +15,7 @@ import org.springframework.util.StreamUtils;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.util.*;
 
@@ -387,17 +388,17 @@ public class WordToXhtmlConverter {
         if (sectPr != null) {
             CTPageSz pgSz = sectPr.getPgSz();
             if (pgSz != null) {
-                pageWidthTwips = toLong(pgSz.getW(), pageWidthTwips);
-                pageHeightTwips = toLong(pgSz.getH(), pageHeightTwips);
+                pageWidthTwips = getSchemaLong(pgSz, "getW", pageWidthTwips);
+                pageHeightTwips = getSchemaLong(pgSz, "getH", pageHeightTwips);
             }
             CTPageMar pgMar = sectPr.getPgMar();
             if (pgMar != null) {
-                topTwips = toLong(pgMar.getTop(), topTwips);
-                bottomTwips = toLong(pgMar.getBottom(), bottomTwips);
-                leftTwips = toLong(pgMar.getLeft(), leftTwips);
-                rightTwips = toLong(pgMar.getRight(), rightTwips);
-                headerTwips = toLong(pgMar.getHeader(), headerTwips);
-                footerTwips = toLong(pgMar.getFooter(), footerTwips);
+                topTwips = getSchemaLong(pgMar, "getTop", topTwips);
+                bottomTwips = getSchemaLong(pgMar, "getBottom", bottomTwips);
+                leftTwips = getSchemaLong(pgMar, "getLeft", leftTwips);
+                rightTwips = getSchemaLong(pgMar, "getRight", rightTwips);
+                headerTwips = getSchemaLong(pgMar, "getHeader", headerTwips);
+                footerTwips = getSchemaLong(pgMar, "getFooter", footerTwips);
             }
         }
 
@@ -1581,11 +1582,10 @@ public class WordToXhtmlConverter {
             // 这两个属性几乎都是 run 级直接给的，未观察到通过 pStyle 继承的实际场景）
             org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr selfRPr = ctr.getRPr();
             if (selfRPr != null) {
-                if (selfRPr.sizeOfUArray() > 0) {
-                    String val = selfRPr.getUArray(0).getVal() != null ? selfRPr.getUArray(0).getVal().toString() : "single";
-                    if (!"none".equalsIgnoreCase(val)) style.append("text-decoration:underline;");
+                if (hasUnderline(selfRPr)) {
+                    style.append("text-decoration:underline;");
                 }
-                if (selfRPr.sizeOfStrikeArray() > 0) style.append("text-decoration:line-through;");
+                if (hasStrike(selfRPr)) style.append("text-decoration:line-through;");
             }
             String color = styleResolver.resolveRunColor(run, para);
             if (color != null && !color.isEmpty()) {
@@ -1616,11 +1616,10 @@ public class WordToXhtmlConverter {
         if (rPr == null) return style;
         if (rPr.sizeOfBArray() > 0) style.append("font-weight:bold;");
         if (rPr.sizeOfIArray() > 0) style.append("font-style:italic;");
-        if (rPr.sizeOfUArray() > 0) {
-            String val = rPr.getUArray(0).getVal() != null ? rPr.getUArray(0).getVal().toString() : "single";
-            if (!"none".equalsIgnoreCase(val)) style.append("text-decoration:underline;");
+        if (hasUnderline(rPr)) {
+            style.append("text-decoration:underline;");
         }
-        if (rPr.sizeOfStrikeArray() > 0) style.append("text-decoration:line-through;");
+        if (hasStrike(rPr)) style.append("text-decoration:line-through;");
         if (rPr.sizeOfColorArray() > 0) {
             Object v = rPr.getColorArray(0).getVal();
             if (v != null) {
@@ -1661,23 +1660,33 @@ public class WordToXhtmlConverter {
                                           org.openxmlformats.schemas.wordprocessingml.x2006.main.CTR ctr) {
         org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr rPr = ctr.getRPr();
         if (rPr == null) return;
-        if (rPr.sizeOfShdArray() > 0) {
-            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTShd shd = rPr.getShdArray(0);
-            Object fill = shd.getFill();
-            if (fill != null) {
-                String hex = fill.toString();
-                if (!hex.isEmpty() && !"auto".equalsIgnoreCase(hex)) {
-                    style.append("background-color:#").append(hex).append(";");
+        Object shd = getRunProperty(rPr, "getShd", "sizeOfShdArray", "getShdArray");
+        if (shd != null) {
+            try {
+                Object fill = shd.getClass().getMethod("getFill").invoke(shd);
+                if (fill != null) {
+                    String hex = fill.toString();
+                    if (!hex.isEmpty() && !"auto".equalsIgnoreCase(hex)) {
+                        style.append("background-color:#").append(hex).append(";");
+                    }
                 }
+            } catch (Exception e) {
+                log.debug("读取 OOXML run 背景色失败: {}", e.getMessage());
             }
-        } else if (rPr.sizeOfHighlightArray() > 0) {
-            org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHighlight hl = rPr.getHighlightArray(0);
-            Object val = hl.getVal();
-            if (val != null) {
-                String css = mapHighlightColorName(val.toString());
-                if (css != null) {
-                    style.append("background-color:").append(css).append(";");
+            return;
+        }
+        Object highlight = getRunProperty(rPr, "getHighlight", "sizeOfHighlightArray", "getHighlightArray");
+        if (highlight != null) {
+            try {
+                Object val = highlight.getClass().getMethod("getVal").invoke(highlight);
+                if (val != null) {
+                    String css = mapHighlightColorName(val.toString());
+                    if (css != null) {
+                        style.append("background-color:").append(css).append(";");
+                    }
                 }
+            } catch (Exception e) {
+                log.debug("读取 OOXML run 高亮色失败: {}", e.getMessage());
             }
         }
     }
@@ -2163,7 +2172,7 @@ public class WordToXhtmlConverter {
         if (tblPr == null || !tblPr.isSetTblW()) return -1;
         org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth tw = tblPr.getTblW();
         String type = (tw.getType() != null) ? tw.getType().toString() : "auto";
-        long w = parseTblWidthW(tw.getW());
+        long w = getSchemaLong(tw, "getW", -1);
         if (w <= 0 || "auto".equalsIgnoreCase(type) || "nil".equalsIgnoreCase(type)) {
             return -1;
         }
@@ -2201,12 +2210,16 @@ public class WordToXhtmlConverter {
                                             double widthMm) {
         if (tblPr == null) return new double[]{0, 0};
         String jc = null;
-        if (tblPr.isSetJc() && tblPr.getJc().getVal() != null) {
-            jc = tblPr.getJc().getVal().toString();
+        if (tblPr.isSetJc()) {
+            Object tableJc = invokeSchemaMethod(tblPr, "getJc");
+            Object value = invokeSchemaMethod(tableJc, "getVal");
+            if (value != null) {
+                jc = value.toString();
+            }
         }
         long indDxa = 0;
         if (tblPr.isSetTblInd()) {
-            indDxa = parseTblWidthW(tblPr.getTblInd().getW());
+            indDxa = getSchemaLong(tblPr.getTblInd(), "getW", -1);
         }
         if ("center".equalsIgnoreCase(jc)) {
             if (widthMm > 0 && contentWidthMm > 0) {
@@ -2244,7 +2257,7 @@ public class WordToXhtmlConverter {
         long[] widths = new long[cols.size()];
         long total = 0;
         for (int i = 0; i < cols.size(); i++) {
-            long w = parseTblWidthW(cols.get(i).getW());
+            long w = getSchemaLong(cols.get(i), "getW", -1);
             widths[i] = Math.max(0, w);
             total += widths[i];
         }
@@ -2332,13 +2345,8 @@ public class WordToXhtmlConverter {
             if (!tc.isSetTcPr()) return null;
             org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTcPr tcPr = tc.getTcPr();
             if (tcPr == null || !tcPr.isSetTcW()) return null;
-            Object wObj = tcPr.getTcW().getW();
-            if (wObj == null) return null;
-            long w;
-            if (wObj instanceof BigInteger) w = ((BigInteger) wObj).longValue();
-            else w = Long.parseLong(wObj.toString().trim());
-            if (w <= 0) return null;
-            return w;
+            long w = getSchemaLong(tcPr.getTcW(), "getW", -1);
+            return w > 0 ? w : null;
         } catch (Exception e) {
             return null;
         }
@@ -2374,9 +2382,9 @@ public class WordToXhtmlConverter {
         CTPageMar pgMar = sectPr.getPgMar();
         if (pgSz == null || pgMar == null) return SimpleDocTemplateConstant.CONTENT_WIDTH_PX_FALLBACK;
 
-        long pageW = toLong(pgSz.getW(), 11906L);
-        long leftM = toLong(pgMar.getLeft(), 1800L);
-        long rightM = toLong(pgMar.getRight(), 1800L);
+        long pageW = getSchemaLong(pgSz, "getW", 11906L);
+        long leftM = getSchemaLong(pgMar, "getLeft", 1800L);
+        long rightM = getSchemaLong(pgMar, "getRight", 1800L);
         long contentTwips = pageW - leftM - rightM;
         if (contentTwips <= 0) return SimpleDocTemplateConstant.CONTENT_WIDTH_PX_FALLBACK;
         // 1 px = 127/20 twips
@@ -2384,6 +2392,65 @@ public class WordToXhtmlConverter {
     }
 
     // ===== 工具方法 =====
+
+    private long getSchemaLong(Object schemaObject, String methodName, long fallback) {
+        Object result = invokeSchemaMethod(schemaObject, methodName);
+        return result != null ? toLong(result, fallback) : fallback;
+    }
+
+    private Object invokeSchemaMethod(Object schemaObject, String methodName) {
+        if (schemaObject == null) return null;
+        try {
+            return schemaObject.getClass().getMethod(methodName).invoke(schemaObject);
+        } catch (Exception e) {
+            log.debug("读取 OOXML {} 失败: {}", methodName, e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean hasUnderline(Object rPr) {
+        return hasRunProperty(rPr, "getU", "sizeOfUArray", "getUArray", true);
+    }
+
+    private boolean hasStrike(Object rPr) {
+        return hasRunProperty(rPr, "getStrike", "sizeOfStrikeArray", "getStrikeArray", false);
+    }
+
+    private boolean hasRunProperty(Object rPr, String singleMethod, String arraySizeMethod,
+                                   String arrayValueMethod, boolean checkNoneValue) {
+        Object property = getRunProperty(rPr, singleMethod, arraySizeMethod, arrayValueMethod);
+        try {
+            return property != null && (!checkNoneValue || isEnabledRunProperty(property));
+        } catch (Exception e) {
+            log.debug("读取 OOXML run 属性失败: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private Object getRunProperty(Object rPr, String singleMethod, String arraySizeMethod,
+                                  String arrayValueMethod) {
+        try {
+            return rPr.getClass().getMethod(singleMethod).invoke(rPr);
+        } catch (NoSuchMethodException ignored) {
+            try {
+                Method sizeOfProperty = rPr.getClass().getMethod(arraySizeMethod);
+                if (((Integer) sizeOfProperty.invoke(rPr)) <= 0) return null;
+                return rPr.getClass().getMethod(arrayValueMethod, int.class).invoke(rPr, 0);
+            } catch (Exception e) {
+                log.debug("读取 OOXML run 属性失败: {}", e.getMessage());
+                return null;
+            }
+        } catch (Exception e) {
+            log.debug("读取 OOXML run 属性失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private boolean isEnabledRunProperty(Object property) throws Exception {
+        Method getValue = property.getClass().getMethod("getVal");
+        Object value = getValue.invoke(property);
+        return value == null || !"none".equalsIgnoreCase(value.toString());
+    }
 
     private String escapeHtml(String s) {
         if (s == null) return "";

@@ -2,22 +2,11 @@ package io.github.surezzzzzz.sdk.template.doc.resolver;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import org.apache.poi.xwpf.usermodel.XWPFRun;
-import org.apache.poi.xwpf.usermodel.XWPFStyle;
-import org.apache.poi.xwpf.usermodel.XWPFStyles;
+import org.apache.poi.xwpf.usermodel.*;
 import org.apache.xmlbeans.XmlCursor;
 import org.apache.xmlbeans.XmlObject;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPrGeneral;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSpacing;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTInd;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTFonts;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTOnOff;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTHpsMeasure;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTColor;
 
 import javax.xml.namespace.QName;
 import java.util.HashMap;
@@ -92,8 +81,7 @@ public class WordStyleResolver {
             }
         }
 
-        // docDefaults：POI 5.x 暴露 XWPFDefaultParagraphStyle / XWPFDefaultRunStyle，
-        // 但其 getPPr()/getRPr() 是 protected，反射访问。
+        // docDefaults：不同 POI 版本的默认样式实现存在差异，getPPr()/getRPr() 通过反射访问。
         XmlObject pd = null;
         XmlObject rd = null;
         try {
@@ -154,8 +142,8 @@ public class WordStyleResolver {
     }
 
     /**
-     * 枚举所有 styles。POI 5.2.2 的 {@link XWPFStyles} 没有公开"全部样式"列表，
-     * 但内部维护了 {@code listStyle}（List&lt;XWPFStyle&gt;）私有字段，反射访问之。
+     * 枚举所有 styles。不同 POI 版本的 {@link XWPFStyles} 没有统一的公开列表入口，
+     * 优先读取内部 {@code listStyle}（List&lt;XWPFStyle&gt;）私有字段。
      * 兜底再走 {@code CTStyles.getStyleList()} → {@code styles.getStyle(id)}。
      */
     private List<XWPFStyle> collectAllStyles(XWPFStyles styles) {
@@ -241,7 +229,7 @@ public class WordStyleResolver {
         String pStyleId = para.getStyle();
         if (pStyleId != null) {
             for (XWPFStyle s : styleChain(pStyleId)) {
-                CTPPrGeneral sp = stylePPr(s);
+                XmlObject sp = stylePPr(s);
                 if (sp != null) out.add(sp);
             }
         }
@@ -297,18 +285,23 @@ public class WordStyleResolver {
         return out;
     }
 
-    private CTPPrGeneral stylePPr(XWPFStyle s) {
-        try {
-            return s.getCTStyle() != null ? s.getCTStyle().getPPr() : null;
-        } catch (Exception e) {
-            return null;
-        }
+    private XmlObject stylePPr(XWPFStyle s) {
+        return invokeSchemaXml(s != null ? s.getCTStyle() : null, "getPPr");
     }
 
     private CTRPr styleRPr(XWPFStyle s) {
+        XmlObject result = invokeSchemaXml(s != null ? s.getCTStyle() : null, "getRPr");
+        return result instanceof CTRPr ? (CTRPr) result : null;
+    }
+
+    private XmlObject invokeSchemaXml(Object target, String methodName) {
+        if (target == null) return null;
         try {
-            return s.getCTStyle() != null ? s.getCTStyle().getRPr() : null;
+            java.lang.reflect.Method method = target.getClass().getMethod(methodName);
+            Object result = method.invoke(target);
+            return result instanceof XmlObject ? (XmlObject) result : null;
         } catch (Exception e) {
+            log.debug("反射 {}.{} 失败: {}", target.getClass().getSimpleName(), methodName, e.getMessage());
             return null;
         }
     }

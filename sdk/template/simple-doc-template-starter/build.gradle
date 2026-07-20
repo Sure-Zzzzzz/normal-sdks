@@ -1,6 +1,32 @@
+def poiRuntimeVersion = findProperty('poiRuntimeVersion') ?: '5.2.2'
+
+def poiRuntimeDependencies = [
+        "org.apache.poi:poi:${poiRuntimeVersion}",
+        "org.apache.poi:poi-ooxml:${poiRuntimeVersion}"
+]
+if (poiRuntimeVersion == '3.17') {
+    poiRuntimeDependencies.add('org.apache.poi:ooxml-schemas:1.3')
+} else {
+    poiRuntimeDependencies.add('org.apache.poi:poi-ooxml-full:5.2.2')
+}
+
+configurations.testRuntimeClasspath {
+    resolutionStrategy.force(poiRuntimeDependencies)
+}
+
+tasks.test {
+    systemProperty 'poiRuntimeVersion', poiRuntimeVersion
+    if (poiRuntimeVersion != '3.17') {
+        exclude '**/EasyExcelPoiCompatibilityTest.class'
+    }
+}
+
 dependencies {
-    // DOCX 文件操作（Apache POI，自主渲染，不依赖 poi-tl）
-    api 'org.apache.poi:poi-ooxml:5.2.2'
+    // DOCX 文件操作：SDK 以 POI 5.2.2 编译，不向业务传递固定 POI 版本
+    compileOnly 'org.apache.poi:poi-ooxml:5.2.2'
+    testCompileOnly 'org.apache.poi:poi-ooxml-full:5.2.2'
+    testRuntimeOnly poiRuntimeDependencies
+    testImplementation 'com.alibaba:easyexcel:2.2.9'
 
     // Spring Boot Starter
     compileOnly 'org.springframework.boot:spring-boot-starter'
