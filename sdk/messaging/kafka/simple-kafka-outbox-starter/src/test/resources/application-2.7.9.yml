@@ -1,0 +1,9 @@
+# Spring Boot 2.7.9 兼容测试配置骨架。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        messaging:
+          kafka:
+            outbox:
+              enable: true
