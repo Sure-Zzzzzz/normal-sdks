@@ -1,0 +1,3 @@
+spring:
+  datasource:
+    password: your_mysql_password_here

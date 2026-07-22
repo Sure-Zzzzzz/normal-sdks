@@ -1,0 +1,16 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
+    api 'org.springframework.boot:spring-boot-starter-jdbc'
+    api 'org.springframework.boot:spring-boot-starter-web'
+    api 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    api 'org.springframework.boot:spring-boot-starter-security'
+    api 'org.springframework.boot:spring-boot-starter-aop'
+    api 'org.springframework.security:spring-security-oauth2-resource-server'
+    api 'org.springframework.security:spring-security-oauth2-jose'
+
+    runtimeOnly 'mysql:mysql-connector-java'
+
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'mysql:mysql-connector-java'
+}

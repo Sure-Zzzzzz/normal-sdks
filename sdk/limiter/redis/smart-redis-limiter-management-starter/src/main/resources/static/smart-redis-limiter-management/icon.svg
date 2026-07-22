@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Sure-Zzzzzz">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#183a68"/>
+      <stop offset="100%" stop-color="#1b7fbd"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <!-- S: Sure 首字母 -->
+  <path d="M38 17 C38 11 20 11 20 23 C20 31 42 33 42 44 C42 54 22 54 22 48"
+        fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round"/>
+  <!-- z: Zzzzzz 标记，右下角 -->
+  <path d="M44 49 h10 l-9 8 h10"
+        fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+</svg>

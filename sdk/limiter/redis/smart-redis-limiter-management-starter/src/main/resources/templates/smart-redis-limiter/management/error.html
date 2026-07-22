@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>限流策略管理</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-5">
+    <section class="card management-card mx-auto" style="max-width: 42rem;">
+        <div class="card-body p-4 p-md-5 text-center">
+            <img th:src="@{/smart-redis-limiter-management/icon.svg}" width="56" height="56" alt="Sure-Zzzzzz">
+            <h1 class="h3 management-brand mt-3 mb-3">限流策略管理</h1>
+            <p class="text-muted mb-4" th:text="${message}">管理页面暂时无法使用，请稍后重试。</p>
+            <a class="btn btn-primary" th:href="@{${policyPageUrl}}">返回策略列表</a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

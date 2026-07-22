@@ -1,0 +1,34 @@
+spring:
+  profiles:
+    active: local
+  datasource:
+    url: jdbc:mysql://localhost:3306/test_limiter_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    # password 请通过 application-local.yml 或环境变量提供
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        limiter:
+          redis:
+            smart:
+              management:
+                enable: true
+                admin:
+                  username: admin
+                api:
+                  enable: true
+                  base-path: /api
+                ui:
+                  enable: true
+                  base-path: /management
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.limiter.redis.smart.management: DEBUG

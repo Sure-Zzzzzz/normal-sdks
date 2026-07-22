@@ -1,0 +1,109 @@
+:root {
+    --srlm-primary: #183a68;
+    --srlm-accent: #1b7fbd;
+    --srlm-surface: #f4f7fb;
+    --srlm-border: #dbe4ef;
+}
+
+body {
+    min-height: 100vh;
+    color: #1f2937;
+    background: var(--srlm-surface);
+}
+
+.management-shell {
+    max-width: 1440px;
+}
+
+.management-brand {
+    color: var(--srlm-primary);
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.management-brand-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .2rem .55rem;
+    margin-right: .65rem;
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.5rem;
+    letter-spacing: .01em;
+    background: linear-gradient(135deg, var(--srlm-primary), var(--srlm-accent));
+    border-radius: .55rem;
+    white-space: nowrap;
+}
+
+.management-card {
+    border: 1px solid var(--srlm-border);
+    box-shadow: 0 .25rem .75rem rgba(24, 58, 104, .06);
+}
+
+.login-page {
+    background: linear-gradient(135deg, #17365f 0%, #1b7fbd 100%);
+}
+
+.login-card {
+    width: min(100%, 28rem);
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, .2);
+}
+
+.limit-chip {
+    display: inline-block;
+    margin: 0 .25rem .25rem 0;
+    padding: .2rem .5rem;
+    font-size: .8rem;
+    color: #345;
+    background: #e8f1fb;
+    border: 1px solid #c6ddf4;
+    border-radius: 999px;
+}
+
+.policy-actions {
+    white-space: nowrap;
+}
+
+.empty-state {
+    padding: 3rem 1rem;
+    color: #6c757d;
+    text-align: center;
+}
+
+.operation-message[hidden] {
+    display: none;
+}
+
+.limit-editor-row + .limit-editor-row {
+    margin-top: .75rem;
+}
+
+@media (max-width: 991.98px) {
+    .policy-table th:nth-child(4),
+    .policy-table td:nth-child(4),
+    .policy-table th:nth-child(7),
+    .policy-table td:nth-child(7) {
+        display: none;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .management-shell {
+        padding-right: .75rem;
+        padding-left: .75rem;
+    }
+
+    .policy-table th:nth-child(1),
+    .policy-table td:nth-child(1),
+    .policy-table th:nth-child(6),
+    .policy-table td:nth-child(6) {
+        display: none;
+    }
+
+    .policy-actions .btn {
+        margin-bottom: .25rem;
+    }
+}

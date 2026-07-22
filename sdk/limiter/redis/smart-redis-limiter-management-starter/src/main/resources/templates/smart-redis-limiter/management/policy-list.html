@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>限流策略管理</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-4 py-lg-5">
+    <header class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 management-brand mb-1"><span class="management-brand-mark">Sure-Zzzzzz</span>限流策略管理</h1>
+            <p class="text-muted mb-0">管理精确策略身份和完整限流窗口配置。</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="button" id="createPolicyButton">创建策略</button>
+            <form method="post" th:action="@{${logoutUrl}}">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button class="btn btn-outline-secondary" type="submit">退出登录</button>
+            </form>
+        </div>
+    </header>
+
+    <div id="operationMessage" class="alert alert-dismissible fade show operation-message" role="alert" hidden>
+        <span id="operationMessageText"></span>
+        <button class="btn-close" type="button" data-bs-dismiss="alert" aria-label="关闭"></button>
+    </div>
+
+    <section class="card management-card mb-4">
+        <div class="card-body">
+            <form class="row g-3 align-items-end" method="get" th:action="@{${policyPageUrl}}">
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label" for="serviceCode">服务编码</label>
+                    <input class="form-control" id="serviceCode" type="text" name="serviceCode"
+                           th:value="${serviceCode}" autocomplete="off">
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <label class="form-label" for="resourceCode">资源编码</label>
+                    <input class="form-control" id="resourceCode" type="text" name="resourceCode"
+                           th:value="${resourceCode}" autocomplete="off">
+                </div>
+                <div class="col-sm-6 col-lg-2">
+                    <label class="form-label" for="subject">限流对象</label>
+                    <input class="form-control" id="subject" type="text" name="subject"
+                           th:value="${subject}" autocomplete="off">
+                </div>
+                <div class="col-sm-3 col-lg-2">
+                    <label class="form-label" for="enabled">状态</label>
+                    <select class="form-select" id="enabled" name="enabled">
+                        <option value="" th:selected="${enabled == null}">全部状态</option>
+                        <option value="true" th:selected="${enabled == true}">已启用</option>
+                        <option value="false" th:selected="${enabled == false}">已禁用</option>
+                    </select>
+                </div>
+                <div class="col-sm-3 col-lg-1">
+                    <label class="form-label" for="size">每页</label>
+                    <select class="form-select" id="size" name="size">
+                        <option th:each="candidate : ${#numbers.sequence(10, maxPageSize, 10)}"
+                                th:value="${candidate}" th:text="${candidate}"
+                                th:selected="${candidate == size}"></option>
+                        <option th:if="${size != null && size % 10 != 0}" th:value="${size}" th:text="${size}" selected></option>
+                    </select>
+                </div>
+                <div class="col-12 col-lg-1 d-flex gap-2">
+                    <button class="btn btn-primary flex-grow-1" type="submit">查询</button>
+                    <a class="btn btn-outline-secondary" th:href="@{${policyPageUrl}}">重置</a>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <section class="card management-card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 policy-table">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">服务 / 资源</th>
+                        <th scope="col">限流对象</th>
+                        <th scope="col">限流窗口</th>
+                        <th scope="col">状态</th>
+                        <th scope="col">版本</th>
+                        <th scope="col">更新时间</th>
+                        <th scope="col" class="text-end">操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="item : ${items}">
+                        <td><code th:text="${item.id}"></code></td>
+                        <td>
+                            <div><code th:text="${item.key.serviceCode}"></code></div>
+                            <div class="text-muted small"><code th:text="${item.key.resourceCode}"></code></div>
+                        </td>
+                        <td><code th:text="${item.key.subject}"></code></td>
+                        <td>
+                            <span class="limit-chip" th:each="limit : ${item.limits}"
+                                  th:text="${limit.count + ' 次 / ' + limit.window + ' ' + limit.unit}"></span>
+                        </td>
+                        <td>
+                            <span th:if="${item.enabled}" class="badge text-bg-success">已启用</span>
+                            <span th:if="${!item.enabled}" class="badge text-bg-secondary">已禁用</span>
+                        </td>
+                        <td><code th:text="${item.rowVersion}"></code></td>
+                        <td class="text-muted small" th:text="${#temporals.format(item.updatedAt, 'yyyy-MM-dd HH:mm:ss')} "></td>
+                        <td class="text-end policy-actions">
+                            <button class="btn btn-sm btn-outline-primary edit-policy-button" type="button"
+                                    th:attr="data-policy-id=${item.id}">编辑</button>
+                            <button th:if="${item.enabled}" class="btn btn-sm btn-outline-warning state-policy-button"
+                                    type="button" th:attr="data-policy-id=${item.id},data-row-version=${item.rowVersion},data-enabled=false">停用</button>
+                            <button th:if="${!item.enabled}" class="btn btn-sm btn-outline-success state-policy-button"
+                                    type="button" th:attr="data-policy-id=${item.id},data-row-version=${item.rowVersion},data-enabled=true">启用</button>
+                            <button class="btn btn-sm btn-outline-danger delete-policy-button" type="button"
+                                    th:attr="data-policy-id=${item.id},data-row-version=${item.rowVersion}">删除</button>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(items)}">
+                        <td colspan="8" class="empty-state">
+                            <span th:if="${serviceCode == null && resourceCode == null && subject == null && enabled == null}">暂未创建限流策略。</span>
+                            <span th:if="${serviceCode != null || resourceCode != null || subject != null || enabled != null}">没有符合当前条件的策略。</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <nav class="mt-4" th:if="${totalPages != null && totalPages > 1}" aria-label="策略列表分页">
+        <ul class="pagination justify-content-center mb-2">
+            <li class="page-item" th:classappend="${page <= 1} ? 'disabled'">
+                <a class="page-link" th:href="@{${policyPageUrl}(serviceCode=${serviceCode},resourceCode=${resourceCode},subject=${subject},enabled=${enabled},page=${page - 1},size=${size})}">上一页</a>
+            </li>
+            <li class="page-item" th:each="candidate : ${pageNumbers}"
+                th:classappend="${candidate == page} ? 'active'">
+                <a class="page-link" th:href="@{${policyPageUrl}(serviceCode=${serviceCode},resourceCode=${resourceCode},subject=${subject},enabled=${enabled},page=${candidate},size=${size})}"
+                   th:text="${candidate}"></a>
+            </li>
+            <li class="page-item" th:classappend="${page >= totalPages} ? 'disabled'">
+                <a class="page-link" th:href="@{${policyPageUrl}(serviceCode=${serviceCode},resourceCode=${resourceCode},subject=${subject},enabled=${enabled},page=${page + 1},size=${size})}">下一页</a>
+            </li>
+        </ul>
+        <p class="text-center text-muted small mb-0">
+            第 <span th:text="${page}"></span> / <span th:text="${totalPages}"></span> 页，共 <span th:text="${totalElements}"></span> 条策略
+        </p>
+    </nav>
+</main>
+
+<div class="modal fade" id="policyModal" tabindex="-1" aria-labelledby="policyModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="policyForm" novalidate>
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="policyModalTitle">创建策略</h2>
+                    <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="关闭"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="policyFormMessage" class="alert" hidden></div>
+                    <input id="policyId" type="hidden">
+                    <input id="expectedRowVersion" type="hidden">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label" for="policyServiceCode">服务编码 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="policyServiceCode" type="text" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="policyResourceCode">资源编码 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="policyResourceCode" type="text" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="policySubject">限流对象 <span class="text-danger">*</span></label>
+                            <input class="form-control" id="policySubject" type="text" required>
+                        </div>
+                    </div>
+                    <div class="form-check form-switch mb-4">
+                        <input class="form-check-input" id="policyEnabled" type="checkbox" checked>
+                        <label class="form-check-label" for="policyEnabled">创建后立即启用</label>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h3 class="h6 mb-0">限流窗口 <span class="text-danger">*</span></h3>
+                        <button class="btn btn-sm btn-outline-primary" id="addLimitButton" type="button">添加窗口</button>
+                    </div>
+                    <div id="limitEditor"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">取消</button>
+                    <button class="btn btn-primary" id="savePolicyButton" type="submit">保存策略</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalTitle" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title fs-5" id="deleteModalTitle">确认删除策略</h2>
+                <button class="btn-close" type="button" data-bs-dismiss="modal" aria-label="关闭"></button>
+            </div>
+            <div class="modal-body">删除后策略及其全部限流窗口将不可恢复，是否继续？</div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary" type="button" data-bs-dismiss="modal">取消</button>
+                <button class="btn btn-danger" id="confirmDeleteButton" type="button">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:src="@{${bootstrapJsUrl}}"></script>
+<script th:inline="javascript">
+    const managementUi = {
+        adminApiUrl: /*[[${adminApiUrl}]]*/ '',
+        loginUrl: /*[[${loginUrl}]]*/ '',
+        csrfToken: /*[[${_csrf.token}]]*/ '',
+        csrfHeader: /*[[${_csrf.headerName}]]*/ ''
+    };
+
+    const policyModal = new bootstrap.Modal(document.getElementById('policyModal'));
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    const policyForm = document.getElementById('policyForm');
+    const limitEditor = document.getElementById('limitEditor');
+    const policyFormMessage = document.getElementById('policyFormMessage');
+    let deleteTarget = null;
+
+    function showOperationMessage(message, type) {
+        const container = document.getElementById('operationMessage');
+        const text = document.getElementById('operationMessageText');
+        text.textContent = message;
+        container.className = 'alert alert-' + type + ' alert-dismissible fade show operation-message';
+        container.hidden = false;
+    }
+
+    function showFormMessage(message, type) {
+        policyFormMessage.textContent = message;
+        policyFormMessage.className = 'alert alert-' + type;
+        policyFormMessage.hidden = false;
+    }
+
+    function clearFormMessage() {
+        policyFormMessage.textContent = '';
+        policyFormMessage.hidden = true;
+    }
+
+    function addLimit(limit) {
+        const row = document.createElement('div');
+        row.className = 'row g-2 align-items-end limit-editor-row';
+
+        const countColumn = document.createElement('div');
+        countColumn.className = 'col-sm-4';
+        const countLabel = document.createElement('label');
+        countLabel.className = 'form-label small';
+        countLabel.textContent = '次数';
+        const countInput = document.createElement('input');
+        countInput.className = 'form-control limit-count';
+        countInput.type = 'number';
+        countInput.min = '1';
+        countInput.step = '1';
+        countInput.required = true;
+        countInput.value = limit ? String(limit.count) : '';
+        countColumn.append(countLabel, countInput);
+
+        const windowColumn = document.createElement('div');
+        windowColumn.className = 'col-sm-3';
+        const windowLabel = document.createElement('label');
+        windowLabel.className = 'form-label small';
+        windowLabel.textContent = '窗口';
+        const windowInput = document.createElement('input');
+        windowInput.className = 'form-control limit-window';
+        windowInput.type = 'number';
+        windowInput.min = '1';
+        windowInput.step = '1';
+        windowInput.required = true;
+        windowInput.value = limit ? String(limit.window) : '';
+        windowColumn.append(windowLabel, windowInput);
+
+        const unitColumn = document.createElement('div');
+        unitColumn.className = 'col-sm-3';
+        const unitLabel = document.createElement('label');
+        unitLabel.className = 'form-label small';
+        unitLabel.textContent = '单位';
+        const unitSelect = document.createElement('select');
+        unitSelect.className = 'form-select limit-unit';
+        ['SECONDS', 'MINUTES', 'HOURS', 'DAYS'].forEach(function(unit) {
+            const option = document.createElement('option');
+            option.value = unit;
+            option.textContent = unit;
+            option.selected = limit ? limit.unit === unit : unit === 'SECONDS';
+            unitSelect.append(option);
+        });
+        unitColumn.append(unitLabel, unitSelect);
+
+        const removeColumn = document.createElement('div');
+        removeColumn.className = 'col-sm-2 d-grid';
+        const removeButton = document.createElement('button');
+        removeButton.className = 'btn btn-outline-danger';
+        removeButton.type = 'button';
+        removeButton.textContent = '移除';
+        removeButton.addEventListener('click', function() {
+            if (limitEditor.children.length > 1) {
+                row.remove();
+            } else {
+                showFormMessage('至少需要配置一个限流窗口。', 'danger');
+            }
+        });
+        removeColumn.append(removeButton);
+        row.append(countColumn, windowColumn, unitColumn, removeColumn);
+        limitEditor.append(row);
+    }
+
+    function limitsFromForm() {
+        const rows = Array.from(limitEditor.querySelectorAll('.limit-editor-row'));
+        if (rows.length === 0) {
+            throw new Error('至少需要配置一个限流窗口。');
+        }
+        return rows.map(function(row) {
+            const count = Number(row.querySelector('.limit-count').value);
+            const window = Number(row.querySelector('.limit-window').value);
+            const unit = row.querySelector('.limit-unit').value;
+            if (!Number.isSafeInteger(count) || count <= 0 || !Number.isSafeInteger(window) || window <= 0) {
+                throw new Error('限流次数和窗口必须是正整数。');
+            }
+            return {count: count, window: window, unit: unit};
+        });
+    }
+
+    async function requestApi(url, options) {
+        const headers = Object.assign({'Accept': 'application/json'}, options.headers || {});
+        if (options.method !== 'GET') {
+            headers[managementUi.csrfHeader] = managementUi.csrfToken;
+        }
+        const response = await fetch(url, Object.assign({}, options, {headers: headers, credentials: 'same-origin'}));
+        const contentType = response.headers.get('content-type') || '';
+        if (response.status === 401 || contentType.indexOf('text/html') >= 0) {
+            window.location.assign(managementUi.loginUrl);
+            throw new Error('登录状态已失效。');
+        }
+        const payload = contentType.indexOf('application/json') >= 0 ? await response.json() : null;
+        if (!response.ok) {
+            const error = new Error(payload && payload.message ? payload.message : '操作暂时无法完成，请稍后重试。');
+            error.status = response.status;
+            throw error;
+        }
+        return payload;
+    }
+
+    function openCreateModal() {
+        policyForm.reset();
+        clearFormMessage();
+        document.getElementById('policyModalTitle').textContent = '创建策略';
+        document.getElementById('policyId').value = '';
+        document.getElementById('expectedRowVersion').value = '';
+        document.getElementById('policyServiceCode').readOnly = false;
+        document.getElementById('policyResourceCode').readOnly = false;
+        document.getElementById('policySubject').readOnly = false;
+        document.getElementById('policyEnabled').closest('.form-check').hidden = false;
+        limitEditor.replaceChildren();
+        addLimit();
+        policyModal.show();
+    }
+
+    async function openEditModal(id) {
+        clearFormMessage();
+        try {
+            const policy = await requestApi(managementUi.adminApiUrl + '/' + encodeURIComponent(id), {method: 'GET'});
+            policyForm.reset();
+            document.getElementById('policyModalTitle').textContent = '编辑限流窗口';
+            document.getElementById('policyId').value = String(policy.id);
+            document.getElementById('expectedRowVersion').value = String(policy.rowVersion);
+            document.getElementById('policyServiceCode').value = policy.key.serviceCode;
+            document.getElementById('policyResourceCode').value = policy.key.resourceCode;
+            document.getElementById('policySubject').value = policy.key.subject;
+            document.getElementById('policyServiceCode').readOnly = true;
+            document.getElementById('policyResourceCode').readOnly = true;
+            document.getElementById('policySubject').readOnly = true;
+            document.getElementById('policyEnabled').closest('.form-check').hidden = true;
+            limitEditor.replaceChildren();
+            policy.limits.forEach(addLimit);
+            policyModal.show();
+        } catch (error) {
+            showOperationMessage(error.message, error.status === 409 ? 'warning' : 'danger');
+        }
+    }
+
+    policyForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        clearFormMessage();
+        const saveButton = document.getElementById('savePolicyButton');
+        try {
+            const limits = limitsFromForm();
+            const id = document.getElementById('policyId').value;
+            let url = managementUi.adminApiUrl;
+            let method = 'POST';
+            let body;
+            if (id) {
+                url += '/' + encodeURIComponent(id);
+                method = 'PUT';
+                body = {expectedRowVersion: Number(document.getElementById('expectedRowVersion').value), limits: limits};
+            } else {
+                body = {
+                    key: {
+                        serviceCode: document.getElementById('policyServiceCode').value.trim(),
+                        resourceCode: document.getElementById('policyResourceCode').value.trim(),
+                        subject: document.getElementById('policySubject').value.trim()
+                    },
+                    limits: limits,
+                    enabled: document.getElementById('policyEnabled').checked
+                };
+                if (!body.key.serviceCode || !body.key.resourceCode || !body.key.subject) {
+                    throw new Error('服务编码、资源编码和限流对象不能为空。');
+                }
+            }
+            saveButton.disabled = true;
+            await requestApi(url, {method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+            policyModal.hide();
+            showOperationMessage(id ? '策略限流窗口已更新。' : '策略已创建。', 'success');
+            window.setTimeout(function() { window.location.reload(); }, 350);
+        } catch (error) {
+            showFormMessage(error.status === 409 ? '记录已被其他操作更新。请刷新后确认并重试。' : error.message, error.status === 409 ? 'warning' : 'danger');
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+
+    document.getElementById('createPolicyButton').addEventListener('click', openCreateModal);
+    document.getElementById('addLimitButton').addEventListener('click', function() { addLimit(); });
+    document.querySelectorAll('.edit-policy-button').forEach(function(button) {
+        button.addEventListener('click', function() { openEditModal(button.dataset.policyId); });
+    });
+    document.querySelectorAll('.state-policy-button').forEach(function(button) {
+        button.addEventListener('click', async function() {
+            button.disabled = true;
+            try {
+                await requestApi(managementUi.adminApiUrl + '/' + encodeURIComponent(button.dataset.policyId), {
+                    method: 'PATCH',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({expectedRowVersion: Number(button.dataset.rowVersion), enabled: button.dataset.enabled === 'true'})
+                });
+                window.location.reload();
+            } catch (error) {
+                showOperationMessage(error.status === 409 ? '记录已被其他操作更新。请刷新后确认并重试。' : error.message,
+                    error.status === 409 ? 'warning' : 'danger');
+                button.disabled = false;
+            }
+        });
+    });
+    document.querySelectorAll('.delete-policy-button').forEach(function(button) {
+        button.addEventListener('click', function() {
+            deleteTarget = {id: button.dataset.policyId, rowVersion: button.dataset.rowVersion};
+            deleteModal.show();
+        });
+    });
+    document.getElementById('confirmDeleteButton').addEventListener('click', async function() {
+        if (!deleteTarget) {
+            return;
+        }
+        const button = document.getElementById('confirmDeleteButton');
+        button.disabled = true;
+        try {
+            await requestApi(managementUi.adminApiUrl + '/' + encodeURIComponent(deleteTarget.id)
+                + '?expectedRowVersion=' + encodeURIComponent(deleteTarget.rowVersion), {method: 'DELETE'});
+            deleteModal.hide();
+            window.location.reload();
+        } catch (error) {
+            deleteModal.hide();
+            showOperationMessage(error.status === 409 ? '记录已被其他操作更新。请刷新后确认并重试。' : error.message,
+                error.status === 409 ? 'warning' : 'danger');
+        } finally {
+            button.disabled = false;
+            deleteTarget = null;
+        }
+    });
+</script>
+</body>
+</html>
