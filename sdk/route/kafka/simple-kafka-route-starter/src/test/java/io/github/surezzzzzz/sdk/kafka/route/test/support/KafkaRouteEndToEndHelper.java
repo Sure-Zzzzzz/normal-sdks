@@ -23,12 +23,6 @@ import java.util.concurrent.ExecutionException;
  */
 public final class KafkaRouteEndToEndHelper {
 
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:19092";
-    public static final String EVENT_BOOTSTRAP_SERVERS = "localhost:19093";
-    public static final String CLUSTER_BOOTSTRAP_SERVERS = "localhost:19192,localhost:19193,localhost:19194";
-    public static final String KAFKA_V110_BOOTSTRAP_SERVERS = "localhost:18091";
-    public static final String KAFKA_V28_BOOTSTRAP_SERVERS = "localhost:18092";
-    public static final String KAFKA_V37_BOOTSTRAP_SERVERS = "localhost:18094";
     public static final long CONSUME_TIMEOUT_MS = 15000L;
     public static final long NO_MESSAGE_TIMEOUT_MS = 3000L;
     public static final long FEATURE_API_PROBE_TIMEOUT_MS = 5000L;
@@ -54,6 +48,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final String TOPIC_TRANSACTION_PREFIX = "mock.route.tx37.e2e.";
     public static final String TOPIC_ROLLBACK_PREFIX = "mock.route.tx37.rollback.e2e.";
     public static final String TOPIC_CLUSTER_PREFIX = "cluster.route.e2e.";
+    public static final String TOPIC_DERIVED_CONSUMER_PREFIX = "event.v37.derived.consumer.e2e.";
 
     public static final String KEY_V110_PREFIX = "v110-key-";
     public static final String KEY_V28_PREFIX = "v28-key-";

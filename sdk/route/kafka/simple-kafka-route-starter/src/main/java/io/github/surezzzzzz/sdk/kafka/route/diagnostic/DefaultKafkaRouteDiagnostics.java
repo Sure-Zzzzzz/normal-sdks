@@ -214,7 +214,7 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
     private Object producerTypedProperty(SimpleKafkaRouteProperties.ProducerConfig producer, String key) {
         if (SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE.equals(key)) {
             return KafkaRouteStringHelper.hasText(producer.getCompressionType())
-                    ? producer.getCompressionType().trim().toLowerCase() : null;
+                    ? producer.getCompressionType().trim().toLowerCase(Locale.ROOT) : null;
         }
         if (SimpleKafkaRouteConstant.PROPERTY_ENABLE_IDEMPOTENCE.equals(key)) {
             return producer.getEnableIdempotence();
@@ -307,7 +307,7 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
     }
 
     private boolean containsSensitiveFragment(String message) {
-        String lowerMessage = message.toLowerCase();
+        String lowerMessage = message.toLowerCase(Locale.ROOT);
         for (String fragment : SimpleKafkaRouteConstant.SENSITIVE_KEY_FRAGMENTS) {
             if (lowerMessage.contains(fragment)) {
                 return true;

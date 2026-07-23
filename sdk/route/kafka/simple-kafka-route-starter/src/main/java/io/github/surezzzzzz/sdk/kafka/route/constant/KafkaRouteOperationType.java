@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.kafka.route.constant;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Locale;
+
 /**
  * Kafka 路由操作类型
  *
@@ -39,7 +41,7 @@ public enum KafkaRouteOperationType {
         if (code == null) {
             return null;
         }
-        String lowerCode = code.toLowerCase().trim();
+        String lowerCode = code.toLowerCase(Locale.ROOT).trim();
         for (KafkaRouteOperationType type : values()) {
             if (type.code.equals(lowerCode)) {
                 return type;

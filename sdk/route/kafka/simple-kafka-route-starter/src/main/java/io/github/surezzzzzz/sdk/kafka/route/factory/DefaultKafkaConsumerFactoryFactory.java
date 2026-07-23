@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.kafka.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.kafka.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import io.github.surezzzzzz.sdk.kafka.route.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.kafka.route.model.KafkaConsumerFactoryOverride;
 import io.github.surezzzzzz.sdk.kafka.route.support.KafkaRoutePropertyMerger;
 import io.github.surezzzzzz.sdk.kafka.route.support.KafkaRouteStringHelper;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -12,6 +13,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -23,13 +25,21 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
 
     @Override
     public ConsumerFactory<Object, Object> create(String datasourceKey, SimpleKafkaRouteProperties.DataSourceConfig config) {
+        return create(datasourceKey, config, null);
+    }
+
+    @Override
+    public ConsumerFactory<Object, Object> create(String datasourceKey,
+                                                  SimpleKafkaRouteProperties.DataSourceConfig config,
+                                                  KafkaConsumerFactoryOverride override) {
         SimpleKafkaRouteProperties.ConsumerConfig consumer = consumerConfig(config);
         try {
+            KafkaRoutePropertyMerger.assertValidConsumerFactoryOverride(datasourceKey, override);
             validateDeserializer(datasourceKey, SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER,
                     consumer.getKeyDeserializer());
             validateDeserializer(datasourceKey, SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER,
                     consumer.getValueDeserializer());
-            return new DefaultKafkaConsumerFactory<>(createConsumerProperties(datasourceKey, config, consumer));
+            return new DefaultKafkaConsumerFactory<>(createConsumerProperties(datasourceKey, config, consumer, override));
         } catch (ConfigurationException e) {
             throw e;
         } catch (Exception e) {
@@ -40,12 +50,15 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
 
     private Map<String, Object> createConsumerProperties(String datasourceKey,
                                                          SimpleKafkaRouteProperties.DataSourceConfig config,
-                                                         SimpleKafkaRouteProperties.ConsumerConfig consumer) {
+                                                         SimpleKafkaRouteProperties.ConsumerConfig consumer,
+                                                         KafkaConsumerFactoryOverride override) {
+        KafkaRoutePropertyMerger.assertNoConsumerControlledKeys(datasourceKey, config.getProperties());
         Map<String, Object> properties = new LinkedHashMap<>(
                 KafkaRoutePropertyMerger.mergeBaseProperties(datasourceKey, config));
         putConsumerTypedProperties(properties, consumer);
         putRawProperties(datasourceKey, properties, consumer.getProperties());
-        putFinalConsumerProperties(properties, config, consumer);
+        putOverrideProperties(properties, override);
+        putFinalConsumerProperties(properties, config, consumer, override);
         return properties;
     }
 
@@ -58,9 +71,23 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
         putIfNotNull(properties, SimpleKafkaRouteConstant.PROPERTY_MAX_POLL_RECORDS, consumer.getMaxPollRecords());
     }
 
+    private void putOverrideProperties(Map<String, Object> properties, KafkaConsumerFactoryOverride override) {
+        if (override == null) {
+            return;
+        }
+        putIfHasText(properties, SimpleKafkaRouteConstant.PROPERTY_GROUP_ID, override.getGroupId());
+        putIfHasText(properties, SimpleKafkaRouteConstant.PROPERTY_AUTO_OFFSET_RESET,
+                lower(override.getAutoOffsetReset()));
+        putIfNotNull(properties, SimpleKafkaRouteConstant.PROPERTY_ENABLE_AUTO_COMMIT,
+                override.getEnableAutoCommit());
+        putIfNotNull(properties, SimpleKafkaRouteConstant.PROPERTY_MAX_POLL_RECORDS,
+                override.getMaxPollRecords());
+    }
+
     private void putFinalConsumerProperties(Map<String, Object> properties,
                                             SimpleKafkaRouteProperties.DataSourceConfig config,
-                                            SimpleKafkaRouteProperties.ConsumerConfig consumer) {
+                                            SimpleKafkaRouteProperties.ConsumerConfig consumer,
+                                            KafkaConsumerFactoryOverride override) {
         properties.put(SimpleKafkaRouteConstant.PROPERTY_BOOTSTRAP_SERVERS, config.getBootstrapServers());
         properties.put(SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER, consumer.getKeyDeserializer().trim());
         properties.put(SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER, consumer.getValueDeserializer().trim());
@@ -69,13 +96,16 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
         } else if (KafkaRouteStringHelper.hasText(config.getClientId())) {
             properties.put(SimpleKafkaRouteConstant.PROPERTY_CLIENT_ID, config.getClientId().trim());
         }
-        if (KafkaRouteStringHelper.hasText(consumer.getGroupId())) {
+        if (override != null && KafkaRouteStringHelper.hasText(override.getGroupId())) {
+            properties.put(SimpleKafkaRouteConstant.PROPERTY_GROUP_ID, override.getGroupId().trim());
+        } else if (KafkaRouteStringHelper.hasText(consumer.getGroupId())) {
             properties.put(SimpleKafkaRouteConstant.PROPERTY_GROUP_ID, consumer.getGroupId().trim());
         }
     }
 
     private void putRawProperties(String datasourceKey, Map<String, Object> target, Map<String, String> rawProperties) {
         KafkaRoutePropertyMerger.assertNoReservedKeys(datasourceKey, rawProperties);
+        KafkaRoutePropertyMerger.assertNoConsumerControlledKeys(datasourceKey, rawProperties);
         if (rawProperties == null || rawProperties.isEmpty()) {
             return;
         }
@@ -120,6 +150,6 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
     }
 
     private String lower(String value) {
-        return KafkaRouteStringHelper.hasText(value) ? value.trim().toLowerCase() : value;
+        return KafkaRouteStringHelper.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : value;
     }
 }

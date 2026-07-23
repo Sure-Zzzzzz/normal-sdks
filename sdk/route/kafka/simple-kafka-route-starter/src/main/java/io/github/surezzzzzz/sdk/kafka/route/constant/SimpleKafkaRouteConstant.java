@@ -15,6 +15,7 @@ public final class SimpleKafkaRouteConstant {
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.kafka.route";
     public static final String CONFIG_PREFIX_DIAGNOSTICS = CONFIG_PREFIX + ".diagnostics";
     public static final String CONFIG_PROPERTY_ENABLE = "enable";
+    public static final String EXCEPTION_MESSAGE_UTILITY_CLASS = "工具类不支持实例化";
 
     public static final String CLASS_NAME_KAFKA_TEMPLATE = "org.springframework.kafka.core.KafkaTemplate";
     public static final String SPRING_KAFKA_2_VERSION_PREFIX = "2.";
@@ -149,6 +150,13 @@ public final class SimpleKafkaRouteConstant {
             PROPERTY_SSL_KEYSTORE_LOCATION,
             PROPERTY_SSL_KEYSTORE_PASSWORD,
             PROPERTY_SSL_KEY_PASSWORD
+    )));
+
+    public static final Set<String> CONSUMER_CONTROLLED_PROPERTY_KEYS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(
+            PROPERTY_GROUP_ID,
+            PROPERTY_AUTO_OFFSET_RESET,
+            PROPERTY_ENABLE_AUTO_COMMIT,
+            PROPERTY_MAX_POLL_RECORDS
     )));
 
     public static final Set<String> VALID_ACKS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(

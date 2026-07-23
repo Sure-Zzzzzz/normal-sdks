@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaProducerFactor
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
@@ -23,6 +24,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.lang.reflect.Method;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
+@ResourceLock("default-locale")
 public class KafkaRouteDiagnosticsTest {
 
     @Test
@@ -186,6 +189,27 @@ public class KafkaRouteDiagnosticsTest {
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+    }
+
+    @Test
+    public void testLocaleRootKeepsDiagnosticCapabilityAndSensitiveMessageMatching() throws Exception {
+        Locale originalLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(new Locale("tr", "TR"));
+            SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+            DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+            SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+            config.getProducer().setCompressionType("GZIP");
+            log.info("土耳其 Locale 下准备验证诊断压缩类型和敏感消息匹配");
+
+            KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic", null, config);
+            assertEquals(KafkaRouteDiagnosticStatus.SUCCESS, result.getStatus());
+            Method method = DefaultKafkaRouteDiagnostics.class.getDeclaredMethod("containsSensitiveFragment", String.class);
+            method.setAccessible(true);
+            assertEquals(Boolean.TRUE, method.invoke(diagnostics, "MOCK-SASL.JAAS.CONFIG"));
+        } finally {
+            Locale.setDefault(originalLocale);
+        }
     }
 
     @Test

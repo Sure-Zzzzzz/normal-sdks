@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.kafka.route.support;
 import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -47,7 +48,7 @@ public final class KafkaRouteSensitiveLogHelper {
         if (!KafkaRouteStringHelper.hasText(key)) {
             return false;
         }
-        String lowerKey = key.trim().toLowerCase();
+        String lowerKey = key.trim().toLowerCase(Locale.ROOT);
         for (String fragment : SimpleKafkaRouteConstant.SENSITIVE_KEY_FRAGMENTS) {
             if (lowerKey.contains(fragment)) {
                 return true;

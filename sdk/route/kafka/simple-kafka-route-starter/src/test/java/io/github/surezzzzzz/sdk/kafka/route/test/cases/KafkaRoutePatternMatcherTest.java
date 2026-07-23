@@ -5,7 +5,8 @@ import io.github.surezzzzzz.sdk.kafka.route.matcher.KafkaRoutePatternMatcher;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Kafka 路由模式匹配器测试

@@ -10,8 +10,8 @@ import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaConsumerFactor
 import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaProducerFactoryFactory;
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelper;
 import io.github.surezzzzzz.sdk.kafka.route.validator.DefaultKafkaRoutePropertiesValidator;
-import org.apache.kafka.common.header.internals.RecordHeader;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

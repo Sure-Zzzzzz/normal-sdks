@@ -56,7 +56,7 @@ public final class KafkaAdminCompatibilityHelper {
      * 探测 Kafka cluster 基础信息
      *
      * @param adminClient AdminClient
-     * @param timeoutMs 超时时间
+     * @param timeoutMs   超时时间
      * @return cluster 描述信息
      */
     public static Map<String, Object> describeCluster(Object adminClient, long timeoutMs) {
@@ -86,7 +86,7 @@ public final class KafkaAdminCompatibilityHelper {
      * 尝试探测 Kafka features
      *
      * @param adminClient AdminClient
-     * @param timeoutMs 超时时间
+     * @param timeoutMs   超时时间
      * @return feature 元数据，无法探测时返回 null
      */
     public static Object describeFeaturesIfAvailable(Object adminClient, long timeoutMs) {

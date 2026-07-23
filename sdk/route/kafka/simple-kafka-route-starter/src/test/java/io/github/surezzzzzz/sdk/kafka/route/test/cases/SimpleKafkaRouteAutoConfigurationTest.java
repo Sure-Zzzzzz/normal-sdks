@@ -14,8 +14,8 @@ import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaProducerFactor
 import io.github.surezzzzzz.sdk.kafka.route.validator.KafkaRoutePropertiesValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.ConsumerFactory;

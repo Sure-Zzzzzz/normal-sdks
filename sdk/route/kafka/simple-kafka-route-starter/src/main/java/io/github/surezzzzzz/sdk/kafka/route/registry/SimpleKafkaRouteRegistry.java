@@ -7,7 +7,9 @@ import io.github.surezzzzzz.sdk.kafka.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.kafka.route.exception.RouteException;
 import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaConsumerFactoryFactory;
 import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaProducerFactoryFactory;
+import io.github.surezzzzzz.sdk.kafka.route.model.KafkaConsumerFactoryOverride;
 import io.github.surezzzzzz.sdk.kafka.route.support.KafkaConfigurationCompatibilityHelper;
+import io.github.surezzzzzz.sdk.kafka.route.support.KafkaRoutePropertyMerger;
 import io.github.surezzzzzz.sdk.kafka.route.support.KafkaRouteStringHelper;
 import io.github.surezzzzzz.sdk.kafka.route.validator.KafkaRoutePropertiesValidator;
 import lombok.extern.slf4j.Slf4j;
@@ -16,11 +18,7 @@ import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.core.ProducerFactory;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Kafka route 注册表
@@ -31,16 +29,19 @@ import java.util.Set;
 public class SimpleKafkaRouteRegistry implements DisposableBean {
 
     private final SimpleKafkaRouteProperties properties;
+    private final KafkaConsumerFactoryFactory consumerFactoryFactory;
     private final Map<String, ProducerFactory<Object, Object>> producerFactories = new LinkedHashMap<>();
     private final Map<String, KafkaTemplate<Object, Object>> kafkaTemplates = new LinkedHashMap<>();
     private final Map<String, ConsumerFactory<Object, Object>> consumerFactories = new LinkedHashMap<>();
-    private volatile boolean destroyed = false;
+    private final Object lifecycleMonitor = new Object();
+    private boolean destroyed = false;
 
     public SimpleKafkaRouteRegistry(SimpleKafkaRouteProperties properties,
                                     KafkaRoutePropertiesValidator validator,
                                     KafkaProducerFactoryFactory producerFactoryFactory,
                                     KafkaConsumerFactoryFactory consumerFactoryFactory) {
         this.properties = properties;
+        this.consumerFactoryFactory = consumerFactoryFactory;
         validator.validate(properties);
         initialize(producerFactoryFactory, consumerFactoryFactory);
     }
@@ -84,6 +85,46 @@ public class SimpleKafkaRouteRegistry implements DisposableBean {
         return factory;
     }
 
+    /**
+     * 按数据源创建调用方持有的独立 ConsumerFactory
+     *
+     * <p>即使 override 为 null，也会创建独立实例。旧版 SPI 未实现三参数方法时固定抛出
+     * KAFKA_ROUTE_015，不能回落复用 registry 的基础 factory。</p>
+     *
+     * @param datasourceKey 数据源标识
+     * @param override      consumer 覆盖配置，可为 null
+     * @return 独立 ConsumerFactory，由调用方负责销毁
+     */
+    public ConsumerFactory<Object, Object> createConsumerFactory(String datasourceKey,
+                                                                 KafkaConsumerFactoryOverride override) {
+        synchronized (lifecycleMonitor) {
+            assertNotDestroyed(datasourceKey);
+            validateDatasourceKey(datasourceKey);
+            SimpleKafkaRouteProperties.DataSourceConfig config = properties.getSources().get(datasourceKey);
+            if (config == null) {
+                throw datasourceNotFound(datasourceKey);
+            }
+            KafkaRoutePropertyMerger.assertValidConsumerFactoryOverride(datasourceKey, override);
+            ConsumerFactory<Object, Object> factory = null;
+            try {
+                factory = consumerFactoryFactory.create(datasourceKey, config, override);
+                if (factory == null) {
+                    throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_006,
+                            String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasourceKey));
+                }
+                assertNotDestroyed(datasourceKey);
+                return factory;
+            } catch (ConfigurationException e) {
+                destroyDerivedFactory(factory);
+                throw e;
+            } catch (Exception e) {
+                destroyDerivedFactory(factory);
+                throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_006,
+                        String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasourceKey), e);
+            }
+        }
+    }
+
     public Set<String> getDatasourceKeys() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(producerFactories.keySet()));
     }
@@ -124,11 +165,13 @@ public class SimpleKafkaRouteRegistry implements DisposableBean {
 
     @Override
     public void destroy() {
-        if (destroyed) {
-            return;
+        synchronized (lifecycleMonitor) {
+            if (destroyed) {
+                return;
+            }
+            destroyed = true;
+            destroyCreatedFactories();
         }
-        destroyed = true;
-        destroyCreatedFactories();
     }
 
     private void destroyCreatedFactories() {
@@ -151,6 +194,24 @@ public class SimpleKafkaRouteRegistry implements DisposableBean {
         kafkaTemplates.clear();
         consumerFactories.clear();
         producerFactories.clear();
+    }
+
+    private void destroyDerivedFactory(ConsumerFactory<Object, Object> factory) {
+        if (factory == null) {
+            return;
+        }
+        try {
+            KafkaConfigurationCompatibilityHelper.destroyConsumerFactory(factory);
+        } catch (RuntimeException e) {
+            log.warn("Kafka route 派生 consumer factory 关闭失败", e);
+        }
+    }
+
+    private void assertNotDestroyed(String datasourceKey) {
+        if (destroyed) {
+            throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_016,
+                    String.format(ErrorMessage.REGISTRY_DESTROYED, datasourceKey));
+        }
     }
 
     private void validateDatasourceKey(String datasourceKey) {

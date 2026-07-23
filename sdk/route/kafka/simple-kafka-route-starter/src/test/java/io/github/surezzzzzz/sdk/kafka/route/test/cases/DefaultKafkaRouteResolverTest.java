@@ -13,7 +13,8 @@ import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelpe
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 默认 Kafka 路由解析器测试

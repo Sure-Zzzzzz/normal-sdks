@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.kafka.route.support.KafkaRouteStringHelper;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.PatternSyntaxException;
 
@@ -55,6 +56,7 @@ public class DefaultKafkaRoutePropertiesValidator implements KafkaRoutePropertie
         }
         validateBootstrapServers(datasourceKey, config.getBootstrapServers());
         validateReservedProperties(datasourceKey, config.getProperties());
+        KafkaRoutePropertyMerger.assertNoConsumerControlledKeys(datasourceKey, config.getProperties());
         validateSecurity(datasourceKey, config.getSecurity());
         validateProducer(datasourceKey, config.getProducer());
         validateConsumer(datasourceKey, config.getConsumer());
@@ -114,7 +116,7 @@ public class DefaultKafkaRoutePropertiesValidator implements KafkaRoutePropertie
             return;
         }
         if (KafkaRouteStringHelper.hasText(security.getSecurityProtocol())) {
-            String protocol = security.getSecurityProtocol().trim().toUpperCase();
+            String protocol = security.getSecurityProtocol().trim().toUpperCase(Locale.ROOT);
             if (!SimpleKafkaRouteConstant.VALID_SECURITY_PROTOCOLS.contains(protocol)) {
                 throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_012,
                         String.format(ErrorMessage.CONFIG_SECURITY_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_SECURITY_PROTOCOL));
@@ -139,7 +141,7 @@ public class DefaultKafkaRoutePropertiesValidator implements KafkaRoutePropertie
                     String.format(ErrorMessage.CONFIG_SERIALIZER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_VALUE_SERIALIZER));
         }
         if (KafkaRouteStringHelper.hasText(producer.getAcks())
-                && !SimpleKafkaRouteConstant.VALID_ACKS.contains(producer.getAcks().trim().toLowerCase())) {
+                && !SimpleKafkaRouteConstant.VALID_ACKS.contains(producer.getAcks().trim().toLowerCase(Locale.ROOT))) {
             throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_005,
                     String.format(ErrorMessage.CONFIG_PRODUCER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_ACKS));
         }
@@ -168,7 +170,7 @@ public class DefaultKafkaRoutePropertiesValidator implements KafkaRoutePropertie
                     String.format(ErrorMessage.CONFIG_PRODUCER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_DELIVERY_TIMEOUT_MS));
         }
         if (KafkaRouteStringHelper.hasText(producer.getCompressionType())
-                && !SimpleKafkaRouteConstant.VALID_COMPRESSION_TYPES.contains(producer.getCompressionType().trim().toLowerCase())) {
+                && !SimpleKafkaRouteConstant.VALID_COMPRESSION_TYPES.contains(producer.getCompressionType().trim().toLowerCase(Locale.ROOT))) {
             throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_005,
                     String.format(ErrorMessage.CONFIG_PRODUCER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_COMPRESSION_TYPE));
         }
@@ -192,11 +194,12 @@ public class DefaultKafkaRoutePropertiesValidator implements KafkaRoutePropertie
                     String.format(ErrorMessage.CONFIG_CONSUMER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_MAX_POLL_RECORDS));
         }
         if (KafkaRouteStringHelper.hasText(consumer.getAutoOffsetReset())
-                && !SimpleKafkaRouteConstant.VALID_AUTO_OFFSET_RESET.contains(consumer.getAutoOffsetReset().trim().toLowerCase())) {
+                && !SimpleKafkaRouteConstant.VALID_AUTO_OFFSET_RESET.contains(consumer.getAutoOffsetReset().trim().toLowerCase(Locale.ROOT))) {
             throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_005,
                     String.format(ErrorMessage.CONFIG_CONSUMER_INVALID, datasourceKey, SimpleKafkaRouteConstant.PROPERTY_AUTO_OFFSET_RESET));
         }
         validateReservedProperties(datasourceKey, consumer.getProperties());
+        KafkaRoutePropertyMerger.assertNoConsumerControlledKeys(datasourceKey, consumer.getProperties());
     }
 
     private void validateReservedProperties(String datasourceKey, Map<String, String> properties) {

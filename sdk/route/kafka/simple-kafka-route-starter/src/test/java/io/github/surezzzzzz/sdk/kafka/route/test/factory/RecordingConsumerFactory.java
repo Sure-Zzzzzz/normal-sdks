@@ -37,14 +37,29 @@ public class RecordingConsumerFactory implements ConsumerFactory<Object, Object>
         this.destroyed = true;
     }
 
+    /**
+     * 获取所属数据源标识
+     *
+     * @return 数据源标识
+     */
     public String getDatasourceKey() {
         return datasourceKey;
     }
 
+    /**
+     * 获取创建 Kafka Consumer 的次数
+     *
+     * @return 创建次数
+     */
     public int getCreateConsumerCount() {
         return createConsumerCount;
     }
 
+    /**
+     * 判断 factory 是否已销毁
+     *
+     * @return 已销毁时返回 true
+     */
     public boolean isDestroyed() {
         return destroyed;
     }

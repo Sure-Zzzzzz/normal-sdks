@@ -31,8 +31,12 @@ public final class ErrorMessage {
     public static final String COMPAT_REFLECT_CLASS_NOT_FOUND = "Kafka route 兼容层未找到 class: %s";
     public static final String COMPAT_REFLECT_METHOD_NOT_FOUND = "Kafka route 兼容层未找到 method: %s#%s";
     public static final String DIAGNOSTICS_DESCRIBE_CLUSTER_EMPTY = "describeCluster 返回空结果";
+    public static final String CONSUMER_FACTORY_OVERRIDE_UNSUPPORTED =
+            "自定义 Kafka ConsumerFactoryFactory 未实现 consumer 覆盖配置：datasource [%s]";
+    public static final String REGISTRY_DESTROYED =
+            "Kafka route registry 已关闭，不能创建派生 ConsumerFactory：datasource [%s]";
 
     private ErrorMessage() {
-        throw new UnsupportedOperationException("Utility class");
+        throw new UnsupportedOperationException(SimpleKafkaRouteConstant.EXCEPTION_MESSAGE_UTILITY_CLASS);
     }
 }

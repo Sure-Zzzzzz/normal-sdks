@@ -66,8 +66,8 @@ public final class KafkaReflectionHelper {
     /**
      * 查找方法，不存在时返回 null
      *
-     * @param clazz class 对象
-     * @param name 方法名
+     * @param clazz      class 对象
+     * @param name       方法名
      * @param paramTypes 参数类型
      * @return 方法对象
      */
@@ -98,8 +98,8 @@ public final class KafkaReflectionHelper {
     /**
      * 加载方法，不存在时抛出兼容层异常
      *
-     * @param clazz class 对象
-     * @param name 方法名
+     * @param clazz      class 对象
+     * @param name       方法名
      * @param paramTypes 参数类型
      * @return 方法对象
      */
@@ -118,7 +118,7 @@ public final class KafkaReflectionHelper {
      *
      * @param method 方法对象
      * @param target 目标对象
-     * @param args 参数
+     * @param args   参数
      * @return 调用结果
      */
     public static Object invoke(Method method, Object target, Object... args) {
@@ -145,9 +145,9 @@ public final class KafkaReflectionHelper {
     /**
      * 方法存在时调用，不存在时返回 null
      *
-     * @param target 目标对象
+     * @param target     目标对象
      * @param methodName 方法名
-     * @param args 参数
+     * @param args       参数
      * @return 调用结果
      */
     public static Object invokeIfPresent(Object target, String methodName, Object... args) {

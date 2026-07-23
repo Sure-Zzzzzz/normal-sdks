@@ -27,7 +27,7 @@ public final class KafkaProducerFactoryCompatibilityHelper {
      * 应用 transaction id prefix
      *
      * @param factory producer factory
-     * @param prefix transaction id prefix
+     * @param prefix  transaction id prefix
      */
     public static void applyTransactionIdPrefix(Object factory, String prefix) {
         if (factory == null || !KafkaRouteStringHelper.hasText(prefix)) {

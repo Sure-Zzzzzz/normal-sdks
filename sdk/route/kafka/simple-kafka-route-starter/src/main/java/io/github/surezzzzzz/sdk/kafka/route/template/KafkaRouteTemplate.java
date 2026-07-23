@@ -86,7 +86,7 @@ public class KafkaRouteTemplate {
     }
 
     public <K, V> ListenableFuture<SendResult<K, V>> sendByRouteKey(String routeKey, String topic,
-                                                                     Integer partition, K key, V value) {
+                                                                    Integer partition, K key, V value) {
         validateRouteKey(routeKey);
         ProducerRecord<K, V> record = createRecord(topic, partition, null, key, value, null);
         return doSend(resolveRouteKeyDatasource(routeKey, topic, KafkaRouteOperationType.SEND), record);

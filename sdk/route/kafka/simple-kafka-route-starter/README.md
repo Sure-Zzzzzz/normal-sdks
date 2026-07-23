@@ -20,7 +20,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.2'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.kafka:spring-kafka'
 }
@@ -177,6 +177,34 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 );
 ```
 
+### 为独立消费入口创建 ConsumerFactory
+
+同一 datasource 下的不同消费入口需要不同消费组或 poll 参数时，调用 `SimpleKafkaRouteRegistry#createConsumerFactory`。每次调用都会创建独立实例；即使 `override` 为 `null`，也不会复用 `getConsumerFactory(...)` 返回的 registry 基础 factory。
+
+```java
+ConsumerFactory<Object, Object> consumerFactory = registry.createConsumerFactory("event",
+        KafkaConsumerFactoryOverride.builder()
+                .groupId("mock-consumer-group")
+                .autoOffsetReset("earliest")
+                .enableAutoCommit(false)
+                .maxPollRecords(100)
+                .build());
+
+try {
+    // 将 consumerFactory 交给当前消费入口创建 Consumer 或 listener container
+} catch (RuntimeException e) {
+    // 当前消费入口启动失败时，立即回收尚未交付给业务容器的 factory
+    KafkaConfigurationCompatibilityHelper.destroyConsumerFactory(consumerFactory);
+    throw e;
+}
+```
+
+派生 factory 的所有权属于调用方：调用方停止对应消费入口时必须调用 `KafkaConfigurationCompatibilityHelper.destroyConsumerFactory(...)`；route registry 不缓存、也不会在关闭时销毁已经成功返回的派生 factory。反之，`getConsumerFactory(...)` 返回 registry 持有的基础 factory，调用方不得销毁。
+
+`groupId`、`autoOffsetReset`、`enableAutoCommit`、`maxPollRecords` 的生效顺序为：datasource typed consumer 配置，再由本次 override 的非空字段覆盖。四项 override 均为可选；`enableAutoCommit=false` 是有效显式值。`bootstrap.servers`、安全配置、反序列化器和 client id 仍由 route 固定，不允许调用方改写。
+
+> `group.id`、`auto.offset.reset`、`enable.auto.commit`、`max.poll.records` 不能写入 datasource `properties` 或 `consumer.properties`；请分别使用 `consumer.*` typed 配置和 `KafkaConsumerFactoryOverride`。无效 override 或受控 raw key 会以 `KAFKA_ROUTE_005` 拒绝。
+
 ## 配置说明
 
 ### 顶层配置
@@ -195,7 +223,7 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 |--------|--------|------|
 | `bootstrap-servers` | 空 | Kafka broker 地址列表 |
 | `client-id` | 空 | datasource 级公共 client id |
-| `properties` | 空 | datasource 级公共 raw properties（不允许保留键） |
+| `properties` | 空 | datasource 级公共 raw properties（不允许保留键，也不允许 `group.id`、`auto.offset.reset`、`enable.auto.commit`、`max.poll.records`） |
 | `security.security-protocol` | 空 | 安全协议：PLAINTEXT / SSL / SASL_PLAINTEXT / SASL_SSL |
 | `security.sasl-mechanism` | 空 | SASL 机制 |
 | `security.sasl-jaas-config` | 空 | JAAS 配置（不进 toString） |
@@ -229,7 +257,7 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 | `consumer.auto-offset-reset` | 空 | 消费起点：earliest / latest / none |
 | `consumer.enable-auto-commit` | 空 | 是否自动提交 offset |
 | `consumer.max-poll-records` | 空 | 单次 poll 最大条数 |
-| `consumer.properties` | 空 | consumer raw properties（不允许保留键） |
+| `consumer.properties` | 空 | consumer raw properties（不允许保留键，也不允许 `group.id`、`auto.offset.reset`、`enable.auto.commit`、`max.poll.records`；这些字段分别通过 typed 配置或本次 override 设置） |
 
 ### 路由规则配置
 
@@ -289,17 +317,17 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 |--------|----------|------|
 | `KafkaRouteResolver` | `DefaultKafkaRouteResolver` | 自定义 topic/routeKey 到 datasource 的解析逻辑 |
 | `KafkaProducerFactoryFactory` | `DefaultKafkaProducerFactoryFactory` | 自定义 ProducerFactory 创建逻辑 |
-| `KafkaConsumerFactoryFactory` | `DefaultKafkaConsumerFactoryFactory` | 自定义 ConsumerFactory 创建逻辑 |
+| `KafkaConsumerFactoryFactory` | `DefaultKafkaConsumerFactoryFactory` | 自定义 ConsumerFactory 创建逻辑；需要支持派生 factory 时必须实现三参数 `create`，旧 SPI 调用新 API 会固定报 `KAFKA_ROUTE_015`，不会回退到共享基础 factory |
 | `KafkaRoutePropertiesValidator` | `DefaultKafkaRoutePropertiesValidator` | 自定义或增强配置校验 |
 | `KafkaRouteDiagnostics` | `DefaultKafkaRouteDiagnostics` | 自定义 Broker 诊断实现 |
 
 ## 测试
 
-单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界与诊断 capability 准确性。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
+单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
 
 ## 升级说明
 
-1.0.1 是 1.0.0 后的诊断准确性补丁版本，仅修复 broker capability 与 Spring Kafka transactionIdPrefix 能力探测口径，不新增配置项，不改变路由核心 API。从 1.0.0 升级到 1.0.1 只需要替换依赖版本。
+1.0.2 在 1.0.1 的基础上新增调用方持有的派生 `ConsumerFactory` API。已有只使用 `KafkaRouteTemplate` 或 `getConsumerFactory(...)` 的代码无需修改；需要为不同消费入口指定独立 consumer 参数时，使用 `createConsumerFactory(...)` 并在调用方生命周期结束时销毁返回 factory。自定义 `KafkaConsumerFactoryFactory` 如未实现三参数 `create`，调用新 API 会报 `KAFKA_ROUTE_015`，应实现该方法并确保每次返回独立实例。
 
 ## 版本兼容
 

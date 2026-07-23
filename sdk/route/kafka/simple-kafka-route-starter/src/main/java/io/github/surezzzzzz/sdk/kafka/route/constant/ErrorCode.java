@@ -21,8 +21,10 @@ public final class ErrorCode {
     public static final String KAFKA_ROUTE_012 = "KAFKA_ROUTE_012";
     public static final String KAFKA_ROUTE_013 = "KAFKA_ROUTE_013";
     public static final String KAFKA_ROUTE_014 = "KAFKA_ROUTE_014";
+    public static final String KAFKA_ROUTE_015 = "KAFKA_ROUTE_015";
+    public static final String KAFKA_ROUTE_016 = "KAFKA_ROUTE_016";
 
     private ErrorCode() {
-        throw new UnsupportedOperationException("Utility class");
+        throw new UnsupportedOperationException(SimpleKafkaRouteConstant.EXCEPTION_MESSAGE_UTILITY_CLASS);
     }
 }

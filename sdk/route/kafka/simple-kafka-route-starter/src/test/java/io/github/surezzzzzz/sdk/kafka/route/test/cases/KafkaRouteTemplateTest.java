@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.kafka.route.test.cases;
 
 import io.github.surezzzzzz.sdk.kafka.route.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.kafka.route.exception.RouteException;
 import io.github.surezzzzzz.sdk.kafka.route.exception.SimpleKafkaRouteException;
 import io.github.surezzzzzz.sdk.kafka.route.matcher.KafkaRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteRecord;
@@ -13,9 +12,9 @@ import io.github.surezzzzzz.sdk.kafka.route.test.factory.MockKafkaProducerFactor
 import io.github.surezzzzzz.sdk.kafka.route.test.factory.RecordingProducerFactory;
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelper;
 import io.github.surezzzzzz.sdk.kafka.route.validator.DefaultKafkaRoutePropertiesValidator;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.KafkaTemplate;
 

@@ -13,6 +13,7 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.ProducerFactory;
 
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -127,6 +128,6 @@ public class DefaultKafkaProducerFactoryFactory implements KafkaProducerFactoryF
     }
 
     private String lower(String value) {
-        return KafkaRouteStringHelper.hasText(value) ? value.trim().toLowerCase() : value;
+        return KafkaRouteStringHelper.hasText(value) ? value.trim().toLowerCase(Locale.ROOT) : value;
     }
 }

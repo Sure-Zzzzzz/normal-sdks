@@ -6,7 +6,8 @@ import io.github.surezzzzzz.sdk.kafka.route.test.factory.RecordingProducerFactor
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Kafka 配置兼容 Helper 测试
