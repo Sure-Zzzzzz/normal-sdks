@@ -4,8 +4,8 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterCo
 import lombok.Data;
 
 import java.lang.reflect.Method;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 智能Redis限流器上下文
@@ -35,13 +35,20 @@ public class SmartRedisLimiterContext {
     /**
      * 扩展属性（存储所有上下文信息）
      */
-    private Map<String, Object> attributes = new HashMap<>();
+    private Map<String, Object> attributes = new ConcurrentHashMap<>();
+
+    /**
+     * 静态Builder
+     */
+    public static SmartRedisLimiterContextBuilder builder() {
+        return new SmartRedisLimiterContextBuilder();
+    }
 
     /**
      * 获取属性
      *
      * @param attribute 属性键
-     * @param <T>      属性类型
+     * @param <T>       属性类型
      * @return 属性值
      */
     @SuppressWarnings("unchecked")
@@ -56,6 +63,10 @@ public class SmartRedisLimiterContext {
      * @param value     属性值
      */
     public void setAttribute(SmartRedisLimiterContextAttribute attribute, Object value) {
+        if (value == null) {
+            attributes.remove(attribute.getCode());
+            return;
+        }
         attributes.put(attribute.getCode(), value);
     }
 
@@ -85,13 +96,6 @@ public class SmartRedisLimiterContext {
      */
     public String getMatchedPathPattern() {
         return getAttribute(SmartRedisLimiterContextAttribute.MATCHED_PATH_PATTERN);
-    }
-
-    /**
-     * 静态Builder
-     */
-    public static SmartRedisLimiterContextBuilder builder() {
-        return new SmartRedisLimiterContextBuilder();
     }
 
     /**
@@ -141,7 +145,7 @@ public class SmartRedisLimiterContext {
          * @return builder
          */
         public SmartRedisLimiterContextBuilder attribute(SmartRedisLimiterContextAttribute attribute, Object value) {
-            context.attributes.put(attribute.getCode(), value);
+            context.setAttribute(attribute, value);
             return this;
         }
 
@@ -153,7 +157,11 @@ public class SmartRedisLimiterContext {
          */
         public SmartRedisLimiterContextBuilder attributes(Map<String, Object> attributes) {
             if (attributes != null) {
-                context.attributes.putAll(attributes);
+                for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+                    if (entry.getValue() != null) {
+                        context.attributes.put(entry.getKey(), entry.getValue());
+                    }
+                }
             }
             return this;
         }

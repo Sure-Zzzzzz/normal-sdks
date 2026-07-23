@@ -1,15 +1,18 @@
 spring:
   application:
     name: smart-limiter-test
-  redis:
-    host: localhost
-    port: 6379
+
 
 # 智能限流器配置
 io:
   github:
     surezzzzzz:
       sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: false
         limiter:
           redis:
             smart:
@@ -43,6 +46,60 @@ io:
                   - /api/health
 
                 rules:
+                  # Redis 版本矩阵：相同限流规则通过 path key 路由到六套 Redis 数据源
+                  - path-pattern: /api/matrix/**
+                    method: GET
+                    key-strategy: path
+                    algorithm: fixed
+                    fallback: deny
+                    limits:
+                      - count: 2
+                        window: 30
+                        unit: seconds
+                      - count: 3
+                        window: 60
+                        unit: seconds
+
+                  - path-pattern: /api/matrix/**
+                    method: POST
+                    key-strategy: path
+                    algorithm: sliding
+                    fallback: deny
+                    limits:
+                      - count: 2
+                        window: 30
+                        unit: seconds
+                      - count: 3
+                        window: 60
+                        unit: seconds
+
+                  # 降级测试：专用路径由 Redis Route 路由到不可用数据源
+                  - path-pattern: /api/fallback/allow
+                    method: GET
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  - path-pattern: /api/fallback/deny
+                    method: POST
+                    key-strategy: path
+                    fallback: deny
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  - path-pattern: /api/fallback/default
+                    method: GET
+                    key-strategy: path
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
                   # 规则0：滑动窗口测试接口，路径模式共享限流
                   - path-pattern: /api/sliding/**
                     method: GET
@@ -201,10 +258,114 @@ io:
 
               # 限流通过时是否发布事件
               log-on-pass: false
+        redis:
+          route:
+            enable: true
+            default-source: redis7Standalone
+            sources:
+              unavailable:
+                mode: standalone
+                host: localhost
+                port: 16399
+              redis3Standalone:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis5Standalone:
+                mode: standalone
+                host: localhost
+                port: 16380
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis7Standalone:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis5Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis7Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+            rules:
+              - pattern: "*/api/fallback/*"
+                type: wildcard
+                datasource: unavailable
+                priority: 1
+              - pattern: "*method:TestService.fallback*Method"
+                type: wildcard
+                datasource: unavailable
+                priority: 2
+              - pattern: "*/api/matrix/redis3-standalone/*"
+                type: wildcard
+                datasource: redis3Standalone
+                priority: 10
+              - pattern: "*/api/matrix/redis5-standalone/*"
+                type: wildcard
+                datasource: redis5Standalone
+                priority: 11
+              - pattern: "*/api/matrix/redis7-standalone/*"
+                type: wildcard
+                datasource: redis7Standalone
+                priority: 12
+              - pattern: "*/api/matrix/redis3-cluster/*"
+                type: wildcard
+                datasource: redis3Cluster
+                priority: 20
+              - pattern: "*/api/matrix/redis5-cluster/*"
+                type: wildcard
+                datasource: redis5Cluster
+                priority: 21
+              - pattern: "*/api/matrix/redis7-cluster/*"
+                type: wildcard
+                datasource: redis7Cluster
+                priority: 22
 
 # 日志配置
 logging:
   level:
     io.github.surezzzzzz.sdk.limiter.redis.smart: DEBUG
-    redis.embedded: WARN
     org.springframework: WARN

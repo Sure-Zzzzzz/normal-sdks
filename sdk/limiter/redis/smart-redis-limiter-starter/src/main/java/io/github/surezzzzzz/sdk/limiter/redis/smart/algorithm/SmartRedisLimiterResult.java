@@ -32,4 +32,39 @@ public class SmartRedisLimiterResult {
      * 窗口重置的 Unix 时间戳（秒）
      */
     private final long resetAt;
+
+    /**
+     * 是否为降级结果
+     */
+    private final boolean fallback;
+
+    /**
+     * 降级原因
+     */
+    private final String fallbackReason;
+
+    /**
+     * 路由 Key
+     */
+    private final String routeKey;
+
+    /**
+     * Redis datasource key
+     */
+    private final String datasourceKey;
+
+    /**
+     * Redis 模式
+     */
+    private final String redisMode;
+
+    /**
+     * 是否要求通过 redis-route 执行
+     */
+    private final boolean routeRequired;
+
+    /**
+     * 是否成功解析到 datasource
+     */
+    private final boolean routeResolved;
 }

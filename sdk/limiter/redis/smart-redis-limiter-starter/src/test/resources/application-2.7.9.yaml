@@ -1,0 +1,6 @@
+# Spring Boot 2.7.9 主版本测试 profile。
+# Redis 3.2.12 / 5.0.14 / 7.2.6 的 standalone 与 cluster 公共矩阵配置继承 application.yaml。
+
+spring:
+  application:
+    name: smart-redis-limiter-test-2.7.9

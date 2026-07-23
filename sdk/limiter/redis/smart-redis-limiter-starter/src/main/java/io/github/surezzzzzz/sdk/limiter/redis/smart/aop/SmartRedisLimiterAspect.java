@@ -9,10 +9,11 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterMode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.execution.SmartRedisLimiterExecutionCoordinator;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.execution.SmartRedisLimiterExecutionOutcome;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -21,7 +22,6 @@ import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.lang.reflect.Method;
@@ -48,6 +48,12 @@ public class SmartRedisLimiterAspect {
     private SmartRedisLimiterAlgorithmFactory algorithmFactory;
 
     /**
+     * 统一请求执行协调器
+     */
+    @Autowired
+    private SmartRedisLimiterExecutionCoordinator executionCoordinator;
+
+    /**
      * 限流器配置
      */
     @Autowired
@@ -58,12 +64,6 @@ public class SmartRedisLimiterAspect {
      */
     @Autowired
     private ApplicationEventPublisher applicationEventPublisher;
-
-    /**
-     * Spring上下文
-     */
-    @Autowired
-    private ApplicationContext applicationContext;
 
     /**
      * 环绕通知：拦截 @SmartRedisLimiter 注解标记的方法
@@ -106,12 +106,21 @@ public class SmartRedisLimiterAspect {
 
         String fallbackStrategy = determineFallbackStrategy(limiter);
         SmartRedisLimiterAlgorithm algorithm = selectAlgorithm(limiter);
+        SmartRedisLimiterExecutionOutcome outcome = executionCoordinator.execute(
+                context,
+                limitRules,
+                keyStrategy,
+                algorithm.getAlgorithm(),
+                fallbackStrategy,
+                limiter.resourceCode());
+        SmartRedisLimiterResult result = outcome.getResult();
+        limitRules = outcome.getPlan().getLimits();
 
-        SmartRedisLimiterResult result = algorithm.tryAcquireWithResult(context, limitRules, keyStrategy, fallbackStrategy);
-
-        // 始终发布事件，由监听器侧决定是否处理
-        if (!result.isPassed() || Boolean.TRUE.equals(properties.getLogOnPass())) {
-            publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), result);
+        // 降级事件必须发布，正常通过事件由 logOnPass 控制
+        if (!result.isPassed() || result.isFallback() || Boolean.TRUE.equals(properties.getLogOnPass())) {
+            publishLimitEvent(context, limitRules, keyStrategy, algorithm.getAlgorithm(), result,
+                    outcome.getPlan().getResourceCode(), outcome.getPlan().getPolicySource(),
+                    outcome.getPlan().getPolicyRevision());
         }
 
         if (!result.isPassed()) {
@@ -134,31 +143,21 @@ public class SmartRedisLimiterAspect {
      */
     private void publishLimitEvent(SmartRedisLimiterContext context,
                                    List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                   String keyStrategy, String algorithm, SmartRedisLimiterResult result) {
+                                   String keyStrategy, String algorithm, SmartRedisLimiterResult result,
+                                   String resourceCode, String policySource, Long policyRevision) {
         try {
-            String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
-                    context, keyStrategy, properties.getMe(), applicationContext);
-            long durationNanos = context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) != null
-                    ? (long) context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) : 0L;
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
-                    limitKey,
-                    keyStrategy,
-                    algorithm,
-                    SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
-                    result.isPassed(),
-                    SmartRedisLimiterConstant.SOURCE_ASPECT,
-                    null,
-                    null,
-                    null,
-                    null,
-                    context.getMethod().getName(),
-                    context.getMethod().toGenericString(),
-                    context.getAttributes(),
-                    result.getLimit(),
-                    result.getRemaining(),
-                    result.getResetAt(),
-                    durationNanos);
+                    SmartRedisLimiterEventHelper.buildEventPayload(
+                            context,
+                            limitRules,
+                            keyStrategy,
+                            algorithm,
+                            result,
+                            SmartRedisLimiterConstant.SOURCE_ASPECT,
+                            resourceCode,
+                            policySource,
+                            policyRevision));
             applicationEventPublisher.publishEvent(event);
         } catch (Exception e) {
             log.warn("发布限流事件失败", e);

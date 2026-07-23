@@ -2,8 +2,11 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.generator;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterKeyException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.lang.reflect.Method;
@@ -22,7 +25,9 @@ public class SmartRedisLimiterMethodKeyGenerator implements SmartRedisLimiterKey
     public String generate(SmartRedisLimiterContext context) {
         Method method = context.getMethod();
         if (method == null) {
-            throw new IllegalArgumentException(SmartRedisLimiterConstant.MSG_METHOD_NULL);
+            throw new SmartRedisLimiterKeyException(
+                    ErrorCode.KEY_PART_METHOD_MISSING,
+                    ErrorMessage.KEY_PART_METHOD_MISSING);
         }
 
         String className = method.getDeclaringClass().getSimpleName();

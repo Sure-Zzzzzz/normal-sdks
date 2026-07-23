@@ -1,13 +1,15 @@
 dependencies {
-    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
-    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
-    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+    api 'org.springframework.boot:spring-boot-starter-aop'
+    api 'org.springframework.boot:spring-boot-starter-web'
 
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.7'
-
+    testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:1.0.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testRuntimeOnly 'mysql:mysql-connector-java'
 }

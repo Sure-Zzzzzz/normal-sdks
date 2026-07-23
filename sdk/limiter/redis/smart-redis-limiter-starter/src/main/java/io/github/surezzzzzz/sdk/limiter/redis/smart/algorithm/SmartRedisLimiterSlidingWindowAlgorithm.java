@@ -4,11 +4,16 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiter
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterStarterConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorCode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorMessage;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.executor.SmartRedisLimiterRedisExecutionResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 滑动窗口限流算法实现
@@ -20,6 +25,7 @@ import java.util.List;
  *   <li>remaining: 最严格窗口的剩余配额</li>
  *   <li>resetAt: 最短窗口的重置 Unix 时间戳（秒）</li>
  * </ul>
+ * <p>窗口时间基准使用客户端 Unix epoch 微秒（跨 JVM 可比较），member 使用 UUID 保证多实例唯一。
  *
  * @author Sure.
  * @Date: 2026-05-08
@@ -32,51 +38,38 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
     private static final String LIMITER_SCRIPT =
             "local key_count = #KEYS\n" +
                     "local current_time = tonumber(ARGV[#ARGV - 1])\n" +
-                    "local current_time_sec = tonumber(ARGV[#ARGV])\n" +
-                    "local NANOSECONDS_PER_SECOND = " + SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND + "\n" +
+                    "local MICROSECONDS_PER_SECOND = 1000000\n" +
+                    "local counts = {}\n" +
+                    "for i = 1, key_count do\n" +
+                    "    local window = tonumber(ARGV[i * 2])\n" +
+                    "    redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', current_time - window)\n" +
+                    "    local current_count = redis.call('ZCARD', KEYS[i])\n" +
+                    "    counts[i] = current_count\n" +
+                    "    if current_count >= tonumber(ARGV[i * 2 - 1]) then\n" +
+                    "        local oldest = redis.call('ZRANGE', KEYS[i], 0, 0, 'WITHSCORES')\n" +
+                    "        local reset_at = math.ceil((tonumber(oldest[2]) + window) / MICROSECONDS_PER_SECOND)\n" +
+                    "        return {0, tonumber(ARGV[i * 2 - 1]), 0, reset_at}\n" +
+                    "    end\n" +
+                    "end\n" +
                     "local min_remaining = nil\n" +
                     "local min_limit = nil\n" +
                     "local min_reset = nil\n" +
-                    "local pass_count = 0\n" +
                     "for i = 1, key_count do\n" +
-                    "    local window_key = KEYS[i]\n" +
                     "    local limit = tonumber(ARGV[i * 2 - 1])\n" +
                     "    local window = tonumber(ARGV[i * 2])\n" +
-                    "    local window_sec = math.ceil(window / NANOSECONDS_PER_SECOND)\n" +
-                    "    local reset_at = current_time_sec + window_sec\n" +
-                    "\n" +
-                    "    -- 优化：先只读计数，不清理\n" +
-                    "    local current_count = redis.call('ZCARD', window_key)\n" +
-                    "    local remaining = limit - current_count\n" +
-                    "\n" +
-                    "    -- 配额用尽或已达阈值才触发过期数据清理\n" +
-                    "    if remaining <= 0 then\n" +
-                    "        local window_start = current_time - window\n" +
-                    "        redis.call('ZREMRANGEBYSCORE', window_key, '-inf', window_start)\n" +
-                    "        current_count = redis.call('ZCARD', window_key)\n" +
-                    "        remaining = limit - current_count\n" +
-                    "    end\n" +
-                    "\n" +
+                    "    local member = ARGV[key_count * 2 + i]\n" +
+                    "    redis.call('ZADD', KEYS[i], current_time, member)\n" +
+                    "    redis.call('EXPIRE', KEYS[i], math.ceil(window / MICROSECONDS_PER_SECOND) + 1)\n" +
+                    "    local remaining = math.max(limit - counts[i] - 1, 0)\n" +
+                    "    local oldest = redis.call('ZRANGE', KEYS[i], 0, 0, 'WITHSCORES')\n" +
+                    "    local reset_at = math.ceil((tonumber(oldest[2]) + window) / MICROSECONDS_PER_SECOND)\n" +
                     "    if min_remaining == nil or remaining < min_remaining then\n" +
                     "        min_remaining = remaining\n" +
                     "        min_limit = limit\n" +
                     "        min_reset = reset_at\n" +
                     "    end\n" +
-                    "    if current_count < limit then\n" +
-                    "        pass_count = pass_count + 1\n" +
-                    "    end\n" +
                     "end\n" +
-                    "if pass_count == key_count then\n" +
-                    "    for i = 1, key_count do\n" +
-                    "        local window_key = KEYS[i]\n" +
-                    "        local window = tonumber(ARGV[i * 2])\n" +
-                    "        local member = ARGV[key_count * 2 + i]\n" +
-                    "        redis.call('ZADD', window_key, current_time, member)\n" +
-                    "        redis.call('EXPIRE', window_key, math.ceil(window / NANOSECONDS_PER_SECOND) + 1)\n" +
-                    "    end\n" +
-                    "    return {1, min_limit, min_remaining, min_reset}\n" +
-                    "end\n" +
-                    "return {0, min_limit, min_remaining, min_reset}";
+                    "return {1, min_limit, min_remaining, min_reset}";
 
     @Override
     public String getAlgorithm() {
@@ -91,44 +84,56 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
     @Override
     protected SmartRedisLimiterResult doExecuteWithResult(SmartRedisLimiterContext context,
                                                           List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
-                                                          String keyStrategy) {
-        String baseKey = buildBaseKey(context, keyStrategy);
-
+                                                          String keyStrategy,
+                                                          String baseKey) {
         List<String> keys = new ArrayList<>();
         List<String> args = new ArrayList<>();
 
-        long currentTimeNano = System.nanoTime();
-
         for (SmartRedisLimiterProperties.SmartLimitRule rule : limitRules) {
-            keys.add(buildWindowKey(baseKey, rule.getWindowSeconds(), SmartRedisLimiterRedisKeyConstant.SUFFIX_SLIDING_WINDOW));
+            keys.add(buildWindowKey(baseKey, rule.getWindowSeconds(),
+                    SmartRedisLimiterRedisKeyConstant.SUFFIX_SLIDING_WINDOW));
             args.add(String.valueOf(rule.getCount()));
-            args.add(String.valueOf(rule.getWindowSeconds() * SmartRedisLimiterRedisKeyConstant.NANOSECONDS_PER_SECOND));
+            args.add(String.valueOf(rule.getWindowSeconds()
+                    * SmartRedisLimiterStarterConstant.MICROSECONDS_PER_SECOND));
         }
 
-        String member = String.format(SmartRedisLimiterConstant.TEMPLATE_SLIDING_WINDOW_MEMBER,
-                Thread.currentThread().getId(), currentTimeNano);
-        args.add(member);
-
-        // current_time（纳秒）和 current_time_sec（Unix秒）放在末尾
-        args.add(String.valueOf(currentTimeNano));
-        args.add(String.valueOf(System.currentTimeMillis() / SmartRedisLimiterConstant.MILLIS_PER_SECOND));
-
-        List<?> result = getRedisTemplate().execute(getScript(), keys, args.toArray(new Object[0]));
-
-        if (result == null || result.size() < 4) {
-            log.warn("SmartRedisLimiter 限流脚本返回异常，默认拒绝: key={}", baseKey);
-            return SmartRedisLimiterResult.builder()
-                    .passed(false)
-                    .limit(0)
-                    .remaining(0)
-                    .resetAt(0)
-                    .build();
+        String requestId = UUID.randomUUID().toString();
+        for (int i = 0; i < limitRules.size(); i++) {
+            args.add(String.format(SmartRedisLimiterStarterConstant.TEMPLATE_SLIDING_WINDOW_MEMBER,
+                    requestId, i));
         }
 
-        boolean passed = Long.valueOf(1).equals(toLong(result.get(0)));
-        long limit = toLong(result.get(1));
-        long remaining = toLong(result.get(2));
-        long resetAt = toLong(result.get(3));
+        long currentTimeMillis = System.currentTimeMillis();
+        args.add(String.valueOf(currentTimeMillis
+                * SmartRedisLimiterStarterConstant.MICROSECONDS_PER_MILLISECOND));
+        args.add(String.valueOf(currentTimeMillis / SmartRedisLimiterConstant.MILLIS_PER_SECOND));
+
+        SmartRedisLimiterRedisExecutionResult<List<?>> executionResult = executeRedis(baseKey,
+                redisTemplate -> redisTemplate.execute(getScript(), keys, args.toArray(new Object[0])));
+        List<?> result = executionResult.getValue();
+
+        if (result == null || result.size() < SmartRedisLimiterStarterConstant.LUA_RESULT_FIELD_COUNT) {
+            log.warn("SmartRedisLimiter 限流脚本返回异常，触发降级: key={}", baseKey);
+            throw scriptException(ErrorCode.SLIDING_WINDOW_SCRIPT_RESULT_INVALID,
+                    ErrorMessage.SLIDING_WINDOW_SCRIPT_RESULT_INVALID, executionResult);
+        }
+
+        boolean passed = parseScriptLong(
+                result.get(SmartRedisLimiterStarterConstant.LUA_RESULT_PASSED_INDEX),
+                SmartRedisLimiterStarterConstant.LUA_RESULT_PASSED_FIELD,
+                executionResult) == SmartRedisLimiterStarterConstant.LUA_RESULT_PASSED;
+        long limit = parseScriptLong(
+                result.get(SmartRedisLimiterStarterConstant.LUA_RESULT_LIMIT_INDEX),
+                SmartRedisLimiterStarterConstant.LUA_RESULT_LIMIT_FIELD,
+                executionResult);
+        long remaining = parseScriptLong(
+                result.get(SmartRedisLimiterStarterConstant.LUA_RESULT_REMAINING_INDEX),
+                SmartRedisLimiterStarterConstant.LUA_RESULT_REMAINING_FIELD,
+                executionResult);
+        long resetAt = parseScriptLong(
+                result.get(SmartRedisLimiterStarterConstant.LUA_RESULT_RESET_AT_INDEX),
+                SmartRedisLimiterStarterConstant.LUA_RESULT_RESET_AT_FIELD,
+                executionResult);
 
         if (!passed) {
             log.warn("SmartRedisLimiter 限流触发: key={}, rules={}", baseKey, limitRules);
@@ -141,20 +146,11 @@ public class SmartRedisLimiterSlidingWindowAlgorithm extends AbstractSmartRedisL
                 .limit(limit)
                 .remaining(remaining)
                 .resetAt(resetAt)
+                .routeKey(executionResult.getRouteKey())
+                .datasourceKey(executionResult.getDatasourceKey())
+                .redisMode(executionResult.getRedisMode())
+                .routeRequired(executionResult.isRouteRequired())
+                .routeResolved(executionResult.isRouteResolved())
                 .build();
-    }
-
-    private static long toLong(Object value) {
-        if (value == null) {
-            return 0;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
-        }
-        try {
-            return Long.parseLong(value.toString());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }

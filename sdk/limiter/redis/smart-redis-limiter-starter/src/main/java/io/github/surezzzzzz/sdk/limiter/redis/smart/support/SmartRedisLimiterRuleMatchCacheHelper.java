@@ -24,19 +24,17 @@ import java.util.concurrent.ConcurrentHashMap;
 @ConditionalOnProperty(prefix = SmartRedisLimiterConstant.CONFIG_PREFIX, name = "enable", havingValue = "true")
 public class SmartRedisLimiterRuleMatchCacheHelper {
 
-    @Autowired
-    private SmartRedisLimiterProperties properties;
-
-    private final ConcurrentHashMap<String, SmartRedisLimiterProperties.SmartInterceptorRule> cache =
-            new ConcurrentHashMap<>();
-
-    private final AntPathMatcher pathMatcher = new AntPathMatcher();
-
     /**
      * 未匹配到规则的标记对象（避免缓存穿透）
      */
     private static final SmartRedisLimiterProperties.SmartInterceptorRule MISS_MARKER =
             new SmartRedisLimiterProperties.SmartInterceptorRule();
+    private final ConcurrentHashMap<String, SmartRedisLimiterProperties.SmartInterceptorRule> cache =
+            new ConcurrentHashMap<>();
+
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
+    @Autowired
+    private SmartRedisLimiterProperties properties;
 
     /**
      * 查找匹配的规则（带缓存）

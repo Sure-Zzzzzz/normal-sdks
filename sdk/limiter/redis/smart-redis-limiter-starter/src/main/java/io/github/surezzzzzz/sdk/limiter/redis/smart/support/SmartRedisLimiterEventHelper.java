@@ -1,21 +1,19 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.support;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterContext;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterKeyStrategy;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.generator.SmartRedisLimiterKeyGenerator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationContext;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterEventPayload;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 限流事件辅助工具类
- * 提供 Interceptor 和 Aspect 共用的 limitKey 构建和规则序列化逻辑
+ * 提供 Interceptor 和 Aspect 共用的事件载荷构建和规则序列化逻辑
  *
  * @author Sure.
  * @Date: 2026-05-09
@@ -26,37 +24,110 @@ public class SmartRedisLimiterEventHelper {
         throw new UnsupportedOperationException("Utility class");
     }
 
-    private static final Logger log = LoggerFactory.getLogger(SmartRedisLimiterEventHelper.class);
+    /**
+     * 构建限流事件载荷
+     *
+     * @param context     限流上下文
+     * @param limitRules  限流规则列表
+     * @param keyStrategy Key策略
+     * @param algorithm   算法
+     * @param result      限流结果
+     * @param sourceType  来源类型
+     * @return 事件载荷
+     */
+    public static SmartRedisLimiterEventPayload buildEventPayload(SmartRedisLimiterContext context,
+                                                                  List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                                                                  String keyStrategy,
+                                                                  String algorithm,
+                                                                  SmartRedisLimiterResult result,
+                                                                  String sourceType) {
+        return buildEventPayload(context, limitRules, keyStrategy, algorithm, result, sourceType,
+                null, SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL, null);
+    }
 
     /**
-     * 构建限流 Key（用于事件发布）
+     * 构建携带动态策略元数据的限流事件载荷
      *
-     * @param context            限流上下文
-     * @param keyStrategy        Key策略
-     * @param me                 服务标识
-     * @param applicationContext Spring上下文
-     * @return 限流Key
+     * @param context        限流上下文
+     * @param limitRules     最终限流规则列表
+     * @param keyStrategy    Key 策略
+     * @param algorithm      算法
+     * @param result         限流结果
+     * @param sourceType     来源类型
+     * @param resourceCode   稳定资源编码
+     * @param policySource   策略来源
+     * @param policyRevision 远程策略版本
+     * @return 事件载荷
      */
-    public static String buildLimitKey(SmartRedisLimiterContext context,
-                                       String keyStrategy,
-                                       String me,
-                                       ApplicationContext applicationContext) {
-        try {
-            String keyPart = context.getAttribute(SmartRedisLimiterContextAttribute.PRECOMPUTED_KEY_PART);
-            if (keyPart == null || keyPart.isEmpty()) {
-                String beanName = SmartRedisLimiterKeyStrategy.getBeanName(keyStrategy);
-                SmartRedisLimiterKeyGenerator generator =
-                        applicationContext.getBean(beanName, SmartRedisLimiterKeyGenerator.class);
-                keyPart = generator.generate(context);
-            }
-            return SmartRedisLimiterRedisKeyConstant.KEY_PREFIX
-                    + me
-                    + SmartRedisLimiterRedisKeyConstant.KEY_SEPARATOR
-                    + keyPart;
-        } catch (Exception e) {
-            log.warn("构建限流Key失败, keyStrategy={}", keyStrategy, e);
-            return null;
+    public static SmartRedisLimiterEventPayload buildEventPayload(SmartRedisLimiterContext context,
+                                                                  List<SmartRedisLimiterProperties.SmartLimitRule> limitRules,
+                                                                  String keyStrategy,
+                                                                  String algorithm,
+                                                                  SmartRedisLimiterResult result,
+                                                                  String sourceType,
+                                                                  String resourceCode,
+                                                                  String policySource,
+                                                                  Long policyRevision) {
+        String routeKey = firstNonNull(result.getRouteKey(),
+                context.getAttribute(SmartRedisLimiterContextAttribute.ROUTE_KEY));
+        String limitKey = routeKey;
+        Long durationNanos = context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS);
+        String datasourceKey = firstNonNull(result.getDatasourceKey(),
+                context.getAttribute(SmartRedisLimiterContextAttribute.DATASOURCE_KEY));
+        String redisMode = firstNonNull(result.getRedisMode(),
+                context.getAttribute(SmartRedisLimiterContextAttribute.REDIS_MODE));
+        String fallbackReason = firstNonNull(result.getFallbackReason(),
+                context.getAttribute(SmartRedisLimiterContextAttribute.FALLBACK_REASON));
+        if (result.isFallback() && fallbackReason == null) {
+            fallbackReason = SmartRedisLimiterConstant.FALLBACK_REASON_UNKNOWN;
         }
+        boolean routeRequired = result.isRouteRequired()
+                || Boolean.TRUE.equals(context.getAttribute(SmartRedisLimiterContextAttribute.ROUTE_REQUIRED));
+        boolean routeResolved = result.isRouteResolved()
+                || Boolean.TRUE.equals(context.getAttribute(SmartRedisLimiterContextAttribute.ROUTE_RESOLVED));
+
+        return SmartRedisLimiterEventPayload.builder()
+                .limitKey(limitKey)
+                .routeKey(routeKey)
+                .datasourceKey(datasourceKey)
+                .redisMode(redisMode == null ? SmartRedisLimiterConstant.REDIS_MODE_UNKNOWN : redisMode)
+                .routeRequired(routeRequired)
+                .routeResolved(routeResolved)
+                .keyStrategy(keyStrategy)
+                .algorithm(algorithm)
+                .limitRules(serializeLimitRules(limitRules))
+                .passed(result.isPassed())
+                .sourceType(sourceType)
+                .requestUri(context.getRequestPath())
+                .httpMethod(context.getRequestMethod())
+                .clientIp(context.getClientIp())
+                .matchedPathPattern(context.getMatchedPathPattern())
+                .methodName(context.getMethod() == null ? null : context.getMethod().getName())
+                .methodQualifiedName(context.getMethod() == null ? null : context.getMethod().toGenericString())
+                .attributes(buildEventAttributes(context))
+                .limit(result.getLimit())
+                .remaining(result.getRemaining())
+                .resetAt(result.getResetAt())
+                .durationNanos(durationNanos == null ? 0L : durationNanos)
+                .fallbackReason(fallbackReason)
+                .resourceCode(resourceCode == null || resourceCode.isEmpty() ? null : resourceCode)
+                .policySource(policySource)
+                .policyRevision(policyRevision)
+                .build();
+    }
+
+    private static Map<String, Object> buildEventAttributes(SmartRedisLimiterContext context) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : context.getAttributes().entrySet()) {
+            if (SmartRedisLimiterContextAttribute.fromCode(entry.getKey()) == null) {
+                result.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    private static <T> T firstNonNull(T primary, T fallback) {
+        return primary == null ? fallback : primary;
     }
 
     /**

@@ -1,8 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.annotation;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterTimeUnit;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.concurrent.TimeUnit;
 
 /**
  * @author: Sure.
@@ -13,17 +14,23 @@ import java.util.concurrent.TimeUnit;
 public @interface SmartRedisLimitRule {
 
     /**
-     * 限流次数
+     * 获取限流次数
+     *
+     * @return 限流次数
      */
-    int count();
+    long count();
 
     /**
-     * 时间窗口
+     * 获取时间窗口
+     *
+     * @return 时间窗口
      */
-    int window();
+    long window();
 
     /**
-     * 时间单位
+     * 获取时间单位
+     *
+     * @return 时间单位
      */
-    TimeUnit unit() default TimeUnit.SECONDS;
+    SmartRedisLimiterTimeUnit unit() default SmartRedisLimiterTimeUnit.SECONDS;
 }
