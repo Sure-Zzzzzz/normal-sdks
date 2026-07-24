@@ -1,0 +1,46 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: audit-integration
+              mode: annotation
+              log-on-pass: false
+              redis:
+                command-timeout: 1000
+              annotation:
+                default-key-strategy: method
+                default-fallback: deny
+                default-limits:
+                  - count: 10
+                    window: 1
+                    unit: seconds
+              fallback:
+                on-redis-error: deny
+              remote-policy:
+                enable: false
+        redis:
+          route:
+            enable: true
+            default-source: local
+            sources:
+              local:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 1000
+                connect-timeout-ms: 1000
+              unavailable:
+                mode: standalone
+                host: localhost
+                port: 16399
+                timeout-ms: 1000
+                connect-timeout-ms: 1000
+            rules:
+              - pattern: "*LimiterService.fallback*"
+                type: wildcard
+                datasource: unavailable
+                priority: 1

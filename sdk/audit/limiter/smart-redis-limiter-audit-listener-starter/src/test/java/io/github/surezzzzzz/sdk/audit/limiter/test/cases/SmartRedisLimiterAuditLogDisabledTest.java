@@ -2,8 +2,12 @@ package io.github.surezzzzzz.sdk.audit.limiter.test.cases;
 
 import io.github.surezzzzzz.sdk.audit.limiter.handler.SmartRedisLimiterAuditHandler;
 import io.github.surezzzzzz.sdk.audit.limiter.test.SmartRedisLimiterAuditListenerTestApplication;
+import io.github.surezzzzzz.sdk.audit.limiter.test.support.TestSmartRedisLimiterAuditHandler;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterEventPayload;
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,6 +15,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.TestPropertySource;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,41 +34,53 @@ public class SmartRedisLimiterAuditLogDisabledTest {
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
-    @Autowired(required = false)
+    @Autowired
     private List<SmartRedisLimiterAuditHandler> handlers;
+
+    @Autowired
+    private TestSmartRedisLimiterAuditHandler testHandler;
+
+    @BeforeEach
+    public void setUp() {
+        testHandler.reset();
+    }
 
     @Test
     public void testLogHandlerNotRegisteredWhenDisabled() {
-        log.info("========== 测试：log.enabled=false 时 LogHandler 不注册 ==========");
-
-        assertNotNull(handlers, "Handlers list should not be null");
-
+        log.info("默认日志关闭后的 Handler 列表是否存在：{}", handlers != null);
+        assertNotNull(handlers, "Handler 列表不应为空");
         boolean hasLogHandler = handlers.stream()
-                .anyMatch(h -> h.getClass().getSimpleName().contains("LogSmartRedisLimiterAuditHandler"));
-        assertFalse(hasLogHandler, "LogHandler should not be registered when log.enabled=false");
-
-        log.info("testLogHandlerNotRegisteredWhenDisabled passed, handler count={}", handlers.size());
+                .anyMatch(handler -> handler.getClass().getSimpleName().contains("LogSmartRedisLimiterAuditHandler"));
+        log.info("默认日志关闭后的 Handler 数量：{}", handlers.size());
+        assertFalse(hasLogHandler, "关闭配置后不得注册默认日志 Handler");
     }
 
     @Test
     public void testCustomHandlerStillWorksWhenLogDisabled() throws InterruptedException {
-        log.info("========== 测试：log 关闭时自定义 Handler 仍正常工作 ==========");
+        SmartRedisLimiterEventPayload payload = SmartRedisLimiterEventPayload.builder()
+                .limitKey("smart-limiter:test-service:path")
+                .routeKey("smart-limiter:test-service:path")
+                .redisMode(SmartRedisLimiterConstant.REDIS_MODE_STANDALONE)
+                .routeRequired(true)
+                .routeResolved(true)
+                .keyStrategy("path")
+                .algorithm("fixed")
+                .limitRules("5/10s")
+                .passed(false)
+                .sourceType("INTERCEPTOR")
+                .limit(5L)
+                .remaining(0L)
+                .resetAt(1715635500L)
+                .durationNanos(100L)
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL)
+                .build();
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:path:/api/test:5s",
-                "path", "fixed", "5/10s", false,
-                "INTERCEPTOR",
-                "/api/test", "GET", "127.0.0.1", null,
-                null, null,
-                null,
-                5, 0, 1715635500L, 100L
-        );
+        eventPublisher.publishEvent(new SmartRedisLimiterEvent(this, payload));
 
-        assertDoesNotThrow(() -> eventPublisher.publishEvent(event));
-
-        // log 关闭不影响 TestSmartRedisLimiterAuditHandler（它是 @Component 注册的）
-        // 这里只验证不抛异常，因为 log.enabled=false 时 TestHandler 可能还没初始化
-        // （取决于 TestApplication 的包扫描是否覆盖到 support 包）
-        log.info("testCustomHandlerStillWorksWhenLogDisabled passed");
+        log.info("默认日志关闭时已发布审计事件，等待自定义 Handler 投递");
+        assertTrue(testHandler.latch.await(5, TimeUnit.SECONDS), "关闭默认日志不得影响自定义 Handler 投递");
+        log.info("默认日志关闭时自定义 Handler 收到记录数：{}", testHandler.records.size());
+        assertEquals(1, testHandler.records.size());
+        assertFalse(testHandler.records.get(0).isPassed());
     }
 }

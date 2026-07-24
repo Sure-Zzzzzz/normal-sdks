@@ -1,155 +1,82 @@
 # smart-redis-limiter-audit-listener-starter
 
-监听 `smart-redis-limiter-starter` 发布的限流事件，生成审计记录并分发给业务处理器。
+> 使用历史 `1.x` 的应用请查看 [README.1.x.md](README.1.x.md)。1.x 已封版，不再维护。
+
+为 `smart-redis-limiter-starter:2.0.0` 提供限流**执行结果**审计。监听器在事件发布线程生成脱敏审计快照，再异步交给业务 Handler；不审计 Management 策略 CRUD。
 
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-audit-listener-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-audit-listener-starter:2.0.0'
 ```
 
-前提：项目中已引入 `smart-redis-limiter-starter`，它负责发布限流事件。
+该组合使用 core `2.1.0` 和 `simple-redis-route-starter:1.1.0`。Redis Route 是 limiter 2.x 的必需能力；Management `1.0.0` 是可选的独立策略管理服务，不是 audit 的运行时依赖。
 
----
+## 接入 Handler
 
-## 快速接入
-
-### 第一步：引入依赖
-
-```gradle
-implementation 'io.github.surezzzzzz:smart-redis-limiter-starter:1.1.3'
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-audit-listener-starter:1.0.0'
-```
-
-### 第二步（可选）：实现审计处理器
-
-默认已提供日志 Handler，开箱即用。如需持久化到数据库、ES 等，实现 `SmartRedisLimiterAuditHandler` 接口：
+默认日志 Handler 已启用。需要写入数据库、消息系统或检索平台时，实现 `SmartRedisLimiterAuditHandler`：
 
 ```java
 @Component
-public class MyAuditHandler implements SmartRedisLimiterAuditHandler {
+public class BusinessLimiterAuditHandler implements SmartRedisLimiterAuditHandler {
 
     @Override
     public void handle(SmartRedisLimiterRecord record) {
-        // 存数据库、发 MQ、写 ES，随你
-        log.info("Limiter audit: passed={}, source={}, algorithm={}, key={}",
-            record.isPassed(), record.getSource(), record.getAlgorithm(), record.getLimitKey());
+        if (!record.isPassed()) {
+            save(record.getResourceCode(), record.getPolicySource(), record.getFallbackReason());
+        }
     }
 }
 ```
 
-支持多个 Handler 同时工作，所有实现了 `SmartRedisLimiterAuditHandler` 的 Bean 都会被调用。
+可注册多个 Handler；单个 Handler 失败不会阻断其他 Handler 或影响限流请求。`SmartRedisLimiterAuditHandler` 接口在 2.0.0 保持不变。
 
-### 第三步（可选）：注入用户信息和 TraceId
+## 事件选择
 
-实现 `SmartRedisLimiterUserProvider` 和 `SmartRedisLimiterTraceIdProvider`，审计记录中会自动填充用户信息和链路 ID：
+Audit 不单独过滤事件，是否发布由 limiter starter 的 `log-on-pass` 决定：
 
-```java
-@Component
-public class MyUserProvider implements SmartRedisLimiterUserProvider {
+| 执行结果 | `log-on-pass=false` | `log-on-pass=true` |
+|----------|---------------------|--------------------|
+| 正常通过 | 不发布 | 发布 |
+| 触发限流 | 发布 | 发布 |
+| fallback allow | 发布 | 发布 |
+| fallback deny | 发布 | 发布 |
 
-    @Override
-    public String getClientId() {
-        return SecurityContext.getClientId();
-    }
+`log-on-pass` 位于 limiter starter 配置，不属于本模块。
 
-    @Override
-    public String getClientType() {
-        return SecurityContext.getClientType();
-    }
+## 审计记录
 
-    @Override
-    public String getUserId() {
-        return SecurityContext.getUserId();
-    }
+Handler 接收 core 的 `SmartRedisLimiterRecord`。2.0.0 完整映射执行快照：
 
-    @Override
-    public String getUsername() {
-        return SecurityContext.getUsername();
-    }
-}
+| 分组 | 字段 |
+|------|------|
+| 结果 | `passed`、`limit`、`remaining`、`resetAt`、`durationNanos` |
+| 限流规则 | `limitKey`、`keyStrategy`、`algorithm`、`limitRules`、`source` |
+| Route | `routeKey`、`datasourceKey`、`redisMode`、`routeRequired`、`routeResolved` |
+| fallback | `fallbackReason` |
+| 动态策略 | `resourceCode`、`policySource`、`policyRevision` |
+| 请求/方法 | `requestUri`、`httpMethod`、`clientIp`、`matchedPathPattern`、`methodName`、`methodQualifiedName` |
+| 身份与关联 | `clientId`、`clientType`、`userId`、`username`、`traceId` |
+| 审计时间 | `timestamp`（审计监听器生成快照的时间） |
 
-@Component
-public class MyTraceIdProvider implements SmartRedisLimiterTraceIdProvider {
+`limitKey` 与 `routeKey` 都会交给自定义 Handler。当前生产执行中它们可能相同，但不应依赖该等值关系。远程策略场景中 key 只含 subject 的 SHA-256 摘要，SDK 不传递或恢复原始 subject。
 
-    @Override
-    public String getTraceId() {
-        return MDC.get("traceId");
-    }
-}
-```
+## 隐私与默认日志边界
 
----
+2.0.0 固定将 `record.extra` 设为 `null`，不会将 `SmartRedisLimiterEvent.attributes` 写入审计记录。因此原始 subject、内部执行属性、请求头、cookie、密码、凭据、policy token、会话标识和请求/响应体等任意 attributes 都不会通过本模块透传。
 
-## 审计记录字段（SmartRedisLimiterRecord）
+`requestUri`、`clientIp`、身份字段和 TraceId 是 `SmartRedisLimiterRecord` 的显式字段，仍会交给自定义 Handler；其存储、脱敏和留存由业务方负责。默认日志只输出结果、算法、策略来源、Route/fallback 诊断及限额结果；不会输出限流 Key、路由 Key、用户标识、IP、TraceId、原始 URI 或 `extra`。
 
-### 用户信息（来自 Provider）
+## 用户与 Trace 扩展
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `clientId` | String | 客户端 ID |
-| `clientType` | String | 客户端类型 |
-| `userId` | String | 用户 ID |
-| `username` | String | 用户名 |
+可选实现 core 提供的 `SmartRedisLimiterUserProvider` 与 `SmartRedisLimiterTraceIdProvider`。2.0.0 在事件发布线程读取这些 Provider，避免 SecurityContext 或 MDC 在异步 Handler 线程丢失。Provider 失败只会使相应字段为空，不会阻断审计分发。
 
-### 限流上下文
+## 配置
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `limitKey` | String | 限流 Key |
-| `keyStrategy` | String | Key 生成策略：method / path / ip / path-pattern |
-| `algorithm` | String | 限流算法：fixed / sliding |
-| `limitRules` | String | 限流规则（序列化字符串） |
-| `passed` | boolean | 限流结果：true=通过，false=触发限流 |
-
-### 来源信息
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `source` | String | 来源：INTERCEPTOR / ASPECT |
-
-### 请求信息（仅拦截器模式）
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `requestUri` | String | 请求 URI |
-| `httpMethod` | String | HTTP 方法 |
-| `clientIp` | String | 客户端 IP |
-| `matchedPathPattern` | String | 匹配到的路径模式 |
-
-### 方法信息（仅注解模式）
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `methodName` | String | 方法名 |
-| `methodQualifiedName` | String | 方法全限定名 |
-
-### 限流详情
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `limit` | long | 限流阈值 |
-| `remaining` | long | 剩余配额 |
-| `resetAt` | long | 窗口重置时间（Unix 秒） |
-| `durationNanos` | long | 限流检查耗时（纳秒） |
-
-### 元数据
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `timestamp` | Long | 事件时间戳 |
-| `traceId` | String | 链路追踪 ID |
-| `extra` | Map<String, String> | 扩展字段（来自 Context attributes，如 fallback 信息） |
-
----
-
-## 配置项
-
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| `io.github.surezzzzzz.sdk.audit.limiter.listener.handler.log.enabled` | Boolean | true | 是否启用默认日志 Handler |
-
-关闭默认日志 Handler：
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `io.github.surezzzzzz.sdk.audit.limiter.listener.handler.log.enabled` | `true` | 是否注册默认日志 Handler |
 
 ```yaml
 io:
@@ -164,26 +91,10 @@ io:
                   enabled: false
 ```
 
----
+## 升级至 2.0.0
 
-## 工作原理
-
-1. `smart-redis-limiter-starter` 在限流检查后发布 `SmartRedisLimiterEvent`
-2. `SmartRedisLimiterAuditEventListener` 监听事件，转换为 `SmartRedisLimiterRecord`
-3. 使用 `@Async` 异步调用所有 `SmartRedisLimiterAuditHandler` 实现
-4. 单个 Handler 异常不影响其他 Handler 和主流程
-5. 默认日志 Handler 将审计记录输出到日志（通过时 INFO，限流时 WARN）
-
----
-
-## 版本历史
-
-### 1.0.0
-- 初始版本
-- 监听 `SmartRedisLimiterEvent`，转换为 `SmartRedisLimiterRecord`
-- 支持多 Handler 机制
-- 提供默认日志 Handler（默认开启，可通过配置关闭）
-- 支持 `SmartRedisLimiterUserProvider` 注入用户信息
-- 支持 `SmartRedisLimiterTraceIdProvider` 注入链路 ID
-- Event → Record 完整字段映射（含 algorithm/limit/remaining/resetAt/durationNanos/extra）
-- 异步处理，容错机制
+1. 将 limiter 升级为 `2.0.0`，完成 Redis Route 配置。
+2. 将 audit listener 升级为 `2.0.0`。
+3. 现有 `SmartRedisLimiterAuditHandler` 实现无需修改；可读取新增的 Route、fallback 与动态策略字段。
+4. 如旧 Handler 读取 `record.extra`，应移除该依赖：2.0.0 故意不再透传任意 attributes。
+5. Management 策略 CRUD 不在本模块审计范围内。

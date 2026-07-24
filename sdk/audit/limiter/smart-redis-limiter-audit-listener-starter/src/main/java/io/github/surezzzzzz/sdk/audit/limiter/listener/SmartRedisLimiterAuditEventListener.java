@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.audit.limiter.listener;
 
 import io.github.surezzzzzz.sdk.audit.limiter.annotation.SmartRedisLimiterAuditListenerComponent;
-import io.github.surezzzzzz.sdk.audit.limiter.handler.SmartRedisLimiterAuditHandler;
+import io.github.surezzzzzz.sdk.audit.limiter.support.SmartRedisLimiterAuditRecordHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.audit.SmartRedisLimiterTraceIdProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.audit.SmartRedisLimiterUserProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
@@ -9,18 +9,14 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterRecor
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
-import org.springframework.scheduling.annotation.Async;
 
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
 
 /**
  * SmartRedisLimiter 限流审计事件监听器
  *
- * <p>监听 {@link SmartRedisLimiterEvent}，转换为 {@link SmartRedisLimiterRecord} 后调用 Handler 处理。
+ * <p>在事件发布线程中生成安全审计快照，再异步分发给 Handler。
  *
  * @author surezzzzzz
  */
@@ -28,98 +24,37 @@ import java.util.function.Function;
 @SmartRedisLimiterAuditListenerComponent
 public class SmartRedisLimiterAuditEventListener {
 
-    private final List<SmartRedisLimiterAuditHandler> handlers;
-    private final List<SmartRedisLimiterUserProvider> userProviders;
-    private final SmartRedisLimiterTraceIdProvider traceIdProvider;
+    private final SmartRedisLimiterAuditRecordHelper recordHelper;
+    private final SmartRedisLimiterAuditHandlerDispatcher handlerDispatcher;
 
+    /**
+     * 创建限流审计事件监听器
+     *
+     * @param userProviders     用户信息 Provider 列表
+     * @param traceIdProvider   TraceId Provider
+     * @param handlerDispatcher 异步审计 Handler 分发器
+     */
     public SmartRedisLimiterAuditEventListener(
-            List<SmartRedisLimiterAuditHandler> handlers,
             @Autowired(required = false) List<SmartRedisLimiterUserProvider> userProviders,
-            @Autowired(required = false) SmartRedisLimiterTraceIdProvider traceIdProvider) {
-        this.handlers = handlers;
-        this.userProviders = userProviders != null ? userProviders : Collections.emptyList();
-        this.traceIdProvider = traceIdProvider;
-        log.info("SmartRedisLimiterAuditEventListener initialized with {} handlers, {} userProviders",
-                handlers.size(), this.userProviders.size());
-    }
-
-    @EventListener
-    @Async
-    public void onLimitEvent(SmartRedisLimiterEvent event) {
-        try {
-            SmartRedisLimiterRecord record = convertToRecord(event);
-            for (SmartRedisLimiterAuditHandler handler : handlers) {
-                try {
-                    handler.handle(record);
-                } catch (Exception e) {
-                    log.error("Handler {} failed", handler.getName(), e);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to handle limit event", e);
-        }
-    }
-
-    private SmartRedisLimiterRecord convertToRecord(SmartRedisLimiterEvent event) {
-        return SmartRedisLimiterRecord.builder()
-                // 用户信息
-                .clientId(getFirstNonNull(userProviders, SmartRedisLimiterUserProvider::getClientId))
-                .clientType(getFirstNonNull(userProviders, SmartRedisLimiterUserProvider::getClientType))
-                .userId(getFirstNonNull(userProviders, SmartRedisLimiterUserProvider::getUserId))
-                .username(getFirstNonNull(userProviders, SmartRedisLimiterUserProvider::getUsername))
-                // 限流上下文
-                .limitKey(event.getLimitKey())
-                .keyStrategy(event.getKeyStrategy())
-                .algorithm(event.getAlgorithm())
-                .limitRules(event.getLimitRules())
-                .passed(event.isPassed())
-                // 来源
-                .source(event.getSource())
-                // 请求信息
-                .requestUri(event.getRequestUri())
-                .httpMethod(event.getHttpMethod())
-                .clientIp(event.getClientIp())
-                .matchedPathPattern(event.getMatchedPathPattern())
-                // 方法信息
-                .methodName(event.getMethodName())
-                .methodQualifiedName(event.getMethodQualifiedName())
-                // 限流详情
-                .limit(event.getLimit())
-                .remaining(event.getRemaining())
-                .resetAt(event.getResetAt())
-                .durationNanos(event.getDurationNanos())
-                // 元数据
-                .timestamp(event.getTimestamp())
-                .traceId(traceIdProvider != null ? traceIdProvider.getTraceId() : null)
-                // 扩展字段
-                .extra(convertAttributes(event.getAttributes()))
-                .build();
+            @Autowired(required = false) SmartRedisLimiterTraceIdProvider traceIdProvider,
+            SmartRedisLimiterAuditHandlerDispatcher handlerDispatcher) {
+        this.recordHelper = new SmartRedisLimiterAuditRecordHelper(
+                userProviders == null ? Collections.emptyList() : userProviders, traceIdProvider);
+        this.handlerDispatcher = handlerDispatcher;
     }
 
     /**
-     * 将 Event 的 Map&lt;String, Object&gt; attributes 转换为 Record 的 Map&lt;String, String&gt; extra
+     * 接收限流事件并提交异步审计
+     *
+     * @param event 限流事件
      */
-    private Map<String, String> convertAttributes(Map<String, Object> attributes) {
-        if (attributes == null || attributes.isEmpty()) {
-            return null;
+    @EventListener
+    public void onLimitEvent(SmartRedisLimiterEvent event) {
+        try {
+            SmartRedisLimiterRecord record = recordHelper.map(event);
+            handlerDispatcher.dispatch(record);
+        } catch (Exception e) {
+            log.error("SmartRedisLimiter 限流事件审计快照生成失败", e);
         }
-        Map<String, String> extra = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
-            if (entry.getValue() != null) {
-                extra.put(entry.getKey(), String.valueOf(entry.getValue()));
-            }
-        }
-        return extra;
-    }
-
-    private String getFirstNonNull(List<SmartRedisLimiterUserProvider> providers,
-                                   Function<SmartRedisLimiterUserProvider, String> getter) {
-        for (SmartRedisLimiterUserProvider p : providers) {
-            String v = getter.apply(p);
-            if (v != null) {
-                return v;
-            }
-        }
-        return null;
     }
 }

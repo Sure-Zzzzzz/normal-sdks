@@ -1,12 +1,13 @@
 dependencies {
     // 依赖 core（提供 Event、Record、Provider 接口）
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:1.1.6'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
 
     // 测试依赖
+    testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.0.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 }

@@ -2,7 +2,9 @@ package io.github.surezzzzzz.sdk.audit.limiter.test.cases;
 
 import io.github.surezzzzzz.sdk.audit.limiter.test.SmartRedisLimiterAuditListenerTestApplication;
 import io.github.surezzzzzz.sdk.audit.limiter.test.support.TestSmartRedisLimiterAuditHandler;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterEventPayload;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterRecord;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -39,196 +41,190 @@ public class SmartRedisLimiterAuditListenerTest {
 
     @Test
     public void testInterceptorRejectedEvent() throws InterruptedException {
-        log.info("========== 测试：拦截器模式拒绝事件 ==========");
+        publish(SmartRedisLimiterEventPayload.builder()
+                .limitKey("smart-limiter:test-service:path")
+                .routeKey("smart-limiter:test-service:path")
+                .datasourceKey("test-redis")
+                .redisMode(SmartRedisLimiterConstant.REDIS_MODE_STANDALONE)
+                .routeRequired(true)
+                .routeResolved(true)
+                .keyStrategy("path")
+                .algorithm("sliding")
+                .limitRules("10/1s")
+                .passed(false)
+                .sourceType("INTERCEPTOR")
+                .requestUri("/api/user/123")
+                .httpMethod("GET")
+                .clientIp("192.168.1.1")
+                .matchedPathPattern("/api/user/**")
+                .limit(10L)
+                .remaining(0L)
+                .resetAt(1715635200L)
+                .durationNanos(500000L)
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL)
+                .build());
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:path:/api/user/123:10s",
-                "path", "sliding", "10/1s", false,
-                "INTERCEPTOR",
-                "/api/user/123", "GET", "192.168.1.1", "/api/user/**",
-                null, null,
-                null,
-                10, 0, 1715635200L, 500_000L
-        );
-
-        eventPublisher.publishEvent(event);
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
-        SmartRedisLimiterRecord record = testHandler.records.get(0);
+        SmartRedisLimiterRecord record = awaitRecord();
+        log.info("拦截器审计快照：source={}, algorithm={}, routeResolved={}",
+                record.getSource(), record.getAlgorithm(), record.isRouteResolved());
         assertFalse(record.isPassed());
         assertEquals("INTERCEPTOR", record.getSource());
         assertEquals("sliding", record.getAlgorithm());
         assertEquals("path", record.getKeyStrategy());
-        assertEquals("smart-limiter:my-service:path:/api/user/123:10s", record.getLimitKey());
+        assertEquals("smart-limiter:test-service:path", record.getLimitKey());
+        assertEquals("test-redis", record.getDatasourceKey());
+        assertEquals(SmartRedisLimiterConstant.REDIS_MODE_STANDALONE, record.getRedisMode());
+        assertTrue(record.isRouteRequired());
+        assertTrue(record.isRouteResolved());
         assertEquals("10/1s", record.getLimitRules());
         assertEquals("/api/user/123", record.getRequestUri());
         assertEquals("GET", record.getHttpMethod());
         assertEquals("192.168.1.1", record.getClientIp());
         assertEquals("/api/user/**", record.getMatchedPathPattern());
-        assertEquals(10, record.getLimit());
-        assertEquals(0, record.getRemaining());
+        assertEquals(10L, record.getLimit());
+        assertEquals(0L, record.getRemaining());
         assertEquals(1715635200L, record.getResetAt());
-        assertEquals(500_000L, record.getDurationNanos());
+        assertEquals(500000L, record.getDurationNanos());
         assertNull(record.getMethodName());
         assertNull(record.getMethodQualifiedName());
         assertNull(record.getExtra());
-
-        // 用户信息来自 TestAuditUserProvider
         assertEquals("test-client", record.getClientId());
         assertEquals("platform", record.getClientType());
         assertEquals("user-001", record.getUserId());
         assertEquals("testuser", record.getUsername());
-
-        // TraceId 来自 TestAuditTraceIdProvider
         assertEquals("trace-test-001", record.getTraceId());
-
-        log.info("testInterceptorRejectedEvent passed");
     }
 
     @Test
     public void testAspectPassedEvent() throws InterruptedException {
-        log.info("========== 测试：注解模式通过事件 ==========");
+        publish(SmartRedisLimiterEventPayload.builder()
+                .limitKey("smart-limiter:test-service:method")
+                .routeKey("smart-limiter:test-service:method")
+                .datasourceKey("test-redis")
+                .redisMode(SmartRedisLimiterConstant.REDIS_MODE_STANDALONE)
+                .routeRequired(true)
+                .routeResolved(true)
+                .keyStrategy("method")
+                .algorithm("fixed")
+                .limitRules("100/1m")
+                .passed(true)
+                .sourceType("ASPECT")
+                .methodName("getUser")
+                .methodQualifiedName("example.UserService.getUser")
+                .limit(100L)
+                .remaining(95L)
+                .resetAt(1715635260L)
+                .durationNanos(200000L)
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL)
+                .build());
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:method:UserService.getUser:60s",
-                "method", "fixed", "100/1m", true,
-                "ASPECT",
-                null, null, null, null,
-                "getUser", "com.example.UserService.getUser",
-                null,
-                100, 95, 1715635260L, 200_000L
-        );
-
-        eventPublisher.publishEvent(event);
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
-        SmartRedisLimiterRecord record = testHandler.records.get(0);
+        SmartRedisLimiterRecord record = awaitRecord();
+        log.info("注解审计快照：source={}, algorithm={}, remaining={}",
+                record.getSource(), record.getAlgorithm(), record.getRemaining());
         assertTrue(record.isPassed());
         assertEquals("ASPECT", record.getSource());
         assertEquals("fixed", record.getAlgorithm());
         assertEquals("method", record.getKeyStrategy());
-        assertEquals("smart-limiter:my-service:method:UserService.getUser:60s", record.getLimitKey());
-        assertEquals("100/1m", record.getLimitRules());
+        assertEquals("smart-limiter:test-service:method", record.getLimitKey());
         assertNull(record.getRequestUri());
         assertNull(record.getHttpMethod());
         assertNull(record.getClientIp());
         assertNull(record.getMatchedPathPattern());
         assertEquals("getUser", record.getMethodName());
-        assertEquals("com.example.UserService.getUser", record.getMethodQualifiedName());
-        assertEquals(100, record.getLimit());
-        assertEquals(95, record.getRemaining());
+        assertEquals("example.UserService.getUser", record.getMethodQualifiedName());
+        assertEquals(100L, record.getLimit());
+        assertEquals(95L, record.getRemaining());
         assertEquals(1715635260L, record.getResetAt());
-        assertEquals(200_000L, record.getDurationNanos());
+        assertEquals(200000L, record.getDurationNanos());
         assertNull(record.getExtra());
-
-        log.info("testAspectPassedEvent passed");
     }
 
     @Test
-    public void testEventWithAttributes() throws InterruptedException {
-        log.info("========== 测试：带扩展属性的事件 ==========");
+    public void testEventAttributesAreNotForwarded() throws InterruptedException {
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        attributes.put("authorization", "test-secret-value");
+        attributes.put("requestBody", "test-request-body-value");
 
-        Map<String, Object> attributes = new HashMap<>();
-        attributes.put("fallback", true);
-        attributes.put("fallbackStrategy", "allow");
+        publish(SmartRedisLimiterEventPayload.builder()
+                .limitKey("smart-limiter:test-service:path")
+                .routeKey("smart-limiter:test-service:path")
+                .redisMode(SmartRedisLimiterConstant.REDIS_MODE_STANDALONE)
+                .routeRequired(true)
+                .routeResolved(true)
+                .keyStrategy("path")
+                .algorithm("fixed")
+                .limitRules("5/10s")
+                .passed(true)
+                .sourceType("INTERCEPTOR")
+                .requestUri("/api/query")
+                .httpMethod("GET")
+                .matchedPathPattern("/api/query")
+                .attributes(attributes)
+                .limit(5L)
+                .remaining(4L)
+                .resetAt(1715635300L)
+                .durationNanos(1000000L)
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL)
+                .build());
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:path:/api/query:10s",
-                "path", "fixed", "5/10s", true,
-                "INTERCEPTOR",
-                "/api/query", "GET", "10.0.0.1", "/api/query",
-                null, null,
-                attributes,
-                5, 4, 1715635300L, 1_000_000L
-        );
-
-        eventPublisher.publishEvent(event);
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
-        SmartRedisLimiterRecord record = testHandler.records.get(0);
+        SmartRedisLimiterRecord record = awaitRecord();
+        log.info("属性脱敏审计快照：source={}, passed={}, extraIsNull={}",
+                record.getSource(), record.isPassed(), record.getExtra() == null);
         assertTrue(record.isPassed());
         assertEquals("INTERCEPTOR", record.getSource());
         assertEquals("fixed", record.getAlgorithm());
         assertEquals("/api/query", record.getRequestUri());
-        assertEquals(5, record.getLimit());
-        assertEquals(4, record.getRemaining());
+        assertEquals(5L, record.getLimit());
+        assertEquals(4L, record.getRemaining());
         assertEquals(1715635300L, record.getResetAt());
-        assertEquals(1_000_000L, record.getDurationNanos());
-        assertNotNull(record.getExtra());
-        assertEquals("true", record.getExtra().get("fallback"));
-        assertEquals("allow", record.getExtra().get("fallbackStrategy"));
-        assertEquals(2, record.getExtra().size(), "extra should only contain the 2 attributes we put in");
-
-        log.info("testEventWithAttributes passed");
+        assertEquals(1000000L, record.getDurationNanos());
+        assertNull(record.getExtra(), "任意 Context attributes 不得进入 2.x 审计记录");
     }
 
     @Test
-    public void testEventWithoutAttributes() throws InterruptedException {
-        log.info("========== 测试：无扩展属性的事件 ==========");
+    public void testRemoteFallbackEvent() throws InterruptedException {
+        publish(SmartRedisLimiterEventPayload.builder()
+                .limitKey("smart-limiter:test-service:remote")
+                .routeKey("smart-limiter:test-service:remote")
+                .redisMode(SmartRedisLimiterConstant.REDIS_MODE_UNKNOWN)
+                .routeRequired(true)
+                .routeResolved(false)
+                .keyStrategy("path")
+                .algorithm("sliding")
+                .limitRules("10/1m")
+                .passed(false)
+                .sourceType("INTERCEPTOR")
+                .matchedPathPattern("/api/fallback")
+                .limit(10L)
+                .remaining(0L)
+                .resetAt(1715635400L)
+                .durationNanos(300000L)
+                .fallbackReason("route-unavailable")
+                .resourceCode("test-resource")
+                .policySource(SmartRedisLimiterConstant.POLICY_SOURCE_REMOTE)
+                .policyRevision(9L)
+                .build());
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:method:OrderService.create:60s",
-                "method", "sliding", "10/1m", false,
-                "ASPECT",
-                null, null, null, null,
-                "create", "com.example.OrderService.create",
-                null,
-                10, 0, 1715635400L, 300_000L
-        );
-
-        eventPublisher.publishEvent(event);
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
-        SmartRedisLimiterRecord record = testHandler.records.get(0);
+        SmartRedisLimiterRecord record = awaitRecord();
+        log.info("远程降级审计快照：passed={}, routeResolved={}, policySource={}",
+                record.isPassed(), record.isRouteResolved(), record.getPolicySource());
         assertFalse(record.isPassed());
-        assertEquals("ASPECT", record.getSource());
-        assertEquals("sliding", record.getAlgorithm());
-        assertEquals(10, record.getLimit());
-        assertEquals(0, record.getRemaining());
-        assertEquals(1715635400L, record.getResetAt());
-        assertEquals(300_000L, record.getDurationNanos());
-        assertNull(record.getExtra());
-
-        log.info("testEventWithoutAttributes passed");
+        assertFalse(record.isRouteResolved());
+        assertEquals("route-unavailable", record.getFallbackReason());
+        assertEquals("test-resource", record.getResourceCode());
+        assertEquals(SmartRedisLimiterConstant.POLICY_SOURCE_REMOTE, record.getPolicySource());
+        assertEquals(Long.valueOf(9L), record.getPolicyRevision());
     }
 
-    @Test
-    public void testMultipleHandlersReceiveSameEvent() throws InterruptedException {
-        log.info("========== 测试：多个 Handler 接收同一事件 ==========");
+    private void publish(SmartRedisLimiterEventPayload payload) {
+        eventPublisher.publishEvent(new SmartRedisLimiterEvent(this, payload));
+    }
 
-        SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
-                this, "smart-limiter:my-service:path:/api/test:5s",
-                "path", "fixed", "5/10s", false,
-                "INTERCEPTOR",
-                "/api/test", "POST", "127.0.0.1", null,
-                null, null,
-                null,
-                5, 0, 1715635500L, 100L
-        );
-
-        eventPublisher.publishEvent(event);
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
-        SmartRedisLimiterRecord record = testHandler.records.get(0);
-        assertFalse(record.isPassed());
-        assertEquals("INTERCEPTOR", record.getSource());
-        assertEquals("fixed", record.getAlgorithm());
-        assertEquals("/api/test", record.getRequestUri());
-        assertEquals("POST", record.getHttpMethod());
-        assertEquals("127.0.0.1", record.getClientIp());
-        assertEquals(5, record.getLimit());
-        assertEquals(0, record.getRemaining());
-
-        log.info("testMultipleHandlersReceiveSameEvent passed");
+    private SmartRedisLimiterRecord awaitRecord() throws InterruptedException {
+        log.info("等待异步审计 Handler 投递记录");
+        assertTrue(testHandler.latch.await(5, TimeUnit.SECONDS), "Handler 应接收到审计记录");
+        log.info("异步审计 Handler 收到记录数：{}", testHandler.records.size());
+        assertEquals(1, testHandler.records.size(), "每个事件应只投递一条审计记录");
+        return testHandler.records.get(0);
     }
 }

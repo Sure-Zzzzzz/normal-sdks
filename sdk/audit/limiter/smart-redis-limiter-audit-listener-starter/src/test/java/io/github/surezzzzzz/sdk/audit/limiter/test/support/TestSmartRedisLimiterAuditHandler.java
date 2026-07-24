@@ -5,8 +5,8 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterRecor
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -18,13 +18,13 @@ import java.util.concurrent.CountDownLatch;
 @Component
 public class TestSmartRedisLimiterAuditHandler implements SmartRedisLimiterAuditHandler {
 
-    public final List<SmartRedisLimiterRecord> records = new ArrayList<>();
+    public final List<SmartRedisLimiterRecord> records = new CopyOnWriteArrayList<>();
     public CountDownLatch latch = new CountDownLatch(1);
 
     @Override
     public void handle(SmartRedisLimiterRecord record) {
-        log.info("Received audit record: passed={}, source={}, algorithm={}, limitKey={}",
-                record.isPassed(), record.getSource(), record.getAlgorithm(), record.getLimitKey());
+        log.info("收到审计记录：passed={}, source={}, algorithm={}",
+                record.isPassed(), record.getSource(), record.getAlgorithm());
         records.add(record);
         latch.countDown();
     }

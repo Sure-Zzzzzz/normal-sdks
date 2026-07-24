@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.audit.limiter.configuration;
 
+import io.github.surezzzzzz.sdk.audit.limiter.constant.SmartRedisLimiterAuditListenerConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -9,7 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @author surezzzzzz
  */
 @Data
-@ConfigurationProperties(prefix = "io.github.surezzzzzz.sdk.audit.limiter.listener")
+@ConfigurationProperties(prefix = SmartRedisLimiterAuditListenerConstant.CONFIG_PREFIX)
 public class SmartRedisLimiterAuditListenerProperties {
 
     private Handler handler = new Handler();
@@ -24,6 +25,6 @@ public class SmartRedisLimiterAuditListenerProperties {
         /**
          * 是否启用默认日志处理器，默认开启
          */
-        private boolean enabled = true;
+        private boolean enabled = SmartRedisLimiterAuditListenerConstant.DEFAULT_LOG_HANDLER_ENABLED;
     }
 }
