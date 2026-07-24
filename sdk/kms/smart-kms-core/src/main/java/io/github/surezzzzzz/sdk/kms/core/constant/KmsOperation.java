@@ -29,7 +29,39 @@ public enum KmsOperation {
     /**
      * 读取已发布的 ES256 公钥。
      */
-    READ_PUBLIC_KEY("READ_PUBLIC_KEY", "读取公钥");
+    READ_PUBLIC_KEY("READ_PUBLIC_KEY", "读取公钥"),
+    /**
+     * 创建逻辑密钥及初始版本。
+     */
+    CREATE_KEY("CREATE_KEY", "创建密钥"),
+    /**
+     * 创建新的活动密钥版本。
+     */
+    ROTATE_KEY("ROTATE_KEY", "轮换密钥"),
+    /**
+     * 修改逻辑密钥状态。
+     */
+    CHANGE_KEY_STATE("CHANGE_KEY_STATE", "修改密钥状态"),
+    /**
+     * 安排逻辑密钥及其版本销毁。
+     */
+    SCHEDULE_KEY_DESTRUCTION("SCHEDULE_KEY_DESTRUCTION", "安排密钥销毁"),
+    /**
+     * 取消尚未领取的密钥销毁任务。
+     */
+    CANCEL_KEY_DESTRUCTION("CANCEL_KEY_DESTRUCTION", "取消密钥销毁"),
+    /**
+     * 创建密钥精确授权策略。
+     */
+    CREATE_KEY_POLICY("CREATE_KEY_POLICY", "创建密钥策略"),
+    /**
+     * 撤销密钥精确授权策略。
+     */
+    REVOKE_KEY_POLICY("REVOKE_KEY_POLICY", "撤销密钥策略"),
+    /**
+     * 销毁 worker 处理到期密钥版本。
+     */
+    PROCESS_KEY_DESTRUCTION("PROCESS_KEY_DESTRUCTION", "处理密钥销毁");
 
     /**
      * 持久化和策略匹配使用的稳定编码。

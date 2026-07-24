@@ -22,9 +22,10 @@ public final class KmsStateHelper {
     /**
      * 判断给定操作是否允许使用指定逻辑密钥和版本。
      *
-     * <p>签名和新加密只允许双 {@code ACTIVE}；历史解密只允许逻辑密钥 {@code ACTIVE} 且版本为
-     * {@code ACTIVE}/{@code RETIRED}；验签和读取公钥可在逻辑密钥禁用后继续进行。待销毁和已销毁
-     * 状态始终拒绝，避免从发布接口或历史密文恢复路径绕过销毁。</p>
+     * <p>本方法只判定密码学和公钥读取操作：签名和新加密只允许双 {@code ACTIVE}；历史解密只允许
+     * 逻辑密钥 {@code ACTIVE} 且版本为 {@code ACTIVE}/{@code RETIRED}；验签和读取公钥可在逻辑
+     * 密钥禁用后继续进行。管理和销毁 worker 操作始终返回 {@code false}，必须由对应服务的事务状态机
+     * 判定。待销毁和已销毁状态始终拒绝，避免从发布接口或历史密文恢复路径绕过销毁。</p>
      *
      * @param keyState     逻辑密钥状态
      * @param versionState 密钥版本状态
@@ -47,9 +48,12 @@ public final class KmsStateHelper {
                     && (versionState == KmsKeyVersionState.ACTIVE
                     || versionState == KmsKeyVersionState.RETIRED);
         }
-        return (keyState == KmsKeyState.ACTIVE || keyState == KmsKeyState.DISABLED)
-                && (versionState == KmsKeyVersionState.ACTIVE
-                || versionState == KmsKeyVersionState.RETIRED);
+        if (operation == KmsOperation.VERIFY || operation == KmsOperation.READ_PUBLIC_KEY) {
+            return (keyState == KmsKeyState.ACTIVE || keyState == KmsKeyState.DISABLED)
+                    && (versionState == KmsKeyVersionState.ACTIVE
+                    || versionState == KmsKeyVersionState.RETIRED);
+        }
+        return false;
     }
 
     /**

@@ -61,6 +61,45 @@ class KmsCoreContractTest {
                 null, KmsOperation.SIGN));
         Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
                 KmsKeyVersionState.ACTIVE, null));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.CREATE_KEY));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.ROTATE_KEY));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.CHANGE_KEY_STATE));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.SCHEDULE_KEY_DESTRUCTION));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.CANCEL_KEY_DESTRUCTION));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.CREATE_KEY_POLICY));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.REVOKE_KEY_POLICY));
+        Assertions.assertFalse(KmsStateHelper.canExecute(KmsKeyState.ACTIVE,
+                KmsKeyVersionState.ACTIVE, KmsOperation.PROCESS_KEY_DESTRUCTION));
+    }
+
+    @Test
+    void shouldExposeStableAuditOperationCodes() {
+        log.info("校验审计操作稳定编码");
+
+        Assertions.assertEquals(KmsOperation.SIGN, KmsOperation.fromCode("SIGN"));
+        Assertions.assertEquals(KmsOperation.READ_PUBLIC_KEY,
+                KmsOperation.fromCode("READ_PUBLIC_KEY"));
+        Assertions.assertEquals(KmsOperation.CREATE_KEY, KmsOperation.fromCode("CREATE_KEY"));
+        Assertions.assertEquals(KmsOperation.ROTATE_KEY, KmsOperation.fromCode("ROTATE_KEY"));
+        Assertions.assertEquals(KmsOperation.CHANGE_KEY_STATE,
+                KmsOperation.fromCode("CHANGE_KEY_STATE"));
+        Assertions.assertEquals(KmsOperation.SCHEDULE_KEY_DESTRUCTION,
+                KmsOperation.fromCode("SCHEDULE_KEY_DESTRUCTION"));
+        Assertions.assertEquals(KmsOperation.CANCEL_KEY_DESTRUCTION,
+                KmsOperation.fromCode("CANCEL_KEY_DESTRUCTION"));
+        Assertions.assertEquals(KmsOperation.CREATE_KEY_POLICY,
+                KmsOperation.fromCode("CREATE_KEY_POLICY"));
+        Assertions.assertEquals(KmsOperation.REVOKE_KEY_POLICY,
+                KmsOperation.fromCode("REVOKE_KEY_POLICY"));
+        Assertions.assertEquals(KmsOperation.PROCESS_KEY_DESTRUCTION,
+                KmsOperation.fromCode("PROCESS_KEY_DESTRUCTION"));
     }
 
     @Test
@@ -131,6 +170,52 @@ class KmsCoreContractTest {
                 VERSION, KmsOperation.SIGN, now.plusSeconds(SmartKmsCoreConstant.ONE)));
         Assertions.assertFalse(KmsAuthorizationHelper.matches(policy, principal, KEY_REF,
                 VERSION, null, now));
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .tenantId(TENANT_ID)
+                .keyRef(KEY_REF)
+                .principalId(PRINCIPAL_ID)
+                .operation(KmsOperation.CREATE_KEY)
+                .build(), "管理操作不得进入精确密钥策略");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .tenantId(TENANT_ID)
+                .keyRef(KEY_REF)
+                .principalId(PRINCIPAL_ID)
+                .operation(KmsOperation.PROCESS_KEY_DESTRUCTION)
+                .build(), "销毁 worker 操作不得进入精确密钥策略");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .tenantId(TENANT_ID)
+                .keyRef(KEY_REF)
+                .principalId(PRINCIPAL_ID)
+                .operation(KmsOperation.SIGN)
+                .build(), "策略必须具备稳定标识");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .keyRef(KEY_REF)
+                .principalId(PRINCIPAL_ID)
+                .operation(KmsOperation.SIGN)
+                .build(), "策略必须具备 tenant");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .tenantId(TENANT_ID)
+                .principalId(PRINCIPAL_ID)
+                .operation(KmsOperation.SIGN)
+                .build(), "策略必须关联逻辑密钥");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .tenantId(TENANT_ID)
+                .keyRef(KEY_REF)
+                .operation(KmsOperation.SIGN)
+                .build(), "策略必须关联主体");
+        Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
+                .policyId(POLICY_ID)
+                .tenantId(TENANT_ID)
+                .keyRef(KEY_REF)
+                .principalId(PRINCIPAL_ID)
+                .keyVersion(SmartKmsCoreConstant.ZERO)
+                .operation(KmsOperation.SIGN)
+                .build(), "指定策略版本必须为正整数");
     }
 
     @Test

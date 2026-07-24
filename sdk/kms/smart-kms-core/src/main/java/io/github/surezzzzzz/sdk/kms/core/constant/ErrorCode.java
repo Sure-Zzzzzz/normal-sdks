@@ -42,7 +42,7 @@ public final class ErrorCode {
      */
     public static final String CRYPTOGRAPHIC_OPERATION_FAILED = "KMS_CORE_008";
     /**
-     * 服务依赖或失败关闭的审计路径不可用。
+     * 必需服务依赖不可用。
      */
     public static final String SERVICE_UNAVAILABLE = "KMS_CORE_009";
 

@@ -40,11 +40,21 @@ public final class KmsAuthorizationHelper {
                 && principal != null
                 && operation != null
                 && now != null
+                && isPolicyOperation(operation)
+                && isPolicyOperation(policy.getOperation())
                 && policy.getTenantId().equals(principal.getTenantId())
                 && policy.getPrincipalId().equals(principal.getPrincipalId())
                 && policy.getKeyRef().equals(keyRef)
                 && policy.getOperation() == operation
                 && (policy.getKeyVersion() == null || policy.getKeyVersion().intValue() == version)
                 && (policy.getExpiresAt() == null || policy.getExpiresAt().isAfter(now));
+    }
+
+    private static boolean isPolicyOperation(KmsOperation operation) {
+        return operation == KmsOperation.SIGN
+                || operation == KmsOperation.VERIFY
+                || operation == KmsOperation.ENCRYPT
+                || operation == KmsOperation.DECRYPT
+                || operation == KmsOperation.READ_PUBLIC_KEY;
     }
 }

@@ -23,10 +23,6 @@ public final class SmartKmsCoreConstant {
      */
     public static final String SKMS_MAGIC_TEXT = "SKMS";
     /**
-     * SKMS 魔数的内部不可变字节表示。
-     */
-    private static final byte[] SKMS_MAGIC_BYTES = SKMS_MAGIC_TEXT.getBytes(StandardCharsets.US_ASCII);
-    /**
      * SKMS 格式版本。
      */
     public static final int SKMS_FORMAT_VERSION = 1;
@@ -135,9 +131,117 @@ public final class SmartKmsCoreConstant {
      */
     public static final int IDEMPOTENCY_KEY_MAX_LENGTH = 128;
     /**
+     * 审计元数据最大条数。
+     */
+    public static final int AUDIT_METADATA_MAX_ENTRIES = 7;
+    /**
+     * 审计元数据单值最大长度。
+     */
+    public static final int AUDIT_METADATA_VALUE_MAX_LENGTH = 32;
+    /**
+     * 审计元数据键：资源类型。
+     */
+    public static final String AUDIT_METADATA_KEY_RESOURCE_TYPE = "resourceType";
+    /**
+     * 审计元数据键：逻辑密钥状态。
+     */
+    public static final String AUDIT_METADATA_KEY_KEY_STATE = "keyState";
+    /**
+     * 审计元数据键：密钥版本状态。
+     */
+    public static final String AUDIT_METADATA_KEY_VERSION_STATE = "versionState";
+    /**
+     * 审计元数据键：输入长度。
+     */
+    public static final String AUDIT_METADATA_KEY_INPUT_LENGTH = "inputLength";
+    /**
+     * 审计元数据键：输出长度。
+     */
+    public static final String AUDIT_METADATA_KEY_OUTPUT_LENGTH = "outputLength";
+    /**
+     * 审计元数据键：失败类别。
+     */
+    public static final String AUDIT_METADATA_KEY_FAILURE_CATEGORY = "failureCategory";
+    /**
+     * 审计元数据键：幂等重放标记。
+     */
+    public static final String AUDIT_METADATA_KEY_IDEMPOTENCY_REPLAY = "idempotencyReplay";
+    /**
+     * 审计资源类型：逻辑密钥。
+     */
+    public static final String AUDIT_RESOURCE_TYPE_KEY = "KEY";
+    /**
+     * 审计资源类型：密钥策略。
+     */
+    public static final String AUDIT_RESOURCE_TYPE_KEY_POLICY = "KEY_POLICY";
+    /**
+     * 审计资源类型：密钥版本。
+     */
+    public static final String AUDIT_RESOURCE_TYPE_KEY_VERSION = "KEY_VERSION";
+    /**
+     * 审计资源类型：销毁任务。
+     */
+    public static final String AUDIT_RESOURCE_TYPE_DESTRUCTION_JOB = "DESTRUCTION_JOB";
+    /**
+     * 审计失败类别：参数校验。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_VALIDATION = "VALIDATION";
+    /**
+     * 审计失败类别：授权拒绝。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_AUTHORIZATION = "AUTHORIZATION";
+    /**
+     * 审计失败类别：资源不存在。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_NOT_FOUND = "NOT_FOUND";
+    /**
+     * 审计失败类别：状态冲突。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_STATE_CONFLICT = "STATE_CONFLICT";
+    /**
+     * 审计失败类别：策略冲突。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_POLICY_CONFLICT = "POLICY_CONFLICT";
+    /**
+     * 审计失败类别：幂等冲突。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT";
+    /**
+     * 审计失败类别：持久化失败。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_PERSISTENCE = "PERSISTENCE";
+    /**
+     * 审计失败类别：密码学失败。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_CRYPTOGRAPHIC = "CRYPTOGRAPHIC";
+    /**
+     * 审计失败类别：服务不可用。
+     */
+    public static final String AUDIT_FAILURE_CATEGORY_SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE";
+    /**
+     * 审计布尔值：是。
+     */
+    public static final String AUDIT_BOOLEAN_TRUE = "true";
+    /**
+     * 审计布尔值：否。
+     */
+    public static final String AUDIT_BOOLEAN_FALSE = "false";
+    /**
+     * 销毁 worker 审计使用的固定系统主体标识。
+     */
+    public static final String AUDIT_SYSTEM_PRINCIPAL_ID = "KMS_SYSTEM";
+    /**
      * 常量类禁止实例化消息。
      */
     public static final String MESSAGE_CONSTANT_CLASS_CANNOT_INSTANTIATE = "常量类不能实例化";
+    /**
+     * SKMS 魔数的内部不可变字节表示。
+     */
+    private static final byte[] SKMS_MAGIC_BYTES = SKMS_MAGIC_TEXT.getBytes(StandardCharsets.US_ASCII);
+
+    private SmartKmsCoreConstant() {
+        throw new UnsupportedOperationException(MESSAGE_CONSTANT_CLASS_CANNOT_INSTANTIATE);
+    }
 
     /**
      * 获取 SKMS 魔数字节副本。
@@ -146,9 +250,5 @@ public final class SmartKmsCoreConstant {
      */
     public static byte[] getSkmsMagic() {
         return Arrays.copyOf(SKMS_MAGIC_BYTES, SKMS_MAGIC_BYTES.length);
-    }
-
-    private SmartKmsCoreConstant() {
-        throw new UnsupportedOperationException(MESSAGE_CONSTANT_CLASS_CANNOT_INSTANTIATE);
     }
 }

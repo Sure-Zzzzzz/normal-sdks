@@ -51,6 +51,13 @@ public final class KmsEnvelope {
     }
 
     /**
+     * 复制二进制值，避免可变数组跨越领域边界。
+     */
+    private static byte[] copy(byte[] value) {
+        return value == null ? null : Arrays.copyOf(value, value.length);
+    }
+
+    /**
      * 获取初始化向量的副本。
      *
      * @return 初始化向量副本；原值为空时返回 {@code null}
@@ -66,12 +73,5 @@ public final class KmsEnvelope {
      */
     public byte[] getCiphertextAndTag() {
         return copy(ciphertextAndTag);
-    }
-
-    /**
-     * 复制二进制值，避免可变数组跨越领域边界。
-     */
-    private static byte[] copy(byte[] value) {
-        return value == null ? null : Arrays.copyOf(value, value.length);
     }
 }

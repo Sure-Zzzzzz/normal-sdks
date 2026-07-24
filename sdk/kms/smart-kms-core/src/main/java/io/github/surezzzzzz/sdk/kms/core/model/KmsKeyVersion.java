@@ -99,6 +99,13 @@ public final class KmsKeyVersion {
     }
 
     /**
+     * 复制材料字节，避免任何调用方持有内部可变数组。
+     */
+    private static byte[] copy(byte[] value) {
+        return value == null ? null : Arrays.copyOf(value, value.length);
+    }
+
+    /**
      * 获取私钥材料副本。
      *
      * @return PKCS#8 DER 私钥材料副本；原值为空时返回 {@code null}
@@ -123,12 +130,5 @@ public final class KmsKeyVersion {
      */
     public byte[] getPublicMaterial() {
         return copy(publicMaterial);
-    }
-
-    /**
-     * 复制材料字节，避免任何调用方持有内部可变数组。
-     */
-    private static byte[] copy(byte[] value) {
-        return value == null ? null : Arrays.copyOf(value, value.length);
     }
 }

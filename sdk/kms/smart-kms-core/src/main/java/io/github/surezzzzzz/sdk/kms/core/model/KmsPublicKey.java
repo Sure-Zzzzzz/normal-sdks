@@ -63,18 +63,18 @@ public final class KmsPublicKey {
     }
 
     /**
+     * 复制公钥字节，避免调用方修改模型内部状态。
+     */
+    private static byte[] copy(byte[] value) {
+        return value == null ? null : Arrays.copyOf(value, value.length);
+    }
+
+    /**
      * 获取公钥材料副本。
      *
      * @return X.509 SubjectPublicKeyInfo DER 公钥材料副本；原值为空时返回 {@code null}
      */
     public byte[] getPublicMaterial() {
         return copy(publicMaterial);
-    }
-
-    /**
-     * 复制公钥字节，避免调用方修改模型内部状态。
-     */
-    private static byte[] copy(byte[] value) {
-        return value == null ? null : Arrays.copyOf(value, value.length);
     }
 }
