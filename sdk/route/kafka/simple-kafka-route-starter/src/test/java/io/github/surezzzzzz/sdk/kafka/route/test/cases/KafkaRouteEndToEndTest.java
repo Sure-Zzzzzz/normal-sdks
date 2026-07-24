@@ -28,6 +28,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
+import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.kafka.listener.MessageListener;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -36,7 +39,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -131,6 +136,9 @@ public class KafkaRouteEndToEndTest {
 
             assertDerivedFactoryConsumes(firstFactory, topic, key, KafkaRouteEndToEndHelper.VALUE_V37);
             assertDerivedFactoryConsumes(secondFactory, topic, key, KafkaRouteEndToEndHelper.VALUE_V37);
+            assertDerivedFactoryStartsListenerContainer(firstFactory, topic,
+                    KafkaRouteEndToEndHelper.keyWithSuffix(KafkaRouteEndToEndHelper.KEY_LISTENER_PREFIX, suffix),
+                    KafkaRouteEndToEndHelper.VALUE_LISTENER);
 
             KafkaConfigurationCompatibilityHelper.destroyConsumerFactory(firstFactory);
             log.info("首个派生 factory 已由调用方销毁，验证第二个派生 factory 和 registry 基础 factory 仍可用");
@@ -157,6 +165,44 @@ public class KafkaRouteEndToEndTest {
         assertEquals("earliest", properties.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals(Boolean.FALSE, properties.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
         assertEquals(1, properties.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+    }
+
+    private void assertDerivedFactoryStartsListenerContainer(ConsumerFactory<Object, Object> factory,
+                                                             String topic, String expectedKey,
+                                                             String expectedValue) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<ConsumerRecord<Object, Object>> consumedRecord = new AtomicReference<>();
+        ContainerProperties containerProperties = new ContainerProperties(topic);
+        containerProperties.setMessageListener((MessageListener<Object, Object>) record -> {
+            if (expectedKey.equals(record.key())) {
+                consumedRecord.set(record);
+                latch.countDown();
+            }
+        });
+        ConcurrentMessageListenerContainer<Object, Object> container =
+                new ConcurrentMessageListenerContainer<>(factory, containerProperties);
+        try {
+            container.start();
+            template.sendOn(KafkaRouteEndToEndHelper.DATASOURCE_V37, topic, expectedKey, expectedValue)
+                    .get(KafkaRouteEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            assertTrue(latch.await(KafkaRouteEndToEndHelper.CONSUME_TIMEOUT_MS, TimeUnit.MILLISECONDS),
+                    "route 派生 ConsumerFactory 创建的 listener container 必须收到消息");
+            ConsumerRecord<Object, Object> record = consumedRecord.get();
+            log.info("listener container 消费到派生 factory 消息：topic={}，key={}，value={}",
+                    record == null ? null : record.topic(), record == null ? null : record.key(),
+                    record == null ? null : record.value());
+            assertNotNull(record, "listener container 必须记录消费结果");
+            assertEquals(topic, record.topic());
+            assertEquals(expectedKey, record.key());
+            assertEquals(expectedValue, record.value());
+        } finally {
+            CountDownLatch stopped = new CountDownLatch(1);
+            container.stop(stopped::countDown);
+            assertTrue(stopped.await(KafkaRouteEndToEndHelper.CONSUME_TIMEOUT_MS, TimeUnit.MILLISECONDS),
+                    "销毁派生 factory 前 listener container 必须完成停止");
+            log.info("listener container 停止结果：running={}", container.isRunning());
+            assertFalse(container.isRunning(), "销毁派生 factory 前 listener container 必须已完全停止");
+        }
     }
 
     private void assertDerivedFactoryConsumes(ConsumerFactory<Object, Object> factory, String topic,

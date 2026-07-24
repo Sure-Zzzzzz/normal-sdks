@@ -8,6 +8,8 @@ import io.github.surezzzzzz.sdk.kafka.route.factory.DefaultKafkaConsumerFactoryF
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaConsumerFactoryOverride;
 import io.github.surezzzzzz.sdk.kafka.route.test.support.KafkaRouteTestDataHelper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -211,16 +213,116 @@ public class KafkaConsumerFactoryFactoryTest {
     }
 
     @Test
-    public void testDeserializerClassMustImplementKafkaDeserializer() {
+    public void testDeserializerInstancesAndClassNamesAreBothRetained() {
         SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("mock-client");
-        config.getConsumer().setValueDeserializer(String.class.getName());
-        log.info("准备拒绝非 Kafka deserializer 类：{}", String.class.getName());
+        config.getConsumer().setGroupId("mock-group");
+        DefaultKafkaConsumerFactory<Object, Object> first =
+                (DefaultKafkaConsumerFactory<Object, Object>) factoryFactory.create("default", config);
+        DefaultKafkaConsumerFactory<Object, Object> second =
+                (DefaultKafkaConsumerFactory<Object, Object>) factoryFactory.create("default", config);
+        log.info("factory 反序列化器：firstKey={}，firstValue={}，secondKey={}，secondValue={}",
+                first.getKeyDeserializer(), first.getValueDeserializer(),
+                second.getKeyDeserializer(), second.getValueDeserializer());
 
-        ConfigurationException exception = assertThrows(ConfigurationException.class,
-                () -> factoryFactory.create("default", config));
-        log.info("非 Kafka deserializer 类拒绝结果：errorCode={}，message={}",
-                exception.getErrorCode(), exception.getMessage());
+        assertEquals(StringDeserializer.class, first.getKeyDeserializer().getClass(),
+                "默认 key deserializer 必须作为 factory 实例提供");
+        assertEquals(StringDeserializer.class, first.getValueDeserializer().getClass(),
+                "默认 value deserializer 必须作为 factory 实例提供");
+        assertEquals(SimpleKafkaRouteConstant.DEFAULT_KEY_DESERIALIZER,
+                first.getConfigurationProperties().get(SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER));
+        assertEquals(SimpleKafkaRouteConstant.DEFAULT_VALUE_DESERIALIZER,
+                first.getConfigurationProperties().get(SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER));
+        assertNotSame(first.getKeyDeserializer(), second.getKeyDeserializer(),
+                "独立 factory 不得共享 key deserializer 实例");
+        assertNotSame(first.getValueDeserializer(), second.getValueDeserializer(),
+                "独立 factory 不得共享 value deserializer 实例");
+    }
+
+    @Test
+    public void testExplicitDeserializerInstancesMatchKafkaConfiguration() {
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("mock-client");
+        config.getConsumer().setKeyDeserializer(CustomKeyDeserializer.class.getName());
+        config.getConsumer().setValueDeserializer(CustomValueDeserializer.class.getName());
+        DefaultKafkaConsumerFactory<Object, Object> first =
+                (DefaultKafkaConsumerFactory<Object, Object>) factoryFactory.create("default", config);
+        DefaultKafkaConsumerFactory<Object, Object> second =
+                (DefaultKafkaConsumerFactory<Object, Object>) factoryFactory.create("default", config);
+        log.info("显式 factory 反序列化器：firstKey={}，firstValue={}，secondKey={}，secondValue={}，properties={}",
+                first.getKeyDeserializer(), first.getValueDeserializer(),
+                second.getKeyDeserializer(), second.getValueDeserializer(), first.getConfigurationProperties());
+
+        assertTrue(first.getKeyDeserializer() instanceof CustomKeyDeserializer);
+        assertTrue(first.getValueDeserializer() instanceof CustomValueDeserializer);
+        assertEquals(CustomKeyDeserializer.class.getName(),
+                first.getConfigurationProperties().get(SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER));
+        assertEquals(CustomValueDeserializer.class.getName(),
+                first.getConfigurationProperties().get(SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER));
+        assertNotSame(first.getKeyDeserializer(), second.getKeyDeserializer(),
+                "独立 factory 不得共享显式 key deserializer 实例");
+        assertNotSame(first.getValueDeserializer(), second.getValueDeserializer(),
+                "独立 factory 不得共享显式 value deserializer 实例");
+    }
+
+    @Test
+    public void testDeserializerClassMustImplementKafkaDeserializer() {
+        assertInvalidDeserializer(String.class.getName(), false);
+        assertInvalidDeserializer(String.class.getName(), true);
+    }
+
+    @Test
+    public void testDeserializerMustHaveAccessibleNoArgumentConstructor() {
+        assertInvalidDeserializer(NoDefaultConstructorDeserializer.class.getName(), false);
+        assertInvalidDeserializer(NoDefaultConstructorDeserializer.class.getName(), true);
+    }
+
+    @Test
+    public void testDeserializerConstructionFailureIsReportedAsConfigurationError() {
+        assertInvalidDeserializer(FailingConstructorDeserializer.class.getName(), false);
+        assertInvalidDeserializer(FailingConstructorDeserializer.class.getName(), true);
+    }
+
+    @Test
+    public void testDeserializerConstructionFailureRetainsRootCause() {
+        ConfigurationException exception = invalidDeserializerException(
+                FailingConstructorDeserializer.class.getName(), false);
+        log.info("反序列化器构造失败根因：{}", exception.getCause());
+        assertTrue(exception.getCause() instanceof IllegalStateException,
+                "反序列化器构造失败必须保留原始根因");
+    }
+
+    @Test
+    public void testMissingDeserializerClassIsReportedAsConfigurationError() {
+        assertInvalidDeserializer("mock.missing.Deserializer", false);
+        assertInvalidDeserializer("mock.missing.Deserializer", true);
+    }
+
+    @Test
+    public void testBlankDeserializerIsReportedAsConfigurationErrorAtFactoryLayer() {
+        assertInvalidDeserializer(" ", false);
+        assertInvalidDeserializer(" ", true);
+    }
+
+    private void assertInvalidDeserializer(String className, boolean keyDeserializer) {
+        ConfigurationException exception = invalidDeserializerException(className, keyDeserializer);
+        String field = keyDeserializer ? SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER
+                : SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER;
+        log.info("不可用 Kafka deserializer 被拒绝：field={}，errorCode={}，message={}",
+                field, exception.getErrorCode(), exception.getMessage());
         assertEquals(ErrorCode.KAFKA_ROUTE_011, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains(field));
+    }
+
+    private ConfigurationException invalidDeserializerException(String className, boolean keyDeserializer) {
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("mock-client");
+        String field = keyDeserializer ? SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER
+                : SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER;
+        if (keyDeserializer) {
+            config.getConsumer().setKeyDeserializer(className);
+        } else {
+            config.getConsumer().setValueDeserializer(className);
+        }
+        log.info("准备拒绝不可用 Kafka deserializer：field={}，class={}", field, className);
+        return assertThrows(ConfigurationException.class, () -> factoryFactory.create("default", config));
     }
 
     private void assertInvalidOverride(SimpleKafkaRouteProperties.DataSourceConfig config,
@@ -256,5 +358,44 @@ public class KafkaConsumerFactoryFactoryTest {
         assertEquals(ErrorCode.KAFKA_ROUTE_005, exception.getErrorCode());
         assertTrue(exception.getMessage().contains(inputKey));
         assertFalse(exception.getMessage().contains(inputValue));
+    }
+
+    public static class CustomKeyDeserializer implements Deserializer<Object> {
+
+        @Override
+        public Object deserialize(String topic, byte[] data) {
+            return null;
+        }
+    }
+
+    public static class CustomValueDeserializer implements Deserializer<Object> {
+
+        @Override
+        public Object deserialize(String topic, byte[] data) {
+            return null;
+        }
+    }
+
+    public static class NoDefaultConstructorDeserializer implements Deserializer<Object> {
+
+        public NoDefaultConstructorDeserializer(String value) {
+        }
+
+        @Override
+        public Object deserialize(String topic, byte[] data) {
+            return null;
+        }
+    }
+
+    public static class FailingConstructorDeserializer implements Deserializer<Object> {
+
+        public FailingConstructorDeserializer() {
+            throw new IllegalStateException("mock constructor failure");
+        }
+
+        @Override
+        public Object deserialize(String topic, byte[] data) {
+            return null;
+        }
     }
 }

@@ -60,6 +60,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final String KEY_TRANSACTION_PREFIX = "tx-key-";
     public static final String KEY_ROLLBACK_PREFIX = "tx-rollback-key-";
     public static final String KEY_CLUSTER_TEMPLATE = "cluster-key-%d-%s";
+    public static final String KEY_LISTENER_PREFIX = "listener-key-";
 
     public static final String VALUE_V110 = "v110-value";
     public static final String VALUE_V28 = "v28-value";
@@ -71,6 +72,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final String VALUE_TRANSACTION = "tx-value";
     public static final String VALUE_ROLLBACK = "tx-rollback-value";
     public static final String VALUE_CLUSTER_TEMPLATE = "cluster-value-%d";
+    public static final String VALUE_LISTENER = "listener-value";
 
     public static final String ROUTE_KEY_V37 = "tenant-v37-a";
     public static final String HEADER_NAME = "mock-header";

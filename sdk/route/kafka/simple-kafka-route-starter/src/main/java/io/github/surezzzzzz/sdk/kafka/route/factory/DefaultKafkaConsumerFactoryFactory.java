@@ -12,6 +12,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -35,11 +36,13 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
         SimpleKafkaRouteProperties.ConsumerConfig consumer = consumerConfig(config);
         try {
             KafkaRoutePropertyMerger.assertValidConsumerFactoryOverride(datasourceKey, override);
-            validateDeserializer(datasourceKey, SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER,
-                    consumer.getKeyDeserializer());
-            validateDeserializer(datasourceKey, SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER,
-                    consumer.getValueDeserializer());
-            return new DefaultKafkaConsumerFactory<>(createConsumerProperties(datasourceKey, config, consumer, override));
+            Deserializer<Object> keyDeserializer = createDeserializer(datasourceKey,
+                    SimpleKafkaRouteConstant.PROPERTY_KEY_DESERIALIZER, consumer.getKeyDeserializer());
+            Deserializer<Object> valueDeserializer = createDeserializer(datasourceKey,
+                    SimpleKafkaRouteConstant.PROPERTY_VALUE_DESERIALIZER, consumer.getValueDeserializer());
+            return new DefaultKafkaConsumerFactory<>(
+                    createConsumerProperties(datasourceKey, config, consumer, override),
+                    keyDeserializer, valueDeserializer);
         } catch (ConfigurationException e) {
             throw e;
         } catch (Exception e) {
@@ -116,21 +119,36 @@ public class DefaultKafkaConsumerFactoryFactory implements KafkaConsumerFactoryF
         }
     }
 
-    private void validateDeserializer(String datasourceKey, String field, String className) {
+    @SuppressWarnings("unchecked")
+    private Deserializer<Object> createDeserializer(String datasourceKey, String field, String className) {
         if (!KafkaRouteStringHelper.hasText(className)) {
-            throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_011,
-                    String.format(ErrorMessage.CONFIG_DESERIALIZER_INVALID, datasourceKey, field));
+            throw deserializerInvalid(datasourceKey, field, null);
         }
         try {
             Class<?> deserializerClass = Class.forName(className.trim());
             if (!Deserializer.class.isAssignableFrom(deserializerClass)) {
-                throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_011,
-                        String.format(ErrorMessage.CONFIG_DESERIALIZER_INVALID, datasourceKey, field));
+                throw deserializerInvalid(datasourceKey, field, null);
             }
-        } catch (ClassNotFoundException e) {
-            throw new ConfigurationException(ErrorCode.KAFKA_ROUTE_011,
-                    String.format(ErrorMessage.CONFIG_DESERIALIZER_INVALID, datasourceKey, field), e);
+            return (Deserializer<Object>) deserializerClass.getDeclaredConstructor().newInstance();
+        } catch (ConfigurationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw deserializerInvalid(datasourceKey, field, causeOf(e));
         }
+    }
+
+    private Throwable causeOf(Exception exception) {
+        if (exception instanceof InvocationTargetException
+                && ((InvocationTargetException) exception).getCause() != null) {
+            return ((InvocationTargetException) exception).getCause();
+        }
+        return exception;
+    }
+
+    private ConfigurationException deserializerInvalid(String datasourceKey, String field, Throwable cause) {
+        String message = String.format(ErrorMessage.CONFIG_DESERIALIZER_INVALID, datasourceKey, field);
+        return cause == null ? new ConfigurationException(ErrorCode.KAFKA_ROUTE_011, message)
+                : new ConfigurationException(ErrorCode.KAFKA_ROUTE_011, message, cause);
     }
 
     private SimpleKafkaRouteProperties.ConsumerConfig consumerConfig(SimpleKafkaRouteProperties.DataSourceConfig config) {
