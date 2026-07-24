@@ -5,7 +5,10 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElastic
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import org.springframework.util.CollectionUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 基于 field-mapping 配置的字段绑定器

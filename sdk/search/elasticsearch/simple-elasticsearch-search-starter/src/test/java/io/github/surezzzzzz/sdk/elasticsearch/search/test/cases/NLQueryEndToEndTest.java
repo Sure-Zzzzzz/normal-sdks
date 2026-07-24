@@ -52,26 +52,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class NLQueryEndToEndTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
-    private SimpleElasticsearchRouteRegistry registry;
-
     private static final String USER_INDEX = "test_user_index";
     private static final String USER_ALIAS = "test_user";
-
-    private boolean primarySupportsPit() {
-        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
-        return clusterInfo != null
-                && clusterInfo.getEffectiveVersion() != null
-                && (clusterInfo.getEffectiveVersion().getMajor() > 7
-                || (clusterInfo.getEffectiveVersion().getMajor() == 7
-                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
-    }
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private SimpleElasticsearchRouteRegistry registry;
 
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
@@ -127,6 +115,15 @@ class NLQueryEndToEndTest {
         map.put("phone", phone);
         map.put("password", password);
         return map;
+    }
+
+    private boolean primarySupportsPit() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
     }
 
     // ==================== 2. 数据查询测试（NL API） ====================

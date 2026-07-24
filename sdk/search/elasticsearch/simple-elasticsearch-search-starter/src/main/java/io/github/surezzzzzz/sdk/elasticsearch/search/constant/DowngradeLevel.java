@@ -40,6 +40,21 @@ public enum DowngradeLevel {
     }
 
     /**
+     * 从数值转换为枚举
+     *
+     * @param value 降级级别值
+     * @return 对应的枚举
+     */
+    public static DowngradeLevel fromValue(int value) {
+        for (DowngradeLevel level : values()) {
+            if (level.value == value) {
+                return level;
+            }
+        }
+        throw new IllegalArgumentException("Invalid DowngradeLevel value: " + value);
+    }
+
+    /**
      * 判断是否还有下一降级级别
      *
      * @return true: 有下一级别, false: 已是最大级别
@@ -62,20 +77,5 @@ public enum DowngradeLevel {
             return this;  // 已达最大级别，返回自身保证幂等性
         }
         return values()[this.value + 1];
-    }
-
-    /**
-     * 从数值转换为枚举
-     *
-     * @param value 降级级别值
-     * @return 对应的枚举
-     */
-    public static DowngradeLevel fromValue(int value) {
-        for (DowngradeLevel level : values()) {
-            if (level.value == value) {
-                return level;
-            }
-        }
-        throw new IllegalArgumentException("Invalid DowngradeLevel value: " + value);
     }
 }

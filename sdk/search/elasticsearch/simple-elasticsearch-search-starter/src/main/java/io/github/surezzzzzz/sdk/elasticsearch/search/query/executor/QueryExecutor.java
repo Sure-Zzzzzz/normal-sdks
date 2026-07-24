@@ -3,12 +3,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.query.executor;
 import io.github.surezzzzzz.sdk.elasticsearch.route.constant.SimpleElasticsearchRouteConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.LowLevelSearchResult;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchEndpointHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchLowLevelRequestHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchRequestOptionHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchResponseHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchVersionHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.XContentCompatibilityHelper;
+import io.github.surezzzzzz.sdk.elasticsearch.route.support.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.annotation.SimpleElasticsearchSearchComponent;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.DowngradeLevel;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorCode;
@@ -80,7 +75,7 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
     @Override
     protected boolean needsDowngradeRetry(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
-                                           IndexMetadata metadata) {
+                                          IndexMetadata metadata) {
         return properties.getDowngrade().isEnabled()
                 && !resolvedIndexConfig.isWildcardMatched()
                 && metadata.isDateSplit()

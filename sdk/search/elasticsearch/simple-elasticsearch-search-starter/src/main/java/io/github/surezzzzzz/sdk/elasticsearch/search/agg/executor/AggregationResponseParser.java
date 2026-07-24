@@ -31,6 +31,34 @@ public class AggregationResponseParser {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    private static Object invokeNoArg(Object target, String methodName) throws Exception {
+        Method m = target.getClass().getMethod(methodName);
+        return m.invoke(target);
+    }
+
+    private static Object invokeBounds(Object target, Class<?> boundsClass, String boundName) {
+        if (boundsClass == null) {
+            return null;
+        }
+        try {
+            Object boundEnum = Enum.valueOf((Class<? extends Enum>) boundsClass, boundName);
+            Method m = target.getClass().getMethod(SimpleElasticsearchSearchConstant.AGG_METHOD_GET_STD_DEVIATION_BOUND, boundsClass);
+            return m.invoke(target, boundEnum);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Class<?> loadClass(String... candidateNames) {
+        for (String name : candidateNames) {
+            try {
+                return Class.forName(name);
+            } catch (ClassNotFoundException ignored) {
+            }
+        }
+        return null;
+    }
+
     /**
      * 解析单个聚合（ES 7.x 路径）
      *
@@ -71,6 +99,8 @@ public class AggregationResponseParser {
         }
         return aggregation.toString();
     }
+
+    // ==================== ES 7.x 私有解析方法（反射，兼容 6.x/7.x 包路径差异）====================
 
     /**
      * 解析 composite 聚合（ES 7.x 路径）
@@ -137,8 +167,6 @@ public class AggregationResponseParser {
         }
         return aggValue;
     }
-
-    // ==================== ES 7.x 私有解析方法（反射，兼容 6.x/7.x 包路径差异）====================
 
     /**
      * 反射判断并解析 NumericMetricsAggregation.SingleValue（6.x 在 metrics.NumericMetricsAggregation，
@@ -253,34 +281,6 @@ public class AggregationResponseParser {
             log.warn("通过反射解析百分位聚合迭代结果失败：{}", e.getMessage());
             return null;
         }
-    }
-
-    private static Object invokeNoArg(Object target, String methodName) throws Exception {
-        Method m = target.getClass().getMethod(methodName);
-        return m.invoke(target);
-    }
-
-    private static Object invokeBounds(Object target, Class<?> boundsClass, String boundName) {
-        if (boundsClass == null) {
-            return null;
-        }
-        try {
-            Object boundEnum = Enum.valueOf((Class<? extends Enum>) boundsClass, boundName);
-            Method m = target.getClass().getMethod(SimpleElasticsearchSearchConstant.AGG_METHOD_GET_STD_DEVIATION_BOUND, boundsClass);
-            return m.invoke(target, boundEnum);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static Class<?> loadClass(String... candidateNames) {
-        for (String name : candidateNames) {
-            try {
-                return Class.forName(name);
-            } catch (ClassNotFoundException ignored) {
-            }
-        }
-        return null;
     }
 
     private Map<String, Object> parseSingleBucket(SingleBucketAggregation agg) {

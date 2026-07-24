@@ -6,7 +6,9 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionVisitorRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
 import io.github.surezzzzzz.sdk.expression.condition.parser.exception.ConditionExpressionParseException;
@@ -16,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
 
+import java.time.DateTimeException;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -30,9 +34,29 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExpressionService {
 
+    private static final List<ExpressionHintsResponse.OperatorHint> OPERATOR_HINTS = Arrays.asList(
+            ExpressionHintsResponse.OperatorHint.builder().op("=").description("等于").chinese("等于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("!=").description("不等于").chinese("不等于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op(">").description("大于").chinese("大于、晚于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op(">=").description("大于等于").chinese("大于等于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("<").description("小于").chinese("小于、早于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("<=").description("小于等于").chinese("小于等于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("IN").description("在列表中").chinese("包含于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("NOT IN").description("不在列表中").chinese("不包含于").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("LIKE").description("模糊匹配").chinese("包含").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("PREFIX LIKE").description("前缀匹配").chinese("前缀").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("SUFFIX LIKE").description("后缀匹配").chinese("后缀").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("NOT LIKE").description("模糊不匹配").chinese("不包含").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("IS NULL").description("为空").chinese("空、为空").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("IS NOT NULL").description("不为空").chinese("非空").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("AND").description("逻辑与").chinese("且、并且").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("OR").description("逻辑或").chinese("或、或者").build(),
+            ExpressionHintsResponse.OperatorHint.builder().op("NOT").description("逻辑非").chinese("非").build()
+    );
     private final ConditionExpressionParser expressionParser;
     private final ExpressionVisitorRegistry visitorRegistry;
     private final SimpleElasticsearchSearchProperties properties;
+    private final MappingManager mappingManager;
 
     /**
      * 将条件表达式字符串转换为 QueryCondition
@@ -44,17 +68,44 @@ public class ExpressionService {
      * @throws ExpressionParseException 语法错误或超长时抛出
      */
     public QueryCondition translate(String expression, String index) {
+        return translate(expression, index, TimeRangeEnd.NOW, null);
+    }
+
+    /**
+     * 将条件表达式字符串转换为 QueryCondition，并指定时间范围边界语义
+     *
+     * @param expression   表达式字符串
+     * @param index        索引别名，用于查找字段名映射
+     * @param timeRangeEnd 时间关键字截止模式，可为空，默认 NOW
+     * @param timeZone     IANA 时区，可为空，默认 JVM 系统时区
+     * @return QueryCondition，可直接赋值给 QueryRequest.query 或 AggRequest.query
+     */
+    public QueryCondition translate(String expression, String index, TimeRangeEnd timeRangeEnd, String timeZone) {
         validateLength(expression);
-        log.debug("Translating expression: index={}", index);
+        ZoneId zoneId = resolveZoneId(timeZone);
+        log.debug("Translating expression: index={}, timeRangeEnd={}, timeZone={}",
+                index, timeRangeEnd, zoneId);
         try {
             Expression ast = parseExpression(expression, index);
-            QueryCondition condition = ast.accept(visitorRegistry.resolve(index));
+            QueryCondition condition = ast.accept(visitorRegistry.resolve(index)
+                    .withTimeRangeContext(mappingManager, index, timeRangeEnd, zoneId));
             log.debug("Expression translated successfully");
             return condition;
         } catch (ConditionExpressionParseException e) {
             log.warn("Expression parse failed: {}", e.getMessage());
             throw new ExpressionParseException(
                     String.format(ErrorMessage.EXPRESSION_PARSE_FAILED, e.getMessage()), e);
+        }
+    }
+
+    private ZoneId resolveZoneId(String timeZone) {
+        if (!StringUtils.hasText(timeZone)) {
+            return ZoneId.systemDefault();
+        }
+        try {
+            return ZoneId.of(timeZone);
+        } catch (DateTimeException e) {
+            throw new ExpressionParseException(String.format(ErrorMessage.EXPRESSION_TIME_ZONE_INVALID, timeZone), e);
         }
     }
 
@@ -127,26 +178,6 @@ public class ExpressionService {
                         .build())
                 .collect(Collectors.toList());
     }
-
-    private static final List<ExpressionHintsResponse.OperatorHint> OPERATOR_HINTS = Arrays.asList(
-            ExpressionHintsResponse.OperatorHint.builder().op("=").description("等于").chinese("等于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("!=").description("不等于").chinese("不等于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op(">").description("大于").chinese("大于、晚于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op(">=").description("大于等于").chinese("大于等于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("<").description("小于").chinese("小于、早于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("<=").description("小于等于").chinese("小于等于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("IN").description("在列表中").chinese("包含于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("NOT IN").description("不在列表中").chinese("不包含于").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("LIKE").description("模糊匹配").chinese("包含").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("PREFIX LIKE").description("前缀匹配").chinese("前缀").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("SUFFIX LIKE").description("后缀匹配").chinese("后缀").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("NOT LIKE").description("模糊不匹配").chinese("不包含").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("IS NULL").description("为空").chinese("空、为空").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("IS NOT NULL").description("不为空").chinese("非空").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("AND").description("逻辑与").chinese("且、并且").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("OR").description("逻辑或").chinese("或、或者").build(),
-            ExpressionHintsResponse.OperatorHint.builder().op("NOT").description("逻辑非").chinese("非").build()
-    );
 
     private List<ExpressionHintsResponse.OperatorHint> buildOperatorHints() {
         return OPERATOR_HINTS;

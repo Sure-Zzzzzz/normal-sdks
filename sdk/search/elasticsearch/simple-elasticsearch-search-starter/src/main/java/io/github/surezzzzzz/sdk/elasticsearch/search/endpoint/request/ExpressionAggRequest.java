@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggDefinition;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,7 +31,7 @@ public class ExpressionAggRequest {
 
     /**
      * 条件表达式字符串（必填）
-     * 示例：状态 = "已完成" AND 金额 >= 100
+     * 示例：事件类型 = "mock-value" AND 风险等级 >= 10
      */
     private String expression;
 
@@ -44,4 +45,14 @@ public class ExpressionAggRequest {
      * key：聚合名称，value：上一页的 afterKey
      */
     private Map<String, Map<String, Object>> after;
+
+    /**
+     * 表达式时间关键字的截止模式（可选，默认 NOW）
+     */
+    private TimeRangeEnd timeRangeEnd;
+
+    /**
+     * 表达式时间关键字使用的 IANA 时区（可选，默认 JVM 系统时区）
+     */
+    private String timeZone;
 }

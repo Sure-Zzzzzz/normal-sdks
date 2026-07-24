@@ -67,10 +67,6 @@ class IndexDowngradeEndToEndTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private String toJson(Object obj) throws Exception {
-        return objectMapper.writeValueAsString(obj);
-    }
-
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备降级测试数据 ==========");
@@ -141,6 +137,10 @@ class IndexDowngradeEndToEndTest {
         }
         log.info("✓ 共创建 {} 个日粒度索引（{} ~ {}），其中月份1无extraField/extraField2，月份2/3有",
                 count, from, to);
+    }
+
+    private String toJson(Object obj) throws Exception {
+        return objectMapper.writeValueAsString(obj);
     }
 
     // ==================== 降级功能测试 ====================

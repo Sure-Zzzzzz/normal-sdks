@@ -1,9 +1,12 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.test.cases;
 
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
+import io.github.surezzzzzz.sdk.elasticsearch.search.configuration.SimpleElasticsearchSearchProperties;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.ExpressionParseException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionToQueryConditionVisitor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor.ExpressionVisitorRegistry;
@@ -15,9 +18,11 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.test.SearchTestProfilesReso
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.SimpleElasticsearchSearchTestApplication;
 import io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.EsApiHelper;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.TimeRange;
+import io.github.surezzzzzz.sdk.expression.condition.parser.parser.ConditionExpressionParser;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,9 +30,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * AdvancedExpressionService 单元测试
@@ -40,6 +51,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class ExpressionTest {
 
     private static final String NL_USER_INDEX = "test_nl_user_index";
+    @Autowired
+    private ExpressionService expressionService;
+    @Autowired
+    private ConditionExpressionParser expressionParser;
+    @Autowired
+    private ExpressionVisitorRegistry visitorRegistry;
+    @Autowired
+    private MappingManager mappingManager;
+    @Autowired
+    private QueryDslBuilder queryDslBuilder;
 
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) {
@@ -51,23 +72,12 @@ class ExpressionTest {
                         "\"city\":{\"type\":\"keyword\"}," +
                         "\"status\":{\"type\":\"keyword\"}," +
                         "\"points\":{\"type\":\"long\"}," +
+                        "\"eventTimestamp\":{\"type\":\"long\"}," +
                         "\"createTime\":{\"type\":\"date\"}," +
                         "\"orderId\":{\"type\":\"keyword\"}" +
                         "}}");
         log.info("✓ ExpressionTest: 已创建索引 {}", NL_USER_INDEX);
     }
-
-    @Autowired
-    private ExpressionService expressionService;
-
-    @Autowired
-    private ExpressionVisitorRegistry visitorRegistry;
-
-    @Autowired
-    private MappingManager mappingManager;
-
-    @Autowired
-    private QueryDslBuilder queryDslBuilder;
 
     // ==================== ExpressionVisitorRegistry ====================
 
@@ -96,12 +106,12 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - 等于")
     void testTranslateEq() {
-        QueryCondition result = expressionService.translate("威胁类型 = \"木马\"", null);
+        QueryCondition result = expressionService.translate("事件类型 = \"mock-value\"", null);
         log.info("eq: {}", result);
         assertNotNull(result);
-        assertEquals("威胁类型", result.getField());
+        assertEquals("事件类型", result.getField());
         assertEquals("eq", result.getOp());
-        assertEquals("木马", result.getValue());
+        assertEquals("mock-value", result.getValue());
     }
 
     @Test
@@ -116,7 +126,7 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - 数值大于等于")
     void testTranslateGte() {
-        QueryCondition result = expressionService.translate("攻击次数 >= 10", null);
+        QueryCondition result = expressionService.translate("事件数量 >= 10", null);
         log.info("gte: {}", result);
         assertEquals("gte", result.getOp());
         assertEquals("10", result.getValue());
@@ -125,13 +135,13 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - IN 多值")
     void testTranslateIn() {
-        QueryCondition result = expressionService.translate("威胁等级 IN (\"高危\", \"中危\")", null);
+        QueryCondition result = expressionService.translate("事件等级 IN (\"一级\", \"二级\")", null);
         log.info("in: {}", result);
         assertEquals("in", result.getOp());
         assertNotNull(result.getValues());
         assertEquals(2, result.getValues().size());
-        assertTrue(result.getValues().contains("高危"));
-        assertTrue(result.getValues().contains("中危"));
+        assertTrue(result.getValues().contains("一级"));
+        assertTrue(result.getValues().contains("二级"));
     }
 
     @Test
@@ -146,19 +156,19 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - LIKE 模糊匹配")
     void testTranslateLike() {
-        QueryCondition result = expressionService.translate("外联目标 LIKE \"evil\"", null);
+        QueryCondition result = expressionService.translate("示例字段 LIKE \"mock-value\"", null);
         log.info("like: {}", result);
         assertEquals("like", result.getOp());
-        assertEquals("evil", result.getValue());
+        assertEquals("mock-value", result.getValue());
     }
 
     @Test
     @DisplayName("translate - NOT LIKE")
     void testTranslateNotLike() {
-        QueryCondition result = expressionService.translate("外联目标 NOT LIKE \"cdn\"", null);
+        QueryCondition result = expressionService.translate("示例字段 NOT LIKE \"sample-value\"", null);
         log.info("not_like: {}", result);
         assertEquals("not_like", result.getOp());
-        assertEquals("cdn", result.getValue());
+        assertEquals("sample-value", result.getValue());
     }
 
     @Test
@@ -200,7 +210,7 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - IS NULL")
     void testTranslateIsNull() {
-        QueryCondition result = expressionService.translate("威胁标签 IS NULL", null);
+        QueryCondition result = expressionService.translate("事件标签 IS NULL", null);
         log.info("is_null: {}", result);
         assertEquals("is_null", result.getOp());
         assertNull(result.getValue());
@@ -209,7 +219,7 @@ class ExpressionTest {
     @Test
     @DisplayName("translate - IS NOT NULL")
     void testTranslateIsNotNull() {
-        QueryCondition result = expressionService.translate("威胁标签 IS NOT NULL", null);
+        QueryCondition result = expressionService.translate("事件标签 IS NOT NULL", null);
         log.info("is_not_null: {}", result);
         assertEquals("is_not_null", result.getOp());
     }
@@ -256,7 +266,7 @@ class ExpressionTest {
     @DisplayName("translate - AND 组合")
     void testTranslateAnd() {
         QueryCondition result = expressionService.translate(
-                "威胁类型 = \"木马\" AND 攻击次数 >= 10", null);
+                "事件类型 = \"mock-value\" AND 事件数量 >= 10", null);
         log.info("and: {}", result);
         assertEquals("and", result.getLogic());
         assertNotNull(result.getConditions());
@@ -267,7 +277,7 @@ class ExpressionTest {
     @DisplayName("translate - OR 组合")
     void testTranslateOr() {
         QueryCondition result = expressionService.translate(
-                "威胁类型 = \"木马\" OR 威胁类型 = \"蠕虫\"", null);
+                "事件类型 = \"mock-value\" OR 事件类型 = \"蠕虫\"", null);
         log.info("or: {}", result);
         assertEquals("or", result.getLogic());
         assertEquals(2, result.getConditions().size());
@@ -277,7 +287,7 @@ class ExpressionTest {
     @DisplayName("translate - 括号分组")
     void testTranslateParenthesis() {
         QueryCondition result = expressionService.translate(
-                "(威胁类型 = \"木马\" OR 威胁类型 = \"蠕虫\") AND 攻击次数 > 5", null);
+                "(事件类型 = \"mock-value\" OR 事件类型 = \"蠕虫\") AND 事件数量 > 5", null);
         log.info("parenthesis: {}", result);
         assertEquals("and", result.getLogic());
         assertEquals(2, result.getConditions().size());
@@ -290,19 +300,19 @@ class ExpressionTest {
     @DisplayName("translate - NOT 叶子节点取反")
     void testTranslateNotLeaf() {
         QueryCondition result = expressionService.translate(
-                "NOT 告警单位 = \"测试环境\"", null);
+                "NOT 示例字段 = \"mock-value\"", null);
         log.info("not leaf: {}", result);
         // NOT eq → ne
         assertEquals("ne", result.getOp());
-        assertEquals("告警单位", result.getField());
-        assertEquals("测试环境", result.getValue());
+        assertEquals("示例字段", result.getField());
+        assertEquals("mock-value", result.getValue());
     }
 
     @Test
     @DisplayName("translate - NOT 复合节点德摩根展开")
     void testTranslateNotComplex() {
         QueryCondition result = expressionService.translate(
-                "NOT (威胁类型 = \"木马\" AND 攻击次数 >= 10)", null);
+                "NOT (事件类型 = \"mock-value\" AND 事件数量 >= 10)", null);
         log.info("not complex: {}", result);
         // NOT (A AND B) → (NOT A) OR (NOT B)
         assertEquals("or", result.getLogic());
@@ -329,6 +339,36 @@ class ExpressionTest {
         log.info("NOT (SUFFIX LIKE): {}", result);
         assertEquals("not_suffix", result.getOp());
         assertEquals("@spam.com", result.getValue());
+    }
+
+    @Test
+    @DisplayName("translate - NOT (NOT LIKE) 取反为 like")
+    void testNegateNotLike() {
+        QueryCondition result = expressionService.translate(
+                "NOT (name NOT LIKE \"mock-value\")", null);
+        log.info("NOT (NOT LIKE): {}", result);
+        assertEquals("like", result.getOp(), "NOT (NOT LIKE) 应恢复为 like");
+        assertEquals("mock-value", result.getValue(), "LIKE 值应保持不变");
+    }
+
+    @Test
+    @DisplayName("translate - NOT (NOT PREFIX LIKE) 取反为 prefix")
+    void testNegateNotPrefixLike() {
+        QueryCondition result = expressionService.translate(
+                "NOT (name NOT PREFIX LIKE \"mock\")", null);
+        log.info("NOT (NOT PREFIX LIKE): {}", result);
+        assertEquals("prefix", result.getOp(), "NOT (NOT PREFIX LIKE) 应恢复为 prefix");
+        assertEquals("mock", result.getValue(), "PREFIX 值应保持不变");
+    }
+
+    @Test
+    @DisplayName("translate - NOT (NOT SUFFIX LIKE) 取反为 suffix")
+    void testNegateNotSuffixLike() {
+        QueryCondition result = expressionService.translate(
+                "NOT (email NOT SUFFIX LIKE \"@example.test\")", null);
+        log.info("NOT (NOT SUFFIX LIKE): {}", result);
+        assertEquals("suffix", result.getOp(), "NOT (NOT SUFFIX LIKE) 应恢复为 suffix");
+        assertEquals("@example.test", result.getValue(), "SUFFIX 值应保持不变");
     }
 
     // ==================== translate - 字段名映射 ====================
@@ -380,14 +420,273 @@ class ExpressionTest {
         log.info("from={}, to={}", result.getValues().get(0), result.getValues().get(1));
     }
 
+    @Test
+    @DisplayName("translate - long 时间字段使用 epoch seconds")
+    void testTranslateLongTimeRange() {
+        QueryCondition result = expressionService.translate("事件时间戳 = 最近7天", NL_USER_INDEX,
+                TimeRangeEnd.TODAY_START, "Asia/Shanghai");
+        log.info("long time range: {}", result);
+
+        assertEquals("between", result.getOp(), "long 时间字段应生成 between 条件");
+        assertEquals(2, result.getValues().size(), "long 时间范围应包含两个边界");
+        assertTrue(result.getValues().get(0) instanceof Long, "long 时间范围起始值应为 epoch seconds Long");
+        assertTrue(result.getValues().get(1) instanceof Long, "long 时间范围结束值应为 epoch seconds Long");
+    }
+
+    @Test
+    @DisplayName("translate - long 时间字段范围补集保留 epoch seconds")
+    void testTranslateLongTimeRangeOutside() {
+        QueryCondition result = expressionService.translate("NOT (事件时间戳 = 最近7天)", NL_USER_INDEX,
+                TimeRangeEnd.TODAY_START, "Asia/Shanghai");
+        log.info("long time range outside: {}", result);
+
+        assertEquals("or", result.getLogic(), "long 时间范围补集应生成 OR 条件");
+        assertTrue(result.getConditions().get(0).getValue() instanceof Long,
+                "long 时间范围补集起始边界应保留 Long");
+        assertTrue(result.getConditions().get(1).getValue() instanceof Long,
+                "long 时间范围补集结束边界应保留 Long");
+    }
+
+    @Test
+    @DisplayName("translate - 时间范围 TODAY_START 截止当天零点")
+    void testTranslateTimeRangeTodayStart() {
+        QueryCondition result = expressionService.translate("创建时间 = 最近7天", NL_USER_INDEX,
+                TimeRangeEnd.TODAY_START, "Asia/Shanghai");
+        log.info("time range today start: {}", result);
+
+        assertEquals("between", result.getOp(), "TODAY_START 应生成 between 条件");
+        String end = String.valueOf(result.getValues().get(1));
+        assertTrue(end.endsWith("T00:00:00"), "TODAY_START 应截止到指定时区的当天零点");
+    }
+
+    @Test
+    @DisplayName("translate - 指定时区的 TODAY_START 精确转换 DATE 与 LONG 边界")
+    void testTranslateTimeRangeTodayStartWithFixedClock() {
+        ZoneId zoneId = ZoneId.of("Asia/Shanghai");
+        Clock clock = Clock.fixed(Instant.parse("2026-07-17T17:20:30Z"), zoneId);
+        ExpressionToQueryConditionVisitor visitor = new ExpressionToQueryConditionVisitor(
+                null, mappingManager, NL_USER_INDEX, TimeRangeEnd.TODAY_START, clock);
+
+        QueryCondition dateCondition = expressionParser.parse("createTime = 最近7天").accept(visitor);
+        QueryCondition longCondition = expressionParser.parse("eventTimestamp = 最近7天").accept(visitor);
+        log.info("fixed clock date condition={}, long condition={}", dateCondition, longCondition);
+
+        assertEquals("2026-07-11T00:00:00", dateCondition.getValues().get(0),
+                "DATE 起始边界应按 Asia/Shanghai 当天零点向前七天计算");
+        assertEquals("2026-07-18T00:00:00", dateCondition.getValues().get(1),
+                "DATE 结束边界应为 Asia/Shanghai 当天零点");
+        assertEquals(Instant.parse("2026-07-10T16:00:00Z").getEpochSecond(), longCondition.getValues().get(0),
+                "LONG 起始边界应为同一时区零点对应的 epoch seconds");
+        assertEquals(Instant.parse("2026-07-17T16:00:00Z").getEpochSecond(), longCondition.getValues().get(1),
+                "LONG 结束边界应为当天零点对应的 epoch seconds");
+        assertTrue(longCondition.getValues().get(0) instanceof Long, "LONG 起始边界应保留 Long 类型");
+        assertTrue(longCondition.getValues().get(1) instanceof Long, "LONG 结束边界应保留 Long 类型");
+
+        QueryBuilder longQuery = queryDslBuilder.build(mappingManager.getMetadata(NL_USER_INDEX), longCondition);
+        assertTrue(longQuery instanceof RangeQueryBuilder, "LONG 时间范围应生成 RangeQueryBuilder");
+        RangeQueryBuilder rangeQuery = (RangeQueryBuilder) longQuery;
+        assertEquals(longCondition.getValues().get(0), rangeQuery.from(), "最终 DSL 起始边界应保留数值");
+        assertEquals(longCondition.getValues().get(1), rangeQuery.to(), "最终 DSL 结束边界应保留数值");
+        assertTrue(rangeQuery.from() instanceof Long, "最终 DSL 起始边界应为 Long");
+        assertTrue(rangeQuery.to() instanceof Long, "最终 DSL 结束边界应为 Long");
+    }
+
+    @Test
+    @DisplayName("translate - long 时间范围补集与单边比较保留精确 epoch seconds")
+    void testTranslateLongTimeRangeOperatorsWithFixedClock() {
+        ZoneId zoneId = ZoneId.of("Asia/Shanghai");
+        Clock clock = Clock.fixed(Instant.parse("2026-07-17T17:20:30Z"), zoneId);
+        ExpressionToQueryConditionVisitor visitor = new ExpressionToQueryConditionVisitor(
+                null, mappingManager, NL_USER_INDEX, TimeRangeEnd.TODAY_START, clock);
+        Long from = Instant.parse("2026-07-10T16:00:00Z").getEpochSecond();
+        Long end = Instant.parse("2026-07-17T16:00:00Z").getEpochSecond();
+
+        QueryCondition notEqual = expressionParser.parse("eventTimestamp != 最近7天").accept(visitor);
+        QueryCondition negatedEqual = expressionParser.parse("NOT (eventTimestamp = 最近7天)").accept(visitor);
+        assertOutsideLongRange(notEqual, from, end, "long != 最近7天");
+        assertOutsideLongRange(negatedEqual, from, end, "NOT (long = 最近7天)");
+
+        QueryCondition doubleNegated = expressionParser.parse("NOT (eventTimestamp != 最近7天)").accept(visitor);
+        assertEquals("and", doubleNegated.getLogic(), "NOT (long != 最近7天) 应恢复为区间内");
+        assertEquals("gte", doubleNegated.getConditions().get(0).getOp(), "区间内下界应为 gte");
+        assertEquals(from, doubleNegated.getConditions().get(0).getValue(), "区间内下界应保留 epoch seconds");
+        assertEquals("lte", doubleNegated.getConditions().get(1).getOp(), "区间内上界应为 lte");
+        assertEquals(end, doubleNegated.getConditions().get(1).getValue(), "区间内上界应保留 epoch seconds");
+
+        assertLongTimeComparison(visitor, "eventTimestamp > 最近7天", "gt", from);
+        assertLongTimeComparison(visitor, "eventTimestamp >= 最近7天", "gte", from);
+        assertLongTimeComparison(visitor, "eventTimestamp < 最近7天", "lt", from);
+        assertLongTimeComparison(visitor, "eventTimestamp <= 最近7天", "lte", from);
+    }
+
+    @Test
+    @DisplayName("translate - 日历时间关键字按请求 IANA 时区截断")
+    void testTranslateCalendarTimeRangeWithFixedClock() {
+        ZoneId zoneId = ZoneId.of("Asia/Shanghai");
+        Clock clock = Clock.fixed(Instant.parse("2026-07-17T17:20:30Z"), zoneId);
+        ExpressionToQueryConditionVisitor visitor = new ExpressionToQueryConditionVisitor(
+                null, mappingManager, NL_USER_INDEX, TimeRangeEnd.NOW, clock);
+
+        QueryCondition today = expressionParser.parse("createTime = 今天").accept(visitor);
+        QueryCondition currentWeek = expressionParser.parse("createTime = 本周").accept(visitor);
+
+        assertEquals("2026-07-18T00:00:00", today.getValues().get(0), "今天的起始边界应按 Asia/Shanghai 计算");
+        assertEquals("2026-07-18T01:20:30", today.getValues().get(1), "今天的结束边界应保留请求时区当前时间");
+        assertEquals("2026-07-13T00:00:00", currentWeek.getValues().get(0), "本周起始边界应为请求时区周一零点");
+        assertEquals("2026-07-18T01:20:30", currentWeek.getValues().get(1), "本周结束边界应保留请求时区当前时间");
+    }
+
+    @Test
+    @DisplayName("translate - 旧重载默认使用 NOW 与系统时区")
+    void testTranslateDefaultOverloadUsesNowAndSystemZone() {
+        QueryCondition defaultResult = expressionService.translate("创建时间 = 最近7天", NL_USER_INDEX);
+        QueryCondition explicitResult = expressionService.translate("创建时间 = 最近7天", NL_USER_INDEX,
+                TimeRangeEnd.NOW, null);
+
+        assertEquals("between", defaultResult.getOp(), "旧重载应继续生成时间范围");
+        assertEquals("between", explicitResult.getOp(), "NOW 重载应生成时间范围");
+        assertEquals(defaultResult.getValues().size(), explicitResult.getValues().size(), "两个重载应生成相同边界数量");
+        assertTrue(String.valueOf(defaultResult.getValues().get(1)).contains("T"), "旧重载应保持 DATE 时间格式");
+        assertTrue(String.valueOf(explicitResult.getValues().get(1)).contains("T"), "NOW 重载应保持 DATE 时间格式");
+    }
+
+    @Test
+    @DisplayName("translate - 并发请求的时间范围上下文互不串扰")
+    void testTranslateTimeRangeContextIsConcurrentSafe() throws Exception {
+        ExecutorService executorService = Executors.newFixedThreadPool(2);
+        long before = Instant.now().getEpochSecond();
+        try {
+            List<Callable<QueryCondition>> tasks = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                tasks.add(() -> expressionService.translate("事件时间戳 = 最近7天", NL_USER_INDEX,
+                        TimeRangeEnd.TODAY_START, "Asia/Shanghai"));
+                tasks.add(() -> expressionService.translate("事件时间戳 = 最近7天", NL_USER_INDEX,
+                        TimeRangeEnd.NOW, "UTC"));
+            }
+
+            List<Future<QueryCondition>> futures = executorService.invokeAll(tasks);
+            long after = Instant.now().getEpochSecond();
+            for (int i = 0; i < futures.size(); i++) {
+                QueryCondition condition = futures.get(i).get(10, TimeUnit.SECONDS);
+                assertEquals("between", condition.getOp(), "并发翻译应保留时间范围操作符");
+                assertTrue(condition.getValues().get(0) instanceof Long, "并发翻译起始边界应保持 Long");
+                assertTrue(condition.getValues().get(1) instanceof Long, "并发翻译结束边界应保持 Long");
+                long end = (Long) condition.getValues().get(1);
+                if (i % 2 == 0) {
+                    assertEquals(0, Instant.ofEpochSecond(end).atZone(ZoneId.of("Asia/Shanghai")).getHour(),
+                            "TODAY_START 上界应按 Shanghai 时区截断到零点");
+                    assertEquals(0, Instant.ofEpochSecond(end).atZone(ZoneId.of("Asia/Shanghai")).getMinute(),
+                            "TODAY_START 上界应按 Shanghai 时区截断到零点");
+                } else {
+                    assertTrue(end >= before && end <= after,
+                            "UTC NOW 上界应是本次调用期间的当前 epoch seconds，不能被其他请求截断");
+                }
+            }
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
+    private void assertOutsideLongRange(QueryCondition condition, Long from, Long end, String description) {
+        assertEquals("or", condition.getLogic(), description + " 应生成区间补集");
+        assertEquals(2, condition.getConditions().size(), description + " 应包含两个边界");
+        assertEquals("lt", condition.getConditions().get(0).getOp(), description + " 下界外应使用 lt");
+        assertEquals(from, condition.getConditions().get(0).getValue(), description + " 下界应保留 epoch seconds");
+        assertEquals("gt", condition.getConditions().get(1).getOp(), description + " 上界外应使用 gt");
+        assertEquals(end, condition.getConditions().get(1).getValue(), description + " 上界应保留 epoch seconds");
+        assertTrue(condition.getConditions().get(0).getValue() instanceof Long, description + " 下界必须为 Long");
+        assertTrue(condition.getConditions().get(1).getValue() instanceof Long, description + " 上界必须为 Long");
+    }
+
+    private void assertLongTimeComparison(ExpressionToQueryConditionVisitor visitor, String expression,
+                                          String expectedOperator, Long expectedValue) {
+        QueryCondition condition = expressionParser.parse(expression).accept(visitor);
+        assertEquals(expectedOperator, condition.getOp(), expression + " 应保留比较运算符");
+        assertEquals(expectedValue, condition.getValue(), expression + " 应使用时间范围起始 epoch seconds");
+        assertTrue(condition.getValue() instanceof Long, expression + " 的边界必须为 Long");
+    }
+
+    @Test
+    @DisplayName("translate - mapping 不可用时 DATE 时间范围回退 ISO 边界")
+    void testTranslateTimeRangeFallsBackWhenMappingUnavailable() {
+        MappingManager unavailableMappingManager = mock(MappingManager.class);
+        SimpleElasticsearchSearchProperties.IndexConfig indexConfig =
+                new SimpleElasticsearchSearchProperties.IndexConfig();
+        indexConfig.setName("missing-index");
+        Clock clock = Clock.fixed(Instant.parse("2026-07-17T17:20:30Z"), ZoneId.of("Asia/Shanghai"));
+        when(unavailableMappingManager.findIndexConfig("missing-index")).thenReturn(indexConfig);
+        when(unavailableMappingManager.getMetadata("missing-index"))
+                .thenThrow(new MappingException("SEARCH_MAPPING_001", "mapping unavailable"));
+        ExpressionToQueryConditionVisitor visitor = new ExpressionToQueryConditionVisitor(
+                null, unavailableMappingManager, "missing-index", TimeRangeEnd.TODAY_START, clock);
+
+        QueryCondition condition = expressionParser.parse("createTime = 最近7天").accept(visitor);
+
+        assertEquals("between", condition.getOp(), "mapping 不可用时仍应生成时间范围");
+        assertEquals("2026-07-11T00:00:00", condition.getValues().get(0),
+                "mapping 不可用时起始边界应回退 ISO 字符串");
+        assertEquals("2026-07-18T00:00:00", condition.getValues().get(1),
+                "mapping 不可用时结束边界应回退 ISO 字符串");
+        verify(unavailableMappingManager).getMetadata("missing-index");
+    }
+
+    @Test
+    @DisplayName("translate - 时间范围不等于转为区间外")
+    void testTranslateTimeRangeNotEqual() {
+        QueryCondition result = expressionService.translate("创建时间 != 最近7天", "test_order_index");
+        log.info("time range not equal: {}", result);
+
+        assertEquals("or", result.getLogic(), "时间范围不等于应生成 OR 区间补集");
+        assertEquals(2, result.getConditions().size(), "时间范围补集应包含两个边界条件");
+        assertEquals("lt", result.getConditions().get(0).getOp(), "第一个边界应小于开始时间");
+        assertEquals("gt", result.getConditions().get(1).getOp(), "第二个边界应大于结束时间");
+    }
+
+    @Test
+    @DisplayName("translate - NOT 时间范围等于转为区间外")
+    void testNegateTimeRangeEqual() {
+        QueryCondition result = expressionService.translate("NOT (创建时间 = 最近7天)", "test_order_index");
+        log.info("NOT time range equal: {}", result);
+
+        assertEquals("or", result.getLogic(), "NOT 时间范围等于应生成 OR 区间补集");
+        assertEquals(2, result.getConditions().size(), "时间范围补集应包含两个边界条件");
+        assertEquals("lt", result.getConditions().get(0).getOp(), "第一个边界应小于开始时间");
+        assertEquals("gt", result.getConditions().get(1).getOp(), "第二个边界应大于结束时间");
+    }
+
+    @Test
+    @DisplayName("translate - 双重否定时间范围恢复区间内")
+    void testDoubleNegateTimeRange() {
+        QueryCondition result = expressionService.translate("NOT (创建时间 != 最近7天)", "test_order_index");
+        log.info("double negate time range: {}", result);
+
+        assertEquals("and", result.getLogic(), "双重否定时间范围应生成 AND 区间内条件");
+        assertEquals(2, result.getConditions().size(), "区间内条件应包含两个边界");
+        assertEquals("gte", result.getConditions().get(0).getOp(), "第一个边界应大于等于开始时间");
+        assertEquals("lte", result.getConditions().get(1).getOp(), "第二个边界应小于等于结束时间");
+    }
+
     // ==================== validate ====================
+
+    @Test
+    @DisplayName("validate - 不读取 mapping")
+    void testValidateDoesNotLoadMapping() {
+        MappingManager mockedMappingManager = mock(MappingManager.class);
+        ExpressionService service = new ExpressionService(expressionParser, visitorRegistry,
+                new SimpleElasticsearchSearchProperties(), mockedMappingManager);
+
+        ExpressionValidationResult result = service.validate("事件类型 = \"mock-value\"", NL_USER_INDEX);
+
+        assertTrue(result.isValid(), "合法表达式应完成语法校验");
+        verify(mockedMappingManager, never()).getMetadata(org.mockito.ArgumentMatchers.anyString());
+    }
 
     @Test
     @DisplayName("validate - 合法表达式")
     void testValidateValid() {
         // 必须传 index，normalize 后解析成功
         ExpressionValidationResult result = expressionService.validate(
-                "威胁类型 = \"木马\" AND 攻击次数 >= 10", "test_nl_user_index");
+                "事件类型 = \"mock-value\" AND 事件数量 >= 10", "test_nl_user_index");
         log.info("validate valid: {}", result);
         assertTrue(result.isValid());
         assertNull(result.getErrorMessage());
@@ -398,7 +697,7 @@ class ExpressionTest {
     @DisplayName("validate - 语法错误")
     void testValidateInvalid() {
         ExpressionValidationResult result = expressionService.validate(
-                "威胁类型 = \"木马\" AND 攻击次数 >=", "test_nl_user_index");
+                "事件类型 = \"mock-value\" AND 事件数量 >=", "test_nl_user_index");
         log.info("validate invalid: {}", result);
         assertFalse(result.isValid());
         assertNotNull(result.getErrorMessage());
@@ -445,10 +744,19 @@ class ExpressionTest {
     // ==================== translate - 异常 ====================
 
     @Test
+    @DisplayName("translate - 非法 IANA 时区抛出 ExpressionParseException")
+    void testTranslateThrowsOnInvalidTimeZone() {
+        ExpressionParseException exception = assertThrows(ExpressionParseException.class, () ->
+                expressionService.translate("创建时间 = 最近7天", NL_USER_INDEX, TimeRangeEnd.NOW, "invalid-zone"));
+        log.info("invalid time zone error: {}", exception.getMessage());
+        assertTrue(exception.getMessage().contains("表达式时间时区无效"), "错误信息应说明时区非法");
+    }
+
+    @Test
     @DisplayName("translate - 语法错误抛出 ExpressionParseException")
     void testTranslateThrowsOnSyntaxError() {
         assertThrows(ExpressionParseException.class, () ->
-                expressionService.translate("威胁类型 = ", null));
+                expressionService.translate("事件类型 = ", null));
     }
 
     // ==================== getHints ====================
@@ -962,6 +1270,21 @@ class ExpressionTest {
                 "内层 OR(A, B) 有 2 个条件");
 
         log.info("✓ 三个 OR 条件扁平测试通过");
+    }
+
+    @Test
+    @DisplayName("translate - 时间范围补集生成 OR range DSL")
+    void testTimeRangeOutsideDsl() {
+        QueryCondition condition = expressionService.translate(
+                "NOT (createTime = 最近7天)", "test_nl_user_index");
+        IndexMetadata metadata = mappingManager.getMetadata("test_nl_user_index");
+        QueryBuilder query = queryDslBuilder.build(metadata, condition);
+        log.info("time range outside condition={}, DSL={}", condition, query);
+
+        assertTrue(query instanceof BoolQueryBuilder, "时间范围补集应生成 BoolQueryBuilder");
+        BoolQueryBuilder boolQuery = (BoolQueryBuilder) query;
+        assertEquals(2, boolQuery.should().size(), "时间范围补集应包含两个 should 范围条件");
+        assertEquals("1", boolQuery.minimumShouldMatch(), "时间范围补集应至少命中一个范围条件");
     }
 
     @Test

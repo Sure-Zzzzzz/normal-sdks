@@ -42,15 +42,6 @@ public class CollapseTest {
     @Autowired
     private SimpleElasticsearchRouteRegistry registry;
 
-    private boolean primarySupportsCollapseSearchAfter() {
-        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
-        return clusterInfo != null
-                && clusterInfo.getEffectiveVersion() != null
-                && (clusterInfo.getEffectiveVersion().getMajor() > 7
-                || (clusterInfo.getEffectiveVersion().getMajor() == 7
-                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
-    }
-
     @BeforeAll
     static void setupTestData(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
         log.info("========== 开始准备 Collapse 测试数据 ==========");
@@ -99,6 +90,15 @@ public class CollapseTest {
         log.put("message", message);
         log.put("createTime", createTime.toString());
         return log;
+    }
+
+    private boolean primarySupportsCollapseSearchAfter() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
     }
 
     /**

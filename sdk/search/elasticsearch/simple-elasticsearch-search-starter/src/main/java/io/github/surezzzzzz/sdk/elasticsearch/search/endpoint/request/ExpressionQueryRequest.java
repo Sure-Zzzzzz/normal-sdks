@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import lombok.AllArgsConstructor;
@@ -29,7 +30,7 @@ public class ExpressionQueryRequest {
 
     /**
      * 条件表达式字符串（必填）
-     * 示例：威胁类型 = "木马" AND 攻击次数 >= 10
+     * 示例：事件类型 = "mock-value" AND 风险等级 >= 10
      */
     private String expression;
 
@@ -47,6 +48,16 @@ public class ExpressionQueryRequest {
      * 日期分割索引的路由范围（可选）
      */
     private QueryRequest.DateRange dateRange;
+
+    /**
+     * 表达式时间关键字的截止模式（可选，默认 NOW）
+     */
+    private TimeRangeEnd timeRangeEnd;
+
+    /**
+     * 表达式时间关键字使用的 IANA 时区（可选，默认 JVM 系统时区）
+     */
+    private String timeZone;
 
     /**
      * 是否仅返回总数（不走 _search，走 _count API）

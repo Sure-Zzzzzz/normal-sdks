@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.AggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.agg.model.PipelineAggDefinition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionAggRequest;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
@@ -23,7 +24,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
@@ -60,37 +63,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class SearchEndToEndTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @Autowired
-    private SimpleElasticsearchRouteRegistry registry;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    private boolean primarySupportsPit() {
-        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
-        return clusterInfo != null
-                && clusterInfo.getEffectiveVersion() != null
-                && (clusterInfo.getEffectiveVersion().getMajor() > 7
-                || (clusterInfo.getEffectiveVersion().getMajor() == 7
-                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
-    }
-
-    private boolean primarySupportsCompositeAfterKey() {
-        ClusterInfo clusterInfo = registry.getClusterInfo(DEFAULT_DATASOURCE);
-        return clusterInfo != null
-                && clusterInfo.getEffectiveVersion() != null
-                && clusterInfo.getEffectiveVersion().getMajor() > 6;
-    }
-
     private static final String USER_INDEX = "test_user_index";
     private static final String NL_USER_INDEX = "test_nl_user_index";
     private static final String ORDER_INDEX = "test_order_index";
     private static final String LOG_INDEX_PREFIX = "test_log_";
     private static final String WILDCARD_INDEX_PATTERN = "test_wildcard--*";
     private static final String WILDCARD_CONCRETE_INDEX = "test_wildcard--2026.07.09";
+    private static final String WILDCARD_TEXT_CONCRETE_INDEX = "test_wildcard--2026.07.10";
     private static final String LOG_MAPPING_JSON = "{"
             + "  \"properties\": {"
             + "    \"user_id\": {\"type\": \"keyword\"},"
@@ -102,13 +81,16 @@ class SearchEndToEndTest {
     private static final String SECONDARY_INDEX = "test_index_b.secondary";  // 路由到 secondary 数据源的索引
     private static final String DEFAULT_DATASOURCE = "primary";  // 从配置文件中获取的默认数据源
     private static final String SECONDARY_DATASOURCE = "secondary";  // 第二个数据源
-
     /**
-     * 将对象转换为JSON字符串
+     * scroll 链式翻页共享的 scrollId（static 保证跨测试方法实例共享）
      */
-    private String toJson(Object obj) throws Exception {
-        return objectMapper.writeValueAsString(obj);
-    }
+    private static String scrollId;
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private SimpleElasticsearchRouteRegistry registry;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @BeforeAll
     static void setupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
@@ -128,6 +110,7 @@ class SearchEndToEndTest {
 
         // 3.5 创建 concrete index 命中 wildcard 配置的测试索引
         createWildcardConcreteIndex(registry);
+        createWildcardTextConcreteIndex(registry);
 
         // 4. 创建 secondary 索引（secondary 数据源）- 测试多数据源路由
         createSecondaryIndex(registry);
@@ -201,6 +184,23 @@ class SearchEndToEndTest {
         log.info("✓ 已创建 concrete wildcard 测试索引: {}", WILDCARD_CONCRETE_INDEX);
     }
 
+    private static void createWildcardTextConcreteIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, WILDCARD_TEXT_CONCRETE_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, WILDCARD_TEXT_CONCRETE_INDEX,
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"extraField\": {\"type\": \"text\", \"fields\": {\"keyword\": {\"type\": \"keyword\"}}}," +
+                        "    \"extraField2\": {\"type\": \"keyword\"}," +
+                        "    \"eventTime\": {\"type\": \"date\"}" +
+                        "  }" +
+                        "}");
+        EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, WILDCARD_TEXT_CONCRETE_INDEX,
+                "doc-003", createWildcardDoc("alpha-text", "group-c", "2026-07-10T10:00:00"));
+        EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, WILDCARD_TEXT_CONCRETE_INDEX,
+                "doc-004", createWildcardDoc("beta-text", "group-d", "2026-07-10T11:00:00"));
+        log.info("✓ 已创建 text concrete wildcard 测试索引: {}", WILDCARD_TEXT_CONCRETE_INDEX);
+    }
+
     private static Map<String, Object> createWildcardDoc(String extraField, String extraField2, String eventTime) {
         Map<String, Object> doc = new HashMap<>();
         doc.put("extraField", extraField);
@@ -208,7 +208,6 @@ class SearchEndToEndTest {
         doc.put("eventTime", eventTime);
         return doc;
     }
-
 
     @AfterAll
     static void cleanupAll(@Autowired SimpleElasticsearchRouteRegistry registry) throws Exception {
@@ -229,6 +228,7 @@ class SearchEndToEndTest {
             }
 
             deleteIndexIfExists(registry, DEFAULT_DATASOURCE, WILDCARD_CONCRETE_INDEX);
+            deleteIndexIfExists(registry, DEFAULT_DATASOURCE, WILDCARD_TEXT_CONCRETE_INDEX);
 
             // 清理 secondary 数据源的索引
             deleteIndexIfExists(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
@@ -249,7 +249,299 @@ class SearchEndToEndTest {
         }
     }
 
+    /**
+     * 创建 order 索引（无标识符）
+     */
+    private static void createOrderIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX,
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"order_id\": {\"type\": \"keyword\"}," +
+                        "    \"product_name\": {\"type\": \"keyword\"}," +
+                        "    \"amount\": {\"type\": \"double\"}," +
+                        "    \"quantity\": {\"type\": \"integer\"}," +
+                        "    \"status\": {\"type\": \"keyword\"}," +
+                        "    \"client_ip\": {\"type\": \"ip\"}," +
+                        "    \"created_at\": {\"type\": \"date\"}" +
+                        "  }" +
+                        "}");
+        log.info("✓ 已创建索引: {}", ORDER_INDEX);
+
+        // 插入测试数据
+        List<Map<String, Object>> orders = Arrays.asList(
+                createOrder("ORD001", "iPhone 15", 7999.0, 1, "completed", "10.0.0.1"),
+                createOrder("ORD002", "MacBook Pro", 15999.0, 1, "pending", "10.0.0.2"),
+                createOrder("ORD003", "AirPods Pro", 1999.0, 2, "completed", "192.168.1.1"),
+                createOrder("ORD004", "iPad Air", 4999.0, 1, "cancelled", "192.168.1.2"),
+                createOrder("ORD005", "Apple Watch", 2999.0, 1, "completed", "172.16.0.1")
+        );
+
+        for (int i = 0; i < orders.size(); i++) {
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, ORDER_INDEX, String.valueOf(i + 1), orders.get(i));
+        }
+
+        log.info("✓ 已插入 {} 条测试数据到 {}", orders.size(), ORDER_INDEX);
+    }
+
+    /**
+     * 创建 user 索引（有标识符）
+     */
+    private static void createUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, USER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, USER_INDEX,
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"username\": {" +
+                        "      \"type\": \"text\"," +
+                        "      \"fields\": {" +
+                        "        \"keyword\": {" +
+                        "          \"type\": \"keyword\"" +
+                        "        }" +
+                        "      }" +
+                        "    }," +
+                        "    \"name\": {\"type\": \"keyword\"}," +
+                        "    \"age\": {\"type\": \"integer\"}," +
+                        "    \"city\": {\"type\": \"keyword\"}," +
+                        "    \"phone\": {\"type\": \"keyword\"}," +
+                        "    \"password\": {\"type\": \"keyword\"}," +
+                        "    \"created_at\": {\"type\": \"date\"}" +
+                        "  }" +
+                        "}");
+        log.info("✓ 已创建索引: {}", USER_INDEX);
+
+        // 插入测试数据
+        List<Map<String, Object>> users = Arrays.asList(
+                createUser("alice", "张三", 25, "北京", "13800138000", "password123"),
+                createUser("bob", "李四", 30, "上海", "13900139000", "password456"),
+                createUser("charlie", "王五", 28, "北京", "13700137000", "password789"),
+                createUser("david", "赵六", 22, "深圳", "13600136000", "password000"),
+                createUser("eve", "钱七", 35, "上海", "13500135000", "password111")
+        );
+
+        for (int i = 0; i < users.size(); i++) {
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, USER_INDEX, String.valueOf(i + 1), users.get(i));
+        }
+
+        log.info("✓ 已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
+    }
+
     // ==================== 1. 索引管理 API 测试 ====================
+
+    /**
+     * 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
+     */
+    private static void createNlUserIndex(SimpleElasticsearchRouteRegistry registry) {
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX,
+                "{" +
+                        "  \"properties\": {" +
+                        "    \"name\": {" +
+                        "      \"type\": \"text\"," +
+                        "      \"fields\": {" +
+                        "        \"keyword\": {" +
+                        "          \"type\": \"keyword\"" +
+                        "        }" +
+                        "      }" +
+                        "    }," +
+                        "    \"description\": {\"type\": \"text\"}," +
+                        "    \"age\": {\"type\": \"long\"}," +
+                        "    \"city\": {\"type\": \"keyword\"}," +
+                        "    \"status\": {\"type\": \"keyword\"}," +
+                        "    \"points\": {\"type\": \"long\"}," +
+                        "    \"eventTimestamp\": {\"type\": \"long\"}," +
+                        "    \"createTime\": {\"type\": \"date\"}," +
+                        "    \"orderId\": {\"type\": \"keyword\"}" +
+                        "  }" +
+                        "}");
+        log.info("✓ 已创建索引: {}", NL_USER_INDEX);
+
+        // 插入测试数据
+        // Alice: age=25, points=500  → 命中 name='Alice' AND age>=18 AND points<=1000
+        // Bob:   age=16, points=200  → age<18，不命中
+        // Carol: age=30, points=1500 → points>1000，不命中
+        // Dave:  age=20, points=800  → 命中 name='Alice' AND age>=18 AND points<=1000 时不命中（name不对）
+        ZoneId zoneId = ZoneId.of("Asia/Shanghai");
+        long todayStart = LocalDate.now(zoneId).atStartOfDay(zoneId).toEpochSecond();
+        LocalDateTime createTime = LocalDateTime.now(zoneId);
+        List<Map<String, Object>> users = Arrays.asList(
+                createNlUser("Alice", "alpha signal", 25, "北京", "active", 500L, todayStart, createTime, "ORD001"),
+                createNlUser("Bob", "beta signal", 16, "上海", "active", 200L,
+                        todayStart - 8 * 24 * 60 * 60, createTime, "ORD002"),
+                createNlUser("Carol", "gamma signal", 30, "广州", "active", 1500L,
+                        todayStart - 2 * 24 * 60 * 60, createTime, "ORD003"),
+                createNlUser("Dave", "delta signal", 20, "深圳", "active", 800L,
+                        todayStart + 1, createTime, "ORD004")
+        );
+        for (int i = 0; i < users.size(); i++) {
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, NL_USER_INDEX, "nl-" + (i + 1), users.get(i));
+        }
+
+        log.info("✓ NL 用户索引创建完成，已插入 {} 条数据", users.size());
+    }
+
+    private static Map<String, Object> createNlUser(String name, String description, int age, String city,
+                                                    String status, long points, long eventTimestamp,
+                                                    LocalDateTime createTime, String orderId) {
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("name", name);
+        doc.put("description", description);
+        doc.put("age", age);
+        doc.put("city", city);
+        doc.put("status", status);
+        doc.put("points", points);
+        doc.put("eventTimestamp", eventTimestamp);
+        doc.put("createTime", createTime);
+        doc.put("orderId", orderId);
+        return doc;
+    }
+
+    private static String createLogIndex(SimpleElasticsearchRouteRegistry registry) {
+        String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
+        String indexName = LOG_INDEX_PREFIX + today;
+
+        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, indexName);
+        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName, LOG_MAPPING_JSON);
+        log.info("✓ 已创建索引: {}", indexName);
+
+        // 插入测试数据
+        List<Map<String, Object>> logs = Arrays.asList(
+                createLog("user001", "login", "用户登录"),
+                createLog("user002", "logout", "用户登出"),
+                createLog("user003", "create", "创建记录")
+        );
+
+        for (int i = 0; i < logs.size(); i++) {
+            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, indexName, String.valueOf(i + 1), logs.get(i));
+        }
+
+        log.info("✓ 已插入 {} 条测试数据到 {}", logs.size(), indexName);
+
+        return indexName;
+    }
+
+    private static Map<String, Object> createOrder(String orderId, String productName, double amount, int quantity, String status, String clientIp) {
+        Map<String, Object> order = new HashMap<>();
+        order.put("order_id", orderId);
+        order.put("product_name", productName);
+        order.put("amount", amount);
+        order.put("quantity", quantity);
+        order.put("status", status);
+        order.put("client_ip", clientIp);
+        order.put("created_at", new Date());
+        return order;
+    }
+
+    // ==================== 2. 数据查询测试 ====================
+
+    private static Map<String, Object> createUser(String username, String name, int age, String city, String phone, String password) {
+        Map<String, Object> user = new HashMap<>();
+        user.put("username", username);
+        user.put("name", name);
+        user.put("age", age);
+        user.put("city", city);
+        user.put("phone", phone);
+        user.put("password", password);
+        user.put("created_at", new Date());
+        return user;
+    }
+
+    private static Map<String, Object> createLog(String userId, String action, String message) {
+        Map<String, Object> log = new HashMap<>();
+        log.put("user_id", userId);
+        log.put("action", action);
+        log.put("message", message);
+        log.put("createTime", new Date());
+        return log;
+    }
+
+    /**
+     * 创建 secondary 索引（secondary 数据源）
+     * 用于测试多数据源路由和版本兼容性
+     */
+    private static void createSecondaryIndex(SimpleElasticsearchRouteRegistry registry) throws Exception {
+        // 删除旧索引
+        EsApiHelper.deleteIndex(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
+
+        // 使用 TestIndexHelper 创建索引（版本自适应，支持 ES 6.x 和 7.x）
+        Map<String, Object> properties = new HashMap<>();
+        Map<String, Object> keywordType = new HashMap<>();
+        keywordType.put("type", "keyword");
+        Map<String, Object> doubleType = new HashMap<>();
+        doubleType.put("type", "double");
+        Map<String, Object> integerType = new HashMap<>();
+        integerType.put("type", "integer");
+        Map<String, Object> dateType = new HashMap<>();
+        dateType.put("type", "date");
+
+        Map<String, Object> ipType = new HashMap<>();
+        ipType.put("type", "ip");
+
+        properties.put("product_id", keywordType);
+        properties.put("product_name", new HashMap<>(keywordType));
+        properties.put("category", new HashMap<>(keywordType));
+        properties.put("price", doubleType);
+        properties.put("stock", integerType);
+        properties.put("created_at", dateType);
+        properties.put("client_ip", ipType);
+
+        io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.TestIndexHelper.createIndex(
+                registry,
+                SECONDARY_DATASOURCE,
+                SECONDARY_INDEX,
+                properties
+        );
+
+        // 插入测试数据
+        List<Map<String, Object>> products = Arrays.asList(
+                createProduct("P001", "iPhone 15 Pro", "Electronics", 8999.0, 100, "10.0.0.1"),
+                createProduct("P002", "MacBook Air", "Electronics", 7999.0, 50, "10.0.0.2"),
+                createProduct("P003", "AirPods Pro 2", "Electronics", 1899.0, 200, "192.168.1.1"),
+                createProduct("P004", "iPad Pro", "Electronics", 6999.0, 80, "192.168.1.2"),
+                createProduct("P005", "Apple Watch Ultra", "Electronics", 6299.0, 120, "172.16.0.1")
+        );
+
+        for (int i = 0; i < products.size(); i++) {
+            EsApiHelper.indexDoc(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX,
+                    String.valueOf(i + 1), products.get(i));
+        }
+        log.info("✓ 已插入 {} 条测试数据到 {} (secondary 数据源)", products.size(), SECONDARY_INDEX);
+    }
+
+    private static Map<String, Object> createProduct(String productId, String productName, String category, double price, int stock, String clientIp) {
+        Map<String, Object> product = new HashMap<>();
+        product.put("product_id", productId);
+        product.put("product_name", productName);
+        product.put("category", category);
+        product.put("price", price);
+        product.put("stock", stock);
+        product.put("client_ip", clientIp);
+        product.put("created_at", new Date());
+        return product;
+    }
+
+    private boolean primarySupportsPit() {
+        ClusterInfo clusterInfo = registry.getClusterInfo("primary");
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && (clusterInfo.getEffectiveVersion().getMajor() > 7
+                || (clusterInfo.getEffectiveVersion().getMajor() == 7
+                && clusterInfo.getEffectiveVersion().getMinor() >= 10));
+    }
+
+    private boolean primarySupportsCompositeAfterKey() {
+        ClusterInfo clusterInfo = registry.getClusterInfo(DEFAULT_DATASOURCE);
+        return clusterInfo != null
+                && clusterInfo.getEffectiveVersion() != null
+                && clusterInfo.getEffectiveVersion().getMajor() > 6;
+    }
+
+    /**
+     * 将对象转换为JSON字符串
+     */
+    private String toJson(Object obj) throws Exception {
+        return objectMapper.writeValueAsString(obj);
+    }
 
     @Test
     @Order(1)
@@ -323,8 +615,6 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 2. 数据查询测试 ====================
-
     @Test
     @Order(10)
     @DisplayName("2.1 基础查询 - EQ 操作符")
@@ -388,6 +678,8 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
+
+    // ==================== 3. 聚合查询测试 ====================
 
     @Test
     @Order(12)
@@ -533,6 +825,8 @@ class SearchEndToEndTest {
                         result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
+    // ==================== 4. 敏感字段测试 ====================
+
     @Test
     @Order(16)
     @DisplayName("2.7 _id IN 查询")
@@ -617,6 +911,8 @@ class SearchEndToEndTest {
                         result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
+    // ==================== 8. 错误处理测试 ====================
+
     @Test
     @Order(19)
     @DisplayName("2.10 _id + 普通字段 AND 查询")
@@ -695,6 +991,8 @@ class SearchEndToEndTest {
                         result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
+    // ==================== 9. search_after 翻页模式测试 ====================
+
     @Test
     @Order(21)
     @DisplayName("2.12 分页查询 - Offset")
@@ -761,8 +1059,6 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
-
-    // ==================== 3. 聚合查询测试 ====================
 
     @Test
     @Order(24)
@@ -867,6 +1163,8 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 辅助方法 ====================
+
     @Test
     @Order(27)
     @DisplayName("3.4 嵌套聚合 - TERMS + AVG")
@@ -915,8 +1213,6 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
-
-    // ==================== 4. 敏感字段测试 ====================
 
     @Test
     @Order(30)
@@ -1014,8 +1310,6 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 8. 错误处理测试 ====================
-
     @Test
     @Order(40)
     @DisplayName("8.1 错误处理 - 索引不存在")
@@ -1066,8 +1360,6 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
-
-    // ==================== 9. search_after 翻页模式测试 ====================
 
     @Test
     @Order(70)
@@ -1280,140 +1572,6 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.error").exists())
                 .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("不支持 PIT")))
                 .andDo(result -> log.info("✓ ES 6.x 不支持 PIT 正确报错"));
-    }
-
-    // ==================== 辅助方法 ====================
-
-    /**
-     * 创建 order 索引（无标识符）
-     */
-    private static void createOrderIndex(SimpleElasticsearchRouteRegistry registry) {
-        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX);
-        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, ORDER_INDEX,
-                "{" +
-                        "  \"properties\": {" +
-                        "    \"order_id\": {\"type\": \"keyword\"}," +
-                        "    \"product_name\": {\"type\": \"keyword\"}," +
-                        "    \"amount\": {\"type\": \"double\"}," +
-                        "    \"quantity\": {\"type\": \"integer\"}," +
-                        "    \"status\": {\"type\": \"keyword\"}," +
-                        "    \"client_ip\": {\"type\": \"ip\"}," +
-                        "    \"created_at\": {\"type\": \"date\"}" +
-                        "  }" +
-                        "}");
-        log.info("✓ 已创建索引: {}", ORDER_INDEX);
-
-        // 插入测试数据
-        List<Map<String, Object>> orders = Arrays.asList(
-                createOrder("ORD001", "iPhone 15", 7999.0, 1, "completed", "10.0.0.1"),
-                createOrder("ORD002", "MacBook Pro", 15999.0, 1, "pending", "10.0.0.2"),
-                createOrder("ORD003", "AirPods Pro", 1999.0, 2, "completed", "192.168.1.1"),
-                createOrder("ORD004", "iPad Air", 4999.0, 1, "cancelled", "192.168.1.2"),
-                createOrder("ORD005", "Apple Watch", 2999.0, 1, "completed", "172.16.0.1")
-        );
-
-        for (int i = 0; i < orders.size(); i++) {
-            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, ORDER_INDEX, String.valueOf(i + 1), orders.get(i));
-        }
-
-        log.info("✓ 已插入 {} 条测试数据到 {}", orders.size(), ORDER_INDEX);
-    }
-
-    /**
-     * 创建 user 索引（有标识符）
-     */
-    private static void createUserIndex(SimpleElasticsearchRouteRegistry registry) {
-        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, USER_INDEX);
-        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, USER_INDEX,
-                "{" +
-                        "  \"properties\": {" +
-                        "    \"username\": {" +
-                        "      \"type\": \"text\"," +
-                        "      \"fields\": {" +
-                        "        \"keyword\": {" +
-                        "          \"type\": \"keyword\"" +
-                        "        }" +
-                        "      }" +
-                        "    }," +
-                        "    \"name\": {\"type\": \"keyword\"}," +
-                        "    \"age\": {\"type\": \"integer\"}," +
-                        "    \"city\": {\"type\": \"keyword\"}," +
-                        "    \"phone\": {\"type\": \"keyword\"}," +
-                        "    \"password\": {\"type\": \"keyword\"}," +
-                        "    \"created_at\": {\"type\": \"date\"}" +
-                        "  }" +
-                        "}");
-        log.info("✓ 已创建索引: {}", USER_INDEX);
-
-        // 插入测试数据
-        List<Map<String, Object>> users = Arrays.asList(
-                createUser("alice", "张三", 25, "北京", "13800138000", "password123"),
-                createUser("bob", "李四", 30, "上海", "13900139000", "password456"),
-                createUser("charlie", "王五", 28, "北京", "13700137000", "password789"),
-                createUser("david", "赵六", 22, "深圳", "13600136000", "password000"),
-                createUser("eve", "钱七", 35, "上海", "13500135000", "password111")
-        );
-
-        for (int i = 0; i < users.size(); i++) {
-            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, USER_INDEX, String.valueOf(i + 1), users.get(i));
-        }
-
-        log.info("✓ 已插入 {} 条测试数据到 {}", users.size(), USER_INDEX);
-    }
-
-    /**
-     * 创建 NL 用户索引（带 keyword 子字段，用于表达式 DSL 端到端测试）
-     */
-    private static void createNlUserIndex(SimpleElasticsearchRouteRegistry registry) {
-        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX);
-        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, NL_USER_INDEX,
-                "{" +
-                        "  \"properties\": {" +
-                        "    \"name\": {" +
-                        "      \"type\": \"text\"," +
-                        "      \"fields\": {" +
-                        "        \"keyword\": {" +
-                        "          \"type\": \"keyword\"" +
-                        "        }" +
-                        "      }" +
-                        "    }," +
-                        "    \"age\": {\"type\": \"long\"}," +
-                        "    \"city\": {\"type\": \"keyword\"}," +
-                        "    \"status\": {\"type\": \"keyword\"}," +
-                        "    \"points\": {\"type\": \"long\"}," +
-                        "    \"createTime\": {\"type\": \"date\"}," +
-                        "    \"orderId\": {\"type\": \"keyword\"}" +
-                        "  }" +
-                        "}");
-        log.info("✓ 已创建索引: {}", NL_USER_INDEX);
-
-        // 插入测试数据
-        // Alice: age=25, points=500  → 命中 name='Alice' AND age>=18 AND points<=1000
-        // Bob:   age=16, points=200  → age<18，不命中
-        // Carol: age=30, points=1500 → points>1000，不命中
-        // Dave:  age=20, points=800  → 命中 name='Alice' AND age>=18 AND points<=1000 时不命中（name不对）
-        List<Map<String, Object>> users = Arrays.asList(
-                createNlUser("Alice", 25, "北京", "active", 500L, "ORD001"),
-                createNlUser("Bob", 16, "上海", "active", 200L, "ORD002"),
-                createNlUser("Carol", 30, "广州", "active", 1500L, "ORD003"),
-                createNlUser("Dave", 20, "深圳", "active", 800L, "ORD004")
-        );
-        for (int i = 0; i < users.size(); i++) {
-            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, NL_USER_INDEX, "nl-" + (i + 1), users.get(i));
-        }
-
-        log.info("✓ NL 用户索引创建完成，已插入 {} 条数据", users.size());
-    }
-
-    private static Map<String, Object> createNlUser(String name, int age, String city, String status, long points, String orderId) {
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("name", name);
-        doc.put("age", age);
-        doc.put("city", city);
-        doc.put("status", status);
-        doc.put("points", points);
-        doc.put("orderId", orderId);
-        return doc;
     }
 
     @Test
@@ -1811,7 +1969,27 @@ class SearchEndToEndTest {
 
     @Test
     @Order(60)
-    @DisplayName("6.11 concrete index 命中 wildcard 配置 - _id IN 查询")
+    @DisplayName("6.11 wildcard 索引合并 keyword 与 text keyword mapping 的 LIKE 查询")
+    void testWildcardIndexMergedLike() throws Exception {
+        String body = "{\"index\":\"" + WILDCARD_INDEX_PATTERN
+                + "\",\"expression\":\"扩展字段 LIKE \\\"*alpha*\\\"\",\"dateRange\":{\"from\":\"2026-07-09T00:00:00\",\"to\":\"2026-07-10T23:59:59\"}}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*].extraField").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("alpha", "alpha-text")));
+    }
+
+    // ==================== 7. 多数据源路由测试 ====================
+
+    @Test
+    @Order(61)
+    @DisplayName("6.12 concrete index 命中 wildcard 配置 - _id IN 查询")
     void testConcreteIndexMatchesWildcardConfigIdIn() throws Exception {
         QueryRequest request = QueryRequest.builder()
                 .index(WILDCARD_CONCRETE_INDEX)
@@ -1835,7 +2013,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(61)
+    @Order(62)
     @DisplayName("6.12 concrete index 命中 wildcard 配置 - countOnly 复用同一解析")
     void testConcreteIndexMatchesWildcardConfigCountOnly() throws Exception {
         QueryRequest request = QueryRequest.builder()
@@ -1858,7 +2036,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(62)
+    @Order(63)
     @DisplayName("6.13 concrete index 命中 wildcard 配置 - 聚合使用配置元数据")
     void testConcreteIndexMatchesWildcardConfigAgg() throws Exception {
         AggRequest request = AggRequest.builder()
@@ -1885,7 +2063,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(63)
+    @Order(64)
     @DisplayName("6.14 concrete index 命中 wildcard 配置 - fields 和 refresh 入口")
     void testConcreteIndexMatchesWildcardConfigFieldsAndRefresh() throws Exception {
         mockMvc.perform(get("/api/indices/{alias}/fields", WILDCARD_CONCRETE_INDEX)
@@ -1903,7 +2081,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(64)
+    @Order(65)
     @DisplayName("6.15 concrete index 命中 wildcard 配置 - 表达式 label、校验和提示")
     void testConcreteIndexMatchesWildcardConfigExpression() throws Exception {
         String body = "{\"index\":\"" + WILDCARD_CONCRETE_INDEX + "\",\"expression\":\"扩展字段 = \\\"alpha\\\"\"}";
@@ -1930,7 +2108,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(65)
+    @Order(66)
     @DisplayName("6.16 concrete index 命中 wildcard 配置 - search_after 游标翻页")
     void testConcreteIndexMatchesWildcardConfigSearchAfter() throws Exception {
         QueryRequest firstPage = QueryRequest.builder()
@@ -2033,10 +2211,8 @@ class SearchEndToEndTest {
                 .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString(WILDCARD_INDEX_PATTERN)));
     }
 
-    // ==================== 7. 多数据源路由测试 ====================
-
     @Test
-    @Order(66)
+    @Order(67)
     @DisplayName("7.1 多数据源路由 - 查询 secondary 数据源索引")
     void testMultiDatasourceQuerySecondary() throws Exception {
         log.info("========== 测试：查询路由到 secondary 数据源的索引 ==========");
@@ -2068,7 +2244,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(67)
+    @Order(75)
     @DisplayName("7.2 多数据源路由 - secondary 索引范围查询")
     void testMultiDatasourceQueryRange() throws Exception {
         log.info("========== 测试：Secondary 数据源范围查询 ==========");
@@ -2101,7 +2277,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(68)
+    @Order(78)
     @DisplayName("7.3 多数据源路由 - secondary 索引聚合")
     void testMultiDatasourceAggregation() throws Exception {
         log.info("========== 测试：Secondary 数据源聚合 ==========");
@@ -2210,7 +2386,7 @@ class SearchEndToEndTest {
                 .query(QueryCondition.builder()
                         .field("username")  // text 字段
                         .op(io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator.LIKE.getOperator())
-                        .value("alice")
+                        .value("*lic*")
                         .build())
                 .pagination(PaginationInfo.builder()
                         .size(10)
@@ -2221,13 +2397,12 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(textQueryRequest)))
+                .andDo(result -> log.info("text keyword LIKE response: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isArray())
-                .andExpect(jsonPath("$.data.items.length()").value(org.hamcrest.Matchers.greaterThan(0)))
-                .andDo(result -> {
-                    log.info("✓ Text 字段模糊查询成功");
-                    log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
-                });
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].username").value("alice"));
 
         // 8.3 使用 keyword 子字段进行精确查询
         log.info("测试 3: 使用 keyword 子字段进行精确查询");
@@ -2498,6 +2673,8 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 12. Pipeline Aggregation 测试 ====================
+
     @Test
     @Order(84)
     @DisplayName("10.5 composite 聚合 - 嵌套 metrics 子聚合（合法）")
@@ -2723,8 +2900,6 @@ class SearchEndToEndTest {
                 });
     }
 
-    // ==================== 12. Pipeline Aggregation 测试 ====================
-
     @Test
     @Order(94)
     @DisplayName("12.1 bucket_sort - Top N（按 avg_age 降序取 Top 2 城市）")
@@ -2770,6 +2945,8 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
+
+    // ==================== 13. 表达式聚合测试 ====================
 
     @Test
     @Order(95)
@@ -3048,8 +3225,6 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ 不支持的 pipeline 类型正确返回 400"));
     }
 
-    // ==================== 13. 表达式聚合测试 ====================
-
     @Test
     @Order(102)
     @DisplayName("13.1 表达式聚合 - 基本过滤 + TERMS")
@@ -3222,44 +3397,194 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ expression 语法错误正确返回 400"));
     }
 
-
-    private static String createLogIndex(SimpleElasticsearchRouteRegistry registry) {
-        String today = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd"));
-        String indexName = LOG_INDEX_PREFIX + today;
-
-        EsApiHelper.deleteIndex(registry, DEFAULT_DATASOURCE, indexName);
-        EsApiHelper.createIndex(registry, DEFAULT_DATASOURCE, indexName, LOG_MAPPING_JSON);
-        log.info("✓ 已创建索引: {}", indexName);
-
-        // 插入测试数据
-        List<Map<String, Object>> logs = Arrays.asList(
-                createLog("user001", "login", "用户登录"),
-                createLog("user002", "logout", "用户登出"),
-                createLog("user003", "create", "创建记录")
-        );
-
-        for (int i = 0; i < logs.size(); i++) {
-            EsApiHelper.indexDoc(registry, DEFAULT_DATASOURCE, indexName, String.valueOf(i + 1), logs.get(i));
-        }
-
-        log.info("✓ 已插入 {} 条测试数据到 {}", logs.size(), indexName);
-
-        return indexName;
+    @Test
+    @Order(107)
+    @DisplayName("13.6 表达式聚合 - 非法 IANA 时区返回 400")
+    void testExpressionAggInvalidTimeZone() throws Exception {
+        String body = "{\"index\":\"" + ORDER_INDEX + "\",\"expression\":\"status = \\\"completed\\\"\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"invalid-zone\",\"aggs\":[]}";
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("表达式时间时区无效")))
+                .andDo(result -> log.info("expression agg invalid time zone response: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
-    private static Map<String, Object> createOrder(String orderId, String productName, double amount, int quantity, String status, String clientIp) {
-        Map<String, Object> order = new HashMap<>();
-        order.put("order_id", orderId);
-        order.put("product_name", productName);
-        order.put("amount", amount);
-        order.put("quantity", quantity);
-        order.put("status", status);
-        order.put("client_ip", clientIp);
-        order.put("created_at", new Date());
-        return order;
+    @Test
+    @Order(108)
+    @DisplayName("13.7 表达式聚合 - TODAY_START 和 IANA 时区过滤 long 时间字段")
+    void testExpressionAggTodayStartWithLongTimeField() throws Exception {
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(NL_USER_INDEX)
+                .expression("事件时间戳 = 最近7天")
+                .timeRangeEnd(TimeRangeEnd.TODAY_START)
+                .timeZone("Asia/Shanghai")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder().name("by_city").type("TERMS").field("city").size(10).build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(2))
+                .andExpect(jsonPath("$.data.aggregations.by_city[*].key").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("北京", "广州")))
+                .andExpect(jsonPath("$.data.aggregations.by_city[*].count").value(
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(1))));
+    }
+
+    @Test
+    @Order(109)
+    @DisplayName("表达式聚合 - 缺省 timeRangeEnd 保持 NOW 滚动边界")
+    void testExpressionAggDefaultTimeRangeEndUsesNow() throws Exception {
+        ExpressionAggRequest request = ExpressionAggRequest.builder()
+                .index(NL_USER_INDEX)
+                .expression("事件时间戳 = 最近7天")
+                .timeZone("Asia/Shanghai")
+                .aggs(Collections.singletonList(
+                        AggDefinition.builder().name("by_city").type("TERMS").field("city").size(10).build()
+                ))
+                .build();
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.aggregations.by_city.length()").value(3))
+                .andExpect(jsonPath("$.data.aggregations.by_city[*].key").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("北京", "广州", "深圳")))
+                .andExpect(jsonPath("$.data.aggregations.by_city[*].count").value(
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(1))));
+    }
+
+    @Test
+    @Order(110)
+    @DisplayName("表达式聚合 - timeRangeEnd 严格拒绝小写和数值")
+    void testExpressionAggRejectsInvalidTimeRangeEnd() throws Exception {
+        String lowerCaseBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeRangeEnd\":\"today_start\",\"aggs\":[]}";
+        String numericBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeRangeEnd\":1,\"aggs\":[]}";
+
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(lowerCaseBody))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/agg/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(numericBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @Order(258)
+    @DisplayName("表达式查询 - pure text 字段 NOT LIKE 排除根字段 wildcard 命中")
+    void testExpressionPureTextNotLike() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"description NOT LIKE \\\"*alpha*\\\"\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Bob", "Carol", "Dave")));
     }
 
     // ==================== 表达式查询端到端测试 ====================
+
+    @Test
+    @Order(259)
+    @DisplayName("表达式查询 - mixed mapping 的 NOT LIKE 排除两个物理字段命中")
+    void testExpressionMergedMappingNotLike() throws Exception {
+        String body = "{\"index\":\"" + WILDCARD_INDEX_PATTERN
+                + "\",\"expression\":\"扩展字段 NOT LIKE \\\"*alpha*\\\"\","
+                + "\"dateRange\":{\"from\":\"2026-07-09T00:00:00\",\"to\":\"2026-07-10T23:59:59\"}}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*].extraField").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("beta", "beta-text")));
+    }
+
+    @Test
+    @Order(262)
+    @DisplayName("表达式查询 - NOT (NOT LIKE) 恢复 text keyword 的 wildcard 命中")
+    void testExpressionDoubleNegatedNotLike() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"NOT (姓名 NOT LIKE \\\"*lic*\\\")\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("Alice"));
+    }
+
+    @Test
+    @Order(263)
+    @DisplayName("表达式查询 - long 时间范围补集和双重否定执行边界正确")
+    void testExpressionLongTimeRangeNegation() throws Exception {
+        String notEqualBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 != 最近7天\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"Asia/Shanghai\"}";
+        String negatedEqualBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"NOT (事件时间戳 = 最近7天)\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"Asia/Shanghai\"}";
+        String negatedNotEqualBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"NOT (事件时间戳 != 最近7天)\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"Asia/Shanghai\"}";
+
+        assertExpressionResult(notEqualBody, "Bob", "Dave");
+        assertExpressionResult(negatedEqualBody, "Bob", "Dave");
+        assertExpressionResult(negatedNotEqualBody, "Alice", "Carol");
+    }
+
+    private void assertExpressionResult(String body, String... expectedNames) throws Exception {
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(expectedNames.length))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder(expectedNames)));
+    }
+
+    @Test
+    @Order(264)
+    @DisplayName("表达式查询 - 指定 IANA 时区的 DATE 日历关键字通过 HTTP 与 ES 链路")
+    void testExpressionQueryDateCalendarTimeRangeWithTimeZone() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"创建时间 = 今天\",\"timeZone\":\"Asia/Shanghai\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Alice", "Bob", "Carol", "Dave")));
+    }
 
     @Test
     @Order(200)
@@ -3345,6 +3670,119 @@ class SearchEndToEndTest {
     }
 
     @Test
+    @Order(252)
+    @DisplayName("表达式查询 - 纯 text 字段 LIKE 使用根字段 wildcard")
+    void testExpressionPureTextLike() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"description LIKE \\\"*alpha*\\\"\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("Alice"));
+    }
+
+    @Test
+    @Order(253)
+    @DisplayName("表达式查询 - text keyword 字段 LIKE 显式通配符")
+    void testExpressionTextKeywordLike() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"姓名 LIKE \\\"*lic*\\\"\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andDo(result -> log.info("expression text keyword LIKE response: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].name").value("Alice"));
+    }
+
+    @Test
+    @Order(254)
+    @DisplayName("表达式查询 - NOT LIKE 排除 text keyword 字段的 wildcard 命中")
+    void testExpressionNotLike() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX
+                + "\",\"expression\":\"姓名 NOT LIKE \\\"*lic*\\\"\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Bob", "Carol", "Dave")));
+    }
+
+    // ==================== v1.6.7 表达式端到端测试：不匹配操作符 ====================
+
+    @Test
+    @Order(255)
+    @DisplayName("表达式查询 - TODAY_START 和 IANA 时区过滤 long 时间字段")
+    void testExpressionQueryTodayStartWithLongTimeField() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"Asia/Shanghai\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Alice", "Carol")));
+    }
+
+    @Test
+    @Order(256)
+    @DisplayName("表达式查询 - 缺省 timeRangeEnd 保持 NOW 滚动边界")
+    void testExpressionQueryDefaultTimeRangeEndUsesNow() throws Exception {
+        String body = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeZone\":\"Asia/Shanghai\"}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(3))
+                .andExpect(jsonPath("$.data.items[*].name").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("Alice", "Carol", "Dave")));
+    }
+
+    @Test
+    @Order(257)
+    @DisplayName("表达式查询 - timeRangeEnd 严格拒绝小写和数值")
+    void testExpressionQueryRejectsInvalidTimeRangeEnd() throws Exception {
+        String lowerCaseBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeRangeEnd\":\"today_start\"}";
+        String numericBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"事件时间戳 = 最近7天\","
+                + "\"timeRangeEnd\":1}";
+
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(lowerCaseBody))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(numericBody))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @Order(206)
     @DisplayName("表达式查询 - 语法错误返回 400")
     void testExpressionQuerySyntaxError() throws Exception {
@@ -3356,7 +3794,21 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ 表达式语法错误返回 400: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
-    // ==================== v1.6.7 表达式端到端测试：不匹配操作符 ====================
+    @Test
+    @Order(207)
+    @DisplayName("表达式查询 - 非法 IANA 时区返回 400")
+    void testExpressionQueryInvalidTimeZone() throws Exception {
+        String body = "{\"index\":\"" + ORDER_INDEX + "\",\"expression\":\"status = \\\"completed\\\"\","
+                + "\"timeRangeEnd\":\"TODAY_START\",\"timeZone\":\"invalid-zone\"}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("表达式时间时区无效")))
+                .andDo(result -> log.info("expression query invalid time zone response: {}",
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
+    }
 
     @Test
     @Order(210)
@@ -3448,7 +3900,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(207)
+    @Order(217)
     @DisplayName("表达式校验 - 合法表达式")
     void testExpressionValidateValid() throws Exception {
         mockMvc.perform(get("/api/expression/validate")
@@ -3461,7 +3913,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(208)
+    @Order(218)
     @DisplayName("表达式校验 - 语法错误")
     void testExpressionValidateInvalid() throws Exception {
         mockMvc.perform(get("/api/expression/validate")
@@ -3474,7 +3926,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(209)
+    @Order(219)
     @DisplayName("表达式提示 - 获取提示信息（含字段中文 label）")
     void testExpressionHints() throws Exception {
         mockMvc.perform(get("/api/expression/hints")
@@ -3501,7 +3953,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(210)
+    @Order(220)
     @DisplayName("表达式提示 - 敏感字段不暴露")
     void testExpressionHintsExcludeSensitive() throws Exception {
         mockMvc.perform(get("/api/expression/hints")
@@ -3515,8 +3967,10 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 14. 新增 bucket 聚合类型测试 ====================
+
     @Test
-    @Order(211)
+    @Order(221)
     @DisplayName("表达式提示 - 不存在的索引仍返回全局提示")
     void testExpressionHintsNonExistentIndex() throws Exception {
         mockMvc.perform(get("/api/expression/hints")
@@ -3528,96 +3982,8 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ 不存在索引仍返回全局提示: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
-    private static Map<String, Object> createUser(String username, String name, int age, String city, String phone, String password) {
-        Map<String, Object> user = new HashMap<>();
-        user.put("username", username);
-        user.put("name", name);
-        user.put("age", age);
-        user.put("city", city);
-        user.put("phone", phone);
-        user.put("password", password);
-        user.put("created_at", new Date());
-        return user;
-    }
-
-    private static Map<String, Object> createLog(String userId, String action, String message) {
-        Map<String, Object> log = new HashMap<>();
-        log.put("user_id", userId);
-        log.put("action", action);
-        log.put("message", message);
-        log.put("createTime", new Date());
-        return log;
-    }
-
-    /**
-     * 创建 secondary 索引（secondary 数据源）
-     * 用于测试多数据源路由和版本兼容性
-     */
-    private static void createSecondaryIndex(SimpleElasticsearchRouteRegistry registry) throws Exception {
-        // 删除旧索引
-        EsApiHelper.deleteIndex(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX);
-
-        // 使用 TestIndexHelper 创建索引（版本自适应，支持 ES 6.x 和 7.x）
-        Map<String, Object> properties = new HashMap<>();
-        Map<String, Object> keywordType = new HashMap<>();
-        keywordType.put("type", "keyword");
-        Map<String, Object> doubleType = new HashMap<>();
-        doubleType.put("type", "double");
-        Map<String, Object> integerType = new HashMap<>();
-        integerType.put("type", "integer");
-        Map<String, Object> dateType = new HashMap<>();
-        dateType.put("type", "date");
-
-        Map<String, Object> ipType = new HashMap<>();
-        ipType.put("type", "ip");
-
-        properties.put("product_id", keywordType);
-        properties.put("product_name", new HashMap<>(keywordType));
-        properties.put("category", new HashMap<>(keywordType));
-        properties.put("price", doubleType);
-        properties.put("stock", integerType);
-        properties.put("created_at", dateType);
-        properties.put("client_ip", ipType);
-
-        io.github.surezzzzzz.sdk.elasticsearch.search.test.helper.TestIndexHelper.createIndex(
-                registry,
-                SECONDARY_DATASOURCE,
-                SECONDARY_INDEX,
-                properties
-        );
-
-        // 插入测试数据
-        List<Map<String, Object>> products = Arrays.asList(
-                createProduct("P001", "iPhone 15 Pro", "Electronics", 8999.0, 100, "10.0.0.1"),
-                createProduct("P002", "MacBook Air", "Electronics", 7999.0, 50, "10.0.0.2"),
-                createProduct("P003", "AirPods Pro 2", "Electronics", 1899.0, 200, "192.168.1.1"),
-                createProduct("P004", "iPad Pro", "Electronics", 6999.0, 80, "192.168.1.2"),
-                createProduct("P005", "Apple Watch Ultra", "Electronics", 6299.0, 120, "172.16.0.1")
-        );
-
-        for (int i = 0; i < products.size(); i++) {
-            EsApiHelper.indexDoc(registry, SECONDARY_DATASOURCE, SECONDARY_INDEX,
-                    String.valueOf(i + 1), products.get(i));
-        }
-        log.info("✓ 已插入 {} 条测试数据到 {} (secondary 数据源)", products.size(), SECONDARY_INDEX);
-    }
-
-    private static Map<String, Object> createProduct(String productId, String productName, String category, double price, int stock, String clientIp) {
-        Map<String, Object> product = new HashMap<>();
-        product.put("product_id", productId);
-        product.put("product_name", productName);
-        product.put("category", category);
-        product.put("price", price);
-        product.put("stock", stock);
-        product.put("client_ip", clientIp);
-        product.put("created_at", new Date());
-        return product;
-    }
-
-    // ==================== 14. 新增 bucket 聚合类型测试 ====================
-
     @Test
-    @Order(212)
+    @Order(270)
     @DisplayName("14.1 filter 聚合 - 单过滤器统计")
     void testAggFilter() throws Exception {
         log.info("========== 测试：filter 聚合 ==========");
@@ -3658,7 +4024,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(213)
+    @Order(271)
     @DisplayName("14.2 filters 聚合 - 多命名过滤器对比")
     void testAggFilters() throws Exception {
         log.info("========== 测试：filters 聚合 ==========");
@@ -3694,7 +4060,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(214)
+    @Order(272)
     @DisplayName("14.3 missing 聚合 - 统计字段缺失文档数")
     void testAggMissing() throws Exception {
         log.info("========== 测试：missing 聚合 ==========");
@@ -3724,7 +4090,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(215)
+    @Order(273)
     @DisplayName("14.4 date_range 聚合 - 日期范围分组")
     void testAggDateRange() throws Exception {
         log.info("========== 测试：date_range 聚合 ==========");
@@ -3764,7 +4130,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(216)
+    @Order(274)
     @DisplayName("14.5 ip_range 聚合 - ES 7.x primary（ip 字段类型验证）")
     void testAggIpRangePrimary() throws Exception {
         log.info("========== 测试：ip_range 聚合 - primary ES 7.x ==========");
@@ -3814,7 +4180,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(217)
+    @Order(275)
     @DisplayName("14.6 ip 字段 - eq 查询（ES 7.x primary）")
     void testIpFieldQueryPrimary() throws Exception {
         log.info("========== 测试：ip 字段 eq 查询 - primary ES 7.x ==========");
@@ -3840,7 +4206,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(218)
+    @Order(276)
     @DisplayName("14.7 ip_range 聚合 - ES 6.2.2 secondary（兼容性验证）")
     void testAggIpRangeSecondary() throws Exception {
         log.info("========== 测试：ip_range 聚合 - secondary ES 6.2.2 ==========");
@@ -3884,7 +4250,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(219)
+    @Order(277)
     @DisplayName("14.8 ip 字段 - eq 查询（ES 6.2.2 secondary）")
     void testIpFieldQuerySecondary() throws Exception {
         log.info("========== 测试：ip 字段 eq 查询 - secondary ES 6.2.2 ==========");
@@ -3910,7 +4276,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(220)
+    @Order(278)
     @DisplayName("14.9 校验 - filter 聚合缺少 query 返回 400")
     void testAggFilterMissingQuery() throws Exception {
         log.info("========== 测试：filter 聚合缺少 query 校验 ==========");
@@ -3934,7 +4300,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(221)
+    @Order(279)
     @DisplayName("14.10 ip 字段 - CIDR 范围查询（ES 7.x primary）")
     void testIpCidrQueryPrimary() throws Exception {
         log.info("========== 测试：ip CIDR 查询 - primary ES 7.x ==========");
@@ -4072,6 +4438,8 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 15. 新增 bucket 类型 composite 校验测试 ====================
+
     @Test
     @Order(225)
     @DisplayName("14.14 校验 - filters 聚合缺少 filters 返回 400")
@@ -4095,8 +4463,6 @@ class SearchEndToEndTest {
                 .andExpect(status().isBadRequest())
                 .andDo(result -> log.info("✓ filters 缺少 filters 正确返回 400"));
     }
-
-    // ==================== 15. 新增 bucket 类型 composite 校验测试 ====================
 
     @Test
     @Order(226)
@@ -4203,6 +4569,8 @@ class SearchEndToEndTest {
                 .andDo(result -> log.info("✓ filters 不支持 composite，正确返回 400"));
     }
 
+    // ==================== 16. percentiles / percentile_ranks / extended_stats 修复验证 ====================
+
     @Test
     @Order(230)
     @DisplayName("15.5 校验 - missing 设置 composite=true 报 400")
@@ -4226,8 +4594,6 @@ class SearchEndToEndTest {
                 .andExpect(status().isBadRequest())
                 .andDo(result -> log.info("✓ missing 不支持 composite，正确返回 400"));
     }
-
-    // ==================== 16. percentiles / percentile_ranks / extended_stats 修复验证 ====================
 
     @Test
     @Order(231)
@@ -4423,6 +4789,8 @@ class SearchEndToEndTest {
                 });
     }
 
+    // ==================== 17. scroll 分页 ====================
+
     @Test
     @Order(237)
     @DisplayName("16.7 extended_stats 聚合 - ES 6.x secondary（兼容性验证）")
@@ -4455,13 +4823,6 @@ class SearchEndToEndTest {
                     log.debug("Response: {}", result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
                 });
     }
-
-    // ==================== 17. scroll 分页 ====================
-
-    /**
-     * scroll 链式翻页共享的 scrollId（static 保证跨测试方法实例共享）
-     */
-    private static String scrollId;
 
     @Test
     @Order(240)

@@ -25,14 +25,6 @@ public enum SensitiveStrategy {
         this.description = description;
     }
 
-    public String getStrategy() {
-        return strategy;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
     /**
      * 根据字符串获取枚举值
      */
@@ -46,5 +38,13 @@ public enum SensitiveStrategy {
             }
         }
         throw new IllegalArgumentException("不支持的敏感字段策略: " + strategy);
+    }
+
+    public String getStrategy() {
+        return strategy;
+    }
+
+    public String getDescription() {
+        return description;
     }
 }

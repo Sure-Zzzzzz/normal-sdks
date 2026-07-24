@@ -353,7 +353,8 @@ public class SimpleElasticsearchSearchApiEndpoint {
         }
         try {
             log.debug("Received expression query request: index={}", request.getIndex());
-            QueryCondition condition = expressionService.translate(request.getExpression(), request.getIndex());
+            QueryCondition condition = expressionService.translate(
+                    request.getExpression(), request.getIndex(), request.getTimeRangeEnd(), request.getTimeZone());
             QueryRequest queryRequest = QueryRequest.builder()
                     .index(request.getIndex())
                     .query(condition)
@@ -428,7 +429,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
         try {
             log.debug("Received expression agg request: index={}", request.getIndex());
             QueryCondition condition = expressionService.translate(
-                    request.getExpression(), request.getIndex());
+                    request.getExpression(), request.getIndex(), request.getTimeRangeEnd(), request.getTimeZone());
             AggRequest aggRequest = AggRequest.builder()
                     .index(request.getIndex())
                     .query(condition)

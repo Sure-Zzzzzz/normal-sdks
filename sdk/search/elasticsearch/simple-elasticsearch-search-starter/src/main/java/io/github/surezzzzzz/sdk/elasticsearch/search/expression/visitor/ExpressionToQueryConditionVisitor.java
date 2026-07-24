@@ -1,13 +1,22 @@
 package io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor;
 
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
+import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
+import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.*;
 import io.github.surezzzzzz.sdk.expression.condition.parser.model.*;
 import io.github.surezzzzzz.sdk.expression.condition.parser.visitor.ExpressionVisitor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -17,8 +26,8 @@ import java.util.Map;
 
 /**
  * 将条件表达式 AST 翻译为 QueryCondition 树
- * 持有固定的 fieldMapping，由 ExpressionVisitorRegistry 在启动时创建并管理
- * 实例只读，并发安全
+ * 注册表仅缓存持有字段映射的共享实例，
+ * 每次翻译创建独占上下文，避免请求状态串扰
  *
  * @author surezzzzzz
  */
@@ -31,9 +40,30 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
      * 字段名映射，启动时注入，之后只读
      */
     private final Map<String, String> fieldMapping;
+    private IndexMetadata indexMetadata;
+    private boolean metadataResolved;
+    private final MappingManager mappingManager;
+    private final String index;
+    private final TimeRangeEnd timeRangeEnd;
+    private final Clock clock;
 
     public ExpressionToQueryConditionVisitor(Map<String, String> fieldMapping) {
+        this(fieldMapping, null, null, TimeRangeEnd.NOW, Clock.systemDefaultZone());
+    }
+
+    public ExpressionToQueryConditionVisitor(Map<String, String> fieldMapping, MappingManager mappingManager,
+                                             String index, TimeRangeEnd timeRangeEnd, Clock clock) {
         this.fieldMapping = fieldMapping;
+        this.mappingManager = mappingManager;
+        this.index = index;
+        this.timeRangeEnd = timeRangeEnd == null ? TimeRangeEnd.NOW : timeRangeEnd;
+        this.clock = clock == null ? Clock.systemDefaultZone() : clock;
+    }
+
+    public ExpressionToQueryConditionVisitor withTimeRangeContext(MappingManager manager, String requestIndex,
+                                                                   TimeRangeEnd end, ZoneId zoneId) {
+        return new ExpressionToQueryConditionVisitor(fieldMapping, manager, requestIndex, end,
+                Clock.system(zoneId == null ? ZoneId.systemDefault() : zoneId));
     }
 
     @Override
@@ -124,19 +154,19 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
     private String comparisonOp(ComparisonOperator operator) {
         switch (operator) {
             case EQ:
-                return "eq";
+                return QueryOperator.EQ.getOperator();
             case NE:
-                return "ne";
+                return QueryOperator.NE.getOperator();
             case GT:
-                return "gt";
+                return QueryOperator.GT.getOperator();
             case GTE:
-                return "gte";
+                return QueryOperator.GTE.getOperator();
             case LT:
-                return "lt";
+                return QueryOperator.LT.getOperator();
             case LTE:
-                return "lte";
+                return QueryOperator.LTE.getOperator();
             default:
-                return "eq";
+                return QueryOperator.EQ.getOperator();
         }
     }
 
@@ -164,44 +194,71 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
     }
 
     private QueryCondition buildTimeRangeCondition(String field, ComparisonOperator operator, TimeRange timeRange) {
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime from = computeFrom(now, timeRange);
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime end = timeRange.isLastType() && timeRangeEnd == TimeRangeEnd.TODAY_START
+                ? now.toLocalDate().atStartOfDay() : now;
+        LocalDateTime from = computeFrom(end, timeRange);
 
+        Object fromValue = convertTimeValue(field, from);
+        Object toValue = convertTimeValue(field, end);
         if (operator == ComparisonOperator.EQ) {
             return QueryCondition.builder()
                     .field(field)
-                    .op("between")
-                    .values(Arrays.asList(from.format(FORMATTER), now.format(FORMATTER)))
+                    .op(QueryOperator.BETWEEN.getOperator())
+                    .values(Arrays.asList(fromValue, toValue))
                     .build();
+        }
+        if (operator == ComparisonOperator.NE) {
+            return buildOutsideRangeCondition(field, fromValue, toValue);
         }
         return QueryCondition.builder()
                 .field(field)
                 .op(comparisonOp(operator))
-                .value(from.format(FORMATTER))
+                .value(fromValue)
                 .build();
     }
 
-    private LocalDateTime computeFrom(LocalDateTime now, TimeRange timeRange) {
+    private Object convertTimeValue(String field, LocalDateTime value) {
+        FieldMetadata fieldMetadata = resolveFieldMetadata(field);
+        if (fieldMetadata != null && fieldMetadata.getType() == FieldType.LONG) {
+            return value.atZone(clock.getZone()).toEpochSecond();
+        }
+        return value.format(FORMATTER);
+    }
+
+    private FieldMetadata resolveFieldMetadata(String field) {
+        if (!metadataResolved && mappingManager != null && mappingManager.findIndexConfig(index) != null) {
+            metadataResolved = true;
+            try {
+                indexMetadata = mappingManager.getMetadata(index);
+            } catch (MappingException e) {
+                log.debug("无法加载索引 [{}] 的 mapping，时间边界回退为日期字符串", index);
+            }
+        }
+        return indexMetadata == null ? null : indexMetadata.getField(field);
+    }
+
+    private LocalDateTime computeFrom(LocalDateTime end, TimeRange timeRange) {
         int amount = timeRange.getAmount();
         ChronoUnit unit = timeRange.getUnit();
         if (amount <= 0) {
-            return truncateTo(now, unit);
+            return truncateTo(end, unit);
         }
         switch (unit) {
             case MINUTES:
-                return now.minusMinutes(amount);
+                return end.minusMinutes(amount);
             case HOURS:
-                return now.minusHours(amount);
+                return end.minusHours(amount);
             case DAYS:
-                return now.minusDays(amount);
+                return end.minusDays(amount);
             case WEEKS:
-                return now.minusWeeks(amount);
+                return end.minusWeeks(amount);
             case MONTHS:
-                return now.minusMonths(amount);
+                return end.minusMonths(amount);
             case YEARS:
-                return now.minusYears(amount);
+                return end.minusYears(amount);
             default:
-                return now.minusDays(amount);
+                return end.minusDays(amount);
         }
     }
 
@@ -234,11 +291,27 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
                     .conditions(negatedChildren)
                     .build();
         }
+        if (QueryOperator.BETWEEN.getOperator().equals(condition.getOp())) {
+            List<Object> values = condition.getValues();
+            return buildOutsideRangeCondition(condition.getField(),
+                    values.get(SimpleElasticsearchSearchConstant.BETWEEN_FROM_INDEX),
+                    values.get(SimpleElasticsearchSearchConstant.BETWEEN_TO_INDEX));
+        }
         return QueryCondition.builder()
                 .field(condition.getField())
                 .op(negateOp(condition.getOp()))
                 .value(condition.getValue())
                 .values(condition.getValues())
+                .build();
+    }
+
+    private QueryCondition buildOutsideRangeCondition(String field, Object from, Object to) {
+        List<QueryCondition> conditions = new ArrayList<>();
+        conditions.add(QueryCondition.builder().field(field).op(QueryOperator.LT.getOperator()).value(from).build());
+        conditions.add(QueryCondition.builder().field(field).op(QueryOperator.GT.getOperator()).value(to).build());
+        return QueryCondition.builder()
+                .logic(SimpleElasticsearchSearchConstant.LOGIC_OR)
+                .conditions(conditions)
                 .build();
     }
 
@@ -261,19 +334,24 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
                 return "not_in";
             case "not_in":
                 return "in";
-            // 匹配：有 AST 专用否定语法（field NOT PREFIX LIKE value），单向映射
             case "like":
                 return "not_like";
+            case "not_like":
+                return "like";
             case "prefix":
                 return "not_prefix";
+            case "not_prefix":
+                return "prefix";
             case "suffix":
                 return "not_suffix";
-            // 存在性：无 AST 专用语法，必须通过 negate() 处理，双向映射修复 bug
+            case "not_suffix":
+                return "suffix";
+            // 存在性：无 AST 专用语法，必须通过 negate() 处理，双向映射修复缺陷
             case "exists":
                 return "not_exists";
             case "not_exists":
                 return "exists";
-            // 空值：无 AST 专用语法，双向映射
+            // 空值：无 AST 专用语法，采用双向映射
             case "is_null":
                 return "is_not_null";
             case "is_not_null":

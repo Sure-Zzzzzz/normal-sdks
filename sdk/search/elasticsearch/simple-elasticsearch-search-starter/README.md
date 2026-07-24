@@ -48,6 +48,7 @@
 | + router 1.1.2 适配 / 多 SB 版本测试 | **1.6.9** | 1.1.2 | 维护版本：补齐 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 测试适配，无用户侧功能变更 |
 | + `_id` 元字段查询 / 通配符混合 mapping 查询兼容 / totalHits 日志修复 | **1.6.10** | 1.1.2 | Bug Fix：支持 `_id` eq/in/ne/not_in，修复 keyword/text.keyword 混合 mapping 查询漏数与 ES 7 totalHits 正常路径 warn |
 | + route 1.2.0 适配 / 请求具体索引匹配通配符配置 | **1.7.0** | 1.2.0 | 请求 `test_wildcard--2026.07.09` 可匹配配置 `test_wildcard--*`，alias 仍只精确匹配 |
+| + LIKE wildcard 语义 / 表达式时间范围修复 | **1.7.1** | 1.2.0 | LIKE 对 text+keyword 自动选择 keyword-compatible 路径；纯 text 保留 wildcard；时间范围补集、LONG epoch seconds、`timeRangeEnd` / IANA `timeZone` |
 
 ### route-starter 各版本能力
 
@@ -75,7 +76,7 @@
 | 2.4.5 | 7.9+ | ✅ | ✅ | 1.2.0 |
 | **2.7.9** | **7.17+** | **✅** | **✅** | **1.2.0** |
 
-> 1.7.0 起随 route-starter 1.2.0 复用 ES 兼容公共 Helper，并完成 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 全量测试。
+> 1.7.0 起随 route-starter 1.2.0 复用 ES 兼容公共 Helper；1.7.1 已在 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 以完整端到端测试验证。
 
 ---
 
@@ -85,7 +86,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.7.0'
+    implementation 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.7.1'
 
     // 需要自行引入
     implementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
@@ -272,6 +273,8 @@ POST /api/query
 | `expression` | String | 条件表达式字符串（必填） |
 | `aggs` | List\<AggDefinition\> | 聚合定义列表（必填） |
 | `after` | Map | composite 聚合翻页游标（可选） |
+| `timeRangeEnd` | TimeRangeEnd | 表达式时间关键字截止模式：`NOW`（默认）或 `TODAY_START`（可选） |
+| `timeZone` | String | 表达式时间关键字使用的 IANA 时区（可选，如 `Asia/Shanghai`；默认 JVM 系统时区） |
 
 ```json
 POST /api/agg/expression
@@ -397,6 +400,8 @@ POST /api/agg/nl
 | `pagination` | PaginationInfo | 分页配置（可选） |
 | `fields` | List\<String\> | 字段投影（可选） |
 | `dateRange` | DateRange | 日期分割索引路由范围（可选） |
+| `timeRangeEnd` | TimeRangeEnd | 表达式时间关键字截止模式：`NOW`（默认）或 `TODAY_START`（可选） |
+| `timeZone` | String | 表达式时间关键字使用的 IANA 时区（可选，如 `Asia/Shanghai`；默认 JVM 系统时区） |
 | `countOnly` | Boolean | `true` 时仅返回 total，走 `_count` API（v1.6.6+） |
 
 ```json
@@ -486,9 +491,11 @@ GET /api/expression/hints?index=order
 | `not_regex` | 正则不匹配 | `value` |
 | `exists` | 字段存在 | — |
 | `not_exists` | 字段不存在 | — |
-| `is_null` | 字段为空 | — |
-| `is_not_null` | 字段不为空 | — |
+| `is_null` | 字段没有可索引值（等价于 `not_exists`） | — |
+| `is_not_null` | 字段有可索引值（等价于 `exists`） | — |
 
+> **LIKE 字段语义（v1.7.1+）**：`like` 始终生成 ES `wildcard` query。`text + keyword` 自动查询 keyword-compatible 子字段；纯 `text` 保留根字段 wildcard 查询，但它匹配 analyzer 写入的词项，不承诺原始完整字段的字符级匹配。value 不含 `*`、`?` 时自动按 `*value*` 包含匹配；显式模式原样保留。若 keyword 子字段受 `ignore_above` 限制未收录长值，完整字段值 wildcard 语义需要由 mapping 提供可收录该值的 keyword-compatible 字段。
+>
 > **`_id` 元字段支持范围（v1.6.10+）**：`_id` 不参与 mapping 字段元数据，只支持 `eq` / `ne` / `in` / `not_in` 精确 id 查询；普通查询和 `countOnly=true` 共用该能力。
 >
 > **表达式语法支持范围**：`regex` / `not_regex` 仅通过 JSON API（`/api/query`）可用，表达式语法无 REGEX 关键字。`between` 仅由时间范围关键字（如 `最近7天`）自动生成，表达式无 BETWEEN 关键字。其余操作符均可通过表达式语法实现，详见[场景十](#场景十条件表达式查询-v152)。
@@ -960,14 +967,20 @@ indices:
 | `A OR B` | `或` / `或者` | 最低 |
 | `(expr)` | — | 括号覆盖优先级 |
 
-> `NOT` 对复合条件做德摩根展开：`NOT (A AND B)` → `NOT A OR NOT B`；对叶子条件翻转操作符：`=` → `!=`，`LIKE` → `NOT LIKE`，`EXISTS` → `NOT EXISTS` 等。
+> `NOT` 对复合条件做德摩根展开：`NOT (A AND B)` → `NOT A OR NOT B`；对叶子条件做双向操作符翻转，例如 `=` ↔ `!=`、`LIKE` ↔ `NOT LIKE`、`PREFIX LIKE` ↔ `NOT PREFIX LIKE`、`EXISTS` ↔ `NOT EXISTS`。
 
 **时间范围**
 
 | 语法 | 示例 | 说明 |
 |------|------|------|
-| `field = 时间关键字` | `create_time = 最近7天` | `=` 生成 between（from ~ now） |
+| `field = 时间关键字` | `create_time = 最近7天` | `=` 生成闭区间 between（from ~ end） |
+| `field != 时间关键字` | `create_time != 最近7天` | 查询范围外：`field < from OR field > end` |
+| `NOT (field = 时间关键字)` | `NOT (create_time = 最近7天)` | 查询范围外：`field < from OR field > end` |
 | `field > 时间关键字` | `create_time > 近1小时` | `>` / `>=` / `<` / `<=` 生成对应比较（against from 时间点） |
+
+`timeRangeEnd` 未传或为 `NOW` 时，`近/最近` 类关键字的 `end` 是请求处理时刻；传 `TODAY_START` 时，`end` 是 `timeZone` 指定 IANA 时区的当天 `00:00:00`。例如 `最近7天` 会生成 `[当天零点 - 7 天, 当天零点]`。`timeZone` 未传时使用 JVM 系统时区；它同时决定日界线和 long 时间字段的 epoch seconds 换算。该参数仅影响表达式时间关键字，不替代日期分割索引路由使用的 `dateRange`。
+
+mapping 为 `date` 的字段继续接收 `yyyy-MM-dd'T'HH:mm:ss` 边界字符串；mapping 为 `long` 的时间字段按 epoch seconds 接收 `Long` 数值边界。`long` 时间字段必须按该秒级约定存储，SDK 不会根据字段名或值大小猜测秒/毫秒单位。
 
 时间关键字完整列表见 `/api/expression/hints` 返回的 `timeRanges`，包含近N分钟/小时/天/周/月/年、今天/昨天/本周/上月等。
 

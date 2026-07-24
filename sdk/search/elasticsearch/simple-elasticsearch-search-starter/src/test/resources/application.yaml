@@ -1,6 +1,3 @@
-
-
-
 io:
   github:
     surezzzzzz:
@@ -28,6 +25,8 @@ io:
                     - 状态
                   points:
                     - 积分
+                  eventTimestamp:
+                    - 事件时间戳
                   createTime:
                     - 创建时间
                   orderId:
@@ -74,6 +73,8 @@ io:
                     - 扩展字段二
                   eventTime:
                     - 事件时间
+                  eventTimestamp:
+                    - 事件时间戳
 
               # 降级测试索引（用于端到端降级测试）
               - name: "test_downgrade_log--*"

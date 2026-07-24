@@ -7,6 +7,13 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.constant;
  */
 public class ErrorMessage {
 
+    // ========== 表达式相关 ==========
+
+    /**
+     * 表达式时间时区无效
+     */
+    public static final String EXPRESSION_TIME_ZONE_INVALID = "表达式时间时区无效: %s";
+
     // ========== 查询相关 ==========
 
     /**

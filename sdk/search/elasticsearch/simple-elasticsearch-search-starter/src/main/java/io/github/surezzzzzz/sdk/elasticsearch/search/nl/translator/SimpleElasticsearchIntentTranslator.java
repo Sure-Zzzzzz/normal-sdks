@@ -109,7 +109,7 @@ public class SimpleElasticsearchIntentTranslator implements IntentTranslator<Obj
             // OR 场景下父节点 value=null，不重复添加（子条件已包含完整数据）
             if (conditionIntent.getFieldHint() != null && conditionIntent.getOperator() != null
                     && (conditionIntent.getValue() != null
-                        || (conditionIntent.getValues() != null && !conditionIntent.getValues().isEmpty()))) {
+                    || (conditionIntent.getValues() != null && !conditionIntent.getValues().isEmpty()))) {
                 String fieldHint = conditionIntent.getFieldHint();
                 String boundField = bindField(fieldHint, index);
                 childConditions.add(QueryCondition.builder()

@@ -29,35 +29,6 @@ import java.util.Map;
 @SimpleElasticsearchSearchComponent
 public class BucketSortPipelineStrategy implements PipelineAggregationStrategy {
 
-    @Override
-    public PipelineAggregationBuilder build(PipelineAggDefinition def) {
-        Object builder = invokeStatic(
-                loadPipelineBuildersClass(),
-                SimpleElasticsearchSearchConstant.AGG_METHOD_BUCKET_SORT,
-                new Class[]{String.class, List.class},
-                def.getName(), buildSortFields(def.getSort()));
-        if (def.getSize() != null) {
-            invokeNoArg(builder, SimpleElasticsearchSearchConstant.AGG_METHOD_SIZE, new Class[]{Integer.class}, def.getSize());
-        }
-        if (def.getFrom() != null) {
-            invokeNoArg(builder, SimpleElasticsearchSearchConstant.AGG_METHOD_FROM, new Class[]{int.class}, def.getFrom());
-        }
-        return (PipelineAggregationBuilder) builder;
-    }
-
-    private List<FieldSortBuilder> buildSortFields(Map<String, String> sort) {
-        List<FieldSortBuilder> fields = new ArrayList<>();
-        if (sort == null) {
-            return fields;
-        }
-        for (Map.Entry<String, String> entry : sort.entrySet()) {
-            SortOrder order = SimpleElasticsearchSearchConstant.SORT_ORDER_DESC.equalsIgnoreCase(entry.getValue())
-                    ? SortOrder.DESC : SortOrder.ASC;
-            fields.add(SortBuilders.fieldSort(entry.getKey()).order(order));
-        }
-        return fields;
-    }
-
     private static Class<?> loadPipelineBuildersClass() {
         try {
             return Class.forName(SimpleElasticsearchSearchConstant.AGG_CLASS_PIPELINE_BUILDERS_ES7);
@@ -89,5 +60,34 @@ public class BucketSortPipelineStrategy implements PipelineAggregationStrategy {
             throw new AggregationException(ErrorCode.AGG_REFLECT_INVOKE_FAILED,
                     String.format(ErrorMessage.AGG_REFLECT_INVOKE_FAILED, methodName), e);
         }
+    }
+
+    @Override
+    public PipelineAggregationBuilder build(PipelineAggDefinition def) {
+        Object builder = invokeStatic(
+                loadPipelineBuildersClass(),
+                SimpleElasticsearchSearchConstant.AGG_METHOD_BUCKET_SORT,
+                new Class[]{String.class, List.class},
+                def.getName(), buildSortFields(def.getSort()));
+        if (def.getSize() != null) {
+            invokeNoArg(builder, SimpleElasticsearchSearchConstant.AGG_METHOD_SIZE, new Class[]{Integer.class}, def.getSize());
+        }
+        if (def.getFrom() != null) {
+            invokeNoArg(builder, SimpleElasticsearchSearchConstant.AGG_METHOD_FROM, new Class[]{int.class}, def.getFrom());
+        }
+        return (PipelineAggregationBuilder) builder;
+    }
+
+    private List<FieldSortBuilder> buildSortFields(Map<String, String> sort) {
+        List<FieldSortBuilder> fields = new ArrayList<>();
+        if (sort == null) {
+            return fields;
+        }
+        for (Map.Entry<String, String> entry : sort.entrySet()) {
+            SortOrder order = SimpleElasticsearchSearchConstant.SORT_ORDER_DESC.equalsIgnoreCase(entry.getValue())
+                    ? SortOrder.DESC : SortOrder.ASC;
+            fields.add(SortBuilders.fieldSort(entry.getKey()).order(order));
+        }
+        return fields;
     }
 }

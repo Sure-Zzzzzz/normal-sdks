@@ -45,6 +45,22 @@ public class PaginationStrategyRegistry {
         this.scrollStrategy = scrollStrategy;
     }
 
+    /**
+     * 生成 offset 分页的策略 key
+     */
+    public static String buildOffsetKey() {
+        return PaginationStrategyKey.OFFSET;
+    }
+
+    /**
+     * 生成 search_after 分页的策略 key
+     *
+     * @param mode search_after 翻页模式
+     */
+    public static String buildSearchAfterKey(SearchAfterMode mode) {
+        return PaginationStrategyKey.SEARCH_AFTER_PREFIX + mode.getCode();
+    }
+
     @PostConstruct
     public void init() {
         register(buildOffsetKey(), offsetStrategy);
@@ -88,22 +104,6 @@ public class PaginationStrategyRegistry {
                     String.format(ErrorMessage.PAGINATION_STRATEGY_NOT_FOUND, key));
         }
         return strategy;
-    }
-
-    /**
-     * 生成 offset 分页的策略 key
-     */
-    public static String buildOffsetKey() {
-        return PaginationStrategyKey.OFFSET;
-    }
-
-    /**
-     * 生成 search_after 分页的策略 key
-     *
-     * @param mode search_after 翻页模式
-     */
-    public static String buildSearchAfterKey(SearchAfterMode mode) {
-        return PaginationStrategyKey.SEARCH_AFTER_PREFIX + mode.getCode();
     }
 
     private String buildKey(PaginationInfo pagination) {

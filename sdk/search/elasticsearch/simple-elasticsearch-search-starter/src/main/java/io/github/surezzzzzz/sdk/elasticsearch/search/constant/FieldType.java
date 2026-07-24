@@ -138,10 +138,6 @@ public enum FieldType {
         this.type = type;
     }
 
-    public String getType() {
-        return type;
-    }
-
     /**
      * 根据字符串获取枚举值
      */
@@ -155,6 +151,10 @@ public enum FieldType {
             }
         }
         return UNKNOWN;
+    }
+
+    public String getType() {
+        return type;
     }
 
     /**

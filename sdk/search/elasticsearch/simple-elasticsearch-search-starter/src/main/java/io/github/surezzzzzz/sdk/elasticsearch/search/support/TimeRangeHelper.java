@@ -53,10 +53,10 @@ public final class TimeRangeHelper {
         String s = timeRange.trim().toLowerCase();
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime from;
-        if (s.endsWith("d"))      from = now.minusDays(value);
+        if (s.endsWith("d")) from = now.minusDays(value);
         else if (s.endsWith("h")) from = now.minusHours(value);
         else if (s.endsWith("m")) from = now.minusMinutes(value);
-        else                      from = now.minusSeconds(value);
+        else from = now.minusSeconds(value);
 
         return QueryRequest.DateRange.builder()
                 .from(from.format(FORMATTER))

@@ -29,6 +29,19 @@ public class BucketSelectorPipelineStrategy implements PipelineAggregationStrate
 
     private static final Pattern PARAMS_PATTERN = Pattern.compile("params\\.([a-zA-Z_][a-zA-Z0-9_]*)");
 
+    private static Class<?> loadPipelineBuildersClass() {
+        try {
+            return Class.forName(SimpleElasticsearchSearchConstant.AGG_CLASS_PIPELINE_BUILDERS_ES7);
+        } catch (ClassNotFoundException e) {
+            try {
+                return Class.forName(SimpleElasticsearchSearchConstant.AGG_CLASS_PIPELINE_BUILDERS_ES6);
+            } catch (ClassNotFoundException ex) {
+                throw new AggregationException(ErrorCode.AGG_REFLECT_CLASS_NOT_FOUND,
+                        String.format(ErrorMessage.AGG_REFLECT_CLASS_NOT_FOUND, "PipelineAggregatorBuilders"), ex);
+            }
+        }
+    }
+
     @Override
     public PipelineAggregationBuilder build(PipelineAggDefinition def) {
         Map<String, String> paths = def.getBucketsPath() != null
@@ -60,18 +73,5 @@ public class BucketSelectorPipelineStrategy implements PipelineAggregationStrate
             paths.put(varName, varName);
         }
         return paths;
-    }
-
-    private static Class<?> loadPipelineBuildersClass() {
-        try {
-            return Class.forName(SimpleElasticsearchSearchConstant.AGG_CLASS_PIPELINE_BUILDERS_ES7);
-        } catch (ClassNotFoundException e) {
-            try {
-                return Class.forName(SimpleElasticsearchSearchConstant.AGG_CLASS_PIPELINE_BUILDERS_ES6);
-            } catch (ClassNotFoundException ex) {
-                throw new AggregationException(ErrorCode.AGG_REFLECT_CLASS_NOT_FOUND,
-                        String.format(ErrorMessage.AGG_REFLECT_CLASS_NOT_FOUND, "PipelineAggregatorBuilders"), ex);
-            }
-        }
     }
 }

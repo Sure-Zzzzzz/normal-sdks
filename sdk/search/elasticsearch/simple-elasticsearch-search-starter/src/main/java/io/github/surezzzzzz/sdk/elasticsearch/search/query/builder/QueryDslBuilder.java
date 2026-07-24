@@ -114,7 +114,7 @@ public class QueryDslBuilder {
      * @param rootLogic 根节点的逻辑类型（用于判断是否需要展开）
      */
     private void collectFlatQueries(QueryCondition condition, IndexMetadata metadata,
-                                     List<QueryBuilder> results, String rootLogic) {
+                                    List<QueryBuilder> results, String rootLogic) {
         if (condition.isLogicCondition()) {
             String logic = defaultLogic(condition.getLogic());
 
@@ -145,7 +145,7 @@ public class QueryDslBuilder {
      * @return 完整的 BoolQueryBuilder
      */
     private QueryBuilder buildLogicAsCompleteUnit(String logic, List<QueryCondition> conditions,
-                                                   IndexMetadata metadata) {
+                                                  IndexMetadata metadata) {
         List<QueryBuilder> subResults = new ArrayList<>();
         for (QueryCondition sub : conditions) {
             // 子节点相对于当前逻辑节点展开（same logic = flatten, diff = build unit）

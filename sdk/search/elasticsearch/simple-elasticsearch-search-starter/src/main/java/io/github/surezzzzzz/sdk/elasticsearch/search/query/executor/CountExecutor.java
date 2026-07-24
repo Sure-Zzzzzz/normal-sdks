@@ -61,7 +61,7 @@ public class CountExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
     @Override
     protected boolean needsDowngradeRetry(QueryRequest request, ResolvedIndexConfig resolvedIndexConfig,
-                                           IndexMetadata metadata) {
+                                          IndexMetadata metadata) {
         return properties.getDowngrade().isEnabled()
                 && !resolvedIndexConfig.isWildcardMatched()
                 && metadata.isDateSplit()
