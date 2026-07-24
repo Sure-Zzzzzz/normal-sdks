@@ -14,7 +14,8 @@
 
 | 组件 | 版本 |
 |---|---|
-| simple-kafka-outbox-starter | 1.0.0 |
+| simple-kafka-outbox-starter | 1.0.1 |
+| simple-kafka-outbox-core | 1.0.0 |
 | simple-kafka-publisher-starter | 1.1.0 |
 | simple-kafka-route-starter | 1.0.1 |
 | Spring Boot | 2.2.13 / 2.3.12 / 2.4.5 / 2.7.9 |
@@ -24,11 +25,11 @@
 ## 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-kafka-outbox-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-kafka-outbox-starter:1.0.1'
 implementation 'org.springframework.kafka:spring-kafka'
 ```
 
-应用还需提供 Spring JDBC、MySQL 驱动、DataSource 和对应的 `DataSourceTransactionManager`。
+Runtime 传递依赖 `simple-kafka-outbox-core:1.0.0`，正常使用无需重复声明 Core。应用还需提供 Spring JDBC、MySQL 驱动、DataSource 和对应的 `DataSourceTransactionManager`。
 
 ## 建表
 
@@ -259,4 +260,12 @@ Outbox Worker 不持有任何跨进程共享状态。并发控制完全通过 My
 
 ## 升级说明
 
-1.0.0 为首发版本，无历史版本升级步骤。后续版本如变更快照协议或 DDL，将单独提供迁移说明；不要用本版本包含 DROP 的首次安装脚本升级已有表。
+### 1.0.1
+
+1.0.1 将 `OutboxStatus`、`OutboxPayloadKind` 和 `KafkaOutboxStringHelper` 的实现归属到传递依赖的 `simple-kafka-outbox-core:1.0.0`，保留原有 FQN 和公共方法。升级不需要修改应用 import、配置、表结构或 DDL。`KafkaOutboxStringHelper` 对安全展示和错误摘要的长度判断改为按 Unicode 码点处理，避免在代理对中间截断；错误摘要仍最多保留 512 个字符，不会超过现有 `VARCHAR(512)` 列容量。
+
+应用若已引入 Core 或 `simple-kafka-outbox-management-starter`，必须将 Runtime 从 1.0.0 升级至 1.0.1，避免旧 Runtime 自带共享类型与 Core 发生重复 FQN 冲突。1.0.1 仅消除该类路径冲突，不代表 Runtime 与 Management 已支持部署在同一个 Spring 应用中。
+
+### 1.0.0
+
+1.0.0 为首发版本。后续版本如变更快照协议或 DDL，将单独提供迁移说明；不要用本版本包含 DROP 的首次安装脚本升级已有表。

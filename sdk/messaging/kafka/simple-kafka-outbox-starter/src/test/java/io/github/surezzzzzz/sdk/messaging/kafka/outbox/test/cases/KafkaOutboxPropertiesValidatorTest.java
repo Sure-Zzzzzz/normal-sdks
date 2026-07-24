@@ -23,6 +23,14 @@ public class KafkaOutboxPropertiesValidatorTest {
 
     private final KafkaOutboxPropertiesValidator validator = new KafkaOutboxPropertiesValidator();
 
+    private static String repeat(char value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
+    }
+
     @Test
     public void testDefaultAndInclusiveBoundariesAreValid() {
         SimpleKafkaOutboxProperties defaults = new SimpleKafkaOutboxProperties();
@@ -161,13 +169,5 @@ public class KafkaOutboxPropertiesValidatorTest {
                 exception.getErrorCode(), exception.getMessage());
         assertEquals(ErrorCode.KAFKA_OUTBOX_001, exception.getErrorCode(), scenario + "应返回统一配置错误码");
         assertEquals(expectedMessage, exception.getMessage(), scenario + "应返回精确配置错误消息");
-    }
-
-    private static String repeat(char value, int count) {
-        StringBuilder builder = new StringBuilder(count);
-        for (int index = 0; index < count; index++) {
-            builder.append(value);
-        }
-        return builder.toString();
     }
 }

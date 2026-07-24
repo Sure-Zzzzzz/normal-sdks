@@ -7,13 +7,9 @@ package io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant;
  */
 public final class SimpleKafkaOutboxConstant {
 
-    private SimpleKafkaOutboxConstant() {
-        throw new UnsupportedOperationException(UTILITY_CLASS_MESSAGE);
-    }
+    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.messaging.kafka.outbox";
 
     // ==================== 配置常量 ====================
-
-    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.messaging.kafka.outbox";
     public static final String CONFIG_PROPERTY_ENABLE = "enable";
     public static final String CONFIG_PROPERTY_WORKER_ENABLE = "worker.enable";
     public static final String CONFIG_PROPERTY_CLEANUP_ENABLE = "cleanup.enable";
@@ -38,10 +34,9 @@ public final class SimpleKafkaOutboxConstant {
     public static final int DEFAULT_CLEANUP_RETENTION_DAYS = 7;
     public static final int DEFAULT_CLEANUP_BATCH_SIZE = 500;
     public static final long DEFAULT_CLEANUP_INTERVAL_MS = 3600000L;
+    public static final int SCHEMA_VERSION = 1;
 
     // ==================== 协议和边界常量 ====================
-
-    public static final int SCHEMA_VERSION = 1;
     public static final int MAX_MESSAGE_ID_LENGTH = 191;
     public static final int MAX_TABLE_NAME_LENGTH = 64;
     public static final int MAX_ERROR_SUMMARY_LENGTH = 512;
@@ -62,10 +57,9 @@ public final class SimpleKafkaOutboxConstant {
     public static final double ZERO_DOUBLE = 0.0D;
     public static final double ONE_DOUBLE = 1.0D;
     public static final int SMART_LIFECYCLE_PHASE = Integer.MAX_VALUE - 100;
+    public static final String BEAN_NAMED_JDBC_TEMPLATE = "simpleKafkaOutboxNamedParameterJdbcTemplate";
 
     // ==================== Bean 与线程常量 ====================
-
-    public static final String BEAN_NAMED_JDBC_TEMPLATE = "simpleKafkaOutboxNamedParameterJdbcTemplate";
     public static final String BEAN_TRANSACTION_TEMPLATE = "simpleKafkaOutboxTransactionTemplate";
     public static final String BEAN_TASK_EXECUTOR = "simpleKafkaOutboxTaskExecutor";
     public static final String BEAN_WORKER_SCHEDULER = "simpleKafkaOutboxWorkerScheduler";
@@ -75,10 +69,9 @@ public final class SimpleKafkaOutboxConstant {
     public static final String CLEANUP_SCHEDULER_THREAD_PREFIX = "simple-kafka-outbox-cleanup-scheduler-";
     public static final int DEFAULT_SCHEDULER_POOL_SIZE = ONE;
     public static final String WORKER_INSTANCE_PREFIX = "outbox-worker-";
+    public static final String PARAM_ID = "id";
 
     // ==================== JDBC 参数常量 ====================
-
-    public static final String PARAM_ID = "id";
     public static final String PARAM_MESSAGE_ID = "messageId";
     public static final String PARAM_TOPIC = "topic";
     public static final String PARAM_RECORD_KEY = "recordKey";
@@ -117,10 +110,9 @@ public final class SimpleKafkaOutboxConstant {
     public static final String PARAM_LAST_ID = "lastId";
     public static final String PARAM_BATCH_SIZE = "batchSize";
     public static final String PARAM_CANDIDATE_IDS = "candidateIds";
+    public static final String SQL_INSERT_TEMPLATE = "INSERT INTO %s (message_id, topic, record_key, route_key, datasource_key, `partition`, message_timestamp, message_type, payload_kind, payload_json, headers_json, attributes_json, envelope_enabled, trace_id, schema_version, status, attempt, available_at, version) VALUES (:messageId, :topic, :recordKey, :routeKey, :datasourceKey, :partition, :messageTimestamp, :messageType, :payloadKind, :payloadJson, :headersJson, :attributesJson, :envelopeEnabled, :traceId, :schemaVersion, :status, 0, CURRENT_TIMESTAMP(3), 0)";
 
     // ==================== SQL 模板 ====================
-
-    public static final String SQL_INSERT_TEMPLATE = "INSERT INTO %s (message_id, topic, record_key, route_key, datasource_key, `partition`, message_timestamp, message_type, payload_kind, payload_json, headers_json, attributes_json, envelope_enabled, trace_id, schema_version, status, attempt, available_at, version) VALUES (:messageId, :topic, :recordKey, :routeKey, :datasourceKey, :partition, :messageTimestamp, :messageType, :payloadKind, :payloadJson, :headersJson, :attributesJson, :envelopeEnabled, :traceId, :schemaVersion, :status, 0, CURRENT_TIMESTAMP(3), 0)";
     public static final String SQL_SELECT_READY_CANDIDATE_TEMPLATE = "SELECT id, version, available_at AS eligible_at FROM %s WHERE status IN (:pendingStatus, :retryWaitStatus) AND available_at <= CURRENT_TIMESTAMP(3) ORDER BY available_at, id LIMIT :candidateLimit";
     public static final String SQL_SELECT_EXPIRED_CANDIDATE_TEMPLATE = "SELECT id, version, lease_until AS eligible_at FROM %s WHERE status = :processingStatus AND lease_until < CURRENT_TIMESTAMP(3) ORDER BY lease_until, id LIMIT :candidateLimit";
     public static final String SQL_CLAIM_TEMPLATE = "UPDATE %s SET status = :processingStatus, owner_token = :ownerToken, lease_until = TIMESTAMPADD(MICROSECOND, :leaseMicros, CURRENT_TIMESTAMP(3)), attempt = attempt + 1, version = version + 1, updated_at = CURRENT_TIMESTAMP(3) WHERE id = :id AND ((status IN (:pendingStatus, :retryWaitStatus) AND available_at <= CURRENT_TIMESTAMP(3)) OR (status = :processingStatus AND lease_until < CURRENT_TIMESTAMP(3))) AND version = :version";
@@ -133,10 +125,9 @@ public final class SimpleKafkaOutboxConstant {
     public static final String SQL_SELECT_CLEANUP_FIRST_CANDIDATE_TEMPLATE = "SELECT id, sent_at FROM %s WHERE status = :sentStatus AND sent_at < :expireBefore ORDER BY sent_at, id LIMIT :batchSize";
     public static final String SQL_SELECT_CLEANUP_NEXT_CANDIDATE_TEMPLATE = "SELECT id, sent_at FROM %s WHERE status = :sentStatus AND sent_at < :expireBefore AND (sent_at > :lastSentAt OR (sent_at = :lastSentAt AND id > :lastId)) ORDER BY sent_at, id LIMIT :batchSize";
     public static final String SQL_DELETE_CLEANUP_TEMPLATE = "DELETE FROM %s WHERE status = :sentStatus AND sent_at < :expireBefore AND id IN (:candidateIds)";
+    public static final String REASON_PROPERTIES_EMPTY = "properties 不能为空";
 
     // ==================== 校验和错误摘要常量 ====================
-
-    public static final String REASON_PROPERTIES_EMPTY = "properties 不能为空";
     public static final String REASON_DATASOURCE_AMBIGUOUS = "DataSource 数量不唯一，必须配置 data-source-bean-name";
     public static final String REASON_DATASOURCE_MISSING = "指定的 DataSource 不存在或类型不匹配";
     public static final String REASON_TX_MANAGER_AMBIGUOUS = "DataSourceTransactionManager 数量不唯一，必须配置 transaction-manager-bean-name";
@@ -172,4 +163,7 @@ public final class SimpleKafkaOutboxConstant {
     public static final String ERROR_SUMMARY_SHUTDOWN_RELEASE = "应用停机，发送前释放租约";
     public static final String ERROR_SUMMARY_PUBLISHER_FAILURE = "Kafka Publisher 发送失败";
     public static final String ERROR_SUMMARY_SNAPSHOT_FAILURE = "消息快照重建失败";
+    private SimpleKafkaOutboxConstant() {
+        throw new UnsupportedOperationException(UTILITY_CLASS_MESSAGE);
+    }
 }

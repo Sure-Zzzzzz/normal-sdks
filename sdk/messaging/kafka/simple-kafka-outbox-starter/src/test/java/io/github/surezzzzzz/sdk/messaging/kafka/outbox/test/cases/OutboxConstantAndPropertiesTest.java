@@ -3,7 +3,9 @@ package io.github.surezzzzzz.sdk.messaging.kafka.outbox.test.cases;
 import io.github.surezzzzzz.sdk.messaging.kafka.outbox.annotation.SimpleKafkaOutboxComponent;
 import io.github.surezzzzzz.sdk.messaging.kafka.outbox.configuration.KafkaOutboxPropertiesValidator;
 import io.github.surezzzzzz.sdk.messaging.kafka.outbox.configuration.SimpleKafkaOutboxProperties;
-import io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant.*;
+import io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant.SimpleKafkaOutboxConstant;
 import io.github.surezzzzzz.sdk.messaging.kafka.outbox.exception.KafkaOutboxConfigurationException;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -11,7 +13,6 @@ import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -24,26 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 public class OutboxConstantAndPropertiesTest {
-
-    @Test
-    public void testEnumContracts() {
-        String[] statusCodes = OutboxStatus.getAllCodes();
-        String[] payloadCodes = OutboxPayloadKind.getAllCodes();
-
-        log.info("Outbox 状态代码: {}", Arrays.toString(statusCodes));
-        log.info("Outbox payload 类型代码: {}", Arrays.toString(payloadCodes));
-        assertArrayEquals(new String[]{"PENDING", "PROCESSING", "RETRY_WAIT", "SENT", "POISON"},
-                statusCodes, "状态代码应完整且顺序稳定");
-        assertArrayEquals(new String[]{"STRING", "JSON", "NULL"}, payloadCodes,
-                "payload 类型代码应完整且顺序稳定");
-        assertSame(OutboxStatus.RETRY_WAIT, OutboxStatus.fromCode("retry_wait"),
-                "状态解析应忽略大小写");
-        assertTrue(OutboxPayloadKind.isValid("json"), "JSON 类型应忽略大小写验证");
-        assertNull(OutboxStatus.fromCode("UNKNOWN"), "未知状态应返回 null");
-        assertFalse(OutboxPayloadKind.isValid(null), "null payload 类型应无效");
-        assertEquals(OutboxStatus.SENT.getCode(), OutboxStatus.SENT.toString(),
-                "状态 toString 应返回 code");
-    }
 
     @Test
     public void testPropertiesDefaultsReferenceContract() {

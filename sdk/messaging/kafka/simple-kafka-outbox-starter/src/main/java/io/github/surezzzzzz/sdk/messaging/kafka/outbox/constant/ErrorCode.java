@@ -7,10 +7,6 @@ package io.github.surezzzzzz.sdk.messaging.kafka.outbox.constant;
  */
 public final class ErrorCode {
 
-    private ErrorCode() {
-        throw new UnsupportedOperationException(SimpleKafkaOutboxConstant.UTILITY_CLASS_MESSAGE);
-    }
-
     public static final String KAFKA_OUTBOX_001 = "KAFKA_OUTBOX_001";
     public static final String KAFKA_OUTBOX_002 = "KAFKA_OUTBOX_002";
     public static final String KAFKA_OUTBOX_003 = "KAFKA_OUTBOX_003";
@@ -20,4 +16,7 @@ public final class ErrorCode {
     public static final String KAFKA_OUTBOX_007 = "KAFKA_OUTBOX_007";
     public static final String KAFKA_OUTBOX_008 = "KAFKA_OUTBOX_008";
     public static final String KAFKA_OUTBOX_009 = "KAFKA_OUTBOX_009";
+    private ErrorCode() {
+        throw new UnsupportedOperationException(SimpleKafkaOutboxConstant.UTILITY_CLASS_MESSAGE);
+    }
 }

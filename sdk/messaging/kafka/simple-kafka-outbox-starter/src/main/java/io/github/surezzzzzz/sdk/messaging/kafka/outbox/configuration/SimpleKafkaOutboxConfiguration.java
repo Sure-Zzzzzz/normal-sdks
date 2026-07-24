@@ -70,6 +70,64 @@ public class SimpleKafkaOutboxConfiguration {
     public static class DefaultKafkaOutboxConfiguration {
 
         /**
+         * 按配置名或唯一候选选中业务 DataSource，多候选且未指定时报 KAFKA_OUTBOX_001。
+         */
+        private static DataSource selectDataSource(ListableBeanFactory beanFactory, String configuredName) {
+            if (KafkaOutboxStringHelper.hasText(configuredName)) {
+                return getBean(beanFactory, configuredName, DataSource.class,
+                        ErrorCode.KAFKA_OUTBOX_001, ErrorMessage.KAFKA_OUTBOX_001,
+                        SimpleKafkaOutboxConstant.REASON_DATASOURCE_MISSING);
+            }
+            Map<String, DataSource> beans = beanFactory.getBeansOfType(DataSource.class);
+            if (beans.size() != SimpleKafkaOutboxConstant.ONE) {
+                throw configurationError(ErrorCode.KAFKA_OUTBOX_001, ErrorMessage.KAFKA_OUTBOX_001,
+                        SimpleKafkaOutboxConstant.REASON_DATASOURCE_AMBIGUOUS);
+            }
+            return beans.values().iterator().next();
+        }
+
+        /**
+         * 按配置名或唯一候选选中事务管理器，多候选且未指定时报 KAFKA_OUTBOX_002。
+         */
+        private static DataSourceTransactionManager selectTransactionManager(ListableBeanFactory beanFactory,
+                                                                             String configuredName) {
+            if (KafkaOutboxStringHelper.hasText(configuredName)) {
+                return getBean(beanFactory, configuredName, DataSourceTransactionManager.class,
+                        ErrorCode.KAFKA_OUTBOX_002, ErrorMessage.KAFKA_OUTBOX_002,
+                        SimpleKafkaOutboxConstant.REASON_TX_MANAGER_MISSING);
+            }
+            Map<String, DataSourceTransactionManager> beans =
+                    beanFactory.getBeansOfType(DataSourceTransactionManager.class);
+            if (beans.size() != SimpleKafkaOutboxConstant.ONE) {
+                throw configurationError(ErrorCode.KAFKA_OUTBOX_002, ErrorMessage.KAFKA_OUTBOX_002,
+                        SimpleKafkaOutboxConstant.REASON_TX_MANAGER_AMBIGUOUS);
+            }
+            return beans.values().iterator().next();
+        }
+
+        /**
+         * 按名获取指定类型 Bean，失败时抛配置异常。
+         */
+        private static <T> T getBean(ListableBeanFactory beanFactory, String name, Class<T> type,
+                                     String errorCode, String messageTemplate, String reason) {
+            try {
+                return beanFactory.getBean(name, type);
+            } catch (RuntimeException e) {
+                throw new KafkaOutboxConfigurationException(errorCode,
+                        String.format(messageTemplate, reason), e);
+            }
+        }
+
+        /**
+         * 构造配置异常，按模板填充失败原因。
+         */
+        private static KafkaOutboxConfigurationException configurationError(String errorCode,
+                                                                            String messageTemplate,
+                                                                            String reason) {
+            return new KafkaOutboxConfigurationException(errorCode, String.format(messageTemplate, reason));
+        }
+
+        /**
          * 创建配置校验触发器。
          */
         @Bean
@@ -241,64 +299,6 @@ public class SimpleKafkaOutboxConfiguration {
                                                          ThreadPoolTaskScheduler simpleKafkaOutboxCleanupScheduler) {
                 return new KafkaOutboxCleanup(repository, listener, properties, simpleKafkaOutboxCleanupScheduler);
             }
-        }
-
-        /**
-         * 按配置名或唯一候选选中业务 DataSource，多候选且未指定时报 KAFKA_OUTBOX_001。
-         */
-        private static DataSource selectDataSource(ListableBeanFactory beanFactory, String configuredName) {
-            if (KafkaOutboxStringHelper.hasText(configuredName)) {
-                return getBean(beanFactory, configuredName, DataSource.class,
-                        ErrorCode.KAFKA_OUTBOX_001, ErrorMessage.KAFKA_OUTBOX_001,
-                        SimpleKafkaOutboxConstant.REASON_DATASOURCE_MISSING);
-            }
-            Map<String, DataSource> beans = beanFactory.getBeansOfType(DataSource.class);
-            if (beans.size() != SimpleKafkaOutboxConstant.ONE) {
-                throw configurationError(ErrorCode.KAFKA_OUTBOX_001, ErrorMessage.KAFKA_OUTBOX_001,
-                        SimpleKafkaOutboxConstant.REASON_DATASOURCE_AMBIGUOUS);
-            }
-            return beans.values().iterator().next();
-        }
-
-        /**
-         * 按配置名或唯一候选选中事务管理器，多候选且未指定时报 KAFKA_OUTBOX_002。
-         */
-        private static DataSourceTransactionManager selectTransactionManager(ListableBeanFactory beanFactory,
-                                                                             String configuredName) {
-            if (KafkaOutboxStringHelper.hasText(configuredName)) {
-                return getBean(beanFactory, configuredName, DataSourceTransactionManager.class,
-                        ErrorCode.KAFKA_OUTBOX_002, ErrorMessage.KAFKA_OUTBOX_002,
-                        SimpleKafkaOutboxConstant.REASON_TX_MANAGER_MISSING);
-            }
-            Map<String, DataSourceTransactionManager> beans =
-                    beanFactory.getBeansOfType(DataSourceTransactionManager.class);
-            if (beans.size() != SimpleKafkaOutboxConstant.ONE) {
-                throw configurationError(ErrorCode.KAFKA_OUTBOX_002, ErrorMessage.KAFKA_OUTBOX_002,
-                        SimpleKafkaOutboxConstant.REASON_TX_MANAGER_AMBIGUOUS);
-            }
-            return beans.values().iterator().next();
-        }
-
-        /**
-         * 按名获取指定类型 Bean，失败时抛配置异常。
-         */
-        private static <T> T getBean(ListableBeanFactory beanFactory, String name, Class<T> type,
-                                     String errorCode, String messageTemplate, String reason) {
-            try {
-                return beanFactory.getBean(name, type);
-            } catch (RuntimeException e) {
-                throw new KafkaOutboxConfigurationException(errorCode,
-                        String.format(messageTemplate, reason), e);
-            }
-        }
-
-        /**
-         * 构造配置异常，按模板填充失败原因。
-         */
-        private static KafkaOutboxConfigurationException configurationError(String errorCode,
-                                                                            String messageTemplate,
-                                                                            String reason) {
-            return new KafkaOutboxConfigurationException(errorCode, String.format(messageTemplate, reason));
         }
     }
 
