@@ -1,0 +1,127 @@
+:root {
+    --outbox-primary: #17365f;
+    --outbox-accent: #1b7fbd;
+    --outbox-surface: #f4f7fb;
+    --outbox-border: #dbe4ef;
+    --outbox-muted: #6b7280;
+}
+
+body {
+    min-height: 100vh;
+    color: #1f2937;
+    background: var(--outbox-surface);
+}
+
+.management-shell {
+    max-width: 1240px;
+}
+
+.management-brand {
+    color: var(--outbox-primary);
+    font-weight: 700;
+    letter-spacing: .02em;
+}
+
+.brand-icon {
+    margin-right: .65rem;
+    object-fit: contain;
+    vertical-align: middle;
+}
+
+.management-card {
+    border: 1px solid var(--outbox-border);
+    box-shadow: 0 .25rem .75rem rgba(23, 54, 95, .06);
+}
+
+.login-page {
+    background: linear-gradient(135deg, #17365f 0%, #1b7fbd 100%);
+}
+
+.login-card {
+    width: min(100%, 28rem);
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, .2);
+}
+
+.status-count {
+    color: var(--outbox-primary);
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: .35rem .65rem;
+    color: #345;
+    font-size: .8rem;
+    font-weight: 600;
+    background: #e8f1fb;
+    border: 1px solid #c6ddf4;
+    border-radius: 999px;
+}
+
+.record-table th,
+.record-table td {
+    white-space: nowrap;
+}
+
+.record-table td:last-child {
+    min-width: 14rem;
+    white-space: normal;
+}
+
+.empty-state {
+    padding: 3rem 1rem;
+    color: var(--outbox-muted);
+    text-align: center;
+}
+
+.detail-list {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1fr) minmax(0, 2fr);
+    gap: .8rem 1.5rem;
+    margin-bottom: 0;
+}
+
+.detail-list dt {
+    color: var(--outbox-muted);
+    font-weight: 600;
+}
+
+.detail-list dd {
+    min-width: 0;
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 991.98px) {
+    .record-table th:nth-child(3),
+    .record-table td:nth-child(3),
+    .record-table th:nth-child(5),
+    .record-table td:nth-child(5) {
+        display: none;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .management-shell {
+        padding-right: .75rem;
+        padding-left: .75rem;
+    }
+
+    .record-table th:nth-child(6),
+    .record-table td:nth-child(6) {
+        display: none;
+    }
+
+    .detail-list {
+        grid-template-columns: 1fr;
+        gap: .25rem;
+    }
+
+    .detail-list dd {
+        margin-bottom: .85rem;
+    }
+}

@@ -1,0 +1,30 @@
+server:
+  address: 127.0.0.1
+  port: 18081
+
+spring:
+  profiles:
+    include: local
+  datasource:
+    url: ${KAFKA_OUTBOX_MANAGEMENT_TEST_JDBC_URL:jdbc:mysql://localhost:3306/simple_kafka_outbox_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${KAFKA_OUTBOX_MANAGEMENT_TEST_JDBC_USERNAME}
+    password: ${KAFKA_OUTBOX_MANAGEMENT_TEST_JDBC_PASSWORD}
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        messaging:
+          kafka:
+            outbox:
+              enable: true
+              worker:
+                enable: false
+              cleanup:
+                enable: false
+              management:
+                enable: true
+                ui:
+                  enable: true
+                  base-path: /outbox
+                admin:
+                  username: admin

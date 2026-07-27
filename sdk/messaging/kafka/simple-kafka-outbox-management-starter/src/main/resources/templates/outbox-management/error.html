@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Outbox 管理台</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-5">
+    <section class="card management-card mx-auto" style="max-width: 38rem;">
+        <div class="card-body p-4 p-md-5 text-center">
+            <img alt="Sure-Zzzzzz" class="brand-icon mb-3" height="56" th:src="@{${brandIconUrl}}" width="56">
+            <h1 class="h4 management-brand mb-3">请求未完成</h1>
+            <p class="text-muted mb-4" th:text="${message}"></p>
+            <a class="btn btn-primary" th:href="${dashboardUrl}">返回总览</a>
+        </div>
+    </section>
+</main>
+</body>
+</html>

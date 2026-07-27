@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Outbox 记录</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-4 py-lg-5">
+    <header class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <a class="btn btn-sm btn-outline-secondary mb-3" th:href="${dashboardUrl}">返回总览</a>
+            <h1 class="h3 management-brand mb-1"><img alt="Sure-Zzzzzz" class="brand-icon" height="40"
+                                                      th:src="@{${brandIconUrl}}" width="40">Outbox 记录</h1>
+            <span class="status-badge" th:text="${status}"></span>
+        </div>
+    </header>
+
+    <section class="card management-card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 record-table">
+                    <thead class="table-light">
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">消息</th>
+                        <th scope="col">主题</th>
+                        <th scope="col">状态</th>
+                        <th scope="col">尝试</th>
+                        <th scope="col">可投递时间</th>
+                        <th scope="col">错误摘要</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="record : ${page.records}">
+                        <td><a th:href="${dashboardUrl + 'records/' + record.recordId}"
+                               th:text="${record.recordId}"></a></td>
+                        <td th:text="${record.messageId}"></td>
+                        <td th:text="${record.topic}"></td>
+                        <td><span class="status-badge" th:text="${record.status.code}"></span></td>
+                        <td th:text="${record.attempt}"></td>
+                        <td class="text-muted small" th:text="${record.availableAt}"></td>
+                        <td th:text="${record.lastErrorSummary}"></td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(page.records)}">
+                        <td class="empty-state" colspan="7">当前状态下暂无记录。</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <nav aria-label="Outbox 记录分页" class="mt-4 text-center" th:if="${page.hasNext}">
+        <a class="btn btn-outline-primary"
+           th:href="${dashboardUrl + 'records?status=' + status + '&cursor=' + page.nextCursor + '&size=' + size}">加载更多</a>
+    </nav>
+</main>
+</body>
+</html>

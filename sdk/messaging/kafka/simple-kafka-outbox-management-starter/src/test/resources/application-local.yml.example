@@ -1,0 +1,24 @@
+# 复制为 application-local.yaml 或 application-local.yml 后填写本机配置。
+# 本地文件已被 .gitignore 忽略，禁止提交真实数据库或管理员凭据。
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/simple_kafka_outbox_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: your_mysql_username
+    password: your_mysql_password
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        messaging:
+          kafka:
+            outbox:
+              management:
+                enable: true
+                ui:
+                  enable: true
+                  base-path: /outbox
+                  redirect-root: true
+                admin:
+                  username: admin
+                  password: your_admin_password

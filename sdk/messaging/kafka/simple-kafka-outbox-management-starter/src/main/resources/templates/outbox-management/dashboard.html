@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Outbox 管理台</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-4 py-lg-5">
+    <header class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 management-brand mb-1"><img alt="Sure-Zzzzzz" class="brand-icon" height="40"
+                                                      th:src="@{${brandIconUrl}}" width="40">Outbox 管理台</h1>
+            <p class="text-muted mb-0">查看消息投递状态并处理单条 POISON 记录。</p>
+        </div>
+        <form method="post" th:action="${logoutUrl}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+            <button class="btn btn-outline-secondary" type="submit">退出登录</button>
+        </form>
+    </header>
+
+    <div class="alert alert-danger" role="alert" th:if="${error}" th:text="${error}"></div>
+
+    <section class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2 class="h5 mb-0">状态总览</h2>
+            <span class="text-muted small">选择状态查看记录</span>
+        </div>
+        <div class="row g-3">
+            <div class="col-sm-6 col-lg" th:each="summary : ${summaries}">
+                <a class="card management-card h-100 text-decoration-none"
+                   th:href="${dashboardUrl + 'records?status=' + summary.status.code}">
+                    <div class="card-body">
+                        <div class="status-badge mb-3" th:text="${summary.status.description}"></div>
+                        <div class="status-count" th:text="${summary.count}"></div>
+                        <span class="text-muted small">查看记录</span>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <section class="card management-card">
+        <div class="card-body p-4">
+            <div class="mb-3">
+                <h2 class="h5 mb-1">精确定位</h2>
+                <p class="text-muted small mb-0">输入记录 ID 或消息 ID 其中之一。</p>
+            </div>
+            <form class="row g-3 align-items-end" method="post" th:action="${locateUrl}">
+                <div class="col-md-5">
+                    <label class="form-label" for="recordId">记录 ID</label>
+                    <input class="form-control" id="recordId" inputmode="numeric" name="recordId" type="text">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label" for="messageId">消息 ID</label>
+                    <input class="form-control" id="messageId" name="messageId" type="text">
+                </div>
+                <div class="col-md-2 d-grid">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+                    <button class="btn btn-primary" type="submit">定位记录</button>
+                </div>
+            </form>
+        </div>
+    </section>
+</main>
+</body>
+</html>

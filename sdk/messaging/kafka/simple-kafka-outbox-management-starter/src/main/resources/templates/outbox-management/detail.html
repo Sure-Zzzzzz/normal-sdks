@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Outbox 记录详情</title>
+    <link rel="stylesheet" th:href="@{${bootstrapCssUrl}}">
+    <link rel="stylesheet" th:href="@{${managementUiCssUrl}}">
+</head>
+<body>
+<main class="container management-shell py-4 py-lg-5">
+    <header class="mb-4">
+        <a class="btn btn-sm btn-outline-secondary mb-3" th:href="${dashboardUrl}">返回总览</a>
+        <h1 class="h3 management-brand mb-1"><img alt="Sure-Zzzzzz" class="brand-icon" height="40"
+                                                  th:src="@{${brandIconUrl}}" width="40">Outbox 记录详情</h1>
+        <span class="status-badge" th:text="${record.status.code}"></span>
+    </header>
+
+    <div class="alert alert-success" role="alert" th:if="${success}" th:text="${success}"></div>
+
+    <section class="card management-card mb-4">
+        <div class="card-body p-4">
+            <dl class="detail-list">
+                <dt>ID</dt>
+                <dd th:text="${record.recordId}"></dd>
+                <dt>消息 ID</dt>
+                <dd th:text="${record.messageId}"></dd>
+                <dt>主题</dt>
+                <dd th:text="${record.topic}"></dd>
+                <dt>路由键</dt>
+                <dd th:text="${record.routeKey}"></dd>
+                <dt>数据源路由键</dt>
+                <dd th:text="${record.datasourceKey}"></dd>
+                <dt>消息类型</dt>
+                <dd th:text="${record.messageType}"></dd>
+                <dt>内容分类</dt>
+                <dd th:text="${record.payloadKind}"></dd>
+                <dt>状态</dt>
+                <dd th:text="${record.status.code}"></dd>
+                <dt>尝试次数</dt>
+                <dd th:text="${record.attempt}"></dd>
+                <dt>可投递时间</dt>
+                <dd th:text="${record.availableAt}"></dd>
+                <dt>错误码</dt>
+                <dd th:text="${record.lastErrorCode}"></dd>
+                <dt>错误摘要</dt>
+                <dd th:text="${record.lastErrorSummary}"></dd>
+                <dt>Broker 主题</dt>
+                <dd th:text="${record.brokerTopic}"></dd>
+                <dt>Broker 分区</dt>
+                <dd th:text="${record.brokerPartition}"></dd>
+                <dt>Broker 位点</dt>
+                <dd th:text="${record.brokerOffset}"></dd>
+                <dt>Broker 时间戳</dt>
+                <dd th:text="${record.brokerTimestamp}"></dd>
+                <dt>创建时间</dt>
+                <dd th:text="${record.createdAt}"></dd>
+                <dt>发送时间</dt>
+                <dd th:text="${record.sentAt}"></dd>
+                <dt>更新时间</dt>
+                <dd th:text="${record.updatedAt}"></dd>
+            </dl>
+        </div>
+    </section>
+
+    <section class="card border-warning" th:if="${record.status.name() == 'POISON'}">
+        <div class="card-body p-4">
+            <h2 class="h5 text-warning-emphasis">重置 POISON 记录</h2>
+            <p class="text-muted mb-3">重置后记录将进入 PENDING，并重新等待运行时组件领取。</p>
+            <form method="post" th:action="${dashboardUrl + 'records/' + record.recordId + '/reset-poison'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+                <button class="btn btn-warning" type="submit">重置为 PENDING</button>
+            </form>
+        </div>
+    </section>
+</main>
+</body>
+</html>
