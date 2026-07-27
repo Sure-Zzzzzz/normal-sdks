@@ -1,0 +1,21 @@
+spring:
+  profiles:
+    active: local
+  datasource:
+    url: ${SMART_KMS_TEST_JDBC_URL:jdbc:mysql://localhost:3306/smart_kms_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${SMART_KMS_TEST_JDBC_USERNAME:root}
+    password: ${SMART_KMS_TEST_JDBC_PASSWORD:}
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kms:
+          server:
+            enable: true
+            worker:
+              enable: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.kms.server: DEBUG
