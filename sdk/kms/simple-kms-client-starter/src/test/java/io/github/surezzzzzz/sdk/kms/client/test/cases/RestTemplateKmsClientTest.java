@@ -216,6 +216,30 @@ class RestTemplateKmsClientTest {
     }
 
     @Test
+    void shouldParseMissingAndNullOptionalPolicyFields() {
+        RestTemplate restTemplate = restTemplate();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        RestTemplateKmsClient client = client(restTemplate, 4096, 4096);
+        String missingOptionalFields = "{\"policyId\":\"policy-missing\",\"keyRef\":\"key-1\",\"principalId\":\"service-a\","
+                + "\"operation\":\"SIGN\",\"rowVersion\":7}";
+        String nullOptionalFields = "{\"policyId\":\"policy-null\",\"keyRef\":\"key-1\",\"principalId\":\"service-a\","
+                + "\"keyVersion\":null,\"operation\":\"SIGN\",\"expiresAt\":null,\"rowVersion\":8}";
+
+        server.expect(once(), requestTo(API_BASE + "/keys/key-1/policies"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"items\":[" + missingOptionalFields + "," + nullOptionalFields + "]}",
+                        MediaType.APPLICATION_JSON));
+        java.util.List<KmsPolicy> policies = client.listPolicies(KEY_REF);
+
+        log.info("可选策略字段缺失和显式 null 的返回数量: {}", policies.size());
+        assertNull(policies.get(0).getKeyVersion(), "缺失的策略版本必须解析为 null");
+        assertNull(policies.get(0).getExpiresAt(), "缺失的策略到期时间必须解析为 null");
+        assertNull(policies.get(1).getKeyVersion(), "显式 null 的策略版本必须解析为 null");
+        assertNull(policies.get(1).getExpiresAt(), "显式 null 的策略到期时间必须解析为 null");
+        server.verify();
+    }
+
+    @Test
     void shouldCallCryptoAndPublicKeyEndpointsWithoutRetry() {
         RestTemplate restTemplate = restTemplate();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();

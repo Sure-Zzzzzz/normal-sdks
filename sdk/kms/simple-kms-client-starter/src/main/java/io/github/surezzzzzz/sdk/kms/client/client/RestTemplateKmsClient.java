@@ -196,29 +196,25 @@ public class RestTemplateKmsClient implements KmsClient {
     }
 
     private static KmsPolicy policy(JsonNode node) {
-        KmsPolicy.KmsPolicyBuilder builder = KmsPolicy.builder()
+        return KmsPolicy.builder()
                 .policyId(text(node, SimpleKmsClientConstant.FIELD_POLICY_ID))
                 .keyRef(text(node, SimpleKmsClientConstant.FIELD_KEY_REF))
                 .principalId(text(node, SimpleKmsClientConstant.FIELD_PRINCIPAL_ID))
+                .keyVersion(optionalInteger(node, SimpleKmsClientConstant.FIELD_KEY_VERSION))
                 .operation(enumValue(node, SimpleKmsClientConstant.FIELD_OPERATION, OPERATIONS))
-                .rowVersion(longValue(node, SimpleKmsClientConstant.FIELD_ROW_VERSION));
-        optionalInteger(node, SimpleKmsClientConstant.FIELD_KEY_VERSION, builder);
-        optionalUtcMillis(node, SimpleKmsClientConstant.FIELD_EXPIRES_AT, builder);
-        return builder.build();
+                .expiresAt(optionalUtcMillis(node, SimpleKmsClientConstant.FIELD_EXPIRES_AT))
+                .rowVersion(longValue(node, SimpleKmsClientConstant.FIELD_ROW_VERSION))
+                .build();
     }
 
-    private static void optionalInteger(JsonNode node, String field, KmsPolicy.KmsPolicyBuilder builder) {
+    private static Integer optionalInteger(JsonNode node, String field) {
         JsonNode value = node.path(field);
-        if (!value.isMissingNode() && !value.isNull()) {
-            builder.keyVersion(integer(node, field));
-        }
+        return value.isMissingNode() || value.isNull() ? null : integer(node, field);
     }
 
-    private static void optionalUtcMillis(JsonNode node, String field, KmsPolicy.KmsPolicyBuilder builder) {
+    private static Instant optionalUtcMillis(JsonNode node, String field) {
         JsonNode value = node.path(field);
-        if (!value.isMissingNode() && !value.isNull()) {
-            builder.expiresAt(utcMillis(node, field));
-        }
+        return value.isMissingNode() || value.isNull() ? null : utcMillis(node, field);
     }
 
     private static KmsPublicKey publicKey(JsonNode node) {
