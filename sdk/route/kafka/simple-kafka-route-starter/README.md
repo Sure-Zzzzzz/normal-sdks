@@ -20,7 +20,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.3'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.kafka:spring-kafka'
 }
@@ -179,7 +179,7 @@ kafkaRouteTemplate.executeOn("tx37", kafkaTemplate ->
 
 ### 为独立消费入口创建 ConsumerFactory
 
-同一 datasource 下的不同消费入口需要不同消费组或 poll 参数时，调用 `SimpleKafkaRouteRegistry#createConsumerFactory`。每次调用都会创建独立实例；即使 `override` 为 `null`，也不会复用 `getConsumerFactory(...)` 返回的 registry 基础 factory。
+同一 datasource 下的不同消费入口需要不同消费组或 poll 参数时，调用 `SimpleKafkaRouteRegistry#createConsumerFactory`。每次调用都会创建独立实例；即使 `override` 为 `null`，也不会复用 `getConsumerFactory(...)` 返回的 registry 基础 factory。基础和派生 factory 均同时保留 Kafka 配置中的反序列化器类名，并提供独立的 factory 级反序列化器实例，可直接用于 Spring Kafka listener container。
 
 ```java
 ConsumerFactory<Object, Object> consumerFactory = registry.createConsumerFactory("event",
@@ -323,17 +323,17 @@ try {
 
 ## 测试
 
-单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
+单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试还会真实启动 Spring Kafka listener container，验证 factory 级反序列化器、消息消费和停止后销毁顺序。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
 
 ## 升级说明
 
-1.0.2 在 1.0.1 的基础上新增调用方持有的派生 `ConsumerFactory` API。已有只使用 `KafkaRouteTemplate` 或 `getConsumerFactory(...)` 的代码无需修改；需要为不同消费入口指定独立 consumer 参数时，使用 `createConsumerFactory(...)` 并在调用方生命周期结束时销毁返回 factory。自定义 `KafkaConsumerFactoryFactory` 如未实现三参数 `create`，调用新 API 会报 `KAFKA_ROUTE_015`，应实现该方法并确保每次返回独立实例。
+1.0.3 修复 `DefaultKafkaConsumerFactory` 仅保留反序列化器类名、未提供 factory 级实例的问题。已有使用 `KafkaRouteTemplate`、`getConsumerFactory(...)` 或 `createConsumerFactory(...)` 的代码和配置均无需修改；升级后，route 创建的基础和派生 ConsumerFactory 可直接交给 Spring Kafka listener container。调用方继续遵循既有生命周期边界：停止 listener container 后，再销毁 `createConsumerFactory(...)` 返回的派生 factory。
 
 ## 版本兼容
 
 | Spring Boot | Spring Kafka | Kafka Broker 矩阵 | 状态 |
 |-------------|--------------|-------------------|------|
-| 2.7.9 | 2.8.x | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster 全通过 | 已验证 |
-| 2.4.5 | 2.6.x | 单元矩阵通过 | 已验证 |
-| 2.3.12 | 2.5.x | 单元矩阵通过 | 已验证 |
-| 2.2.x | 2.3.x | 单元矩阵通过；Spring Kafka 2.3 `getTransactionIdPrefix` 为 protected，兼容层通过反射覆盖 | 已验证 |
+| 2.7.9 | 2.8.x | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster；真实 listener container 全通过 | 已验证 |
+| 2.4.5 | 2.6.x | 完整模块测试；真实 listener container 全通过 | 已验证 |
+| 2.3.12 | 2.5.x | 完整模块测试；真实 listener container 全通过 | 已验证 |
+| 2.2.x | 2.3.x | 完整模块测试；真实 listener container 全通过；`getTransactionIdPrefix` 为 protected，兼容层通过反射覆盖 | 已验证 |
