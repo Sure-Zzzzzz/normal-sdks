@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.kafka.route.test.cases;
 import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteProperties;
 import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
+import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaRouteAdminClientFactory;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaConsumerFactoryOverride;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerCapability;
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerDiagnosticResult;
@@ -66,6 +67,34 @@ public class KafkaRouteEndToEndTest {
 
     @Autowired
     private SimpleKafkaRouteRegistry registry;
+
+    @Autowired
+    private KafkaRouteAdminClientFactory adminClientFactory;
+
+    @Test
+    public void testRouteAdminClientReadsClusterWithinCallback() {
+        Integer nodeCount = adminClientFactory.withAdminClient(
+                KafkaRouteEndToEndHelper.DATASOURCE_V37,
+                adminClient -> {
+                    try {
+                        return adminClient.describeCluster().nodes()
+                                .get(KafkaRouteEndToEndHelper.ADMIN_CLIENT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                                .size();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(
+                                KafkaRouteEndToEndHelper.ADMIN_CLIENT_DESCRIBE_CLUSTER_FAILED_MESSAGE, e);
+                    } catch (Exception e) {
+                        throw new IllegalStateException(
+                                KafkaRouteEndToEndHelper.ADMIN_CLIENT_DESCRIBE_CLUSTER_FAILED_MESSAGE, e);
+                    }
+                });
+        log.info("AdminClient 回调内读取集群节点数：datasource={}，nodeCount={}",
+                KafkaRouteEndToEndHelper.DATASOURCE_V37, nodeCount);
+
+        assertTrue(nodeCount > KafkaRouteEndToEndHelper.MIN_NODE_COUNT,
+                KafkaRouteEndToEndHelper.ASSERT_ADMIN_CLIENT_NODE_COUNT_MESSAGE);
+    }
 
     @Test
     public void testRouteSendAcrossKafkaBrokerVersionsAndCluster() throws Exception {

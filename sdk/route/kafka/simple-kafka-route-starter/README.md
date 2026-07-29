@@ -13,14 +13,14 @@
 - 安全默认：保留键（bootstrap.servers、serializer、group.id 等）禁止写入 raw properties；敏感字段（JAAS、SSL 密码等）不进 toString、日志、异常 message。
 - 不污染业务上下文：不注册全局 `KafkaTemplate` / `ProducerFactory` / `ConsumerFactory` / `KafkaAdmin`。
 - Spring Kafka 全版本兼容：跨版本差异集中在 helper 层，业务路径不感知版本细节。
-- 可扩展：`KafkaRouteResolver`、`KafkaProducerFactoryFactory`、`KafkaConsumerFactoryFactory`、`KafkaRouteDiagnostics` 均可业务侧覆盖。
-- 兼容 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9。
+- 可扩展：`KafkaRouteResolver`、`KafkaProducerFactoryFactory`、`KafkaConsumerFactoryFactory`、`KafkaRouteDiagnostics`、`KafkaRouteAdminClientFactory` 均可调用方侧覆盖。
+- 兼容 Spring Boot 2.2.13.RELEASE / 2.3.12.RELEASE / 2.4.5 / 2.7.9。
 
 ## 依赖配置
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.4'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.kafka:spring-kafka'
 }
@@ -156,6 +156,22 @@ kafkaRouteTemplate.executeOn("event", kafkaTemplate -> {
     return null;
 });
 ```
+
+### 使用短生命周期 AdminClient
+
+通过 `KafkaRouteAdminClientFactory` 按 datasource key 获取仅在 callback 内有效的 `AdminClient`。所有异步 Admin 请求必须在 callback 内等待完成并转换为业务结果；callback 返回后 Route 自动关闭客户端，调用方不得缓存、返回或传递该客户端及依赖它的未完成异步对象。
+
+```java
+Integer nodeCount = adminClientFactory.withAdminClient("event", adminClient -> {
+    try {
+        return adminClient.describeCluster().nodes().get(30, TimeUnit.SECONDS).size();
+    } catch (Exception e) {
+        throw new IllegalStateException("读取 Kafka 集群信息失败", e);
+    }
+});
+```
+
+默认 Factory 不暴露合并后的 Kafka 配置，也不转移客户端关闭责任。调用方如需替换创建或关闭策略，可注册自己的 `KafkaRouteAdminClientFactory` Bean；替换后由调用方实现完整生命周期边界。
 
 ### 获取 KafkaTemplate
 
@@ -297,6 +313,7 @@ try {
 - `KafkaRouteTemplate`
 - `KafkaRoutePatternMatcher`
 - `KafkaRouteDiagnostics`
+- `KafkaRouteAdminClientFactory`
 
 模块不会注册或替换业务项目的全局 Kafka Bean：
 
@@ -320,20 +337,25 @@ try {
 | `KafkaConsumerFactoryFactory` | `DefaultKafkaConsumerFactoryFactory` | 自定义 ConsumerFactory 创建逻辑；需要支持派生 factory 时必须实现三参数 `create`，旧 SPI 调用新 API 会固定报 `KAFKA_ROUTE_015`，不会回退到共享基础 factory |
 | `KafkaRoutePropertiesValidator` | `DefaultKafkaRoutePropertiesValidator` | 自定义或增强配置校验 |
 | `KafkaRouteDiagnostics` | `DefaultKafkaRouteDiagnostics` | 自定义 Broker 诊断实现 |
+| `KafkaRouteAdminClientFactory` | `DefaultKafkaRouteAdminClientFactory` | 自定义 callback 作用域内的 AdminClient 创建与关闭策略 |
 
 ## 测试
 
-单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试还会真实启动 Spring Kafka listener container，验证 factory 级反序列化器、消息消费和停止后销毁顺序。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
+单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试还会真实启动 Spring Kafka listener container，验证 factory 级反序列化器、消息消费和停止后销毁顺序；1.0.4 额外在 callback 内执行只读 `describeCluster` 并等待结果。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
 
 ## 升级说明
+
+1.0.4 新增 `KafkaRouteAdminClientFactory`，不改变既有 `KafkaRouteTemplate`、Registry、ProducerFactory、ConsumerFactory 或 diagnostics 的使用方式。需要 AdminClient 的调用方在 callback 内完成所有请求，callback 结束后不再保留客户端或未完成异步结果；不需要该能力的调用方无需修改代码或配置。
 
 1.0.3 修复 `DefaultKafkaConsumerFactory` 仅保留反序列化器类名、未提供 factory 级实例的问题。已有使用 `KafkaRouteTemplate`、`getConsumerFactory(...)` 或 `createConsumerFactory(...)` 的代码和配置均无需修改；升级后，route 创建的基础和派生 ConsumerFactory 可直接交给 Spring Kafka listener container。调用方继续遵循既有生命周期边界：停止 listener container 后，再销毁 `createConsumerFactory(...)` 返回的派生 factory。
 
 ## 版本兼容
 
-| Spring Boot | Spring Kafka | Kafka Broker 矩阵 | 状态 |
-|-------------|--------------|-------------------|------|
-| 2.7.9 | 2.8.x | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster；真实 listener container 全通过 | 已验证 |
-| 2.4.5 | 2.6.x | 完整模块测试；真实 listener container 全通过 | 已验证 |
-| 2.3.12 | 2.5.x | 完整模块测试；真实 listener container 全通过 | 已验证 |
-| 2.2.x | 2.3.x | 完整模块测试；真实 listener container 全通过；`getTransactionIdPrefix` 为 protected，兼容层通过反射覆盖 | 已验证 |
+1.0.4 已在以下 Spring Boot 基线完成完整模块测试与 Docker Kafka 端到端验证；每个基线均覆盖 callback 内只读 `describeCluster`、多版本 broker 路由、事务、诊断、listener container 和派生 ConsumerFactory 生命周期。
+
+| Spring Boot | Spring Kafka | 构建环境 | Kafka Broker 矩阵 | 状态 |
+|-------------|--------------|----------|-------------------|------|
+| 2.7.9 | 2.8.x | Java 11 / Gradle 8.5 | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster | 已验证 |
+| 2.4.5 | 2.6.x | Java 8 / Gradle 7.6 | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster | 已验证 |
+| 2.3.12.RELEASE | 2.5.x | Java 8 / Gradle 7.6 | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster | 已验证 |
+| 2.2.13.RELEASE | 2.3.x | Java 8 / Gradle 7.6 | 1.1.0 / 2.8.1 / 3.7.1 + 3 broker cluster；`getTransactionIdPrefix` 为 protected，兼容层通过反射覆盖 | 已验证 |

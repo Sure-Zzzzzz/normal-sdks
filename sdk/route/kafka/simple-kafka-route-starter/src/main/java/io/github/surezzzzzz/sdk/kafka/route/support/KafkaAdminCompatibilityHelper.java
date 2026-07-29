@@ -27,7 +27,10 @@ public final class KafkaAdminCompatibilityHelper {
     }
 
     /**
-     * 创建短生命周期 AdminClient
+     * 创建短生命周期 AdminClient。
+     *
+     * <p>保留 Object 返回类型以兼容已发布版本的二进制方法签名；需要类型化客户端的内部调用方应在
+     * 已知创建结果的边界处转换。</p>
      *
      * @param config admin client 配置
      * @return AdminClient
@@ -48,7 +51,7 @@ public final class KafkaAdminCompatibilityHelper {
         try {
             KafkaReflectionHelper.invokeIfPresent(adminClient, SimpleKafkaRouteConstant.REFLECT_METHOD_CLOSE);
         } catch (RuntimeException e) {
-            log.warn("Kafka route 诊断 AdminClient 关闭失败", e);
+            log.warn("Kafka route AdminClient 关闭失败", e);
         }
     }
 

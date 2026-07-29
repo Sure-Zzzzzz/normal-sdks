@@ -35,6 +35,8 @@ public final class ErrorMessage {
             "自定义 Kafka ConsumerFactoryFactory 未实现 consumer 覆盖配置：datasource [%s]";
     public static final String REGISTRY_DESTROYED =
             "Kafka route registry 已关闭，不能创建派生 ConsumerFactory：datasource [%s]";
+    public static final String ADMIN_CLIENT_FACTORY_DESTROYED =
+            "Kafka route AdminClientFactory 已关闭，不能创建 AdminClient：datasource [%s]";
 
     private ErrorMessage() {
         throw new UnsupportedOperationException(SimpleKafkaRouteConstant.EXCEPTION_MESSAGE_UTILITY_CLASS);

@@ -5,10 +5,7 @@ import io.github.surezzzzzz.sdk.kafka.route.annotation.SimpleKafkaRouteComponent
 import io.github.surezzzzzz.sdk.kafka.route.constant.SimpleKafkaRouteConstant;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.DefaultKafkaRouteDiagnostics;
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
-import io.github.surezzzzzz.sdk.kafka.route.factory.DefaultKafkaConsumerFactoryFactory;
-import io.github.surezzzzzz.sdk.kafka.route.factory.DefaultKafkaProducerFactoryFactory;
-import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaConsumerFactoryFactory;
-import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaProducerFactoryFactory;
+import io.github.surezzzzzz.sdk.kafka.route.factory.*;
 import io.github.surezzzzzz.sdk.kafka.route.matcher.KafkaRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.kafka.route.registry.SimpleKafkaRouteRegistry;
 import io.github.surezzzzzz.sdk.kafka.route.resolver.DefaultKafkaRouteResolver;
@@ -67,6 +64,20 @@ public class SimpleKafkaRouteConfiguration {
                                                              KafkaProducerFactoryFactory producerFactoryFactory,
                                                              KafkaConsumerFactoryFactory consumerFactoryFactory) {
         return new SimpleKafkaRouteRegistry(properties, validator, producerFactoryFactory, consumerFactoryFactory);
+    }
+
+    /**
+     * 注册可整体替换的短生命周期 AdminClient 资源工厂。
+     *
+     * @param properties Kafka route 配置
+     * @param registry   已完成初始化的数据源注册表
+     * @return 默认 AdminClient 资源工厂
+     */
+    @Bean
+    @ConditionalOnMissingBean(KafkaRouteAdminClientFactory.class)
+    public KafkaRouteAdminClientFactory kafkaRouteAdminClientFactory(SimpleKafkaRouteProperties properties,
+                                                                     SimpleKafkaRouteRegistry registry) {
+        return new DefaultKafkaRouteAdminClientFactory(properties, registry);
     }
 
     @Bean

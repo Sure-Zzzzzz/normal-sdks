@@ -26,6 +26,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final long CONSUME_TIMEOUT_MS = 15000L;
     public static final long NO_MESSAGE_TIMEOUT_MS = 3000L;
     public static final long FEATURE_API_PROBE_TIMEOUT_MS = 5000L;
+    public static final long ADMIN_CLIENT_TIMEOUT_SECONDS = 30L;
     public static final long CONSUMER_POLL_INTERVAL_MS = 500L;
     public static final String E2E_CONSUMER_GROUP_PREFIX = "kafka-route-e2e-";
 
@@ -83,6 +84,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final String ASSERT_DATASOURCE_COUNT_MESSAGE = "E2E 必须拿到全部 datasource 诊断结果";
     public static final String ASSERT_CLUSTER_NODE_COUNT_MESSAGE = "cluster 诊断应看到至少 3 个 broker";
     public static final String ASSERT_ADMIN_API_CAPABILITY_MESSAGE = "describeCluster 成功后基础 Admin API 应视为可用: %s";
+    public static final String ASSERT_ADMIN_CLIENT_NODE_COUNT_MESSAGE = "AdminClient 回调内必须读取到 broker 节点";
     public static final String ASSERT_TRANSACTION_CAPABILITY_MESSAGE = "transactionSupported 不符合预期: %s";
     public static final String ASSERT_IDEMPOTENCE_CAPABILITY_MESSAGE = "idempotenceSupported 不符合预期: %s";
     public static final String ASSERT_ZSTD_CAPABILITY_MESSAGE = "zstdSupported 不符合预期: %s";
@@ -99,6 +101,7 @@ public final class KafkaRouteEndToEndHelper {
     public static final String FORMAT_CLUSTER_VALUE = "cluster-value-%d";
     public static final String CREATE_TOPIC_FAILED_MESSAGE = "创建 Kafka topic 失败: %s";
     public static final String CREATE_TOPIC_INTERRUPTED_MESSAGE = "创建 Kafka topic 被中断: %s";
+    public static final String ADMIN_CLIENT_DESCRIBE_CLUSTER_FAILED_MESSAGE = "AdminClient 回调内读取集群失败";
     public static final String CALLBACK_SEND_FAILED_MESSAGE = "callback 内部发送失败";
 
     public static final int EXPECTED_DATASOURCE_COUNT = 7;

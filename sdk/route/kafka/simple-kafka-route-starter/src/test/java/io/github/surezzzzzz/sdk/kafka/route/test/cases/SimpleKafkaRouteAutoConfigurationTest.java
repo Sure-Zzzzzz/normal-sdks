@@ -5,6 +5,8 @@ import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteProper
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
 import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaConsumerFactoryFactory;
 import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaProducerFactoryFactory;
+import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaRouteAdminClientCallback;
+import io.github.surezzzzzz.sdk.kafka.route.factory.KafkaRouteAdminClientFactory;
 import io.github.surezzzzzz.sdk.kafka.route.matcher.KafkaRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.kafka.route.registry.SimpleKafkaRouteRegistry;
 import io.github.surezzzzzz.sdk.kafka.route.resolver.KafkaRouteResolver;
@@ -59,7 +61,9 @@ public class SimpleKafkaRouteAutoConfigurationTest {
             assertTrue(context.containsBean("kafkaRouteTemplate"));
             assertTrue(context.containsBean("kafkaRoutePatternMatcher"));
             assertTrue(context.containsBean("kafkaRouteDiagnostics"));
+            assertTrue(context.containsBean("kafkaRouteAdminClientFactory"));
             assertNotNull(context.getBean(KafkaRouteDiagnostics.class));
+            assertNotNull(context.getBean(KafkaRouteAdminClientFactory.class));
             assertTrue(context.getBean(SimpleKafkaRouteRegistry.class).containsDatasource("default"));
             assertTrue(context.getBean(SimpleKafkaRouteRegistry.class).containsDatasource("event"));
             assertSame(context.getBean(KafkaRouteTemplate.class).kafkaTemplate("event"),
@@ -112,6 +116,8 @@ public class SimpleKafkaRouteAutoConfigurationTest {
                             context.getBean(KafkaRouteResolver.class));
                     assertSame(context.getBean("customKafkaRoutePropertiesValidator"),
                             context.getBean(KafkaRoutePropertiesValidator.class));
+                    assertSame(context.getBean("customKafkaRouteAdminClientFactory"),
+                            context.getBean(KafkaRouteAdminClientFactory.class));
                     assertTrue(context.getBean(CustomSpiConfiguration.class).validatorCalled.get());
                     assertTrue(context.getBean(SimpleKafkaRouteRegistry.class).containsDatasource("default"));
                 });
@@ -151,6 +157,22 @@ public class SimpleKafkaRouteAutoConfigurationTest {
         @Bean
         public KafkaRoutePropertiesValidator customKafkaRoutePropertiesValidator() {
             return properties -> validatorCalled.set(true);
+        }
+
+        /**
+         * 验证调用方可整体替换 AdminClient 生命周期入口。
+         *
+         * @return 自定义 AdminClient 资源工厂
+         */
+        @Bean
+        public KafkaRouteAdminClientFactory customKafkaRouteAdminClientFactory() {
+            return new KafkaRouteAdminClientFactory() {
+                @Override
+                public <T> T withAdminClient(String datasourceKey,
+                                             KafkaRouteAdminClientCallback<T> callback) {
+                    return callback.doWithAdminClient(null);
+                }
+            };
         }
     }
 }
