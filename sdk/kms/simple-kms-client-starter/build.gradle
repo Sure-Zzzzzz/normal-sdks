@@ -1,0 +1,62 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.apache.httpcomponents:httpclient'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.apache.httpcomponents:httpclient:4.5.13'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
+
+sourceSets {
+    test {
+        resources.exclude 'application-local.yml'
+    }
+}
+
+tasks.named('test') {
+    systemProperty 'kms.e2e.server.file', System.getProperty('kms.e2e.server.file', '')
+}
+
+def springBootVersion = plugins.findPlugin('org.springframework.boot')?.class?.package?.implementationVersion
+if (springBootVersion == null || springBootVersion.trim().isEmpty()) {
+    throw new GradleException("无法识别 Spring Boot Gradle 插件版本：${project.path}")
+}
+
+if (springBootVersion == '2.7.9') {
+    sourceSets {
+        e2eServer {
+            compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+            runtimeClasspath += output + compileClasspath
+        }
+    }
+
+    configurations {
+        e2eServerImplementation.extendsFrom testImplementation
+        e2eServerRuntimeOnly.extendsFrom testRuntimeOnly
+        e2eServerAnnotationProcessor.extendsFrom testAnnotationProcessor
+    }
+
+    dependencies {
+        e2eServerImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+        e2eServerImplementation 'org.springframework.boot:spring-boot-starter-security'
+        e2eServerImplementation 'io.github.sure-zzzzzz:smart-kms-server-starter:1.0.0'
+        e2eServerRuntimeOnly 'mysql:mysql-connector-java'
+    }
+
+    tasks.register('e2eServerBootJar', BootJar) {
+        group = 'verification'
+        description = '构建固定 Spring Boot 2.7.9 的 KMS E2E Server 可执行 jar'
+        dependsOn(tasks.named('e2eServerClasses'))
+        archiveFileName.set('simple-kms-client-e2e-server.jar')
+        destinationDirectory.set(rootProject.layout.buildDirectory.dir('kms-e2e'))
+        mainClass.set('io.github.surezzzzzz.sdk.kms.client.e2eserver.KmsClientE2eServerApplication')
+        classpath = sourceSets.e2eServer.runtimeClasspath
+    }
+}
