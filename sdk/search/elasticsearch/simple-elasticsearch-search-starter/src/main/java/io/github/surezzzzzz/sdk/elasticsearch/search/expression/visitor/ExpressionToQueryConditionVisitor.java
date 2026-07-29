@@ -3,10 +3,10 @@ package io.github.surezzzzzz.sdk.elasticsearch.search.expression.visitor;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.FieldType;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.QueryOperator;
 import io.github.surezzzzzz.sdk.elasticsearch.search.constant.SimpleElasticsearchSearchConstant;
-import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.MappingException;
-import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
+import io.github.surezzzzzz.sdk.elasticsearch.search.expression.TimeRangeEnd;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.MappingManager;
+import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.FieldMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.metadata.model.IndexMetadata;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryCondition;
 import io.github.surezzzzzz.sdk.expression.condition.parser.constant.*;
@@ -40,12 +40,12 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
      * 字段名映射，启动时注入，之后只读
      */
     private final Map<String, String> fieldMapping;
-    private IndexMetadata indexMetadata;
-    private boolean metadataResolved;
     private final MappingManager mappingManager;
     private final String index;
     private final TimeRangeEnd timeRangeEnd;
     private final Clock clock;
+    private IndexMetadata indexMetadata;
+    private boolean metadataResolved;
 
     public ExpressionToQueryConditionVisitor(Map<String, String> fieldMapping) {
         this(fieldMapping, null, null, TimeRangeEnd.NOW, Clock.systemDefaultZone());
@@ -61,7 +61,7 @@ public class ExpressionToQueryConditionVisitor implements ExpressionVisitor<Quer
     }
 
     public ExpressionToQueryConditionVisitor withTimeRangeContext(MappingManager manager, String requestIndex,
-                                                                   TimeRangeEnd end, ZoneId zoneId) {
+                                                                  TimeRangeEnd end, ZoneId zoneId) {
         return new ExpressionToQueryConditionVisitor(fieldMapping, manager, requestIndex, end,
                 Clock.system(zoneId == null ? ZoneId.systemDefault() : zoneId));
     }

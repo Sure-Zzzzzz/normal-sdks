@@ -28,7 +28,7 @@ public class PaginationDefaultsValidator implements QueryRequestValidator {
             request.setPagination(pagination);
             return;
         }
-        if (pagination.getSize() == null) {
+        if (!pagination.isScrollPagination() && pagination.getSize() == null) {
             pagination.setSize(properties.getQueryLimits().getDefaultSize());
         }
         if (pagination.isOffsetPagination() && pagination.getPage() == null) {

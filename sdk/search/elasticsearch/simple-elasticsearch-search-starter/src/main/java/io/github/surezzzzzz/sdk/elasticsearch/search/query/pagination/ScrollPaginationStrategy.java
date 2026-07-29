@@ -34,6 +34,16 @@ public class ScrollPaginationStrategy implements PaginationStrategy {
 
     @Override
     public void validate(QueryRequest request, PaginationInfo pagination) {
+        boolean continuation = StringUtils.hasText(pagination.getScrollId());
+        if (continuation && pagination.getSize() != null) {
+            throw new QueryException(ErrorCode.SCROLL_CONTINUATION_SIZE_NOT_ALLOWED,
+                    ErrorMessage.SCROLL_CONTINUATION_SIZE_NOT_ALLOWED);
+        }
+        if (!continuation && pagination.getSize() == null) {
+            throw new QueryException(ErrorCode.SCROLL_INITIAL_SIZE_REQUIRED,
+                    ErrorMessage.SCROLL_INITIAL_SIZE_REQUIRED);
+        }
+
         // 1. scrollTtl 必填
         if (!StringUtils.hasText(pagination.getScrollTtl())) {
             throw new QueryException(ErrorCode.SCROLL_TTL_REQUIRED, ErrorMessage.SCROLL_TTL_REQUIRED);
@@ -59,8 +69,7 @@ public class ScrollPaginationStrategy implements PaginationStrategy {
         }
 
         // 3. 第一页必须有 sort，后续翻页（带 scrollId）不需要
-        if (!StringUtils.hasText(pagination.getScrollId())
-                && (pagination.getSort() == null || pagination.getSort().isEmpty())) {
+        if (!continuation && (pagination.getSort() == null || pagination.getSort().isEmpty())) {
             throw new QueryException(ErrorCode.SCROLL_SORT_REQUIRED, ErrorMessage.SCROLL_SORT_REQUIRED);
         }
 
@@ -92,7 +101,8 @@ public class ScrollPaginationStrategy implements PaginationStrategy {
                                                       PaginationInfo pagination,
                                                       QueryRequest request) {
         SearchHit[] hits = searchResponse.getHits().getHits();
-        boolean hasMore = hits.length == pagination.getSize();
+        boolean continuation = StringUtils.hasText(pagination.getScrollId());
+        boolean hasMore = continuation ? hits.length > 0 : hits.length == pagination.getSize();
 
         QueryResponse.PaginationResult.PaginationResultBuilder builder = QueryResponse.PaginationResult.builder()
                 .type(pagination.getType())

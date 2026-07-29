@@ -364,6 +364,16 @@ public class ErrorCode {
      */
     public static final String SCROLL_COLLAPSE_NOT_SUPPORTED = "SEARCH_SCROLL_005";
 
+    /**
+     * scroll 分页首页未提供 size
+     */
+    public static final String SCROLL_INITIAL_SIZE_REQUIRED = "SEARCH_SCROLL_006";
+
+    /**
+     * scroll 分页续页携带 size
+     */
+    public static final String SCROLL_CONTINUATION_SIZE_NOT_ALLOWED = "SEARCH_SCROLL_007";
+
     private ErrorCode() {
         // 私有构造函数，防止实例化
     }

@@ -13,10 +13,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.Expression
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.ExpressionQueryRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.NLAggRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.request.NLQueryRequest;
-import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionHintsResponse;
-import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.ExpressionValidationResult;
-import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexFieldsResponse;
-import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.IndexInfoResponse;
+import io.github.surezzzzzz.sdk.elasticsearch.search.endpoint.response.*;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.NLDslTranslationException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.exception.SimpleElasticsearchSearchException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.expression.service.ExpressionService;
@@ -84,9 +81,9 @@ public class SimpleElasticsearchSearchApiEndpoint {
             log.debug("Received query request: index={}", request.getIndex());
             request.setSourceType(SourceType.QUERY_API.getCode());
             if (Boolean.TRUE.equals(request.getCountOnly())) {
-                return ResponseEntity.ok(ApiResponse.success(countExecutor.execute(request)));
+                return ResponseEntity.ok(ApiResponse.success(EndpointQueryResponse.from(countExecutor.execute(request))));
             }
-            return ResponseEntity.ok(ApiResponse.success(queryExecutor.execute(request)));
+            return ResponseEntity.ok(ApiResponse.success(EndpointQueryResponse.from(queryExecutor.execute(request))));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Query validation failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
@@ -269,7 +266,7 @@ public class SimpleElasticsearchSearchApiEndpoint {
             QueryResponse response = Boolean.TRUE.equals(request.getCountOnly())
                     ? countExecutor.execute(queryRequest)
                     : queryExecutor.execute(queryRequest);
-            return ResponseEntity.ok(ApiResponse.success(response));
+            return ResponseEntity.ok(ApiResponse.success(EndpointQueryResponse.from(response)));
         } catch (NLDslTranslationException e) {
             log.warn("NL query translation failed: nl='{}', error={}", truncate(request.getNl()), truncate(e.getMessage()));
             if (e.getMessage() != null && e.getMessage().contains("未指定索引")) {
@@ -364,10 +361,10 @@ public class SimpleElasticsearchSearchApiEndpoint {
                     .countOnly(request.getCountOnly())
                     .sourceType(SourceType.EXPRESSION_API.getCode())
                     .build();
-            return ResponseEntity.ok(ApiResponse.success(
-                    Boolean.TRUE.equals(request.getCountOnly())
-                            ? countExecutor.execute(queryRequest)
-                            : queryExecutor.execute(queryRequest)));
+            QueryResponse response = Boolean.TRUE.equals(request.getCountOnly())
+                    ? countExecutor.execute(queryRequest)
+                    : queryExecutor.execute(queryRequest);
+            return ResponseEntity.ok(ApiResponse.success(EndpointQueryResponse.from(response)));
         } catch (SimpleElasticsearchSearchException e) {
             log.warn("Expression query failed: index={}, error={}", request.getIndex(), e.getMessage());
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));

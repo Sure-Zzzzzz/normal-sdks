@@ -30,8 +30,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -81,10 +80,6 @@ class SearchEndToEndTest {
     private static final String SECONDARY_INDEX = "test_index_b.secondary";  // 路由到 secondary 数据源的索引
     private static final String DEFAULT_DATASOURCE = "primary";  // 从配置文件中获取的默认数据源
     private static final String SECONDARY_DATASOURCE = "secondary";  // 第二个数据源
-    /**
-     * scroll 链式翻页共享的 scrollId（static 保证跨测试方法实例共享）
-     */
-    private static String scrollId;
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -4826,11 +4821,42 @@ class SearchEndToEndTest {
 
     @Test
     @Order(240)
-    @DisplayName("17.1 scroll 第一页 - 返回 scrollId，hasMore=true")
+    @DisplayName("17.1 scroll 首页不足一页 - 自动清除上下文")
     void testScrollFirstPage() throws Exception {
-        log.info("========== 测试：scroll 第一页请求，返回 scrollId ==========");
+        log.info("========== 测试：scroll 首页不足一页自动结束 ==========");
 
         QueryRequest request = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页不足一页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(5))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist())
+                .andExpect(jsonPath("$.data.total").value(5));
+    }
+
+    @Test
+    @Order(241)
+    @DisplayName("17.2 scroll 续页不传 size - 完整遍历至终止空页")
+    void testScrollContinuationWithoutSize() throws Exception {
+        log.info("========== 测试：scroll 续页不传 size，完整遍历 ==========");
+
+        QueryRequest firstRequest = QueryRequest.builder()
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
@@ -4840,37 +4866,101 @@ class SearchEndToEndTest {
                                 PaginationInfo.SortField.builder().field("amount").order("asc").build()))
                         .build())
                 .build();
-
-        String response = mockMvc.perform(post("/api/query")
+        String firstResponse = mockMvc.perform(post("/api/query")
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
-                        .content(toJson(request)))
+                        .content(toJson(firstRequest)))
+                .andDo(result -> log.info("scroll 首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items").isArray())
                 .andExpect(jsonPath("$.data.items.length()").value(2))
-                .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
-                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
-                .andExpect(jsonPath("$.data.pagination.scrollId").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.emptyString())))
-                .andExpect(jsonPath("$.data.pagination.nextSearchAfter").doesNotExist())
-                .andExpect(jsonPath("$.data.pagination.pitId").doesNotExist())
-                .andExpect(jsonPath("$.data.total").value(5))
-                .andDo(result -> log.info("✓ scroll 第一页成功"))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
                 .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
 
-        scrollId = objectMapper.readTree(response)
-                .path("data").path("pagination").path("scrollId").asText();
-        log.info("scrollId: {}", scrollId);
-        assertFalse(scrollId.isEmpty(), "scrollId 不应为空");
+        com.fasterxml.jackson.databind.JsonNode firstNode = objectMapper.readTree(firstResponse);
+        Set<String> allIds = new HashSet<>();
+        for (com.fasterxml.jackson.databind.JsonNode item : firstNode.path("data").path("items")) {
+            assertTrue(allIds.add(item.path("_id").asText()), "首页记录不得重复");
+        }
+        String currentScrollId = firstNode.path("data").path("pagination").path("scrollId").asText();
+        int pageCount = 1;
+
+        while (true) {
+            QueryRequest continuationRequest = QueryRequest.builder()
+                    .index(ORDER_INDEX)
+                    .pagination(PaginationInfo.builder()
+                            .type("scroll")
+                            .scrollTtl("2m")
+                            .scrollId(currentScrollId)
+                            .build())
+                    .build();
+            String continuationResponse = mockMvc.perform(post("/api/query")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .characterEncoding("UTF-8")
+                            .content(toJson(continuationRequest)))
+                    .andDo(result -> log.info("scroll 续页响应: status={}, body={}",
+                            result.getResponse().getStatus(),
+                            result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(continuationResponse);
+            com.fasterxml.jackson.databind.JsonNode items = root.path("data").path("items");
+            boolean hasMore = root.path("data").path("pagination").path("hasMore").asBoolean();
+            pageCount++;
+            log.info("第 {} 页：{} 条，hasMore={}", pageCount, items.size(), hasMore);
+            assertEquals(items.size(), root.path("data").path("size").asInt(), "续页响应 size 必须等于实际返回条数");
+
+            for (com.fasterxml.jackson.databind.JsonNode item : items) {
+                assertTrue(allIds.add(item.path("_id").asText()), "续页记录不得重复");
+            }
+            if (!hasMore) {
+                assertTrue(items.isEmpty(), "终止页必须为空列表");
+                assertTrue(root.path("data").path("size").asInt() == 0, "终止页 size 必须为 0");
+                assertTrue(root.path("data").path("pagination").path("scrollId").isMissingNode(), "终止页不得返回 scrollId");
+                break;
+            }
+            currentScrollId = root.path("data").path("pagination").path("scrollId").asText();
+            assertFalse(currentScrollId.isEmpty(), "非终止续页必须返回 scrollId");
+        }
+
+        log.info("遍历完成：共 {} 页，收集 {} 条记录", pageCount, allIds.size());
+        assertTrue(allIds.size() == 5, "应遍历到全部 5 条记录");
+        assertTrue(pageCount == 4, "应包含三页非空数据和一页终止空数据");
     }
 
     @Test
-    @Order(241)
-    @DisplayName("17.2 scroll 后续翻页 - 带 scrollId 请求下一页")
-    void testScrollNextPage() throws Exception {
-        log.info("========== 测试：scroll 后续翻页 ==========");
+    @Order(242)
+    @DisplayName("17.3 scroll 续页传 size - 返回 400 且不消费游标")
+    void testScrollContinuationSizeNotAllowed() throws Exception {
+        log.info("========== 测试：scroll 续页传 size 返回 400 ==========");
 
-        QueryRequest request = QueryRequest.builder()
+        QueryRequest firstRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(5)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstRequest)))
+                .andDo(result -> log.info("scroll 续页 size 校验首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        QueryRequest invalidRequest = QueryRequest.builder()
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
@@ -4879,40 +4969,121 @@ class SearchEndToEndTest {
                         .scrollId(scrollId)
                         .build())
                 .build();
-
-        String response = mockMvc.perform(post("/api/query")
+        mockMvc.perform(post("/api/query")
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
-                        .content(toJson(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items").isArray())
-                .andExpect(jsonPath("$.data.items.length()").value(2))
-                .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
-                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
-                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
-                .andExpect(jsonPath("$.data.pagination.scrollId").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.emptyString())))
-                .andDo(result -> log.info("✓ scroll 第二页成功"))
-                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                        .content(toJson(invalidRequest)))
+                .andDo(result -> log.info("scroll 续页携带 size 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("续页不支持 size")));
 
-        scrollId = objectMapper.readTree(response)
-                .path("data").path("pagination").path("scrollId").asText();
-        log.info("新 scrollId: {}", scrollId);
+        QueryRequest terminalRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(terminalRequest)))
+                .andDo(result -> log.info("scroll 续页 size 校验终止响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
     }
 
     @Test
-    @Order(242)
-    @DisplayName("17.3 scroll 最后一页 - hasMore=false，scrollId 不再返回，上下文自动清除")
-    void testScrollLastPage() throws Exception {
-        log.info("========== 测试：scroll 最后一页，自动清除上下文 ==========");
+    @Order(261)
+    @DisplayName("17.3.1 scroll 续页传超大 size 与非法 TTL - 返回专属 400 且不消费游标")
+    void testScrollContinuationOversizedSizeNotAllowed() throws Exception {
+        log.info("========== 测试：scroll 续页传超大 size 与非法 TTL 返回专属 400 ==========");
 
-        // test_order 共 5 条，前两页各 2 条，第三页剩余 1 条
+        QueryRequest firstRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(5)
+                        .scrollTtl("2m")
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
+                        .build())
+                .build();
+        String firstResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(firstRequest)))
+                .andDo(result -> log.info("scroll 超大 size 校验首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        QueryRequest invalidRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(10001)
+                        .scrollTtl("invalid-ttl")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(invalidRequest)))
+                .andDo(result -> log.info("scroll 续页携带超大 size 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("续页不支持 size")));
+
+        QueryRequest terminalRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(terminalRequest)))
+                .andDo(result -> log.info("scroll 超大 size 校验终止响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
+    }
+
+    @Test
+    @Order(243)
+    @DisplayName("17.4 scroll 首页不传 size - 返回 400")
+    void testScrollInitialSizeRequired() throws Exception {
+        log.info("========== 测试：scroll 首页不传 size 返回 400 ==========");
+
         QueryRequest request = QueryRequest.builder()
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
-                        .size(2)
                         .scrollTtl("2m")
-                        .scrollId(scrollId)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()))
                         .build())
                 .build();
 
@@ -4920,18 +5091,16 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items").isArray())
-                .andExpect(jsonPath("$.data.items.length()").value(1))
-                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
-                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist())
-                .andExpect(jsonPath("$.data.total").value(5))
-                .andDo(result -> log.info("✓ scroll 最后一页成功，上下文已自动清除"));
+                .andDo(result -> log.info("scroll 首页缺少 size 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("第一页必须提供 size")));
     }
 
     @Test
-    @Order(243)
-    @DisplayName("17.4 scroll 不传 scrollTtl - 返回 400")
+    @Order(244)
+    @DisplayName("17.5 scroll 不传 scrollTtl - 返回 400")
     void testScrollTtlRequired() throws Exception {
         log.info("========== 测试：scroll 不传 scrollTtl → 400 ==========");
 
@@ -4949,14 +5118,16 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页缺少 scrollTtl 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")))
-                .andDo(result -> log.info("✓ 缺少 scrollTtl 正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")));
     }
 
     @Test
-    @Order(244)
-    @DisplayName("17.5 scroll scrollTtl 超过服务端上限 - 返回 400")
+    @Order(245)
+    @DisplayName("17.6 scroll scrollTtl 超过服务端上限 - 返回 400")
     void testScrollTtlExceeded() throws Exception {
         log.info("========== 测试：scrollTtl 超过 max-ttl → 400 ==========");
 
@@ -4975,15 +5146,17 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页 scrollTtl 超限响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("1h")))
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("5m")))
-                .andDo(result -> log.info("✓ scrollTtl 超限正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("5m")));
     }
 
     @Test
-    @Order(245)
-    @DisplayName("17.6 scroll 第一页不传 sort - 返回 400")
+    @Order(246)
+    @DisplayName("17.7 scroll 第一页不传 sort - 返回 400")
     void testScrollSortRequired() throws Exception {
         log.info("========== 测试：scroll 第一页不传 sort → 400 ==========");
 
@@ -5000,14 +5173,16 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页缺少 sort 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("排序")))
-                .andDo(result -> log.info("✓ 缺少 sort 正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("排序")));
     }
 
     @Test
-    @Order(246)
-    @DisplayName("17.7 scroll + collapse 同时使用 - 返回 400")
+    @Order(247)
+    @DisplayName("17.8 scroll + collapse 同时使用 - 返回 400")
     void testScrollCollapseNotSupported() throws Exception {
         log.info("========== 测试：scroll + collapse → 400 ==========");
 
@@ -5027,14 +5202,16 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll + collapse 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("collapse")))
-                .andDo(result -> log.info("✓ scroll + collapse 正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("collapse")));
     }
 
     @Test
-    @Order(247)
-    @DisplayName("17.8 scroll scrollTtl 格式不合法 - 返回 400")
+    @Order(248)
+    @DisplayName("17.9 scroll scrollTtl 格式不合法 - 返回 400")
     void testScrollTtlInvalidFormat() throws Exception {
         log.info("========== 测试：scrollTtl 格式不合法 → 400 ==========");
 
@@ -5053,14 +5230,16 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页非法 scrollTtl 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("abc")))
-                .andDo(result -> log.info("✓ scrollTtl 格式非法正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("abc")));
     }
 
     @Test
-    @Order(248)
-    @DisplayName("17.9 scroll 全量遍历一致性 - 数据不丢不重")
+    @Order(281)
+    @DisplayName("17.10 scroll 全量遍历一致性 - 数据不丢不重")
     void testScrollFullTraversalConsistency() throws Exception {
         log.info("========== 测试：scroll 全量遍历一致性 ==========");
 
@@ -5071,12 +5250,12 @@ class SearchEndToEndTest {
         while (true) {
             PaginationInfo.PaginationInfoBuilder paginationBuilder = PaginationInfo.builder()
                     .type("scroll")
-                    .size(2)
                     .scrollTtl("2m");
 
             if (currentScrollId == null) {
-                paginationBuilder.sort(Collections.singletonList(
-                        PaginationInfo.SortField.builder().field("amount").order("asc").build()));
+                paginationBuilder.size(2)
+                        .sort(Collections.singletonList(
+                                PaginationInfo.SortField.builder().field("amount").order("asc").build()));
             } else {
                 paginationBuilder.scrollId(currentScrollId);
             }
@@ -5090,6 +5269,9 @@ class SearchEndToEndTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .characterEncoding("UTF-8")
                             .content(toJson(request)))
+                    .andDo(result -> log.info("scroll 翻页响应: status={}, body={}",
+                            result.getResponse().getStatus(),
+                            result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                     .andExpect(status().isOk())
                     .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
 
@@ -5098,20 +5280,27 @@ class SearchEndToEndTest {
             boolean hasMore = root.path("data").path("pagination").path("hasMore").asBoolean();
 
             for (com.fasterxml.jackson.databind.JsonNode item : items) {
-                allIds.add(item.path("_id").asText());
+                assertTrue(allIds.add(item.path("_id").asText()), "scroll 翻页不得重复记录");
             }
             pageCount++;
             log.info("第 {} 页：{} 条，hasMore={}", pageCount, items.size(), hasMore);
+            if (currentScrollId != null) {
+                assertEquals(items.size(), root.path("data").path("size").asInt(), "续页响应 size 必须等于实际返回条数");
+            }
 
             if (!hasMore) {
+                assertTrue(items.isEmpty(), "终止页必须为空列表");
+                assertTrue(root.path("data").path("size").asInt() == 0, "终止页 size 必须为 0");
+                assertTrue(root.path("data").path("pagination").path("scrollId").isMissingNode(), "终止页不得返回 scrollId");
                 break;
             }
             currentScrollId = root.path("data").path("pagination").path("scrollId").asText();
+            assertFalse(currentScrollId.isEmpty(), "非终止页必须返回 scrollId");
         }
 
         log.info("遍历完成：共 {} 页，收集 {} 个 id", pageCount, allIds.size());
         assertTrue(allIds.size() == 5, "应遍历到全部 5 条数据，实际: " + allIds.size());
-        assertTrue(pageCount == 3, "应分 3 页遍历完，实际: " + pageCount);
+        assertTrue(pageCount == 4, "应包含三页非空数据和一页终止空数据，实际: " + pageCount);
         // 验证 5 条数据的 _id 完整（1~5）
         for (int i = 1; i <= 5; i++) {
             assertTrue(allIds.contains(String.valueOf(i)), "缺少 _id=" + i);
@@ -5125,12 +5314,10 @@ class SearchEndToEndTest {
         log.info("========== 测试：ES 6.x 环境下 scroll 翻页 ==========");
 
         ClusterInfo clusterInfo = registry.getClusterInfo(SECONDARY_DATASOURCE);
-        Assumptions.assumeTrue(
-                clusterInfo != null
+        assertTrue(clusterInfo != null
                         && clusterInfo.getEffectiveVersion() != null
                         && clusterInfo.getEffectiveVersion().getMajor() == 6,
-                "secondary 数据源不是 ES 6.x，跳过此测试"
-        );
+                "secondary 数据源必须为 ES 6.x，实际版本不满足兼容性测试前提");
 
         QueryRequest request = QueryRequest.builder()
                 .index(SECONDARY_INDEX)
@@ -5143,14 +5330,85 @@ class SearchEndToEndTest {
                         .build())
                 .build();
 
-        mockMvc.perform(post("/api/query")
+        String firstResponse = mockMvc.perform(post("/api/query")
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("ES 6.x scroll 首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
-                .andDo(result -> log.info("✓ ES 6.x scroll 第一页成功"));
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        QueryRequest continuationRequest = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(scrollId)
+                        .build())
+                .build();
+        String secondResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(continuationRequest)))
+                .andDo(result -> log.info("ES 6.x scroll 第二页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.size").value(2))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String secondScrollId = objectMapper.readTree(secondResponse).path("data").path("pagination").path("scrollId").asText();
+
+        QueryRequest thirdRequest = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(secondScrollId)
+                        .build())
+                .build();
+        String thirdResponse = mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(thirdRequest)))
+                .andDo(result -> log.info("ES 6.x scroll 第三页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.size").value(1))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String thirdScrollId = objectMapper.readTree(thirdResponse).path("data").path("pagination").path("scrollId").asText();
+
+        QueryRequest terminalRequest = QueryRequest.builder()
+                .index(SECONDARY_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(thirdScrollId)
+                        .build())
+                .build();
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(terminalRequest)))
+                .andDo(result -> log.info("ES 6.x scroll 终止页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
     }
 
     @Test
@@ -5164,7 +5422,7 @@ class SearchEndToEndTest {
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
-                        .size(2)
+                        .size(5)
                         .scrollTtl("2m")
                         .sort(Collections.singletonList(
                                 PaginationInfo.SortField.builder().field("amount").order("asc").build()))
@@ -5175,7 +5433,12 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(firstPage)))
+                .andDo(result -> log.info("scroll 续页 TTL 校验首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
                 .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
 
         String sid = objectMapper.readTree(firstResponse)
@@ -5186,7 +5449,6 @@ class SearchEndToEndTest {
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
-                        .size(2)
                         .scrollId(sid)
                         // 故意不传 scrollTtl
                         .build())
@@ -5196,9 +5458,32 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(nextPage)))
+                .andDo(result -> log.info("scroll 续页缺少 scrollTtl 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")))
-                .andDo(result -> log.info("✓ 后续翻页缺少 scrollTtl 正确报错"));
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("scrollTtl")));
+
+        QueryRequest terminalRequest = QueryRequest.builder()
+                .index(ORDER_INDEX)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .scrollTtl("2m")
+                        .scrollId(sid)
+                        .build())
+                .build();
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(terminalRequest)))
+                .andDo(result -> log.info("scroll 续页 TTL 校验终止响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
     }
 
     @Test
@@ -5212,7 +5497,7 @@ class SearchEndToEndTest {
                 .index(ORDER_INDEX)
                 .pagination(PaginationInfo.builder()
                         .type("scroll")
-                        .size(2)
+                        .size(10)
                         .scrollTtl("5m")
                         .sort(Collections.singletonList(
                                 PaginationInfo.SortField.builder().field("amount").order("asc").build()))
@@ -5223,16 +5508,127 @@ class SearchEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(toJson(request)))
+                .andDo(result -> log.info("scroll 首页最大 scrollTtl 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.pagination.scrollId").isString())
-                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
-                .andDo(result -> log.info("✓ scrollTtl=maxTtl 边界值通过"));
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false));
     }
 
     // ==================== v1.6.5 表达式三条件 AND 扁平化端到端测试 ====================
 
     @Test
     @Order(260)
+    @DisplayName("v1.7.2 表达式 scroll 续页不传 size - 共享 Scroll 链路正常翻页")
+    void testExpressionScrollContinuationWithoutSize() throws Exception {
+        log.info("========== 测试：表达式 scroll 续页不传 size ==========");
+
+        String firstBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"2m\","
+                + "\"sort\":[{\"field\":\"age\",\"order\":\"asc\"}]}}";
+        String firstResponse = mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(firstBody))
+                .andDo(result -> log.info("表达式 scroll 首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        String continuationBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"2m\","
+                + "\"scrollId\":\"" + scrollId + "\"}}";
+        String secondResponse = mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(continuationBody))
+                .andDo(result -> log.info("表达式 scroll 续页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.size").value(2))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String secondScrollId = objectMapper.readTree(secondResponse).path("data").path("pagination").path("scrollId").asText();
+
+        String terminalBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"2m\","
+                + "\"scrollId\":\"" + secondScrollId + "\"}}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(terminalBody))
+                .andDo(result -> log.info("表达式 scroll 终止页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
+    }
+
+    @Test
+    @Order(280)
+    @DisplayName("v1.7.2 表达式 scroll 续页携带 size - 返回 400")
+    void testExpressionScrollContinuationSizeNotAllowed() throws Exception {
+        log.info("========== 测试：表达式 scroll 续页携带 size 返回 400 ==========");
+
+        String firstBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"size\":4,\"scrollTtl\":\"2m\","
+                + "\"sort\":[{\"field\":\"age\",\"order\":\"asc\"}]}}";
+        String firstResponse = mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(firstBody))
+                .andDo(result -> log.info("表达式 scroll 续页 size 校验首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        String invalidBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"2m\","
+                + "\"scrollId\":\"" + scrollId + "\"}}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(invalidBody))
+                .andDo(result -> log.info("表达式 scroll 续页携带 size 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("续页不支持 size")));
+
+        String terminalBody = "{\"index\":\"" + NL_USER_INDEX + "\",\"expression\":\"orderId EXISTS\","
+                + "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"2m\","
+                + "\"scrollId\":\"" + scrollId + "\"}}";
+        mockMvc.perform(post("/api/query/expression")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(terminalBody))
+                .andDo(result -> log.info("表达式 scroll 续页 size 校验终止响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
+    }
+
+    @Test
+    @Order(282)
     @DisplayName("v1.6.5 表达式三条件 AND - 扁平 DSL 查询结果正确")
     void testExpressionThreeAndFlatQuery() throws Exception {
         log.info("========== 测试：表达式三条件 AND 扁平化端到端 ==========");
@@ -5256,7 +5652,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(261)
+    @Order(283)
     @DisplayName("v1.6.5 表达式三条件 OR - 扁平 DSL 查询结果正确")
     void testExpressionThreeOrFlatQuery() throws Exception {
         log.info("========== 测试：表达式三条件 OR 扁平化端到端 ==========");
@@ -5396,6 +5792,36 @@ class SearchEndToEndTest {
 
     @Test
     @Order(304)
+    @DisplayName("v1.7.2 countOnly=true + scroll - 分页字段静默忽略")
+    void testCountOnlyWithScroll() throws Exception {
+        log.info("========== 测试：countOnly=true + scroll 分页字段静默忽略 ==========");
+
+        QueryRequest request = QueryRequest.builder()
+                .index("test_user")
+                .countOnly(true)
+                .pagination(PaginationInfo.builder()
+                        .type("scroll")
+                        .size(2)
+                        .scrollTtl("1m")
+                        .scrollId("dummy-scroll-id")
+                        .build())
+                .build();
+
+        mockMvc.perform(post("/api/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(toJson(request)))
+                .andDo(result -> log.info("countOnly + scroll 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(5))
+                .andExpect(jsonPath("$.data.items").doesNotExist())
+                .andExpect(jsonPath("$.data.pagination").doesNotExist());
+    }
+
+    @Test
+    @Order(305)
     @DisplayName("v1.6.6 countOnly=true - /query/expression 透传")
     void testCountOnlyExpression() throws Exception {
         log.info("========== 测试：countOnly=true 表达式查询 ==========");
@@ -5414,7 +5840,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(305)
+    @Order(306)
     @DisplayName("v1.6.6 countOnly=false - 走正常查询路径")
     void testCountOnlyFalse() throws Exception {
         log.info("========== 测试：countOnly=false 走正常查询 ==========");
@@ -5442,7 +5868,7 @@ class SearchEndToEndTest {
     }
 
     @Test
-    @Order(306)
+    @Order(310)
     @DisplayName("v1.6.6 countOnly=null - 走正常查询路径")
     void testCountOnlyNull() throws Exception {
         log.info("========== 测试：countOnly=null 走正常查询 ==========");

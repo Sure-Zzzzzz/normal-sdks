@@ -284,7 +284,6 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
 
         PaginationInfo pagination = request.getPagination();
         builder.page(pagination.getPage());
-        builder.size(pagination.getSize());
 
         List<Map<String, Object>> items = new ArrayList<>();
         for (SearchHit hit : searchResponse.getHits().getHits()) {
@@ -297,6 +296,11 @@ public class QueryExecutor extends AbstractExecutor<QueryRequest, QueryResponse>
             items.add(source);
         }
         builder.items(items);
+        if (pagination.isScrollPagination() && StringUtils.hasText(pagination.getScrollId())) {
+            builder.size(items.size());
+        } else {
+            builder.size(pagination.getSize());
+        }
 
         PaginationStrategy strategy = paginationStrategyRegistry.resolve(pagination);
         QueryResponse.PaginationResult paginationResult = strategy.buildResult(searchResponse, pagination, request);

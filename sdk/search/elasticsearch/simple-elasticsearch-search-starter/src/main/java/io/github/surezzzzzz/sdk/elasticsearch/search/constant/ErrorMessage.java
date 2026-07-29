@@ -369,6 +369,16 @@ public class ErrorMessage {
      */
     public static final String SCROLL_COLLAPSE_NOT_SUPPORTED = "scroll 分页不支持与 collapse（字段折叠）同时使用";
 
+    /**
+     * scroll 首页未提供 size
+     */
+    public static final String SCROLL_INITIAL_SIZE_REQUIRED = "scroll 分页第一页必须提供 size";
+
+    /**
+     * scroll 续页携带 size
+     */
+    public static final String SCROLL_CONTINUATION_SIZE_NOT_ALLOWED = "scroll 分页续页不支持 size，请仅传 scrollId 和 scrollTtl";
+
     // ========== 自然语言相关 ==========
 
     /**

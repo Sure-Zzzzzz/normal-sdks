@@ -49,6 +49,7 @@
 | + `_id` 元字段查询 / 通配符混合 mapping 查询兼容 / totalHits 日志修复 | **1.6.10** | 1.1.2 | Bug Fix：支持 `_id` eq/in/ne/not_in，修复 keyword/text.keyword 混合 mapping 查询漏数与 ES 7 totalHits 正常路径 warn |
 | + route 1.2.0 适配 / 请求具体索引匹配通配符配置 | **1.7.0** | 1.2.0 | 请求 `test_wildcard--2026.07.09` 可匹配配置 `test_wildcard--*`，alias 仍只精确匹配 |
 | + LIKE wildcard 语义 / 表达式时间范围修复 | **1.7.1** | 1.2.0 | LIKE 对 text+keyword 自动选择 keyword-compatible 路径；纯 text 保留 wildcard；时间范围补集、LONG epoch seconds、`timeRangeEnd` / IANA `timeZone` |
+| + 原生 Scroll 续页无截断遍历 | **1.7.2** | 1.2.0 | 续页禁止传 `size`，非空续页持续返回游标，终止空页才结束遍历 |
 
 ### route-starter 各版本能力
 
@@ -197,14 +198,14 @@ POST /api/query
 |------|------|
 | `type` | `offset` / `search_after` / `scroll` |
 | `page` | 页码（offset 模式） |
-| `size` | 每页数量 |
-| `sort` | 排序字段列表 |
+| `size` | 每页数量；scroll 仅首页必填，续页不得传 |
+| `sort` | 排序字段列表；scroll 仅首页必填 |
 | `searchAfter` | 上一页游标（search_after 模式） |
 | `searchAfterMode` | `tiebreaker`（默认）/ `pit` / `none` |
 | `pitKeepAlive` | PIT 保活时间（pit 模式，如 `1m`） |
 | `pitId` | PIT ID（pit 模式，首页不传） |
 | `scrollTtl` | scroll 保活时间（scroll 模式必填，如 `2m`） |
-| `scrollId` | scroll ID（scroll 模式，首页不传） |
+| `scrollId` | scroll ID（scroll 模式，首页不传；续页必传） |
 
 ---
 
@@ -354,11 +355,11 @@ POST /api/query/nl
 POST /api/query/nl
 {
   "dataSource": "test_user",
-  "pagination": {"type": "scroll", "size": 2, "scrollTtl": "1m", "scrollId": "FGluY2x1ZGVfY29udGV4dF91dWlk..."}
+  "pagination": {"type": "scroll", "scrollTtl": "1m", "scrollId": "FGluY2x1ZGVfY29udGV4dF91dWlk..."}
 }
 ```
 
-响应格式与 `/api/query` 完全一致。
+响应格式与 `/api/query` 完全一致。续页仅传 `dataSource`、`scrollId`、`scrollTtl`；`size` 仅属于首页，续页显式携带会返回 400。
 
 ---
 
@@ -1302,7 +1303,7 @@ key 为传入的原始值，value 为百分位排名。表示约 48% 的订单�
 ```json
 POST /api/query
 {
-  "index": "order",
+  "index": "test_order",
   "pagination": {
     "type": "scroll",
     "size": 500,
@@ -1333,21 +1334,20 @@ POST /api/query
 ```json
 POST /api/query
 {
-  "index": "order",
+  "index": "test_order",
   "pagination": {
     "type": "scroll",
-    "size": 500,
     "scrollTtl": "2m",
     "scrollId": "DXF1ZXJ5QW..."
   }
 }
 ```
 
-`hasMore: false` 时 SDK 自动清除 scroll 上下文，无需手动操作。
+续页只携带 `scrollId` 和 `scrollTtl`，不得传 `size`；显式传入会返回 400。续页返回非空 `items` 时始终继续返回 `scrollId`；最后一批非空数据后需再请求一次，得到 `items=[]`、`size=0`、`hasMore=false` 的终止页，SDK 随即自动清除 Scroll 上下文。
 
 **注意事项：**
 - `scrollTtl` 必填，表示两次请求间的最大空闲时间，每次请求自动续期
-- 第一页必须传 `sort`，后续翻页不需要
+- 第一页必须传 `size` 和 `sort`，后续翻页不需要且不得传 `size`
 - 不支持与 `collapse` 同时使用
 - 不支持跳页，只能顺序翻页
 - 服务端可通过 `scroll.max-ttl` 限制最大保活时间（默认 5m）
@@ -1384,7 +1384,7 @@ POST /api/query/nl
 POST /api/query/nl
 {
   "dataSource": "test_user",
-  "pagination": {"type": "scroll", "size": 500, "scrollTtl": "2m", "scrollId": "FGluY2x1ZGVfY29udGV4dF91dWlk..."}
+  "pagination": {"type": "scroll", "scrollTtl": "2m", "scrollId": "FGluY2x1ZGVfY29udGV4dF91dWlk..."}
 }
 ```
 

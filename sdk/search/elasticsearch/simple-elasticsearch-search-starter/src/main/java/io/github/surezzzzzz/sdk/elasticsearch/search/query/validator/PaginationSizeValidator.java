@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.search.exception.QueryException;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.PaginationInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.search.query.model.QueryRequest;
 import org.springframework.core.annotation.Order;
+import org.springframework.util.StringUtils;
 
 /**
  * 分页 size 上限校验
@@ -21,7 +22,9 @@ public class PaginationSizeValidator implements QueryRequestValidator {
     @Override
     public void validate(QueryRequest request, SimpleElasticsearchSearchProperties properties) {
         PaginationInfo pagination = request.getPagination();
-        if (pagination.getSize() > properties.getQueryLimits().getMaxSize()) {
+        if (pagination.getSize() != null
+                && !(pagination.isScrollPagination() && StringUtils.hasText(pagination.getScrollId()))
+                && pagination.getSize() > properties.getQueryLimits().getMaxSize()) {
             throw new QueryException(ErrorCode.QUERY_SIZE_EXCEEDED,
                     String.format(ErrorMessage.QUERY_SIZE_EXCEEDED, properties.getQueryLimits().getMaxSize()));
         }

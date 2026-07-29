@@ -540,7 +540,7 @@ class NLQueryEndToEndTest {
         log.info("========== NL 查询：pagination 覆盖（scroll 首页） ==========");
         String body = "{" +
                 "\"nl\":\"查询test_user索引，按年龄升序\"," +
-                "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"1m\"," +
+                "\"pagination\":{\"type\":\"scroll\",\"size\":5,\"scrollTtl\":\"1m\"," +
                 "\"sort\":[{\"field\":\"age\",\"order\":\"asc\"}]}" +
                 "}";
         log.info("请求: POST /api/query/nl  body={}", body);
@@ -551,7 +551,7 @@ class NLQueryEndToEndTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items").isArray())
-                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items.length()").value(5))
                 .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
                 .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
@@ -566,7 +566,7 @@ class NLQueryEndToEndTest {
                     log.info("========== NL 查询：scroll 续页（nl 为空，dataSource 必填） ==========");
                     String continuationBody = "{" +
                             "\"dataSource\":\"test_user\"," +
-                            "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"1m\"," +
+                            "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"1m\"," +
                             "\"scrollId\":\"" + scrollId + "\"}" +
                             "}";
                     log.info("请求: POST /api/query/nl  body={}", continuationBody);
@@ -577,9 +577,12 @@ class NLQueryEndToEndTest {
                                     .content(continuationBody))
                             .andExpect(status().isOk())
                             .andExpect(jsonPath("$.data.items").isArray())
-                            .andExpect(jsonPath("$.data.items.length()").value(2))
+                            .andExpect(jsonPath("$.data.items.length()").value(0))
+                            .andExpect(jsonPath("$.data.size").value(0))
                             .andExpect(jsonPath("$.data.pagination.type").value("scroll"))
-                            .andDo(r -> log.info("续页响应: status={}, body={}",
+                            .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                            .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist())
+                            .andDo(r -> log.info("终止续页响应: status={}, body={}",
                                     r.getResponse().getStatus(),
                                     r.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)));
                 });
@@ -617,7 +620,7 @@ class NLQueryEndToEndTest {
         log.info("========== NL 查询错误：scroll 续页缺少 dataSource ==========");
         // scroll 续页时 dataSource 必填
         String body = "{" +
-                "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"1m\"," +
+                "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"1m\"," +
                 "\"scrollId\":\"some_scroll_id\"}" +
                 "}";
         log.info("请求: POST /api/query/nl  body={}", body);
@@ -1118,15 +1121,19 @@ class NLQueryEndToEndTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .characterEncoding("UTF-8")
                         .content(firstBody))
+                .andDo(result -> log.info("NL scroll 首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items.length()").value(2))
                 .andExpect(jsonPath("$.data.pagination.hasMore").value(true))
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
                 .andReturn();
 
         JsonNode firstNode = objectMapper.readTree(firstResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
         String scrollId = firstNode.path("data").path("pagination").path("scrollId").asText();
         for (JsonNode item : firstNode.path("data").path("items")) {
-            allIds.add(item.path("_id").asText());
+            org.junit.jupiter.api.Assertions.assertTrue(allIds.add(item.path("_id").asText()), "scroll 首页不得重复记录");
         }
         pageCount++;
 
@@ -1134,34 +1141,93 @@ class NLQueryEndToEndTest {
         while (scrollId != null && !scrollId.isEmpty()) {
             String contBody = "{" +
                     "\"dataSource\":\"test_user\"," +
-                    "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"1m\"," +
+                    "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"1m\"," +
                     "\"scrollId\":\"" + scrollId + "\"}" +
                     "}";
             MvcResult contResult = mockMvc.perform(post("/api/query/nl")
                             .contentType(MediaType.APPLICATION_JSON)
                             .characterEncoding("UTF-8")
                             .content(contBody))
+                    .andDo(result -> log.info("NL scroll 续页响应: status={}, body={}",
+                            result.getResponse().getStatus(),
+                            result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
                     .andExpect(status().isOk())
                     .andReturn();
 
             JsonNode contNode = objectMapper.readTree(contResult.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
             JsonNode items = contNode.path("data").path("items");
             boolean hasMore = contNode.path("data").path("pagination").path("hasMore").asBoolean();
+            org.junit.jupiter.api.Assertions.assertEquals(items.size(), contNode.path("data").path("size").asInt(),
+                    "续页响应 size 必须等于实际返回条数");
 
             for (JsonNode item : items) {
-                allIds.add(item.path("_id").asText());
+                org.junit.jupiter.api.Assertions.assertTrue(allIds.add(item.path("_id").asText()), "scroll 翻页不得重复记录");
             }
             pageCount++;
 
             if (!hasMore) {
+                org.junit.jupiter.api.Assertions.assertTrue(items.isEmpty(), "终止页必须为空列表");
+                org.junit.jupiter.api.Assertions.assertEquals(0, contNode.path("data").path("size").asInt(), "终止页 size 必须为 0");
+                org.junit.jupiter.api.Assertions.assertTrue(contNode.path("data").path("pagination").path("scrollId").isMissingNode(), "终止页不得返回 scrollId");
                 break;
             }
             scrollId = contNode.path("data").path("pagination").path("scrollId").asText();
+            org.junit.jupiter.api.Assertions.assertFalse(scrollId.isEmpty(), "非终止续页必须返回 scrollId");
         }
 
-        // 5 条数据，3 页，5 个唯一 ID
+        // 5 条数据，三页非空数据和一页终止空数据
         org.junit.jupiter.api.Assertions.assertEquals(5, allIds.size(), "scroll 翻页应无丢失无重复");
-        org.junit.jupiter.api.Assertions.assertEquals(3, pageCount, "5 条数据每页 2 条应有 3 页");
-        log.info("✓ scroll 完整翻页一致性验证通过：5 条数据、3 页、5 个唯一 ID");
+        org.junit.jupiter.api.Assertions.assertEquals(4, pageCount, "5 条数据每页 2 条应包含终止空页");
+        log.info("✓ scroll 完整翻页一致性验证通过：5 条数据、4 页、5 个唯一 ID");
+    }
+
+    @Test
+    @Order(79)
+    void testNlScrollContinuationSizeNotAllowed() throws Exception {
+        log.info("========== NL 查询：scroll 续页携带 size 返回 400 ==========");
+
+        String firstBody = "{\"nl\":\"查询test_user索引，按年龄升序\","
+                + "\"pagination\":{\"type\":\"scroll\",\"size\":5,\"scrollTtl\":\"1m\","
+                + "\"sort\":[{\"field\":\"age\",\"order\":\"asc\"}]}}";
+        String firstResponse = mockMvc.perform(post("/api/query/nl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(firstBody))
+                .andDo(result -> log.info("NL scroll 续页 size 校验首页响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pagination.scrollId").isNotEmpty())
+                .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        String scrollId = objectMapper.readTree(firstResponse).path("data").path("pagination").path("scrollId").asText();
+
+        String invalidBody = "{\"dataSource\":\"test_user\","
+                + "\"pagination\":{\"type\":\"scroll\",\"size\":2,\"scrollTtl\":\"1m\","
+                + "\"scrollId\":\"" + scrollId + "\"}}";
+        mockMvc.perform(post("/api/query/nl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(invalidBody))
+                .andDo(result -> log.info("NL scroll 续页携带 size 响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("续页不支持 size")));
+
+        String terminalBody = "{\"dataSource\":\"test_user\","
+                + "\"pagination\":{\"type\":\"scroll\",\"scrollTtl\":\"1m\","
+                + "\"scrollId\":\"" + scrollId + "\"}}";
+        mockMvc.perform(post("/api/query/nl")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .characterEncoding("UTF-8")
+                        .content(terminalBody))
+                .andDo(result -> log.info("NL scroll 续页 size 校验终止响应: status={}, body={}",
+                        result.getResponse().getStatus(),
+                        result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(0))
+                .andExpect(jsonPath("$.data.size").value(0))
+                .andExpect(jsonPath("$.data.pagination.hasMore").value(false))
+                .andExpect(jsonPath("$.data.pagination.scrollId").doesNotExist());
     }
 }
