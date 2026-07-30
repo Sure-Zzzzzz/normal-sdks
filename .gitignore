@@ -34,6 +34,14 @@ build/
 .idea
 .gradle
 
+# node
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
 #private-key
 *-credentials.gradle
 
