@@ -1,0 +1,16 @@
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.kafka:spring-kafka'
+    compileOnly 'org.springframework.data:spring-data-redis'
+    compileOnly 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.3'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.springframework.data:spring-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+}

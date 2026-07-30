@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  io.github.surezzzzzz.sdk.messaging.kafka.consumer.configuration.SimpleKafkaConsumerConfiguration,\
+  io.github.surezzzzzz.sdk.messaging.kafka.consumer.configuration.SimpleKafkaConsumerIdempotencyConfiguration
