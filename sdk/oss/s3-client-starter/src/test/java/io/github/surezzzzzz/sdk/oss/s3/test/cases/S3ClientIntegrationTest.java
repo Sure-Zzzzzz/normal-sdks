@@ -29,12 +29,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -51,15 +46,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class S3ClientIntegrationTest {
 
-    @Autowired
-    private S3Client s3Client;
-
-    @Autowired
-    private AmazonS3 amazonS3;
-
-    @Autowired
-    private S3ClientProperties properties;
-
     private static final String TEST_BUCKET = "normal-sdks-dev";
     private static final String TEST_KEY = "integration/sample.txt";
     private static final String TEST_STREAM_KEY = "integration/sample-stream.txt";
@@ -67,8 +53,35 @@ class S3ClientIntegrationTest {
     private static final String TEST_FOLDER = "integration-folder";
     private static final byte[] TEST_CONTENT = "Hello S3 Integration Test 2024".getBytes(StandardCharsets.UTF_8);
     private static final long CONTENT_LENGTH = TEST_CONTENT.length;
+    /**
+     * Order 37 set 用：测试结束保留文件和标签，便于 S3 Browser 观察 set 效果
+     */
+    private static final String TAG_SET_KEY = "integration/tag-set-target.txt";
+    /**
+     * Order 39 delete 用：先 upload+set 铺数据，再 delete 清空标签，最后 deleteObject 清理文件
+     */
+    private static final String TAG_DELETE_KEY = "integration/tag-delete-target.txt";
+    /**
+     * 校验类（Order 38/40/41）共用，仅做入参校验，不会真正落到 S3
+     */
+    private static final String TAG_VALIDATE_KEY = "integration/tag-validate-target.txt";
 
     // ==================== 存储桶管理 ====================
+    private static final String MULTIPART_SMALL_KEY = "integration/multipart-small.bin";
+    private static final String MULTIPART_LARGE_KEY = "integration/multipart-large.bin";
+    private static final String MULTIPART_CUSTOM_KEY = "integration/multipart-custom.bin";
+    private static final String MULTIPART_MANUAL_KEY = "integration/multipart-manual.bin";
+
+    // ==================== 文件夹管理 ====================
+    private static final String MULTIPART_ABORT_KEY = "integration/multipart-abort.bin";
+    @Autowired
+    private S3Client s3Client;
+    @Autowired
+    private AmazonS3 amazonS3;
+
+    // ==================== 上传 ====================
+    @Autowired
+    private S3ClientProperties properties;
 
     @Test
     @Order(1)
@@ -96,6 +109,8 @@ class S3ClientIntegrationTest {
         assertDoesNotThrow(() -> s3Client.createS3Bucket(TEST_BUCKET), "重复创建不应抛异常");
         assertTrue(amazonS3.doesBucketExistV2(TEST_BUCKET), "Bucket 仍应存在");
     }
+
+    // ==================== 查询 ====================
 
     @Test
     @Order(3)
@@ -128,8 +143,6 @@ class S3ClientIntegrationTest {
         assertEquals(S3ClientConstant.DEFAULT_BUCKET_EXPIRATION_DAYS, expirationDays,
                 "过期天数应与常量一致");
     }
-
-    // ==================== 文件夹管理 ====================
 
     @Test
     @Order(5)
@@ -166,8 +179,6 @@ class S3ClientIntegrationTest {
         assertDoesNotThrow(() -> s3Client.createFolder(TEST_BUCKET, "with-slash/"), "入参含 / 不应抛异常");
         assertTrue(s3Client.doesObjectExist(TEST_BUCKET, "with-slash/"), "文件夹对象应存在");
     }
-
-    // ==================== 上传 ====================
 
     @Test
     @Order(8)
@@ -218,8 +229,6 @@ class S3ClientIntegrationTest {
         assertEquals(CONTENT_LENGTH, actualLength, "S3 侧 contentLength 应与上传内容一致");
     }
 
-    // ==================== 查询 ====================
-
     @Test
     @Order(11)
     @DisplayName("判断对象存在 - 存在")
@@ -228,6 +237,8 @@ class S3ClientIntegrationTest {
         log.info("doesObjectExist({}) = {}", TEST_KEY, result);
         assertTrue(result, "已上传的对象应存在");
     }
+
+    // ==================== 复制 ====================
 
     @Test
     @Order(12)
@@ -238,6 +249,8 @@ class S3ClientIntegrationTest {
         log.info("doesObjectExist({}) = {}", nonExistKey, result);
         assertFalse(result, "不存在的对象应返回 false");
     }
+
+    // ==================== 版本管理 ====================
 
     @Test
     @Order(13)
@@ -279,6 +292,8 @@ class S3ClientIntegrationTest {
         assertNotNull(metadata, "带版本号的 metadata 不应为 null");
         assertEquals(versionId, metadata.getVersionId(), "返回的 versionId 应与查询入参一致");
     }
+
+    // ==================== 预签名 URL ====================
 
     @Test
     @Order(15)
@@ -365,8 +380,6 @@ class S3ClientIntegrationTest {
         assertTrue(listing.getObjectSummaries().size() <= 1, "maxKeys=1 时结果条数应 <= 1");
     }
 
-    // ==================== 复制 ====================
-
     @Test
     @Order(20)
     @DisplayName("复制对象")
@@ -382,8 +395,6 @@ class S3ClientIntegrationTest {
         assertFalse(etag.isEmpty(), "ETag 不应为空字符串");
         assertTrue(s3Client.doesObjectExist(TEST_BUCKET, TEST_COPY_KEY), "复制目标对象应存在");
     }
-
-    // ==================== 版本管理 ====================
 
     @Test
     @Order(21)
@@ -401,6 +412,8 @@ class S3ClientIntegrationTest {
                 "版本列表为空，跳过此测试（MinIO 版本历史可能已过期）");
     }
 
+    // ==================== 删除 ====================
+
     @Test
     @Order(22)
     @DisplayName("列举版本历史 - 前缀过滤")
@@ -415,8 +428,6 @@ class S3ClientIntegrationTest {
                         .allMatch(v -> v.getKey().startsWith("integration/")),
                 "前缀过滤结果中所有 key 应以 integration/ 开头");
     }
-
-    // ==================== 预签名 URL ====================
 
     @Test
     @Order(23)
@@ -446,6 +457,8 @@ class S3ClientIntegrationTest {
         assertTrue(url.contains("attachment"), "DOWNLOAD 模式 URL 应包含 attachment");
     }
 
+    // ==================== 异常场景 ====================
+
     @Test
     @Order(25)
     @DisplayName("生成下载预签名 URL - INLINE")
@@ -458,6 +471,8 @@ class S3ClientIntegrationTest {
         assertNotNull(url, "INLINE 模式 URL 不应为 null");
         assertTrue(url.contains("inline"), "INLINE 模式 URL 应包含 inline");
     }
+
+    // ==================== STS 凭证（需配置 roleArn）====================
 
     @Test
     @Order(26)
@@ -501,6 +516,8 @@ class S3ClientIntegrationTest {
         assertFalse(url.isEmpty(), "URL 不应为空");
     }
 
+    // ==================== 对象标签（v2.0.1）====================
+
     @Test
     @Order(29)
     @DisplayName("自定义 HmacSHA1 预签名 URL")
@@ -515,8 +532,6 @@ class S3ClientIntegrationTest {
         assertTrue(url.contains("Expires="), "URL 应包含 Expires");
         assertTrue(url.contains("Signature="), "URL 应包含 Signature");
     }
-
-    // ==================== 删除 ====================
 
     @Test
     @Order(30)
@@ -555,8 +570,6 @@ class S3ClientIntegrationTest {
         assertFalse(s3Client.doesObjectExist(TEST_BUCKET, TEST_COPY_KEY), "删除后对象应不存在");
     }
 
-    // ==================== 异常场景 ====================
-
     @Test
     @Order(33)
     @DisplayName("上传不存在的文件 - 抛 FileNotFoundException")
@@ -573,8 +586,6 @@ class S3ClientIntegrationTest {
         assertEquals(ErrorCode.FILE_NOT_FOUND, ex.getErrorCode(), "errorCode 应为 OSS_102");
         assertTrue(ex.getMessage().contains("file.txt"), "错误消息应包含文件名");
     }
-
-    // ==================== STS 凭证（需配置 roleArn）====================
 
     @Test
     @Order(34)
@@ -636,15 +647,6 @@ class S3ClientIntegrationTest {
         assertNotNull(credentials.getExpiration(), "expiration 不应为 null");
     }
 
-    // ==================== 对象标签（v2.0.1）====================
-
-    /** Order 37 set 用：测试结束保留文件和标签，便于 S3 Browser 观察 set 效果 */
-    private static final String TAG_SET_KEY = "integration/tag-set-target.txt";
-    /** Order 39 delete 用：先 upload+set 铺数据，再 delete 清空标签，最后 deleteObject 清理文件 */
-    private static final String TAG_DELETE_KEY = "integration/tag-delete-target.txt";
-    /** 校验类（Order 38/40/41）共用，仅做入参校验，不会真正落到 S3 */
-    private static final String TAG_VALIDATE_KEY = "integration/tag-validate-target.txt";
-
     @Test
     @Order(37)
     @DisplayName("设置对象标签 - 正常（保留文件和标签便于观察）")
@@ -690,6 +692,8 @@ class S3ClientIntegrationTest {
         assertTrue(ex.getMessage().contains(String.valueOf(S3ClientConstant.MAX_OBJECT_TAGS)),
                 "异常消息应提示标签上限 " + S3ClientConstant.MAX_OBJECT_TAGS);
     }
+
+    // ==================== 分段上传（v2.0.1）====================
 
     @Test
     @Order(39)
@@ -794,14 +798,6 @@ class S3ClientIntegrationTest {
         log.info("异常 errorCode={}, message={}", ex.getErrorCode(), ex.getMessage());
         assertEquals(ErrorCode.DELETE_OBJECT_TAGGING_FAILED, ex.getErrorCode(), "errorCode 应为 OSS_213");
     }
-
-    // ==================== 分段上传（v2.0.1）====================
-
-    private static final String MULTIPART_SMALL_KEY = "integration/multipart-small.bin";
-    private static final String MULTIPART_LARGE_KEY = "integration/multipart-large.bin";
-    private static final String MULTIPART_CUSTOM_KEY = "integration/multipart-custom.bin";
-    private static final String MULTIPART_MANUAL_KEY = "integration/multipart-manual.bin";
-    private static final String MULTIPART_ABORT_KEY = "integration/multipart-abort.bin";
 
     @Test
     @Order(44)

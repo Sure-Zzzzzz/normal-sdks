@@ -54,20 +54,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class S3Client {
 
+    private final ObjectMapper capitalizeObjectMapper;
     @Autowired
     private AWSSecurityTokenService awsSecurityTokenService;
-
     @Autowired
     private AmazonS3 amazonS3;
-
     @Autowired
     private S3ClientProperties properties;
-
     @Autowired
     private TaskRetryExecutor taskRetryExecutor;
-
-    private final ObjectMapper capitalizeObjectMapper;
-
     private ExecutorService multipartExecutor;
 
     public S3Client() {

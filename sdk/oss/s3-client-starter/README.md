@@ -1,6 +1,6 @@
 # S3 Client Starter
 
-[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > **1.x 封版文档**：如果你使用的是 1.x 版本（包名 `io.github.surezzzzzz.sdk.s3`），请查看 [README.1.x.md](README.1.x.md)。
@@ -187,7 +187,7 @@ try {
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:s3-client-starter:2.0.2'
+implementation 'io.github.sure-zzzzzz:s3-client-starter:2.1.0'
 ```
 
 **⚠️ 必须添加 Spring Boot 依赖**（本 starter 使用 compileOnly 配置）：
@@ -210,6 +210,8 @@ io:
           s3:
             # 基础连接配置
             endpoint: "https://s3.example.com"
+            # 可选：企业私有 CA 文件，支持 PEM / DER 内容的 .crt、.cer、.pem
+            trusted-ca-file: "/etc/example-ca/s3-ca.crt"
             access-key: "${OSS_ACCESS_KEY}"
             secret-key: "${OSS_SECRET_KEY}"
 
@@ -246,6 +248,19 @@ io:
             connection-max-idle-millis: 60000
             connection-ttl: -1
 ```
+
+### 私有 CA 信任配置
+
+`trusted-ca-file` 用于私有 S3 兼容服务的自签名 CA。配置为空时，客户端继续仅使用 JRE 默认可信根。
+
+- 支持 `.crt`、`.cer`、`.pem`；按文件内容解析 PEM 或 DER 编码的 X.509 CA 证书，不依赖扩展名
+- 单个文件可包含多张 CA 证书；文件必须可读，且每张证书均为处于有效期内的 CA。若声明 KeyUsage，必须包含 `keyCertSign`
+- 配置该项时 `endpoint` 必须是 HTTPS；非法 endpoint、不可读或非法 CA 文件会在应用启动期以 `S3ClientPropertiesInvalidException(OSS_301)` 失败
+- 仅影响本 starter 创建的 `AmazonS3` 和 `AWSSecurityTokenService` 客户端；JRE 默认可信根仍然保留
+- 不修改 JRE `cacerts`，不设置 JVM 全局 TLS 系统属性或默认 `SSLContext`，不提供 trust-all 或关闭主机名校验能力
+- 服务端证书的 SAN / CN 仍必须匹配 endpoint 主机名；域名不匹配时应修复证书或 endpoint，不能通过 CA 配置绕过
+- 预签名 URL 由浏览器、移动端或调用方自身 HTTP 客户端访问，这些外部客户端仍需自行信任私有 CA
+- 不支持 `com.amazonaws.sdk.disableCertChecking=true`；该 AWS SDK 全局开关会关闭证书校验，starter 会在启动期拒绝该运行态
 
 ### 分段上传配置说明
 
@@ -288,6 +303,10 @@ io:
 ---
 
 ## 版本历史
+
+### 2.1.0 (2026-07-30)
+
+新增可选 `trusted-ca-file`，支持从 PEM / DER 编码的 `.crt`、`.cer`、`.pem` 文件加载一张或多张私有 CA，仅为 starter 创建的 S3 / STS 客户端建立“JRE 默认可信根 + 私有 CA”的专用信任链。保留严格主机名校验，拒绝 HTTP endpoint + CA、非法/过期/非 CA 证书以及 AWS SDK 全局关闭证书校验；不修改 JRE `cacerts` 或 JVM 全局 TLS 配置。详见 [CHANGELOG.2.1.0.md](CHANGELOG.2.1.0.md)
 
 ### 2.0.2 (2026-07-01)
 
