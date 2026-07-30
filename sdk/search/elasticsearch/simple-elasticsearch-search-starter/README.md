@@ -133,7 +133,7 @@ POST /api/query
   "index": "test_wildcard--2026.07.09",
   "query": {
     "field": "extraField",
-    "op": "eq",
+    "operator": "eq",
     "value": "mock-value"
   },
   "pagination": {
@@ -155,7 +155,7 @@ POST /api/query
   "index": "test_wildcard",
   "query": {
     "field": "_id",
-    "op": "in",
+    "operator": "in",
     "values": ["doc-001", "doc-002"]
   }
 }
@@ -186,7 +186,7 @@ POST /api/query
 | 字段 | 说明 |
 |------|------|
 | `field` | 字段名；v1.6.10 起支持 ES 元字段 `_id` |
-| `op` | 操作符（见操作符表） |
+| `operator` | 操作符（见操作符表） |
 | `value` | 单值；`_id eq/ne` 使用 |
 | `values` | 多值（in/between/not_in 使用）；`_id in/not_in` 使用 |
 | `logic` | 逻辑操作符（and/or），用于嵌套条件 |
@@ -648,8 +648,8 @@ POST /api/query
   "query": {
     "logic": "and",
     "conditions": [
-      {"field": "status", "op": "eq", "value": "active"},
-      {"field": "age", "op": "gte", "value": 18}
+      {"field": "status", "operator": "eq", "value": "active"},
+      {"field": "age", "operator": "gte", "value": 18}
     ]
   },
   "pagination": {
@@ -674,7 +674,7 @@ POST /api/query
 {
   "index": "app_access_log",
   "dateRange": {"from": "2025-01-01T00:00:00", "to": "2025-12-31T23:59:59"},
-  "query": {"field": "clientIP", "op": "eq", "value": "192.168.1.1"},
+  "query": {"field": "clientIP", "operator": "eq", "value": "192.168.1.1"},
   "pagination": {
     "type": "search_after",
     "size": 500,
@@ -756,7 +756,7 @@ POST /api/query
 POST /api/agg
 {
   "index": "order_index",
-  "query": {"field": "status", "op": "eq", "value": "completed"},
+  "query": {"field": "status", "operator": "eq", "value": "completed"},
   "aggs": [{
     "name": "user_total",
     "type": "terms",
@@ -797,13 +797,13 @@ POST /api/query
   "query": {
     "logic": "and",
     "conditions": [
-      {"field": "status", "op": "eq", "value": "active"},
-      {"field": "age", "op": "between", "values": [18, 60]},
+      {"field": "status", "operator": "eq", "value": "active"},
+      {"field": "age", "operator": "between", "values": [18, 60]},
       {
         "logic": "or",
         "conditions": [
-          {"field": "city", "op": "eq", "value": "Beijing"},
-          {"field": "city", "op": "eq", "value": "Shanghai"}
+          {"field": "city", "operator": "eq", "value": "Beijing"},
+          {"field": "city", "operator": "eq", "value": "Shanghai"}
         ]
       }
     ]
@@ -843,7 +843,7 @@ POST /api/query
 {
   "index": "test_wildcard--*",
   "dateRange": {"from": "2026-07-01T00:00:00", "to": "2026-07-07T23:59:59"},
-  "query": {"field": "extraField", "op": "eq", "value": "mock-value"},
+  "query": {"field": "extraField", "operator": "eq", "value": "mock-value"},
   "pagination": {"type": "offset", "page": 1, "size": 50}
 }
 ```
@@ -866,7 +866,7 @@ POST /api/query
 POST /api/query
 {
   "index": "test_wildcard--2026.07.09",
-  "query": {"field": "extraField", "op": "eq", "value": "mock-value"}
+  "query": {"field": "extraField", "operator": "eq", "value": "mock-value"}
 }
 ```
 
@@ -1044,7 +1044,7 @@ POST /api/agg
   "aggs": [{
     "name": "high_value",
     "type": "filter",
-    "query": {"field": "amount", "op": "gte", "value": 1000},
+    "query": {"field": "amount", "operator": "gte", "value": 1000},
     "aggs": [
       {"name": "total", "type": "sum", "field": "amount"},
       {"name": "count", "type": "count", "field": "orderId"}
@@ -1063,9 +1063,9 @@ POST /api/agg
     "name": "by_status",
     "type": "filters",
     "filters": {
-      "completed": {"field": "status", "op": "eq", "value": "completed"},
-      "pending":   {"field": "status", "op": "eq", "value": "pending"},
-      "cancelled": {"field": "status", "op": "eq", "value": "cancelled"}
+      "completed": {"field": "status", "operator": "eq", "value": "completed"},
+      "pending":   {"field": "status", "operator": "eq", "value": "pending"},
+      "cancelled": {"field": "status", "operator": "eq", "value": "cancelled"}
     },
     "aggs": [
       {"name": "total_amount", "type": "sum", "field": "amount"}
@@ -1183,7 +1183,7 @@ ES 的 `ip` 字段类型原生支持 CIDR 表示法，`eq` 操作符传入 CIDR 
 POST /api/query
 {
   "index": "access_log",
-  "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.1"},
+  "query": {"field": "client_ip", "operator": "eq", "value": "10.0.0.1"},
   "pagination": {"type": "offset", "page": 1, "size": 20}
 }
 ```
@@ -1194,7 +1194,7 @@ POST /api/query
 POST /api/query
 {
   "index": "access_log",
-  "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.0/24"},
+  "query": {"field": "client_ip", "operator": "eq", "value": "10.0.0.0/24"},
   "pagination": {"type": "offset", "page": 1, "size": 20}
 }
 ```
@@ -1208,7 +1208,7 @@ POST /api/agg
   "aggs": [{
     "name": "internal_traffic",
     "type": "filter",
-    "query": {"field": "client_ip", "op": "eq", "value": "10.0.0.0/8"},
+    "query": {"field": "client_ip", "operator": "eq", "value": "10.0.0.0/8"},
     "aggs": [
       {"name": "total_bytes", "type": "sum", "field": "bytes"},
       {"name": "request_count", "type": "count", "field": "request_id"}
@@ -1433,7 +1433,7 @@ POST /api/query
   "index": "user_behavior",
   "query": {
     "field": "status",
-    "op": "eq",
+    "operator": "eq",
     "value": "active"
   },
   "countOnly": true
