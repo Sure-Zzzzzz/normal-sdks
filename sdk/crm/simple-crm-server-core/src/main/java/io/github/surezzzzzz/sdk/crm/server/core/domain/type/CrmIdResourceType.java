@@ -1,0 +1,134 @@
+package io.github.surezzzzzz.sdk.crm.server.core.domain.type;
+
+import lombok.Getter;
+
+/**
+ * CRM 稳定标识资源类型。
+ *
+ * @author surezzzzzz
+ */
+@Getter
+public enum CrmIdResourceType {
+
+    /**
+     * 客户。
+     */
+    CUSTOMER("customer", "客户"),
+
+    /**
+     * 联系人。
+     */
+    CONTACT("contact", "联系人"),
+
+    /**
+     * 商品或服务。
+     */
+    OFFERING("offering", "商品或服务"),
+
+    /**
+     * 报价。
+     */
+    QUOTATION("quotation", "报价"),
+
+    /**
+     * 报价、行。
+     */
+    QUOTATION_LINE("quotation_line", "报价、行"),
+
+    /**
+     * 订单。
+     */
+    ORDER("order", "订单"),
+
+    /**
+     * 订单、行。
+     */
+    ORDER_LINE("order_line", "订单、行"),
+
+    /**
+     * 履约、项。
+     */
+    FULFILLMENT_ITEM("fulfillment_item", "履约、项"),
+
+    /**
+     * 领域、领域事件。
+     */
+    DOMAIN_EVENT("domain_event", "领域、领域事件"),
+
+    /**
+     * 履约、命令、发件箱。
+     */
+    FULFILLMENT_COMMAND_OUTBOX("fulfillment_command_outbox", "履约、命令、发件箱");
+
+    /**
+     * 稳定类型代码。
+     */
+    private final String code;
+
+    /**
+     * 面向使用者的中文说明。
+     */
+    private final String description;
+
+    CrmIdResourceType(String code, String description) {
+        this.code = code;
+        this.description = description;
+    }
+
+    /**
+     * 根据稳定代码获取枚举值。
+     *
+     * @param code 稳定类型代码
+     * @return 匹配的枚举值；不存在时返回 null
+     */
+    public static CrmIdResourceType fromCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        for (CrmIdResourceType type : values()) {
+            if (type.code.equalsIgnoreCase(code)) {
+                return type;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 判断稳定代码是否有效。
+     *
+     * @param code 稳定类型代码
+     * @return 有效时返回 true
+     */
+    public static boolean isValid(String code) {
+        return fromCode(code) != null;
+    }
+
+    /**
+     * 获取全部稳定类型代码。
+     *
+     * @return 类型代码数组
+     */
+    public static String[] getAllCodes() {
+        CrmIdResourceType[] types = values();
+        String[] codes = new String[types.length];
+        for (int index = 0; index < types.length; index++) {
+            codes[index] = types[index].code;
+        }
+        return codes;
+    }
+
+    /**
+     * 返回稳定类型代码。
+     *
+     * @return 稳定类型代码
+     */
+    /**
+     * 返回稳定类型代码。
+     *
+     * @return 处理后的领域事实或校验结果。
+     */
+    @Override
+    public String toString() {
+        return code;
+    }
+}
