@@ -1,0 +1,3 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-kms-client-starter:1.0.1'
+}
