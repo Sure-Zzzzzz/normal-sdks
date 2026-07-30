@@ -22,6 +22,7 @@
   - [3.2 自定义组件注解（必需）](#32-自定义组件注解必需)
   - [3.3 标准目录结构](#33-标准目录结构)
   - [3.4 数据类包规范](#34-数据类包规范)
+  - [3.5 Controller 与 REST API 规范](#35-controller-与-rest-api-规范)
 - [4. 配置类规范](#4-配置类规范)
   - [4.1 全局 Properties 类（单一）](#41-全局-properties-类单一)
   - [4.2 AutoConfiguration 类](#42-autoconfiguration-类)
@@ -639,13 +640,12 @@ public class QueryRangeRequest {
 package io.github.surezzzzzz.sdk.prometheus.api.controller.response;
 
 public class QueryRangeResponse {
-    private String status;
     private Data data;
     // ...
 }
 ```
 
-#### 3.4.5 包组织建议
+### 3.4.5 包组织建议
 
 根据模块复杂度，可以选择以下组织方式：
 
@@ -693,6 +693,19 @@ sdk/{domain}/{module}/
 - request/response优先放在controller或endpoint包下，与API接口定义放在一起
 - entity包保持独立，用于数据库实体映射
 - model包保持独立，用于业务逻辑层的领域模型
+
+### 3.5 Controller 与 REST API 规范
+
+**适用范围**：所有对外提供 HTTP API 的 SDK 模块。
+
+**强制要求**：
+- Controller 必须使用 `@RestController`，只接收和返回明确的 `*Request`、`*Response` DTO 或空响应。
+- 接口必须遵循 RESTful：路径使用资源名词及层级关系，使用 `GET`、`POST`、`PUT`、`PATCH`、`DELETE` 表达查询、创建、整体替换、局部修改与删除；禁止 RPC 风格动作路径、冒号路由和动词后缀，例如 `/users:login`、`/orders/{id}:cancel`。
+- 接口状态必须只由 HTTP status 表达。禁止统一响应包装体、业务 `code` 字段、在 HTTP `200` 中包装失败结果，或以业务错误码替代 `4xx`、`5xx`。
+- 错误响应只能包含面向调用方的安全消息、时间和请求标识；不得暴露业务错误码、异常类型、异常链、SQL、实现细节、认证凭据或敏感数据。
+- 资源创建成功返回 `201 Created`，并在适用时提供 `Location`；无响应体的删除或幂等取消成功返回 `204 No Content`；格式非法、未认证、未授权、资源不存在、冲突、内容过大、媒体类型不支持和服务不可用等场景分别使用语义正确的 `4xx`、`5xx`。
+- `405 Method Not Allowed`、`413 Payload Too Large`、`415 Unsupported Media Type` 必须由 HTTP status 表达，不能包装为 `200`。
+- 验证结果为业务正常结果时可以返回 `200`，例如验签不通过返回 `{ "valid": false }`；不得将异常或拒绝伪装成正常结果。
 
 ---
 
