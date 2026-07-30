@@ -15,7 +15,7 @@
 ## 依赖
 
 ```groovy
-implementation "io.github.sure-zzzzzz:simple-crm-server-core:1.0.0"
+implementation "io.github.sure-zzzzzz:simple-crm-server-core:1.0.1"
 ```
 
 下游模块必须使用已发布的 Maven 版本，不能依赖未发布的 Core 源码工程。
@@ -23,10 +23,11 @@ implementation "io.github.sure-zzzzzz:simple-crm-server-core:1.0.0"
 ## 最小接入步骤
 
 1. 在入口适配器完成认证后，构造已绑定租户的 `CrmActor`；不要从请求体接收 tenant、actor、履约消费者或数据权限。
-2. 为每次写命令生成唯一的 `CrmCommandMetadata`，并由实现 `CrmCommandFacade` 的运行时适配器完成授权、幂等与乐观并发控制。
-3. 由存储适配器按租户、授权和数据范围加载 Customer、Offering、Quotation 等领域事实；实现 `CrmQueryFacade` 时，对不可见资源使用安全 not-found 语义。
-4. 注册业务所需的 `CommercialCapability`。使用 `QuotationDraftService` 基于已加载的 Customer 与 Offering 快照构造报价草稿；使用 `QuotationLifecycleService` 签发或确认报价。
-5. 确认报价后，将 `QuotationConfirmation` 中的报价、版本、订单和履约项作为一个完整事实集合，在同一权威事务中连同审计与两个 Outbox 事实持久化；通过 `port` 接口对接实际的安全、存储、时钟、标识生成和投递实现。
+2. 为每次写命令生成唯一的 `CrmCommandMetadata`。创建 Customer、Contact、Offering、Quotation 时，运行时适配器使用 `CrmCreateIdempotencyPort` 以 tenant、actor、命令类型、资源类型和幂等键定位：首次回调生成并持久化顶级资源 ID，相同请求重放该 ID，不能重复生成或写入。
+3. 对执行前已经确定目标 ID 的签发、确认报价，使用 `CrmIdempotencyPort`；不要将未生成或临时生成的创建资源 ID 传给该 Port。
+4. 由存储适配器按租户、授权和数据范围加载 Customer、Offering、Quotation 等领域事实；实现 `CrmQueryFacade` 时，对不可见资源使用安全 not-found 语义。创建首次成功和重放后均按返回 ID 回读；报价还必须回读初始 `QuotationVersion` 以重建 `QuotationDraft`。
+5. 注册业务所需的 `CommercialCapability`。使用 `QuotationDraftService` 基于已加载的 Customer 与 Offering 快照构造报价草稿；使用 `QuotationLifecycleService` 签发或确认报价。
+6. 确认报价后，将 `QuotationConfirmation` 中的报价、版本、订单和履约项作为一个完整事实集合，在同一权威事务中连同审计与两个 Outbox 事实持久化；通过 `port` 接口对接实际的安全、存储、时钟、标识生成和投递实现。
 
 ## 使用入口
 
@@ -51,8 +52,9 @@ implementation "io.github.sure-zzzzzz:simple-crm-server-core:1.0.0"
 
 | 模块版本 | Java 字节码 | 说明 |
 | --- | --- | --- |
+| 1.0.1 | Java 8 | 补齐服务端生成资源的创建幂等契约 |
 | 1.0.0 | Java 8 | 首发纯 Java CRM 商业领域契约 |
 
 ## 升级指南
 
-首发版本没有前序版本升级路径。后续版本会保持已发布类型和枚举语义的兼容性；涉及状态机、错误码或公开模型语义变更时，将以新的兼容策略发布。
+从 1.0.0 升级到 1.0.1 时，既有 `CrmIdempotencyPort` 的类型与方法签名保持不变。创建 Customer、Contact、Offering、Quotation 的运行时适配器改用新增 `CrmCreateIdempotencyPort`，并在同一权威事务中保存首次顶级资源 ID 与幂等成功结果；相同稳定范围使用不同请求摘要时必须使用已有错误码拒绝。后续版本会保持已发布类型和枚举语义的兼容性；涉及状态机、错误码或公开模型语义变更时，将以新的兼容策略发布。

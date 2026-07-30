@@ -16,6 +16,13 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.quotation.QuotationIssuan
  * 不得由请求体传入 tenant、操作者、消费者或数据权限。实现必须在同一权威事务内完成
  * 授权、数据范围、幂等、乐观并发、审计和必要 Outbox 事实的写入。</p>
  *
+ * <p>创建 Customer、Contact、Offering 和 Quotation 时，运行时适配器必须使用
+ * {@link io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmCreateIdempotencyPort}：仅在首次回调中
+ * 生成并持久化顶级资源 ID，首次成功和重放后均按该 ID 在当前 tenant 与数据范围内回读结果。报价重放必须以
+ * quotationId 回读 Quotation 与初始 QuotationVersion 后重建 QuotationDraft。签发和确认报价的 quotationId
+ * 在执行前已经确定，继续使用
+ * {@link io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmIdempotencyPort}。</p>
+ *
  * @author surezzzzzz
  */
 public interface CrmCommandFacade {

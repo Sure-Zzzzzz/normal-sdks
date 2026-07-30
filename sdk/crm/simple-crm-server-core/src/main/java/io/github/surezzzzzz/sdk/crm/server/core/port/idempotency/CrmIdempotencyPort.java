@@ -6,9 +6,13 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmCommandType;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 
 /**
- * 命令幂等事实端口。
+ * 已知目标资源命令幂等事实端口。
  *
- * <p>实现必须按 tenant、actor、命令类型、目标聚合和幂等键唯一化，并校验规范化请求摘要。</p>
+ * <p>仅适用于执行前已经确定目标资源 ID 的命令，例如签发报价和确认报价。实现必须按 tenant、actor、
+ * 命令类型、目标资源类型、目标资源 ID 和幂等键唯一化，并校验规范化请求摘要。</p>
+ *
+ * <p>服务端生成顶级资源 ID 的创建命令必须使用 {@link CrmCreateIdempotencyPort}，不得以未知或临时生成的
+ * 目标资源 ID 调用本端口。</p>
  *
  * @author surezzzzzz
  */
