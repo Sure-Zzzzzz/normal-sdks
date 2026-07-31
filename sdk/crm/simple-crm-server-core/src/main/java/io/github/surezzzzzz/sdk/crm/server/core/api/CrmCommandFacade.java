@@ -20,8 +20,11 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.quotation.QuotationIssuan
  * {@link io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmCreateIdempotencyPort}：仅在首次回调中
  * 生成并持久化顶级资源 ID，首次成功和重放后均按该 ID 在当前 tenant 与数据范围内回读结果。报价重放必须以
  * quotationId 回读 Quotation 与初始 QuotationVersion 后重建 QuotationDraft。签发和确认报价的 quotationId
- * 在执行前已经确定，继续使用
- * {@link io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmIdempotencyPort}。</p>
+ * 在执行前已经确定，必须使用
+ * {@link io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmReplayableIdempotencyPort}：签发按已提交的
+ * Quotation 与 QuotationVersion 重建重放结果，确认按已提交的 Quotation、QuotationVersion、Order 与
+ * {@link io.github.surezzzzzz.sdk.crm.server.core.port.repository.ReplayableFulfillmentItemRepository} 回读的
+ * FulfillmentItem 完整集合重建重放结果。</p>
  *
  * @author surezzzzzz
  */

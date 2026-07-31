@@ -12,7 +12,8 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
  * 命令类型、目标资源类型、目标资源 ID 和幂等键唯一化，并校验规范化请求摘要。</p>
  *
  * <p>服务端生成顶级资源 ID 的创建命令必须使用 {@link CrmCreateIdempotencyPort}，不得以未知或临时生成的
- * 目标资源 ID 调用本端口。</p>
+ * 目标资源 ID 调用本端口。报价签发和确认需要可重放声明结果时，运行时适配器必须实现并使用
+ * {@link CrmReplayableIdempotencyPort}；本接口保留已发布方法的源码和二进制兼容，不能单独表达成功重放结果。</p>
  *
  * @author surezzzzzz
  */
