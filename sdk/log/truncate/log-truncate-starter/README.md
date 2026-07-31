@@ -1,45 +1,44 @@
 # log-truncate-starter
 
-对超长日志/对象进行安全截断的 Spring Boot Starter，避免控制台、日志文件或网络传输因大对象导致内存、磁盘或带宽暴涨。
+对超长日志、异常堆栈和 Java 对象进行安全截断的 Spring Boot Starter，避免日志输出或网络传输被异常大字段放大。
 
-## 功能
-- 字符串、异常堆栈、任意 Java 对象统一截断
-- UTF-8 多字节安全，不会截碎中文
-- 深度与长度双重阈值，防止深层嵌套或超大字段
-- Spring Boot 自动配置，零代码侵入，开箱即用
-- 纯本地计算，无外部依赖
+## 版本选择
 
-## 快速开始
+| 版本 | 适用场景 |
+|---|---|
+| `1.1.0` | 当前推荐版本。最终输出严格遵守字段字符与总字节上限。 |
+| `1.0.0` | 历史版本。超限后追加截断标记可能使最终输出超过配置上限。 |
 
-### 1. 引入依赖（Gradle 示例）
-本模块对以下依赖使用 `compileOnly`，**不会传递**，由引用者**自行决定版本**与**是否使用**：
+## 接入
+
 ```groovy
 dependencies {
-    // ① starter 本身
-    implementation 'io.github.surezzzzzz:sdk-log-truncate-starter:1.0.0'
-
-    // ② Jackson（示例，版本自理）
-    // 如果你项目里已管理 Jackson，直接沿用即可；
-    // 若未管理，可任选以下一种方式：
-    // compileOnly 'com.fasterxml.jackson.core:jackson-databind:你的版本'
-    // implementation 'com.fasterxml.jackson.core:jackson-databind:你的版本'
-    
-    // ③ 可选：Spring Boot 配置处理器（仅编译期，IDE 提示用）
-    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    implementation 'io.github.surezzzzzz:sdk-log-truncate-starter:1.1.0'
 }
 ```
-> 运行时若缺失 Jackson 会抛 `ClassNotFoundException`，请按项目已有版本补全即可。
 
-### 2. 直接注入使用
+本模块使用业务项目已有的 Jackson 版本；若项目未提供 Jackson，请自行引入兼容版本。
+
+## 使用
+
+引入依赖后自动注册名为 `logTruncator` 的 `LogTruncator` Bean：
+
 ```java
 @Autowired
+@Qualifier("logTruncator")
 private LogTruncator logTruncator;
 
 String shortLog = logTruncator.truncate(anyHugeObject);
-log.info("{}", shortLog);
+String shortRawLog = logTruncator.truncateRaw(rawLog);
 ```
 
-### 3. 配置项（`application.yml`）
+- `truncate(Object)`：字符串直接截断；异常输出堆栈；其他对象转为 JSON 后裁剪深度和文本字段。
+- `truncateRaw(String)`：只按总字节数截断原始字符串。
+- `truncate(null)` 返回字符串 `"null"`；`truncateRaw(null)` 返回 `null`。
+- SDK 维护独立 `ObjectMapper`，不会注入、替换或修改业务的 Spring `ObjectMapper`。
+
+## 配置
+
 ```yaml
 io:
   github:
@@ -47,17 +46,38 @@ io:
       sdk:
         log:
           truncate:
-            max-total-bytes: 8192          # 整体日志字符串最大字节数(UTF-8)，默认 8K
-            max-field-chars: 1024          # 单字段字符截断阈值，默认 1K
-            max-depth: 8                   # 对象展开最大深度，默认 8
-            ellipsis: "..."                # 截断后缀，默认 "..."
-            truncated-note-template: " [truncated {dropped}]"   # 提示模板
-            depth-exceeded-placeholder: "__depth_exceeded__"  # 深度超限占位符
+            max-total-bytes: 8192
+            max-field-chars: 1024
+            max-depth: 8
+            ellipsis: "..."
+            truncated-note-template: " [truncated {dropped}]"
+            depth-exceeded-placeholder: "__depth_exceeded__"
 ```
 
-## 设计原则
-- 安全：截断后字符串永远合法 UTF-8
-- 轻量：不依赖第三方 RPC、存储或队列
-- 无侵入：仅提供工具 Bean，不影响业务代码
-- 可审计：截断结果带 `[truncated ...]` 标记，方便排查
+| 配置项 | 默认值 | 说明 |
+|---|---:|---|
+| `max-total-bytes` | `8192` | 最终日志字符串最大 UTF-8 字节数。 |
+| `max-field-chars` | `1024` | JSON 中每个文本字段的最终最大 Unicode code point 数。 |
+| `max-depth` | `8` | 对象和数组展开的最大深度，达到深度后使用占位符。 |
+| `ellipsis` | `...` | 截断标记前缀。 |
+| `truncated-note-template` | ` [truncated {dropped}]` | 截断提示模板，`{dropped}` 会替换为实际省略数量。 |
+| `depth-exceeded-placeholder` | `__depth_exceeded__` | 超过最大深度时的文本占位符。 |
 
+`max-field-chars` 按 Unicode code point 计算，`max-total-bytes` 按 UTF-8 字节计算；中文、emoji 和代理对都不会被截断到半个字符。
+
+## 兼容性
+
+| Spring Boot | 验证状态 |
+|---|---|
+| `2.2.13.RELEASE` | 已验证 |
+| `2.3.12.RELEASE` | 已验证 |
+| `2.4.5` | 已验证 |
+| `2.7.9` | 已验证 |
+
+JDK 8 源码兼容；四档 Spring Boot 均执行完整模块测试。
+
+## 1.1.0 升级说明
+
+1.1.0 不修改 Maven 坐标、`LogTruncator` API、配置前缀、配置键、默认值或默认 Bean 名。
+
+对于超限输入，`max-total-bytes` 和 `max-field-chars` 从 1.0.0 的“原始内容保留阈值”收口为**最终输出严格上限**。截断标记也计入上限；当阈值小到无法容纳完整标记时，结果优先保证不越界，可能不显示完整截断标记。若需要保留更多原始内容或完整标记，请调大相应阈值。

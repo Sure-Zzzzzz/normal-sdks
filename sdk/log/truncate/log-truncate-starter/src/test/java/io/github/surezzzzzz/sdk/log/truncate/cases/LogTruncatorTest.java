@@ -1,106 +1,274 @@
 package io.github.surezzzzzz.sdk.log.truncate.cases;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.surezzzzzz.sdk.log.truncate.LogTruncateApplication;
+import io.github.surezzzzzz.sdk.log.truncate.configuration.LogTruncateProperties;
 import io.github.surezzzzzz.sdk.log.truncate.support.LogTruncator;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.context.SpringBootTest;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * 日志截断器测试
+ *
+ * @author surezzzzzz
+ */
 @Slf4j
-@SpringBootTest(classes = LogTruncateApplication.class)
 public class LogTruncatorTest {
 
-    @Autowired
-    @Qualifier("logTruncator")
-    private LogTruncator truncator;
-
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 测试原始字符串截断
+     * 验证空值和未超限内容保持既有语义
      */
     @Test
-    @DisplayName("测试原始字符串截断")
-    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
-    public void testRawStringTruncation() throws Exception {
-        String longString = repeatString("这是一段很长的日志内容，", 500) + "结尾";
+    public void shouldKeepNullAndUntruncatedValues() {
+        LogTruncator truncator = newTruncator(1024, 1024, 8);
 
-        String truncated = truncator.truncateRaw(longString);
-
-        log.info("=== 原始字符串截断测试 ===");
-        log.info("原始长度: {} bytes", longString.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-        log.info("截断后长度: {} bytes", truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-        log.info("截断后内容预览:\n{}", truncated.substring(0, Math.min(200, truncated.length())));
-
-        Assertions.assertNotNull(truncated);
-        Assertions.assertTrue(truncated.contains("[truncated"), "应包含截断标记");
-        Assertions.assertTrue(truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                < longString.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        assertNull(truncator.truncateRaw(null));
+        assertEquals("null", truncator.truncate(null));
+        assertEquals("中文😀abc", truncator.truncateRaw("中文😀abc"));
+        assertEquals("中文😀abc", truncator.truncate("中文😀abc"));
     }
 
     /**
-     * 测试异常对象截断
+     * 验证总字节上限严格限制最终输出
      */
     @Test
-    @DisplayName("测试异常对象堆栈截断")
-//    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
-    public void testExceptionTruncation() throws Exception {
-        Exception exception = new RuntimeException("测试异常",
-                new IllegalArgumentException("嵌套异常原因",
-                        new NullPointerException("最深层异常")));
+    public void shouldKeepTotalOutputWithinUtf8Limit() {
+        LogTruncator truncator = newTruncator(18, 1024, 8);
+        String result = truncator.truncateRaw("中文😀中文😀中文😀");
 
-        String truncated = truncator.truncate(exception);
-
-        log.info("=== 异常对象截断测试 ===");
-        log.info("截断后内容:\n{}", truncated);
-
-        Assertions.assertNotNull(truncated);
-        Assertions.assertTrue(truncated.contains("RuntimeException"), "应包含异常类型");
-        Assertions.assertTrue(truncated.contains("测试异常"), "应包含异常消息");
+        log.info("总字节截断结果：{}", result);
+        assertTrue(utf8Length(result) <= 18);
+        assertFalse(result.contains("�"));
     }
 
     /**
-     * 测试包含中文的超长字符串
+     * 验证截断标记中 dropped 位数变化不突破总字节上限
      */
     @Test
-    @DisplayName("测试中文字符截断（UTF-8 多字节安全）")
-    @EnabledIfEnvironmentVariable(named = "run.local.tests", matches = "zs")
-    public void testChineseCharacterTruncation() throws Exception {
-        String chineseText = repeatString("这是一段包含中文的超长日志内容，用于测试UTF-8多字节字符的安全截断。", 100);
-
-        String truncated = truncator.truncateRaw(chineseText);
-
-        log.info("=== 中文字符截断测试 ===");
-        log.info("原始长度: {} bytes ({} 字符)",
-                chineseText.getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
-                chineseText.length());
-        log.info("截断后长度: {} bytes",
-                truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-
-        Assertions.assertNotNull(truncated);
-        // 验证没有乱码（UTF-8 截断不应破坏多字节字符）
-        Assertions.assertDoesNotThrow(() ->
-                        new String(truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                                java.nio.charset.StandardCharsets.UTF_8),
-                "截断后的字符串应该是合法的 UTF-8 编码");
+    public void shouldRespectTotalLimitAcrossDroppedDigitBoundaries() {
+        assertTotalLimitForDroppedBoundary(repeat("a", 28), 20, 9);
+        assertTotalLimitForDroppedBoundary(repeat("a", 29), 20, 11);
+        assertTotalLimitForDroppedBoundary(repeat("a", 127), 30, 99);
+        assertTotalLimitForDroppedBoundary(repeat("a", 128), 30, 101);
     }
 
     /**
-     * Java 8 兼容的字符串重复方法
+     * 验证 JSON 文本字段按 code point 严格截断
      */
-    private String repeatString(String s, int times) {
-        StringBuilder sb = new StringBuilder(s.length() * times);
-        for (int i = 0; i < times; i++) {
-            sb.append(s);
+    @Test
+    public void shouldKeepTextFieldWithinCodePointLimit() throws Exception {
+        LogTruncator truncator = newTruncator(4096, 14, 8);
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("message", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀");
+
+        String result = truncator.truncate(value);
+        JsonNode message = objectMapper.readTree(result).get("message");
+
+        log.info("字段截断结果：{}", result);
+        assertTrue(codePointLength(message.asText()) <= 14);
+        assertFalse(message.asText().contains("�"));
+    }
+
+    /**
+     * 验证字段截断标记的位数变化不突破字符上限
+     */
+    @Test
+    public void shouldRespectFieldLimitAcrossDroppedDigitBoundaries() throws Exception {
+        assertFieldLimitForDroppedBoundary(repeat("a", 28), 20, 9);
+        assertFieldLimitForDroppedBoundary(repeat("a", 29), 20, 11);
+        assertFieldLimitForDroppedBoundary(repeat("a", 127), 30, 99);
+        assertFieldLimitForDroppedBoundary(repeat("a", 128), 30, 101);
+    }
+
+    /**
+     * 验证无法容纳完整标记时仍不越界
+     */
+    @Test
+    public void shouldPreferStrictLimitWhenMarkerCannotFit() throws Exception {
+        LogTruncator totalTruncator = newTruncator(2, 1024, 8);
+        String rawResult = totalTruncator.truncateRaw("abcdef");
+
+        LogTruncator fieldTruncator = newTruncator(4096, 2, 8);
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("message", "abcdef");
+        JsonNode message = objectMapper.readTree(fieldTruncator.truncate(value)).get("message");
+
+        assertTrue(utf8Length(rawResult) <= 2);
+        assertTrue(codePointLength(message.asText()) <= 2);
+        assertFalse(rawResult.contains("[truncated"));
+        assertFalse(message.asText().contains("[truncated"));
+    }
+
+    /**
+     * 验证零和负阈值保持安全输出
+     */
+    @Test
+    public void shouldHandleNonPositiveLimits() throws Exception {
+        LogTruncator truncator = newTruncator(0, -1, 8);
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("message", "abcdef");
+
+        assertEquals("", truncator.truncateRaw("abcdef"));
+        assertEquals("", truncator.truncate(value));
+
+        LogTruncator fieldTruncator = newTruncator(4096, 0, 8);
+        JsonNode message = objectMapper.readTree(fieldTruncator.truncate(value)).get("message");
+        assertEquals("", message.asText());
+    }
+
+    /**
+     * 验证空文本配置不会影响安全截断
+     */
+    @Test
+    public void shouldHandleEmptyTextConfiguration() {
+        LogTruncateProperties properties = new LogTruncateProperties();
+        properties.setMaxTotalBytes(4);
+        properties.setEllipsis(null);
+        properties.setTruncatedNoteTemplate(null);
+        LogTruncator truncator = new LogTruncator(properties);
+
+        assertEquals("abcd", truncator.truncateRaw("abcdef"));
+    }
+
+    /**
+     * 验证对象和数组在深度边界使用占位符
+     */
+    @Test
+    public void shouldReplaceNestedObjectAndArrayAtDepthLimit() {
+        LogTruncator truncator = newTruncator(4096, 1024, 2);
+        Map<String, Object> nested = new LinkedHashMap<>();
+        nested.put("items", Arrays.asList(Arrays.asList("value")));
+
+        String result = truncator.truncate(nested);
+
+        assertTrue(result.contains("__depth_exceeded__"));
+    }
+
+    /**
+     * 验证非正最大深度从根节点开始使用占位符
+     */
+    @Test
+    public void shouldReplaceRootAtNonPositiveDepthLimit() {
+        LogTruncator truncator = newTruncator(4096, 1024, 0);
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("message", "content");
+
+        assertEquals("\"__depth_exceeded__\"", truncator.truncate(value));
+    }
+
+    /**
+     * 验证各文本字段先受字段上限约束，再受总字节上限约束
+     */
+    @Test
+    public void shouldApplyFieldLimitBeforeTotalLimit() throws Exception {
+        LogTruncator truncator = newTruncator(55, 24, 8);
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("first", repeat("a", 80));
+        value.put("second", repeat("b", 80));
+
+        String fieldLimited = newTruncator(4096, 24, 8).truncate(value);
+        String result = truncator.truncate(value);
+        JsonNode fieldLimitedNode = objectMapper.readTree(fieldLimited);
+
+        assertEquals("aaaaaa... [truncated 74]", fieldLimitedNode.get("first").asText());
+        assertEquals("bbbbbb... [truncated 74]", fieldLimitedNode.get("second").asText());
+        assertTrue(utf8Length(fieldLimited) > 55);
+        assertTrue(utf8Length(result) <= 55);
+        assertTrue(result.contains("[truncated"));
+        assertTrue(result.startsWith("{\"first\":\"aaaaaa... [truncated 74]\""));
+    }
+
+    /**
+     * 验证异常和序列化失败降级文本都受总字节限制
+     */
+    @Test
+    public void shouldTruncateThrowableAndSerializationFallback() {
+        LogTruncator truncator = newTruncator(64, 1024, 8);
+        String throwableResult = truncator.truncate(new IllegalArgumentException(repeat("异常", 80)));
+        String fallbackResult = truncator.truncate(new Object() {
+            public String getValue() {
+                throw new IllegalStateException(repeat("失败", 80));
+            }
+        });
+
+        assertNotNull(throwableResult);
+        assertNotNull(fallbackResult);
+        assertTrue(utf8Length(throwableResult) <= 64);
+        assertTrue(utf8Length(fallbackResult) <= 64);
+    }
+
+    private void assertTotalLimitForDroppedBoundary(String value, int maxBytes, int expectedDropped) {
+        LogTruncateProperties properties = new LogTruncateProperties();
+        properties.setMaxTotalBytes(maxBytes);
+        properties.setEllipsis("");
+        properties.setTruncatedNoteTemplate("{dropped}");
+        LogTruncator truncator = new LogTruncator(properties);
+        String result = truncator.truncateRaw(value);
+
+        assertTrue(utf8Length(result) <= maxBytes);
+        assertEquals(expectedDropped, droppedFromNumericMarker(result));
+        assertEquals(value.length() - numericMarkerStart(result), droppedFromNumericMarker(result));
+    }
+
+    private void assertFieldLimitForDroppedBoundary(String value, int maxChars, int expectedDropped) throws Exception {
+        LogTruncateProperties properties = new LogTruncateProperties();
+        properties.setMaxTotalBytes(4096);
+        properties.setMaxFieldChars(maxChars);
+        properties.setEllipsis("");
+        properties.setTruncatedNoteTemplate("{dropped}");
+        LogTruncator truncator = new LogTruncator(properties);
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("message", value);
+        JsonNode message = objectMapper.readTree(truncator.truncate(source)).get("message");
+
+        assertTrue(codePointLength(message.asText()) <= maxChars);
+        assertEquals(expectedDropped, droppedFromNumericMarker(message.asText()));
+        assertEquals(value.length() - numericMarkerStart(message.asText()), droppedFromNumericMarker(message.asText()));
+    }
+
+    private int droppedFromNumericMarker(String value) {
+        return Integer.parseInt(value.substring(numericMarkerStart(value)));
+    }
+
+    private int numericMarkerStart(String value) {
+        for (int index = 0; index < value.length(); index++) {
+            if (Character.isDigit(value.charAt(index))) {
+                return index;
+            }
         }
-        return sb.toString();
+        return value.length();
     }
 
+    private LogTruncator newTruncator(int maxTotalBytes, int maxFieldChars, int maxDepth) {
+        LogTruncateProperties properties = new LogTruncateProperties();
+        properties.setMaxTotalBytes(maxTotalBytes);
+        properties.setMaxFieldChars(maxFieldChars);
+        properties.setMaxDepth(maxDepth);
+        return new LogTruncator(properties);
+    }
+
+    private int utf8Length(String value) {
+        return value.getBytes(StandardCharsets.UTF_8).length;
+    }
+
+    private int codePointLength(String value) {
+        return value.codePointCount(0, value.length());
+    }
+
+    private String repeat(String value, int count) {
+        StringBuilder builder = new StringBuilder();
+        for (int index = 0; index < count; index++) {
+            builder.append(value);
+        }
+        return builder.toString();
+    }
 }
