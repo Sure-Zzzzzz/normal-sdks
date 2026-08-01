@@ -1,0 +1,70 @@
+spring:
+  main:
+    web-application-type: none
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            clusters:
+              mysql57:
+                host: localhost
+                port: 24357
+                credential-ref: test-mysql57-reader
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                connection-properties:
+                  useUnicode: true
+                  characterEncoding: UTF-8
+                  useSSL: false
+                  serverTimezone: UTC
+                  allowPublicKeyRetrieval: true
+                  connectTimeout: 5000
+                  socketTimeout: 5000
+              mysql84:
+                host: localhost
+                port: 24384
+                credential-ref: test-mysql84-reader
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                connection-properties:
+                  useUnicode: true
+                  characterEncoding: UTF-8
+                  useSSL: false
+                  serverTimezone: UTC
+                  allowPublicKeyRetrieval: true
+                  connectTimeout: 5000
+                  socketTimeout: 5000
+            datasources:
+              test-mysql57-ops:
+                cluster-key: mysql57
+                database: test_ops
+              test-mysql57-audit:
+                cluster-key: mysql57
+                database: test_audit
+              test-mysql84-ops:
+                cluster-key: mysql84
+                database: test_ops
+              test-mysql84-audit:
+                cluster-key: mysql84
+                database: test_audit
+            rules:
+              - pattern: test_order
+                match-type: exact
+                datasource-key: test-mysql57-ops
+                priority: 100
+              - pattern: test_user
+                match-type: exact
+                datasource-key: test-mysql57-audit
+                priority: 100
+              - pattern: test_wildcard
+                match-type: exact
+                datasource-key: test-mysql84-ops
+                priority: 100
+              - pattern: test_extra_field
+                match-type: exact
+                datasource-key: test-mysql84-audit
+                priority: 100

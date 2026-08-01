@@ -1,0 +1,10 @@
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    compileOnly 'org.springframework:spring-tx'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'mysql:mysql-connector-java'
+}

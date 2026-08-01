@@ -1,0 +1,46 @@
+services:
+  mysql-route-e2e-57:
+    image: mysql:5.7.44
+    container_name: mysql-route-e2e-57
+    ports:
+      - "127.0.0.1:24357:3306"
+    environment:
+      MYSQL_DATABASE: test_ops
+      MYSQL_ROOT_PASSWORD: mysql-route-root-local
+      E2E_CLUSTER_ID: mysql57
+      E2E_MYSQL_USERNAME: mysql_route_e2e_reader
+      E2E_MYSQL_PASSWORD: mysql-route-reader-local
+    volumes:
+      - mysql-route-e2e-57-data:/var/lib/mysql
+      - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  mysql-route-e2e-84:
+    image: mysql:8.4.2
+    container_name: mysql-route-e2e-84
+    ports:
+      - "127.0.0.1:24384:3306"
+    environment:
+      MYSQL_DATABASE: test_ops
+      MYSQL_ROOT_PASSWORD: mysql-route-root-local
+      E2E_CLUSTER_ID: mysql84
+      E2E_MYSQL_USERNAME: mysql_route_e2e_reader
+      E2E_MYSQL_PASSWORD: mysql-route-reader-local
+    volumes:
+      - mysql-route-e2e-84-data:/var/lib/mysql
+      - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  mysql-route-e2e-57-data:
+  mysql-route-e2e-84-data:
