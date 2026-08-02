@@ -35,15 +35,22 @@ public class MySqlRouteTemplate {
 
     private final SimpleMysqlRouteRegistry registry;
     private final MySqlRouteResolver resolver;
+    private final MySqlRoutingDataSource routingDataSource;
     private final JdbcTemplate routingJdbcTemplate;
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final MySqlRouteAuditPublisher auditPublisher;
 
     public MySqlRouteTemplate(SimpleMysqlRouteRegistry registry, MySqlRouteResolver resolver,
-                              JdbcTemplate routingJdbcTemplate, NamedParameterJdbcTemplate namedParameterJdbcTemplate,
-                              MySqlRouteAuditPublisher auditPublisher) {
+                              MySqlRoutingDataSource routingDataSource, JdbcTemplate routingJdbcTemplate,
+                              NamedParameterJdbcTemplate namedParameterJdbcTemplate, MySqlRouteAuditPublisher auditPublisher) {
+        if (routingDataSource == null || routingJdbcTemplate == null || namedParameterJdbcTemplate == null
+                || routingJdbcTemplate.getDataSource() != routingDataSource
+                || namedParameterJdbcTemplate.getJdbcTemplate().getDataSource() != routingDataSource) {
+            throw new IllegalArgumentException(ErrorMessage.ROUTING_RESOURCE_INVALID);
+        }
         this.registry = registry;
         this.resolver = resolver;
+        this.routingDataSource = routingDataSource;
         this.routingJdbcTemplate = routingJdbcTemplate;
         this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.auditPublisher = auditPublisher == null ? new NoopMySqlRouteAuditPublisher() : auditPublisher;
@@ -135,7 +142,7 @@ public class MySqlRouteTemplate {
      * @return 路由数据源
      */
     public DataSource routingDataSource() {
-        return routingJdbcTemplate.getDataSource();
+        return routingDataSource;
     }
 
     /**
@@ -188,7 +195,7 @@ public class MySqlRouteTemplate {
 
     private void publishAudit(String routeKey, String datasourceKey, int status, long durationMillis) {
         MySqlRouteAuditContext context = MySqlRouteAuditContext.current();
-        String digest = context == null || context.getResourceDigest() == null
+        String digest = context == null || !MySqlRouteDigestHelper.isSha256(context.getResourceDigest())
                 ? digestRouteKey(routeKey) : context.getResourceDigest();
         try {
             auditPublisher.publish(MySqlRouteAuditEvent.builder().occurredAt(Instant.now())
@@ -211,10 +218,7 @@ public class MySqlRouteTemplate {
     }
 
     private void bindTransactionDatasource(String datasourceKey) {
-        DataSource dataSource = routingDataSource();
-        if (dataSource instanceof MySqlRoutingDataSource) {
-            ((MySqlRoutingDataSource) dataSource).bindTransactionDatasource(datasourceKey);
-        }
+        routingDataSource.bindTransactionDatasource(datasourceKey);
     }
 
     private void ensureNoTransactionForDirectTarget() {

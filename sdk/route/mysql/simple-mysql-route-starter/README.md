@@ -1,26 +1,24 @@
 # Simple MySQL Route Starter
 
-面向 Spring Boot 的显式 MySQL 路由组件。业务通过 `routeKey`，或 Ops 等管理侧通过完整 `datasourceKey`，选择已配置的 **固定 cluster + 固定 database** 目标，并在受控 callback 中执行 JDBC 操作。
+面向 Spring Boot 的显式 MySQL 路由组件。业务通过 `routeKey`，或 Ops 等管理侧通过完整 `datasourceKey`，选择已经配置的固定 MySQL target，并在受控 callback 中执行 JDBC 或 MyBatis 操作。
 
-接入路径：引入依赖 → 提供凭据解析 SPI → 配置 cluster、datasource 和 rule → 使用 `MySqlRouteTemplate` 执行。
+接入路径：引入依赖 → 配置固定 target → 配置路由规则 → 在 `MySqlRouteTemplate` scope 内执行。
 
-- 路由入口是显式 callback，不使用业务注解或 AOP。
-- 一个 `datasourceKey` 对应一个固定 database 的物理 DataSource，不会在运行期切换 database。
-- 支持 `JdbcTemplate`、`NamedParameterJdbcTemplate`，也可以将路由 DataSource 显式绑定到业务自己的 MyBatis 配置。
-- 不存在默认 datasource 回退；未命中 routeKey 或未知 datasourceKey 会直接失败。
-- 不替换宿主默认 `DataSource`，也不创建事务管理器。
+- 一个 target 是固定 `cluster address + database + username + password` 的完整连接定义；不会在运行期切换 database。
+- `datasourceKey` 由 `clusterKey.datasourceName` 自动生成，例如 `mysql57.ops`。
+- 注册所有 target 时都会创建并验证连接；任一个地址、库名、账号、密码或权限错误都会使应用启动失败。
+- 提供命名、非 `@Primary` 的路由 `DataSource`、`JdbcTemplate` 和 `NamedParameterJdbcTemplate`；不替换宿主默认数据源，也不创建事务管理器。
+- 不存在默认 target 回退；未知 `routeKey` 或 `datasourceKey` 直接失败。
 
-## 依赖与前置条件
+## 依赖与启用
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.0.1'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'mysql:mysql-connector-java'
 }
 ```
-
-启用模块：
 
 ```yaml
 io:
@@ -32,13 +30,15 @@ io:
             enable: true
 ```
 
-启用后，应用必须提供一个 `MySqlRouteCredentialResolver` Bean。Route 配置中的 `credential-ref` 只是凭据定位符，不是用户名或密码。
+## 兼容性与验证
 
-## 快速接入
+1.0.1 已完成以下 Spring Boot 精确版本的完整模块测试：`2.2.13.RELEASE`、`2.3.12.RELEASE`、`2.4.5` 与 `2.7.9`。每个版本均执行全部单元测试和真实 MySQL E2E，不通过系统属性跳过 E2E。
 
-### 1. 配置固定目标与路由规则
+真实 E2E 同时连接 MySQL `5.7.44` 与 `8.4.2` 两个独立实例；四个固定 target 使用各自账号，覆盖连接身份、路由与显式 target、命名参数 JDBC、完整 CRUD、同实例跨 database 越权拒绝，以及单事务切换 target 拦截。
 
-以下示例使用两个 MySQL cluster 和三个固定 database 目标。示例中的名称仅用于说明，不代表业务库表或真实环境。
+## 配置固定 target 与路由规则
+
+每个 `datasources` 项在所属 cluster 下定义自身的固定 database、username 与 password。示例名称为中性示例，不代表真实业务库表或环境。
 
 ```yaml
 io:
@@ -49,236 +49,196 @@ io:
           route:
             enable: true
             clusters:
-              test-primary:
-                host: mysql-primary
+              mysql57:
+                host: mysql57.example.internal
                 port: 3306
-                credential-ref: test-primary-reader
                 driver-class-name: com.mysql.cj.jdbc.Driver
                 connection-properties:
                   useUnicode: true
                   characterEncoding: UTF-8
-              test-archive:
-                host: mysql-archive
-                credential-ref: test-archive-reader
-            datasources:
-              test-record-primary:
-                cluster-key: test-primary
-                database: test_record
-              test-audit-primary:
-                cluster-key: test-primary
-                database: test_audit
-              test-record-archive:
-                cluster-key: test-archive
-                database: test_record
+                  useSSL: true
+                datasources:
+                  ops:
+                    database: test_ops
+                    username: mysql57_ops_route
+                    password: ${MYSQL57_OPS_PASSWORD}
+                  audit:
+                    database: test_audit
+                    username: mysql57_audit_route
+                    password: ${MYSQL57_AUDIT_PASSWORD}
+              mysql84:
+                host: mysql84.example.internal
+                datasources:
+                  ops:
+                    database: test_ops
+                    username: mysql84_ops_route
+                    password: ${MYSQL84_OPS_PASSWORD}
+                  audit:
+                    database: test_audit
+                    username: mysql84_audit_route
+                    password: ${MYSQL84_AUDIT_PASSWORD}
             rules:
-              - pattern: test_record
+              - pattern: test_order
                 match-type: exact
-                datasource-key: test-record-primary
+                datasource-key: mysql57.ops
                 priority: 1000
-              - pattern: test_record_batch
+              - pattern: test_user
                 match-type: exact
-                datasource-key: test-record-primary
+                datasource-key: mysql57.audit
                 priority: 1000
-              - pattern: test_audit
+              - pattern: test_wildcard
                 match-type: exact
-                datasource-key: test-audit-primary
+                datasource-key: mysql84.ops
                 priority: 1000
-              - pattern: test_record_archive
+              - pattern: test_extra_field
                 match-type: exact
-                datasource-key: test-record-archive
+                datasource-key: mysql84.audit
                 priority: 1000
 ```
-
-配置模型如下：
 
 | 配置 | 作用 |
 |---|---|
-| `clusters` | 定义 MySQL 连接地址、驱动、连接属性和凭据定位符。`port` 默认 `3306`，驱动默认 `com.mysql.cj.jdbc.Driver`。 |
-| `datasources` | 将一个 `datasourceKey` 绑定到已配置 `clusterKey` 下的固定 `database`。同一 cluster 不允许重复绑定同一 database。 |
-| `rules` | 将业务 `routeKey` 解析到 `datasourceKey`。一个 target 可以被多个 rule 复用。 |
+| `clusters` | 定义 MySQL 实例共用的 host、port、driver 与连接属性。`port` 默认 `3306`，驱动默认 `com.mysql.cj.jdbc.Driver`。 |
+| `clusters.<cluster>.datasources` | 定义该实例内的完整固定连接 target。每项必须有 `database`、`username`、`password`。同一 cluster 内不能重复绑定同一 database。 |
+| `rules` | 将业务 `routeKey` 解析到自动生成的 `datasourceKey`。一个 target 可被多个规则复用。 |
 
-`datasourceKey` 表达完整目标，不只是 MySQL 实例。例如 `test-record-primary` 与 `test-audit-primary` 虽在同一 cluster，仍是两个不同的固定 database 目标。
+`datasourceKey` 不在 YAML 中重复配置，而是稳定生成：`clusterKey.datasourceName`。例如 `mysql57.ops` 表示 mysql57 实例下名为 ops、固定连接 test_ops 的 target。cluster 名和 datasource 名应使用稳定技术标识，不能直接使用用户输入。
 
-### 2. 提供连接凭据
+## 密码配置与最小权限
 
-凭据由应用在启动期按 `credential-ref` 解析。生产实现应接入应用已有的密钥管理机制，不能把密码写入普通 Route 配置或日志。
+已提交的 YAML 仅保留 `${MYSQL57_OPS_PASSWORD}` 一类占位符，不提交真实密码。生产环境可通过标准 Spring 属性覆盖提供密码：
 
-```java
-@Configuration
-public class MySqlRouteCredentialConfiguration {
-
-    @Bean
-    public MySqlRouteCredentialResolver mySqlRouteCredentialResolver(
-            MySqlCredentialProvider credentialProvider) {
-        return credentialProvider::resolve;
-    }
-}
+```bash
+MYSQL57_OPS_PASSWORD='secret' java -jar app.jar
 ```
 
-`MySqlCredentialProvider` 是应用自己的密钥访问组件；其 `resolve(String credentialRef)` 应返回 `MySqlRouteCredential`。未知的 `credentialRef` 应明确失败，不能回退到任意默认账号。
+```bash
+java -DMYSQL57_OPS_PASSWORD=secret -jar app.jar
+```
 
-### 3. 按业务路由键执行
+每个 target 使用自己的数据库账号。账号只授予目标 database、目标表和实际操作需要的权限；不要为同实例内其他 database 授权。模块不提供、不需要 `credential-ref`、凭据解析器、KMS/Vault SPI 或默认账号。
+
+starter 自身仅在默认物理 DataSource 工厂创建连接时读取账号和密码；替换 `MySqlRouteDataSourceFactory` 的应用代码应自行遵守相同边界。公开 target 元数据、starter 审计事件、starter 日志和 starter 主动构造的异常消息不会输出 host、JDBC URL、username、password 或连接属性；业务执行期由 JDBC 驱动抛出的异常应由宿主按自身日志规范处理。
+
+## 按业务路由键执行
 
 `execute(routeKey, callback)` 先解析规则，再在对应路由作用域内执行 callback。应在 callback 内使用 `routingJdbcTemplate()` 或 `namedParameterJdbcTemplate()`。
 
 ```java
 @Service
-public class TestRecordService {
+public class TestOrderService {
 
     private final MySqlRouteTemplate mySqlRouteTemplate;
 
-    public TestRecordService(MySqlRouteTemplate mySqlRouteTemplate) {
+    public TestOrderService(MySqlRouteTemplate mySqlRouteTemplate) {
         this.mySqlRouteTemplate = mySqlRouteTemplate;
     }
 
-    public Integer countRecords() {
-        return mySqlRouteTemplate.execute("test_record", () ->
+    public Integer countOrders() {
+        return mySqlRouteTemplate.execute("test_order", () ->
                 mySqlRouteTemplate.routingJdbcTemplate().queryForObject(
-                        "SELECT COUNT(*) FROM test_record", Integer.class));
+                        "SELECT COUNT(*) FROM test_order", Integer.class));
     }
 }
 ```
 
-callback 完成后，当前线程原有的 Route 上下文会被恢复。未命中启用规则的 `routeKey` 会失败，不会落到宿主默认 DataSource 或任意 Route target。
+callback 完成后，线程原有 Route 上下文会被恢复。未命中启用规则的 `routeKey` 会失败，不会落到宿主默认 DataSource 或任意 Route target。
 
-### 4. 显式选择目标
+## 显式选择 target
 
 Ops 等管理侧可直接使用完整 `datasourceKey`，无需构造业务 `routeKey`。
 
 ```java
-Integer count = mySqlRouteTemplate.executeOn("test-audit-primary", () ->
+Integer count = mySqlRouteTemplate.executeOn("mysql57.audit", () ->
         mySqlRouteTemplate.routingJdbcTemplate().queryForObject(
                 "SELECT COUNT(*) FROM test_audit", Integer.class));
 ```
 
-这仍然使用 Route callback 和路由 DataSource；`datasourceKey` 不存在时，callback 不会执行。
+`datasourceKey` 不存在时 callback 不会执行。`executeOnSameDatasource` 仅用于预检多个 routeKey 是否解析到同一 target；它不提供跨 datasource 协调、跨库结果合并或分布式事务。
 
-## 使用建议
+## JDBC、MyBatis 与事务
 
-- **业务使用 routeKey，Ops 使用 datasourceKey。** `routeKey` 是稳定的业务输入，业务代码优先使用 `execute(routeKey, ...)`；需要明确选择物理目标的管理、排障场景才使用 `executeOn(datasourceKey, ...)`。不要把表名、SQL 文本或用户输入直接当作 routeKey。
-- **datasourceKey 要能表达完整目标。** 名称应同时区分 cluster 和固定 database，例如 `test-record-primary`，而不是只写 `primary`。同一 MySQL 实例下的不同 database 也是不同 target。
-- **事务放在 Route callback 内。** 宿主使用自己的 `PlatformTransactionManager` 时，先进入 `execute` 或 `executeOn`，再开启事务；一个事务回调只访问一个 datasourceKey。
+模块注册以下命名资源：
 
-```java
-mySqlRouteTemplate.execute("test_record", () -> transactionTemplate.execute(status ->
-        mySqlRouteTemplate.routingJdbcTemplate().update(
-                "UPDATE test_record SET status = ? WHERE id = ?", "ACTIVE", 1L)));
-```
-
-- **多业务键操作先做同目标预检。** 同一次逻辑操作涉及多个 routeKey 时，使用 `executeOnSameDatasource`，不要先后独立进入多个 Route callback 再假设它们处于同一数据库。
-- **凭据最小权限且按 cluster 隔离。** `MySqlRouteCredentialResolver` 应返回仅满足该 cluster/database 操作范围的账号；生产凭据由既有密钥机制托管，不写入普通 YAML、日志、审计事件或异常文本。
-- **规则优先清晰、范围收敛。** 优先采用 `exact` 或 `prefix`；只有确有模式需求时使用 `wildcard` 或 `regex`。重叠规则用 priority 明确决策，避免依赖声明顺序作为业务语义。
-- **MyBatis 与 JDBC 显式绑定。** 只有明确绑定 `mysqlRouteRoutingDataSource` 的组件才会路由；保留宿主默认 DataSource 给不需要 Route 的组件，避免无意扩大路由范围。
-- **上线前验证每个固定 target。** 对每个 datasourceKey 分别验证连接、固定 database、最小权限和关键 routeKey 命中；未命中 routeKey 不会回退，应用应在发布前发现缺失规则。
-
-## 选择访问 API
-
-| 诉求 | API | 使用条件 |
+| Bean 名称 | 类型 | 用途 |
 |---|---|---|
-| 按业务路由键执行 | `execute(routeKey, callback)` | `routeKey` 必须命中启用的 rule。 |
-| 显式选择已注册目标 | `executeOn(datasourceKey, callback)` | `datasourceKey` 必须已注册。 |
-| 预检多个业务键是否同目标 | `executeOnSameDatasource(routeKeys, callback)` | 所有 routeKey 必须解析到同一个 datasourceKey。 |
-| 使用位置参数 JDBC | `routingJdbcTemplate()` | 必须在 `execute` 或 `executeOn` 的 callback 内。 |
-| 使用命名参数 JDBC | `namedParameterJdbcTemplate()` | 必须在 `execute` 或 `executeOn` 的 callback 内。 |
-| 直接取得单个 target | `jdbcTemplate(datasourceKey)`、`dataSource(datasourceKey)` | 只适用于非事务中的显式目标访问。 |
+| `mysqlRouteRoutingDataSource` | `DataSource` | 仅在 Route scope 内确定实际 target 的严格路由 DataSource。 |
+| `mysqlRouteJdbcTemplate` | `JdbcTemplate` | 基于严格路由 DataSource 的 JDBC 模板。 |
+| `mysqlRouteNamedParameterJdbcTemplate` | `NamedParameterJdbcTemplate` | 基于严格路由 DataSource 的命名参数 JDBC 模板。 |
+
+这三个名称是启用 MySQL Route 时由 starter 独占的保留基础设施名称，不能由应用定义同名 Bean；发生冲突时应用会启动失败。它们必须保持为同一条严格路由链，才能保证 starter 默认 `MySqlRouteTemplate` 的作用域校验和单个 Spring 事务只能绑定一个 target。
+
+路由 `DataSource` 是普通命名 Bean，且刻意不标记 `@Primary`：
+
+- 应用只有这个 `DataSource` 候选时，MyBatis Spring Boot 自动配置可以将其作为唯一候选。
+- 应用已有默认 `DataSource` 时，Route Bean 与它并存；MyBatis 不应依赖隐式候选选择，而应由应用显式绑定自己的路由 `SqlSessionFactory`。
+- starter 不引入 MyBatis 生产依赖、不创建 `SqlSessionFactory`、不扫描 Mapper，也不改变宿主 JDBC、事务或 MyBatis 的默认数据源。
 
 ```java
-mySqlRouteTemplate.executeOnSameDatasource(
-        Arrays.asList("test_record", "test_record_batch"),
-        () -> mySqlRouteTemplate.routingJdbcTemplate().queryForObject("SELECT 1", Integer.class));
+import javax.sql.DataSource;
+
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.mybatis.spring.SqlSessionFactoryBean;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+
+@Bean
+public SqlSessionFactory routedSqlSessionFactory(
+        @Qualifier("mysqlRouteRoutingDataSource") DataSource routingDataSource) throws Exception {
+    SqlSessionFactoryBean factory = new SqlSessionFactoryBean();
+    factory.setDataSource(routingDataSource);
+    return factory.getObject();
+}
+
+@Bean
+public DataSourceTransactionManager routedTransactionManager(
+        @Qualifier("mysqlRouteRoutingDataSource") DataSource routingDataSource) {
+    return new DataSourceTransactionManager(routingDataSource);
+}
 ```
 
-`executeOnSameDatasource` 只在 callback 前确认多个业务键属于同一目标；它不提供跨 datasource 协调、跨库结果合并或分布式事务。
+调用路由 Mapper 前必须进入 `execute(routeKey, ...)` 或 `executeOn(datasourceKey, ...)`。多数据源宿主使用 `@Transactional` 时，必须显式指定 `routedTransactionManager`，并确保首次 JDBC 或 Mapper 调用发生在 Route callback 内；不要在进入 callback 前访问路由 Mapper。一个 Spring 事务只能绑定一个 `datasourceKey`，尝试切换 target 会立即失败。不支持跨 datasource 事务、XA / 2PC / Seata、动态 `USE database`、SQL 改写、分库分表、跨库 Join、动态刷新、业务注解或 AOP。
 
 ## 配置参考
-
-### 顶层配置
 
 | 配置项 | 默认值 | 说明 |
 |---|---:|---|
 | `enable` | `false` | 是否启用 MySQL Route 自动配置。 |
-| `clusters` | 空 | clusterKey 到连接配置的映射。 |
-| `datasources` | 空 | datasourceKey 到固定 cluster/database 目标的映射。 |
-| `rules` | 空 | 业务 routeKey 的解析规则。 |
-
-### cluster 配置
-
-| 配置项 | 默认值 | 说明 |
-|---|---:|---|
-| `host` | 无 | MySQL 主机，必填。 |
-| `port` | `3306` | MySQL 端口。 |
-| `credential-ref` | 无 | 应用凭据 SPI 使用的定位符，必填。 |
-| `driver-class-name` | `com.mysql.cj.jdbc.Driver` | JDBC 驱动类。 |
-| `connection-properties` | 空 | 追加到 JDBC URL 的连接属性。 |
-
-### datasource 与 rule 配置
-
-| 配置项 | 默认值 | 说明 |
-|---|---:|---|
-| `datasources.<key>.cluster-key` | 无 | datasource 所属 cluster，必填。 |
-| `datasources.<key>.database` | 无 | 固定 database，必填。 |
+| `clusters` | 空 | clusterKey 到实例与嵌套 target 配置的映射。 |
+| `clusters.<cluster>.host` | 无 | MySQL 主机，必填。 |
+| `clusters.<cluster>.port` | `3306` | MySQL 端口。 |
+| `clusters.<cluster>.driver-class-name` | `com.mysql.cj.jdbc.Driver` | JDBC 驱动类。 |
+| `clusters.<cluster>.connection-properties` | 空 | 追加到 JDBC URL 的连接属性。 |
+| `clusters.<cluster>.datasources.<name>.database` | 无 | 固定 database，必填。 |
+| `clusters.<cluster>.datasources.<name>.username` | 无 | 此固定 target 的连接账号，必填。 |
+| `clusters.<cluster>.datasources.<name>.password` | 无 | 此固定 target 的连接密码，必填。 |
 | `rules[].pattern` | 无 | 匹配表达式，必填。 |
 | `rules[].match-type` | `exact` | `exact`、`prefix`、`suffix`、`wildcard` 或 `regex`。 |
-| `rules[].datasource-key` | 无 | rule 命中的 datasourceKey，必填。 |
-| `rules[].priority` | `1000` | 数值越大越优先；数值相同时按 YAML 声明顺序匹配。 |
+| `rules[].datasource-key` | 无 | 规则命中的生成 target key，必填。 |
+| `rules[].priority` | `1000` | 数值越大越优先；相同时按 YAML 声明顺序匹配。 |
 | `rules[].enable` | `true` | 是否参与路由解析。 |
 
 `wildcard` 仅将 `*` 和 `?` 视为通配符，其他正则特殊字符按字面匹配；`regex` 使用 Java 正则表达式。
 
-## JDBC 与 MyBatis 集成
+## 1.0.0 升级到 1.0.1
 
-模块启用后注册以下命名资源：
+1. 删除 cluster 上的 `credential-ref`，同时删除顶层 `datasources`。
+2. 将每个原有固定 database 移动到所属 `clusters.<cluster>.datasources.<name>` 下。
+3. 在每个 datasource 中配置该库自己的 `database`、`username` 与 `password`。
+4. 将 rule、`executeOn()`、`jdbcTemplate()`、`dataSource()` 使用的 key 改为 `cluster.datasource`，例如 `mysql57.ops`。
+5. 删除 `MySqlRouteCredential`、`MySqlRouteCredentialResolver` 及所有相关 Bean 配置。
 
-| Bean 名称 | 类型 | 用途 |
-|---|---|---|
-| `mysqlRouteRoutingDataSource` | `DataSource` | 仅在 Route scope 内确定实际 target 的路由 DataSource。 |
-| `mysqlRouteJdbcTemplate` | `JdbcTemplate` | 基于 Route DataSource 的 JDBC 模板。 |
-| `mysqlRouteNamedParameterJdbcTemplate` | `NamedParameterJdbcTemplate` | 基于 Route DataSource 的命名参数 JDBC 模板。 |
-
-宿主应用如需让自己的 JDBC 或 MyBatis 组件走 Route，必须显式引用 `mysqlRouteRoutingDataSource`：
-
-```java
-@Bean
-public JdbcTemplate routedJdbcTemplate(
-        @Qualifier("mysqlRouteRoutingDataSource") DataSource routingDataSource) {
-    return new JdbcTemplate(routingDataSource);
-}
-```
-
-MyBatis 同理：由宿主创建 `SqlSessionFactory` 时显式设置该 DataSource。starter 不创建 `SqlSessionFactory` 或事务管理器，也不标记任何 Route Bean 为 `@Primary`；宿主默认 DataSource 可以继续独立使用。
-
-应用若已定义同名的三个命名 Bean，starter 会保留应用的定义，不进行覆盖。
+这是配置模型的破坏性修复：公开 Template API 与事务边界不变，但不兼容 1.0.0 的平铺 target 与凭据 SPI 配置。
 
 ## 扩展与审计
 
 | 扩展点 | 是否必须 | 作用 |
 |---|---|---|
-| `MySqlRouteCredentialResolver` | 是 | 按 `credential-ref` 解析启动期连接凭据。 |
 | `MySqlRouteAuditPublisher` | 否 | 接收 Route 执行审计事件；默认 `NoopMySqlRouteAuditPublisher` 不保存事件。 |
 | `MySqlRouteResolver` | 否 | 替换业务 routeKey 到 datasourceKey 的解析策略。 |
 | `MySqlRouteDataSourceFactory` | 否 | 替换物理 DataSource 的创建、校验和关闭策略。 |
 | `MySqlRoutePropertiesValidator` | 否 | 替换或增强配置校验。 |
 | `MySqlRouteTemplate` | 否 | 替换 Route 执行门面。 |
 
-每次 Route 执行成功或失败都会尝试发布脱敏 `MySqlRouteAuditEvent`；默认实现是 Noop。审计发布失败不会改变业务调用结果。
-
-事件不包含 SQL、SQL 参数、结果、凭据、JDBC URL、原始 routeKey 或原始异常。调用方可以通过 `MySqlRouteAuditContext` 补充主体、能力、请求 ID 和资源摘要；未设置资源摘要时，Template 会对 `routeKey` 或 `datasourceKey` 计算 SHA-256 摘要。
-
-## 事务与能力边界
-
-> 一个 Spring 事务只能绑定一个 `datasourceKey`。事务期间尝试切换到另一个 target 会立即失败，不支持跨 datasource 事务。
-
-- 事务中不得使用 `jdbcTemplate(datasourceKey)` 或 `dataSource(datasourceKey)` 直接取得物理 target，避免绕过 Route 事务边界。
-- 不支持 SQL 解析或改写、分库分表、跨库 Join、跨库结果合并、XA / 2PC / Seata、动态 `USE database`、动态刷新、业务注解或 AOP。
-- 每个 datasource 都是启动时创建的固定 cluster + 固定 database 目标；模块不提供默认 target 或默认 DataSource 回退。
-
-## 已验证兼容性与本地验证
-
-| Spring Boot | Java | MySQL Community Server | 结果 |
-|---|---:|---|---|
-| `2.2.13.RELEASE` | 8 | `5.7.44`、`8.4.2` | 通过 |
-| `2.3.12.RELEASE` | 8 | `5.7.44`、`8.4.2` | 通过 |
-| `2.4.5` | 8 | `5.7.44`、`8.4.2` | 通过 |
-| `2.7.9` | 11 | `5.7.44`、`8.4.2` | 通过 |
-
-每个 Spring Boot 版本均执行同一套真实双实例 E2E：同一 MySQL 实例下的固定 database 路由，以及 MySQL `5.7.44` / `8.4.2` 两个独立物理实例之间的 Route 均单独验证。
+每次 Route 执行成功或失败都会尝试发布脱敏 `MySqlRouteAuditEvent`；默认实现是 Noop。审计发布失败不会改变业务调用结果。事件不包含 SQL、SQL 参数、结果、凭据、JDBC URL、原始 routeKey 或原始异常。调用方通过 `MySqlRouteAuditContext` 提供 `resourceDigest` 时，只能传入小写十六进制 SHA-256 摘要；格式无效时自动使用 routeKey 的 SHA-256 摘要。

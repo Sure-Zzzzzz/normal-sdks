@@ -3,13 +3,10 @@ package io.github.surezzzzzz.sdk.mysql.route.registry;
 import io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteProperties;
 import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.mysql.route.credential.MySqlRouteCredentialResolver;
 import io.github.surezzzzzz.sdk.mysql.route.datasource.MySqlRouteDataSourceFactory;
 import io.github.surezzzzzz.sdk.mysql.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.mysql.route.exception.SimpleMysqlRouteException;
-import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteCredential;
 import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteTarget;
-import io.github.surezzzzzz.sdk.mysql.route.support.MySqlRouteStringHelper;
 import io.github.surezzzzzz.sdk.mysql.route.validator.MySqlRoutePropertiesValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
@@ -35,21 +32,16 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
     /**
      * 校验并初始化全部固定物理数据源。
      *
-     * @param properties         Route 配置
-     * @param validator          配置校验器
-     * @param credentialResolver 凭据解析 SPI
-     * @param dataSourceFactory  物理数据源工厂
+     * @param properties        Route 配置
+     * @param validator         配置校验器
+     * @param dataSourceFactory 物理数据源工厂
      */
     public SimpleMysqlRouteRegistry(SimpleMysqlRouteProperties properties,
                                     MySqlRoutePropertiesValidator validator,
-                                    MySqlRouteCredentialResolver credentialResolver,
                                     MySqlRouteDataSourceFactory dataSourceFactory) {
-        if (credentialResolver == null) {
-            throw new ConfigurationException(ErrorCode.CONFIG_INVALID, ErrorMessage.CREDENTIAL_RESOLVER_REQUIRED);
-        }
         this.dataSourceFactory = dataSourceFactory;
         validator.validate(properties);
-        initialize(properties, credentialResolver);
+        initialize(properties);
     }
 
     /**
@@ -156,36 +148,20 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
         targets.clear();
     }
 
-    private void initialize(SimpleMysqlRouteProperties properties, MySqlRouteCredentialResolver credentialResolver) {
+    private void initialize(SimpleMysqlRouteProperties properties) {
         try {
-            for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> entry
-                    : properties.getDatasources().entrySet()) {
-                String datasourceKey = entry.getKey();
-                SimpleMysqlRouteProperties.DatasourceConfig datasourceConfig = entry.getValue();
-                SimpleMysqlRouteProperties.ClusterConfig cluster = properties.getClusters()
-                        .get(datasourceConfig.getClusterKey());
-                MySqlRouteTarget target = new MySqlRouteTarget(datasourceKey, datasourceConfig.getClusterKey(),
-                        datasourceConfig.getDatabase());
-                MySqlRouteCredential credential = credentialResolver.resolve(cluster.getCredentialRef());
-                if (credential == null || !MySqlRouteStringHelper.hasText(credential.getUsername())) {
-                    throw new ConfigurationException(ErrorCode.CONFIG_INVALID,
-                            String.format(ErrorMessage.CREDENTIAL_INVALID, target.getClusterKey()));
+            for (Map.Entry<String, SimpleMysqlRouteProperties.ClusterConfig> clusterEntry
+                    : properties.getClusters().entrySet()) {
+                String clusterKey = clusterEntry.getKey();
+                SimpleMysqlRouteProperties.ClusterConfig cluster = clusterEntry.getValue();
+                for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> datasourceEntry
+                        : cluster.getDatasources().entrySet()) {
+                    String datasourceKey = datasourceKey(clusterKey, datasourceEntry.getKey());
+                    SimpleMysqlRouteProperties.DatasourceConfig datasource = datasourceEntry.getValue();
+                    MySqlRouteTarget target = new MySqlRouteTarget(datasourceKey, clusterKey,
+                            datasource.getDatabase());
+                    registerTarget(target, cluster, datasource);
                 }
-                DataSource dataSource = null;
-                try {
-                    dataSource = dataSourceFactory.create(target, cluster, credential);
-                    if (dataSource == null) {
-                        throw new ConfigurationException(ErrorCode.DATASOURCE_CREATE_FAILED,
-                                String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasourceKey));
-                    }
-                    dataSourceFactory.verify(dataSource);
-                    dataSources.put(datasourceKey, dataSource);
-                } catch (RuntimeException e) {
-                    closeCurrent(dataSource, datasourceKey);
-                    throw e;
-                }
-                jdbcTemplates.put(datasourceKey, new JdbcTemplate(dataSource));
-                targets.put(datasourceKey, target);
             }
         } catch (ConfigurationException e) {
             destroy();
@@ -193,8 +169,31 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
         } catch (RuntimeException e) {
             destroy();
             throw new ConfigurationException(ErrorCode.DATASOURCE_CREATE_FAILED,
-                    ErrorMessage.TARGET_INITIALIZE_FAILED, e);
+                    ErrorMessage.TARGET_INITIALIZE_FAILED);
         }
+    }
+
+    private void registerTarget(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
+                                SimpleMysqlRouteProperties.DatasourceConfig datasource) {
+        DataSource dataSource = null;
+        try {
+            dataSource = dataSourceFactory.create(target, cluster, datasource);
+            if (dataSource == null) {
+                throw new ConfigurationException(ErrorCode.DATASOURCE_CREATE_FAILED,
+                        String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, target.getDatasourceKey()));
+            }
+            dataSourceFactory.verify(dataSource);
+            dataSources.put(target.getDatasourceKey(), dataSource);
+        } catch (RuntimeException e) {
+            closeCurrent(dataSource, target.getDatasourceKey());
+            throw e;
+        }
+        jdbcTemplates.put(target.getDatasourceKey(), new JdbcTemplate(dataSource));
+        targets.put(target.getDatasourceKey(), target);
+    }
+
+    private String datasourceKey(String clusterKey, String datasourceName) {
+        return clusterKey + "." + datasourceName;
     }
 
     private void closeCurrent(DataSource dataSource, String datasourceKey) {

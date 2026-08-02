@@ -31,6 +31,11 @@ public final class SimpleMysqlRouteConstant {
     public static final String JDBC_URL_KEY_VALUE_SEPARATOR = "=";
     public static final String UTF_8 = "UTF-8";
     public static final String SHA_256 = "SHA-256";
+    public static final int SHA_256_DIGEST_LENGTH = 64;
+    public static final char DIGIT_MIN = '0';
+    public static final char DIGIT_MAX = '9';
+    public static final char LOWERCASE_HEX_MIN = 'a';
+    public static final char LOWERCASE_HEX_MAX = 'f';
 
     private SimpleMysqlRouteConstant() {
         throw new UnsupportedOperationException("工具类不能实例化");

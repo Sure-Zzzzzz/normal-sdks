@@ -113,7 +113,7 @@ public class MySqlRouteTransactionTest {
 
     private MySqlRouteTemplate template(SimpleMysqlRouteRegistry registry, MySqlRoutingDataSource routingDataSource) {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(routingDataSource);
-        return new MySqlRouteTemplate(registry, routeKey -> routeKey, jdbcTemplate,
+        return new MySqlRouteTemplate(registry, routeKey -> routeKey, routingDataSource, jdbcTemplate,
                 new NamedParameterJdbcTemplate(jdbcTemplate), null);
     }
 

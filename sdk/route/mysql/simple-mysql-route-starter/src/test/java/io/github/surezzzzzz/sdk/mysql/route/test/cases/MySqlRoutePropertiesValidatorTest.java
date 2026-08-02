@@ -28,33 +28,79 @@ public class MySqlRoutePropertiesValidatorTest {
     }
 
     @Test
-    public void shouldAcceptValidConfiguration() {
-        validator.validate(validProperties());
+    public void shouldAcceptIndependentNestedTargets() {
+        assertDoesNotThrow(() -> validator.validate(validProperties()));
     }
 
     @Test
-    public void shouldRejectMissingCredentialAndDuplicateDatabaseBinding() {
-        SimpleMysqlRouteProperties missingCredential = validProperties();
-        missingCredential.getClusters().get("test-cluster-a").setCredentialRef(" ");
-        ConfigurationException credentialException = assertThrows(ConfigurationException.class,
-                () -> validator.validate(missingCredential));
-        assertEquals(ErrorCode.CONFIG_INVALID, credentialException.getCode());
-        assertTrue(credentialException.getMessage().contains("credential-ref"));
+    public void shouldExcludeConnectionDetailsFromToString() {
+        SimpleMysqlRouteProperties.DatasourceConfig datasource =
+                datasource("test_ops", "test-ops-user", "test-ops-password");
+        SimpleMysqlRouteProperties.ClusterConfig cluster = new SimpleMysqlRouteProperties.ClusterConfig();
+        cluster.setHost("test-host.internal");
+        cluster.getConnectionProperties().put("connection-password", "test-connection-password");
+        cluster.getDatasources().put("ops", datasource);
+
+        String datasourceDescription = datasource.toString();
+        String clusterDescription = cluster.toString();
+
+        assertFalse(datasourceDescription.contains("test-ops-user"));
+        assertFalse(datasourceDescription.contains("test-ops-password"));
+        assertFalse(clusterDescription.contains("test-host.internal"));
+        assertFalse(clusterDescription.contains("test-connection-password"));
+        assertFalse(clusterDescription.contains("test-ops-user"));
+        assertFalse(clusterDescription.contains("test-ops-password"));
+    }
+
+    @Test
+    public void shouldRejectMissingTargetCredentialAndDuplicateDatabaseBinding() {
+        SimpleMysqlRouteProperties missingDatasource = validProperties();
+        missingDatasource.getClusters().get("test-cluster-a").getDatasources().put("missing", null);
+        ConfigurationException datasourceException = assertThrows(ConfigurationException.class,
+                () -> validator.validate(missingDatasource));
+        assertEquals(ErrorCode.CONFIG_INVALID, datasourceException.getCode());
+
+        SimpleMysqlRouteProperties missingUsername = validProperties();
+        missingUsername.getClusters().get("test-cluster-a").getDatasources().get("ops").setUsername(" ");
+        ConfigurationException usernameException = assertThrows(ConfigurationException.class,
+                () -> validator.validate(missingUsername));
+        assertEquals(ErrorCode.CONFIG_INVALID, usernameException.getCode());
+        assertTrue(usernameException.getMessage().contains("username"));
+
+        SimpleMysqlRouteProperties missingPassword = validProperties();
+        missingPassword.getClusters().get("test-cluster-a").getDatasources().get("ops").setPassword(" ");
+        ConfigurationException passwordException = assertThrows(ConfigurationException.class,
+                () -> validator.validate(missingPassword));
+        assertEquals(ErrorCode.CONFIG_INVALID, passwordException.getCode());
+        assertTrue(passwordException.getMessage().contains("password"));
 
         SimpleMysqlRouteProperties duplicate = validProperties();
-        SimpleMysqlRouteProperties.DatasourceConfig second = new SimpleMysqlRouteProperties.DatasourceConfig();
-        second.setClusterKey("test-cluster-a");
-        second.setDatabase("test_ops");
-        duplicate.getDatasources().put("test-duplicate", second);
+        duplicate.getClusters().get("test-cluster-a").getDatasources().put("duplicate",
+                datasource("test_ops", "test-duplicate-user", "test-duplicate-password"));
         ConfigurationException duplicateException = assertThrows(ConfigurationException.class,
                 () -> validator.validate(duplicate));
         assertEquals(ErrorCode.CONFIG_INVALID, duplicateException.getCode());
+
+        SimpleMysqlRouteProperties duplicateGeneratedKey = new SimpleMysqlRouteProperties();
+        SimpleMysqlRouteProperties.ClusterConfig firstCluster = new SimpleMysqlRouteProperties.ClusterConfig();
+        firstCluster.setHost("example.invalid");
+        firstCluster.getDatasources().put("b.ops",
+                datasource("test_first", "test-first-user", "test-first-password"));
+        duplicateGeneratedKey.getClusters().put("test-cluster-a", firstCluster);
+        SimpleMysqlRouteProperties.ClusterConfig secondCluster = new SimpleMysqlRouteProperties.ClusterConfig();
+        secondCluster.setHost("example.invalid");
+        secondCluster.getDatasources().put("ops",
+                datasource("test_second", "test-second-user", "test-second-password"));
+        duplicateGeneratedKey.getClusters().put("test-cluster-a.b", secondCluster);
+        ConfigurationException generatedKeyException = assertThrows(ConfigurationException.class,
+                () -> validator.validate(duplicateGeneratedKey));
+        assertEquals(ErrorCode.CONFIG_INVALID, generatedKeyException.getCode());
     }
 
     @Test
-    public void shouldRejectUnknownRuleTargetAndInvalidPattern() {
+    public void shouldRejectUnknownGeneratedRuleTargetAndInvalidPattern() {
         SimpleMysqlRouteProperties unknownTarget = validProperties();
-        unknownTarget.getRules().get(0).setDatasourceKey("test-unknown");
+        unknownTarget.getRules().get(0).setDatasourceKey("test-unknown.ops");
         ConfigurationException unknownTargetException = assertThrows(ConfigurationException.class,
                 () -> validator.validate(unknownTarget));
         assertEquals(ErrorCode.CONFIG_INVALID, unknownTargetException.getCode());
@@ -71,18 +117,22 @@ public class MySqlRoutePropertiesValidatorTest {
         SimpleMysqlRouteProperties properties = new SimpleMysqlRouteProperties();
         SimpleMysqlRouteProperties.ClusterConfig cluster = new SimpleMysqlRouteProperties.ClusterConfig();
         cluster.setHost("example.invalid");
-        cluster.setCredentialRef("test-reader-credential");
+        cluster.getDatasources().put("ops", datasource("test_ops", "test-ops-user", "test-ops-password"));
+        cluster.getDatasources().put("audit", datasource("test_audit", "test-audit-user", "test-audit-password"));
         properties.getClusters().put("test-cluster-a", cluster);
-
-        SimpleMysqlRouteProperties.DatasourceConfig datasource = new SimpleMysqlRouteProperties.DatasourceConfig();
-        datasource.setClusterKey("test-cluster-a");
-        datasource.setDatabase("test_ops");
-        properties.getDatasources().put("test-ops-a", datasource);
 
         SimpleMysqlRouteProperties.RouteRule rule = new SimpleMysqlRouteProperties.RouteRule();
         rule.setPattern("test_order");
-        rule.setDatasourceKey("test-ops-a");
+        rule.setDatasourceKey("test-cluster-a.ops");
         properties.getRules().add(rule);
         return properties;
+    }
+
+    private SimpleMysqlRouteProperties.DatasourceConfig datasource(String database, String username, String password) {
+        SimpleMysqlRouteProperties.DatasourceConfig datasource = new SimpleMysqlRouteProperties.DatasourceConfig();
+        datasource.setDatabase(database);
+        datasource.setUsername(username);
+        datasource.setPassword(password);
+        return datasource;
     }
 }

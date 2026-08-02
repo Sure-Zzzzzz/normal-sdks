@@ -8,8 +8,10 @@ services:
       MYSQL_DATABASE: test_ops
       MYSQL_ROOT_PASSWORD: mysql-route-root-local
       E2E_CLUSTER_ID: mysql57
-      E2E_MYSQL_USERNAME: mysql_route_e2e_reader
-      E2E_MYSQL_PASSWORD: mysql-route-reader-local
+      E2E_OPS_USERNAME: mysql57_ops_route
+      E2E_OPS_PASSWORD: mysql57-ops-route-local
+      E2E_AUDIT_USERNAME: mysql57_audit_route
+      E2E_AUDIT_PASSWORD: mysql57-audit-route-local
     volumes:
       - mysql-route-e2e-57-data:/var/lib/mysql
       - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro
@@ -29,8 +31,10 @@ services:
       MYSQL_DATABASE: test_ops
       MYSQL_ROOT_PASSWORD: mysql-route-root-local
       E2E_CLUSTER_ID: mysql84
-      E2E_MYSQL_USERNAME: mysql_route_e2e_reader
-      E2E_MYSQL_PASSWORD: mysql-route-reader-local
+      E2E_OPS_USERNAME: mysql84_ops_route
+      E2E_OPS_PASSWORD: mysql84-ops-route-local
+      E2E_AUDIT_USERNAME: mysql84_audit_route
+      E2E_AUDIT_PASSWORD: mysql84-audit-route-local
     volumes:
       - mysql-route-e2e-84-data:/var/lib/mysql
       - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro

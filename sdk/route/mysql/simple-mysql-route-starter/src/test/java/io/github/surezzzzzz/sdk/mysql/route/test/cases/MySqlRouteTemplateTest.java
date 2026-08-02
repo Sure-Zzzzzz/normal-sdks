@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.mysql.route.audit.MySqlRouteAuditPublisher;
 import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.mysql.route.constant.SimpleMysqlRouteConstant;
 import io.github.surezzzzzz.sdk.mysql.route.context.MySqlRouteContextHolder;
+import io.github.surezzzzzz.sdk.mysql.route.datasource.MySqlRoutingDataSource;
 import io.github.surezzzzzz.sdk.mysql.route.exception.SimpleMysqlRouteException;
 import io.github.surezzzzzz.sdk.mysql.route.registry.SimpleMysqlRouteRegistry;
 import io.github.surezzzzzz.sdk.mysql.route.resolver.MySqlRouteResolver;
@@ -81,6 +82,24 @@ public class MySqlRouteTemplateTest {
     }
 
     @Test
+    public void shouldRestoreOuterRouteContextAfterNestedExecution() {
+        SimpleMysqlRouteRegistry registry = registryWith("test-ops-a", "test-audit-a");
+        MySqlRouteTemplate template = template(registry,
+                routeKey -> routeKey.endsWith("order") ? "test-ops-a" : "test-audit-a", new RecordingPublisher());
+
+        template.execute("test_order", () -> {
+            assertEquals("test-ops-a", MySqlRouteContextHolder.current());
+            template.execute("test_user", () -> {
+                assertEquals("test-audit-a", MySqlRouteContextHolder.current());
+                return null;
+            });
+            assertEquals("test-ops-a", MySqlRouteContextHolder.current());
+            return null;
+        });
+        assertNull(MySqlRouteContextHolder.current());
+    }
+
+    @Test
     public void shouldRejectDifferentDatasourceBeforeCallback() {
         SimpleMysqlRouteRegistry registry = registryWith("test-ops-a", "test-audit-a");
         RecordingPublisher publisher = new RecordingPublisher();
@@ -143,22 +162,33 @@ public class MySqlRouteTemplateTest {
                 new RecordingPublisher());
         TransactionSynchronizationManager.setActualTransactionActive(true);
 
-        SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
+        SimpleMysqlRouteException dataSourceException = assertThrows(SimpleMysqlRouteException.class,
                 () -> template.dataSource("test-ops-a"));
-        assertEquals(ErrorCode.DIRECT_TARGET_IN_TRANSACTION, exception.getCode());
+        assertEquals(ErrorCode.DIRECT_TARGET_IN_TRANSACTION, dataSourceException.getCode());
+
+        SimpleMysqlRouteException jdbcTemplateException = assertThrows(SimpleMysqlRouteException.class,
+                () -> template.jdbcTemplate("test-ops-a"));
+        assertEquals(ErrorCode.DIRECT_TARGET_IN_TRANSACTION, jdbcTemplateException.getCode());
     }
 
     @Test
-    public void shouldUseProvidedResourceDigestAndContainPublisherFailure() {
+    public void shouldUseOnlySha256ResourceDigestAndContainPublisherFailure() {
         SimpleMysqlRouteRegistry registry = registryWith("test-ops-a");
         RecordingPublisher publisher = new RecordingPublisher();
         MySqlRouteTemplate template = template(registry, routeKey -> "test-ops-a", publisher);
+        String providedDigest = MySqlRouteDigestHelper.sha256("provided-resource");
 
         try (MySqlRouteAuditContext.Scope ignored = MySqlRouteAuditContext.open(
-                new MySqlRouteAuditContext("test-subject", "MYSQL_QUERY", "test-request", "provided-digest"))) {
+                new MySqlRouteAuditContext("test-subject", "MYSQL_QUERY", "test-request", providedDigest))) {
             template.execute("test_order", () -> null);
         }
-        assertEquals("provided-digest", publisher.events.get(0).getResourceDigest());
+        assertEquals(providedDigest, publisher.events.get(0).getResourceDigest());
+
+        try (MySqlRouteAuditContext.Scope ignored = MySqlRouteAuditContext.open(
+                new MySqlRouteAuditContext("test-subject", "MYSQL_QUERY", "test-request", "raw-resource"))) {
+            template.execute("test_order", () -> null);
+        }
+        assertEquals(MySqlRouteDigestHelper.sha256("test_order"), publisher.events.get(1).getResourceDigest());
 
         MySqlRouteTemplate failingPublisherTemplate = template(registry, routeKey -> "test-ops-a",
                 event -> {
@@ -181,6 +211,19 @@ public class MySqlRouteTemplateTest {
         assertEquals(SimpleMysqlRouteConstant.AUDIT_STATUS_INTERNAL_SERVER_ERROR, publisher.events.get(0).getStatus());
     }
 
+    @Test
+    public void shouldRejectTemplatesNotBackedByRoutingDatasource() {
+        MySqlRoutingDataSource routingDataSource = new MySqlRoutingDataSource(
+                java.util.Collections.<Object, Object>singletonMap("test-ops-a", mock(DataSource.class)));
+        JdbcTemplate routingJdbcTemplate = new JdbcTemplate(routingDataSource);
+        NamedParameterJdbcTemplate mismatchedNamedParameterJdbcTemplate =
+                new NamedParameterJdbcTemplate(mock(DataSource.class));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> new MySqlRouteTemplate(mock(SimpleMysqlRouteRegistry.class), routeKey -> "test-ops-a",
+                        routingDataSource, routingJdbcTemplate, mismatchedNamedParameterJdbcTemplate, null));
+    }
+
     private SimpleMysqlRouteRegistry registryWith(String... datasourceKeys) {
         SimpleMysqlRouteRegistry registry = mock(SimpleMysqlRouteRegistry.class);
         for (String datasourceKey : datasourceKeys) {
@@ -191,8 +234,10 @@ public class MySqlRouteTemplateTest {
 
     private MySqlRouteTemplate template(SimpleMysqlRouteRegistry registry, MySqlRouteResolver resolver,
                                         MySqlRouteAuditPublisher publisher) {
-        JdbcTemplate jdbcTemplate = new JdbcTemplate(mock(DataSource.class));
-        return new MySqlRouteTemplate(registry, resolver, jdbcTemplate,
+        MySqlRoutingDataSource routingDataSource = new MySqlRoutingDataSource(
+                java.util.Collections.<Object, Object>singletonMap("test-ops-a", mock(DataSource.class)));
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(routingDataSource);
+        return new MySqlRouteTemplate(registry, resolver, routingDataSource, jdbcTemplate,
                 new NamedParameterJdbcTemplate(jdbcTemplate), publisher);
     }
 

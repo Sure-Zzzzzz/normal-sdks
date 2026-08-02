@@ -38,4 +38,25 @@ public final class MySqlRouteDigestHelper {
             throw new IllegalStateException(ErrorMessage.SHA_256_UNAVAILABLE, e);
         }
     }
+
+    /**
+     * 判断值是否为小写十六进制 SHA-256 摘要。
+     *
+     * @param value 待校验的摘要
+     * @return 值符合 SHA-256 摘要格式时返回 true
+     */
+    public static boolean isSha256(String value) {
+        if (value == null || value.length() != SimpleMysqlRouteConstant.SHA_256_DIGEST_LENGTH) {
+            return false;
+        }
+        for (int index = 0; index < value.length(); index++) {
+            char current = value.charAt(index);
+            if ((current < SimpleMysqlRouteConstant.DIGIT_MIN || current > SimpleMysqlRouteConstant.DIGIT_MAX)
+                    && (current < SimpleMysqlRouteConstant.LOWERCASE_HEX_MIN
+                    || current > SimpleMysqlRouteConstant.LOWERCASE_HEX_MAX)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

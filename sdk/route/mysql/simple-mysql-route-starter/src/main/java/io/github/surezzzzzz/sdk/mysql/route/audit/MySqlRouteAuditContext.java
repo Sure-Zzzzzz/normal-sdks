@@ -23,7 +23,7 @@ public final class MySqlRouteAuditContext {
      * @param subject        操作主体标识
      * @param capability     已授权能力标识
      * @param requestId      请求标识
-     * @param resourceDigest 调用方提供的资源摘要
+     * @param resourceDigest 调用方提供的小写十六进制 SHA-256 资源摘要；格式无效时使用 Route key 摘要
      */
     public MySqlRouteAuditContext(String subject, String capability, String requestId, String resourceDigest) {
         this.subject = subject;

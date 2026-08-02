@@ -55,7 +55,7 @@ public class MySqlRoutingDataSource extends AbstractRoutingDataSource {
     }
 
     /**
-     * 禁止调用方绕过凭据解析器直接指定数据库连接凭据。
+     * 禁止调用方绕过受控 target 配置直接指定数据库连接凭据。
      *
      * @param username 调用方提供的用户名
      * @param password 调用方提供的密码

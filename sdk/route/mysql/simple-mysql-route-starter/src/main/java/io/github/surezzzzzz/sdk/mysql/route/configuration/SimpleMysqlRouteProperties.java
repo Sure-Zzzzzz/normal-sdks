@@ -21,23 +21,24 @@ public class SimpleMysqlRouteProperties {
 
     private boolean enable;
     private Map<String, ClusterConfig> clusters = new LinkedHashMap<>();
-    private Map<String, DatasourceConfig> datasources = new LinkedHashMap<>();
     private List<RouteRule> rules = new ArrayList<>();
 
     @Data
-    @ToString(exclude = {"host", "credentialRef", "connectionProperties"})
+    @ToString(exclude = {"host", "connectionProperties", "datasources"})
     public static class ClusterConfig {
         private String host;
         private int port = SimpleMysqlRouteConstant.DEFAULT_CLUSTER_PORT;
-        private String credentialRef;
         private String driverClassName = SimpleMysqlRouteConstant.DEFAULT_DRIVER_CLASS_NAME;
         private Map<String, String> connectionProperties = new LinkedHashMap<>();
+        private Map<String, DatasourceConfig> datasources = new LinkedHashMap<>();
     }
 
     @Data
+    @ToString(exclude = {"username", "password"})
     public static class DatasourceConfig {
-        private String clusterKey;
         private String database;
+        private String username;
+        private String password;
     }
 
     @Data

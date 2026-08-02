@@ -32,10 +32,10 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = SimpleMysqlRouteTestApplication.class)
 public class MySqlRouteMultiClusterEndToEndTest {
 
-    private static final String MYSQL57_OPS = "test-mysql57-ops";
-    private static final String MYSQL57_AUDIT = "test-mysql57-audit";
-    private static final String MYSQL84_OPS = "test-mysql84-ops";
-    private static final String MYSQL84_AUDIT = "test-mysql84-audit";
+    private static final String MYSQL57_OPS = "mysql57.ops";
+    private static final String MYSQL57_AUDIT = "mysql57.audit";
+    private static final String MYSQL84_OPS = "mysql84.ops";
+    private static final String MYSQL84_AUDIT = "mysql84.audit";
     private static final String TEST_OPS = "test_ops";
     private static final String TEST_AUDIT = "test_audit";
 
@@ -56,10 +56,14 @@ public class MySqlRouteMultiClusterEndToEndTest {
                 MYSQL57_OPS, MYSQL57_AUDIT, MYSQL84_OPS, MYSQL84_AUDIT));
         assertEquals(expectedKeys, registry.getDatasourceKeys());
 
-        assertTarget(MYSQL57_OPS, "test_order", "mysql57", TEST_OPS, "mysql57", "5.7.");
-        assertTarget(MYSQL57_AUDIT, "test_user", "mysql57", TEST_AUDIT, "mysql57", "5.7.");
-        assertTarget(MYSQL84_OPS, "test_wildcard", "mysql84", TEST_OPS, "mysql84", "8.4.");
-        assertTarget(MYSQL84_AUDIT, "test_extra_field", "mysql84", TEST_AUDIT, "mysql84", "8.4.");
+        assertTarget(MYSQL57_OPS, "test_order", "mysql57", TEST_OPS, "mysql57", "5.7.",
+                "mysql57_ops_route");
+        assertTarget(MYSQL57_AUDIT, "test_user", "mysql57", TEST_AUDIT, "mysql57", "5.7.",
+                "mysql57_audit_route");
+        assertTarget(MYSQL84_OPS, "test_wildcard", "mysql84", TEST_OPS, "mysql84", "8.4.",
+                "mysql84_ops_route");
+        assertTarget(MYSQL84_AUDIT, "test_extra_field", "mysql84", TEST_AUDIT, "mysql84", "8.4.",
+                "mysql84_audit_route");
     }
 
     @Test
@@ -70,9 +74,19 @@ public class MySqlRouteMultiClusterEndToEndTest {
 
         assertEquals(mysql57Ops.clusterId, mysql57Audit.clusterId);
         assertNotEquals(mysql57Ops.database, mysql57Audit.database);
+        assertNotEquals(mysql57Ops.currentUser, mysql57Audit.currentUser);
         assertEquals(mysql57Ops.database, mysql84Ops.database);
         assertNotEquals(mysql57Ops.clusterId, mysql84Ops.clusterId);
         assertNotEquals(mysql57Ops.version, mysql84Ops.version);
+    }
+
+    @Test
+    public void shouldRejectSameClusterCrossDatabaseAccessWithTargetCredential() {
+        DataAccessException exception = assertThrows(DataAccessException.class,
+                () -> template.executeOn(MYSQL57_AUDIT, () -> template.routingJdbcTemplate().queryForObject(
+                        "SELECT cluster_id FROM test_ops.test_route_marker", String.class)));
+        assertTrue(exception.getCause() instanceof SQLException);
+        assertEquals(1142, ((SQLException) exception.getCause()).getErrorCode());
     }
 
     @Test
@@ -153,17 +167,49 @@ public class MySqlRouteMultiClusterEndToEndTest {
     }
 
     @Test
-    public void shouldRejectWritesWithReadOnlyE2eCredential() {
-        DataAccessException exception = assertThrows(DataAccessException.class, () -> template.executeOn(MYSQL57_OPS,
+    public void shouldExecuteCompleteCrudOnEveryFixedTarget() {
+        assertCompleteCrud(MYSQL57_OPS, "test_order", "mysql57-ops");
+        assertCompleteCrud(MYSQL57_AUDIT, "test_user", "mysql57-audit");
+        assertCompleteCrud(MYSQL84_OPS, "test_wildcard", "mysql84-ops");
+        assertCompleteCrud(MYSQL84_AUDIT, "test_extra_field", "mysql84-audit");
+    }
+
+    private void assertCompleteCrud(String datasourceKey, String routeKey, String recordId) {
+        String initialContent = recordId + "-initial";
+        String updatedContent = recordId + "-updated";
+        template.executeOn(datasourceKey,
                 () -> template.routingJdbcTemplate().update(
-                        "INSERT INTO test_route_marker (cluster_id, database_name) VALUES (?, ?)",
-                        "test_write", "test_write")));
-        assertTrue(exception.getCause() instanceof SQLException);
-        assertEquals(1142, ((SQLException) exception.getCause()).getErrorCode());
+                        "DELETE FROM test_route_crud WHERE record_id = ?", recordId));
+        try {
+            assertEquals(1, template.execute(routeKey,
+                    () -> template.routingJdbcTemplate().update(
+                            "INSERT INTO test_route_crud (record_id, content) VALUES (?, ?)",
+                            recordId, initialContent)));
+            assertEquals(initialContent, template.executeOn(datasourceKey,
+                    () -> template.routingJdbcTemplate().queryForObject(
+                            "SELECT content FROM test_route_crud WHERE record_id = ?", String.class, recordId)));
+            assertEquals(1, template.execute(routeKey,
+                    () -> template.routingJdbcTemplate().update(
+                            "UPDATE test_route_crud SET content = ? WHERE record_id = ?", updatedContent, recordId)));
+            assertEquals(updatedContent, template.executeOn(datasourceKey,
+                    () -> template.routingJdbcTemplate().queryForObject(
+                            "SELECT content FROM test_route_crud WHERE record_id = ?", String.class, recordId)));
+            assertEquals(1, template.execute(routeKey,
+                    () -> template.routingJdbcTemplate().update(
+                            "DELETE FROM test_route_crud WHERE record_id = ?", recordId)));
+            assertEquals(Integer.valueOf(0), template.executeOn(datasourceKey,
+                    () -> template.routingJdbcTemplate().queryForObject(
+                            "SELECT COUNT(*) FROM test_route_crud WHERE record_id = ?", Integer.class, recordId)));
+        } finally {
+            template.executeOn(datasourceKey,
+                    () -> template.routingJdbcTemplate().update(
+                            "DELETE FROM test_route_crud WHERE record_id = ?", recordId));
+        }
     }
 
     private void assertTarget(String datasourceKey, String routeKey, String expectedClusterKey,
-                              String expectedDatabase, String expectedClusterId, String expectedVersionPrefix) {
+                              String expectedDatabase, String expectedClusterId, String expectedVersionPrefix,
+                              String expectedUsername) {
         MySqlRouteTarget target = registry.getTarget(datasourceKey);
         assertEquals(datasourceKey, target.getDatasourceKey());
         assertEquals(expectedClusterKey, target.getClusterKey());
@@ -173,9 +219,10 @@ public class MySqlRouteMultiClusterEndToEndTest {
         assertEquals(expectedDatabase, explicitIdentity.database);
         assertEquals(expectedClusterId, explicitIdentity.clusterId);
         assertTrue(explicitIdentity.version.startsWith(expectedVersionPrefix));
+        assertTrue(explicitIdentity.currentUser.startsWith(expectedUsername + "@"));
 
         TargetIdentity routeIdentity = template.execute(routeKey, () -> new TargetIdentity(
-                currentDatabase(), currentVersion(), currentClusterId()));
+                currentDatabase(), currentVersion(), currentClusterId(), currentUser()));
         assertEquals(explicitIdentity, routeIdentity);
         String namedParameterDatabase = template.executeOn(datasourceKey,
                 () -> template.namedParameterJdbcTemplate().queryForObject("SELECT DATABASE()",
@@ -207,7 +254,7 @@ public class MySqlRouteMultiClusterEndToEndTest {
 
     private TargetIdentity identity(String datasourceKey) {
         return template.executeOn(datasourceKey,
-                () -> new TargetIdentity(currentDatabase(), currentVersion(), currentClusterId()));
+                () -> new TargetIdentity(currentDatabase(), currentVersion(), currentClusterId(), currentUser()));
     }
 
     private String currentDatabase() {
@@ -223,15 +270,21 @@ public class MySqlRouteMultiClusterEndToEndTest {
                 "SELECT cluster_id FROM test_route_marker", String.class);
     }
 
+    private String currentUser() {
+        return template.routingJdbcTemplate().queryForObject("SELECT CURRENT_USER()", String.class);
+    }
+
     private static final class TargetIdentity {
         private final String database;
         private final String version;
         private final String clusterId;
+        private final String currentUser;
 
-        private TargetIdentity(String database, String version, String clusterId) {
+        private TargetIdentity(String database, String version, String clusterId, String currentUser) {
             this.database = database;
             this.version = version;
             this.clusterId = clusterId;
+            this.currentUser = currentUser;
         }
 
         @Override
@@ -243,7 +296,8 @@ public class MySqlRouteMultiClusterEndToEndTest {
                 return false;
             }
             TargetIdentity that = (TargetIdentity) other;
-            return database.equals(that.database) && version.equals(that.version) && clusterId.equals(that.clusterId);
+            return database.equals(that.database) && version.equals(that.version) && clusterId.equals(that.clusterId)
+                    && currentUser.equals(that.currentUser);
         }
 
         @Override
@@ -251,6 +305,7 @@ public class MySqlRouteMultiClusterEndToEndTest {
             int result = database.hashCode();
             result = 31 * result + version.hashCode();
             result = 31 * result + clusterId.hashCode();
+            result = 31 * result + currentUser.hashCode();
             return result;
         }
     }

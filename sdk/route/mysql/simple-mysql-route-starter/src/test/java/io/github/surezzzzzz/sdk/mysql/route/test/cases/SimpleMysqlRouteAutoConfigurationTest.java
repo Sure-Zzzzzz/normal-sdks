@@ -2,10 +2,10 @@ package io.github.surezzzzzz.sdk.mysql.route.test.cases;
 
 import io.github.surezzzzzz.sdk.mysql.route.audit.MySqlRouteAuditPublisher;
 import io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteConfiguration;
+import io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteProperties;
 import io.github.surezzzzzz.sdk.mysql.route.constant.SimpleMysqlRouteConstant;
-import io.github.surezzzzzz.sdk.mysql.route.credential.MySqlRouteCredentialResolver;
 import io.github.surezzzzzz.sdk.mysql.route.datasource.MySqlRouteDataSourceFactory;
-import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteCredential;
+import io.github.surezzzzzz.sdk.mysql.route.datasource.MySqlRoutingDataSource;
 import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteTarget;
 import io.github.surezzzzzz.sdk.mysql.route.template.MySqlRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
@@ -30,15 +30,13 @@ public class SimpleMysqlRouteAutoConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(SimpleMysqlRouteConfiguration.class)
-            .withBean(MySqlRouteCredentialResolver.class,
-                    () -> reference -> new MySqlRouteCredential("test-user", "test-password"))
             .withBean(MySqlRouteDataSourceFactory.class, TestDataSourceFactory::new)
             .withPropertyValues("io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.host=example.invalid",
-                    "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.credential-ref=test-reader-credential",
-                    "io.github.surezzzzzz.sdk.mysql.route.datasources.test-ops-a.cluster-key=test-cluster-a",
-                    "io.github.surezzzzzz.sdk.mysql.route.datasources.test-ops-a.database=test_ops",
+                    "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.datasources.ops.database=test_ops",
+                    "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.datasources.ops.username=test-user",
+                    "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.datasources.ops.password=test-password",
                     "io.github.surezzzzzz.sdk.mysql.route.rules[0].pattern=test_order",
-                    "io.github.surezzzzzz.sdk.mysql.route.rules[0].datasource-key=test-ops-a");
+                    "io.github.surezzzzzz.sdk.mysql.route.rules[0].datasource-key=test-cluster-a.ops");
 
     @BeforeEach
     public void logTestStart() {
@@ -60,42 +58,45 @@ public class SimpleMysqlRouteAutoConfigurationTest {
             assertTrue(context.containsBean(SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME));
             assertTrue(context.containsBean(SimpleMysqlRouteConstant.JDBC_TEMPLATE_BEAN_NAME));
             assertTrue(context.containsBean(SimpleMysqlRouteConstant.NAMED_PARAMETER_JDBC_TEMPLATE_BEAN_NAME));
+            DataSource routingDataSource = context.getBean(
+                    SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME, DataSource.class);
+            assertTrue(routingDataSource instanceof MySqlRoutingDataSource);
+            assertFalse(context.getBeanFactory().getBeanDefinition(
+                    SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME).isPrimary());
+            JdbcTemplate jdbcTemplate = context.getBean(SimpleMysqlRouteConstant.JDBC_TEMPLATE_BEAN_NAME,
+                    JdbcTemplate.class);
+            NamedParameterJdbcTemplate namedParameterJdbcTemplate = context.getBean(
+                    SimpleMysqlRouteConstant.NAMED_PARAMETER_JDBC_TEMPLATE_BEAN_NAME,
+                    NamedParameterJdbcTemplate.class);
+            MySqlRouteTemplate template = context.getBean(MySqlRouteTemplate.class);
+            assertSame(routingDataSource, jdbcTemplate.getDataSource());
+            assertSame(routingDataSource, namedParameterJdbcTemplate.getJdbcTemplate().getDataSource());
+            assertSame(routingDataSource, template.routingDataSource());
             assertEquals(1, context.getBeansOfType(MySqlRouteTemplate.class).size());
             assertEquals(1, context.getBeansOfType(MySqlRouteAuditPublisher.class).size());
         });
     }
 
     @Test
-    public void shouldFailStartupWithoutCredentialResolver() {
+    public void shouldFailStartupWithMissingNestedPassword() {
         new ApplicationContextRunner().withUserConfiguration(SimpleMysqlRouteConfiguration.class)
                 .withBean(MySqlRouteDataSourceFactory.class, TestDataSourceFactory::new)
                 .withPropertyValues("io.github.surezzzzzz.sdk.mysql.route.enable=true",
                         "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.host=example.invalid",
-                        "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.credential-ref=test-reader-credential",
-                        "io.github.surezzzzzz.sdk.mysql.route.datasources.test-ops-a.cluster-key=test-cluster-a",
-                        "io.github.surezzzzzz.sdk.mysql.route.datasources.test-ops-a.database=test_ops")
+                        "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.datasources.ops.database=test_ops",
+                        "io.github.surezzzzzz.sdk.mysql.route.clusters.test-cluster-a.datasources.ops.username=test-user")
                 .run(context -> assertNotNull(context.getStartupFailure()));
     }
 
     @Test
-    public void shouldKeepNamedRouteResourceOverride() {
-        DataSource routingDataSource = mock(DataSource.class);
-        JdbcTemplate jdbcTemplate = new JdbcTemplate(routingDataSource);
-        NamedParameterJdbcTemplate namedParameterJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
-
-        contextRunner.withBean(SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME, DataSource.class,
-                        () -> routingDataSource)
-                .withBean(SimpleMysqlRouteConstant.JDBC_TEMPLATE_BEAN_NAME, JdbcTemplate.class, () -> jdbcTemplate)
-                .withBean(SimpleMysqlRouteConstant.NAMED_PARAMETER_JDBC_TEMPLATE_BEAN_NAME,
-                        NamedParameterJdbcTemplate.class, () -> namedParameterJdbcTemplate)
-                .withPropertyValues("io.github.surezzzzzz.sdk.mysql.route.enable=true")
-                .run(context -> {
-                    assertSame(routingDataSource,
-                            context.getBean(SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME));
-                    assertSame(jdbcTemplate, context.getBean(SimpleMysqlRouteConstant.JDBC_TEMPLATE_BEAN_NAME));
-                    assertSame(namedParameterJdbcTemplate,
-                            context.getBean(SimpleMysqlRouteConstant.NAMED_PARAMETER_JDBC_TEMPLATE_BEAN_NAME));
-                });
+    public void shouldRejectHostRoutingResourceDefinitionsWithReservedNames() {
+        assertReservedNameFails(SimpleMysqlRouteConstant.ROUTING_DATASOURCE_BEAN_NAME, DataSource.class,
+                () -> mock(DataSource.class));
+        assertReservedNameFails(SimpleMysqlRouteConstant.JDBC_TEMPLATE_BEAN_NAME, JdbcTemplate.class,
+                () -> new JdbcTemplate(mock(DataSource.class)));
+        assertReservedNameFails(SimpleMysqlRouteConstant.NAMED_PARAMETER_JDBC_TEMPLATE_BEAN_NAME,
+                NamedParameterJdbcTemplate.class,
+                () -> new NamedParameterJdbcTemplate(mock(DataSource.class)));
     }
 
     @Test
@@ -107,11 +108,17 @@ public class SimpleMysqlRouteAutoConfigurationTest {
                 .run(context -> assertSame(customPublisher, context.getBean(MySqlRouteAuditPublisher.class)));
     }
 
+    private <T> void assertReservedNameFails(String beanName, Class<T> beanType,
+                                             java.util.function.Supplier<T> beanSupplier) {
+        contextRunner.withBean(beanName, beanType, beanSupplier)
+                .withPropertyValues("io.github.surezzzzzz.sdk.mysql.route.enable=true")
+                .run(context -> assertNotNull(context.getStartupFailure()));
+    }
+
     private static class TestDataSourceFactory implements MySqlRouteDataSourceFactory {
         @Override
-        public DataSource create(MySqlRouteTarget target,
-                                 io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteProperties.ClusterConfig cluster,
-                                 MySqlRouteCredential credential) {
+        public DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
+                                 SimpleMysqlRouteProperties.DatasourceConfig datasource) {
             return mock(DataSource.class);
         }
 

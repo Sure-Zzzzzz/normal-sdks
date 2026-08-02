@@ -42,70 +42,78 @@ public class MySqlRoutePropertiesValidator {
         if (properties == null) {
             fail(ErrorMessage.PROPERTIES_REQUIRED);
         }
-        validateClusters(properties.getClusters());
-        validateDatasources(properties.getClusters(), properties.getDatasources());
-        validateRules(properties.getDatasources(), properties.getRules());
+        Set<String> datasourceKeys = validateClusters(properties.getClusters());
+        validateRules(datasourceKeys, properties.getRules());
     }
 
-    private void validateClusters(Map<String, SimpleMysqlRouteProperties.ClusterConfig> clusters) {
+    private Set<String> validateClusters(Map<String, SimpleMysqlRouteProperties.ClusterConfig> clusters) {
         if (clusters == null || clusters.isEmpty()) {
             fail(ErrorMessage.CLUSTERS_REQUIRED);
         }
-        Set<String> keys = new HashSet<>();
+        Set<String> clusterKeys = new HashSet<>();
+        Set<String> datasourceKeys = new HashSet<>();
         for (Map.Entry<String, SimpleMysqlRouteProperties.ClusterConfig> entry : clusters.entrySet()) {
             String clusterKey = entry.getKey();
-            SimpleMysqlRouteProperties.ClusterConfig config = entry.getValue();
-            if (!MySqlRouteStringHelper.hasText(clusterKey) || !keys.add(clusterKey)) {
-                fail(ErrorMessage.CLUSTER_KEY_INVALID);
-            }
-            if (config == null || !MySqlRouteStringHelper.hasText(config.getHost())) {
-                fail(String.format(ErrorMessage.CLUSTER_HOST_REQUIRED, clusterKey));
-            }
-            if (config.getPort() < SimpleMysqlRouteConstant.MIN_CLUSTER_PORT
-                    || config.getPort() > SimpleMysqlRouteConstant.MAX_CLUSTER_PORT) {
-                fail(String.format(ErrorMessage.CLUSTER_PORT_INVALID, clusterKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(config.getCredentialRef())) {
-                fail(String.format(ErrorMessage.CLUSTER_CREDENTIAL_REF_REQUIRED, clusterKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(config.getDriverClassName())) {
-                fail(String.format(ErrorMessage.CLUSTER_DRIVER_REQUIRED, clusterKey));
-            }
+            SimpleMysqlRouteProperties.ClusterConfig cluster = entry.getValue();
+            validateCluster(clusterKey, cluster, clusterKeys);
+            validateDatasources(clusterKey, cluster.getDatasources(), datasourceKeys);
+        }
+        return datasourceKeys;
+    }
+
+    private void validateCluster(String clusterKey, SimpleMysqlRouteProperties.ClusterConfig cluster,
+                                 Set<String> clusterKeys) {
+        if (!MySqlRouteStringHelper.hasText(clusterKey) || !clusterKeys.add(clusterKey)) {
+            fail(ErrorMessage.CLUSTER_KEY_INVALID);
+        }
+        if (cluster == null || !MySqlRouteStringHelper.hasText(cluster.getHost())) {
+            fail(String.format(ErrorMessage.CLUSTER_HOST_REQUIRED, clusterKey));
+        }
+        if (cluster.getPort() < SimpleMysqlRouteConstant.MIN_CLUSTER_PORT
+                || cluster.getPort() > SimpleMysqlRouteConstant.MAX_CLUSTER_PORT) {
+            fail(String.format(ErrorMessage.CLUSTER_PORT_INVALID, clusterKey));
+        }
+        if (!MySqlRouteStringHelper.hasText(cluster.getDriverClassName())) {
+            fail(String.format(ErrorMessage.CLUSTER_DRIVER_REQUIRED, clusterKey));
         }
     }
 
-    private void validateDatasources(Map<String, SimpleMysqlRouteProperties.ClusterConfig> clusters,
-                                     Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources) {
+    private void validateDatasources(String clusterKey,
+                                     Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources,
+                                     Set<String> datasourceKeys) {
         if (datasources == null || datasources.isEmpty()) {
-            fail(ErrorMessage.DATASOURCES_REQUIRED);
+            fail(String.format(ErrorMessage.CLUSTER_DATASOURCES_REQUIRED, clusterKey));
         }
-        Set<String> combinations = new HashSet<>();
+        Set<String> databases = new HashSet<>();
         for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> entry : datasources.entrySet()) {
-            String datasourceKey = entry.getKey();
-            SimpleMysqlRouteProperties.DatasourceConfig config = entry.getValue();
-            if (!MySqlRouteStringHelper.hasText(datasourceKey)) {
-                fail(ErrorMessage.DATASOURCE_KEY_REQUIRED);
+            String datasourceName = entry.getKey();
+            String datasourceKey = datasourceKey(clusterKey, datasourceName);
+            SimpleMysqlRouteProperties.DatasourceConfig datasource = entry.getValue();
+            if (!MySqlRouteStringHelper.hasText(datasourceName)) {
+                fail(String.format(ErrorMessage.DATASOURCE_NAME_REQUIRED, clusterKey));
             }
-            if (config == null || !MySqlRouteStringHelper.hasText(config.getClusterKey())
-                    || !clusters.containsKey(config.getClusterKey())) {
-                fail(String.format(ErrorMessage.DATASOURCE_CLUSTER_NOT_FOUND, datasourceKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(config.getDatabase())) {
+            if (datasource == null) {
                 fail(String.format(ErrorMessage.DATASOURCE_DATABASE_REQUIRED, datasourceKey));
             }
-            String combination = datasourceCombination(config.getClusterKey(), config.getDatabase());
-            if (!combinations.add(combination)) {
+            if (!MySqlRouteStringHelper.hasText(datasource.getDatabase())) {
+                fail(String.format(ErrorMessage.DATASOURCE_DATABASE_REQUIRED, datasourceKey));
+            }
+            if (!MySqlRouteStringHelper.hasText(datasource.getUsername())) {
+                fail(String.format(ErrorMessage.DATASOURCE_USERNAME_REQUIRED, datasourceKey));
+            }
+            if (!MySqlRouteStringHelper.hasText(datasource.getPassword())) {
+                fail(String.format(ErrorMessage.DATASOURCE_PASSWORD_REQUIRED, datasourceKey));
+            }
+            if (!databases.add(datasource.getDatabase())) {
                 fail(ErrorMessage.DATASOURCE_COMBINATION_DUPLICATE);
+            }
+            if (!datasourceKeys.add(datasourceKey)) {
+                fail(String.format(ErrorMessage.DATASOURCE_KEY_DUPLICATE, datasourceKey));
             }
         }
     }
 
-    private String datasourceCombination(String clusterKey, String database) {
-        return clusterKey.length() + ":" + clusterKey + ":" + database.length() + ":" + database;
-    }
-
-    private void validateRules(Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources,
-                               List<SimpleMysqlRouteProperties.RouteRule> rules) {
+    private void validateRules(Set<String> datasourceKeys, List<SimpleMysqlRouteProperties.RouteRule> rules) {
         if (rules == null) {
             return;
         }
@@ -122,7 +130,7 @@ public class MySqlRoutePropertiesValidator {
                 fail(String.format(ErrorMessage.RULE_MATCH_TYPE_INVALID, index));
             }
             if (!MySqlRouteStringHelper.hasText(rule.getDatasourceKey())
-                    || !datasources.containsKey(rule.getDatasourceKey())) {
+                    || !datasourceKeys.contains(rule.getDatasourceKey())) {
                 fail(String.format(ErrorMessage.RULE_DATASOURCE_NOT_FOUND, index));
             }
             if (matchType == RouteMatchType.REGEX || matchType == RouteMatchType.WILDCARD) {
@@ -133,6 +141,10 @@ public class MySqlRoutePropertiesValidator {
                 }
             }
         }
+    }
+
+    private String datasourceKey(String clusterKey, String datasourceName) {
+        return clusterKey + "." + datasourceName;
     }
 
     private void fail(String detail) {

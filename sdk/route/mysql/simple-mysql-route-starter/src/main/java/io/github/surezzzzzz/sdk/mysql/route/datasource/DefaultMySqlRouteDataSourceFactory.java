@@ -3,7 +3,6 @@ package io.github.surezzzzzz.sdk.mysql.route.datasource;
 import io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteProperties;
 import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.mysql.route.constant.SimpleMysqlRouteConstant;
-import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteCredential;
 import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteTarget;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 
@@ -19,22 +18,23 @@ import java.util.Map;
  *
  * @author surezzzzzz
  */
-public class DefaultMySqlRouteDataSourceFactory implements MySqlRouteDataSourceFactory {
+public class
+DefaultMySqlRouteDataSourceFactory implements MySqlRouteDataSourceFactory {
 
     /**
      * 按目标的固定数据库创建独立物理数据源。
      *
      * @param target     已校验的逻辑目标
-     * @param cluster    连接定义
-     * @param credential 受控凭据
+     * @param cluster    集群连接定义
+     * @param datasource 目标连接定义
      * @return 新创建的物理数据源
      */
     @Override
     public DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                             MySqlRouteCredential credential) {
+                             SimpleMysqlRouteProperties.DatasourceConfig datasource) {
         DataSourceBuilder<?> builder = DataSourceBuilder.create().driverClassName(cluster.getDriverClassName())
                 .url(buildUrl(target, cluster, cluster.getConnectionProperties()))
-                .username(credential.getUsername()).password(credential.getPassword());
+                .username(datasource.getUsername()).password(datasource.getPassword());
         return builder.build();
     }
 

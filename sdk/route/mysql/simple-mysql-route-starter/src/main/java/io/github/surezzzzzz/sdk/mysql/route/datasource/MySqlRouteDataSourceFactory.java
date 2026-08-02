@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.mysql.route.datasource;
 
 import io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteProperties;
-import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteCredential;
 import io.github.surezzzzzz.sdk.mysql.route.model.MySqlRouteTarget;
 
 import javax.sql.DataSource;
@@ -14,15 +13,15 @@ import javax.sql.DataSource;
 public interface MySqlRouteDataSourceFactory {
 
     /**
-     * 按固定逻辑目标、连接定义和受控凭据创建物理数据源。
+     * 按固定逻辑目标、集群连接定义和目标连接定义创建物理数据源。
      *
      * @param target     已校验的逻辑目标
-     * @param cluster    连接定义
-     * @param credential 凭据解析器返回的凭据
+     * @param cluster    集群连接定义
+     * @param datasource 目标连接定义
      * @return 新创建的物理数据源
      */
     DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                      MySqlRouteCredential credential);
+                      SimpleMysqlRouteProperties.DatasourceConfig datasource);
 
     /**
      * 验证物理数据源可用性。
