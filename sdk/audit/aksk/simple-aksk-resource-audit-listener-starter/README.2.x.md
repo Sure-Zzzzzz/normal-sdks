@@ -1,6 +1,6 @@
-# simple-aksk-resource-audit-listener-starter
+# simple-aksk-resource-audit-listener-starter（2.x 封版）
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.0**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **封版说明**：此快照对应最终已发布版本 **2.0.0**，2.x 不再接受功能、缺陷修复或常规维护发布。
 
 > **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
 

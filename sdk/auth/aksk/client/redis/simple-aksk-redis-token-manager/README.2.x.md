@@ -1,6 +1,6 @@
-# Simple AKSK Redis Token Manager
+# Simple AKSK Redis Token Manager（2.x 封版）
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.1**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **封版说明**：此快照对应最终已发布版本 **2.0.1**，2.x 不再接受功能、缺陷修复或常规维护发布。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 

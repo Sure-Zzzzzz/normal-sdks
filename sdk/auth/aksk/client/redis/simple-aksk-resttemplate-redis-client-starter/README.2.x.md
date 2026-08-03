@@ -1,6 +1,6 @@
-# Simple AKSK RestTemplate Redis Client Starter
+# Simple AKSK RestTemplate Redis Client Starter（2.x 封版）
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.1**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **封版说明**：此快照对应最终已发布版本 **2.0.1**，2.x 不再接受功能、缺陷修复或常规维护发布。
 
 [![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
