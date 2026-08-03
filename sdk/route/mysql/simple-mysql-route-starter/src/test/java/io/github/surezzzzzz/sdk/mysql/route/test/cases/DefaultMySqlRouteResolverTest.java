@@ -62,10 +62,10 @@ public class DefaultMySqlRouteResolverTest {
         assertEquals(ErrorCode.ROUTE_KEY_INVALID, blank.getCode());
     }
 
-    private SimpleMysqlRouteProperties.RouteRule rule(String pattern, String datasourceKey, int priority) {
+    private SimpleMysqlRouteProperties.RouteRule rule(String pattern, String datasource, int priority) {
         SimpleMysqlRouteProperties.RouteRule rule = new SimpleMysqlRouteProperties.RouteRule();
         rule.setPattern(pattern);
-        rule.setDatasourceKey(datasourceKey);
+        rule.setDatasource(datasource);
         rule.setMatchType("wildcard");
         rule.setPriority(priority);
         return rule;

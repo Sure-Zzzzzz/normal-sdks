@@ -42,7 +42,7 @@ public class MySqlRouteContextHolderTest {
     }
 
     @Test
-    public void shouldRejectBlankDatasourceKey() {
+    public void shouldRejectBlankDatasource() {
         SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
                 () -> MySqlRouteContextHolder.push(" "));
         assertEquals(ErrorCode.CONTEXT_INVALID, exception.getCode());

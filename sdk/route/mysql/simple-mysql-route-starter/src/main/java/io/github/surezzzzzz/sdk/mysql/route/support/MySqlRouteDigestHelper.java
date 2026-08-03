@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.mysql.route.support;
 
+import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.mysql.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.mysql.route.constant.SimpleMysqlRouteConstant;
+import io.github.surezzzzzz.sdk.mysql.route.exception.SimpleMysqlRouteException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,7 +37,8 @@ public final class MySqlRouteDigestHelper {
             }
             return new String(result);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(ErrorMessage.SHA_256_UNAVAILABLE, e);
+            throw new SimpleMysqlRouteException(ErrorCode.RUNTIME_UNAVAILABLE,
+                    ErrorMessage.SHA_256_UNAVAILABLE, e);
         }
     }
 

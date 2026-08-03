@@ -11,7 +11,8 @@ import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
-import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,7 +40,7 @@ public class MySqlRoutingDataSourceTest {
     public void shouldRejectConnectionWithoutContext() throws Exception {
         DataSource target = mock(DataSource.class);
         MySqlRoutingDataSource routing = new MySqlRoutingDataSource(
-                Collections.<Object, Object>singletonMap("test-ops-a", target));
+                singleTarget(target));
 
         SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
                 routing::getConnection);
@@ -49,7 +50,7 @@ public class MySqlRoutingDataSourceTest {
     @Test
     public void shouldRejectCallerProvidedConnectionCredential() throws Exception {
         MySqlRoutingDataSource routing = new MySqlRoutingDataSource(
-                Collections.<Object, Object>singletonMap("test-ops-a", mock(DataSource.class)));
+                singleTarget(mock(DataSource.class)));
 
         SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
                 () -> routing.getConnection("test-user", "test-password"));
@@ -61,12 +62,69 @@ public class MySqlRoutingDataSourceTest {
         DataSource target = mock(DataSource.class);
         Connection connection = mock(Connection.class);
         when(target.getConnection()).thenReturn(connection);
-        MySqlRoutingDataSource routing = new MySqlRoutingDataSource(
-                Collections.<Object, Object>singletonMap("test-ops-a", target));
+        MySqlRoutingDataSource routing = new MySqlRoutingDataSource(singleTarget(target));
 
         try (MySqlRouteContextHolder.Scope ignored = MySqlRouteContextHolder.push("test-ops-a");
              Connection ignoredConnection = routing.getConnection()) {
             verify(target).getConnection();
         }
+    }
+
+    @Test
+    public void shouldRejectInvalidConfiguredPrimaryAtConstruction() {
+        DataSource target = mock(DataSource.class);
+
+        SimpleMysqlRouteException blankException = assertThrows(SimpleMysqlRouteException.class,
+                () -> new MySqlRoutingDataSource(singleTarget(target), " "));
+        assertEquals(ErrorCode.PRIMARY_DATASOURCE_INVALID, blankException.getCode());
+        SimpleMysqlRouteException unknownException = assertThrows(SimpleMysqlRouteException.class,
+                () -> new MySqlRoutingDataSource(singleTarget(target), "test-missing"));
+        assertEquals(ErrorCode.PRIMARY_DATASOURCE_INVALID, unknownException.getCode());
+    }
+
+    @Test
+    public void shouldRouteWithoutContextToConfiguredPrimaryInsteadOfFirstTarget() throws Exception {
+        DataSource firstTarget = mock(DataSource.class);
+        DataSource defaultTarget = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        when(defaultTarget.getConnection()).thenReturn(connection);
+        Map<Object, Object> targets = new LinkedHashMap<>();
+        targets.put("test-ops-a", firstTarget);
+        targets.put("test-audit-a", defaultTarget);
+        MySqlRoutingDataSource routing = new MySqlRoutingDataSource(targets, "test-audit-a");
+
+        try (Connection ignored = routing.getConnection()) {
+            verify(defaultTarget).getConnection();
+            verify(firstTarget, never()).getConnection();
+        }
+    }
+
+    @Test
+    public void shouldPreferExplicitContextAndRejectUnknownContextWithoutDefaultFallback() throws Exception {
+        DataSource defaultTarget = mock(DataSource.class);
+        DataSource scopedTarget = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        when(scopedTarget.getConnection()).thenReturn(connection);
+        Map<Object, Object> targets = new LinkedHashMap<>();
+        targets.put("test-ops-a", defaultTarget);
+        targets.put("test-audit-a", scopedTarget);
+        MySqlRoutingDataSource routing = new MySqlRoutingDataSource(targets, "test-ops-a");
+
+        try (MySqlRouteContextHolder.Scope ignored = MySqlRouteContextHolder.push("test-audit-a");
+             Connection ignoredConnection = routing.getConnection()) {
+            verify(scopedTarget).getConnection();
+            verify(defaultTarget, never()).getConnection();
+        }
+
+        try (MySqlRouteContextHolder.Scope ignored = MySqlRouteContextHolder.push("test-missing")) {
+            SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class, routing::getConnection);
+            assertEquals(ErrorCode.CONTEXT_INVALID, exception.getCode());
+        }
+    }
+
+    private Map<Object, Object> singleTarget(DataSource target) {
+        Map<Object, Object> targets = new LinkedHashMap<>();
+        targets.put("test-ops-a", target);
+        return targets;
     }
 }

@@ -9,10 +9,9 @@ import io.github.surezzzzzz.sdk.mysql.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.mysql.route.matcher.MySqlRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.mysql.route.support.MySqlRouteStringHelper;
 
-import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.PatternSyntaxException;
 
 /**
@@ -24,96 +23,72 @@ public class MySqlRoutePropertiesValidator {
 
     private final MySqlRoutePatternMatcher patternMatcher;
 
-    /**
-     * 创建使用指定匹配器校验规则模式的校验器。
-     *
-     * @param patternMatcher 路由规则匹配器
-     */
     public MySqlRoutePropertiesValidator(MySqlRoutePatternMatcher patternMatcher) {
         this.patternMatcher = patternMatcher;
     }
 
-    /**
-     * 校验全部 MySQL Route 配置及其目标引用关系。
-     *
-     * @param properties 待校验配置
-     */
     public void validate(SimpleMysqlRouteProperties properties) {
         if (properties == null) {
             fail(ErrorMessage.PROPERTIES_REQUIRED);
         }
-        Set<String> datasourceKeys = validateClusters(properties.getClusters());
-        validateRules(datasourceKeys, properties.getRules());
-    }
-
-    private Set<String> validateClusters(Map<String, SimpleMysqlRouteProperties.ClusterConfig> clusters) {
-        if (clusters == null || clusters.isEmpty()) {
-            fail(ErrorMessage.CLUSTERS_REQUIRED);
-        }
-        Set<String> clusterKeys = new HashSet<>();
-        Set<String> datasourceKeys = new HashSet<>();
-        for (Map.Entry<String, SimpleMysqlRouteProperties.ClusterConfig> entry : clusters.entrySet()) {
-            String clusterKey = entry.getKey();
-            SimpleMysqlRouteProperties.ClusterConfig cluster = entry.getValue();
-            validateCluster(clusterKey, cluster, clusterKeys);
-            validateDatasources(clusterKey, cluster.getDatasources(), datasourceKeys);
-        }
-        return datasourceKeys;
-    }
-
-    private void validateCluster(String clusterKey, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                                 Set<String> clusterKeys) {
-        if (!MySqlRouteStringHelper.hasText(clusterKey) || !clusterKeys.add(clusterKey)) {
-            fail(ErrorMessage.CLUSTER_KEY_INVALID);
-        }
-        if (cluster == null || !MySqlRouteStringHelper.hasText(cluster.getHost())) {
-            fail(String.format(ErrorMessage.CLUSTER_HOST_REQUIRED, clusterKey));
-        }
-        if (cluster.getPort() < SimpleMysqlRouteConstant.MIN_CLUSTER_PORT
-                || cluster.getPort() > SimpleMysqlRouteConstant.MAX_CLUSTER_PORT) {
-            fail(String.format(ErrorMessage.CLUSTER_PORT_INVALID, clusterKey));
-        }
-        if (!MySqlRouteStringHelper.hasText(cluster.getDriverClassName())) {
-            fail(String.format(ErrorMessage.CLUSTER_DRIVER_REQUIRED, clusterKey));
-        }
-    }
-
-    private void validateDatasources(String clusterKey,
-                                     Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources,
-                                     Set<String> datasourceKeys) {
+        Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources = properties.getDatasources();
         if (datasources == null || datasources.isEmpty()) {
-            fail(String.format(ErrorMessage.CLUSTER_DATASOURCES_REQUIRED, clusterKey));
+            fail(ErrorMessage.DATASOURCES_REQUIRED);
         }
-        Set<String> databases = new HashSet<>();
+        if (!MySqlRouteStringHelper.hasText(properties.getPrimaryDatasource())) {
+            fail(ErrorMessage.PRIMARY_DATASOURCE_REQUIRED);
+        }
+        if (!isDatasource(properties.getPrimaryDatasource())) {
+            fail(ErrorMessage.PRIMARY_DATASOURCE_NOT_FOUND);
+        }
+        SimpleMysqlRouteProperties.DatasourceConfig primary = datasources.get(properties.getPrimaryDatasource());
+        if (primary == null) {
+            fail(ErrorMessage.PRIMARY_DATASOURCE_NOT_FOUND);
+        }
         for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> entry : datasources.entrySet()) {
-            String datasourceName = entry.getKey();
-            String datasourceKey = datasourceKey(clusterKey, datasourceName);
-            SimpleMysqlRouteProperties.DatasourceConfig datasource = entry.getValue();
-            if (!MySqlRouteStringHelper.hasText(datasourceName)) {
-                fail(String.format(ErrorMessage.DATASOURCE_NAME_REQUIRED, clusterKey));
-            }
-            if (datasource == null) {
-                fail(String.format(ErrorMessage.DATASOURCE_DATABASE_REQUIRED, datasourceKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(datasource.getDatabase())) {
-                fail(String.format(ErrorMessage.DATASOURCE_DATABASE_REQUIRED, datasourceKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(datasource.getUsername())) {
-                fail(String.format(ErrorMessage.DATASOURCE_USERNAME_REQUIRED, datasourceKey));
-            }
-            if (!MySqlRouteStringHelper.hasText(datasource.getPassword())) {
-                fail(String.format(ErrorMessage.DATASOURCE_PASSWORD_REQUIRED, datasourceKey));
-            }
-            if (!databases.add(datasource.getDatabase())) {
-                fail(ErrorMessage.DATASOURCE_COMBINATION_DUPLICATE);
-            }
-            if (!datasourceKeys.add(datasourceKey)) {
-                fail(String.format(ErrorMessage.DATASOURCE_KEY_DUPLICATE, datasourceKey));
+            validateDatasource(entry.getKey(), entry.getValue());
+        }
+        validateRules(datasources, properties.getRules());
+    }
+
+    private void validateDatasource(String datasourceName, SimpleMysqlRouteProperties.DatasourceConfig datasource) {
+        if (!isDatasource(datasourceName)) {
+            fail(ErrorMessage.DATASOURCE_KEY_INVALID);
+        }
+        if (datasource == null) {
+            fail(String.format(ErrorMessage.DATASOURCE_URL_REQUIRED, datasourceName));
+        }
+        if (!MySqlRouteStringHelper.hasText(datasource.getUrl())) {
+            fail(String.format(ErrorMessage.DATASOURCE_URL_REQUIRED, datasourceName));
+        }
+        if (!MySqlRouteStringHelper.hasText(datasource.getUsername())) {
+            fail(String.format(ErrorMessage.DATASOURCE_USERNAME_REQUIRED, datasourceName));
+        }
+        if (isPrivilegedUsername(datasource.getUsername())) {
+            fail(ErrorMessage.DATASOURCE_USERNAME_PRIVILEGED);
+        }
+        if (!MySqlRouteStringHelper.hasText(datasource.getPassword())) {
+            fail(String.format(ErrorMessage.DATASOURCE_PASSWORD_REQUIRED, datasourceName));
+        }
+        if (!MySqlRouteStringHelper.hasText(datasource.getDriverClassName())) {
+            fail(String.format(ErrorMessage.DATASOURCE_DRIVER_REQUIRED, datasourceName));
+        }
+        validateHikari(datasourceName, datasource.getHikari());
+    }
+
+    private void validateHikari(String datasourceName, Map<String, String> hikari) {
+        if (hikari == null) {
+            return;
+        }
+        for (Map.Entry<String, String> entry : hikari.entrySet()) {
+            if (!MySqlRouteStringHelper.hasText(entry.getKey()) || !MySqlRouteStringHelper.hasText(entry.getValue())) {
+                fail(String.format(ErrorMessage.HIKARI_CONFIGURATION_INVALID, datasourceName));
             }
         }
     }
 
-    private void validateRules(Set<String> datasourceKeys, List<SimpleMysqlRouteProperties.RouteRule> rules) {
+    private void validateRules(Map<String, SimpleMysqlRouteProperties.DatasourceConfig> datasources,
+                               List<SimpleMysqlRouteProperties.RouteRule> rules) {
         if (rules == null) {
             return;
         }
@@ -129,8 +104,8 @@ public class MySqlRoutePropertiesValidator {
             if (matchType == null) {
                 fail(String.format(ErrorMessage.RULE_MATCH_TYPE_INVALID, index));
             }
-            if (!MySqlRouteStringHelper.hasText(rule.getDatasourceKey())
-                    || !datasourceKeys.contains(rule.getDatasourceKey())) {
+            if (!MySqlRouteStringHelper.hasText(rule.getDatasource())
+                    || !datasources.containsKey(rule.getDatasource())) {
                 fail(String.format(ErrorMessage.RULE_DATASOURCE_NOT_FOUND, index));
             }
             if (matchType == RouteMatchType.REGEX || matchType == RouteMatchType.WILDCARD) {
@@ -143,8 +118,15 @@ public class MySqlRoutePropertiesValidator {
         }
     }
 
-    private String datasourceKey(String clusterKey, String datasourceName) {
-        return clusterKey + "." + datasourceName;
+    private boolean isDatasource(String datasourceName) {
+        return MySqlRouteStringHelper.hasText(datasourceName)
+                && datasourceName.matches(SimpleMysqlRouteConstant.DATASOURCE_KEY_PATTERN);
+    }
+
+    private boolean isPrivilegedUsername(String username) {
+        String normalized = username.trim().toLowerCase(Locale.ROOT);
+        return SimpleMysqlRouteConstant.PRIVILEGED_USERNAME_ROOT.equals(normalized)
+                || SimpleMysqlRouteConstant.PRIVILEGED_USERNAME_ADMIN.equals(normalized);
     }
 
     private void fail(String detail) {

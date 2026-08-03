@@ -21,13 +21,13 @@ public final class MySqlRouteContextHolder {
     }
 
     /**
-     * 将数据源键压入当前线程的路由栈。
+     * 将数据源名称压入当前线程的路由栈。
      *
-     * @param datasourceKey 已注册的数据源键
+     * @param datasource 已注册的数据源名称
      * @return 可自动恢复前序路由上下文的作用域
      */
-    public static Scope push(String datasourceKey) {
-        if (datasourceKey == null || datasourceKey.trim().isEmpty()) {
+    public static Scope push(String datasource) {
+        if (datasource == null || datasource.trim().isEmpty()) {
             throw new SimpleMysqlRouteException(ErrorCode.CONTEXT_INVALID, ErrorMessage.CONTEXT_INVALID);
         }
         Deque<String> stack = CONTEXT.get();
@@ -35,14 +35,14 @@ public final class MySqlRouteContextHolder {
             stack = new ArrayDeque<>();
             CONTEXT.set(stack);
         }
-        stack.push(datasourceKey);
+        stack.push(datasource);
         return new Scope();
     }
 
     /**
-     * 获取当前线程栈顶的数据源键。
+     * 获取当前线程栈顶的数据源名称。
      *
-     * @return 当前数据源键；不存在时返回 {@code null}
+     * @return 当前数据源名称；不存在时返回 {@code null}
      */
     public static String current() {
         Deque<String> stack = CONTEXT.get();

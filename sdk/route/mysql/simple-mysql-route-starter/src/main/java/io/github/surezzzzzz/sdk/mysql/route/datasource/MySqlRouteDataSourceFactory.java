@@ -13,15 +13,13 @@ import javax.sql.DataSource;
 public interface MySqlRouteDataSourceFactory {
 
     /**
-     * 按固定逻辑目标、集群连接定义和目标连接定义创建物理数据源。
+     * 按固定逻辑目标和完整连接定义创建物理数据源。
      *
      * @param target     已校验的逻辑目标
-     * @param cluster    集群连接定义
-     * @param datasource 目标连接定义
+     * @param datasource 完整连接定义
      * @return 新创建的物理数据源
      */
-    DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                      SimpleMysqlRouteProperties.DatasourceConfig datasource);
+    DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.DatasourceConfig datasource);
 
     /**
      * 验证物理数据源可用性。

@@ -116,7 +116,7 @@ public class MySqlRouteTemplateTest {
         assertFalse(invoked.get());
         assertEquals(1, publisher.events.size());
         assertEquals(SimpleMysqlRouteConstant.AUDIT_STATUS_CONFLICT, publisher.events.get(0).getStatus());
-        assertNull(publisher.events.get(0).getDatasourceKey());
+        assertNull(publisher.events.get(0).getDatasource());
     }
 
     @Test
@@ -131,7 +131,7 @@ public class MySqlRouteTemplateTest {
         assertEquals(ErrorCode.ROUTE_NOT_FOUND, exception.getCode());
         assertEquals(1, publisher.events.size());
         assertEquals(SimpleMysqlRouteConstant.AUDIT_STATUS_NOT_FOUND, publisher.events.get(0).getStatus());
-        assertNull(publisher.events.get(0).getDatasourceKey());
+        assertNull(publisher.events.get(0).getDatasource());
         assertEquals(MySqlRouteDigestHelper.sha256("test_unknown"), publisher.events.get(0).getResourceDigest());
     }
 
@@ -219,15 +219,16 @@ public class MySqlRouteTemplateTest {
         NamedParameterJdbcTemplate mismatchedNamedParameterJdbcTemplate =
                 new NamedParameterJdbcTemplate(mock(DataSource.class));
 
-        assertThrows(IllegalArgumentException.class,
+        SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
                 () -> new MySqlRouteTemplate(mock(SimpleMysqlRouteRegistry.class), routeKey -> "test-ops-a",
                         routingDataSource, routingJdbcTemplate, mismatchedNamedParameterJdbcTemplate, null));
+        assertEquals(ErrorCode.ROUTING_RESOURCE_INVALID, exception.getCode());
     }
 
-    private SimpleMysqlRouteRegistry registryWith(String... datasourceKeys) {
+    private SimpleMysqlRouteRegistry registryWith(String... datasources) {
         SimpleMysqlRouteRegistry registry = mock(SimpleMysqlRouteRegistry.class);
-        for (String datasourceKey : datasourceKeys) {
-            when(registry.getDataSource(datasourceKey)).thenReturn(mock(DataSource.class));
+        for (String datasource : datasources) {
+            when(registry.getDataSource(datasource)).thenReturn(mock(DataSource.class));
         }
         return registry;
     }

@@ -89,6 +89,30 @@ public class MySqlRouteTransactionTest {
     }
 
     @Test
+    public void shouldBindConfiguredPrimaryBeforeRejectingOtherTargetInTransaction() throws Exception {
+        DataSource ops = mock(DataSource.class);
+        DataSource audit = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        when(ops.getConnection()).thenReturn(connection);
+        MySqlRoutingDataSource routingDataSource = routingDataSource(ops, audit, "test-ops-a");
+        MySqlRouteTemplate template = template(registryWith(ops, audit), routingDataSource);
+        AtomicBoolean secondCallbackInvoked = new AtomicBoolean(false);
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+
+        try (Connection ignored = routingDataSource.getConnection()) {
+            assertDoesNotThrow(() -> template.executeOn("test-ops-a", () -> null));
+            SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
+                    () -> template.executeOn("test-audit-a", () -> {
+                        secondCallbackInvoked.set(true);
+                        return null;
+                    }));
+            assertEquals(ErrorCode.TRANSACTION_CROSS_DATASOURCE, exception.getCode());
+            assertFalse(secondCallbackInvoked.get());
+        }
+    }
+
+    @Test
     public void shouldRejectTargetSwitchWhenTransactionStartsInsideRouteScope() throws Exception {
         DataSource ops = mock(DataSource.class);
         DataSource audit = mock(DataSource.class);
@@ -125,9 +149,14 @@ public class MySqlRouteTransactionTest {
     }
 
     private MySqlRoutingDataSource routingDataSource(DataSource ops, DataSource audit) {
+        return routingDataSource(ops, audit, null);
+    }
+
+    private MySqlRoutingDataSource routingDataSource(DataSource ops, DataSource audit,
+                                                     String defaultDatasource) {
         Map<Object, Object> targets = new LinkedHashMap<>();
         targets.put("test-ops-a", ops);
         targets.put("test-audit-a", audit);
-        return new MySqlRoutingDataSource(targets);
+        return new MySqlRoutingDataSource(targets, defaultDatasource);
     }
 }

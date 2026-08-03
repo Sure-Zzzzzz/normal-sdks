@@ -34,12 +34,32 @@ public class SimpleMysqlRouteRegistryTest {
     }
 
     @Test
-    public void shouldCloseAlreadyCreatedAndCurrentDatasourceWhenVerificationFails() {
+    public void shouldCreateVerifyAndCloseAllDatasourcesInReverseOrder() {
+        RecordingFactory factory = new RecordingFactory();
+        SimpleMysqlRouteRegistry registry = new SimpleMysqlRouteRegistry(propertiesWithTwoDatasources(), validator(), factory);
+
+        log.info("已创建目标：{}", factory.createdNames);
+        assertEquals("test-ops", factory.createdNames.get(0));
+        assertEquals("test-audit", factory.createdNames.get(1));
+        assertEquals("test-ops-user", factory.createdUsernames.get(0));
+        assertEquals("test-audit-password", factory.createdPasswords.get(1));
+        assertEquals(2, factory.verified.size());
+
+        registry.destroy();
+
+        assertSame(factory.created.get(1), factory.closed.get(0));
+        assertSame(factory.created.get(0), factory.closed.get(1));
+    }
+
+    @Test
+    public void shouldCloseCurrentAndRegisteredDatasourceWhenVerificationFails() {
         RecordingFactory factory = new RecordingFactory();
         factory.failOnVerifyCall = 2;
 
         ConfigurationException exception = assertThrows(ConfigurationException.class,
                 () -> new SimpleMysqlRouteRegistry(propertiesWithTwoDatasources(), validator(), factory));
+
+        log.info("初始化失败：code={}，cause={}", exception.getCode(), exception.getCause());
         assertEquals(ErrorCode.DATASOURCE_CREATE_FAILED, exception.getCode());
         assertNull(exception.getCause());
         assertEquals(2, factory.closed.size());
@@ -48,29 +68,30 @@ public class SimpleMysqlRouteRegistryTest {
     }
 
     @Test
-    public void shouldPassEachNestedTargetCredentialOnlyToFactory() {
+    public void shouldRejectDuplicatedPhysicalDatasourceFromFactory() {
         RecordingFactory factory = new RecordingFactory();
-        SimpleMysqlRouteRegistry registry = new SimpleMysqlRouteRegistry(propertiesWithTwoDatasources(), validator(), factory);
+        factory.reuseCreatedDatasource = true;
 
-        assertEquals("test-cluster-a.ops", factory.createdKeys.get(0));
-        assertEquals("test-cluster-b.audit", factory.createdKeys.get(1));
-        assertEquals("test-ops-user", factory.createdUsernames.get(0));
-        assertEquals("test-audit-user", factory.createdUsernames.get(1));
-        assertEquals("test-ops-password", factory.createdPasswords.get(0));
-        assertEquals("test-audit-password", factory.createdPasswords.get(1));
-        assertEquals(2, registry.getDatasourceKeys().size());
-        registry.destroy();
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> new SimpleMysqlRouteRegistry(propertiesWithTwoDatasources(), validator(), factory));
+
+        log.info("重复物理数据源：code={}，message={}", exception.getCode(), exception.getMessage());
+        assertEquals(ErrorCode.DATASOURCE_CREATE_FAILED, exception.getCode());
+        assertEquals(1, factory.closed.size());
+        assertSame(factory.created.get(0), factory.closed.get(0));
     }
 
     @Test
-    public void shouldDestroyIdempotently() {
+    public void shouldDestroyIdempotentlyAndRejectFurtherAccess() {
         RecordingFactory factory = new RecordingFactory();
         SimpleMysqlRouteRegistry registry = new SimpleMysqlRouteRegistry(propertiesWithOneDatasource(), validator(), factory);
+
         registry.destroy();
         registry.destroy();
+
         assertEquals(1, factory.closed.size());
         SimpleMysqlRouteException exception = assertThrows(SimpleMysqlRouteException.class,
-                () -> registry.getDataSource("test-cluster-a.ops"));
+                () -> registry.getDataSource("test-ops"));
         assertEquals(ErrorCode.REGISTRY_DESTROYED, exception.getCode());
     }
 
@@ -80,26 +101,20 @@ public class SimpleMysqlRouteRegistryTest {
 
     private SimpleMysqlRouteProperties propertiesWithOneDatasource() {
         SimpleMysqlRouteProperties properties = new SimpleMysqlRouteProperties();
-        SimpleMysqlRouteProperties.ClusterConfig cluster = new SimpleMysqlRouteProperties.ClusterConfig();
-        cluster.setHost("example.invalid");
-        cluster.getDatasources().put("ops", datasource("test_ops", "test-ops-user", "test-ops-password"));
-        properties.getClusters().put("test-cluster-a", cluster);
+        properties.setPrimaryDatasource("test-ops");
+        properties.getDatasources().put("test-ops", datasource("test-ops-user", "test-ops-password"));
         return properties;
     }
 
     private SimpleMysqlRouteProperties propertiesWithTwoDatasources() {
         SimpleMysqlRouteProperties properties = propertiesWithOneDatasource();
-        SimpleMysqlRouteProperties.ClusterConfig secondCluster = new SimpleMysqlRouteProperties.ClusterConfig();
-        secondCluster.setHost("example.invalid");
-        secondCluster.getDatasources().put("audit",
-                datasource("test_audit", "test-audit-user", "test-audit-password"));
-        properties.getClusters().put("test-cluster-b", secondCluster);
+        properties.getDatasources().put("test-audit", datasource("test-audit-user", "test-audit-password"));
         return properties;
     }
 
-    private SimpleMysqlRouteProperties.DatasourceConfig datasource(String database, String username, String password) {
+    private SimpleMysqlRouteProperties.DatasourceConfig datasource(String username, String password) {
         SimpleMysqlRouteProperties.DatasourceConfig datasource = new SimpleMysqlRouteProperties.DatasourceConfig();
-        datasource.setDatabase(database);
+        datasource.setUrl("jdbc:mysql://example.invalid/test_order");
         datasource.setUsername(username);
         datasource.setPassword(password);
         return datasource;
@@ -107,19 +122,22 @@ public class SimpleMysqlRouteRegistryTest {
 
     private static class RecordingFactory implements MySqlRouteDataSourceFactory {
         private final List<DataSource> created = new ArrayList<>();
+        private final List<DataSource> verified = new ArrayList<>();
         private final List<DataSource> closed = new ArrayList<>();
-        private final List<String> createdKeys = new ArrayList<>();
+        private final List<String> createdNames = new ArrayList<>();
         private final List<String> createdUsernames = new ArrayList<>();
         private final List<String> createdPasswords = new ArrayList<>();
         private int verifyCalls;
         private int failOnVerifyCall;
+        private boolean reuseCreatedDatasource;
 
         @Override
-        public DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                                 SimpleMysqlRouteProperties.DatasourceConfig datasource) {
-            DataSource dataSource = mock(DataSource.class);
-            created.add(dataSource);
-            createdKeys.add(target.getDatasourceKey());
+        public DataSource create(MySqlRouteTarget target, SimpleMysqlRouteProperties.DatasourceConfig datasource) {
+            DataSource dataSource = reuseCreatedDatasource && !created.isEmpty() ? created.get(0) : mock(DataSource.class);
+            if (!reuseCreatedDatasource || created.isEmpty()) {
+                created.add(dataSource);
+            }
+            createdNames.add(target.getDatasource());
             createdUsernames.add(datasource.getUsername());
             createdPasswords.add(datasource.getPassword());
             return dataSource;
@@ -127,6 +145,7 @@ public class SimpleMysqlRouteRegistryTest {
 
         @Override
         public void verify(DataSource dataSource) {
+            verified.add(dataSource);
             verifyCalls++;
             if (verifyCalls == failOnVerifyCall) {
                 throw new IllegalStateException("controlled failure");

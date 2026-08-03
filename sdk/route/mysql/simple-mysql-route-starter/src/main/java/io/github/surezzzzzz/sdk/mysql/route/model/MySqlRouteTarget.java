@@ -10,13 +10,17 @@ import lombok.Getter;
 @Getter
 public final class MySqlRouteTarget {
 
-    private final String datasourceKey;
-    private final String clusterKey;
-    private final String database;
+    /**
+     * 调用方配置的数据源名称。
+     */
+    private final String datasource;
 
-    public MySqlRouteTarget(String datasourceKey, String clusterKey, String database) {
-        this.datasourceKey = datasourceKey;
-        this.clusterKey = clusterKey;
-        this.database = database;
+    /**
+     * 创建已校验的数据源目标。
+     *
+     * @param datasource 调用方配置的数据源名称
+     */
+    public MySqlRouteTarget(String datasource) {
+        this.datasource = datasource;
     }
 }

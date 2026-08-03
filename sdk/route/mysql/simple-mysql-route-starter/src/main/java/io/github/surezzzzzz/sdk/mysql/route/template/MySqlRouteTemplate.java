@@ -43,10 +43,11 @@ public class MySqlRouteTemplate {
     public MySqlRouteTemplate(SimpleMysqlRouteRegistry registry, MySqlRouteResolver resolver,
                               MySqlRoutingDataSource routingDataSource, JdbcTemplate routingJdbcTemplate,
                               NamedParameterJdbcTemplate namedParameterJdbcTemplate, MySqlRouteAuditPublisher auditPublisher) {
-        if (routingDataSource == null || routingJdbcTemplate == null || namedParameterJdbcTemplate == null
-                || routingJdbcTemplate.getDataSource() != routingDataSource
+        if (registry == null || resolver == null || routingDataSource == null || routingJdbcTemplate == null
+                || namedParameterJdbcTemplate == null || routingJdbcTemplate.getDataSource() != routingDataSource
                 || namedParameterJdbcTemplate.getJdbcTemplate().getDataSource() != routingDataSource) {
-            throw new IllegalArgumentException(ErrorMessage.ROUTING_RESOURCE_INVALID);
+            throw new SimpleMysqlRouteException(ErrorCode.ROUTING_RESOURCE_INVALID,
+                    ErrorMessage.ROUTING_RESOURCE_INVALID);
         }
         this.registry = registry;
         this.resolver = resolver;
@@ -65,26 +66,26 @@ public class MySqlRouteTemplate {
      * @return 回调返回结果
      */
     public <T> T execute(String routeKey, Supplier<T> callback) {
-        String datasourceKey;
+        String datasource;
         try {
-            datasourceKey = resolver.resolve(routeKey);
+            datasource = resolver.resolve(routeKey);
         } catch (RuntimeException e) {
             publishAudit(routeKey, null, auditStatus(e), 0L);
             throw e;
         }
-        return executeResolved(routeKey, datasourceKey, callback);
+        return executeResolved(routeKey, datasource, callback);
     }
 
     /**
-     * 使用调用方显式指定的数据源键执行回调。
+     * 使用调用方显式指定的数据源名称执行回调。
      *
-     * @param datasourceKey 已注册的数据源键
-     * @param callback      在路由作用域内执行的回调
-     * @param <T>           回调返回类型
+     * @param datasource 已注册的数据源名称
+     * @param callback   在路由作用域内执行的回调
+     * @param <T>        回调返回类型
      * @return 回调返回结果
      */
-    public <T> T executeOn(String datasourceKey, Supplier<T> callback) {
-        return executeResolved(datasourceKey, datasourceKey, callback);
+    public <T> T executeOn(String datasource, Supplier<T> callback) {
+        return executeResolved(datasource, datasource, callback);
     }
 
     /**
@@ -101,25 +102,25 @@ public class MySqlRouteTemplate {
             publishAudit(null, null, SimpleMysqlRouteConstant.AUDIT_STATUS_BAD_REQUEST, 0L);
             throw new SimpleMysqlRouteException(ErrorCode.ROUTE_KEYS_INVALID, ErrorMessage.ROUTE_KEYS_INVALID);
         }
-        Set<String> datasourceKeys = new HashSet<>();
+        Set<String> datasources = new HashSet<>();
         try {
             for (String routeKey : routeKeys) {
-                datasourceKeys.add(resolver.resolve(routeKey));
+                datasources.add(resolver.resolve(routeKey));
             }
         } catch (RuntimeException e) {
             publishAudit(firstRouteKey, null, auditStatus(e), 0L);
             throw e;
         }
-        if (datasourceKeys.size() != 1) {
+        if (datasources.size() != 1) {
             publishAudit(firstRouteKey, null, SimpleMysqlRouteConstant.AUDIT_STATUS_CONFLICT, 0L);
             throw new SimpleMysqlRouteException(ErrorCode.OPERATION_CROSS_DATASOURCE,
                     ErrorMessage.OPERATION_CROSS_DATASOURCE);
         }
-        return executeResolved(firstRouteKey, datasourceKeys.iterator().next(), callback);
+        return executeResolved(firstRouteKey, datasources.iterator().next(), callback);
     }
 
     /**
-     * 获取必须在 Route 作用域内使用的路由 JdbcTemplate。
+     * 获取按 Route 作用域或主数据源路由的 JdbcTemplate。
      *
      * @return 路由 JdbcTemplate
      */
@@ -128,7 +129,7 @@ public class MySqlRouteTemplate {
     }
 
     /**
-     * 获取必须在 Route 作用域内使用的命名参数 JdbcTemplate。
+     * 获取按 Route 作用域或主数据源路由的命名参数 JdbcTemplate。
      *
      * @return 路由 NamedParameterJdbcTemplate
      */
@@ -137,7 +138,7 @@ public class MySqlRouteTemplate {
     }
 
     /**
-     * 获取必须在 Route 作用域内使用的路由数据源。
+     * 获取按 Route 作用域或主数据源路由的数据源。
      *
      * @return 路由数据源
      */
@@ -150,12 +151,12 @@ public class MySqlRouteTemplate {
      *
      * <p>当前线程存在 Spring 事务时禁止调用，避免绕过路由事务边界。</p>
      *
-     * @param datasourceKey 已注册的数据源键
+     * @param datasource 已注册的数据源名称
      * @return 目标 JdbcTemplate
      */
-    public JdbcTemplate jdbcTemplate(String datasourceKey) {
+    public JdbcTemplate jdbcTemplate(String datasource) {
         ensureNoTransactionForDirectTarget();
-        return registry.getJdbcTemplate(datasourceKey);
+        return registry.getJdbcTemplate(datasource);
     }
 
     /**
@@ -163,24 +164,24 @@ public class MySqlRouteTemplate {
      *
      * <p>当前线程存在 Spring 事务时禁止调用，避免绕过路由事务边界。</p>
      *
-     * @param datasourceKey 已注册的数据源键
+     * @param datasource 已注册的数据源名称
      * @return 目标物理数据源
      */
-    public DataSource dataSource(String datasourceKey) {
+    public DataSource dataSource(String datasource) {
         ensureNoTransactionForDirectTarget();
-        return registry.getDataSource(datasourceKey);
+        return registry.getDataSource(datasource);
     }
 
-    private <T> T executeResolved(String routeKey, String datasourceKey, Supplier<T> callback) {
+    private <T> T executeResolved(String routeKey, String datasource, Supplier<T> callback) {
         long startedAt = System.currentTimeMillis();
         int status = SimpleMysqlRouteConstant.AUDIT_STATUS_INTERNAL_SERVER_ERROR;
         try {
             if (callback == null) {
                 throw new SimpleMysqlRouteException(ErrorCode.CALLBACK_INVALID, ErrorMessage.CALLBACK_INVALID);
             }
-            ensureDatasource(datasourceKey);
-            bindTransactionDatasource(datasourceKey);
-            try (MySqlRouteContextHolder.Scope ignored = MySqlRouteContextHolder.push(datasourceKey)) {
+            ensureDatasource(datasource);
+            bindTransactionDatasource(datasource);
+            try (MySqlRouteContextHolder.Scope ignored = MySqlRouteContextHolder.push(datasource)) {
                 T result = callback.get();
                 status = SimpleMysqlRouteConstant.AUDIT_STATUS_SUCCESS;
                 return result;
@@ -189,11 +190,11 @@ public class MySqlRouteTemplate {
             status = auditStatus(e);
             throw e;
         } finally {
-            publishAudit(routeKey, datasourceKey, status, System.currentTimeMillis() - startedAt);
+            publishAudit(routeKey, datasource, status, System.currentTimeMillis() - startedAt);
         }
     }
 
-    private void publishAudit(String routeKey, String datasourceKey, int status, long durationMillis) {
+    private void publishAudit(String routeKey, String datasource, int status, long durationMillis) {
         MySqlRouteAuditContext context = MySqlRouteAuditContext.current();
         String digest = context == null || !MySqlRouteDigestHelper.isSha256(context.getResourceDigest())
                 ? digestRouteKey(routeKey) : context.getResourceDigest();
@@ -201,11 +202,11 @@ public class MySqlRouteTemplate {
             auditPublisher.publish(MySqlRouteAuditEvent.builder().occurredAt(Instant.now())
                     .subject(context == null ? null : context.getSubject())
                     .capability(context == null ? null : context.getCapability())
-                    .middlewareType(SimpleMysqlRouteConstant.MIDDLEWARE_TYPE_MYSQL).datasourceKey(datasourceKey).resourceDigest(digest)
+                    .middlewareType(SimpleMysqlRouteConstant.MIDDLEWARE_TYPE_MYSQL).datasource(datasource).resourceDigest(digest)
                     .status(status).durationMillis(durationMillis)
                     .requestId(context == null ? null : context.getRequestId()).build());
         } catch (RuntimeException e) {
-            log.warn("MySQL Route 审计事件发布失败，datasourceKey={}，status={}", datasourceKey, status);
+            log.warn("MySQL Route 审计事件发布失败，datasource={}，status={}", datasource, status);
         }
     }
 
@@ -213,12 +214,12 @@ public class MySqlRouteTemplate {
         return MySqlRouteDigestHelper.sha256(routeKey);
     }
 
-    private void ensureDatasource(String datasourceKey) {
-        registry.getDataSource(datasourceKey);
+    private void ensureDatasource(String datasource) {
+        registry.getDataSource(datasource);
     }
 
-    private void bindTransactionDatasource(String datasourceKey) {
-        routingDataSource.bindTransactionDatasource(datasourceKey);
+    private void bindTransactionDatasource(String datasource) {
+        routingDataSource.bindTransactionDatasource(datasource);
     }
 
     private void ensureNoTransactionForDirectTarget() {

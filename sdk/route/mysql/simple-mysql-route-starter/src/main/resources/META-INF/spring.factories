@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteConfiguration
+io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteManagedDatasourceConfiguration,\
+io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteJdbcTemplateAliasConfiguration

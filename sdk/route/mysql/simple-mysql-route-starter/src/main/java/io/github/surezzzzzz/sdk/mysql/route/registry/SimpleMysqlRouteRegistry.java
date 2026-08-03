@@ -30,9 +30,9 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
     private volatile boolean destroyed;
 
     /**
-     * 校验并初始化全部固定物理数据源。
+     * 使用 Route 管理的物理数据源创建注册表。
      *
-     * @param properties        Route 配置
+     * @param properties        MySQL Route 配置
      * @param validator         配置校验器
      * @param dataSourceFactory 物理数据源工厂
      */
@@ -45,77 +45,77 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
     }
 
     /**
-     * 获取已注册目标的物理数据源。
+     * 获取指定目标的物理数据源。
      *
-     * @param datasourceKey 数据源键
-     * @return 对应物理数据源
+     * @param datasource 调用方配置的数据源名称
+     * @return 物理数据源
      */
-    public DataSource getDataSource(String datasourceKey) {
+    public DataSource getDataSource(String datasource) {
         ensureActive();
-        DataSource dataSource = dataSources.get(datasourceKey);
+        DataSource dataSource = dataSources.get(datasource);
         if (dataSource == null) {
             throw new SimpleMysqlRouteException(ErrorCode.DATASOURCE_NOT_FOUND,
-                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasourceKey));
+                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasource));
         }
         return dataSource;
     }
 
     /**
-     * 获取已注册目标的显式 JdbcTemplate。
+     * 获取指定目标的 JdbcTemplate。
      *
-     * @param datasourceKey 数据源键
-     * @return 对应 JdbcTemplate
+     * @param datasource 调用方配置的数据源名称
+     * @return 目标 JdbcTemplate
      */
-    public JdbcTemplate getJdbcTemplate(String datasourceKey) {
+    public JdbcTemplate getJdbcTemplate(String datasource) {
         ensureActive();
-        JdbcTemplate jdbcTemplate = jdbcTemplates.get(datasourceKey);
+        JdbcTemplate jdbcTemplate = jdbcTemplates.get(datasource);
         if (jdbcTemplate == null) {
             throw new SimpleMysqlRouteException(ErrorCode.DATASOURCE_NOT_FOUND,
-                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasourceKey));
+                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasource));
         }
         return jdbcTemplate;
     }
 
     /**
-     * 获取已注册目标的安全逻辑元数据。
+     * 获取指定目标的安全元数据。
      *
-     * @param datasourceKey 数据源键
-     * @return 目标安全逻辑元数据
+     * @param datasource 调用方配置的数据源名称
+     * @return 目标安全元数据
      */
-    public MySqlRouteTarget getTarget(String datasourceKey) {
+    public MySqlRouteTarget getTarget(String datasource) {
         ensureActive();
-        MySqlRouteTarget target = targets.get(datasourceKey);
+        MySqlRouteTarget target = targets.get(datasource);
         if (target == null) {
             throw new SimpleMysqlRouteException(ErrorCode.DATASOURCE_NOT_FOUND,
-                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasourceKey));
+                    String.format(ErrorMessage.DATASOURCE_NOT_FOUND, datasource));
         }
         return target;
     }
 
     /**
-     * 获取全部已注册的数据源键。
+     * 获取全部已登记的数据源名称。
      *
-     * @return 只读数据源键集合
+     * @return 不可修改的数据源名称集合
      */
-    public Set<String> getDatasourceKeys() {
+    public Set<String> getDatasources() {
         ensureActive();
         return Collections.unmodifiableSet(dataSources.keySet());
     }
 
     /**
-     * 判断当前注册表是否仍包含指定数据源。
+     * 判断指定数据源名称是否已登记。
      *
-     * @param datasourceKey 数据源键
-     * @return 注册表存活且包含该键时返回 true
+     * @param datasource 调用方配置的数据源名称
+     * @return 是否已登记
      */
-    public boolean containsDatasource(String datasourceKey) {
-        return !destroyed && dataSources.containsKey(datasourceKey);
+    public boolean containsDatasource(String datasource) {
+        return !destroyed && dataSources.containsKey(datasource);
     }
 
     /**
-     * 生成供 Spring 路由数据源初始化使用的只读目标映射。
+     * 获取供 RoutingDataSource 初始化使用的目标映射。
      *
-     * @return 数据源键到物理数据源的只读映射
+     * @return 不可修改的目标映射
      */
     public Map<Object, Object> routingTargets() {
         ensureActive();
@@ -125,7 +125,7 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
     }
 
     /**
-     * 逆初始化顺序关闭由本注册表创建的物理数据源。
+     * 逆序关闭全部 Route 管理的物理数据源。
      */
     @Override
     public void destroy() {
@@ -139,7 +139,7 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
             try {
                 dataSourceFactory.close(entry.getValue());
             } catch (RuntimeException e) {
-                log.warn("MySQL Route datasource 关闭失败，datasourceKey={}，异常类型={}",
+                log.warn("MySQL Route datasource 关闭失败，datasource={}，异常类型={}",
                         entry.getKey(), e.getClass().getSimpleName());
             }
         }
@@ -150,18 +150,9 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
 
     private void initialize(SimpleMysqlRouteProperties properties) {
         try {
-            for (Map.Entry<String, SimpleMysqlRouteProperties.ClusterConfig> clusterEntry
-                    : properties.getClusters().entrySet()) {
-                String clusterKey = clusterEntry.getKey();
-                SimpleMysqlRouteProperties.ClusterConfig cluster = clusterEntry.getValue();
-                for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> datasourceEntry
-                        : cluster.getDatasources().entrySet()) {
-                    String datasourceKey = datasourceKey(clusterKey, datasourceEntry.getKey());
-                    SimpleMysqlRouteProperties.DatasourceConfig datasource = datasourceEntry.getValue();
-                    MySqlRouteTarget target = new MySqlRouteTarget(datasourceKey, clusterKey,
-                            datasource.getDatabase());
-                    registerTarget(target, cluster, datasource);
-                }
+            for (Map.Entry<String, SimpleMysqlRouteProperties.DatasourceConfig> entry
+                    : properties.getDatasources().entrySet()) {
+                registerTarget(entry.getKey(), entry.getValue());
             }
         } catch (ConfigurationException e) {
             destroy();
@@ -173,38 +164,43 @@ public class SimpleMysqlRouteRegistry implements DisposableBean {
         }
     }
 
-    private void registerTarget(MySqlRouteTarget target, SimpleMysqlRouteProperties.ClusterConfig cluster,
-                                SimpleMysqlRouteProperties.DatasourceConfig datasource) {
+    private void registerTarget(String datasource, SimpleMysqlRouteProperties.DatasourceConfig datasourceConfig) {
+        MySqlRouteTarget target = new MySqlRouteTarget(datasource);
         DataSource dataSource = null;
         try {
-            dataSource = dataSourceFactory.create(target, cluster, datasource);
-            if (dataSource == null) {
+            dataSource = dataSourceFactory.create(target, datasourceConfig);
+            if (dataSource == null || containsDataSource(dataSource)) {
                 throw new ConfigurationException(ErrorCode.DATASOURCE_CREATE_FAILED,
-                        String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, target.getDatasourceKey()));
+                        String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasource));
             }
             dataSourceFactory.verify(dataSource);
-            dataSources.put(target.getDatasourceKey(), dataSource);
+            dataSources.put(datasource, dataSource);
+            jdbcTemplates.put(datasource, new JdbcTemplate(dataSource));
+            targets.put(datasource, target);
         } catch (RuntimeException e) {
-            closeCurrent(dataSource, target.getDatasourceKey());
+            closeCurrent(dataSource, datasource);
             throw e;
         }
-        jdbcTemplates.put(target.getDatasourceKey(), new JdbcTemplate(dataSource));
-        targets.put(target.getDatasourceKey(), target);
     }
 
-    private String datasourceKey(String clusterKey, String datasourceName) {
-        return clusterKey + "." + datasourceName;
+    private boolean containsDataSource(DataSource dataSource) {
+        for (DataSource registered : dataSources.values()) {
+            if (registered == dataSource) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private void closeCurrent(DataSource dataSource, String datasourceKey) {
-        if (dataSource == null || dataSources.containsValue(dataSource)) {
+    private void closeCurrent(DataSource dataSource, String datasource) {
+        if (dataSource == null || containsDataSource(dataSource)) {
             return;
         }
         try {
             dataSourceFactory.close(dataSource);
         } catch (RuntimeException e) {
-            log.warn("MySQL Route 本地 datasource 关闭失败，datasourceKey={}，异常类型={}",
-                    datasourceKey, e.getClass().getSimpleName());
+            log.warn("MySQL Route 本地 datasource 关闭失败，datasource={}，异常类型={}",
+                    datasource, e.getClass().getSimpleName());
         }
     }
 

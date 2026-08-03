@@ -18,7 +18,7 @@ public final class MySqlRouteAuditEvent {
     private final String subject;
     private final String capability;
     private final String middlewareType;
-    private final String datasourceKey;
+    private final String datasource;
     private final String resourceDigest;
     private final int status;
     private final long durationMillis;

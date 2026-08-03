@@ -20,6 +20,14 @@ public final class ErrorCode {
     public static final String DIRECT_TARGET_IN_TRANSACTION = "MYSQL_ROUTE_011";
     public static final String ROUTE_KEY_INVALID = "MYSQL_ROUTE_012";
     public static final String USER_CREDENTIAL_CONNECTION_UNSUPPORTED = "MYSQL_ROUTE_013";
+    public static final String ROUTING_RESOURCE_INVALID = "MYSQL_ROUTE_014";
+    public static final String PRIMARY_DATASOURCE_INVALID = "MYSQL_ROUTE_015";
+    public static final String DATASOURCE_VERIFY_FAILED = "MYSQL_ROUTE_016";
+    public static final String DATASOURCE_CLOSE_FAILED = "MYSQL_ROUTE_017";
+    public static final String RUNTIME_UNAVAILABLE = "MYSQL_ROUTE_018";
+    public static final String ROUTING_BEAN_NAME_CONFLICT = "MYSQL_ROUTE_019";
+    public static final String HIKARI_CONFIGURATION_INVALID = "MYSQL_ROUTE_020";
+    public static final String BOOT_JDBC_TEMPLATE_REQUIRED = "MYSQL_ROUTE_021";
 
     private ErrorCode() {
         throw new UnsupportedOperationException("工具类不能实例化");

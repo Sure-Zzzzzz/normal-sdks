@@ -23,17 +23,30 @@ import java.util.WeakHashMap;
 public class MySqlRoutingDataSource extends AbstractRoutingDataSource {
 
     private final Map<Object, Object> targets;
+    private final String primaryDatasource;
     private final Object transactionResourceKey;
-    private final Map<Connection, String> connectionDatasourceKeys =
+    private final Map<Connection, String> connectionDatasources =
             Collections.synchronizedMap(new WeakHashMap<Connection, String>());
 
     /**
      * 使用已注册的物理数据源创建严格路由数据源。
      *
-     * @param targets datasourceKey 到物理数据源的映射
+     * @param targets datasource 到物理数据源的映射
      */
     public MySqlRoutingDataSource(Map<Object, Object> targets) {
+        this(targets, null);
+    }
+
+    /**
+     * 使用已注册的物理数据源和主数据源名称创建路由数据源。
+     *
+     * @param targets           datasource 到物理数据源的映射
+     * @param primaryDatasource 无 Route 作用域时使用的配置主数据源名称；可为空以保持严格 scope 模式
+     */
+    public MySqlRoutingDataSource(Map<Object, Object> targets, String primaryDatasource) {
         this.targets = targets;
+        validatePrimaryDatasource(primaryDatasource);
+        this.primaryDatasource = primaryDatasource;
         this.transactionResourceKey = new Object();
         setTargetDataSources(targets);
         setLenientFallback(false);
@@ -41,16 +54,16 @@ public class MySqlRoutingDataSource extends AbstractRoutingDataSource {
     }
 
     /**
-     * 按当前线程的 Route 作用域获取连接。
+     * 按当前线程 Route 作用域或主数据源获取连接。
      *
-     * @return 当前 datasourceKey 对应的连接
+     * @return 当前 datasource 对应的连接
      * @throws SQLException 获取物理连接失败
      */
     @Override
     public Connection getConnection() throws SQLException {
-        String datasourceKey = currentDatasourceKey();
+        String datasource = currentDatasource();
         Connection connection = super.getConnection();
-        connectionDatasourceKeys.put(connection, datasourceKey);
+        connectionDatasources.put(connection, datasource);
         return connection;
     }
 
@@ -70,34 +83,34 @@ public class MySqlRoutingDataSource extends AbstractRoutingDataSource {
 
     @Override
     protected Object determineCurrentLookupKey() {
-        String datasourceKey = currentDatasourceKey();
-        bindTransactionDatasource(datasourceKey);
-        return datasourceKey;
+        String datasource = currentDatasource();
+        bindTransactionDatasource(datasource);
+        return datasource;
     }
 
     /**
-     * 在进入回调前绑定已激活事务的目标。
+     * 在进入回调前绑定已激活事务的 datasource。
      *
-     * @param datasourceKey 当前目标键
+     * @param datasource 当前 datasource 名称
      */
-    public void bindTransactionDatasource(String datasourceKey) {
+    public void bindTransactionDatasource(String datasource) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()
                 || !TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }
         Object bound = TransactionSynchronizationManager.getResource(transactionResourceKey);
         Connection transactionConnection = transactionConnection();
-        String connectionDatasourceKey = transactionConnection == null
-                ? null : connectionDatasourceKeys.get(transactionConnection);
-        if (bound == null && connectionDatasourceKey != null) {
-            bound = connectionDatasourceKey;
+        String connectionDatasource = transactionConnection == null
+                ? null : connectionDatasources.get(transactionConnection);
+        if (bound == null && connectionDatasource != null) {
+            bound = connectionDatasource;
         }
-        if (bound != null && !datasourceKey.equals(bound)) {
+        if (bound != null && !datasource.equals(bound)) {
             throw new SimpleMysqlRouteException(ErrorCode.TRANSACTION_CROSS_DATASOURCE,
-                    String.format(ErrorMessage.TRANSACTION_CROSS_DATASOURCE, datasourceKey));
+                    String.format(ErrorMessage.TRANSACTION_CROSS_DATASOURCE, datasource));
         }
         if (!TransactionSynchronizationManager.hasResource(transactionResourceKey)) {
-            TransactionSynchronizationManager.bindResource(transactionResourceKey, datasourceKey);
+            TransactionSynchronizationManager.bindResource(transactionResourceKey, datasource);
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCompletion(int status) {
@@ -105,19 +118,35 @@ public class MySqlRoutingDataSource extends AbstractRoutingDataSource {
                         TransactionSynchronizationManager.unbindResourceIfPossible(transactionResourceKey);
                     }
                     if (transactionConnection != null) {
-                        connectionDatasourceKeys.remove(transactionConnection);
+                        connectionDatasources.remove(transactionConnection);
                     }
                 }
             });
         }
     }
 
-    private String currentDatasourceKey() {
-        String datasourceKey = MySqlRouteContextHolder.current();
-        if (datasourceKey == null || datasourceKey.trim().isEmpty() || !targets.containsKey(datasourceKey)) {
-            throw new SimpleMysqlRouteException(ErrorCode.CONTEXT_INVALID, ErrorMessage.CONTEXT_INVALID);
+    private void validatePrimaryDatasource(String primaryDatasource) {
+        if (primaryDatasource == null) {
+            return;
         }
-        return datasourceKey;
+        if (primaryDatasource.trim().isEmpty() || !targets.containsKey(primaryDatasource)) {
+            throw new SimpleMysqlRouteException(ErrorCode.PRIMARY_DATASOURCE_INVALID,
+                    ErrorMessage.PRIMARY_DATASOURCE_INVALID);
+        }
+    }
+
+    private String currentDatasource() {
+        String datasource = MySqlRouteContextHolder.current();
+        if (datasource != null && !datasource.trim().isEmpty()) {
+            if (!targets.containsKey(datasource)) {
+                throw new SimpleMysqlRouteException(ErrorCode.CONTEXT_INVALID, ErrorMessage.CONTEXT_INVALID);
+            }
+            return datasource;
+        }
+        if (primaryDatasource != null) {
+            return primaryDatasource;
+        }
+        throw new SimpleMysqlRouteException(ErrorCode.CONTEXT_INVALID, ErrorMessage.CONTEXT_INVALID);
     }
 
     private Connection transactionConnection() {
