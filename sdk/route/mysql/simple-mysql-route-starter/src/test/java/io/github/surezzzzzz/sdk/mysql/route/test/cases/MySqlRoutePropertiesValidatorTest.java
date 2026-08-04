@@ -90,19 +90,14 @@ public class MySqlRoutePropertiesValidatorTest {
     }
 
     @Test
-    public void shouldRejectPrivilegedUsernameWithoutEchoingCredential() {
-        String[] privilegedUsernames = {"root", "ROOT", "admin", "ADMIN"};
-        for (String privilegedUsername : privilegedUsernames) {
+    public void shouldAcceptNonBlankDatasourceUsernamesRegardlessOfName() {
+        String[] usernames = {"root", "ROOT", "admin", "ADMIN"};
+        for (String username : usernames) {
             SimpleMysqlRouteProperties properties = validProperties();
-            properties.getDatasources().get("test-ops").setUsername(privilegedUsername);
+            properties.getDatasources().get("test-ops").setUsername(username);
+            log.info("用户名不参与 Route 权限判断：{}", username);
 
-            ConfigurationException exception = assertThrows(ConfigurationException.class,
-                    () -> validator.validate(properties));
-            log.info("高风险账号校验结果：code={}，message={}", exception.getCode(), exception.getMessage());
-
-            assertEquals(ErrorCode.CONFIG_INVALID, exception.getCode());
-            assertTrue(exception.getMessage().contains("高风险连接账号"));
-            assertFalse(exception.getMessage().contains(privilegedUsername));
+            assertDoesNotThrow(() -> validator.validate(properties));
         }
     }
 

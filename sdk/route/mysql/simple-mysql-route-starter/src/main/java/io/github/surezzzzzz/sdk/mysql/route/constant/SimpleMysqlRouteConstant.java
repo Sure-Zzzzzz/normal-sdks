@@ -48,8 +48,6 @@ public final class SimpleMysqlRouteConstant {
     public static final int AUDIT_STATUS_INTERNAL_SERVER_ERROR = 500;
     public static final int CONNECTION_VALIDATION_TIMEOUT_SECONDS = 5;
     public static final String SHA_256 = "SHA-256";
-    public static final String PRIVILEGED_USERNAME_ROOT = "root";
-    public static final String PRIVILEGED_USERNAME_ADMIN = "admin";
     public static final int SHA_256_DIGEST_LENGTH = 64;
     public static final char DIGIT_MIN = '0';
     public static final char DIGIT_MAX = '9';

@@ -10,7 +10,6 @@ import io.github.surezzzzzz.sdk.mysql.route.matcher.MySqlRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.mysql.route.support.MySqlRouteStringHelper;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.PatternSyntaxException;
 
@@ -63,9 +62,6 @@ public class MySqlRoutePropertiesValidator {
         }
         if (!MySqlRouteStringHelper.hasText(datasource.getUsername())) {
             fail(String.format(ErrorMessage.DATASOURCE_USERNAME_REQUIRED, datasourceName));
-        }
-        if (isPrivilegedUsername(datasource.getUsername())) {
-            fail(ErrorMessage.DATASOURCE_USERNAME_PRIVILEGED);
         }
         if (!MySqlRouteStringHelper.hasText(datasource.getPassword())) {
             fail(String.format(ErrorMessage.DATASOURCE_PASSWORD_REQUIRED, datasourceName));
@@ -121,12 +117,6 @@ public class MySqlRoutePropertiesValidator {
     private boolean isDatasource(String datasourceName) {
         return MySqlRouteStringHelper.hasText(datasourceName)
                 && datasourceName.matches(SimpleMysqlRouteConstant.DATASOURCE_KEY_PATTERN);
-    }
-
-    private boolean isPrivilegedUsername(String username) {
-        String normalized = username.trim().toLowerCase(Locale.ROOT);
-        return SimpleMysqlRouteConstant.PRIVILEGED_USERNAME_ROOT.equals(normalized)
-                || SimpleMysqlRouteConstant.PRIVILEGED_USERNAME_ADMIN.equals(normalized);
     }
 
     private void fail(String detail) {

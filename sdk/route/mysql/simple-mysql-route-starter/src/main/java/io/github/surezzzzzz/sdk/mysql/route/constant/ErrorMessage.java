@@ -35,7 +35,6 @@ public final class ErrorMessage {
     public static final String DATASOURCE_URL_REQUIRED = "datasource [%s] url 不能为空";
     public static final String DATASOURCE_DRIVER_REQUIRED = "datasource [%s] driver-class-name 不能为空";
     public static final String DATASOURCE_USERNAME_REQUIRED = "datasource [%s] username 不能为空";
-    public static final String DATASOURCE_USERNAME_PRIVILEGED = "datasource 不能使用高风险连接账号";
     public static final String DATASOURCE_PASSWORD_REQUIRED = "datasource [%s] password 不能为空";
     public static final String RULE_PATTERN_REQUIRED = "第 %s 条规则 pattern 不能为空";
     public static final String RULE_MATCH_TYPE_INVALID = "第 %s 条规则 match-type 无效";

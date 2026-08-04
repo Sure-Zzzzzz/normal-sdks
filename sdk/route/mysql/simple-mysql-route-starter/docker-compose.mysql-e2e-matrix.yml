@@ -12,6 +12,10 @@ services:
       E2E_OPS_PASSWORD: mysql57-ops-route-local
       E2E_AUDIT_USERNAME: mysql57_audit_route
       E2E_AUDIT_PASSWORD: mysql57-audit-route-local
+      E2E_OPS_READONLY_USERNAME: mysql57_ops_view
+      E2E_OPS_READONLY_PASSWORD: mysql57-ops-view-local
+      E2E_AUDIT_READONLY_USERNAME: mysql57_audit_view
+      E2E_AUDIT_READONLY_PASSWORD: mysql57-audit-view-local
     volumes:
       - mysql-route-e2e-57-data:/var/lib/mysql
       - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro
@@ -35,6 +39,10 @@ services:
       E2E_OPS_PASSWORD: mysql84-ops-route-local
       E2E_AUDIT_USERNAME: mysql84_audit_route
       E2E_AUDIT_PASSWORD: mysql84-audit-route-local
+      E2E_OPS_READONLY_USERNAME: mysql84_ops_view
+      E2E_OPS_READONLY_PASSWORD: mysql84-ops-view-local
+      E2E_AUDIT_READONLY_USERNAME: mysql84_audit_view
+      E2E_AUDIT_READONLY_PASSWORD: mysql84-audit-view-local
     volumes:
       - mysql-route-e2e-84-data:/var/lib/mysql
       - ./docker/mysql-e2e-init:/docker-entrypoint-initdb.d:ro

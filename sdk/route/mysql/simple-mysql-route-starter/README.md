@@ -18,7 +18,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     runtimeOnly 'mysql:mysql-connector-java'
 }
@@ -110,7 +110,7 @@ io:
 | `primary-datasource` | 是 | 无 | 无显式 Route scope 时使用的 datasource 名称，必须精确命中 `datasources`。 |
 | `datasources` | 是 | 无 | datasource 名称到完整连接定义的映射。名称只能包含字母、数字、`_`、`-`，且必须以字母或数字开头。 |
 | `datasources.<name>.url` | 是 | 无 | 固定 JDBC URL。 |
-| `datasources.<name>.username` | 是 | 无 | 固定连接账号，不允许 `root`、`admin` 及其大小写变体。 |
+| `datasources.<name>.username` | 是 | 无 | 固定连接账号，Route 只校验非空，不评估账号权限。 |
 | `datasources.<name>.password` | 是 | 无 | 固定连接密码。 |
 | `datasources.<name>.driver-class-name` | 否 | `com.mysql.cj.jdbc.Driver` | JDBC 驱动类名。 |
 | `datasources.<name>.hikari` | 否 | 空 | Hikari 配置映射。 |
@@ -251,7 +251,7 @@ Flyway 或 Liquibase 无 Route scope 时只处理 `primary-datasource`。其他 
 
 ## 最佳实践
 
-1. 每个 datasource 使用独立的最小权限账号，不使用 `root` 或 `admin`；读写职责不同的 database 使用不同账号与授权。
+1. 部署时为每个 datasource 配置独立的最小权限账号；读写职责不同的 database 使用不同账号与授权。该建议由部署侧落实，Route 不按账号名称推断权限。
 2. URL、database、账号和密码属于 datasource 的固定身份；同一 MySQL 实例的不同 database 仍应分别配置 datasource。
 3. 密码只通过部署环境变量、密钥服务或受控配置注入；不要提交真实密码、JDBC URL 中的敏感参数或连接池诊断信息。
 4. `primary-datasource` 只服务无 scope 调用；有明确业务归属时优先使用 routeKey 或 `executeOn(datasource, ...)`，不要依赖注册顺序。
