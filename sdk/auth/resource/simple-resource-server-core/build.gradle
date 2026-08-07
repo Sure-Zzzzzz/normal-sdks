@@ -1,0 +1,3 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
+}
