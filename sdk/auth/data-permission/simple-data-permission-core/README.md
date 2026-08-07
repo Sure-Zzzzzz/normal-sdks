@@ -85,6 +85,19 @@ return queryOrdersByOrganization(plan.getGrants());
 
 多个 grant 之间表示“或”；同一个 grant 中的多个约束表示“且”。资源服务必须完整使用每个 grant，不能把不同 grant 的条件拆开重组。
 
+## 结构化 Claim 接入
+
+1.1.0 新增 `DataGrantDocumentClaimMapper`，用于在已经完成认证和授权绑定的适配器中，将 `DataGrantDocument` 转换为来源中立的结构化 Claim，或从 Claim 还原文档：
+
+```java
+Map<String, Object> claim = DataGrantDocumentClaimMapper.toClaim(document);
+DataGrantDocument restored = DataGrantDocumentClaimMapper.fromClaim(claim);
+```
+
+该 Mapper 只处理 DATA 文档本身，不负责证明 Claim 来源可信。调用方应先完成载体的签名、解密、issuer、audience、subject、时效和授权版本校验，再调用 `fromClaim`。Mapper 会严格拒绝缺失或未知字段、错误容器类型、错误标量类型、未知协议版本、未知操作符以及超过节点或 UTF-8 文本预算的 Claim；非法输入不会退化为全量授权。
+
+所有输出的 Map、List 和嵌套对象均不可修改。它不依赖 Spring、Jackson、IAM 或 AKSK，生产运行时仍保持 JDK-only Core。
+
 ## 授权文档从哪里来
 
 本模块接收已经确认可信的 `DataGrantDocument`，不关心它来自 IAM、AKSK、RPC 还是业务上下文。
@@ -107,7 +120,7 @@ DataAccessPlan plan = evaluator.evaluate(documentSource,
 - 将受限范围翻译为 SQL、ES 或其他查询条件。
 - 对列表、详情、导出、创建、更新、删除和批量操作实际执行范围校验。
 
-完整协议规则和演进约束见 [DESIGN.1.0.0.md](DESIGN.1.0.0.md)。
+本模块只提供稳定的数据权限模型、评估器和结构化 Claim 映射能力；认证载体校验和业务查询范围执行由接入方负责。
 
 ## 许可证
 

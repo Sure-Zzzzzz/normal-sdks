@@ -102,6 +102,27 @@ public final class SimpleDataPermissionConstant {
      * 约束值最大 Unicode 码点数量。
      */
     public static final int MAX_VALUE_CODE_POINT_COUNT = 512;
+    /**
+     * 结构化 Claim 最大节点数量。
+     */
+    public static final int MAX_CLAIM_NODE_COUNT = 16384;
+    /**
+     * 结构化 Claim 文本最大 UTF-8 字节数。
+     */
+    public static final int MAX_CLAIM_TEXT_BYTE_COUNT = 65536;
+
+    /**
+     * 结构化 Claim 形状无效详情。
+     */
+    public static final String DETAIL_CLAIM_SHAPE_INVALID = "结构化Claim形状无效";
+    /**
+     * 结构化 Claim 节点数量超限详情模板。
+     */
+    public static final String DETAIL_CLAIM_NODE_COUNT_TOO_LARGE = "结构化Claim节点数量不能超过%d";
+    /**
+     * 结构化 Claim 文本字节数超限详情模板。
+     */
+    public static final String DETAIL_CLAIM_TEXT_BYTE_COUNT_TOO_LARGE = "结构化Claim文本UTF-8字节数不能超过%d";
 
     /**
      * 常量类实例化提示。

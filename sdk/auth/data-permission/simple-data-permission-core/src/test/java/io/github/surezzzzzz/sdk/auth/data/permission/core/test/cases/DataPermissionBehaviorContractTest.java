@@ -118,7 +118,7 @@ class DataPermissionBehaviorContractTest {
         assertInvalid(() -> new DataPermissionRequest("test_resource", null), ErrorCode.INVALID_DOCUMENT,
                 "授权请求动作不能为null");
         assertInvalid(() -> new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL, null,
-                Collections.singletonList(allGrant("test_resource", "read"))), ErrorCode.UNSUPPORTED_VERSION,
+                        Collections.singletonList(allGrant("test_resource", "read"))), ErrorCode.UNSUPPORTED_VERSION,
                 "授权文档版本不能为null");
     }
 

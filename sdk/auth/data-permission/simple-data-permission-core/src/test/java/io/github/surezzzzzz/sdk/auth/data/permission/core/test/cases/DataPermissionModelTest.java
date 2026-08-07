@@ -13,12 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.AbstractCollection;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -102,7 +97,7 @@ class DataPermissionModelTest {
         new DataGrant("test_resource", Collections.nCopies(SimpleDataPermissionConstant.MAX_ACTION_COUNT, "read"), true,
                 Collections.<DataConstraint>emptyList());
         assertInvalid(() -> new DataGrant("test_resource", misleadingCollection("read",
-                SimpleDataPermissionConstant.MAX_ACTION_COUNT + 1), true, Collections.<DataConstraint>emptyList()),
+                        SimpleDataPermissionConstant.MAX_ACTION_COUNT + 1), true, Collections.<DataConstraint>emptyList()),
                 ErrorCode.INVALID_GRANT, "动作实际数量超过上限必须拒绝");
         DataConstraint constraint = new DataConstraint("scope_a", DataConstraintOperator.IN,
                 Collections.singletonList("value-a"));
@@ -113,12 +108,12 @@ class DataPermissionModelTest {
         }
         new DataGrant("test_resource", Collections.singletonList("read"), false, maximumConstraints);
         assertInvalid(() -> new DataGrant("test_resource", Collections.singletonList("read"), false,
-                misleadingCollection(constraint, SimpleDataPermissionConstant.MAX_CONSTRAINT_COUNT + 1)),
+                        misleadingCollection(constraint, SimpleDataPermissionConstant.MAX_CONSTRAINT_COUNT + 1)),
                 ErrorCode.INVALID_GRANT, "约束实际数量超过上限必须拒绝");
         new DataConstraint("scope_a", DataConstraintOperator.IN,
                 Collections.nCopies(SimpleDataPermissionConstant.MAX_VALUE_COUNT, "value-a"));
         assertInvalid(() -> new DataConstraint("scope_a", DataConstraintOperator.IN,
-                misleadingCollection("value-a", SimpleDataPermissionConstant.MAX_VALUE_COUNT + 1)),
+                        misleadingCollection("value-a", SimpleDataPermissionConstant.MAX_VALUE_COUNT + 1)),
                 ErrorCode.INVALID_CONSTRAINT, "值实际数量超过上限必须拒绝");
         List<DataGrant> grants = new ArrayList<DataGrant>();
         for (int index = 0; index <= SimpleDataPermissionConstant.MAX_GRANT_COUNT; index++) {
@@ -128,7 +123,7 @@ class DataPermissionModelTest {
         new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL, SimpleDataPermissionConstant.VERSION,
                 grants.subList(0, SimpleDataPermissionConstant.MAX_GRANT_COUNT));
         assertInvalid(() -> new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
-                SimpleDataPermissionConstant.VERSION, misleadingCollection(grants.get(0), grants)),
+                        SimpleDataPermissionConstant.VERSION, misleadingCollection(grants.get(0), grants)),
                 ErrorCode.INVALID_DOCUMENT, "授权项实际数量超过上限必须拒绝");
     }
 
@@ -137,10 +132,10 @@ class DataPermissionModelTest {
         DataConstraint constraint = new DataConstraint("scope_a", DataConstraintOperator.IN,
                 Collections.singletonList("value-a"));
         assertInvalid(() -> new DataGrant("test_resource", Collections.singletonList("read"), true,
-                collectionWithEmptySize(constraint)), ErrorCode.INVALID_GRANT,
+                        collectionWithEmptySize(constraint)), ErrorCode.INVALID_GRANT,
                 "全量授权必须以实际快照中的约束判断互斥");
         assertInvalid(() -> new DataGrant("test_resource", Collections.singletonList("read"), false,
-                collectionWithEmptyIterator()), ErrorCode.INVALID_GRANT,
+                        collectionWithEmptyIterator()), ErrorCode.INVALID_GRANT,
                 "受限授权必须以实际快照非空约束判断");
     }
 

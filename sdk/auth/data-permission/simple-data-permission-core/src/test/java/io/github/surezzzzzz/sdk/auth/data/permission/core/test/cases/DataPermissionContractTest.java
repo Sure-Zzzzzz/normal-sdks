@@ -69,7 +69,7 @@ class DataPermissionContractTest {
 
     @Test
     void shouldKeepCanonicalCodecFixtureAvailable() throws IOException {
-        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("data-grant-document-1.0.json");
+        InputStream inputStream = getClass().getClassLoader().getResourceAsStream("data-grant-document-1.0.json.txt");
         log.info("读取1.0协议规范fixture");
         assertNotNull(inputStream, "未来codec适配器必须复用规范JSON fixture");
         try {
