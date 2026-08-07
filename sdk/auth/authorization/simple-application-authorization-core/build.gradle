@@ -1,0 +1,3 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
+}
