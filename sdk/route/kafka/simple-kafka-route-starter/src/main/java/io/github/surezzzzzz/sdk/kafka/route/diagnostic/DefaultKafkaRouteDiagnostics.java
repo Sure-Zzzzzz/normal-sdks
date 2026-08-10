@@ -146,12 +146,14 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
         KafkaRouteBrokerCapability idempotenceSupported = capabilityInferredFromFeatureApi;
         KafkaRouteBrokerCapability zstdSupported = capabilityInferredFromFeatureApi;
         KafkaRouteBrokerCapability transactionSupported = capabilityInferredFromFeatureApi;
-        KafkaRouteDiagnosticStatus status = hasCapabilityWarning(config, transactionSupported,
-                idempotenceSupported, zstdSupported)
+        String diagnosticReason = capabilityWarningReason(config, transactionSupported,
+                idempotenceSupported, zstdSupported);
+        KafkaRouteDiagnosticStatus status = KafkaRouteStringHelper.hasText(diagnosticReason)
                 ? KafkaRouteDiagnosticStatus.WARN : KafkaRouteDiagnosticStatus.SUCCESS;
         return KafkaRouteBrokerDiagnosticResult.builder()
                 .datasourceKey(datasourceKey)
                 .status(status)
+                .diagnosticReason(diagnosticReason)
                 .clusterId(KafkaAdminCompatibilityHelper.extractClusterId(clusterDesc))
                 .nodeCount(KafkaAdminCompatibilityHelper.extractNodeCount(clusterDesc))
                 .controllerVisible(KafkaAdminCompatibilityHelper.extractControllerVisible(clusterDesc))
@@ -162,25 +164,28 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
                 .build();
     }
 
-    private boolean hasCapabilityWarning(SimpleKafkaRouteProperties.DataSourceConfig config,
-                                         KafkaRouteBrokerCapability transactionSupported,
-                                         KafkaRouteBrokerCapability idempotenceSupported,
-                                         KafkaRouteBrokerCapability zstdSupported) {
+    private String capabilityWarningReason(SimpleKafkaRouteProperties.DataSourceConfig config,
+                                           KafkaRouteBrokerCapability transactionSupported,
+                                           KafkaRouteBrokerCapability idempotenceSupported,
+                                           KafkaRouteBrokerCapability zstdSupported) {
         if (config == null) {
-            return false;
+            return null;
         }
         SimpleKafkaRouteProperties.ProducerConfig producer = config.getProducer() == null
                 ? new SimpleKafkaRouteProperties.ProducerConfig() : config.getProducer();
         if (KafkaRouteStringHelper.hasText(producer.getTransactionIdPrefix())
                 && transactionSupported != KafkaRouteBrokerCapability.SUPPORTED) {
-            return true;
+            return "已配置事务生产者，但 broker Feature API 未确认事务能力";
         }
         if (isEffectiveIdempotenceEnabled(config, producer)
                 && idempotenceSupported != KafkaRouteBrokerCapability.SUPPORTED) {
-            return true;
+            return "已启用幂等生产者，但 broker Feature API 未确认幂等能力";
         }
-        return isEffectiveZstdCompression(config, producer)
-                && zstdSupported != KafkaRouteBrokerCapability.SUPPORTED;
+        if (isEffectiveZstdCompression(config, producer)
+                && zstdSupported != KafkaRouteBrokerCapability.SUPPORTED) {
+            return "已配置 zstd 压缩，但 broker Feature API 未确认 zstd 能力";
+        }
+        return null;
     }
 
     private boolean isEffectiveIdempotenceEnabled(SimpleKafkaRouteProperties.DataSourceConfig config,
@@ -264,9 +269,10 @@ public class DefaultKafkaRouteDiagnostics implements KafkaRouteDiagnostics, Smar
             return;
         }
         if (result.getStatus() == KafkaRouteDiagnosticStatus.WARN) {
-            log.warn("Kafka route datasource [{}] 诊断完成但存在 capability 告警，clusterId=[{}]，nodeCount=[{}]，controllerVisible=[{}]，transactionSupported=[{}]，idempotenceSupported=[{}]，zstdSupported=[{}]，adminApiLevel=[{}]",
-                    result.getDatasourceKey(), result.getClusterId(), result.getNodeCount(), result.isControllerVisible(),
-                    result.getTransactionSupported(), result.getIdempotenceSupported(), result.getZstdSupported(), result.getAdminApiLevel());
+            log.warn("Kafka route datasource [{}] 诊断完成但存在 capability 告警，reason=[{}]，clusterId=[{}]，nodeCount=[{}]，controllerVisible=[{}]，transactionSupported=[{}]，idempotenceSupported=[{}]，zstdSupported=[{}]，adminApiLevel=[{}]",
+                    result.getDatasourceKey(), result.getDiagnosticReason(), result.getClusterId(), result.getNodeCount(),
+                    result.isControllerVisible(), result.getTransactionSupported(), result.getIdempotenceSupported(),
+                    result.getZstdSupported(), result.getAdminApiLevel());
             return;
         }
         log.info("Kafka route datasource [{}] 诊断完成，clusterId=[{}]，nodeCount=[{}]，controllerVisible=[{}]，transactionSupported=[{}]，idempotenceSupported=[{}]，zstdSupported=[{}]，adminApiLevel=[{}]",

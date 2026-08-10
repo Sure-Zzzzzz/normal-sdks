@@ -8,7 +8,7 @@
 - 三类显式路由入口：按 topic 路由、按 route key 路由、显式指定 datasource，互不干扰。
 - 多匹配模式：支持 exact / prefix / suffix / wildcard / regex。
 - 规则优先级：priority 数字越小越优先，同 priority 按配置声明顺序匹配。
-- Broker 诊断层：核心 Bean 就绪后可选探测 broker 可达性、cluster 信息和 capability；探测失败默认只 warn，不阻断启动。
+- Broker 诊断层：核心 Bean 就绪后可选探测 broker 可达性、cluster 信息和 capability；探测失败默认只 warn，不阻断启动；`WARN` 结果通过 `diagnosticReason` 提供固定且脱敏的告警原因。
 - 事务透传：`transaction-id-prefix` 通过 `setTransactionIdPrefix()` 设置，保留原生 Spring Kafka 事务语义。
 - 安全默认：保留键（bootstrap.servers、serializer、group.id 等）禁止写入 raw properties；敏感字段（JAAS、SSL 密码等）不进 toString、日志、异常 message。
 - 不污染业务上下文：不注册全局 `KafkaTemplate` / `ProducerFactory` / `ConsumerFactory` / `KafkaAdmin`。
@@ -20,7 +20,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.4'
+    implementation 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.5'
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.kafka:spring-kafka'
 }
@@ -341,9 +341,27 @@ try {
 
 ## 测试
 
-单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试还会真实启动 Spring Kafka listener container，验证 factory 级反序列化器、消息消费和停止后销毁顺序；1.0.4 额外在 callback 内执行只读 `describeCluster` 并等待结果。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
+单元测试不依赖真实 broker；端到端测试通过 Docker 启动 Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点与 3 broker cluster，验证多版本 broker 路由隔离、事务边界、诊断 capability 准确性，以及同一 datasource 的派生 ConsumerFactory 独立 group、生效参数和销毁边界。端到端测试还会真实启动 Spring Kafka listener container，验证 factory 级反序列化器、消息消费和停止后销毁顺序；1.0.4 额外在 callback 内执行只读 `describeCluster` 并等待结果，1.0.5 继续验证 `WARN` 结果携带安全的 `diagnosticReason`。端到端测试默认随 `test` 任务执行，运行前需要先启动本地 Docker Kafka 矩阵。
 
 ## 升级说明
+
+### 1.0.5 诊断告警原因
+
+1.0.5 新增 `KafkaRouteBrokerDiagnosticResult#diagnosticReason`，无需增加配置。其为 Route 对 `WARN` 的唯一详细解释来源：
+
+| 诊断状态 | `diagnosticReason` | 调用方处理方式 |
+|----------|--------------------|----------------|
+| `SUCCESS` | `null` | 不展示告警原因 |
+| `WARN` | 下表中的固定脱敏短消息之一 | 直接展示该字段，不要根据 capability 字段自行推断 |
+| `FAILED` | `null` | 读取既有 `failureReason`，不要将失败信息混入告警原因 |
+
+| WARN 触发条件 | 固定 `diagnosticReason` |
+|---------------|----------------------------|
+| 已配置事务生产者，broker Feature API 未确认事务能力 | `已配置事务生产者，但 broker Feature API 未确认事务能力` |
+| 已启用幂等生产者，broker Feature API 未确认幂等能力 | `已启用幂等生产者，但 broker Feature API 未确认幂等能力` |
+| 已配置 zstd 压缩，broker Feature API 未确认 zstd 能力 | `已配置 zstd 压缩，但 broker Feature API 未确认 zstd 能力` |
+
+同时命中多项时固定按事务生产者、幂等生产者、zstd 压缩取第一项。该字段不包含 bootstrap 地址、认证信息、JAAS、SSL 配置或原始异常。自定义 `KafkaRouteDiagnostics` 实现可以继续返回未设置该字段的旧版结果；使用方仅在 `WARN` 且原因为空时展示中性提示，不得反推具体能力原因。
 
 1.0.4 新增 `KafkaRouteAdminClientFactory`，不改变既有 `KafkaRouteTemplate`、Registry、ProducerFactory、ConsumerFactory 或 diagnostics 的使用方式。需要 AdminClient 的调用方在 callback 内完成所有请求，callback 结束后不再保留客户端或未完成异步结果；不需要该能力的调用方无需修改代码或配置。
 
@@ -351,7 +369,7 @@ try {
 
 ## 版本兼容
 
-1.0.4 已在以下 Spring Boot 基线完成完整模块测试与 Docker Kafka 端到端验证；每个基线均覆盖 callback 内只读 `describeCluster`、多版本 broker 路由、事务、诊断、listener container 和派生 ConsumerFactory 生命周期。
+1.0.5 已在以下 Spring Boot 基线完成完整模块测试与 Docker Kafka 端到端验收；每个基线覆盖 callback 内只读 `describeCluster`、多版本 broker 路由、事务、诊断及 `diagnosticReason`、listener container 和派生 ConsumerFactory 生命周期。
 
 | Spring Boot | Spring Kafka | 构建环境 | Kafka Broker 矩阵 | 状态 |
 |-------------|--------------|----------|-------------------|------|

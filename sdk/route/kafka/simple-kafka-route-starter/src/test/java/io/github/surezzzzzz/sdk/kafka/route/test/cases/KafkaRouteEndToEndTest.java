@@ -276,7 +276,11 @@ public class KafkaRouteEndToEndTest {
         assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_V37, v37Capability, KafkaRouteDiagnosticStatus.SUCCESS);
         KafkaRouteDiagnosticStatus tx37Status = v37Capability == KafkaRouteBrokerCapability.SUPPORTED
                 ? KafkaRouteDiagnosticStatus.SUCCESS : KafkaRouteDiagnosticStatus.WARN;
-        assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_TX37, v37Capability, tx37Status);
+        KafkaRouteBrokerDiagnosticResult tx37Result = assertDiagnosticResult(results,
+                KafkaRouteEndToEndHelper.DATASOURCE_TX37, v37Capability, tx37Status);
+        if (tx37Status == KafkaRouteDiagnosticStatus.WARN) {
+            assertEquals("已配置事务生产者，但 broker Feature API 未确认事务能力", tx37Result.getDiagnosticReason());
+        }
         KafkaRouteBrokerDiagnosticResult clusterResult = assertDiagnosticResult(results, KafkaRouteEndToEndHelper.DATASOURCE_CLUSTER, clusterCapability,
                 KafkaRouteDiagnosticStatus.SUCCESS);
         assertTrue(clusterResult.getNodeCount() >= KafkaRouteEndToEndHelper.CLUSTER_MIN_NODE_COUNT,
@@ -327,6 +331,13 @@ public class KafkaRouteEndToEndTest {
                 String.format(KafkaRouteEndToEndHelper.ASSERT_CONTROLLER_VISIBLE_MESSAGE, datasourceKey));
         assertNull(result.getFailureReason(),
                 String.format(KafkaRouteEndToEndHelper.ASSERT_FAILURE_REASON_MESSAGE, datasourceKey));
+        if (expectedStatus == KafkaRouteDiagnosticStatus.WARN) {
+            assertNotNull(result.getDiagnosticReason(),
+                    String.format("Kafka datasource [%s] WARN 必须包含诊断原因", datasourceKey));
+        } else {
+            assertNull(result.getDiagnosticReason(),
+                    String.format("Kafka datasource [%s] SUCCESS 不应包含诊断原因", datasourceKey));
+        }
         assertCapabilities(result, expectedFeatureCapability, datasourceKey);
         return result;
     }

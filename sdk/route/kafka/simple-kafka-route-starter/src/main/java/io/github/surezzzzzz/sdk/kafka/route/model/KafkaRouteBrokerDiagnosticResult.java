@@ -60,6 +60,11 @@ public class KafkaRouteBrokerDiagnosticResult {
     private final KafkaRouteBrokerCapability adminApiLevel;
 
     /**
+     * 诊断告警原因短消息，仅在 WARN 时有值
+     */
+    private final String diagnosticReason;
+
+    /**
      * 失败原因短消息
      */
     private final String failureReason;

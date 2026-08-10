@@ -77,8 +77,12 @@ public class KafkaRouteDiagnosticsTest {
         log.info("fail-fast 关闭时诊断结果: {}", results);
 
         assertEquals(2, results.size());
-        assertEquals(KafkaRouteDiagnosticStatus.FAILED, results.get("default").getStatus());
-        assertEquals(KafkaRouteDiagnosticStatus.FAILED, results.get("event").getStatus());
+        KafkaRouteBrokerDiagnosticResult defaultResult = results.get("default");
+        KafkaRouteBrokerDiagnosticResult eventResult = results.get("event");
+        assertEquals(KafkaRouteDiagnosticStatus.FAILED, defaultResult.getStatus());
+        assertEquals(KafkaRouteDiagnosticStatus.FAILED, eventResult.getStatus());
+        assertNull(defaultResult.getDiagnosticReason());
+        assertNull(eventResult.getDiagnosticReason());
         assertNotNull(diagnostics.getDiagnosticResult("default"));
     }
 
@@ -103,6 +107,22 @@ public class KafkaRouteDiagnosticsTest {
     }
 
     @Test
+    public void testFailedResultKeepsDiagnosticReasonEmptyAndMasksSensitiveFailureReason() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        Method method = DefaultKafkaRouteDiagnostics.class.getDeclaredMethod("failedResult", String.class,
+                RuntimeException.class);
+        method.setAccessible(true);
+
+        KafkaRouteBrokerDiagnosticResult result = (KafkaRouteBrokerDiagnosticResult) method.invoke(diagnostics,
+                "diagnostic", new IllegalStateException("password=secret"));
+
+        assertEquals(KafkaRouteDiagnosticStatus.FAILED, result.getStatus());
+        assertNull(result.getDiagnosticReason());
+        assertEquals(SimpleKafkaRouteConstant.MASKED_VALUE, result.getFailureReason());
+    }
+
+    @Test
     public void testSuccessResultReportsUnknownWhenFeaturesNull() throws Exception {
         SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
         DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
@@ -121,6 +141,7 @@ public class KafkaRouteDiagnosticsTest {
         assertEquals("mock-cluster", result.getClusterId());
         assertEquals(1, result.getNodeCount());
         assertTrue(result.isControllerVisible());
+        assertNull(result.getDiagnosticReason());
         assertNull(result.getFailureReason());
     }
 
@@ -142,6 +163,7 @@ public class KafkaRouteDiagnosticsTest {
         assertEquals("mock-cluster", result.getClusterId());
         assertEquals(1, result.getNodeCount());
         assertTrue(result.isControllerVisible());
+        assertNull(result.getDiagnosticReason());
         assertNull(result.getFailureReason());
     }
 
@@ -157,6 +179,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("事务能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已配置事务生产者，但 broker Feature API 未确认事务能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getTransactionSupported());
     }
 
@@ -172,6 +195,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("幂等能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已启用幂等生产者，但 broker Feature API 未确认幂等能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
     }
 
@@ -188,6 +212,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("raw properties 幂等能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已启用幂等生产者，但 broker Feature API 未确认幂等能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
     }
 
@@ -224,6 +249,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("zstd 能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已配置 zstd 压缩，但 broker Feature API 未确认 zstd 能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
     }
 
@@ -241,6 +267,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("raw properties zstd 覆盖 typed 配置时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已配置 zstd 压缩，但 broker Feature API 未确认 zstd 能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
     }
 
@@ -257,6 +284,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("datasource raw properties zstd 能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已配置 zstd 压缩，但 broker Feature API 未确认 zstd 能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getZstdSupported());
     }
 
@@ -273,6 +301,7 @@ public class KafkaRouteDiagnosticsTest {
         log.info("datasource raw properties 幂等能力未知时诊断结果: {}", result);
 
         assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已启用幂等生产者，但 broker Feature API 未确认幂等能力", result.getDiagnosticReason());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
     }
 
@@ -291,6 +320,28 @@ public class KafkaRouteDiagnosticsTest {
 
         assertEquals(KafkaRouteDiagnosticStatus.SUCCESS, result.getStatus());
         assertEquals(KafkaRouteBrokerCapability.UNKNOWN, result.getIdempotenceSupported());
+        assertNull(result.getDiagnosticReason());
+    }
+
+    @Test
+    public void testCapabilityWarningReasonPrioritizesTransactionAndNeverExposesConfiguration() throws Exception {
+        SimpleKafkaRouteProperties properties = KafkaRouteTestDataHelper.properties();
+        DefaultKafkaRouteDiagnostics diagnostics = new DefaultKafkaRouteDiagnostics(properties);
+        SimpleKafkaRouteProperties.DataSourceConfig config = KafkaRouteTestDataHelper.source("diagnostic-client");
+        config.getProducer().setTransactionIdPrefix("secret-transaction-prefix");
+        config.getProducer().setEnableIdempotence(Boolean.TRUE);
+        config.getProducer().setCompressionType(SimpleKafkaRouteConstant.COMPRESSION_TYPE_ZSTD);
+        config.getProperties().put("sasl.jaas.config", "username=ops password=secret");
+
+        KafkaRouteBrokerDiagnosticResult result = invokeSuccessResult(diagnostics, "diagnostic", null, config);
+        log.info("多能力告警时诊断结果: {}", result);
+
+        assertEquals(KafkaRouteDiagnosticStatus.WARN, result.getStatus());
+        assertEquals("已配置事务生产者，但 broker Feature API 未确认事务能力", result.getDiagnosticReason());
+        assertFalse(result.getDiagnosticReason().contains("secret"));
+        assertFalse(result.getDiagnosticReason().contains("sasl"));
+        assertFalse(result.getDiagnosticReason().contains("password"));
+        assertFalse(result.getDiagnosticReason().contains("transaction-prefix"));
     }
 
     @Test
