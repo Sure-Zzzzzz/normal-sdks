@@ -12,7 +12,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.1'
 }
 ```
 
@@ -34,6 +34,19 @@ io:
 ```
 
 `enabled` 默认是 `true`。显式设置为 `false`，或没有配置 `protected-paths` 时，Starter 不创建资源认证引擎与 `SecurityFilterChain`，不会接管宿主其他端点。
+
+## 兼容性
+
+1.0.1 已在以下 Spring Boot 精确版本完成完整模块测试：
+
+- `2.2.13.RELEASE`
+- `2.3.12.RELEASE`
+- `2.4.5`
+- `2.7.9`
+
+本模块仍使用 `javax.servlet` 与 Spring Security 5，不支持 Spring Boot 3、Spring Security 6 或 `jakarta.servlet`。
+
+在 Boot `2.2.13.RELEASE` 和 `2.3.12.RELEASE` 中，Starter 使用旧版 Spring Security 安全配置生命周期；在 Boot `2.4.5` 和 `2.7.9` 中，Starter 使用 `SecurityFilterChain` 配置方式。两种方式对业务方的路径、认证和授权契约一致，升级到 1.0.1 不需要修改业务配置或 Provider 适配器。
 
 ## API 权限配置
 
@@ -130,7 +143,7 @@ public class OrderController {
 
 ### 认证路由
 
-首发仅支持单一 Bearer 凭据。公共层只有限长读取紧凑令牌首段的外层 protected header，并从唯一 `kid` 选择 Provider：
+当前版本仅支持单一 Bearer 凭据。公共层只有限长读取紧凑令牌首段的外层 protected header，并从唯一 `kid` 选择 Provider：
 
 ```text
 kid = <source-id>/<key-id>
@@ -146,7 +159,7 @@ kid = <source-id>/<key-id>
 - 缺少、重复或未知 `kid`；
 - Provider 校验失败。
 
-Cookie 与 Session 认证不在 1.0.0 范围内；它们需要先独立定义传输、CSRF 与多载体规则。
+Cookie 与 Session 认证不在当前版本范围内；它们需要先独立定义传输、CSRF 与多载体规则。
 
 ### API 与 DATA 权限
 
@@ -177,6 +190,7 @@ Resource Server 只负责认证、应用准入和 API 权限。业务服务必�
 - Starter 仅在配置的 public/protected 路径范围内建立资源安全链。
 - Spring Security principal 只保留已验证上下文，不保存原始 Bearer token。
 - Provider Starter 不应创建竞争的最终业务 `SecurityFilterChain`，也不应覆盖公共层的 401/403、路径或 CSRF 策略。
+- 宿主可以用低优先级安全链处理非资源路径；如果业务要完全接管受保护路径，必须显式设置 `enabled: false`，并自行完成等价的认证、路径、CSRF 与 401/403 策略。Starter 不会因为发现其他安全链而自动退让。
 - 本模块使用 SDK 私有 JSON 解析器，不复用宿主 Spring `ObjectMapper`。
 
 ## 许可证

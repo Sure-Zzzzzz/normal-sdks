@@ -7,7 +7,6 @@ import io.github.surezzzzzz.sdk.auth.resource.server.SimpleResourceServerPackage
 import io.github.surezzzzzz.sdk.auth.resource.server.annotation.SimpleResourceServerComponent;
 import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServerStarterConstant;
 import io.github.surezzzzzz.sdk.auth.resource.server.exception.ResourceServerConfigurationException;
-import io.github.surezzzzzz.sdk.auth.resource.server.filter.ResourceAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,12 +15,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
@@ -41,6 +36,7 @@ import java.util.List;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = SimpleResourceServerStarterConstant.CONFIG_PREFIX, name = "enabled", havingValue = "true", matchIfMissing = true)
 @org.springframework.context.annotation.Conditional(ResourceServerProtectedPathCondition.class)
+@Import({ResourceServerLegacySecurityConfiguration.class, ResourceServerModernSecurityConfiguration.class})
 public class ResourceServerAutoConfiguration {
 
     /**
@@ -123,56 +119,4 @@ public class ResourceServerAutoConfiguration {
         return new ResourceServerWebMvcConfiguration(evaluator, resolver);
     }
 
-    /**
-     * 创建唯一的业务资源安全链。
-     *
-     * @param http       Spring Security配置器
-     * @param properties 资源服务配置
-     * @param engine     资源认证编排引擎
-     * @return 业务资源安全链
-     * @throws Exception 配置异常
-     */
-    @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE)
-    public SecurityFilterChain resourceServerSecurityFilterChain(HttpSecurity http, ResourceServerProperties properties,
-                                                                 ResourceServerEngine engine, Environment environment) throws Exception {
-        String contextPath = environment.getProperty(
-                SimpleResourceServerStarterConstant.PROPERTY_SERVER_SERVLET_CONTEXT_PATH);
-        List<String> protectedPaths = ResourceSecurityPathHelper.normalizePaths(
-                properties.getSecurity().getProtectedPaths(), contextPath,
-                properties.getSecurity().isContextPathAware());
-        List<String> permitAllPaths = ResourceSecurityPathHelper.normalizePaths(
-                properties.getSecurity().getPermitAllPaths(), contextPath,
-                properties.getSecurity().isContextPathAware());
-        ResourceSecurityPathHelper.validateNoOverlap(permitAllPaths, protectedPaths);
-        String[] chainPaths = new String[protectedPaths.size() + permitAllPaths.size()];
-        int index = 0;
-        for (String protectedPath : protectedPaths) {
-            chainPaths[index++] = protectedPath;
-        }
-        for (String permitAllPath : permitAllPaths) {
-            chainPaths[index++] = permitAllPath;
-        }
-        http.requestMatcher(new org.springframework.security.web.util.matcher.OrRequestMatcher(
-                java.util.Arrays.stream(chainPaths)
-                        .map(org.springframework.security.web.util.matcher.AntPathRequestMatcher::new)
-                        .toArray(org.springframework.security.web.util.matcher.RequestMatcher[]::new)));
-        http.authorizeRequests(authorize -> {
-            if (!permitAllPaths.isEmpty()) {
-                authorize.antMatchers(permitAllPaths.toArray(new String[0])).permitAll();
-            }
-            authorize.antMatchers(protectedPaths.toArray(new String[0])).authenticated();
-            authorize.anyRequest().denyAll();
-        });
-        http.csrf(csrf -> csrf.ignoringAntMatchers(protectedPaths.toArray(new String[0])));
-        http.exceptionHandling(handling -> handling
-                .authenticationEntryPoint((request, response, exception) -> response.sendError(
-                        SimpleResourceServerStarterConstant.HTTP_STATUS_UNAUTHORIZED,
-                        SimpleResourceServerStarterConstant.MESSAGE_UNAUTHORIZED))
-                .accessDeniedHandler((request, response, exception) -> response.sendError(
-                        SimpleResourceServerStarterConstant.HTTP_STATUS_FORBIDDEN,
-                        SimpleResourceServerStarterConstant.MESSAGE_FORBIDDEN)));
-        http.addFilterBefore(new ResourceAuthenticationFilter(engine, protectedPaths), AnonymousAuthenticationFilter.class);
-        return http.build();
-    }
 }

@@ -16,17 +16,20 @@ import io.github.surezzzzzz.sdk.auth.resource.server.test.SimpleResourceServerTe
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
 import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.SecurityFilterChain;
@@ -53,7 +56,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @Slf4j
 @SpringBootTest(classes = SimpleResourceServerTestApplication.class)
-@Import(ResourceServerAutoConfigurationTest.TestConfiguration.class)
+@Import({ResourceServerAutoConfigurationTest.TestConfiguration.class,
+        ResourceServerAutoConfigurationTest.ModernHostWideSecurityConfiguration.class,
+        ResourceServerAutoConfigurationTest.LegacyHostWideSecurityConfiguration.class})
 @AutoConfigureMockMvc
 class ResourceServerAutoConfigurationTest {
 
@@ -66,6 +71,8 @@ class ResourceServerAutoConfigurationTest {
     private MockMvc mockMvc;
     @Autowired
     private ResourceServerEngine engine;
+    @Autowired
+    private ApplicationContext applicationContext;
 
     /**
      * 验证自动配置链在认证、精确权限和公共路径上的HTTP行为。
@@ -179,6 +186,23 @@ class ResourceServerAutoConfigurationTest {
         });
     }
 
+    /**
+     * 验证当前Spring Boot版本只装配一种资源安全配置模型。
+     */
+    @Test
+    void shouldUseOnlyMatchingSecurityConfigurationOnCurrentBoot() {
+        String bootVersion = SpringBootVersion.getVersion();
+        boolean legacy = bootVersion.startsWith("2.2.") || bootVersion.startsWith("2.3.");
+        assertEquals(Integer.valueOf(legacy ? 0 : 1), Integer.valueOf(
+                applicationContext.getBeansOfType(
+                                io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerModernSecurityConfiguration.class)
+                        .size()), "现代安全配置装配数量不符合当前Boot版本");
+        assertEquals(Integer.valueOf(legacy ? 1 : 0), Integer.valueOf(
+                applicationContext.getBeansOfType(
+                                io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerLegacySecurityConfiguration.class)
+                        .size()), "旧版安全配置装配数量不符合当前Boot版本");
+    }
+
     private String bearer(String sourceId) {
         String header = "{\"alg\":\"dir\",\"enc\":\"A256GCM\",\"kid\":\"" + sourceId + "/key-a\"}";
         String encodedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8));
@@ -285,6 +309,16 @@ class ResourceServerAutoConfigurationTest {
             };
         }
 
+    }
+
+    /**
+     * Spring Boot 2.4至2.7宿主宽匹配安全链配置。
+     */
+    @org.springframework.context.annotation.Configuration
+    @org.springframework.context.annotation.Conditional(
+            io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerBootVersionCondition.Modern.class)
+    static class ModernHostWideSecurityConfiguration {
+
         /**
          * 注册宿主宽匹配安全链，用于验证资源窄链排序。
          *
@@ -300,6 +334,26 @@ class ResourceServerAutoConfigurationTest {
         }
     }
 
+    /**
+     * Spring Boot 2.2和2.3宿主宽匹配安全链配置。
+     */
+    @org.springframework.context.annotation.Configuration
+    @Order(100)
+    @org.springframework.context.annotation.Conditional(
+            io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerBootVersionCondition.Legacy.class)
+    static class LegacyHostWideSecurityConfiguration extends WebSecurityConfigurerAdapter {
+
+        /**
+         * 配置宿主宽匹配安全链，用于验证资源窄链排序。
+         *
+         * @param http Spring Security配置器
+         * @throws Exception 配置异常
+         */
+        @Override
+        protected void configure(HttpSecurity http) throws Exception {
+            http.authorizeRequests().anyRequest().permitAll();
+        }
+    }
 
     /**
      * 测试Controller。
