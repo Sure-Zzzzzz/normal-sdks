@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.configuration.DataPermissionSpringMvcAutoConfiguration

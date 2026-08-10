@@ -1,0 +1,17 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/**
+                api-permission-rules:
+                  - path-pattern: /api/orders
+                    method: GET
+                    api-permission: order:read
+                  - path-pattern: /api/health
+                    method: GET
+                    api-permission: order:read
