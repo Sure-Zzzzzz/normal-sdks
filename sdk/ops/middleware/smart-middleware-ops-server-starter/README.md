@@ -70,6 +70,40 @@ io.github.surezzzzzz.sdk.ops.middleware:
 
 `default-size` 是页面首次查询的默认窗口；`max-size` 是单次读取的硬上限。页面只在浏览器内存中对已经返回且受硬上限限制的数据分页，不提供 cursor、续页令牌或后端查询会话。
 
+### 用户系统：Windows AD / LDAP
+
+Ops Server 不自建用户表，也不保存用户密码。启用 LDAP 后，Starter 使用配置的管理账号搜索用户，再使用用户自己的密码执行 LDAP Bind；认证成功后建立 Spring Security 会话。
+
+```yaml
+io.github.surezzzzzz.sdk.ops.middleware:
+  ldap:
+    enabled: true
+    url: ldaps://ad.example.com:636/DC=example,DC=com
+    manager-dn: CN=middleware-ops-reader,OU=Service Accounts,DC=example,DC=com
+    manager-password: ${MIDDLEWARE_OPS_LDAP_MANAGER_PASSWORD}
+    user-search-base: OU=Users
+    user-search-filter: (sAMAccountName={0})
+```
+
+| 配置项 | 必填 | 说明 |
+| --- | ---: | --- |
+| `ldap.enabled` | 是 | 设为 `true` 才启用 Starter 自动注册的 LDAP 认证；默认 `false`。 |
+| `ldap.url` | 是 | LDAP/LDAPS 地址，必须包含搜索根 DN，例如 `ldaps://ad.example.com:636/DC=example,DC=com`。生产优先使用 LDAPS。 |
+| `ldap.manager-dn` | 是 | 仅用于搜索用户的服务账号 DN，不是登录用户账号。 |
+| `ldap.manager-password` | 是 | 管理账号密码，只从环境变量、密钥服务或受控配置注入。 |
+| `ldap.user-search-base` | 否 | 相对于 URL 根 DN 的用户搜索基准，例如 `OU=Users`；默认空值表示从根 DN 搜索。 |
+| `ldap.user-search-filter` | 否 | 用户搜索过滤器，登录名替换 `{0}`；Windows AD 通常使用 `(sAMAccountName={0})`。普通 LDAP 可按目录实际字段改为 `(uid={0})`。 |
+
+认证入口和边界如下：
+
+- 浏览器登录：`GET /middleware-ops/login` 展示自有登录页，提交到同一路径；成功后建立会话并进入 `/middleware-ops`。
+- API 认证：`/api/v1/middleware-ops/**` 使用 HTTP Basic；未认证返回 JSON `401`，不会跳转 HTML 登录页。
+- 页面与 API 使用同一个 LDAP `AuthenticationProvider`；会话固定保护使用 Spring Security 的 session fixation migration。
+- 用户认证成功后，一期默认授权策略允许其访问已发布的只读能力；LDAP 组不会被 Starter 猜测、映射或转化为业务权限。需要按用户、组或数据范围授权时，由使用方提供 `MiddlewareOpsAuthorizationPolicy` 或接入 IAM。
+- `manager-dn` 仅用于查找用户，不会作为操作者身份写入审计；审计主体来自实际登录用户的 Spring Security 身份。
+
+如果 `ldap.enabled=false`，Starter 不会自动创建 LDAP 认证提供器；使用方必须提供自己的 Spring Security 认证链，并确保页面和 API 仍满足本 SDK 的认证边界。不要把 `manager-password`、用户密码或 LDAP 原始响应写入日志、审计、前端或提交配置。
+
 ### MySQL Route 示例
 
 MySQL Route 1.1.1 使用扁平 `datasources` 映射，且必须指定 `primary-datasource`。映射键就是全部 MySQL 接口中的 `{datasourceKey}`；名称只能包含字母、数字、`-` 与 `_`，且必须以字母或数字开始。
@@ -344,7 +378,7 @@ DROP USER 'middleware_ops_reader'@'middleware-ops.test';
 
 ## 8. 身份、授权与扩展
 
-Windows AD 的目录服务连接与部署策略由使用方配置；Ops 不耦合 AD 用户名格式、组结构或认证协议。默认情况下，任何已认证用户都可访问已发布的只读能力。后续接入 IAM 时可替换：
+LDAP 用户认证的配置和页面/API 入口见“用户系统：Windows AD / LDAP”。身份认证成功后，默认情况下任何已认证用户都可访问已发布的只读能力。Ops 不耦合 AD 用户名格式、组结构或认证协议，也不把 LDAP 组自动当作业务权限。后续接入 IAM 或自定义授权时可替换：
 
 - `MiddlewareOpsIdentityResolver`
 - `MiddlewareOpsAuthorizationPolicy`
