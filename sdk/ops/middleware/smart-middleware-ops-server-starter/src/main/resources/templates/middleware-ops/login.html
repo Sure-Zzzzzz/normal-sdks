@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>Windows AD 登录 - 多维中间件运维平台</title>
+    <link rel="icon" th:href="${uiBasePath + '/favicon.svg'}" type="image/svg+xml">
+    <link rel="stylesheet" th:href="${uiBasePath + '/console.css'}">
+</head>
+<body class="ops-login-body">
+<main class="ops-login-card">
+    <div aria-hidden="true" class="ops-brand-mark">M</div>
+    <h1>多维中间件运维平台</h1>
+    <p>使用 Windows AD 账号登录</p>
+    <form class="ops-login-form" method="post" th:action="${uiBasePath + '/login'}">
+        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+        <label for="username">账号</label>
+        <input autocomplete="username" autofocus id="username" name="username" required type="text">
+        <label for="password">密码</label>
+        <input autocomplete="current-password" id="password" name="password" required type="password">
+        <p class="ops-form-error" th:if="${param.error}">账号或密码错误</p>
+        <button class="ops-primary-button" type="submit">登录</button>
+    </form>
+</main>
+<footer class="ops-login-footer">Copyright © 2026 多维中间件运维平台</footer>
+</body>
+</html>

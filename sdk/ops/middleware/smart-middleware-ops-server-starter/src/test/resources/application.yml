@@ -1,0 +1,313 @@
+server:
+  port: 8888
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        ops:
+          middleware:
+            enable: true
+            api-base-path: /api/v1/middleware-ops
+            ui-base-path: /middleware-ops
+            query:
+              default-size: 1
+              max-size: 100
+              deadline-millis: 5000
+            audit:
+              max-range-days: 90
+              max-offset: 10000
+            concurrency:
+              global: 4
+              datasource: 2
+            datasource-tags:
+              elasticsearch:
+                primary: "华东订单检索集群"
+                secondary: "数据分析检索集群"
+                tertiary: "会员检索集群"
+              redis:
+                redis3Standalone: "历史缓存单节点"
+                redis5Standalone: "积分缓存单节点"
+                redis7Standalone: "会员缓存单节点"
+                redis3Cluster: "订单缓存集群"
+                redis5Cluster: "商品缓存集群"
+                redis7Cluster: "会员缓存集群"
+              kafka:
+                default: "基础事件流"
+                event: "订单事件流-华东"
+                v110: "Kafka 1.1 兼容集群"
+                v28: "Kafka 2.8 兼容集群"
+                v37: "Kafka 3.7 兼容集群"
+                tx37: "事务事件流"
+                cluster: "多节点事件集群"
+              mysql:
+                mysql57-ops: "MySQL 5.7 运维库"
+                mysql57-audit: "MySQL 5.7 审计库"
+                mysql84-ops: "MySQL 8.4 运维库"
+                mysql84-audit: "MySQL 8.4 审计库"
+        elasticsearch:
+          persistence:
+            enable: true
+          search:
+            enable: true
+            indices:
+              - name: middleware-ops-audit-*
+                date-split: true
+                date-pattern: yyyy.MM.dd
+                date-field: occurredAt
+                lazy-load: true
+                cache-mapping: true
+                sensitive-fields:
+                  - field: elasticsearchIndex
+                    strategy: MASK
+                    mask-start: 2
+                    mask-end: 2
+                  - field: elasticsearchDsl
+                    strategy: MASK
+                    mask-start: 12
+                    mask-end: 8
+                  - field: mysqlSql
+                    strategy: MASK
+                    mask-start: 12
+                    mask-end: 8
+                  - field: redisKey
+                    strategy: MASK
+                    mask-start: 2
+                    mask-end: 2
+                  - field: redisField
+                    strategy: MASK
+                    mask-start: 2
+                    mask-end: 2
+                  - field: kafkaTopic
+                    strategy: MASK
+                    mask-start: 2
+                    mask-end: 2
+                  - field: kafkaGroupId
+                    strategy: MASK
+                    mask-start: 2
+                    mask-end: 2
+            query-limits:
+              max-offset: 10000
+              ignore-unavailable-indices: true
+              strict-date-filter: true
+              default-date-range: 30d
+            api:
+              enabled: false
+          route:
+            enable: true
+            default-source: primary
+            rules:
+              - pattern: middleware-ops-audit
+                type: exact
+                datasource: primary
+                write-index:
+                  template: middleware-ops-audit-{yyyy.MM.dd}
+                  zone-id: UTC
+            version-detect:
+              enabled: true
+              fail-fast-on-detect-error: true
+              timeout-ms: 5000
+            sources:
+              primary:
+                urls: http://localhost:9203
+                connect-timeout: 5000
+                socket-timeout: 5000
+              secondary:
+                urls: http://localhost:9200
+                connect-timeout: 5000
+                socket-timeout: 5000
+              tertiary:
+                urls: http://localhost:9204
+                connect-timeout: 5000
+                socket-timeout: 5000
+        redis:
+          route:
+            enable: true
+            default-source: redis3Standalone
+            probe:
+              server-info: true
+            sources:
+              redis3Standalone:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis5Standalone:
+                mode: standalone
+                host: localhost
+                port: 16380
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis7Standalone:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis5Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis7Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+        mysql:
+          route:
+            enable: true
+            primary-datasource: mysql57-ops
+            datasources:
+              mysql57-ops:
+                url: jdbc:mysql://localhost:24357/test_ops?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql57_ops_view
+                driver-class-name: com.mysql.cj.jdbc.Driver
+              mysql57-audit:
+                url: jdbc:mysql://localhost:24357/test_audit?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql57_audit_view
+                driver-class-name: com.mysql.cj.jdbc.Driver
+              mysql84-ops:
+                url: jdbc:mysql://localhost:24384/test_ops?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql84_ops_view
+                driver-class-name: com.mysql.cj.jdbc.Driver
+              mysql84-audit:
+                url: jdbc:mysql://localhost:24384/test_audit?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql84_audit_view
+                driver-class-name: com.mysql.cj.jdbc.Driver
+        kafka:
+          route:
+            enable: true
+            default-source: v110
+            sources:
+              default:
+                bootstrap-servers:
+                  - localhost:18091
+                client-id: middleware-ops-e2e-default
+                producer:
+                  client-id: middleware-ops-e2e-default-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-default-consumer
+                  group-id: middleware-ops-e2e-default-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              event:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: middleware-ops-e2e-event
+                producer:
+                  client-id: middleware-ops-e2e-event-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-event-consumer
+                  group-id: middleware-ops-e2e-event-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v110:
+                bootstrap-servers:
+                  - localhost:18091
+                client-id: middleware-ops-e2e-v110
+                producer:
+                  client-id: middleware-ops-e2e-v110-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-v110-consumer
+                  group-id: middleware-ops-e2e-v110-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v28:
+                bootstrap-servers:
+                  - localhost:18092
+                client-id: middleware-ops-e2e-v28
+                producer:
+                  client-id: middleware-ops-e2e-v28-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-v28-consumer
+                  group-id: middleware-ops-e2e-v28-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              v37:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: middleware-ops-e2e-v37
+                producer:
+                  client-id: middleware-ops-e2e-v37-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-v37-consumer
+                  group-id: middleware-ops-e2e-v37-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              tx37:
+                bootstrap-servers:
+                  - localhost:18094
+                client-id: middleware-ops-e2e-tx37
+                producer:
+                  client-id: middleware-ops-e2e-tx37-producer
+                  acks: all
+                  transaction-id-prefix: middleware-ops-e2e-tx37-
+                consumer:
+                  client-id: middleware-ops-e2e-tx37-consumer
+                  group-id: middleware-ops-e2e-tx37-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+              cluster:
+                bootstrap-servers:
+                  - localhost:19192
+                  - localhost:19193
+                  - localhost:19194
+                client-id: middleware-ops-e2e-cluster
+                producer:
+                  client-id: middleware-ops-e2e-cluster-producer
+                  acks: all
+                consumer:
+                  client-id: middleware-ops-e2e-cluster-consumer
+                  group-id: middleware-ops-e2e-cluster-group
+                  auto-offset-reset: earliest
+                  enable-auto-commit: false
+            diagnostics:
+              enable: true
+              startup-check: true
+              fail-fast: true
+              timeout-ms: 5000

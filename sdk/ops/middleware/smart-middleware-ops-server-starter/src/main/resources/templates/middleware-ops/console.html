@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <title>多维中间件运维平台</title>
+    <link rel="icon" th:href="${uiBasePath + '/favicon.svg'}" type="image/svg+xml">
+    <link rel="stylesheet" th:href="${uiBasePath + '/console.css'}">
+</head>
+<body>
+<div class="ops-shell" th:attr="data-api-base-path=${apiBasePath},data-audit-max-range-days=${auditMaxRangeDays}">
+    <header class="ops-topbar">
+        <div class="ops-title"><span aria-hidden="true" class="ops-brand-mark">M</span><span>多维中间件运维平台</span>
+        </div>
+        <details class="ops-user-menu">
+            <summary><span aria-hidden="true" class="ops-user-avatar" th:text="${currentUserAvatar}">?</span><span
+                    th:text="${currentUser}">当前用户</span><span aria-hidden="true" class="ops-user-caret">⌄</span>
+            </summary>
+            <div class="ops-user-menu-panel">
+                <p>当前登录账号</p>
+                <strong th:text="${currentUser}">当前用户</strong>
+                <form method="post" th:action="${uiBasePath + '/logout'}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+                    <button class="ops-text-button" type="submit">退出登录</button>
+                </form>
+            </div>
+        </details>
+    </header>
+    <aside aria-label="中间件" class="ops-sidebar">
+        <p class="ops-sidebar-title">中间件</p>
+        <button class="ops-workspace-nav is-active" data-workspace="elasticsearch" type="button">Elasticsearch</button>
+        <button class="ops-workspace-nav" data-workspace="redis" type="button">Redis</button>
+        <button class="ops-workspace-nav" data-workspace="kafka" type="button">Kafka</button>
+        <button class="ops-workspace-nav" data-workspace="mysql" type="button">MySQL</button>
+    </aside>
+    <main class="ops-main">
+        <section class="ops-workspace is-active" data-workspace-panel="elasticsearch">
+            <div class="ops-heading">
+                <div>
+                    <p class="ops-breadcrumb" data-workspace-breadcrumb>Elasticsearch / 概览</p>
+                    <h1 data-workspace-title>Elasticsearch 概览</h1>
+                    <p data-workspace-description>选择数据源并查看当前工作区的安全状态。</p>
+                </div>
+            </div>
+            <nav aria-label="Elasticsearch 页面" class="ops-section-tabs">
+                <button class="ops-section-tab is-active" data-section="overview" type="button">概览</button>
+                <button class="ops-section-tab" data-section="console" type="button">控制台</button>
+                <button class="ops-section-tab" data-section="audit" type="button">审计</button>
+            </nav>
+            <section class="ops-section is-active" data-section-panel="overview">
+                <section class="ops-overview-card">
+                    <div class="ops-overview-card-heading">
+                        <div>
+                            <h2>集群概览</h2>
+                            <p class="ops-state" id="elasticsearch-overview-state">正在加载数据源。</p>
+                        </div>
+                    </div>
+                    <div class="ops-datasource-grid" id="elasticsearch-overview-grid"></div>
+                </section>
+                <aside class="ops-overview-notice">
+                    <h2>安全状态说明</h2>
+                    <p>选择已配置的数据源进入控制台。查询和审计能力始终遵循当前工作区的访问边界。</p>
+                </aside>
+            </section>
+            <section class="ops-section" data-section-panel="console">
+                <div class="ops-console-context" data-datasource-context>请选择数据源</div>
+                <div class="ops-console-panels">
+                    <section class="ops-console-panel" data-console-panel="query">
+                        <button aria-controls="elasticsearch-query-panel" aria-expanded="true"
+                                class="ops-console-panel-toggle"
+                                data-console-panel-toggle="query" type="button">
+                            <span>DSL 文档查询</span><span aria-hidden="true" class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" id="elasticsearch-query-panel">
+                            <form class="ops-form-grid" id="elasticsearch-console-form">
+                                <label>数据源<select class="ops-datasource-select" disabled name="datasourceKey"
+                                                     required>
+                                    <option value="">请选择数据源</option>
+                                </select></label>
+                                <label>索引<input autocomplete="off" id="elasticsearch-index-input"
+                                                  list="elasticsearch-index-options"
+                                                  maxlength="256" name="index" required type="text">
+                                    <datalist id="elasticsearch-index-options"></datalist>
+                                </label>
+                                <p aria-live="polite" class="ops-index-state ops-full-width"
+                                   id="elasticsearch-index-state">请选择数据源后加载索引候选。</p>
+                                <label class="ops-full-width">JSON DSL<textarea name="dsl" required rows="12"
+                                                                                spellcheck="false">{"query":{"match_all":{}}}</textarea></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" id="elasticsearch-format-dsl" type="button">美化
+                                        JSON
+                                    </button>
+                                    <button class="ops-primary-button" type="submit">查询</button>
+                                </div>
+                            </form>
+                            <section aria-live="polite" class="ops-elasticsearch-result"
+                                     id="elasticsearch-console-result">
+                                <div class="ops-elasticsearch-result-list">
+                                    <h2>本次响应命中</h2>
+                                    <p class="ops-state" id="elasticsearch-console-result-state">等待查询。</p>
+                                    <div class="ops-elasticsearch-hit-list"
+                                         id="elasticsearch-console-result-hits"></div>
+                                </div>
+                                <div class="ops-elasticsearch-document-viewer">
+                                    <h2>文档详情</h2>
+                                    <p class="ops-state" id="elasticsearch-console-result-document-meta">未选择文档。</p>
+                                    <pre id="elasticsearch-console-result-document">等待查询。</pre>
+                                </div>
+                            </section>
+                            <div class="ops-pagination" hidden id="elasticsearch-console-result-pagination">
+                                <button class="ops-secondary-button" id="elasticsearch-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="elasticsearch-console-result-page"></span>
+                                <button class="ops-secondary-button" id="elasticsearch-console-result-next"
+                                        type="button">下一页
+                                </button>
+                            </div>
+                            <p class="ops-result-policy">
+                                本次命中仅在当前页面内存展示；重新查询、切换工作区或刷新页面即清除。</p>
+                        </div>
+                    </section>
+                </div>
+            </section>
+            <section class="ops-section" data-section-panel="audit">
+                <div class="ops-audit-filter">
+                    <label>时间范围<select id="elasticsearch-audit-range">
+                        <option value="">最近 30 天（默认）</option>
+                        <option value="1d">最近 24 小时</option>
+                        <option value="7d">最近 7 天</option>
+                        <option value="30d">最近 30 天</option>
+                        <option th:if="${auditMaxRangeDays >= 90}" value="90d">最近 90 天</option>
+                        <option value="custom">自定义</option>
+                    </select></label>
+                    <label class="ops-audit-custom" hidden>开始时间（UTC）<input id="elasticsearch-audit-from"
+                                                                               type="datetime-local"></label>
+                    <label class="ops-audit-custom" hidden>结束时间（UTC）<input id="elasticsearch-audit-to"
+                                                                               type="datetime-local"></label>
+                    <button class="ops-primary-button" id="elasticsearch-audit-query" type="button">查询</button>
+                    <span class="ops-audit-effective" id="elasticsearch-audit-effective">默认由 Search Starter 查询最近 30 天。</span>
+                </div>
+                <div class="ops-state" id="elasticsearch-audit-state">打开审计页后加载。</div>
+                <div class="ops-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>发生时间</th>
+                            <th>主体</th>
+                            <th>操作</th>
+                            <th>数据源</th>
+                            <th>集群标签</th>
+                            <th>操作指纹</th>
+                            <th>状态</th>
+                            <th>查询参数</th>
+                            <th>耗时</th>
+                        </tr>
+                        </thead>
+                        <tbody id="elasticsearch-audit-body"></tbody>
+                    </table>
+                </div>
+                <div class="ops-pagination">
+                    <button class="ops-secondary-button" disabled id="elasticsearch-audit-previous" type="button">
+                        上一页
+                    </button>
+                    <span id="elasticsearch-audit-page">第 1 页</span>
+                    <button class="ops-secondary-button" disabled id="elasticsearch-audit-next" type="button">下一页
+                    </button>
+                </div>
+            </section>
+        </section>
+        <section class="ops-workspace" data-workspace-panel="redis">
+            <div class="ops-heading">
+                <div>
+                    <p class="ops-breadcrumb" data-workspace-breadcrumb>Redis / 概览</p>
+                    <h1 data-workspace-title>Redis 概览</h1>
+                    <p data-workspace-description>选择数据源并查看当前工作区的安全状态。</p>
+                </div>
+            </div>
+            <nav aria-label="Redis 页面" class="ops-section-tabs">
+                <button class="ops-section-tab is-active" data-section="overview" type="button">概览</button>
+                <button class="ops-section-tab" data-section="console" type="button">控制台</button>
+                <button class="ops-section-tab" data-section="audit" type="button">审计</button>
+            </nav>
+            <section class="ops-section is-active" data-section-panel="overview">
+                <section class="ops-overview-card">
+                    <div class="ops-overview-card-heading">
+                        <div>
+                            <h2>集群概览</h2>
+                            <p class="ops-state" id="redis-overview-state">正在加载数据源。</p>
+                        </div>
+                    </div>
+                    <div class="ops-datasource-grid" id="redis-overview-grid"></div>
+                </section>
+                <aside class="ops-overview-notice">
+                    <h2>安全状态说明</h2>
+                    <p>选择已配置的数据源进入控制台。查询和审计能力始终遵循当前工作区的访问边界。</p>
+                </aside>
+            </section>
+            <section class="ops-section" data-section-panel="console">
+                <div class="ops-console-context" data-datasource-context>请选择数据源</div>
+                <div class="ops-console-panels">
+                    <section class="ops-console-panel" data-console-panel="key-read">
+                        <button aria-controls="redis-key-read-panel" aria-expanded="true"
+                                class="ops-console-panel-toggle"
+                                data-console-panel-toggle="key-read" type="button">
+                            <span>精确 Key 读取</span><span aria-hidden="true" class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" id="redis-key-read-panel">
+                            <form class="ops-form-grid" id="redis-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>精确 Key<input maxlength="256" name="key" required
+                                                                   type="text"></label><label>Hash 字段（可选）<input
+                                    maxlength="256" name="field" type="text"></label><label>起始位置<input min="0"
+                                                                                                           name="offset"
+                                                                                                           required
+                                                                                                           type="number"
+                                                                                                           value="0"></label><label>数量上限<input
+                                    max="200" min="1" name="size" type="number" value="50"></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-primary-button" type="submit">读取</button>
+                                </div>
+                            </form>
+                            <pre aria-live="polite" class="ops-result" id="redis-console-result">等待查询。</pre>
+                            <div class="ops-pagination" hidden id="redis-console-result-pagination">
+                                <button class="ops-secondary-button" id="redis-console-result-previous" type="button">
+                                    上一页
+                                </button>
+                                <span id="redis-console-result-page"></span>
+                                <button class="ops-secondary-button" id="redis-console-result-next" type="button">
+                                    下一页
+                                </button>
+                            </div>
+                            <p class="ops-result-policy">
+                                普通查询仅保留当前页面内存；重新查询、切换工作区或刷新页面即清除。</p>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="datasource-summary">
+                        <button aria-controls="redis-datasource-summary-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="datasource-summary"
+                                type="button"><span>数据源摘要</span><span aria-hidden="true"
+                                                                           class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" hidden id="redis-datasource-summary-panel">
+                            <form class="ops-form-grid" id="redis-datasource-console-form">
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询数据源摘要</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="redis-datasource-console-result">等待数据源摘要查询。
+                            </div>
+                            <form class="ops-form-grid ops-form-spaced" id="redis-summary-console-form">
+                                <label>数据源<select class="ops-datasource-select" disabled name="datasourceKey"
+                                                     required>
+                                    <option value="">请选择数据源</option>
+                                </select></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询单个数据源摘要</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="redis-summary-console-result">等待摘要查询。
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+            <section class="ops-section" data-section-panel="audit">
+                <div class="ops-audit-filter">
+                    <label>时间范围<select id="redis-audit-range">
+                        <option value="">最近 30 天（默认）</option>
+                        <option value="1d">最近 24 小时</option>
+                        <option value="7d">最近 7 天</option>
+                        <option value="30d">最近 30 天</option>
+                        <option th:if="${auditMaxRangeDays >= 90}" value="90d">最近 90 天</option>
+                        <option value="custom">自定义</option>
+                    </select></label>
+                    <label class="ops-audit-custom" hidden>开始时间（UTC）<input id="redis-audit-from"
+                                                                               type="datetime-local"></label>
+                    <label class="ops-audit-custom" hidden>结束时间（UTC）<input id="redis-audit-to"
+                                                                               type="datetime-local"></label>
+                    <button class="ops-primary-button" id="redis-audit-query" type="button">查询</button>
+                    <span class="ops-audit-effective"
+                          id="redis-audit-effective">默认由 Search Starter 查询最近 30 天。</span>
+                </div>
+                <div class="ops-state" id="redis-audit-state">打开审计页后加载。</div>
+                <div class="ops-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>发生时间</th>
+                            <th>主体</th>
+                            <th>操作</th>
+                            <th>数据源</th>
+                            <th>集群标签</th>
+                            <th>操作指纹</th>
+                            <th>状态</th>
+                            <th>查询参数</th>
+                            <th>耗时</th>
+                        </tr>
+                        </thead>
+                        <tbody id="redis-audit-body"></tbody>
+                    </table>
+                </div>
+                <div class="ops-pagination">
+                    <button class="ops-secondary-button" disabled id="redis-audit-previous" type="button">上一页
+                    </button>
+                    <span id="redis-audit-page">第 1 页</span>
+                    <button class="ops-secondary-button" disabled id="redis-audit-next" type="button">下一页</button>
+                </div>
+            </section>
+        </section>
+        <section class="ops-workspace" data-workspace-panel="kafka">
+            <div class="ops-heading">
+                <div>
+                    <p class="ops-breadcrumb" data-workspace-breadcrumb>Kafka / 概览</p>
+                    <h1 data-workspace-title>Kafka 概览</h1>
+                    <p data-workspace-description>选择数据源并查看当前工作区的安全状态。</p>
+                </div>
+            </div>
+            <nav aria-label="Kafka 页面" class="ops-section-tabs">
+                <button class="ops-section-tab is-active" data-section="overview" type="button">概览</button>
+                <button class="ops-section-tab" data-section="console" type="button">控制台</button>
+                <button class="ops-section-tab" data-section="audit" type="button">审计</button>
+            </nav>
+            <section class="ops-section is-active" data-section-panel="overview">
+                <section class="ops-overview-card">
+                    <div class="ops-overview-card-heading">
+                        <div>
+                            <h2>集群概览</h2>
+                            <p class="ops-state" id="kafka-overview-state">正在加载数据源。</p>
+                        </div>
+                    </div>
+                    <div class="ops-datasource-grid" id="kafka-overview-grid"></div>
+                </section>
+                <aside class="ops-overview-notice">
+                    <h2>安全状态说明</h2>
+                    <p>选择已配置的数据源进入控制台。查询和审计能力始终遵循当前工作区的访问边界。</p>
+                </aside>
+            </section>
+            <section class="ops-section" data-section-panel="console">
+                <div class="ops-console-context" data-datasource-context>请选择数据源</div>
+                <div class="ops-console-panels">
+                    <section class="ops-console-panel" data-console-panel="topic-list">
+                        <button aria-controls="kafka-topic-list-panel" aria-expanded="true"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="topic-list" type="button">
+                            <span>Topic 清单</span><span aria-hidden="true" class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" id="kafka-topic-list-panel">
+                            <form class="ops-form-grid" id="kafka-topic-list-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>数量上限<input max="200" min="1" name="size" required type="number"
+                                                                   value="50"></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-primary-button" type="submit">查询 Topic 清单</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="kafka-topic-list-console-result">等待 Topic 清单查询。
+                            </div>
+                            <div class="ops-pagination" hidden id="kafka-topic-list-console-result-pagination">
+                                <button class="ops-secondary-button" id="kafka-topic-list-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="kafka-topic-list-console-result-page"></span>
+                                <button class="ops-secondary-button" id="kafka-topic-list-console-result-next"
+                                        type="button">下一页
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="topic-runtime">
+                        <button aria-controls="kafka-topic-runtime-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="topic-runtime"
+                                type="button"><span>Topic 运行态</span><span aria-hidden="true"
+                                                                             class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" hidden id="kafka-topic-runtime-panel">
+                            <form class="ops-form-grid" id="kafka-topic-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>Topic<input maxlength="256" name="topic" required
+                                                                type="text"></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询 Topic 运行态</button>
+                                </div>
+                            </form>
+                            <p aria-live="polite" class="ops-state" id="kafka-topic-console-state">
+                                仅展示当前响应窗口内的分区。</p>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="kafka-topic-console-result">等待查询。
+                            </div>
+                            <div class="ops-pagination" hidden id="kafka-topic-console-result-pagination">
+                                <button class="ops-secondary-button" id="kafka-topic-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="kafka-topic-console-result-page"></span>
+                                <button class="ops-secondary-button" id="kafka-topic-console-result-next" type="button">
+                                    下一页
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="group-list">
+                        <button aria-controls="kafka-group-list-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="group-list" type="button">
+                            <span>消费组清单</span><span aria-hidden="true" class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" hidden id="kafka-group-list-panel">
+                            <form class="ops-form-grid" id="kafka-group-list-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>数量上限<input max="200" min="1" name="size" required type="number"
+                                                                   value="50"></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询消费组清单</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="kafka-group-list-console-result">等待消费组清单查询。
+                            </div>
+                            <div class="ops-pagination" hidden id="kafka-group-list-console-result-pagination">
+                                <button class="ops-secondary-button" id="kafka-group-list-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="kafka-group-list-console-result-page"></span>
+                                <button class="ops-secondary-button" id="kafka-group-list-console-result-next"
+                                        type="button">下一页
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="group-lag">
+                        <button aria-controls="kafka-group-lag-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="group-lag" type="button">
+                            <span>消费组积压</span><span aria-hidden="true" class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" hidden id="kafka-group-lag-panel">
+                            <form class="ops-form-grid" id="kafka-lag-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>消费组<input maxlength="256" name="groupId" required
+                                                                 type="text"></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询消费组积压</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface" id="kafka-lag-console-result">
+                                等待查询。
+                            </div>
+                            <div class="ops-pagination" hidden id="kafka-lag-console-result-pagination">
+                                <button class="ops-secondary-button" id="kafka-lag-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="kafka-lag-console-result-page"></span>
+                                <button class="ops-secondary-button" id="kafka-lag-console-result-next" type="button">
+                                    下一页
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="datasource-diagnostic">
+                        <button aria-controls="kafka-datasource-diagnostic-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="datasource-diagnostic"
+                                type="button"><span>数据源诊断</span><span aria-hidden="true"
+                                                                           class="ops-console-panel-caret">⌄</span>
+                        </button>
+                        <div class="ops-console-panel-body" hidden id="kafka-datasource-diagnostic-panel">
+                            <form class="ops-form-grid" id="kafka-datasource-console-form">
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">查询数据源诊断</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="kafka-datasource-console-result">等待数据源诊断查询。
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <p class="ops-result-policy">普通查询仅保留当前页面内存；重新查询、切换工作区或刷新页面即清除。</p>
+            </section>
+            <section class="ops-section" data-section-panel="audit">
+                <div class="ops-audit-filter">
+                    <label>时间范围<select id="kafka-audit-range">
+                        <option value="">最近 30 天（默认）</option>
+                        <option value="1d">最近 24 小时</option>
+                        <option value="7d">最近 7 天</option>
+                        <option value="30d">最近 30 天</option>
+                        <option th:if="${auditMaxRangeDays >= 90}" value="90d">最近 90 天</option>
+                        <option value="custom">自定义</option>
+                    </select></label>
+                    <label class="ops-audit-custom" hidden>开始时间（UTC）<input id="kafka-audit-from"
+                                                                               type="datetime-local"></label>
+                    <label class="ops-audit-custom" hidden>结束时间（UTC）<input id="kafka-audit-to"
+                                                                               type="datetime-local"></label>
+                    <button class="ops-primary-button" id="kafka-audit-query" type="button">查询</button>
+                    <span class="ops-audit-effective"
+                          id="kafka-audit-effective">默认由 Search Starter 查询最近 30 天。</span>
+                </div>
+                <div class="ops-state" id="kafka-audit-state">打开审计页后加载。</div>
+                <div class="ops-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>发生时间</th>
+                            <th>主体</th>
+                            <th>操作</th>
+                            <th>数据源</th>
+                            <th>集群标签</th>
+                            <th>操作指纹</th>
+                            <th>状态</th>
+                            <th>查询参数</th>
+                            <th>耗时</th>
+                        </tr>
+                        </thead>
+                        <tbody id="kafka-audit-body"></tbody>
+                    </table>
+                </div>
+                <div class="ops-pagination">
+                    <button class="ops-secondary-button" disabled id="kafka-audit-previous" type="button">上一页
+                    </button>
+                    <span id="kafka-audit-page">第 1 页</span>
+                    <button class="ops-secondary-button" disabled id="kafka-audit-next" type="button">下一页</button>
+                </div>
+            </section>
+        </section>
+        <section class="ops-workspace" data-workspace-panel="mysql">
+            <div class="ops-heading">
+                <div>
+                    <p class="ops-breadcrumb" data-workspace-breadcrumb>MySQL / 概览</p>
+                    <h1 data-workspace-title>MySQL 概览</h1>
+                    <p data-workspace-description>选择数据源并查看当前工作区的安全状态。</p>
+                </div>
+            </div>
+            <nav aria-label="MySQL 页面" class="ops-section-tabs">
+                <button class="ops-section-tab is-active" data-section="overview" type="button">概览</button>
+                <button class="ops-section-tab" data-section="console" type="button">控制台</button>
+                <button class="ops-section-tab" data-section="audit" type="button">审计</button>
+            </nav>
+            <section class="ops-section is-active" data-section-panel="overview">
+                <section class="ops-overview-card">
+                    <div class="ops-overview-card-heading">
+                        <div>
+                            <h2>集群概览</h2>
+                            <p class="ops-state" id="mysql-overview-state">正在加载数据源。</p>
+                        </div>
+                    </div>
+                    <div class="ops-datasource-grid" id="mysql-overview-grid"></div>
+                </section>
+                <aside class="ops-overview-notice">
+                    <h2>安全状态说明</h2>
+                    <p>选择已配置的数据源进入控制台。查询和审计能力始终遵循当前工作区的访问边界。</p>
+                </aside>
+            </section>
+            <section class="ops-section" data-section-panel="console">
+                <div class="ops-console-context" data-datasource-context>请选择数据源</div>
+                <div class="ops-console-panels">
+                    <section class="ops-console-panel" data-console-panel="select">
+                        <button aria-controls="mysql-select-panel" aria-expanded="true" class="ops-console-panel-toggle"
+                                data-console-panel-toggle="select" type="button"><span>受控 SELECT</span><span
+                                aria-hidden="true" class="ops-console-panel-caret">⌄</span></button>
+                        <div class="ops-console-panel-body" id="mysql-select-panel">
+                            <form class="ops-form-grid" id="mysql-select-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label><label>数量上限<input max="200" min="1" name="size" required type="number"
+                                                                   value="50"></label><label class="ops-full-width">受控
+                                SELECT<textarea maxlength="8192" name="sql"
+                                                placeholder="仅支持单表、无 schema、无 Join、无函数和无锁的 SELECT。"
+                                                required rows="8" spellcheck="false"></textarea></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-primary-button" type="submit">执行受控查询</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="mysql-select-console-result">等待查询。
+                            </div>
+                            <div class="ops-pagination" hidden id="mysql-select-console-result-pagination">
+                                <button class="ops-secondary-button" id="mysql-select-console-result-previous"
+                                        type="button">上一页
+                                </button>
+                                <span id="mysql-select-console-result-page"></span>
+                                <button class="ops-secondary-button" id="mysql-select-console-result-next"
+                                        type="button">下一页
+                                </button>
+                            </div>
+                            <p class="ops-result-policy">单条 SELECT 的结果仅保留当前页面内存；重新查询、切换工作区或刷新页面即清除，不保存
+                                SQL。</p>
+                        </div>
+                    </section>
+                    <section class="ops-console-panel" data-console-panel="status">
+                        <button aria-controls="mysql-status-panel" aria-expanded="false"
+                                class="ops-console-panel-toggle" data-console-panel-toggle="status" type="button"><span>探测状态</span><span
+                                aria-hidden="true" class="ops-console-panel-caret">⌄</span></button>
+                        <div class="ops-console-panel-body" hidden id="mysql-status-panel">
+                            <form class="ops-form-grid" id="mysql-status-console-form"><label>数据源<select
+                                    class="ops-datasource-select" disabled name="datasourceKey" required>
+                                <option value="">请选择数据源</option>
+                            </select></label>
+                                <div class="ops-form-actions">
+                                    <button class="ops-secondary-button" type="submit">探测状态</button>
+                                </div>
+                            </form>
+                            <div aria-live="polite" class="ops-result ops-result-surface"
+                                 id="mysql-status-console-result">等待状态探测。
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+            <section class="ops-section" data-section-panel="audit">
+                <div class="ops-audit-filter">
+                    <label>时间范围<select id="mysql-audit-range">
+                        <option value="">最近 30 天（默认）</option>
+                        <option value="1d">最近 24 小时</option>
+                        <option value="7d">最近 7 天</option>
+                        <option value="30d">最近 30 天</option>
+                        <option th:if="${auditMaxRangeDays >= 90}" value="90d">最近 90 天</option>
+                        <option value="custom">自定义</option>
+                    </select></label>
+                    <label class="ops-audit-custom" hidden>开始时间（UTC）<input id="mysql-audit-from"
+                                                                               type="datetime-local"></label>
+                    <label class="ops-audit-custom" hidden>结束时间（UTC）<input id="mysql-audit-to"
+                                                                               type="datetime-local"></label>
+                    <button class="ops-primary-button" id="mysql-audit-query" type="button">查询</button>
+                    <span class="ops-audit-effective"
+                          id="mysql-audit-effective">默认由 Search Starter 查询最近 30 天。</span>
+                </div>
+                <div class="ops-state" id="mysql-audit-state">打开审计页后加载。</div>
+                <div class="ops-table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th>发生时间</th>
+                            <th>主体</th>
+                            <th>操作</th>
+                            <th>数据源</th>
+                            <th>集群标签</th>
+                            <th>操作指纹</th>
+                            <th>状态</th>
+                            <th>查询参数</th>
+                            <th>耗时</th>
+                        </tr>
+                        </thead>
+                        <tbody id="mysql-audit-body"></tbody>
+                    </table>
+                </div>
+                <div class="ops-pagination">
+                    <button class="ops-secondary-button" disabled id="mysql-audit-previous" type="button">上一页
+                    </button>
+                    <span id="mysql-audit-page">第 1 页</span>
+                    <button class="ops-secondary-button" disabled id="mysql-audit-next" type="button">下一页</button>
+                </div>
+            </section>
+        </section>
+    </main>
+    <footer class="ops-footer">Copyright © 2026 多维中间件运维平台</footer>
+</div>
+<script th:src="${uiBasePath + '/console.js'}"></script>
+</body>
+</html>

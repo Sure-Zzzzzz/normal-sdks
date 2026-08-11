@@ -1,0 +1,30 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.2.1'
+    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.5'
+    api 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.7.2'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.1.1'
+
+    api 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    api 'org.springframework.boot:spring-boot-starter-security'
+    api 'org.springframework.security:spring-security-ldap'
+    implementation 'com.github.jsqlparser:jsqlparser:4.9'
+
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+    compileOnly 'org.springframework.kafka:spring-kafka'
+
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'mysql:mysql-connector-java'
+}
