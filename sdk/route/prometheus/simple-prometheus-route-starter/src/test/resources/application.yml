@@ -1,0 +1,33 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        prometheus:
+          route:
+            enable: true
+            shutdown-timeout-ms: 10000
+            targets:
+              prometheus-237:
+                url: http://127.0.0.1:19090
+                http:
+                  connect-timeout-ms: 3000
+                  socket-timeout-ms: 10000
+                  connection-request-timeout-ms: 2000
+                  validate-after-inactivity-ms: 1000
+                  max-total: 20
+                  max-per-route: 20
+                  max-response-body-bytes: 10485760
+              prometheus-245:
+                url: http://127.0.0.1:19091
+                http:
+                  connect-timeout-ms: 3000
+                  socket-timeout-ms: 10000
+                  connection-request-timeout-ms: 2000
+                  validate-after-inactivity-ms: 1000
+                  max-total: 20
+                  max-per-route: 20
+                  max-response-body-bytes: 10485760
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.prometheus.route: INFO

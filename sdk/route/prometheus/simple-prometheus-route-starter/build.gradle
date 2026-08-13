@@ -1,0 +1,7 @@
+dependencies {
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly "org.apache.httpcomponents:httpclient"
+
+    testImplementation 'org.apache.httpcomponents:httpclient'
+}

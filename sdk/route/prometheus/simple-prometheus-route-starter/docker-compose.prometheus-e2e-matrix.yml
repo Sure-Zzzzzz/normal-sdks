@@ -1,0 +1,28 @@
+services:
+  prometheus-237:
+    image: prom/prometheus:v2.37.0
+    ports:
+      - "19090:9090"
+    volumes:
+      - prometheus-237-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  prometheus-245:
+    image: prom/prometheus:v2.45.2
+    ports:
+      - "19091:9090"
+    volumes:
+      - prometheus-245-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/ready"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  prometheus-237-data:
+  prometheus-245-data:
