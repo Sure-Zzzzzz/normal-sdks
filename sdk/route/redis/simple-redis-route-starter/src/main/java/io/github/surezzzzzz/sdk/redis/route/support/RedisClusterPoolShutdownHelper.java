@@ -24,7 +24,7 @@ public final class RedisClusterPoolShutdownHelper {
     /**
      * 在连接池关闭前释放 Cluster 命令执行器，避免旧版 Spring Data Redis 归还已关闭的连接池。
      *
-     * @param connectionFactory pooled Cluster 连接工厂
+     * @param connectionFactory 使用连接池的 Cluster 连接工厂
      */
     public static void destroyClusterCommandExecutor(LettuceConnectionFactory connectionFactory) {
         if (!(connectionFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration)) {
@@ -39,12 +39,12 @@ public final class RedisClusterPoolShutdownHelper {
         if (executor == null) {
             return;
         }
-        ReflectionUtils.setField(field, connectionFactory, null);
         Method destroyMethod = ReflectionUtils.findMethod(executor.getClass(), DESTROY_METHOD);
         if (destroyMethod == null) {
             return;
         }
         ReflectionUtils.makeAccessible(destroyMethod);
+        ReflectionUtils.setField(field, connectionFactory, null);
         ReflectionUtils.invokeMethod(destroyMethod, executor);
     }
 }

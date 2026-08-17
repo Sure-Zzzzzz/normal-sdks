@@ -10,7 +10,7 @@
 - 仅当 `lettuce.pool.enabled=true` 时创建 `LettucePoolingClientConfiguration`；未启用时继续使用普通 Lettuce client configuration。
 - `max-active`、`max-idle`、`min-idle`、`max-wait-ms` 分别映射为 Commons Pool2 的 `maxTotal`、`maxIdle`、`minIdle`、`maxWaitMillis`。
 - standalone 与 Cluster datasource 都可以独立启用连接池；连接池分支保留命令超时、关闭超时、SSL、client name、连接超时、自动重连、断连拒绝、请求队列、Cluster 自适应与周期性拓扑刷新，以及 topology hostname 补全行为。
-- 发布物携带 Commons Pool2 运行期依赖；应用启用连接池时无需额外声明该依赖。
+- 连接池实现基于 Commons Pool2；应用启用连接池时需提供该运行时依赖，Spring Boot 应用可交由自身 BOM 管理版本。
 - 对旧版 Spring Data Redis 的 pooled Cluster 关闭顺序增加受限兼容处理，在连接池 provider 仍可用时先关闭 Cluster 命令执行器，避免归还已关闭连接池。
 
 ## 配置约束
@@ -23,7 +23,7 @@
 
 ## 升级说明
 
-- 从 1.2.0 升级不需要修改现有配置；只有需要连接池时，才在目标 datasource 下显式设置 `lettuce.pool.enabled=true`。
+- 从 1.2.0 升级不需要修改现有配置；只有需要连接池时，才添加 Commons Pool2 运行时依赖并在目标 datasource 下显式设置 `lettuce.pool.enabled=true`。
 - 迁移已有 Spring Redis pool 容量设置时，仅映射 `max-active`、`max-idle`、`min-idle`、`max-wait-ms` 四项；Route 不提供其他 Pool2 实现细节配置。
 - Route 继续只支持 Lettuce，不提供 Jedis driver 或双 driver 切换能力。
 - 连接池不改变 default-source 标准 Spring Redis Bean 接管、`RedisRouteTemplate` 显式/规则路由、Registry 唯一连接工厂生命周期或 Route 查询能力边界。
@@ -39,4 +39,4 @@
 | 2.4.5 | 8 | 通过 |
 | 2.7.9 | 11 | 通过 |
 
-四个基线均覆盖普通 Route E2E、池化 standalone 默认 datasource 与按规则 datasource、Redis 3.2.12 / 5.0.14 / 7.2.6 standalone 与 Cluster 矩阵、池化 Redis 5 / 7 Cluster、非池化回归、topology hostname mapper 与连接工厂生命周期。Spring Boot 2.7.9 还覆盖短 hostname topology Cluster 真实读写。
+四个基线均覆盖普通 Route E2E、池化 standalone 默认 datasource 与按规则 datasource、Redis 3.2.12 / 5.0.14 / 7.2.6 standalone 与 Cluster 矩阵、池化 Redis 5 / 7 Cluster、非池化回归、topology hostname mapper，以及池化 Cluster 关闭兼容工厂选择和连接工厂生命周期。Spring Boot 2.7.9 还覆盖短 hostname topology Cluster 真实读写。

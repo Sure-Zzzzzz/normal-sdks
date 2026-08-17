@@ -3,7 +3,6 @@ dependencies {
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
     compileOnly "org.springframework.boot:spring-boot-starter-data-redis"
     compileOnly 'org.apache.commons:commons-pool2'
-    runtimeOnly 'org.apache.commons:commons-pool2'
 
     testImplementation 'org.apache.commons:commons-pool2'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'

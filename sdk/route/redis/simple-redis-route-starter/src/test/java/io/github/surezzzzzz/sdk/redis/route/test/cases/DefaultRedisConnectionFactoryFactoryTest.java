@@ -35,6 +35,8 @@ public class DefaultRedisConnectionFactoryFactoryTest {
 
     private static final String NODES_TOPOLOGY_FACTORY_CLASS =
             "io.github.surezzzzzz.sdk.redis.route.factory.NodesTopologyLettuceConnectionFactory";
+    private static final String POOLED_CLUSTER_FACTORY_CLASS =
+            "io.github.surezzzzzz.sdk.redis.route.factory.PooledClusterLettuceConnectionFactory";
 
     @Test
     public void testClusterClientOptionsEnableTopologyRefresh() {
@@ -126,6 +128,40 @@ public class DefaultRedisConnectionFactoryFactoryTest {
                 .create("cluster", config);
         try {
             assertFalse(NODES_TOPOLOGY_FACTORY_CLASS.equals(connectionFactory.getClass().getName()));
+            assertFalse(POOLED_CLUSTER_FACTORY_CLASS.equals(connectionFactory.getClass().getName()));
+        } finally {
+            connectionFactory.destroy();
+        }
+    }
+
+    @Test
+    public void testPooledClusterUsesPoolShutdownCompatibleFactory() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        config.setMode(RedisSourceMode.CLUSTER.getCode());
+        config.setNodes(Arrays.asList("localhost:7000", "localhost:7001", "localhost:7002"));
+        configurePool(config, 8, 8, 0, -1L);
+        LettuceConnectionFactory connectionFactory = (LettuceConnectionFactory) new DefaultRedisConnectionFactoryFactory()
+                .create("cluster", config);
+        try {
+            assertEquals(POOLED_CLUSTER_FACTORY_CLASS, connectionFactory.getClass().getName());
+            assertTrue(connectionFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration);
+        } finally {
+            connectionFactory.destroy();
+        }
+    }
+
+    @Test
+    public void testPooledClusterNodesTopologyKeepsResourceOwningFactory() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        config.setMode(RedisSourceMode.CLUSTER.getCode());
+        config.setNodes(Arrays.asList("redis-cluster-0.redis-cluster-headless.route-test:6379"));
+        config.setClusterTopologyAddressFollowNodes(true);
+        configurePool(config, 8, 8, 0, -1L);
+        LettuceConnectionFactory connectionFactory = (LettuceConnectionFactory) new DefaultRedisConnectionFactoryFactory()
+                .create("cluster", config);
+        try {
+            assertEquals(NODES_TOPOLOGY_FACTORY_CLASS, connectionFactory.getClass().getName());
+            assertTrue(connectionFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration);
         } finally {
             connectionFactory.destroy();
         }

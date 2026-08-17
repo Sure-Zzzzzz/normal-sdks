@@ -192,7 +192,13 @@ Route 启用时，应用不得自行声明任何 `RedisConnectionFactory`、`Str
 
 ### 按 datasource 配置 Lettuce 连接池
 
-Route 只使用 Lettuce。连接池默认关闭；未设置 `lettuce.pool.enabled=true` 时，连接工厂保持 1.2.0 的非池化行为。启用后，`commons-pool2` 作为 Route 的运行期依赖自动可用，无需由应用额外声明。
+Route 只使用 Lettuce。连接池默认关闭；未设置 `lettuce.pool.enabled=true` 时，连接工厂保持 1.2.0 的非池化行为。启用连接池时，应用需自行提供 Commons Pool2 运行时依赖；Spring Boot 应用可交由自身 BOM 管理版本：
+
+```gradle
+dependencies {
+    implementation 'org.apache.commons:commons-pool2'
+}
+```
 
 将既有 Spring Redis 的 Lettuce 或 Jedis pool 容量值迁移到目标 datasource 的 `lettuce.pool`。四个字段一一对应：`max-active` 对应最大借出连接数、`max-idle` 对应最大空闲连接数、`min-idle` 对应最小空闲连接数、`max-wait-ms` 对应借连接最大等待时间。`max-wait-ms=-1` 表示无限等待，`0` 表示不等待。
 
