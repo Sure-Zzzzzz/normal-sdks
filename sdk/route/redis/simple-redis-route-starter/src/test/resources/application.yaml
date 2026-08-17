@@ -13,12 +13,26 @@ io:
                 database: 0
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
+                lettuce:
+                  pool:
+                    enabled: true
+                    max-active: 12
+                    max-idle: 8
+                    min-idle: 2
+                    max-wait-ms: 1000
               cache:
                 host: localhost
                 port: 6379
                 database: 1
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
+                lettuce:
+                  pool:
+                    enabled: true
+                    max-active: 10
+                    max-idle: 6
+                    min-idle: 1
+                    max-wait-ms: 500
               lock:
                 host: localhost
                 port: 6379

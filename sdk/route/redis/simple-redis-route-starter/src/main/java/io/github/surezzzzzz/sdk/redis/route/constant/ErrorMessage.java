@@ -27,6 +27,16 @@ public final class ErrorMessage {
     public static final String CONFIG_TIMEOUT_INVALID = "数据源 [%s] 的 timeout-ms / connect-timeout-ms / lettuce.shutdown-timeout-ms 必须大于 0";
     public static final String CONFIG_LETTUCE_REQUEST_QUEUE_SIZE_INVALID = "数据源 [%s] 的 lettuce.request-queue-size 必须大于 0，当前值: %d";
     public static final String CONFIG_CLUSTER_REFRESH_PERIOD_INVALID = "数据源 [%s] 的 lettuce.cluster-refresh-period-ms 必须大于 0，当前值: %d";
+    public static final String CONFIG_LETTUCE_POOL_MAX_ACTIVE_INVALID =
+            "数据源 [%s] 的 lettuce.pool.max-active 必须大于 0，当前值: %d";
+    public static final String CONFIG_LETTUCE_POOL_MAX_IDLE_INVALID =
+            "数据源 [%s] 的 lettuce.pool.max-idle 不能小于 0，当前值: %d";
+    public static final String CONFIG_LETTUCE_POOL_MIN_IDLE_INVALID =
+            "数据源 [%s] 的 lettuce.pool.min-idle 不能小于 0，当前值: %d";
+    public static final String CONFIG_LETTUCE_POOL_IDLE_RANGE_INVALID =
+            "数据源 [%s] 的 lettuce.pool.min-idle 不能大于 max-idle，当前值: min-idle=%d, max-idle=%d";
+    public static final String CONFIG_LETTUCE_POOL_MAX_WAIT_INVALID =
+            "数据源 [%s] 的 lettuce.pool.max-wait-ms 不能小于 -1，当前值: %d";
     public static final String CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_STANDALONE =
             "standalone 数据源 [%s] 不支持配置 cluster-topology-address-follow-nodes";
     public static final String CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_MAPPING_INVALID =

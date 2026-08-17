@@ -18,6 +18,7 @@
 - 多 key 操作强制校验所有 key 命中同一 datasource，避免在一次回调中误跨 Redis 实例操作。
 - 提供 Redis Server 版本与部署模式快照，以及保守的命令能力判断和 `UNLINK` 优先删除 helper。
 - Cluster 默认启用自适应和周期性拓扑刷新；断连时拒绝命令入队，并限制请求队列上限。
+- 每个 datasource 可独立启用 Lettuce 连接池，支持 standalone 与 Redis Cluster；默认保持非池化。
 - 可选兼容 Redis Cluster 返回两段式 hostname、初始 `nodes` 配置完整 hostname 的容器化部署。
 - 不为命名 datasource 注册额外的全局 `RedisConnectionFactory`、`RedisTemplate` 或 `StringRedisTemplate`。
 
@@ -27,7 +28,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.1'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 ```
@@ -116,6 +117,12 @@ io:
                   cluster-adaptive-refresh: true
                   cluster-periodic-refresh: true
                   cluster-refresh-period-ms: 60000
+                  pool:
+                    enabled: true
+                    max-active: 16
+                    max-idle: 10
+                    min-idle: 2
+                    max-wait-ms: 1000
               cache:
                 mode: standalone
                 host: ${REDIS_CACHE_HOST}
@@ -135,6 +142,12 @@ io:
                   cluster-adaptive-refresh: true
                   cluster-periodic-refresh: true
                   cluster-refresh-period-ms: 60000
+                  pool:
+                    enabled: true
+                    max-active: 8
+                    max-idle: 8
+                    min-idle: 0
+                    max-wait-ms: -1
             rules:
               - pattern: "cache:user:"
                 type: prefix
@@ -176,6 +189,26 @@ default-source 可以通过标准 Spring Redis Bean 或 `RedisRouteTemplate` 使
 Route 启用时，应用不得自行声明任何 `RedisConnectionFactory`、`StringRedisTemplate` 或 `RedisTemplate` Bean，无论 Bean 名称是什么。检测到冲突会在启动期以 `REDIS_ROUTE_015` fail-fast；不要通过重命名、`@Primary` 或 Bean 覆盖顺序绕开冲突。
 
 1.1.x 的 `enable=true` 是仅显式使用 `RedisRouteTemplate` 的边界，不接管应用标准 Redis Bean。不能接受 1.2.0 默认接管语义的应用应继续使用 1.1.x；1.2.0 不提供同配置下的隐藏回退。
+
+### 按 datasource 配置 Lettuce 连接池
+
+Route 只使用 Lettuce。连接池默认关闭；未设置 `lettuce.pool.enabled=true` 时，连接工厂保持 1.2.0 的非池化行为。启用后，`commons-pool2` 作为 Route 的运行期依赖自动可用，无需由应用额外声明。
+
+将既有 Spring Redis 的 Lettuce 或 Jedis pool 容量值迁移到目标 datasource 的 `lettuce.pool`。四个字段一一对应：`max-active` 对应最大借出连接数、`max-idle` 对应最大空闲连接数、`min-idle` 对应最小空闲连接数、`max-wait-ms` 对应借连接最大等待时间。`max-wait-ms=-1` 表示无限等待，`0` 表示不等待。
+
+连接池可以用于 standalone 和 Cluster datasource。Cluster 中 `max-active` 约束 Spring Data Redis 的专用连接借还容量，不是所有 Cluster 节点 TCP 连接数的硬上限；拓扑刷新、共享连接、阻塞命令、事务、Lua 与多节点连接仍遵循 Spring Data Redis 和 Lettuce 的运行机制。
+
+仅需为单个 standalone datasource 启用连接池时，在最小配置的 datasource 下补充：
+
+```yaml
+lettuce:
+  pool:
+    enabled: true
+    max-active: 8
+    max-idle: 8
+    min-idle: 0
+    max-wait-ms: -1
+```
 
 ### 按数据职责划分 datasource
 
@@ -296,6 +329,18 @@ redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redi
 | `lettuce.cluster-adaptive-refresh` | `true` | 是否启用 Cluster 自适应拓扑刷新 |
 | `lettuce.cluster-periodic-refresh` | `true` | 是否启用 Cluster 周期性拓扑刷新 |
 | `lettuce.cluster-refresh-period-ms` | `60000` | Cluster 周期性刷新间隔，单位毫秒 |
+
+### Lettuce 连接池配置
+
+连接池默认关闭，只有 `lettuce.pool.enabled=true` 时才创建池化 Lettuce client。下列约束仅在启用连接池时校验。
+
+| 配置项 | 默认值 | 说明 |
+|---|---:|---|
+| `lettuce.pool.enabled` | `false` | 是否为当前 datasource 启用 Lettuce 连接池 |
+| `lettuce.pool.max-active` | `8` | 最大借出连接数，对应 Pool2 `maxTotal`，必须大于 `0` |
+| `lettuce.pool.max-idle` | `8` | 最大空闲连接数，对应 Pool2 `maxIdle`，不能小于 `0` |
+| `lettuce.pool.min-idle` | `0` | 最小空闲连接数，对应 Pool2 `minIdle`，不能小于 `0` 且不能大于 `max-idle` |
+| `lettuce.pool.max-wait-ms` | `-1` | 获取连接最大等待时间，对应 Pool2 `maxWaitMillis`，必须大于等于 `-1`；`-1` 表示无限等待 |
 
 ### 路由规则配置
 

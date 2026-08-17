@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.test.context.ActiveProfiles;
@@ -437,6 +438,24 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
                 "redis5Standalone host 应为 localhost");
         assertEquals(16380, standaloneFactory.getStandaloneConfiguration().getPort(),
                 "redis5Standalone port 应为 16380");
+        assertTrue(clusterFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration,
+                "redis5Cluster 应使用 Lettuce 连接池配置");
+        LettucePoolingClientConfiguration pooledConfiguration =
+                (LettucePoolingClientConfiguration) clusterFactory.getClientConfiguration();
+        assertEquals(16, pooledConfiguration.getPoolConfig().getMaxTotal());
+        assertEquals(10, pooledConfiguration.getPoolConfig().getMaxIdle());
+        assertEquals(2, pooledConfiguration.getPoolConfig().getMinIdle());
+        assertEquals(1000L, pooledConfiguration.getPoolConfig().getMaxWaitMillis());
+        LettuceConnectionFactory redis7ClusterFactory = (LettuceConnectionFactory)
+                template.connectionFactory(REDIS7_CLUSTER);
+        assertTrue(redis7ClusterFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration,
+                "redis7Cluster 应使用 Lettuce 连接池配置");
+        LettucePoolingClientConfiguration redis7PooledConfiguration =
+                (LettucePoolingClientConfiguration) redis7ClusterFactory.getClientConfiguration();
+        assertEquals(14, redis7PooledConfiguration.getPoolConfig().getMaxTotal());
+        assertEquals(8, redis7PooledConfiguration.getPoolConfig().getMaxIdle());
+        assertEquals(2, redis7PooledConfiguration.getPoolConfig().getMinIdle());
+        assertEquals(800L, redis7PooledConfiguration.getPoolConfig().getMaxWaitMillis());
     }
 
     @Test

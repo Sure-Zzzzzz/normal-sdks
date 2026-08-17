@@ -164,6 +164,43 @@ public class SimpleRedisRouteProperties {
          * Redis Cluster 周期性拓扑刷新间隔，毫秒
          */
         private long clusterRefreshPeriodMs = SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_REFRESH_PERIOD_MS;
+
+        /**
+         * Lettuce 连接池配置
+         */
+        private PoolConfig pool = new PoolConfig();
+    }
+
+    /**
+     * Lettuce 连接池配置
+     */
+    @Data
+    public static class PoolConfig {
+
+        /**
+         * 是否启用连接池
+         */
+        private boolean enabled = false;
+
+        /**
+         * 最大活跃连接数
+         */
+        private int maxActive = SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_MAX_ACTIVE;
+
+        /**
+         * 最大空闲连接数
+         */
+        private int maxIdle = SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_MAX_IDLE;
+
+        /**
+         * 最小空闲连接数
+         */
+        private int minIdle = SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_MIN_IDLE;
+
+        /**
+         * 获取连接最大等待时间，毫秒
+         */
+        private long maxWaitMs = SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_MAX_WAIT_MS;
     }
 
     /**

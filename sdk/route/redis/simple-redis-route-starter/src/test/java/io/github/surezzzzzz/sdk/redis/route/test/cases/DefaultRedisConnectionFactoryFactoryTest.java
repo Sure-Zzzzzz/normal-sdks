@@ -11,6 +11,7 @@ import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Constructor;
@@ -148,6 +149,59 @@ public class DefaultRedisConnectionFactoryFactoryTest {
     }
 
     @Test
+    public void testDisabledPoolKeepsNonPooledClientConfiguration() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+
+        LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, RedisSourceMode.STANDALONE);
+
+        assertFalse(clientConfiguration instanceof LettucePoolingClientConfiguration);
+    }
+
+    @Test
+    public void testPooledStandaloneClientConfigurationUsesConfiguredCapacity() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        configurePool(config, 32, 16, 4, 1000L);
+
+        LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, RedisSourceMode.STANDALONE);
+
+        assertTrue(clientConfiguration instanceof LettucePoolingClientConfiguration);
+        LettucePoolingClientConfiguration pooledConfiguration =
+                (LettucePoolingClientConfiguration) clientConfiguration;
+        assertEquals(32, pooledConfiguration.getPoolConfig().getMaxTotal());
+        assertEquals(16, pooledConfiguration.getPoolConfig().getMaxIdle());
+        assertEquals(4, pooledConfiguration.getPoolConfig().getMinIdle());
+        assertEquals(1000L, pooledConfiguration.getPoolConfig().getMaxWaitMillis());
+        assertEquals(Duration.ofMillis(config.getTimeoutMs()), pooledConfiguration.getCommandTimeout());
+        assertEquals(Duration.ofMillis(config.getLettuce().getShutdownTimeoutMs()),
+                pooledConfiguration.getShutdownTimeout());
+    }
+
+    @Test
+    public void testPooledClusterClientConfigurationKeepsTopologyRefresh() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        config.setMode(RedisSourceMode.CLUSTER.getCode());
+        config.setNodes(Arrays.asList("localhost:7000", "localhost:7001", "localhost:7002"));
+        config.getLettuce().setClusterRefreshPeriodMs(45000L);
+        configurePool(config, 24, 12, 3, -1L);
+
+        LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, RedisSourceMode.CLUSTER);
+
+        assertTrue(clientConfiguration instanceof LettucePoolingClientConfiguration);
+        LettucePoolingClientConfiguration pooledConfiguration =
+                (LettucePoolingClientConfiguration) clientConfiguration;
+        assertEquals(24, pooledConfiguration.getPoolConfig().getMaxTotal());
+        assertEquals(12, pooledConfiguration.getPoolConfig().getMaxIdle());
+        assertEquals(3, pooledConfiguration.getPoolConfig().getMinIdle());
+        assertEquals(-1L, pooledConfiguration.getPoolConfig().getMaxWaitMillis());
+        Object clientOptions = pooledConfiguration.getClientOptions().orElse(null);
+        assertNotNull(clientOptions);
+        Object topologyRefreshOptions = invoke(clientOptions, "getTopologyRefreshOptions");
+        assertNotNull(topologyRefreshOptions);
+        assertEquals(Boolean.TRUE, invoke(topologyRefreshOptions, "isPeriodicRefreshEnabled"));
+        assertEquals(Duration.ofMillis(45000L), invoke(topologyRefreshOptions, "getRefreshPeriod"));
+    }
+
+    @Test
     public void testLettuceProductionSafetyDefaults() {
         SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
         log.info("Lettuce 默认配置：自动重连={}，拒绝断连命令={}，队列上限={}",
@@ -160,6 +214,24 @@ public class DefaultRedisConnectionFactoryFactoryTest {
         assertTrue(config.getLettuce().isClusterAdaptiveRefresh());
         assertTrue(config.getLettuce().isClusterPeriodicRefresh());
         assertEquals(60000L, config.getLettuce().getClusterRefreshPeriodMs());
+        assertFalse(config.getLettuce().getPool().isEnabled());
+        assertEquals(8, config.getLettuce().getPool().getMaxActive());
+        assertEquals(8, config.getLettuce().getPool().getMaxIdle());
+        assertEquals(0, config.getLettuce().getPool().getMinIdle());
+        assertEquals(-1L, config.getLettuce().getPool().getMaxWaitMs());
+    }
+
+    private void configurePool(SimpleRedisRouteProperties.DataSourceConfig config,
+                               int maxActive,
+                               int maxIdle,
+                               int minIdle,
+                               long maxWaitMs) {
+        SimpleRedisRouteProperties.PoolConfig pool = config.getLettuce().getPool();
+        pool.setEnabled(true);
+        pool.setMaxActive(maxActive);
+        pool.setMaxIdle(maxIdle);
+        pool.setMinIdle(minIdle);
+        pool.setMaxWaitMs(maxWaitMs);
     }
 
     private LettuceConnectionFactory createClusterFactoryWithNodesTopology() {

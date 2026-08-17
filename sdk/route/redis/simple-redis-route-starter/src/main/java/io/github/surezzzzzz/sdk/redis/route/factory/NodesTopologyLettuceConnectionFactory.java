@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.redis.route.factory;
 
+import io.github.surezzzzzz.sdk.redis.route.support.RedisClusterPoolShutdownHelper;
 import io.lettuce.core.resource.ClientResources;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
@@ -33,6 +34,7 @@ final class NodesTopologyLettuceConnectionFactory extends LettuceConnectionFacto
             return;
         }
         try {
+            RedisClusterPoolShutdownHelper.destroyClusterCommandExecutor(this);
             super.destroy();
         } finally {
             clientResources.shutdown();

@@ -7,11 +7,13 @@ import io.github.surezzzzzz.sdk.redis.route.constant.RedisSourceMode;
 import io.github.surezzzzzz.sdk.redis.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisConfigurationCompatibilityHelper;
 import io.lettuce.core.resource.ClientResources;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
@@ -71,7 +73,7 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
             if (mode == RedisSourceMode.CLUSTER) {
                 RedisClusterConfiguration clusterConfiguration = createClusterConfiguration(config);
                 connectionFactory = clientResources == null
-                        ? new LettuceConnectionFactory(clusterConfiguration, clientConfiguration)
+                        ? createClusterConnectionFactory(clusterConfiguration, clientConfiguration)
                         : new NodesTopologyLettuceConnectionFactory(clusterConfiguration, clientConfiguration, clientResources);
             } else {
                 connectionFactory = new LettuceConnectionFactory(createStandaloneConfiguration(config), clientConfiguration);
@@ -83,6 +85,15 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006,
                     String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasourceKey), e);
         }
+    }
+
+    private LettuceConnectionFactory createClusterConnectionFactory(
+            RedisClusterConfiguration clusterConfiguration,
+            LettuceClientConfiguration clientConfiguration) {
+        if (clientConfiguration instanceof LettucePoolingClientConfiguration) {
+            return new PooledClusterLettuceConnectionFactory(clusterConfiguration, clientConfiguration);
+        }
+        return new LettuceConnectionFactory(clusterConfiguration, clientConfiguration);
     }
 
     private void destroyFailedFactory(LettuceConnectionFactory connectionFactory, ClientResources clientResources) {
@@ -127,8 +138,15 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private LettuceClientConfiguration createClientConfiguration(SimpleRedisRouteProperties.DataSourceConfig config,
                                                                  RedisSourceMode mode,
                                                                  ClientResources clientResources) {
-        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofMillis(config.getTimeoutMs()))
+        SimpleRedisRouteProperties.PoolConfig pool = config.getLettuce().getPool();
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder builder;
+        if (pool != null && pool.isEnabled()) {
+            builder = LettucePoolingClientConfiguration.builder()
+                    .poolConfig(createPoolConfiguration(pool));
+        } else {
+            builder = LettuceClientConfiguration.builder();
+        }
+        builder.commandTimeout(Duration.ofMillis(config.getTimeoutMs()))
                 .shutdownTimeout(Duration.ofMillis(config.getLettuce().getShutdownTimeoutMs()));
         if (config.isSsl()) {
             builder.useSsl();
@@ -139,6 +157,15 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
         RedisConfigurationCompatibilityHelper.applyClientName(builder, config.getClientName());
         applyClientOptions(builder, config, mode);
         return builder.build();
+    }
+
+    private GenericObjectPoolConfig createPoolConfiguration(SimpleRedisRouteProperties.PoolConfig pool) {
+        GenericObjectPoolConfig poolConfiguration = new GenericObjectPoolConfig();
+        poolConfiguration.setMaxTotal(pool.getMaxActive());
+        poolConfiguration.setMaxIdle(pool.getMaxIdle());
+        poolConfiguration.setMinIdle(pool.getMinIdle());
+        poolConfiguration.setMaxWaitMillis(pool.getMaxWaitMs());
+        return poolConfiguration;
     }
 
     private ClientResources createClientResources(SimpleRedisRouteProperties.DataSourceConfig config,

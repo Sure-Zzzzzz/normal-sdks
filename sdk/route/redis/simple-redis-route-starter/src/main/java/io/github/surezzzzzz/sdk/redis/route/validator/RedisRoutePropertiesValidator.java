@@ -97,6 +97,38 @@ public class RedisRoutePropertiesValidator {
                     String.format(ErrorMessage.CONFIG_CLUSTER_REFRESH_PERIOD_INVALID,
                             datasourceKey, config.getLettuce().getClusterRefreshPeriodMs()));
         }
+        validateLettucePool(datasourceKey, config.getLettuce().getPool());
+    }
+
+    private void validateLettucePool(String datasourceKey, SimpleRedisRouteProperties.PoolConfig pool) {
+        if (pool == null || !pool.isEnabled()) {
+            return;
+        }
+        if (pool.getMaxActive() <= 0) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_MAX_ACTIVE_INVALID,
+                            datasourceKey, pool.getMaxActive()));
+        }
+        if (pool.getMaxIdle() < 0) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_MAX_IDLE_INVALID,
+                            datasourceKey, pool.getMaxIdle()));
+        }
+        if (pool.getMinIdle() < 0) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_MIN_IDLE_INVALID,
+                            datasourceKey, pool.getMinIdle()));
+        }
+        if (pool.getMinIdle() > pool.getMaxIdle()) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_IDLE_RANGE_INVALID,
+                            datasourceKey, pool.getMinIdle(), pool.getMaxIdle()));
+        }
+        if (pool.getMaxWaitMs() < -1L) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_MAX_WAIT_INVALID,
+                            datasourceKey, pool.getMaxWaitMs()));
+        }
     }
 
     private void validateStandalone(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {

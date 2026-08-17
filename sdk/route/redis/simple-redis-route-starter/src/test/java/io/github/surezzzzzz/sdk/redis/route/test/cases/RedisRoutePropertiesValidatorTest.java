@@ -13,6 +13,7 @@ import org.springframework.core.env.StandardEnvironment;
 import org.springframework.mock.env.MockPropertySource;
 
 import java.util.Arrays;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -75,6 +76,65 @@ public class RedisRoutePropertiesValidatorTest {
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
         assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
         assertTrue(exception.getMessage().contains("cluster-refresh-period-ms"));
+    }
+
+    @Test
+    public void testLettucePoolBindsFromKebabCaseProperties() {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addFirst(new MockPropertySource()
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.enabled", "true")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-active", "32")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-idle", "16")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.min-idle", "4")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-wait-ms", "1000"));
+
+        SimpleRedisRouteProperties properties = Binder.get(environment)
+                .bind("io.github.surezzzzzz.sdk.redis.route", SimpleRedisRouteProperties.class)
+                .orElseGet(SimpleRedisRouteProperties::new);
+        SimpleRedisRouteProperties.PoolConfig pool = properties.getSources().get("default").getLettuce().getPool();
+
+        assertTrue(pool.isEnabled());
+        assertEquals(32, pool.getMaxActive());
+        assertEquals(16, pool.getMaxIdle());
+        assertEquals(4, pool.getMinIdle());
+        assertEquals(1000L, pool.getMaxWaitMs());
+    }
+
+    @Test
+    public void testDisabledPoolDoesNotValidateInactiveCapacityValues() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.PoolConfig pool = properties.getSources().get("default").getLettuce().getPool();
+        pool.setMaxActive(0);
+        pool.setMaxIdle(-1);
+        pool.setMinIdle(-1);
+        pool.setMaxWaitMs(-2L);
+
+        assertDoesNotThrow(() -> validator.validate(properties));
+    }
+
+    @Test
+    public void testEnabledPoolAcceptsStandaloneAndClusterSources() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        enablePool(properties.getSources().get("default"));
+        SimpleRedisRouteProperties.DataSourceConfig cluster = new SimpleRedisRouteProperties.DataSourceConfig();
+        cluster.setMode(RedisSourceMode.CLUSTER.getCode());
+        cluster.setNodes(Arrays.asList("localhost:7000", "localhost:7001"));
+        enablePool(cluster);
+        properties.getSources().put("cluster", cluster);
+
+        assertDoesNotThrow(() -> validator.validate(properties));
+    }
+
+    @Test
+    public void testEnabledPoolRejectsInvalidCapacityValuesWithoutConnectionDetails() {
+        assertPoolValidationFailure("max-active", pool -> pool.setMaxActive(0));
+        assertPoolValidationFailure("max-idle", pool -> pool.setMaxIdle(-1));
+        assertPoolValidationFailure("min-idle", pool -> pool.setMinIdle(-1));
+        assertPoolValidationFailure("min-idle", pool -> {
+            pool.setMaxIdle(3);
+            pool.setMinIdle(4);
+        });
+        assertPoolValidationFailure("max-wait-ms", pool -> pool.setMaxWaitMs(-2L));
     }
 
     @Test
@@ -213,6 +273,34 @@ public class RedisRoutePropertiesValidatorTest {
                 "datasource 不存在时应抛 ConfigurationException");
         log.info("errorCode={}, message={}", exception.getErrorCode(), exception.getMessage());
         assertTrue(exception.getMessage().contains("default"), "消息应包含已配置 datasource 列表");
+    }
+
+    private void enablePool(SimpleRedisRouteProperties.DataSourceConfig config) {
+        config.getLettuce().getPool().setEnabled(true);
+    }
+
+    private void assertPoolValidationFailure(String expectedProperty,
+                                             Consumer<SimpleRedisRouteProperties.PoolConfig> customizer) {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.DataSourceConfig config = properties.getSources().get("default");
+        config.setHost("redis-internal.example.test");
+        config.setPort(16379);
+        config.setUsername("route-user");
+        config.setPassword("opaque-credential-content");
+        config.setClientName("route-client");
+        enablePool(config);
+        customizer.accept(config.getLettuce().getPool());
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains(expectedProperty));
+        assertFalse(exception.getMessage().contains("redis-internal.example.test"));
+        assertFalse(exception.getMessage().contains("16379"));
+        assertFalse(exception.getMessage().contains("route-user"));
+        assertFalse(exception.getMessage().contains("opaque-credential-content"));
+        assertFalse(exception.getMessage().contains("route-client"));
     }
 
     private SimpleRedisRouteProperties baseProperties() {

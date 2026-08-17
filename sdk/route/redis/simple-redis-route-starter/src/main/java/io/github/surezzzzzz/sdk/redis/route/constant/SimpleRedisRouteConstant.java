@@ -23,6 +23,10 @@ public final class SimpleRedisRouteConstant {
     public static final long DEFAULT_LETTUCE_SHUTDOWN_TIMEOUT_MS = 100L;
     public static final int DEFAULT_LETTUCE_REQUEST_QUEUE_SIZE = 10000;
     public static final long DEFAULT_LETTUCE_CLUSTER_REFRESH_PERIOD_MS = 60000L;
+    public static final int DEFAULT_LETTUCE_POOL_MAX_ACTIVE = 8;
+    public static final int DEFAULT_LETTUCE_POOL_MAX_IDLE = 8;
+    public static final int DEFAULT_LETTUCE_POOL_MIN_IDLE = 0;
+    public static final long DEFAULT_LETTUCE_POOL_MAX_WAIT_MS = -1L;
 
     /**
      * 默认是否探测 Redis Server 信息
