@@ -22,7 +22,7 @@ Redis Cluster 在容器化环境中可能向客户端返回两段式 hostname，
 - 不做反向 DNS、IP 到 hostname 推导、任意后缀猜测或 Redis 服务端配置改造。
 - IPv4、IPv6、`localhost`、单段 hostname、已完整 hostname、未知 service 及不符合受支持语法的 hostname 均保持原样。
 - 不升级或覆盖 Spring Boot 管理的 Lettuce 版本；已有自适应刷新、周期性刷新、断连拒绝入队和请求队列上限默认值保持不变。
-- Route 仅负责 datasource 路由、连接、Cluster topology 与客户端生命周期；Redis key 扫描、枚举、cursor 和只读查询属于 Middleware Ops 读查询边界，不纳入 Route API。
+- Route 仅负责 datasource 路由、连接、Cluster topology 与客户端生命周期；不提供 Redis key 扫描、枚举、cursor 或只读查询 API。
 
 ## 验证
 
