@@ -1,32 +1,36 @@
 # Simple Redis Route Starter
 
-面向业务应用的 Redis 多数据源路由组件。应用按 Redis key 或显式 datasource 选择目标 Redis，而不替换业务工程已有的 Spring Boot Redis Bean。
+面向业务应用的 Redis 多数据源路由组件。启用后，`default-source` 同时是 Route 的默认 datasource 和应用标准 Spring Redis 的默认入口；命名 datasource 仍通过 `RedisRouteTemplate` 按 key 或显式指定访问。
 
 适用于缓存、会话、分布式锁等数据分别部署，或同一应用同时使用 Redis Cluster 与 standalone Redis 的场景。
 
 ## 模块特性
 
-- 按 key 将操作路由至不同 Redis datasource，支持默认路由和显式 datasource 调用。
+- `enable=true` 时，`default-source` 发布为标准 Spring Redis 默认 Bean：
+  - `redisConnectionFactory`：`@Primary`；
+  - `stringRedisTemplate`：非 `@Primary`；
+  - `redisTemplate`：`@Primary`。
+- 标准 `redisConnectionFactory` 与 `stringRedisTemplate` 分别复用 Route 注册表持有的 default-source 实例；标准 `redisTemplate` 绑定同一个连接工厂，不会创建第二套 Redis client。
+- Route 注册表是所有连接工厂的唯一生命周期 owner；标准 `redisConnectionFactory` 不会被 Spring 容器重复销毁。
+- 按 key 将操作路由至不同 datasource，支持默认路由和显式 datasource 调用。
 - 支持 standalone、Redis Cluster 及两种模式在同一应用内混用。
 - 支持 exact、prefix、suffix、wildcard、regex 五种路由规则；优先级数字越小越优先，同优先级按配置声明顺序匹配。
 - 多 key 操作强制校验所有 key 命中同一 datasource，避免在一次回调中误跨 Redis 实例操作。
 - 提供 Redis Server 版本与部署模式快照，以及保守的命令能力判断和 `UNLINK` 优先删除 helper。
 - Cluster 默认启用自适应和周期性拓扑刷新；断连时拒绝命令入队，并限制请求队列上限。
 - 可选兼容 Redis Cluster 返回两段式 hostname、初始 `nodes` 配置完整 hostname 的容器化部署。
-- 不注册、不覆盖业务工程的全局 `RedisConnectionFactory`、`RedisTemplate`、`StringRedisTemplate` 或 `RedisMessageListenerContainer`。
-
-## 引入依赖
-
-```gradle
-dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.1'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-}
-```
+- 不为命名 datasource 注册额外的全局 `RedisConnectionFactory`、`RedisTemplate` 或 `StringRedisTemplate`。
 
 ## 最小配置
 
-单数据源也建议通过 Route 接入。后续新增数据源和路由规则时，业务调用代码不需要改动。
+单数据源也建议通过 Route 接入。`enable=true` 后，未带 Route scope 的标准 Spring Redis 调用固定使用 `default-source`；后续新增数据源和路由规则时，默认调用代码不需要改动。
+
+```gradle
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.0'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}
+```
 
 ```yaml
 io:
@@ -36,34 +40,44 @@ io:
         redis:
           route:
             enable: true
-            default-source: primary
+            default-source: default
             sources:
-              primary:
+              default:
                 mode: standalone
-                host: ${REDIS_PRIMARY_HOST}
-                port: 6379
+                host: ${REDIS_HOST}
+                port: ${REDIS_PORT:6379}
 ```
+
+默认 datasource 可直接使用标准 Spring Redis API：
 
 ```java
 @Service
 public class CacheService {
 
-    private final RedisRouteTemplate redisRouteTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
 
-    public CacheService(RedisRouteTemplate redisRouteTemplate) {
-        this.redisRouteTemplate = redisRouteTemplate;
+    public CacheService(StringRedisTemplate stringRedisTemplate) {
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     public String load(String cacheKey) {
-        return redisRouteTemplate.execute(cacheKey,
-                redisTemplate -> redisTemplate.opsForValue().get(cacheKey));
+        return stringRedisTemplate.opsForValue().get(cacheKey);
     }
 }
 ```
 
+`StringRedisTemplate`、`RedisTemplate` 和 `RedisConnectionFactory` 都绑定 default-source。标准模板不按 key 自动切换 datasource；需要按规则路由或访问命名 datasource 时，使用 `RedisRouteTemplate`：
+
+```java
+redisRouteTemplate.execute("cache:item:42", redisTemplate -> {
+    redisTemplate.opsForValue().set("cache:item:42", "cached-value");
+    return null;
+});
+```
+
 未匹配任何规则的 key 使用 `default-source`。
 
-## 最全配置
+## 完整配置
 
 以下示例覆盖顶层、standalone datasource、Cluster datasource、Lettuce、Redis Server 探测和全部路由规则配置。密码等敏感值应从部署环境注入，不要写入仓库。
 
@@ -75,20 +89,20 @@ io:
         redis:
           route:
             enable: true
-            default-source: primary
+            default-source: default
             probe:
               server-info: true
             sources:
-              primary:
+              default:
                 mode: cluster
                 nodes:
-                  - ${REDIS_PRIMARY_NODE_1}
-                  - ${REDIS_PRIMARY_NODE_2}
-                  - ${REDIS_PRIMARY_NODE_3}
+                  - ${REDIS_DEFAULT_NODE_1}
+                  - ${REDIS_DEFAULT_NODE_2}
+                  - ${REDIS_DEFAULT_NODE_3}
                 max-redirects: 3
                 database: 0
-                username: ${REDIS_PRIMARY_USERNAME:}
-                password: ${REDIS_PRIMARY_PASSWORD:}
+                username: ${REDIS_DEFAULT_USERNAME:}
+                password: ${REDIS_DEFAULT_PASSWORD:}
                 ssl: false
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
@@ -105,7 +119,7 @@ io:
               cache:
                 mode: standalone
                 host: ${REDIS_CACHE_HOST}
-                port: 6379
+                port: ${REDIS_CACHE_PORT:6379}
                 database: 1
                 username: ${REDIS_CACHE_USERNAME:}
                 password: ${REDIS_CACHE_PASSWORD:}
@@ -149,62 +163,25 @@ io:
                 enable: true
 ```
 
-`mode=cluster` 时 `database` 必须为 `0`，并且必须配置至少一个 `nodes`；每个环境变量值都应为 `host:port`。`mode=standalone` 使用 `host`、`port` 与 `database`。
+`mode=cluster` 时 `database` 必须为 `0`，并且必须配置至少一个 `nodes`；每个节点环境变量值都应为 `host:port`。`mode=standalone` 使用 `host`、`port` 与 `database`。
 
-## 业务调用方式
-
-### 按 key 自动路由
-
-优先使用按 key 调用，让数据归属由统一路由规则决定。
-
-```java
-redisRouteTemplate.execute("cache:user:42", redisTemplate -> {
-    redisTemplate.opsForValue().set("cache:user:42", "cached-value");
-    return null;
-});
-```
-
-### 在指定 datasource 上执行
-
-仅在业务明确知道目标 datasource 且不适合以 key 描述时使用。
-
-```java
-redisRouteTemplate.executeOn("primary", redisTemplate -> {
-    redisTemplate.opsForValue().set("system:maintenance", "enabled");
-    return null;
-});
-```
-
-### 获取模板或连接工厂
-
-```java
-StringRedisTemplate cacheTemplate = redisRouteTemplate.stringTemplate("cache");
-StringRedisTemplate routedTemplate = redisRouteTemplate.stringTemplateByKey("cache:user:42");
-RedisConnectionFactory primaryFactory = redisRouteTemplate.connectionFactory("primary");
-```
-
-### 多 key 操作
-
-同一次回调中的所有 key 必须路由到同一个 datasource。
-
-```java
-redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redisTemplate -> {
-    redisTemplate.delete(Arrays.asList("cache:user:42", "cache:user:43"));
-    return null;
-});
-```
-
-在 Redis Cluster 中，同 datasource 不代表同 slot。业务如果在回调里执行 multi-key Redis 命令或 Lua，仍应使用 `{...}` hash tag 确保同 slot。
+default-source 可以通过标准 Spring Redis Bean 或 `RedisRouteTemplate` 使用。`cache` 等命名 datasource 不会成为全局标准 Bean，只能通过 `RedisRouteTemplate` 的按 key 路由、`executeOn`、`stringTemplate` 或 `connectionFactory` 访问。
 
 ## 最佳实践
+
+### 先迁移默认 Redis，再拆分数据源
+
+先将原 `spring.redis` 的有效连接契约迁移为 `sources.<default-source>`，让现有 `StringRedisTemplate`、`RedisTemplate` 与 `RedisConnectionFactory` 注入无代码切换到 default-source。之后再为需要隔离的数据增加命名 datasource 和路由规则。
+
+Route 启用时，应用不得自行声明任何 `RedisConnectionFactory`、`StringRedisTemplate` 或 `RedisTemplate` Bean，无论 Bean 名称是什么。检测到冲突会在启动期以 `REDIS_ROUTE_015` fail-fast；不要通过重命名、`@Primary` 或 Bean 覆盖顺序绕开冲突。
+
+1.1.x 的 `enable=true` 是仅显式使用 `RedisRouteTemplate` 的边界，不接管应用标准 Redis Bean。不能接受 1.2.0 默认接管语义的应用应继续使用 1.1.x；1.2.0 不提供同配置下的隐藏回退。
 
 ### 按数据职责划分 datasource
 
 将高频缓存、核心状态和锁等不同数据职责配置为不同 datasource，并为每类数据使用稳定前缀。例如 `cache:`、`state:`、`lock:`。路由规则只描述数据归属，不承担业务权限或数据查询职责。
 
-### 使用默认 datasource 承接未迁移 key
-
-先把现有 Redis 配置作为 `default-source`，再逐步为需要拆分的数据增加 prefix 规则。这样可以避免一次性改造全部业务 key，也能让未配置规则的存量 key 保持原有归属。
+默认 datasource 的普通读写使用标准 Spring Redis API。需要按 key 规则选择 datasource、访问命名 datasource 或明确指定目标时，使用 `RedisRouteTemplate`。
 
 ### 为 Cluster 保留安全连接默认值
 
@@ -235,14 +212,59 @@ if (RedisCommandCapabilityHelper.supportsGetEx(serverInfo)) {
 
 `RedisCommandCompatibilityHelper.deletePreferUnlink` 在已知支持时优先使用 `UNLINK`，否则使用 `DEL`；模块不提供改变业务语义的透明降级。
 
+## 业务调用方式
+
+### 按 key 自动路由
+
+优先使用按 key 调用，让数据归属由统一路由规则决定。
+
+```java
+redisRouteTemplate.execute("cache:user:42", redisTemplate -> {
+    redisTemplate.opsForValue().set("cache:user:42", "cached-value");
+    return null;
+});
+```
+
+### 在指定 datasource 上执行
+
+仅在业务明确知道目标 datasource 且不适合以 key 描述时使用。
+
+```java
+redisRouteTemplate.executeOn("default", redisTemplate -> {
+    redisTemplate.opsForValue().set("system:maintenance", "enabled");
+    return null;
+});
+```
+
+### 获取命名 datasource 的模板或连接工厂
+
+```java
+StringRedisTemplate cacheTemplate = redisRouteTemplate.stringTemplate("cache");
+StringRedisTemplate routedTemplate = redisRouteTemplate.stringTemplateByKey("cache:user:42");
+RedisConnectionFactory defaultFactory = redisRouteTemplate.connectionFactory("default");
+```
+
+### 多 key 操作
+
+同一次回调中的所有 key 必须路由到同一个 datasource。
+
+```java
+redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redisTemplate -> {
+    redisTemplate.delete(Arrays.asList("cache:user:42", "cache:user:43"));
+    return null;
+});
+```
+
+在 Redis Cluster 中，同 datasource 不代表同 slot。业务如果在回调里执行 multi-key Redis 命令或 Lua，仍应使用 `{...}` hash tag 确保同 slot。
+
 ## 配置参考
 
 ### 顶层配置
 
 | 配置项 | 默认值 | 说明 |
 |---|---:|---|
-| `enable` | `false` | 是否启用 Redis Route |
-| `default-source` | `default` | 未命中规则时使用的 datasource |
+| `enable` | `false` | 是否启用 Redis Route；启用后 default-source 接管标准 Spring Redis 默认入口 |
+| `default-source` | `default` | 默认 datasource，也是标准 Spring Redis Bean 的绑定目标 |
 | `sources` | 空 | datasource 配置集合 |
 | `rules` | 空 | 路由规则集合 |
 | `probe.server-info` | `true` | 启动时是否探测 Redis Server 信息 |
@@ -287,7 +309,7 @@ if (RedisCommandCapabilityHelper.supportsGetEx(serverInfo)) {
 
 ## 扩展点
 
-业务侧可通过自定义 Bean 覆盖下列默认实现：
+业务侧可通过自定义 Bean 覆盖下列 Route 扩展点：
 
 | 扩展点 | 默认实现 | 用途 |
 |---|---|---|
@@ -296,8 +318,10 @@ if (RedisCommandCapabilityHelper.supportsGetEx(serverInfo)) {
 | `RedisRoutePropertiesValidator` | `RedisRoutePropertiesValidator` | 增强配置校验 |
 | `RedisRouteTemplate` | `RedisRouteTemplate` | 自定义路由门面 |
 
+不要通过自定义标准 Spring Redis Bean 改变 default-source 接管语义；这会触发启动期冲突校验。
+
 ## 使用边界
 
-- Route 负责 datasource 路由、连接、Cluster topology 与客户端生命周期；不提供 Redis key 扫描、枚举或只读查询能力。
-- 业务工程原有的 Spring Boot Redis Bean 保持不变；通过 `RedisRouteTemplate` 显式使用 Route 数据源。
+- Route 负责 datasource 路由、连接、Cluster topology 与客户端生命周期；不提供 Redis key 扫描、枚举、cursor、query 或 search 能力。
+- `enable=true` 时 Route 接管 default-source 的标准 Spring Redis Bean；命名 datasource 仍只通过 `RedisRouteTemplate` 使用。
 - `probe.server-info=false` 可用于 Redis 禁用 `INFO` 命令的环境；探测失败不阻断启动，但 Server 信息会标记为未知，能力判断会保守返回不支持。

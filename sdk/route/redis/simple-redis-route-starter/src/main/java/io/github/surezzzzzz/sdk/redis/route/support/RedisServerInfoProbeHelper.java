@@ -9,7 +9,7 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 /**
  * Redis Server 信息探测，内部使用，不作为 Spring Bean 注册
  *
- * <p>探测时机：registry.afterPropertiesSet() 后，对每个 datasource 执行一次。
+ * <p>注册表完成全部 datasource 初始化后，对每个 datasource 执行一次。
  * 探测失败不阻断启动，known=false 并记录 warn。
  *
  * @author surezzzzzz

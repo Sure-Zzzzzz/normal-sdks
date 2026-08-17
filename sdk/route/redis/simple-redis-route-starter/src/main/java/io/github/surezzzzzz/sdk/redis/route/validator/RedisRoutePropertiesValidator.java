@@ -31,6 +31,12 @@ public class RedisRoutePropertiesValidator {
 
     private final RedisRoutePatternMatcher patternMatcher;
 
+    /**
+     * 校验 Route 数据源、默认数据源和路由规则配置。
+     *
+     * @param properties 待校验的 Route 配置
+     * @throws ConfigurationException 配置不满足 Route 约束时抛出
+     */
     public void validate(SimpleRedisRouteProperties properties) {
         validateSources(properties);
         validateRules(properties);
@@ -184,18 +190,18 @@ public class RedisRoutePropertiesValidator {
         for (String node : nodes) {
             if (!RedisRouteStringHelper.hasText(node)) {
                 throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
-                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey, node));
+                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey));
             }
             String[] parts = node.trim().split(":");
             if (parts.length != 2 || !RedisRouteStringHelper.hasText(parts[0])) {
                 throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
-                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey, node));
+                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey));
             }
             try {
                 validatePort(datasourceKey, Integer.parseInt(parts[1]));
             } catch (NumberFormatException e) {
                 throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
-                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey, node), e);
+                        String.format(ErrorMessage.CONFIG_NODE_INVALID, datasourceKey), e);
             }
         }
     }
@@ -203,7 +209,7 @@ public class RedisRoutePropertiesValidator {
     private void validatePort(String datasourceKey, int port) {
         if (port < MIN_PORT || port > MAX_PORT) {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
-                    String.format(ErrorMessage.CONFIG_PORT_INVALID, datasourceKey, port));
+                    String.format(ErrorMessage.CONFIG_PORT_INVALID, datasourceKey));
         }
     }
 

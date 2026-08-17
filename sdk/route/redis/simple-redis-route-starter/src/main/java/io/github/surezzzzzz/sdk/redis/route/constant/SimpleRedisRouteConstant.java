@@ -8,6 +8,9 @@ package io.github.surezzzzzz.sdk.redis.route.constant;
 public final class SimpleRedisRouteConstant {
 
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.redis.route";
+    public static final String REDIS_CONNECTION_FACTORY_BEAN_NAME = "redisConnectionFactory";
+    public static final String STRING_REDIS_TEMPLATE_BEAN_NAME = "stringRedisTemplate";
+    public static final String REDIS_TEMPLATE_BEAN_NAME = "redisTemplate";
 
     public static final String DEFAULT_DATASOURCE_KEY = "default";
     public static final String DEFAULT_HOST = "localhost";

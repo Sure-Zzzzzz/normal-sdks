@@ -162,12 +162,23 @@ public class RedisRoutePropertiesValidatorTest {
     }
 
     @Test
-    public void testDatasourceConfigToStringDoesNotLeakCredential() {
+    public void testDatasourceConfigToStringDoesNotLeakConnectionDetails() {
         SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
-        String opaqueCredential = "OPAQUE-" + "CREDENTIAL-CONTENT";
-        config.setPassword(opaqueCredential);
+        config.setHost("redis-internal.example.test");
+        config.setPort(16379);
+        config.setNodes(Arrays.asList("redis-node-a.example.test:16379"));
+        config.setUsername("route-user");
+        config.setPassword("opaque-credential-content");
+        config.setClientName("route-client");
+
         String text = config.toString();
-        assertFalse(text.contains(opaqueCredential), "toString 不得包含原始认证内容");
+
+        assertFalse(text.contains("redis-internal.example.test"), "toString 不得包含 Redis 主机信息");
+        assertFalse(text.contains("16379"), "toString 不得包含 Redis 端口信息");
+        assertFalse(text.contains("redis-node-a.example.test"), "toString 不得包含 Redis 节点信息");
+        assertFalse(text.contains("route-user"), "toString 不得包含 Redis 用户名");
+        assertFalse(text.contains("opaque-credential-content"), "toString 不得包含 Redis 密码");
+        assertFalse(text.contains("route-client"), "toString 不得包含 Redis 客户端名称");
     }
 
     @Test

@@ -25,7 +25,7 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Redis 多版本矩阵端到端测试（v1.1.0 发布阻塞项）
+ * Redis 多版本矩阵端到端测试
  *
  * <p>测试矩阵：
  * <ul>
@@ -402,7 +402,7 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
                 () -> template.execute(Arrays.asList("cluster:{slot-a}:001", "cluster:{slot-b}:001"), redisTemplate ->
                         redisTemplate.execute(script, Arrays.asList("cluster:{slot-a}:001", "cluster:{slot-b}:001"))),
                 "不同 hash tag 的 Redis Cluster Lua multi-key 命令应由 Redis/Lettuce 暴露真实 cross-slot 异常");
-        log.info("cluster cross-slot exceptionType=[{}], message=[{}]", exception.getClass().getSimpleName(), exception.getMessage());
+        log.info("cluster cross-slot exceptionType=[{}]", exception.getClass().getSimpleName());
         assertExceptionChainContains(exception, "slot", "cross-slot 异常链必须包含 slot 语义");
     }
 
@@ -424,9 +424,6 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
     public void testMixedConnectionFactoryModes() {
         LettuceConnectionFactory clusterFactory = (LettuceConnectionFactory) template.connectionFactory("redis5Cluster");
         LettuceConnectionFactory standaloneFactory = (LettuceConnectionFactory) template.connectionFactory("redis5Standalone");
-        log.info("clusterNodes={}, standaloneHost={}",
-                clusterFactory.getClusterConfiguration().getClusterNodes().size(),
-                standaloneFactory.getStandaloneConfiguration().getHostName());
         assertNotNull(clusterFactory.getClusterConfiguration(), "redis5Cluster 应有 cluster 配置");
         assertEquals(6, clusterFactory.getClusterConfiguration().getClusterNodes().size(),
                 "redis5Cluster 应配置 6 个 cluster node");
@@ -508,7 +505,7 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
             }
             current = current.getCause();
         }
-        fail(message + ": " + throwable);
+        fail(message);
     }
 
     private Set<Integer> clusterNodePorts(LettuceConnectionFactory connectionFactory) {

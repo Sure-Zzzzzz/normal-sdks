@@ -46,6 +46,15 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private static final String DISCONNECTED_BEHAVIOR_REJECT_COMMANDS = "REJECT_COMMANDS";
     private static final String DISCONNECTED_BEHAVIOR_DEFAULT = "DEFAULT";
 
+    /**
+     * 按 Route 数据源配置构造并初始化 Lettuce 连接工厂。
+     * 创建失败时会关闭本次已创建资源，并抛出不含连接详情的配置异常。
+     *
+     * @param datasourceKey 数据源 key
+     * @param config        数据源配置
+     * @return 已完成初始化的 Redis 连接工厂
+     * @throws ConfigurationException 连接工厂创建失败时抛出
+     */
     @Override
     public RedisConnectionFactory create(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
         return create(datasourceKey, config, null);

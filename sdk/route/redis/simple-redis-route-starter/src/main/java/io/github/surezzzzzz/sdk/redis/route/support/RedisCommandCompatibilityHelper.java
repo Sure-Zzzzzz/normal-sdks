@@ -22,7 +22,7 @@ public final class RedisCommandCompatibilityHelper {
 
     /**
      * 删除 key：优先使用 UNLINK（4.0+ 异步删除），不支持则降级到 DEL。
-     * 两者语义完全等价，仅性能不同。
+     * 对调用方都表示删除 key，差异仅在服务端执行方式与性能特征。
      *
      * @param template Redis template
      * @param info     Redis Server 信息

@@ -50,7 +50,7 @@ public class SimpleRedisRouteProperties {
      * Redis 数据源配置
      */
     @Data
-    @ToString(exclude = "password")
+    @ToString(exclude = {"host", "port", "nodes", "username", "password", "clientName"})
     public static class DataSourceConfig {
 
         /**

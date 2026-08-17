@@ -14,12 +14,12 @@ public final class ErrorMessage {
     public static final String CONFIG_ROUTE_DATASOURCE_EMPTY = "第 %d 条路由规则 datasource 不能为空，pattern=[%s]，type=[%s]";
     public static final String CONFIG_SOURCE_MODE_INVALID = "数据源 [%s] 的 mode [%s] 无效，有效值: %s";
     public static final String CONFIG_HOST_EMPTY = "standalone 数据源 [%s] 的 host 不能为空";
-    public static final String CONFIG_PORT_INVALID = "数据源 [%s] 的 port 必须在 1~65535 范围内，当前值: %d";
+    public static final String CONFIG_PORT_INVALID = "数据源 [%s] 的 port 必须在 1~65535 范围内";
     public static final String CONFIG_DATABASE_INVALID = "数据源 [%s] 的 database 不能小于 0，当前值: %d";
     public static final String CONFIG_CLUSTER_DATABASE_INVALID = "cluster 数据源 [%s] 的 database 必须为 0，当前值: %d";
     public static final String CONFIG_CLUSTER_NODES_EMPTY = "cluster 数据源 [%s] 的 nodes 不能为空";
     public static final String CONFIG_CLUSTER_MAX_REDIRECTS_INVALID = "cluster 数据源 [%s] 的 maxRedirects 不能小于 0，当前值: %d";
-    public static final String CONFIG_NODE_INVALID = "数据源 [%s] 的节点 [%s] 不是合法 host:port 格式";
+    public static final String CONFIG_NODE_INVALID = "数据源 [%s] 的 nodes 包含不合法 host:port 格式";
     public static final String CONFIG_ROUTE_PATTERN_EMPTY = "第 %d 条路由规则 pattern 不能为空";
     public static final String CONFIG_ROUTE_DATASOURCE_NOT_FOUND = "第 %d 条路由规则引用的数据源 [%s] 不存在，pattern=[%s]，type=[%s]，已配置的数据源: %s";
     public static final String CONFIG_ROUTE_TYPE_INVALID = "第 %d 条路由规则 type [%s] 无效，pattern=[%s]，datasource=[%s]，有效值: %s";
@@ -43,7 +43,7 @@ public final class ErrorMessage {
     public static final String PROBE_DISABLED = "probe.server-info=false，已跳过 Redis Server 信息探测";
 
     /**
-     * probe 执行时发生异常，sanitized 描述
+     * probe 执行异常时使用的脱敏说明
      */
     public static final String PROBE_FAILED = "探测 Redis Server 信息失败";
 
@@ -62,6 +62,8 @@ public final class ErrorMessage {
     public static final String TOPOLOGY_ADDRESS_MAPPING_FAILED = "Redis Cluster 拓扑节点地址映射失败";
     public static final String LETTUCE_SOCKET_ADDRESS_RESOLVER_UNSUPPORTED = "当前 Lettuce 不支持节点地址解析器扩展";
     public static final String LETTUCE_CLIENT_RESOURCES_UNSUPPORTED = "当前 Spring Data Redis 不支持 Lettuce ClientResources 扩展";
+    public static final String STANDARD_REDIS_BEAN_CONFLICT =
+            "Redis Route default-source 接管 Spring Redis 默认 Bean 时检测到宿主自定义标准 Redis Bean，请移除该 Bean 或关闭 Redis Route";
 
     private ErrorMessage() {
         throw new UnsupportedOperationException("Utility class");

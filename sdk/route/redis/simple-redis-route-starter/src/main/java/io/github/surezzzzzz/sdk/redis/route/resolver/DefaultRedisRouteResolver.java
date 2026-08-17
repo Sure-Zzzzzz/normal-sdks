@@ -25,6 +25,12 @@ public class DefaultRedisRouteResolver implements RedisRouteResolver {
     private final RedisRoutePatternMatcher patternMatcher;
     private final List<CompiledRouteRule> compiledRules;
 
+    /**
+     * 创建默认路由解析器，并在创建时预编译全部已启用规则。
+     *
+     * @param properties     Route 配置
+     * @param patternMatcher 路由规则匹配器
+     */
     public DefaultRedisRouteResolver(SimpleRedisRouteProperties properties, RedisRoutePatternMatcher patternMatcher) {
         this.properties = properties;
         this.patternMatcher = patternMatcher;

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.redis.route.test.cases;
 
 import io.github.surezzzzzz.sdk.redis.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.redis.route.exception.RouteException;
+import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import io.github.surezzzzzz.sdk.redis.route.test.SimpleRedisRouteTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,12 +31,44 @@ public class RedisRouteEndToEndTest {
     @Autowired
     private RedisRouteTemplate template;
 
+    @Autowired
+    private SimpleRedisRouteRegistry registry;
+
+    @Autowired
+    private RedisConnectionFactory redisConnectionFactory;
+
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private RedisTemplate<Object, Object> redisTemplate;
+
     @AfterEach
     public void cleanUp() {
         template.executeOn("default", redisTemplate -> redisTemplate.delete("route:default:001"));
+        template.executeOn("default", redisTemplate -> redisTemplate.delete("route:standard:001"));
         template.executeOn("cache", redisTemplate -> redisTemplate.delete("cache:user:001"));
         template.executeOn("cache", redisTemplate -> redisTemplate.delete("cache:order:001"));
         template.executeOn("lock", redisTemplate -> redisTemplate.delete("lock:order:001"));
+    }
+
+    @Test
+    public void testStandardStringRedisTemplateUsesRouteDefaultSource() {
+        stringRedisTemplate.opsForValue().set("route:standard:001", "standard-value");
+
+        log.info("验证标准 StringRedisTemplate 使用 Route default-source");
+        assertSame(registry.getConnectionFactory(), redisConnectionFactory,
+                "标准 RedisConnectionFactory 必须复用 Route default-source");
+        assertSame(registry.getStringRedisTemplate(), stringRedisTemplate,
+                "标准 StringRedisTemplate 必须复用 Route default-source");
+        assertSame(redisConnectionFactory, redisTemplate.getConnectionFactory(),
+                "标准 RedisTemplate 必须绑定 Route default-source");
+        assertSame(stringRedisTemplate, template.stringTemplate(),
+                "Route 默认 template 与标准 StringRedisTemplate 必须为同一实例");
+        assertEquals("standard-value", template.stringTemplate().opsForValue().get("route:standard:001"),
+                "Route default-source 必须读取标准 StringRedisTemplate 写入的数据");
+        assertNull(template.stringTemplate("cache").opsForValue().get("route:standard:001"),
+                "非默认 datasource 不得读取默认 source 数据");
     }
 
     @Test

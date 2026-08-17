@@ -24,6 +24,9 @@ final class NodesTopologyLettuceConnectionFactory extends LettuceConnectionFacto
         this.clientResources = clientResources;
     }
 
+    /**
+     * 幂等关闭连接工厂及其专属 ClientResources。
+     */
     @Override
     public void destroy() {
         if (!destroyed.compareAndSet(false, true)) {

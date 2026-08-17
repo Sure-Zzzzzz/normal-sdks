@@ -29,7 +29,7 @@ public final class RedisServerInfo {
     private final RedisServerVersion version;
 
     /**
-     * Redis 部署模式原始字符串（standalone / cluster），known=true 时有值
+     * Redis 部署模式原始字符串（例如 standalone / cluster），探测输出包含该字段时有值
      */
     private final String redisMode;
 

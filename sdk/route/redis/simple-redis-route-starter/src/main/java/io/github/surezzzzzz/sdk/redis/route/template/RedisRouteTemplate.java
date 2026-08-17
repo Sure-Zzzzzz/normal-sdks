@@ -25,6 +25,12 @@ public class RedisRouteTemplate {
     private final SimpleRedisRouteRegistry registry;
     private final RedisRouteResolver routeResolver;
 
+    /**
+     * 创建显式路由门面。
+     *
+     * @param registry      Route 数据源注册表
+     * @param routeResolver Route 路由解析器
+     */
     public RedisRouteTemplate(SimpleRedisRouteRegistry registry, RedisRouteResolver routeResolver) {
         this.registry = registry;
         this.routeResolver = routeResolver;

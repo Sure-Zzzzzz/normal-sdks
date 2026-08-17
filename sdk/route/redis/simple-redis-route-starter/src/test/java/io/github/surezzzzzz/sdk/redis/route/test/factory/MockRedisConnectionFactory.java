@@ -15,7 +15,7 @@ import org.springframework.data.redis.connection.RedisSentinelConnection;
 public class MockRedisConnectionFactory implements RedisConnectionFactory, DisposableBean {
 
     private final String datasourceKey;
-    private boolean destroyed;
+    private int destroyCount;
 
     public MockRedisConnectionFactory(String datasourceKey) {
         this.datasourceKey = datasourceKey;
@@ -48,11 +48,15 @@ public class MockRedisConnectionFactory implements RedisConnectionFactory, Dispo
 
     @Override
     public void destroy() {
-        this.destroyed = true;
+        destroyCount++;
     }
 
     public boolean isDestroyed() {
-        return destroyed;
+        return destroyCount > 0;
+    }
+
+    public int getDestroyCount() {
+        return destroyCount;
     }
 
     public String getDatasourceKey() {

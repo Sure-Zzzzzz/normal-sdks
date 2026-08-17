@@ -38,6 +38,11 @@ public final class ErrorCode {
      */
     public static final String REDIS_ROUTE_014 = "REDIS_ROUTE_014";
 
+    /**
+     * Spring Redis 默认 Bean 冲突
+     */
+    public static final String REDIS_ROUTE_015 = "REDIS_ROUTE_015";
+
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class");
     }
