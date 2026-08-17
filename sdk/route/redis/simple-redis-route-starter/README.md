@@ -1,231 +1,32 @@
 # Simple Redis Route Starter
 
-基于 Spring Boot 的 Redis 多数据源路由组件，支持按 Redis key 将操作路由到不同 Redis 数据源。
+面向业务应用的 Redis 多数据源路由组件。应用按 Redis key 或显式 datasource 选择目标 Redis，而不替换业务工程已有的 Spring Boot Redis Bean。
 
-## 核心特性
+适用于缓存、会话、分布式锁等数据分别部署，或同一应用同时使用 Redis Cluster 与 standalone Redis 的场景。
 
-- 多数据源：支持 standalone / cluster 两种 Redis 部署模式，并支持同一路由实例混合使用 standalone 与 cluster 数据源。
-- Lettuce 生产安全默认值：Cluster 拓扑自适应刷新 / 周期刷新默认开启，断连默认拒绝命令入队，并限制请求队列上限。
-- 显式路由入口：通过 `RedisRouteTemplate` 按 key 或 datasource 获取 `StringRedisTemplate` / `RedisConnectionFactory`。
-- 多匹配模式：支持 exact / prefix / suffix / wildcard / regex。
-- 规则优先级：priority 数字越小越优先，同 priority 按配置声明顺序匹配。
-- 多 key 保护：批量 key 必须命中同一 datasource，跨 datasource 会直接抛出路由异常。
-- Server 信息探测：datasource 初始化后探测 Redis Server 版本和模式，探测失败不阻断启动。
-- 命令能力判断：按 Redis 版本保守判断 ACL / UNLINK / GETEX / SET GET / KEEPTTL / ZPOP / LMOVE 等能力。
-- 安全兼容 helper：仅提供语义等价的 `UNLINK` 优先删除和显式能力断言，不做透明命令降级。
-- 不污染业务上下文：不注册全局 `RedisConnectionFactory` / `RedisTemplate` / `StringRedisTemplate`。
-- 可扩展：`RedisRouteResolver`、`RedisConnectionFactoryFactory`、`RedisRouteTemplate` 支持业务侧覆盖。
-- 兼容 Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9。
+## 模块特性
 
-## 依赖配置
+- 按 key 将操作路由至不同 Redis datasource，支持默认路由和显式 datasource 调用。
+- 支持 standalone、Redis Cluster 及两种模式在同一应用内混用。
+- 支持 exact、prefix、suffix、wildcard、regex 五种路由规则；优先级数字越小越优先，同优先级按配置声明顺序匹配。
+- 多 key 操作强制校验所有 key 命中同一 datasource，避免在一次回调中误跨 Redis 实例操作。
+- 提供 Redis Server 版本与部署模式快照，以及保守的命令能力判断和 `UNLINK` 优先删除 helper。
+- Cluster 默认启用自适应和周期性拓扑刷新；断连时拒绝命令入队，并限制请求队列上限。
+- 可选兼容 Redis Cluster 返回两段式 hostname、初始 `nodes` 配置完整 hostname 的容器化部署。
+- 不注册、不覆盖业务工程的全局 `RedisConnectionFactory`、`RedisTemplate`、`StringRedisTemplate` 或 `RedisMessageListenerContainer`。
+
+## 引入依赖
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 ```
 
-## 快速开始
+## 最小配置
 
-### 1. 启用路由
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        redis:
-          route:
-            enable: true
-            default-source: default
-```
-
-### 2. 配置多数据源
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        redis:
-          route:
-            enable: true
-            default-source: default
-            sources:
-              default:
-                mode: standalone
-                host: localhost
-                port: 6379
-                database: 0
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-              cache:
-                mode: standalone
-                host: localhost
-                port: 6379
-                database: 1
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-              lock:
-                mode: standalone
-                host: localhost
-                port: 6379
-                database: 2
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-```
-
-### 3. 配置路由规则
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        redis:
-          route:
-            enable: true
-            default-source: default
-            sources:
-              # ... 数据源配置 ...
-            rules:
-              - pattern: "cache:"
-                type: prefix
-                datasource: cache
-                priority: 1
-                enable: true
-              - pattern: "lock:"
-                type: prefix
-                datasource: lock
-                priority: 2
-                enable: true
-              - pattern: "session:*"
-                type: wildcard
-                datasource: cache
-                priority: 10
-                enable: true
-```
-
-## 使用示例
-
-### 按 Redis key 自动路由
-
-```java
-@Service
-public class DemoCacheService {
-
-    private final RedisRouteTemplate redisRouteTemplate;
-
-    public DemoCacheService(RedisRouteTemplate redisRouteTemplate) {
-        this.redisRouteTemplate = redisRouteTemplate;
-    }
-
-    public void writeCache() {
-        redisRouteTemplate.execute("cache:user:001", redisTemplate -> {
-            redisTemplate.opsForValue().set("cache:user:001", "mock-value");
-            return null;
-        });
-    }
-
-    public String readCache() {
-        return redisRouteTemplate.execute("cache:user:001",
-                redisTemplate -> redisTemplate.opsForValue().get("cache:user:001"));
-    }
-}
-```
-
-### 指定 datasource 执行
-
-```java
-redisRouteTemplate.executeOn("lock", redisTemplate -> {
-    redisTemplate.opsForValue().set("lock:order:001", "mock-lock");
-    return null;
-});
-```
-
-### 获取模板或连接工厂
-
-```java
-StringRedisTemplate cacheTemplate = redisRouteTemplate.stringTemplate("cache");
-StringRedisTemplate routedTemplate = redisRouteTemplate.stringTemplateByKey("cache:user:001");
-RedisConnectionFactory lockFactory = redisRouteTemplate.connectionFactoryByKey("lock:order:001");
-```
-
-### 读取 Redis Server 信息
-
-```java
-RedisServerInfo defaultInfo = redisRouteTemplate.serverInfo();
-RedisServerInfo cacheInfo = redisRouteTemplate.serverInfo("cache");
-RedisServerInfo routedInfo = redisRouteTemplate.serverInfoByKey("cache:user:001");
-
-if (cacheInfo.isKnown()) {
-    String version = cacheInfo.getVersion().getRaw();
-    String mode = cacheInfo.getRedisMode();
-}
-```
-
-### 判断命令能力
-
-```java
-RedisServerInfo info = redisRouteTemplate.serverInfo("cache");
-
-if (RedisCommandCapabilityHelper.supportsGetEx(info)) {
-    // 可以使用 Redis 6.2+ GETEX 语义
-}
-
-RedisCommandCompatibilityHelper.requireCapability(
-        info,
-        RedisCommandCapabilityHelper.CAPABILITY_UNLINK);
-```
-
-`RedisCommandCapabilityHelper` 对 `null`、`known=false` 一律保守返回 `false`。`RedisCommandCompatibilityHelper` 只提供语义安全的 helper：`deletePreferUnlink` 会在 Redis 4.0+ 优先使用 `UNLINK`，低版本或未知版本使用 `DEL`；不提供非原子的透明降级。
-
-### 多 key 操作
-
-```java
-redisRouteTemplate.execute(Arrays.asList("cache:user:001", "cache:order:001"), redisTemplate -> {
-    redisTemplate.opsForValue().set("cache:user:001", "mock-user");
-    redisTemplate.opsForValue().set("cache:order:001", "mock-order");
-    return null;
-});
-```
-
-多 key 操作要求所有 key 命中同一 datasource。比如 `cache:user:001` 和 `lock:order:001` 同时传入时会抛出 `RouteException`，避免一次回调里误操作多个 Redis 数据源。
-
-## Cluster 配置示例
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        redis:
-          route:
-            enable: true
-            default-source: default
-            sources:
-              default:
-                mode: cluster
-                nodes:
-                  - localhost:6379
-                  - localhost:6380
-                  - localhost:6381
-                max-redirects: 3
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-                lettuce:
-                  auto-reconnect: true
-                  reject-commands-when-disconnected: true
-                  request-queue-size: 10000
-                  cluster-adaptive-refresh: true
-                  cluster-periodic-refresh: true
-                  cluster-refresh-period-ms: 60000
-```
-
-Cluster 模式下 `database` 固定为 0。本模块只负责选择 datasource，不计算 slot，不改写 hash tag，也不改写 Redis key。multi-key 回调只保证命中同一个 datasource，不保证 Redis Cluster 同 slot；如果 callback 内执行 multi-key Redis 命令或 Lua，调用方必须使用 `{...}` hash tag 等方式保证同 slot。
-
-## 混合部署配置示例
+单数据源也建议通过 Route 接入。后续新增数据源和路由规则时，业务调用代码不需要改动。
 
 ```yaml
 io:
@@ -238,158 +39,265 @@ io:
             default-source: primary
             sources:
               primary:
-                mode: cluster
-                nodes:
-                  - localhost:7000
-                  - localhost:7001
-                  - localhost:7002
-                max-redirects: 5
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-              secondary:
                 mode: standalone
-                host: localhost
+                host: ${REDIS_PRIMARY_HOST}
                 port: 6379
-                database: 1
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-            rules:
-              - pattern: "secondary:"
-                type: prefix
-                datasource: secondary
-                priority: 1
 ```
 
-混合部署是本模块的主要端到端场景：同一个 `RedisRouteTemplate` 可以把默认 key 路由到 cluster 数据源，把指定前缀 key 路由到 standalone 数据源。
+```java
+@Service
+public class CacheService {
 
-## 配置说明
+    private final RedisRouteTemplate redisRouteTemplate;
+
+    public CacheService(RedisRouteTemplate redisRouteTemplate) {
+        this.redisRouteTemplate = redisRouteTemplate;
+    }
+
+    public String load(String cacheKey) {
+        return redisRouteTemplate.execute(cacheKey,
+                redisTemplate -> redisTemplate.opsForValue().get(cacheKey));
+    }
+}
+```
+
+未匹配任何规则的 key 使用 `default-source`。
+
+## 最全配置
+
+以下示例覆盖顶层、standalone datasource、Cluster datasource、Lettuce、Redis Server 探测和全部路由规则配置。密码等敏感值应从部署环境注入，不要写入仓库。
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: primary
+            probe:
+              server-info: true
+            sources:
+              primary:
+                mode: cluster
+                nodes:
+                  - ${REDIS_PRIMARY_NODE_1}
+                  - ${REDIS_PRIMARY_NODE_2}
+                  - ${REDIS_PRIMARY_NODE_3}
+                max-redirects: 3
+                database: 0
+                username: ${REDIS_PRIMARY_USERNAME:}
+                password: ${REDIS_PRIMARY_PASSWORD:}
+                ssl: false
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                client-name: ${spring.application.name}
+                cluster-topology-address-follow-nodes: false
+                lettuce:
+                  shutdown-timeout-ms: 100
+                  auto-reconnect: true
+                  reject-commands-when-disconnected: true
+                  request-queue-size: 10000
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 60000
+              cache:
+                mode: standalone
+                host: ${REDIS_CACHE_HOST}
+                port: 6379
+                database: 1
+                username: ${REDIS_CACHE_USERNAME:}
+                password: ${REDIS_CACHE_PASSWORD:}
+                ssl: false
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                client-name: ${spring.application.name}
+                lettuce:
+                  shutdown-timeout-ms: 100
+                  auto-reconnect: true
+                  reject-commands-when-disconnected: true
+                  request-queue-size: 10000
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 60000
+            rules:
+              - pattern: "cache:user:"
+                type: prefix
+                datasource: cache
+                priority: 100
+                enable: true
+              - pattern: ":snapshot"
+                type: suffix
+                datasource: cache
+                priority: 200
+                enable: true
+              - pattern: "cache:temporary:*"
+                type: wildcard
+                datasource: cache
+                priority: 300
+                enable: true
+              - pattern: "cache:(invoice|statement):[0-9]+"
+                type: regex
+                datasource: cache
+                priority: 400
+                enable: true
+              - pattern: "cache:system"
+                type: exact
+                datasource: cache
+                priority: 500
+                enable: true
+```
+
+`mode=cluster` 时 `database` 必须为 `0`，并且必须配置至少一个 `nodes`；每个环境变量值都应为 `host:port`。`mode=standalone` 使用 `host`、`port` 与 `database`。
+
+## 业务调用方式
+
+### 按 key 自动路由
+
+优先使用按 key 调用，让数据归属由统一路由规则决定。
+
+```java
+redisRouteTemplate.execute("cache:user:42", redisTemplate -> {
+    redisTemplate.opsForValue().set("cache:user:42", "cached-value");
+    return null;
+});
+```
+
+### 在指定 datasource 上执行
+
+仅在业务明确知道目标 datasource 且不适合以 key 描述时使用。
+
+```java
+redisRouteTemplate.executeOn("primary", redisTemplate -> {
+    redisTemplate.opsForValue().set("system:maintenance", "enabled");
+    return null;
+});
+```
+
+### 获取模板或连接工厂
+
+```java
+StringRedisTemplate cacheTemplate = redisRouteTemplate.stringTemplate("cache");
+StringRedisTemplate routedTemplate = redisRouteTemplate.stringTemplateByKey("cache:user:42");
+RedisConnectionFactory primaryFactory = redisRouteTemplate.connectionFactory("primary");
+```
+
+### 多 key 操作
+
+同一次回调中的所有 key 必须路由到同一个 datasource。
+
+```java
+redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redisTemplate -> {
+    redisTemplate.delete(Arrays.asList("cache:user:42", "cache:user:43"));
+    return null;
+});
+```
+
+在 Redis Cluster 中，同 datasource 不代表同 slot。业务如果在回调里执行 multi-key Redis 命令或 Lua，仍应使用 `{...}` hash tag 确保同 slot。
+
+## 最佳实践
+
+### 按数据职责划分 datasource
+
+将高频缓存、核心状态和锁等不同数据职责配置为不同 datasource，并为每类数据使用稳定前缀。例如 `cache:`、`state:`、`lock:`。路由规则只描述数据归属，不承担业务权限或数据查询职责。
+
+### 使用默认 datasource 承接未迁移 key
+
+先把现有 Redis 配置作为 `default-source`，再逐步为需要拆分的数据增加 prefix 规则。这样可以避免一次性改造全部业务 key，也能让未配置规则的存量 key 保持原有归属。
+
+### 为 Cluster 保留安全连接默认值
+
+除非有明确的容量与故障恢复依据，不要关闭 `cluster-adaptive-refresh`、`cluster-periodic-refresh` 或 `reject-commands-when-disconnected`。请求队列上限应结合业务并发和故障可承受时间设置，避免 Redis 不可用时在客户端积压大量命令。
+
+### 容器化 Cluster 的短 hostname 拓扑
+
+当 Redis Cluster 返回 `pod.service` 两段 hostname，而应用初始 `nodes` 配置为 `pod.service.namespace` 或 `pod.service.namespace.svc.cluster.local` 时，可开启：
+
+```yaml
+cluster-topology-address-follow-nodes: true
+```
+
+开启后，`nodes` 是唯一地址事实来源。Route 仅保留 Redis 返回的动态节点名与端口，并按相同 service 的唯一 hostname 尾部补全地址；不会修改初始 seed、回退到 seed、反向解析 DNS、由 IP 推导 hostname 或猜测其他域名。
+
+同一 service 在 `nodes` 中出现不同尾部，或没有可用映射时，应用会启动失败。仅在 Redis 服务端已返回 hostname、初始 `nodes` 已配置为可解析完整地址且这些地址属于同一集群地址体系时开启。
+
+### 以能力快照保护版本差异
+
+需要使用特定 Redis 命令前，先读取 Server 信息并判断能力；未知版本一律按不支持处理。
+
+```java
+RedisServerInfo serverInfo = redisRouteTemplate.serverInfo("cache");
+if (RedisCommandCapabilityHelper.supportsGetEx(serverInfo)) {
+    // 使用 Redis 6.2+ GETEX 语义
+}
+```
+
+`RedisCommandCompatibilityHelper.deletePreferUnlink` 在已知支持时优先使用 `UNLINK`，否则使用 `DEL`；模块不提供改变业务语义的透明降级。
+
+## 配置参考
 
 ### 顶层配置
 
 | 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `enable` | `false` | 是否启用 Redis route |
-| `default-source` | `default` | 默认 datasource key |
-| `sources` | 空 | datasource 配置 |
-| `rules` | 空 | 路由规则配置 |
+|---|---:|---|
+| `enable` | `false` | 是否启用 Redis Route |
+| `default-source` | `default` | 未命中规则时使用的 datasource |
+| `sources` | 空 | datasource 配置集合 |
+| `rules` | 空 | 路由规则集合 |
+| `probe.server-info` | `true` | 启动时是否探测 Redis Server 信息 |
 
-### 数据源配置
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `mode` | `standalone` | Redis 部署模式：`standalone` / `cluster` |
-| `host` | `localhost` | standalone 主机 |
-| `port` | `6379` | standalone 端口 |
-| `nodes` | 空 | cluster 节点，格式为 `host:port` |
-| `max-redirects` | `3` | cluster 最大重定向次数 |
-| `database` | `0` | Redis database，cluster 模式必须为 0 |
-| `ssl` | `false` | 是否启用 SSL |
-| `timeout-ms` | `3000` | 命令超时时间，毫秒 |
-| `connect-timeout-ms` | `3000` | 连接超时时间，毫秒 |
-| `client-name` | 空 | Redis client name |
-| `lettuce.shutdown-timeout-ms` | `100` | Lettuce 连接工厂关闭超时时间，毫秒 |
-| `lettuce.auto-reconnect` | `true` | 是否启用 Lettuce 自动重连 |
-| `lettuce.reject-commands-when-disconnected` | `true` | 连接断开时是否拒绝命令入队 |
-| `lettuce.request-queue-size` | `10000` | Lettuce 请求队列上限 |
-| `lettuce.cluster-adaptive-refresh` | `true` | cluster 模式是否启用自适应拓扑刷新 |
-| `lettuce.cluster-periodic-refresh` | `true` | cluster 模式是否启用周期性拓扑刷新 |
-| `lettuce.cluster-refresh-period-ms` | `60000` | cluster 周期性拓扑刷新间隔，毫秒 |
-
-空白的认证信息和 `client-name` 会按未配置处理，认证内容不会出现在配置对象 `toString()` 中。
-
-### Server 信息探测配置
+### datasource 配置
 
 | 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `probe.server-info` | `true` | datasource 初始化后是否执行 `INFO server` 探测 Redis Server 信息 |
+|---|---:|---|
+| `mode` | `standalone` | `standalone` 或 `cluster` |
+| `host` / `port` | `localhost` / `6379` | standalone 地址 |
+| `nodes` | 空 | Cluster 初始节点，格式为 `host:port` |
+| `max-redirects` | `3` | Cluster 最大重定向次数 |
+| `database` | `0` | Cluster 固定为 `0` |
+| `username` / `password` | 空 | Redis 认证信息 |
+| `ssl` | `false` | 是否使用 SSL |
+| `timeout-ms` | `3000` | 命令超时时间，单位毫秒 |
+| `connect-timeout-ms` | `3000` | 连接超时时间，单位毫秒 |
+| `client-name` | 空 | Redis 客户端名称 |
+| `cluster-topology-address-follow-nodes` | `false` | 是否补全 Cluster 两段式 topology hostname |
 
-探测失败不会阻断 datasource 注册，`RedisServerInfo.known=false`，命令能力判断 helper 会保守返回 `false`。如果环境禁用 `INFO` 命令，可以设置 `probe.server-info=false`。
+### Lettuce 配置
+
+| 配置项 | 默认值 | 说明 |
+|---|---:|---|
+| `lettuce.shutdown-timeout-ms` | `100` | 连接工厂关闭超时，单位毫秒 |
+| `lettuce.auto-reconnect` | `true` | 是否自动重连 |
+| `lettuce.reject-commands-when-disconnected` | `true` | 断连时是否拒绝命令入队 |
+| `lettuce.request-queue-size` | `10000` | 客户端请求队列上限 |
+| `lettuce.cluster-adaptive-refresh` | `true` | 是否启用 Cluster 自适应拓扑刷新 |
+| `lettuce.cluster-periodic-refresh` | `true` | 是否启用 Cluster 周期性拓扑刷新 |
+| `lettuce.cluster-refresh-period-ms` | `60000` | Cluster 周期性刷新间隔，单位毫秒 |
 
 ### 路由规则配置
 
 | 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `pattern` | 空 | 匹配表达式 |
-| `type` | `exact` | 匹配类型：`exact` / `prefix` / `suffix` / `wildcard` / `regex` |
-| `datasource` | 空 | 命中的 datasource key |
-| `priority` | `1000` | 优先级，数字越小越优先 |
+|---|---:|---|
+| `pattern` | 无 | 匹配表达式 |
+| `type` | `exact` | `exact`、`prefix`、`suffix`、`wildcard`、`regex` |
+| `datasource` | 无 | 目标 datasource |
+| `priority` | `1000` | 数字越小越优先 |
 | `enable` | `true` | 是否启用规则 |
-
-## 路由语义
-
-- `exact`：key 与 pattern 完全一致。
-- `prefix`：key 以 pattern 开头。
-- `suffix`：key 以 pattern 结尾。
-- `wildcard`：支持 `*` 和 `?` 通配符。
-- `regex`：按 Java 正则表达式匹配。
-- 没有命中任何启用规则时，使用 `default-source`。
-
-## Bean 边界
-
-模块启用后只注册 Redis route 自身 Bean，例如：
-
-- `SimpleRedisRouteRegistry`
-- `RedisRouteResolver`
-- `RedisRouteTemplate`
-- `RedisRoutePatternMatcher`
-
-模块不会注册或替换业务项目的全局 Redis Bean：
-
-- `RedisConnectionFactory`
-- `RedisTemplate`
-- `StringRedisTemplate`
-- `RedisMessageListenerContainer`
-
-如果业务项目已经使用 Spring Boot 默认 Redis 自动配置，可以继续保留；Redis route 通过 `RedisRouteTemplate` 独立使用。
 
 ## 扩展点
 
-业务侧可以通过自定义 Bean 覆盖默认实现：
+业务侧可通过自定义 Bean 覆盖下列默认实现：
 
-| 扩展点 | 默认实现 | 说明 |
-|--------|----------|------|
+| 扩展点 | 默认实现 | 用途 |
+|---|---|---|
 | `RedisRouteResolver` | `DefaultRedisRouteResolver` | 自定义 key 到 datasource 的解析逻辑 |
-| `RedisConnectionFactoryFactory` | `DefaultRedisConnectionFactoryFactory` | 自定义 RedisConnectionFactory 创建逻辑 |
-| `RedisRoutePropertiesValidator` | `RedisRoutePropertiesValidator` | 自定义或增强配置校验 |
+| `RedisConnectionFactoryFactory` | `DefaultRedisConnectionFactoryFactory` | 自定义连接工厂创建逻辑 |
+| `RedisRoutePropertiesValidator` | `RedisRoutePropertiesValidator` | 增强配置校验 |
 | `RedisRouteTemplate` | `RedisRouteTemplate` | 自定义路由门面 |
 
-## 本地测试
+## 使用边界
 
-模块测试依赖真实 Redis：`localhost:6379`。
-
-测试用同一 Redis 的不同 database 模拟多数据源：
-
-- `default`：database 0
-- `cache`：database 1
-- `lock`：database 2
-
-默认端到端测试是 `RedisRouteEndToEndTest`，覆盖链路为：配置绑定 → 自动配置 → 组件扫描 / Bean 组装 → 路由解析 → registry 获取数据源 → `RedisRouteTemplate` 写读真实 Redis。
-
-多版本矩阵端到端测试默认跳过；需要先通过 [docker-compose.redis-version-matrix.yml](docker-compose.redis-version-matrix.yml) 启动 Redis 3 / 5 / 7 的 standalone + cluster 矩阵，再通过 `JAVA_TOOL_OPTIONS` 显式开启 `redis.route.version.matrix.test=true`。
-
-`RedisRouteMultiVersionMatrixEndToEndTest` 是唯一重型端到端入口，覆盖 Redis 版本探测、命令能力判断、standalone / cluster 写读隔离、cluster route、同 slot multi-key、cross-slot 真实异常、跨 datasource multi-key 拦截和 Spring Boot 2.2.x Redis 7 cluster 兼容边界。
-
-矩阵测试配置拆分为公共 profile 和 Spring Boot 版本专属 profile：`application-redis-route-version-matrix.yaml` 只放公共 datasource / rule，`application-redis-route-version-matrix-2.7.9.yaml`、`application-redis-route-version-matrix-2.4.5.yaml`、`application-redis-route-version-matrix-2.3.12.yaml`、`application-redis-route-version-matrix-2.2.x.yaml` 负责声明该 Spring Boot 版本下哪些 datasource 应 `known=true`、哪些 datasource 是兼容边界。
-
-多版本本地测试命令见 [LOCAL_TEST_COMMANDS.md](LOCAL_TEST_COMMANDS.md)。
-
-## Redis 版本能力矩阵
-
-| Redis Server | 授权边界 | 已验证形态 | 关键能力判断 |
-|--------------|----------|------------|--------------|
-| 3.2.12 | BSD-3-Clause Redis OSS | standalone / cluster | 不假设 UNLINK、ZPOP、GETEX、ACL、LMOVE、KEEPTTL |
-| 5.0.14 | BSD-3-Clause Redis OSS | standalone / cluster | 支持 UNLINK、ZPOP；不假设 GETEX、ACL、LMOVE、KEEPTTL |
-| 7.2.6 | BSD-3-Clause Redis OSS | standalone / cluster | 支持当前 helper 覆盖的现代命令能力 |
-
-默认测试矩阵不使用 Redis 7.4+ 或 8.x。Redis 7.4+ 已不属于原 BSD 宽松授权线，除非完成许可证评估，不作为本模块默认测试和推荐基线。
-
-## 版本兼容
-
-| Spring Boot | Java | Redis 矩阵验证 | 状态 |
-|-------------|------|----------------|------|
-| 2.7.9 | 11 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
-| 2.4.5 | 8 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
-| 2.3.12 | 8 | 3.2.12 / 5.0.14 / 7.2.6，standalone + cluster 全通过 | 已验证 |
-| 2.2.x | 8 | 3.2.12 / 5.0.14 cluster + 3.2.12 / 5.0.14 / 7.2.6 standalone 通过；7.2.6 cluster 是旧 Lettuce 5.2 兼容边界 | 已验证 |
-
-Spring Boot 2.2.x 自带 Lettuce 5.2.2.RELEASE 无法解析 Redis 7 cluster `CLUSTER SLOTS` 的新节点 metadata 结构，`redis7Cluster` 探测会保守返回 `known=false`。这不是 route 透明修复范围；升级到 2.3.12+ 后同一 Redis 7 cluster 矩阵已验证通过。
+- Route 负责 datasource 路由、连接、Cluster topology 与客户端生命周期；不提供 Redis key 扫描、枚举或只读查询能力。
+- 业务工程原有的 Spring Boot Redis Bean 保持不变；通过 `RedisRouteTemplate` 显式使用 Route 数据源。
+- `probe.server-info=false` 可用于 Redis 禁用 `INFO` 命令的环境；探测失败不阻断启动，但 Server 信息会标记为未知，能力判断会保守返回不支持。

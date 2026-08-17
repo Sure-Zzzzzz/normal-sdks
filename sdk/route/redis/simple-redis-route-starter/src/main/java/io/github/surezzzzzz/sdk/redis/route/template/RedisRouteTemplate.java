@@ -7,7 +7,6 @@ import io.github.surezzzzzz.sdk.redis.route.model.RedisServerInfo;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import io.github.surezzzzzz.sdk.redis.route.resolver.RedisRouteResolver;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisRouteStringHelper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -21,11 +20,15 @@ import java.util.function.Function;
  *
  * @author surezzzzzz
  */
-@RequiredArgsConstructor
 public class RedisRouteTemplate {
 
     private final SimpleRedisRouteRegistry registry;
     private final RedisRouteResolver routeResolver;
+
+    public RedisRouteTemplate(SimpleRedisRouteRegistry registry, RedisRouteResolver routeResolver) {
+        this.registry = registry;
+        this.routeResolver = routeResolver;
+    }
 
     /**
      * 获取默认 datasource 的 StringRedisTemplate。

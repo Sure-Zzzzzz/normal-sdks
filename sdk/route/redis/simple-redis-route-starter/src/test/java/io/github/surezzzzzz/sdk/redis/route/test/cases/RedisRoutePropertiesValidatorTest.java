@@ -8,6 +8,9 @@ import io.github.surezzzzzz.sdk.redis.route.matcher.RedisRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.redis.route.validator.RedisRoutePropertiesValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.mock.env.MockPropertySource;
 
 import java.util.Arrays;
 
@@ -72,6 +75,78 @@ public class RedisRoutePropertiesValidatorTest {
         ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
         assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
         assertTrue(exception.getMessage().contains("cluster-refresh-period-ms"));
+    }
+
+    @Test
+    public void testClusterTopologyAddressFollowNodesBindsFromKebabCaseProperty() {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addFirst(new MockPropertySource()
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.mode", "cluster")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.nodes[0]",
+                        "redis-cluster-0.redis-cluster-headless.route-test:6379")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.cluster-topology-address-follow-nodes",
+                        "true"));
+
+        SimpleRedisRouteProperties properties = Binder.get(environment)
+                .bind("io.github.surezzzzzz.sdk.redis.route", SimpleRedisRouteProperties.class)
+                .orElseGet(SimpleRedisRouteProperties::new);
+
+        assertTrue(properties.getSources().get("cluster").isClusterTopologyAddressFollowNodes());
+    }
+
+    @Test
+    public void testClusterTopologyAddressFollowNodesIsAllowedForCluster() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.DataSourceConfig cluster = new SimpleRedisRouteProperties.DataSourceConfig();
+        cluster.setMode(RedisSourceMode.CLUSTER.getCode());
+        cluster.setNodes(Arrays.asList("redis-cluster-0.redis-cluster-headless.route-test:6379"));
+        cluster.setClusterTopologyAddressFollowNodes(true);
+        properties.getSources().put("cluster", cluster);
+
+        assertDoesNotThrow(() -> validator.validate(properties));
+    }
+
+    @Test
+    public void testClusterTopologyAddressFollowNodesRejectsAmbiguousOrUnsupportedNodes() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.DataSourceConfig cluster = new SimpleRedisRouteProperties.DataSourceConfig();
+        cluster.setMode(RedisSourceMode.CLUSTER.getCode());
+        cluster.setClusterTopologyAddressFollowNodes(true);
+        cluster.setNodes(Arrays.asList("redis-cluster-0.redis-cluster-headless.route-test:6379",
+                "redis-cluster-1.redis-cluster-headless.other:6379"));
+        properties.getSources().put("cluster", cluster);
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("cluster-topology-address-follow-nodes"));
+        assertFalse(exception.getMessage().contains("redis-cluster-0"));
+    }
+
+    @Test
+    public void testClusterTopologyAddressFollowNodesRejectsNodesWithoutMapping() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        SimpleRedisRouteProperties.DataSourceConfig cluster = new SimpleRedisRouteProperties.DataSourceConfig();
+        cluster.setMode(RedisSourceMode.CLUSTER.getCode());
+        cluster.setClusterTopologyAddressFollowNodes(true);
+        cluster.setNodes(Arrays.asList("redis-cluster-0.redis-cluster-headless.route-test.svc.example:6379"));
+        properties.getSources().put("cluster", cluster);
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("cluster-topology-address-follow-nodes"));
+        assertFalse(exception.getMessage().contains("svc.example"));
+    }
+
+    @Test
+    public void testClusterTopologyAddressFollowNodesIsNotAllowedForStandalone() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        properties.getSources().get("default").setClusterTopologyAddressFollowNodes(true);
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("standalone"));
     }
 
     @Test

@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.redis.route.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.redis.route.constant.RedisSourceMode;
 import io.github.surezzzzzz.sdk.redis.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisConfigurationCompatibilityHelper;
+import io.lettuce.core.resource.ClientResources;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -47,20 +48,45 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
 
     @Override
     public RedisConnectionFactory create(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
+        return create(datasourceKey, config, null);
+    }
+
+    RedisConnectionFactory create(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config,
+                                  Object dnsResolver) {
+        ClientResources clientResources = null;
+        LettuceConnectionFactory connectionFactory = null;
         try {
             RedisSourceMode mode = RedisSourceMode.fromCode(config.getMode());
-            LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, mode);
-            LettuceConnectionFactory connectionFactory;
+            clientResources = createClientResources(config, mode, dnsResolver);
+            LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, mode, clientResources);
             if (mode == RedisSourceMode.CLUSTER) {
-                connectionFactory = new LettuceConnectionFactory(createClusterConfiguration(config), clientConfiguration);
+                RedisClusterConfiguration clusterConfiguration = createClusterConfiguration(config);
+                connectionFactory = clientResources == null
+                        ? new LettuceConnectionFactory(clusterConfiguration, clientConfiguration)
+                        : new NodesTopologyLettuceConnectionFactory(clusterConfiguration, clientConfiguration, clientResources);
             } else {
                 connectionFactory = new LettuceConnectionFactory(createStandaloneConfiguration(config), clientConfiguration);
             }
             connectionFactory.afterPropertiesSet();
             return connectionFactory;
         } catch (Exception e) {
+            destroyFailedFactory(connectionFactory, clientResources);
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006,
                     String.format(ErrorMessage.DATASOURCE_CREATE_FAILED, datasourceKey), e);
+        }
+    }
+
+    private void destroyFailedFactory(LettuceConnectionFactory connectionFactory, ClientResources clientResources) {
+        try {
+            if (connectionFactory != null) {
+                connectionFactory.destroy();
+                return;
+            }
+            if (clientResources != null) {
+                clientResources.shutdown();
+            }
+        } catch (RuntimeException ignored) {
+            // 清理失败不覆盖数据源初始化失败。
         }
     }
 
@@ -86,21 +112,60 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
 
     private LettuceClientConfiguration createClientConfiguration(SimpleRedisRouteProperties.DataSourceConfig config,
                                                                  RedisSourceMode mode) {
+        return createClientConfiguration(config, mode, null);
+    }
+
+    private LettuceClientConfiguration createClientConfiguration(SimpleRedisRouteProperties.DataSourceConfig config,
+                                                                 RedisSourceMode mode,
+                                                                 ClientResources clientResources) {
         LettuceClientConfiguration.LettuceClientConfigurationBuilder builder = LettuceClientConfiguration.builder()
                 .commandTimeout(Duration.ofMillis(config.getTimeoutMs()))
                 .shutdownTimeout(Duration.ofMillis(config.getLettuce().getShutdownTimeoutMs()));
         if (config.isSsl()) {
             builder.useSsl();
         }
+        if (clientResources != null) {
+            applyClientResources(builder, clientResources);
+        }
         RedisConfigurationCompatibilityHelper.applyClientName(builder, config.getClientName());
         applyClientOptions(builder, config, mode);
         return builder.build();
     }
 
+    private ClientResources createClientResources(SimpleRedisRouteProperties.DataSourceConfig config,
+                                                  RedisSourceMode mode, Object dnsResolver) {
+        if (mode != RedisSourceMode.CLUSTER || !config.isClusterTopologyAddressFollowNodes()) {
+            return null;
+        }
+        Object builder = ClientResources.builder();
+        Object resolver = NodesTopologySocketAddressResolverFactory.create(config.getNodes(), dnsResolver);
+        Method resolverMethod = findCompatibleMethod(builder.getClass(), "socketAddressResolver", new Object[]{resolver});
+        Method buildMethod = findCompatibleMethod(builder.getClass(), METHOD_BUILD, new Object[]{});
+        if (resolverMethod == null || buildMethod == null) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006,
+                    ErrorMessage.LETTUCE_SOCKET_ADDRESS_RESOLVER_UNSUPPORTED);
+        }
+        ReflectionUtils.makeAccessible(resolverMethod);
+        ReflectionUtils.makeAccessible(buildMethod);
+        ReflectionUtils.invokeMethod(resolverMethod, builder, resolver);
+        return (ClientResources) ReflectionUtils.invokeMethod(buildMethod, builder);
+    }
+
+    private void applyClientResources(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
+                                      ClientResources clientResources) {
+        Method method = findCompatibleMethod(builder.getClass(), "clientResources", new Object[]{clientResources});
+        if (method == null) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006,
+                    ErrorMessage.LETTUCE_CLIENT_RESOURCES_UNSUPPORTED);
+        }
+        ReflectionUtils.makeAccessible(method);
+        ReflectionUtils.invokeMethod(method, builder, clientResources);
+    }
+
     private void applyClientOptions(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
                                     SimpleRedisRouteProperties.DataSourceConfig config,
                                     RedisSourceMode mode) {
-        // Lettuce 5.x / 6.x 的 builder API 有差异，生产安全默认值通过反射按可用方法设置。
+        // Lettuce 5.x / 6.x 的构建器 API 有差异，生产安全默认值通过反射按可用方法设置。
         try {
             Object socketOptions = createSocketOptions(config.getConnectTimeoutMs());
             Object clientOptions = mode == RedisSourceMode.CLUSTER

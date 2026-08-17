@@ -114,6 +114,11 @@ public class SimpleRedisRouteProperties {
         private String clientName;
 
         /**
+         * Redis Cluster 拓扑地址是否跟随 nodes 地址体系
+         */
+        private boolean clusterTopologyAddressFollowNodes = false;
+
+        /**
          * Lettuce 配置
          */
         private LettuceConfig lettuce = new LettuceConfig();

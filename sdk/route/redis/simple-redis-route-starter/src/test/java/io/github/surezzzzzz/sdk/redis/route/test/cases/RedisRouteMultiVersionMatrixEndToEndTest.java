@@ -13,7 +13,6 @@ import io.github.surezzzzzz.sdk.redis.route.test.SimpleRedisRouteTestApplication
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -21,12 +20,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -46,13 +40,12 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>启动方式：
  * <pre>
  * docker-compose -f docker-compose.redis-version-matrix.yml up -d
- * ./gradlew :sdk:route:redis:simple-redis-route-starter:test -Dredis.route.version.matrix.test=true
+ * ./gradlew :sdk:route:redis:simple-redis-route-starter:test
  * </pre>
  *
  * @author surezzzzzz
  */
 @Slf4j
-@EnabledIfSystemProperty(named = "redis.route.version.matrix.test", matches = "true")
 @ActiveProfiles(resolver = RedisRouteMatrixProfilesResolver.class)
 @SpringBootTest(classes = SimpleRedisRouteTestApplication.class)
 public class RedisRouteMultiVersionMatrixEndToEndTest {
@@ -309,10 +302,10 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
 
         // 串库验证：redis3 不应能读到 redis5 写的 key
         assertNull(template.executeOn("redis3Standalone",
-                t -> t.opsForValue().get("{route-matrix}:redis5:standalone:string")),
+                        t -> t.opsForValue().get("{route-matrix}:redis5:standalone:string")),
                 "redis3Standalone 不应读到 redis5 的数据");
         assertNull(template.executeOn("redis7Standalone",
-                t -> t.opsForValue().get("{route-matrix}:redis3:standalone:string")),
+                        t -> t.opsForValue().get("{route-matrix}:redis3:standalone:string")),
                 "redis7Standalone 不应读到 redis3 的数据");
     }
 
@@ -349,7 +342,7 @@ public class RedisRouteMultiVersionMatrixEndToEndTest {
         }
 
         assertNull(template.executeOn("redis3Cluster",
-                t -> t.opsForValue().get("{route-matrix}:redis5:cluster:string")),
+                        t -> t.opsForValue().get("{route-matrix}:redis5:cluster:string")),
                 "redis3Cluster 不应读到 redis5Cluster 的数据");
     }
 

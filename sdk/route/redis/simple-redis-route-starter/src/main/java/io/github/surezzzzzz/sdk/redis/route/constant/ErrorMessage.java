@@ -27,6 +27,10 @@ public final class ErrorMessage {
     public static final String CONFIG_TIMEOUT_INVALID = "数据源 [%s] 的 timeout-ms / connect-timeout-ms / lettuce.shutdown-timeout-ms 必须大于 0";
     public static final String CONFIG_LETTUCE_REQUEST_QUEUE_SIZE_INVALID = "数据源 [%s] 的 lettuce.request-queue-size 必须大于 0，当前值: %d";
     public static final String CONFIG_CLUSTER_REFRESH_PERIOD_INVALID = "数据源 [%s] 的 lettuce.cluster-refresh-period-ms 必须大于 0，当前值: %d";
+    public static final String CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_STANDALONE =
+            "standalone 数据源 [%s] 不支持配置 cluster-topology-address-follow-nodes";
+    public static final String CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_MAPPING_INVALID =
+            "cluster 数据源 [%s] 的 cluster-topology-address-follow-nodes 无法从 nodes 建立唯一 hostname 地址映射";
     public static final String DATASOURCE_NOT_FOUND = "Redis 数据源 [%s] 不存在，已配置的数据源: %s";
     public static final String DATASOURCE_CREATE_FAILED = "创建 Redis 数据源 [%s] 失败";
     public static final String ROUTE_KEY_EMPTY = "route key 不能为空";
@@ -52,6 +56,12 @@ public final class ErrorMessage {
      * 能力不满足要求
      */
     public static final String CAPABILITY_NOT_SATISFIED = "Redis 数据源 [%s] 不满足能力要求: [%s]，Server version=[%s]";
+    public static final String TOPOLOGY_ADDRESS_RESOLVER_UNAVAILABLE = "Redis Cluster 拓扑地址解析器不可用";
+    public static final String TOPOLOGY_ADDRESS_MAPPING_AMBIGUOUS = "Redis Cluster nodes 地址映射存在歧义";
+    public static final String TOPOLOGY_ADDRESS_MAPPING_MISSING = "Redis Cluster nodes 未包含可用 hostname 地址映射";
+    public static final String TOPOLOGY_ADDRESS_MAPPING_FAILED = "Redis Cluster 拓扑节点地址映射失败";
+    public static final String LETTUCE_SOCKET_ADDRESS_RESOLVER_UNSUPPORTED = "当前 Lettuce 不支持节点地址解析器扩展";
+    public static final String LETTUCE_CLIENT_RESOURCES_UNSUPPORTED = "当前 Spring Data Redis 不支持 Lettuce ClientResources 扩展";
 
     private ErrorMessage() {
         throw new UnsupportedOperationException("Utility class");

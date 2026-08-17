@@ -5,6 +5,8 @@ set -eu
 
 VERSION="${1:-7.2.6}"
 BASE_PORT="${2:-17000}"
+ANNOUNCE_HOST_PREFIX="${3:-}"
+ANNOUNCE_HOST_SERVICE="${4:-}"
 MAJOR=$(echo "$VERSION" | cut -d. -f1)
 
 P0=$BASE_PORT
@@ -14,11 +16,23 @@ P3=$((BASE_PORT + 3))
 P4=$((BASE_PORT + 4))
 P5=$((BASE_PORT + 5))
 
+# 矩阵环境不保留测试数据，容器启动时清理旧节点状态并重建干净集群。
+rm -rf /tmp/redis-cluster
+
+if [ -n "$ANNOUNCE_HOST_PREFIX" ] && [ -n "$ANNOUNCE_HOST_SERVICE" ]; then
+  for index in 0 1 2 3 4 5; do
+    echo "127.0.0.1 ${ANNOUNCE_HOST_PREFIX}-${index}.${ANNOUNCE_HOST_SERVICE}" >> /etc/hosts
+  done
+fi
+
 # 启动 6 个节点
 for port in $P0 $P1 $P2 $P3 $P4 $P5; do
   mkdir -p /tmp/redis-cluster/$port
   announce_args=""
-  if [ "$MAJOR" -ge 5 ]; then
+  if [ -n "$ANNOUNCE_HOST_PREFIX" ] && [ -n "$ANNOUNCE_HOST_SERVICE" ]; then
+    index=$((port - BASE_PORT))
+    announce_args="--cluster-announce-hostname ${ANNOUNCE_HOST_PREFIX}-${index}.${ANNOUNCE_HOST_SERVICE} --cluster-announce-port $port --cluster-preferred-endpoint-type hostname"
+  elif [ "$MAJOR" -ge 5 ]; then
     announce_args="--cluster-announce-ip 127.0.0.1 --cluster-announce-port $port"
   fi
   redis-server \
@@ -34,17 +48,12 @@ for port in $P0 $P1 $P2 $P3 $P4 $P5; do
     --daemonize yes
 done
 
-# 等待第一个节点就绪
-until redis-cli -p $P0 ping >/dev/null 2>&1; do
-  sleep 1
+# 等待全部节点就绪，避免 Cluster 创建时后续节点尚未监听。
+for port in $P0 $P1 $P2 $P3 $P4 $P5; do
+  until redis-cli -p $port ping >/dev/null 2>&1; do
+    sleep 1
+  done
 done
-
-# 判断集群是否已初始化
-if redis-cli -p $P0 cluster info 2>/dev/null | grep -q 'cluster_state:ok'; then
-  echo "Cluster 已初始化，跳过创建"
-  tail -f /dev/null
-  exit 0
-fi
 
 # Redis 5.0+ 支持 redis-cli --cluster create
 MAJOR=$(echo "$VERSION" | cut -d. -f1)

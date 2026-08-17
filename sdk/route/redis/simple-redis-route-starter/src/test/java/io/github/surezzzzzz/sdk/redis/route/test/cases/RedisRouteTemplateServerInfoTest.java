@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -114,6 +115,13 @@ public class RedisRouteTemplateServerInfoTest {
                 () -> template.serverInfoByKey(null),
                 "null redisKey 应抛 RouteException");
         assertEquals(ErrorCode.REDIS_ROUTE_008, ex.getErrorCode(), "errorCode 应为 REDIS_ROUTE_008");
+    }
+
+    @Test
+    public void testPublicApiDoesNotExposeKeyScan() {
+        for (Method method : RedisRouteTemplate.class.getMethods()) {
+            assertNotEquals("scanKeys", method.getName(), "Route 不应暴露 Redis key 查询能力");
+        }
     }
 
     private RedisServerInfo knownInfo(String datasourceKey, String versionStr) {

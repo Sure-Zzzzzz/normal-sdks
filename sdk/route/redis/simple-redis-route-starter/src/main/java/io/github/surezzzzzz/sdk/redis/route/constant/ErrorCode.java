@@ -33,6 +33,11 @@ public final class ErrorCode {
      */
     public static final String REDIS_ROUTE_013 = "REDIS_ROUTE_013";
 
+    /**
+     * Redis Cluster 拓扑节点地址映射失败
+     */
+    public static final String REDIS_ROUTE_014 = "REDIS_ROUTE_014";
+
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class");
     }

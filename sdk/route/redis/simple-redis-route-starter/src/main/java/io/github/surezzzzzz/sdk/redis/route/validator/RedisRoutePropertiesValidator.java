@@ -10,8 +10,10 @@ import io.github.surezzzzzz.sdk.redis.route.matcher.RedisRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisRouteStringHelper;
 import lombok.RequiredArgsConstructor;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
@@ -24,6 +26,8 @@ public class RedisRoutePropertiesValidator {
 
     private static final int MIN_PORT = 1;
     private static final int MAX_PORT = 65535;
+    private static final Pattern HOSTNAME_LABEL =
+            Pattern.compile("^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$");
 
     private final RedisRoutePatternMatcher patternMatcher;
 
@@ -65,6 +69,7 @@ public class RedisRoutePropertiesValidator {
         } else if (mode == RedisSourceMode.CLUSTER) {
             validateCluster(datasourceKey, config);
         }
+        validateClusterTopologyAddressFollowNodes(datasourceKey, config, mode);
     }
 
     private void validateCommonSource(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
@@ -114,6 +119,65 @@ public class RedisRoutePropertiesValidator {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
                     String.format(ErrorMessage.CONFIG_CLUSTER_MAX_REDIRECTS_INVALID, datasourceKey, config.getMaxRedirects()));
         }
+    }
+
+    private void validateClusterTopologyAddressFollowNodes(String datasourceKey,
+                                                           SimpleRedisRouteProperties.DataSourceConfig config,
+                                                           RedisSourceMode mode) {
+        if (!config.isClusterTopologyAddressFollowNodes()) {
+            return;
+        }
+        if (mode != RedisSourceMode.CLUSTER) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_STANDALONE, datasourceKey));
+        }
+        if (!hasUniqueHostnameAddressMapping(config.getNodes())) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_CLUSTER_TOPOLOGY_ADDRESS_FOLLOW_NODES_MAPPING_INVALID,
+                            datasourceKey));
+        }
+    }
+
+    private boolean hasUniqueHostnameAddressMapping(List<String> nodes) {
+        Map<String, String> serviceTails = new HashMap<>();
+        boolean mapped = false;
+        for (String node : nodes) {
+            String normalizedNode = node.trim();
+            String host = normalizedNode.substring(0, normalizedNode.lastIndexOf(':'));
+            String[] labels = host.split("\\.", -1);
+            if (!isSupportedNodesHostname(labels)) {
+                continue;
+            }
+            String service = labels[1];
+            String tail = normalizeTail(labels);
+            String previous = serviceTails.putIfAbsent(service, tail);
+            if (previous != null && !previous.equals(tail)) {
+                return false;
+            }
+            mapped = true;
+        }
+        return mapped;
+    }
+
+    private boolean isSupportedNodesHostname(String[] labels) {
+        if (labels.length != 3 && labels.length != 6) {
+            return false;
+        }
+        for (String label : labels) {
+            if (!HOSTNAME_LABEL.matcher(label).matches()) {
+                return false;
+            }
+        }
+        return labels.length == 3 || ("svc".equals(labels[3])
+                && "cluster".equals(labels[4]) && "local".equals(labels[5]));
+    }
+
+    private String normalizeTail(String[] labels) {
+        StringBuilder builder = new StringBuilder();
+        for (int i = 2; i < labels.length; i++) {
+            builder.append('.').append(labels[i]);
+        }
+        return builder.toString();
     }
 
     private void validateNodes(String datasourceKey, List<String> nodes) {

@@ -7,7 +7,8 @@ import io.github.surezzzzzz.sdk.redis.route.support.RedisServerVersionHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Redis Server 版本/能力判断 Helper 测试

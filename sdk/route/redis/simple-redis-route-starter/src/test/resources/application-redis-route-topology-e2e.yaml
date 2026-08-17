@@ -1,0 +1,24 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: topologyCluster
+            sources:
+              topologyCluster:
+                mode: cluster
+                nodes:
+                  - redis-node-0.redis-topology-headless.route-test.svc.cluster.local:17120
+                cluster-topology-address-follow-nodes: true
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 1000
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.redis.route: DEBUG

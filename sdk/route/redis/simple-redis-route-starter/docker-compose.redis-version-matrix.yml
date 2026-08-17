@@ -68,3 +68,29 @@ services:
     volumes:
       - ./redis-matrix-cluster-entrypoint.sh:/redis-matrix-cluster-entrypoint.sh:ro
     entrypoint: ["sh", "/redis-matrix-cluster-entrypoint.sh", "7.2.6", "17020"]
+
+  # Redis 7.2.6 short hostname topology cluster - 端口 17120-17125
+  redis-topology-cluster:
+    image: redis:7.2.6
+    container_name: redis-topology-cluster
+    ports:
+      - "17120:17120"
+      - "17121:17121"
+      - "17122:17122"
+      - "17123:17123"
+      - "17124:17124"
+      - "17125:17125"
+    volumes:
+      - ./redis-matrix-cluster-entrypoint.sh:/redis-matrix-cluster-entrypoint.sh:ro
+    entrypoint:
+      - sh
+      - /redis-matrix-cluster-entrypoint.sh
+      - 7.2.6
+      - "17120"
+      - redis-node
+      - redis-topology-headless
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 17120 cluster info | grep -q '^cluster_state:ok'"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
