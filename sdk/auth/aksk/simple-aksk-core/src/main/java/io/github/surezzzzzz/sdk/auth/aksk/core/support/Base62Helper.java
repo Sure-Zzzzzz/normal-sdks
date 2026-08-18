@@ -17,20 +17,19 @@ import java.security.SecureRandom;
  */
 public final class Base62Helper {
 
-    private Base62Helper() {
-        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
-    }
-
     /**
      * Base62 字符集（0-9, A-Z, a-z）
      */
     private static final String BASE62_CHARS =
             "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
     /**
      * 安全随机数生成器
      */
     private static final SecureRandom RANDOM = new SecureRandom();
+
+    private Base62Helper() {
+        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
+    }
 
     /**
      * 生成指定长度的随机 Base62 字符串
