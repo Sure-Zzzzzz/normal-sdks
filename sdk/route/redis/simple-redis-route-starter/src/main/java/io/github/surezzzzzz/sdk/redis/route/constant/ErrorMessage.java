@@ -27,6 +27,12 @@ public final class ErrorMessage {
     public static final String CONFIG_TIMEOUT_INVALID = "数据源 [%s] 的 timeout-ms / connect-timeout-ms / lettuce.shutdown-timeout-ms 必须大于 0";
     public static final String CONFIG_LETTUCE_REQUEST_QUEUE_SIZE_INVALID = "数据源 [%s] 的 lettuce.request-queue-size 必须大于 0，当前值: %d";
     public static final String CONFIG_CLUSTER_REFRESH_PERIOD_INVALID = "数据源 [%s] 的 lettuce.cluster-refresh-period-ms 必须大于 0，当前值: %d";
+    public static final String CONFIG_LETTUCE_READ_FROM_INVALID =
+            "数据源 [%s] 的 lettuce.read-from [%s] 无效，有效值: %s";
+    public static final String CONFIG_LETTUCE_CLUSTER_OPTION_STANDALONE =
+            "standalone 数据源 [%s] 不支持非默认 lettuce.%s";
+    public static final String CONFIG_LETTUCE_POOL_EVICTION_PERIOD_INVALID =
+            "数据源 [%s] 的 lettuce.pool.time-between-eviction-runs-ms 不能小于 -1，当前值: %d";
     public static final String CONFIG_LETTUCE_POOL_MAX_ACTIVE_INVALID =
             "数据源 [%s] 的 lettuce.pool.max-active 必须大于 0，当前值: %d";
     public static final String CONFIG_LETTUCE_POOL_MAX_IDLE_INVALID =
@@ -72,8 +78,12 @@ public final class ErrorMessage {
     public static final String TOPOLOGY_ADDRESS_MAPPING_FAILED = "Redis Cluster 拓扑节点地址映射失败";
     public static final String LETTUCE_SOCKET_ADDRESS_RESOLVER_UNSUPPORTED = "当前 Lettuce 不支持节点地址解析器扩展";
     public static final String LETTUCE_CLIENT_RESOURCES_UNSUPPORTED = "当前 Spring Data Redis 不支持 Lettuce ClientResources 扩展";
-    public static final String STANDARD_REDIS_BEAN_CONFLICT =
-            "Redis Route default-source 接管 Spring Redis 默认 Bean 时检测到宿主自定义标准 Redis Bean，请移除该 Bean 或关闭 Redis Route";
+    public static final String LETTUCE_CLIENT_OPTIONS_UNSUPPORTED = "当前 Spring Data Redis 不支持 Route 所需 Lettuce client options 配置";
+    public static final String LETTUCE_READ_FROM_UNSUPPORTED = "当前 Spring Data Redis 不支持 Lettuce Cluster read-from 配置";
+    public static final String REDIS_CONNECTION_FACTORY_CONFLICT =
+            "Redis Route 启用时只允许 Registry 创建 RedisConnectionFactory，冲突 Bean: [%s]";
+    public static final String REDIS_TEMPLATE_CONNECTION_FACTORY_MISMATCH =
+            "Redis Route 启用时 RedisTemplate 必须绑定 default-source RedisConnectionFactory，冲突 Bean: [%s]";
 
     private ErrorMessage() {
         throw new UnsupportedOperationException("Utility class");

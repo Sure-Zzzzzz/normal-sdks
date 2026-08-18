@@ -28,7 +28,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.1'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
 ```
@@ -105,6 +105,7 @@ io:
                 username: ${REDIS_DEFAULT_USERNAME:}
                 password: ${REDIS_DEFAULT_PASSWORD:}
                 ssl: false
+                ssl-verify-peer: true
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
                 client-name: ${spring.application.name}
@@ -117,12 +118,16 @@ io:
                   cluster-adaptive-refresh: true
                   cluster-periodic-refresh: true
                   cluster-refresh-period-ms: 60000
+                  cluster-dynamic-refresh-sources: true
+                  cluster-close-stale-connections: true
+                  read-from: master
                   pool:
                     enabled: true
                     max-active: 16
                     max-idle: 10
                     min-idle: 2
                     max-wait-ms: 1000
+                    time-between-eviction-runs-ms: 30000
               cache:
                 mode: standalone
                 host: ${REDIS_CACHE_HOST}
@@ -131,6 +136,7 @@ io:
                 username: ${REDIS_CACHE_USERNAME:}
                 password: ${REDIS_CACHE_PASSWORD:}
                 ssl: false
+                ssl-verify-peer: true
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
                 client-name: ${spring.application.name}
@@ -142,12 +148,16 @@ io:
                   cluster-adaptive-refresh: true
                   cluster-periodic-refresh: true
                   cluster-refresh-period-ms: 60000
+                  cluster-dynamic-refresh-sources: true
+                  cluster-close-stale-connections: true
+                  read-from: master
                   pool:
                     enabled: true
                     max-active: 8
                     max-idle: 8
                     min-idle: 0
                     max-wait-ms: -1
+                    time-between-eviction-runs-ms: -1
             rules:
               - pattern: "cache:user:"
                 type: prefix
@@ -186,9 +196,11 @@ default-source 可以通过标准 Spring Redis Bean 或 `RedisRouteTemplate` 使
 
 先将原 `spring.redis` 的有效连接契约迁移为 `sources.<default-source>`，让现有 `StringRedisTemplate`、`RedisTemplate` 与 `RedisConnectionFactory` 注入无代码切换到 default-source。之后再为需要隔离的数据增加命名 datasource 和路由规则。
 
-Route 启用时，应用不得自行声明任何 `RedisConnectionFactory`、`StringRedisTemplate` 或 `RedisTemplate` Bean，无论 Bean 名称是什么。检测到冲突会在启动期以 `REDIS_ROUTE_015` fail-fast；不要通过重命名、`@Primary` 或 Bean 覆盖顺序绕开冲突。
+Route 启用后，物理 `RedisConnectionFactory` 只能由 Route Registry 创建和销毁；任意宿主自建 factory（包括异名、`@Lazy` 与 `FactoryBean` 产品）都会以 `REDIS_ROUTE_015` fail-fast，不能通过重命名、`@Primary` 或 Bean 覆盖顺序绕开。
 
-1.1.x 的 `enable=true` 是仅显式使用 `RedisRouteTemplate` 的边界，不接管应用标准 Redis Bean。不能接受 1.2.0 默认接管语义的应用应继续使用 1.1.x；1.2.0 不提供同配置下的隐藏回退。
+宿主可以保留任意名称、泛型、序列化器和 `@Primary` 语义的 `RedisTemplate` 或 `StringRedisTemplate`，前提是它们注入并实际绑定 Route 发布的 default-source `RedisConnectionFactory`。这适用于授权、同意记录等业务专用模板；Route 不替换、包装或重设这些模板。模板未绑定 factory 或绑定独立 factory 时会以 `REDIS_ROUTE_016` fail-fast。
+
+1.1.x 的 `enable=true` 是仅显式使用 `RedisRouteTemplate` 的边界，不接管应用标准 Redis Bean。不能接受 1.2.0 及以后 default-source 接管语义的应用应继续使用 1.1.x；Route 不提供同配置下的隐藏回退。
 
 ### 按 datasource 配置 Lettuce 连接池
 
@@ -200,7 +212,7 @@ dependencies {
 }
 ```
 
-将既有 Spring Redis 的 Lettuce 或 Jedis pool 容量值迁移到目标 datasource 的 `lettuce.pool`。四个字段一一对应：`max-active` 对应最大借出连接数、`max-idle` 对应最大空闲连接数、`min-idle` 对应最小空闲连接数、`max-wait-ms` 对应借连接最大等待时间。`max-wait-ms=-1` 表示无限等待，`0` 表示不等待。
+将既有 Spring Redis 的 Lettuce pool 容量值迁移到目标 datasource 的 `lettuce.pool`。`max-active` 对应最大借出连接数、`max-idle` 对应最大空闲连接数、`min-idle` 对应最小空闲连接数、`max-wait-ms` 对应借连接最大等待时间、`time-between-eviction-runs-ms` 对应空闲连接驱逐任务间隔。`max-wait-ms=-1` 表示无限等待，`max-wait-ms=0` 表示不等待；`time-between-eviction-runs-ms=-1` 表示不启动周期驱逐任务。
 
 连接池可以用于 standalone 和 Cluster datasource。Cluster 中 `max-active` 约束 Spring Data Redis 的专用连接借还容量，不是所有 Cluster 节点 TCP 连接数的硬上限；拓扑刷新、共享连接、阻塞命令、事务、Lua 与多节点连接仍遵循 Spring Data Redis 和 Lettuce 的运行机制。
 
@@ -224,7 +236,7 @@ lettuce:
 
 ### 为 Cluster 保留安全连接默认值
 
-除非有明确的容量与故障恢复依据，不要关闭 `cluster-adaptive-refresh`、`cluster-periodic-refresh` 或 `reject-commands-when-disconnected`。请求队列上限应结合业务并发和故障可承受时间设置，避免 Redis 不可用时在客户端积压大量命令。
+除非有明确的容量与故障恢复依据，不要关闭 `cluster-adaptive-refresh`、`cluster-periodic-refresh`、`cluster-dynamic-refresh-sources`、`cluster-close-stale-connections` 或 `reject-commands-when-disconnected`。`read-from` 默认 `master`；改为 `master-preferred`、`replica`、`replica-preferred`、`nearest` 或 `any` 前，应确认业务可接受副本复制延迟与节点选择差异。请求队列上限应结合业务并发和故障可承受时间设置，避免 Redis 不可用时在客户端积压大量命令。
 
 ### 容器化 Cluster 的短 hostname 拓扑
 
@@ -319,6 +331,7 @@ redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redi
 | `database` | `0` | Cluster 固定为 `0` |
 | `username` / `password` | 空 | Redis 认证信息 |
 | `ssl` | `false` | 是否使用 SSL |
+| `ssl-verify-peer` | `true` | SSL 启用时是否校验服务端证书；仅在受控环境临时排障时才可设为 `false` |
 | `timeout-ms` | `3000` | 命令超时时间，单位毫秒 |
 | `connect-timeout-ms` | `3000` | 连接超时时间，单位毫秒 |
 | `client-name` | 空 | Redis 客户端名称 |
@@ -334,7 +347,10 @@ redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redi
 | `lettuce.request-queue-size` | `10000` | 客户端请求队列上限 |
 | `lettuce.cluster-adaptive-refresh` | `true` | 是否启用 Cluster 自适应拓扑刷新 |
 | `lettuce.cluster-periodic-refresh` | `true` | 是否启用 Cluster 周期性拓扑刷新 |
-| `lettuce.cluster-refresh-period-ms` | `60000` | Cluster 周期性刷新间隔，单位毫秒 |
+| `lettuce.cluster-refresh-period-ms` | `60000` | Cluster 周期性刷新间隔，单位毫秒；仅 Cluster 可配置非默认值 |
+| `lettuce.cluster-dynamic-refresh-sources` | `true` | Cluster 拓扑刷新是否使用已发现节点作为刷新来源；仅 Cluster 可配置非默认值 |
+| `lettuce.cluster-close-stale-connections` | `true` | Cluster 拓扑变更后是否关闭过期节点连接；仅 Cluster 可配置非默认值 |
+| `lettuce.read-from` | `master` | Cluster 读偏好，可选 `master`、`master-preferred`、`replica`、`replica-preferred`、`nearest`、`any`；standalone 仅允许默认值 `master` |
 
 ### Lettuce 连接池配置
 
@@ -347,6 +363,7 @@ redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redi
 | `lettuce.pool.max-idle` | `8` | 最大空闲连接数，对应 Pool2 `maxIdle`，不能小于 `0` |
 | `lettuce.pool.min-idle` | `0` | 最小空闲连接数，对应 Pool2 `minIdle`，不能小于 `0` 且不能大于 `max-idle` |
 | `lettuce.pool.max-wait-ms` | `-1` | 获取连接最大等待时间，对应 Pool2 `maxWaitMillis`，必须大于等于 `-1`；`-1` 表示无限等待 |
+| `lettuce.pool.time-between-eviction-runs-ms` | `-1` | 空闲连接驱逐任务间隔，对应 Pool2 `timeBetweenEvictionRunsMillis`，必须大于等于 `-1`；`-1` 表示不启动周期任务 |
 
 ### 路由规则配置
 
@@ -369,10 +386,12 @@ redisRouteTemplate.execute(Arrays.asList("cache:user:42", "cache:user:43"), redi
 | `RedisRoutePropertiesValidator` | `RedisRoutePropertiesValidator` | 增强配置校验 |
 | `RedisRouteTemplate` | `RedisRouteTemplate` | 自定义路由门面 |
 
-不要通过自定义标准 Spring Redis Bean 改变 default-source 接管语义；这会触发启动期冲突校验。
+不要通过自定义 `RedisConnectionFactory` 改变 default-source 接管语义；这会触发所有权冲突校验。自定义模板必须绑定 Route 的 default-source factory。
 
 ## 使用边界
 
 - Route 负责 datasource 路由、连接、Cluster topology 与客户端生命周期；不提供 Redis key 扫描、枚举、cursor、query 或 search 能力。
-- `enable=true` 时 Route 接管 default-source 的标准 Spring Redis Bean；命名 datasource 仍只通过 `RedisRouteTemplate` 使用。
+- `enable=true` 时 Route 独占物理 `RedisConnectionFactory` 并接管 default-source 标准 Spring Redis 入口；命名 datasource 仍只通过 `RedisRouteTemplate` 使用。
+- `spring.redis.url`、`spring.redis.client-type`、Jedis/Jedis pool、Redis Sentinel（包括 Sentinel 认证）、TLS keystore/truststore/custom SSLContext/StartTLS、ClientResources 线程或 DNS 透传、socket TCP 细节、reconnect delay、timeoutOptions、细粒度拓扑触发条件，以及 Pool2 JMX/fairness/lifo/abandoned/validator 等实现参数不属于 Route YAML 契约。需要此类能力时，通过 `RedisConnectionFactoryFactory` 扩展点完成受控实现与验证。
+- `read-from` 不接受已废弃的 `slave` 术语；使用 `replica` 或 `replica-preferred`。
 - `probe.server-info=false` 可用于 Redis 禁用 `INFO` 命令的环境；探测失败不阻断启动，但 Server 信息会标记为未知，能力判断会保守返回不支持。

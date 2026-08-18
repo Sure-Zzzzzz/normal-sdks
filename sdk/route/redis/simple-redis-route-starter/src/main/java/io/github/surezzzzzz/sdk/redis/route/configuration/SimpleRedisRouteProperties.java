@@ -99,6 +99,11 @@ public class SimpleRedisRouteProperties {
         private boolean ssl = false;
 
         /**
+         * SSL 是否校验服务端证书
+         */
+        private boolean sslVerifyPeer = SimpleRedisRouteConstant.DEFAULT_SSL_VERIFY_PEER;
+
+        /**
          * 命令超时时间，毫秒
          */
         private long timeoutMs = SimpleRedisRouteConstant.DEFAULT_TIMEOUT_MS;
@@ -153,17 +158,34 @@ public class SimpleRedisRouteProperties {
         /**
          * 是否启用 Redis Cluster 自适应拓扑刷新
          */
-        private boolean clusterAdaptiveRefresh = true;
+        private boolean clusterAdaptiveRefresh = SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_ADAPTIVE_REFRESH;
 
         /**
          * 是否启用 Redis Cluster 周期性拓扑刷新
          */
-        private boolean clusterPeriodicRefresh = true;
+        private boolean clusterPeriodicRefresh = SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_PERIODIC_REFRESH;
 
         /**
          * Redis Cluster 周期性拓扑刷新间隔，毫秒
          */
         private long clusterRefreshPeriodMs = SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_REFRESH_PERIOD_MS;
+
+        /**
+         * Redis Cluster 拓扑刷新是否使用已发现节点
+         */
+        private boolean clusterDynamicRefreshSources =
+                SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_DYNAMIC_REFRESH_SOURCES;
+
+        /**
+         * Redis Cluster 拓扑变更后是否关闭过期连接
+         */
+        private boolean clusterCloseStaleConnections =
+                SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_CLOSE_STALE_CONNECTIONS;
+
+        /**
+         * Redis Cluster 读偏好
+         */
+        private String readFrom = SimpleRedisRouteConstant.DEFAULT_LETTUCE_READ_FROM;
 
         /**
          * Lettuce 连接池配置
@@ -201,6 +223,12 @@ public class SimpleRedisRouteProperties {
          * 获取连接最大等待时间，毫秒
          */
         private long maxWaitMs = SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_MAX_WAIT_MS;
+
+        /**
+         * 空闲连接驱逐任务间隔，毫秒
+         */
+        private long timeBetweenEvictionRunsMs =
+                SimpleRedisRouteConstant.DEFAULT_LETTUCE_POOL_TIME_BETWEEN_EVICTION_RUNS_MS;
     }
 
     /**

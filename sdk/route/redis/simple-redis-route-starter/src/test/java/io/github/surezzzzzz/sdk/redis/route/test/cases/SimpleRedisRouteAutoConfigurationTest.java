@@ -10,11 +10,14 @@ import io.github.surezzzzzz.sdk.redis.route.test.factory.MockRedisConnectionFact
 import io.github.surezzzzzz.sdk.redis.route.test.factory.MockRedisConnectionFactoryFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.FactoryBean;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -56,6 +59,13 @@ public class SimpleRedisRouteAutoConfigurationTest {
                     RedisAutoConfiguration.class))
             .withUserConfiguration(MockRedisFactoryConfiguration.class)
             .withPropertyValues(ROUTE_PROPERTIES);
+
+    private static <K, V> RedisTemplate<K, V> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<K, V> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+        template.afterPropertiesSet();
+        return template;
+    }
 
     @Test
     public void testRouteEnabledPublishesDefaultSourceAsStandardRedisBeans() {
@@ -113,6 +123,84 @@ public class SimpleRedisRouteAutoConfigurationTest {
     }
 
     @Test
+    public void testHostBusinessTemplatesBoundToRouteFactoryAreAllowed() {
+        routeContextRunner.withUserConfiguration(HostBusinessTemplateConfiguration.class).run(context -> {
+            assertNull(context.getStartupFailure(), "绑定 Route factory 的业务模板不得阻断 default-source 接管");
+            RedisConnectionFactory routeFactory = context.getBean("redisConnectionFactory", RedisConnectionFactory.class);
+            RedisTemplate<?, ?> authorizationTemplate = context.getBean("authorizationRedisTemplate", RedisTemplate.class);
+            RedisTemplate<?, ?> consentTemplate = context.getBean("consentRedisTemplate", RedisTemplate.class);
+            StringRedisTemplate otpTemplate = context.getBean("otpRedisTemplate", StringRedisTemplate.class);
+
+            assertSame(routeFactory, authorizationTemplate.getConnectionFactory(),
+                    "授权模板必须使用 Route default-source factory");
+            assertSame(routeFactory, consentTemplate.getConnectionFactory(),
+                    "授权同意模板必须使用 Route default-source factory");
+            assertSame(routeFactory, otpTemplate.getConnectionFactory(),
+                    "额外 StringRedisTemplate 必须使用 Route default-source factory");
+            assertTrue(context.getBeanFactory().getBeanDefinition("authorizationRedisTemplate").isPrimary(),
+                    "业务模板原有 Primary 语义必须保留");
+        });
+    }
+
+    @Test
+    public void testHostStandardNameTemplatesBoundToRouteFactoryAreAllowed() {
+        routeContextRunner.withUserConfiguration(HostStandardNameTemplateConfiguration.class).run(context -> {
+            assertNull(context.getStartupFailure(), "宿主标准名模板绑定 Route factory 时应允许保留原有语义");
+            RedisConnectionFactory routeFactory = context.getBean("redisConnectionFactory", RedisConnectionFactory.class);
+            RedisTemplate<?, ?> redisTemplate = context.getBean("redisTemplate", RedisTemplate.class);
+            StringRedisTemplate stringRedisTemplate = context.getBean("stringRedisTemplate", StringRedisTemplate.class);
+
+            assertSame(routeFactory, redisTemplate.getConnectionFactory(),
+                    "宿主 redisTemplate 必须绑定 Route default-source factory");
+            assertSame(routeFactory, stringRedisTemplate.getConnectionFactory(),
+                    "宿主 stringRedisTemplate 必须绑定 Route default-source factory");
+            assertTrue(context.getBeanFactory().getBeanDefinition("redisTemplate").isPrimary(),
+                    "宿主 redisTemplate 的 Primary 语义必须保留");
+        });
+    }
+
+    @Test
+    public void testHostConnectionFactoryFailsFastWhenRouteEnabled() {
+        assertFactoryOwnershipConflict(HostRedisConnectionFactoryConfiguration.class, "hostRedisConnectionFactory");
+    }
+
+    @Test
+    public void testHostFactoryBeanFailsFastWhenRouteEnabled() {
+        assertFactoryOwnershipConflict(HostRedisConnectionFactoryFactoryBeanConfiguration.class,
+                "hostRedisConnectionFactory");
+    }
+
+    @Test
+    public void testHostLazyConnectionFactoryFailsFastWhenRouteEnabled() {
+        assertFactoryOwnershipConflict(HostLazyRedisConnectionFactoryConfiguration.class,
+                "hostRedisConnectionFactory");
+    }
+
+    @Test
+    public void testOpaqueLazyFactoryBeanProductFailsAtRuntimeWhenRouteEnabled() {
+        routeContextRunner.withUserConfiguration(HostOpaqueLazyFactoryBeanConfiguration.class).run(context -> {
+            assertNull(context.getStartupFailure(), "无法预判产品类型的延迟 FactoryBean 不应提前实例化");
+            Throwable failure = assertThrows(Throwable.class,
+                    () -> context.getBean("hostRedisConnectionFactory"));
+            ConfigurationException exception = findConfigurationException(failure);
+            assertEquals(ErrorCode.REDIS_ROUTE_015, exception.getErrorCode(),
+                    "运行期创建的独立 RedisConnectionFactory 必须返回 factory 所有权错误码");
+            assertTrue(exception.getMessage().contains("hostRedisConnectionFactory"),
+                    "错误消息必须定位运行期冲突 Bean");
+        });
+    }
+
+    @Test
+    public void testHostTemplateWithIndependentFactoryFailsFastWhenRouteEnabled() {
+        assertTemplateFactoryMismatch(HostIndependentTemplateConfiguration.class, "hostRedisTemplate");
+    }
+
+    @Test
+    public void testHostTemplateWithoutFactoryFailsFastWhenRouteEnabled() {
+        assertTemplateFactoryMismatch(HostTemplateWithoutFactoryConfiguration.class, "hostRedisTemplate");
+    }
+
+    @Test
     public void testRouteDisabledDoesNotPublishRouteOrStandardRedisBeans() {
         new ApplicationContextRunner()
                 .withUserConfiguration(SimpleRedisRouteConfiguration.class)
@@ -128,46 +216,32 @@ public class SimpleRedisRouteAutoConfigurationTest {
                 });
     }
 
-    @Test
-    public void testHostConnectionFactoryFailsFastWhenRouteEnabled() {
-        assertHostStandardRedisBeanConflict(HostRedisConnectionFactoryConfiguration.class);
-    }
-
-    @Test
-    public void testHostStringRedisTemplateFailsFastWhenRouteEnabled() {
-        assertHostStandardRedisBeanConflict(HostStringRedisTemplateConfiguration.class);
-    }
-
-    @Test
-    public void testHostRedisTemplateFailsFastWhenRouteEnabled() {
-        assertHostStandardRedisBeanConflict(HostRedisTemplateConfiguration.class);
-    }
-
-    @Test
-    public void testHostBeanWithStandardNameFailsFastWhenRouteEnabled() {
-        assertHostStandardRedisBeanConflict(HostStandardNameRedisConnectionFactoryConfiguration.class);
-    }
-
-    @Test
-    public void testHostBeanWithRouteFactoryMethodNameFailsFastWhenRouteEnabled() {
-        assertHostStandardRedisBeanConflict(HostRouteFactoryMethodNameRedisConnectionFactoryConfiguration.class);
-    }
-
-    private void assertHostStandardRedisBeanConflict(Class<?> hostConfiguration) {
+    private void assertFactoryOwnershipConflict(Class<?> hostConfiguration, String beanName) {
         routeContextRunner.withUserConfiguration(hostConfiguration).run(context -> {
-            Throwable failure = context.getStartupFailure();
-            assertNotNull(failure, "宿主声明标准 Redis Bean 时必须阻断 Route 默认接管");
-            ConfigurationException exception = findConfigurationException(failure);
-            log.info("验证宿主标准 Redis Bean 冲突，errorCode={}, message={}",
+            ConfigurationException exception = findConfigurationException(context.getStartupFailure());
+            log.info("验证宿主 RedisConnectionFactory 冲突，errorCode={}, message={}",
                     exception.getErrorCode(), exception.getMessage());
             assertEquals(ErrorCode.REDIS_ROUTE_015, exception.getErrorCode(),
-                    "冲突必须返回默认 Bean 接管错误码");
-            assertFalse(exception.getMessage().contains("localhost"),
-                    "冲突消息不得暴露 Redis 连接信息");
+                    "独立 RedisConnectionFactory 必须返回 factory 所有权错误码");
+            assertTrue(exception.getMessage().contains(beanName), "错误消息必须定位冲突 Bean");
+            assertFalse(exception.getMessage().contains("localhost"), "错误消息不得暴露 Redis 连接信息");
+        });
+    }
+
+    private void assertTemplateFactoryMismatch(Class<?> hostConfiguration, String beanName) {
+        routeContextRunner.withUserConfiguration(hostConfiguration).run(context -> {
+            ConfigurationException exception = findConfigurationException(context.getStartupFailure());
+            log.info("验证 RedisTemplate factory 不匹配，errorCode={}, message={}",
+                    exception.getErrorCode(), exception.getMessage());
+            assertEquals(ErrorCode.REDIS_ROUTE_016, exception.getErrorCode(),
+                    "绑定非 Route factory 的模板必须返回模板 factory 错误码");
+            assertTrue(exception.getMessage().contains(beanName), "错误消息必须定位冲突 Bean");
+            assertFalse(exception.getMessage().contains("localhost"), "错误消息不得暴露 Redis 连接信息");
         });
     }
 
     private ConfigurationException findConfigurationException(Throwable failure) {
+        assertNotNull(failure, "冲突场景必须阻断应用启动");
         for (Throwable current = failure; current != null; current = current.getCause()) {
             if (current instanceof ConfigurationException) {
                 return (ConfigurationException) current;
@@ -186,6 +260,41 @@ public class SimpleRedisRouteAutoConfigurationTest {
     }
 
     @Configuration
+    static class HostBusinessTemplateConfiguration {
+
+        @Bean
+        @Primary
+        RedisTemplate<String, String> authorizationRedisTemplate(RedisConnectionFactory connectionFactory) {
+            return redisTemplate(connectionFactory);
+        }
+
+        @Bean
+        RedisTemplate<String, String> consentRedisTemplate(RedisConnectionFactory connectionFactory) {
+            return redisTemplate(connectionFactory);
+        }
+
+        @Bean
+        StringRedisTemplate otpRedisTemplate(RedisConnectionFactory connectionFactory) {
+            return new StringRedisTemplate(connectionFactory);
+        }
+    }
+
+    @Configuration
+    static class HostStandardNameTemplateConfiguration {
+
+        @Bean(name = "redisTemplate")
+        @Primary
+        RedisTemplate<Object, Object> hostRedisTemplate(RedisConnectionFactory connectionFactory) {
+            return redisTemplate(connectionFactory);
+        }
+
+        @Bean(name = "stringRedisTemplate")
+        StringRedisTemplate hostStringRedisTemplate(RedisConnectionFactory connectionFactory) {
+            return new StringRedisTemplate(connectionFactory);
+        }
+    }
+
+    @Configuration
     static class HostRedisConnectionFactoryConfiguration {
 
         @Bean
@@ -195,41 +304,71 @@ public class SimpleRedisRouteAutoConfigurationTest {
     }
 
     @Configuration
-    static class HostStringRedisTemplateConfiguration {
+    static class HostRedisConnectionFactoryFactoryBeanConfiguration {
 
         @Bean
-        StringRedisTemplate hostStringRedisTemplate() {
-            return new StringRedisTemplate(new MockRedisConnectionFactory("host"));
+        FactoryBean<RedisConnectionFactory> hostRedisConnectionFactory() {
+            return new FactoryBean<RedisConnectionFactory>() {
+
+                @Override
+                public RedisConnectionFactory getObject() {
+                    return new MockRedisConnectionFactory("host");
+                }
+
+                @Override
+                public Class<?> getObjectType() {
+                    return RedisConnectionFactory.class;
+                }
+            };
         }
     }
 
     @Configuration
-    static class HostRedisTemplateConfiguration {
+    static class HostLazyRedisConnectionFactoryConfiguration {
 
         @Bean
-        RedisTemplate<Object, Object> hostRedisTemplate() {
-            RedisTemplate<Object, Object> redisTemplate = new RedisTemplate<>();
-            redisTemplate.setConnectionFactory(new MockRedisConnectionFactory("host"));
-            redisTemplate.afterPropertiesSet();
-            return redisTemplate;
-        }
-    }
-
-    @Configuration
-    static class HostStandardNameRedisConnectionFactoryConfiguration {
-
-        @Bean(name = "redisConnectionFactory")
+        @Lazy
         RedisConnectionFactory hostRedisConnectionFactory() {
             return new MockRedisConnectionFactory("host");
         }
     }
 
     @Configuration
-    static class HostRouteFactoryMethodNameRedisConnectionFactoryConfiguration {
+    static class HostOpaqueLazyFactoryBeanConfiguration {
 
         @Bean
-        RedisConnectionFactory redisConnectionFactory() {
-            return new MockRedisConnectionFactory("host");
+        @Lazy
+        FactoryBean<Object> hostRedisConnectionFactory() {
+            return new FactoryBean<Object>() {
+
+                @Override
+                public Object getObject() {
+                    return new MockRedisConnectionFactory("host");
+                }
+
+                @Override
+                public Class<?> getObjectType() {
+                    return null;
+                }
+            };
+        }
+    }
+
+    @Configuration
+    static class HostIndependentTemplateConfiguration {
+
+        @Bean
+        RedisTemplate<Object, Object> hostRedisTemplate() {
+            return redisTemplate(new MockRedisConnectionFactory("host"));
+        }
+    }
+
+    @Configuration
+    static class HostTemplateWithoutFactoryConfiguration {
+
+        @Bean
+        RedisTemplate<Object, Object> hostRedisTemplate() {
+            return new RedisTemplate<>();
         }
     }
 }

@@ -86,7 +86,8 @@ public class RedisRoutePropertiesValidatorTest {
                 .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-active", "32")
                 .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-idle", "16")
                 .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.min-idle", "4")
-                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-wait-ms", "1000"));
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.max-wait-ms", "1000")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.default.lettuce.pool.time-between-eviction-runs-ms", "30000"));
 
         SimpleRedisRouteProperties properties = Binder.get(environment)
                 .bind("io.github.surezzzzzz.sdk.redis.route", SimpleRedisRouteProperties.class)
@@ -98,6 +99,7 @@ public class RedisRoutePropertiesValidatorTest {
         assertEquals(16, pool.getMaxIdle());
         assertEquals(4, pool.getMinIdle());
         assertEquals(1000L, pool.getMaxWaitMs());
+        assertEquals(30000L, pool.getTimeBetweenEvictionRunsMs());
     }
 
     @Test
@@ -135,6 +137,56 @@ public class RedisRoutePropertiesValidatorTest {
             pool.setMinIdle(4);
         });
         assertPoolValidationFailure("max-wait-ms", pool -> pool.setMaxWaitMs(-2L));
+        assertPoolValidationFailure("time-between-eviction-runs-ms", pool -> pool.setTimeBetweenEvictionRunsMs(-2L));
+    }
+
+    @Test
+    public void testLettuceClusterOptionsBindFromKebabCaseProperties() {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().addFirst(new MockPropertySource()
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.mode", "cluster")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.nodes[0]", "localhost:7000")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.ssl-verify-peer", "false")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.lettuce.cluster-dynamic-refresh-sources", "false")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.lettuce.cluster-close-stale-connections", "false")
+                .withProperty("io.github.surezzzzzz.sdk.redis.route.sources.cluster.lettuce.read-from", "replica-preferred"));
+
+        SimpleRedisRouteProperties properties = Binder.get(environment)
+                .bind("io.github.surezzzzzz.sdk.redis.route", SimpleRedisRouteProperties.class)
+                .orElseGet(SimpleRedisRouteProperties::new);
+        SimpleRedisRouteProperties.DataSourceConfig config = properties.getSources().get("cluster");
+
+        assertFalse(config.isSslVerifyPeer());
+        assertFalse(config.getLettuce().isClusterDynamicRefreshSources());
+        assertFalse(config.getLettuce().isClusterCloseStaleConnections());
+        assertEquals("replica-preferred", config.getLettuce().getReadFrom());
+    }
+
+    @Test
+    public void testStandaloneRejectsNonDefaultClusterOptions() {
+        assertStandaloneClusterOptionRejected("read-from", config -> config.getLettuce().setReadFrom("replica"));
+        assertStandaloneClusterOptionRejected("cluster-adaptive-refresh",
+                config -> config.getLettuce().setClusterAdaptiveRefresh(false));
+        assertStandaloneClusterOptionRejected("cluster-periodic-refresh",
+                config -> config.getLettuce().setClusterPeriodicRefresh(false));
+        assertStandaloneClusterOptionRejected("cluster-refresh-period-ms",
+                config -> config.getLettuce().setClusterRefreshPeriodMs(30000L));
+        assertStandaloneClusterOptionRejected("cluster-dynamic-refresh-sources",
+                config -> config.getLettuce().setClusterDynamicRefreshSources(false));
+        assertStandaloneClusterOptionRejected("cluster-close-stale-connections",
+                config -> config.getLettuce().setClusterCloseStaleConnections(false));
+    }
+
+    @Test
+    public void testReadFromMustBeKnownValue() {
+        SimpleRedisRouteProperties properties = baseProperties();
+        properties.getSources().get("default").getLettuce().setReadFrom("slave");
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class, () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("read-from"));
+        assertTrue(exception.getMessage().contains("replica"));
     }
 
     @Test
@@ -277,6 +329,18 @@ public class RedisRoutePropertiesValidatorTest {
 
     private void enablePool(SimpleRedisRouteProperties.DataSourceConfig config) {
         config.getLettuce().getPool().setEnabled(true);
+    }
+
+    private void assertStandaloneClusterOptionRejected(String expectedProperty,
+                                                       Consumer<SimpleRedisRouteProperties.DataSourceConfig> customizer) {
+        SimpleRedisRouteProperties properties = baseProperties();
+        customizer.accept(properties.getSources().get("default"));
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> validator.validate(properties));
+
+        assertEquals(ErrorCode.REDIS_ROUTE_005, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains(expectedProperty));
     }
 
     private void assertPoolValidationFailure(String expectedProperty,

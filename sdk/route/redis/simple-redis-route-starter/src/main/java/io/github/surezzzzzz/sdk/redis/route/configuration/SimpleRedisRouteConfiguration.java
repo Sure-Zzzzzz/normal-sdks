@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import io.github.surezzzzzz.sdk.redis.route.validator.RedisRoutePropertiesValidator;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -51,35 +52,29 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 public class SimpleRedisRouteConfiguration {
 
     /**
-     * 创建标准 Redis Bean 冲突校验器。
+     * 创建 RedisConnectionFactory 所有权校验器。
      *
-     * @return 标准 Redis Bean 冲突校验器
+     * @return RedisConnectionFactory 所有权校验器
      */
     @Bean
-    public static org.springframework.beans.factory.config.BeanFactoryPostProcessor redisRouteStandardBeanConflictValidator() {
-        return SimpleRedisRouteConfiguration::validateStandardRedisBeanConflict;
+    public static org.springframework.beans.factory.config.BeanFactoryPostProcessor redisConnectionFactoryOwnershipValidator() {
+        return SimpleRedisRouteConfiguration::validateRedisConnectionFactoryDefinitions;
     }
 
-    private static void validateStandardRedisBeanConflict(ConfigurableListableBeanFactory beanFactory) {
-        validateStandardRedisBeanConflict(beanFactory, RedisConnectionFactory.class);
-        validateStandardRedisBeanConflict(beanFactory, StringRedisTemplate.class);
-        validateStandardRedisBeanConflict(beanFactory, RedisTemplate.class);
-    }
-
-    private static void validateStandardRedisBeanConflict(ConfigurableListableBeanFactory beanFactory,
-                                                          Class<?> beanType) {
-        String[] beanNames = beanFactory.getBeanNamesForType(beanType, true, false);
+    private static void validateRedisConnectionFactoryDefinitions(ConfigurableListableBeanFactory beanFactory) {
+        String[] beanNames = beanFactory.getBeanNamesForType(RedisConnectionFactory.class, true, false);
         for (String beanName : beanNames) {
-            if (!isRouteStandardRedisBean(beanFactory, beanName)) {
-                throw new ConfigurationException(ErrorCode.REDIS_ROUTE_015, ErrorMessage.STANDARD_REDIS_BEAN_CONFLICT);
+            if (!isRouteRedisConnectionFactoryBean(beanFactory, beanName)) {
+                throw new ConfigurationException(ErrorCode.REDIS_ROUTE_015,
+                        String.format(ErrorMessage.REDIS_CONNECTION_FACTORY_CONFLICT, beanName));
             }
         }
     }
 
-    private static boolean isRouteStandardRedisBean(ConfigurableListableBeanFactory beanFactory, String beanName) {
+    private static boolean isRouteRedisConnectionFactoryBean(ConfigurableListableBeanFactory beanFactory,
+                                                             String beanName) {
         if (!SimpleRedisRouteConstant.REDIS_CONNECTION_FACTORY_BEAN_NAME.equals(beanName)
-                && !SimpleRedisRouteConstant.STRING_REDIS_TEMPLATE_BEAN_NAME.equals(beanName)
-                && !SimpleRedisRouteConstant.REDIS_TEMPLATE_BEAN_NAME.equals(beanName)) {
+                || !beanFactory.containsBeanDefinition(beanName)) {
             return false;
         }
         BeanDefinition beanDefinition = beanFactory.getBeanDefinition(beanName);
@@ -89,6 +84,17 @@ public class SimpleRedisRouteConfiguration {
         MethodMetadata methodMetadata = (MethodMetadata) beanDefinition.getSource();
         return SimpleRedisRouteConfiguration.class.getName().equals(methodMetadata.getDeclaringClassName())
                 && beanName.equals(methodMetadata.getMethodName());
+    }
+
+    /**
+     * 创建 Redis Bean 运行期所有权校验器。
+     *
+     * @param registry Route 数据源注册表
+     * @return Redis Bean 运行期所有权校验器
+     */
+    @Bean
+    public BeanPostProcessor redisRouteBeanOwnershipValidator(SimpleRedisRouteRegistry registry) {
+        return new RedisRouteBeanOwnershipValidator(registry);
     }
 
     /**

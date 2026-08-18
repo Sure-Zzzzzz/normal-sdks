@@ -3,15 +3,18 @@ package io.github.surezzzzzz.sdk.redis.route.factory;
 import io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteProperties;
 import io.github.surezzzzzz.sdk.redis.route.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.redis.route.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.redis.route.constant.RedisReadFrom;
 import io.github.surezzzzzz.sdk.redis.route.constant.RedisSourceMode;
 import io.github.surezzzzzz.sdk.redis.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisConfigurationCompatibilityHelper;
+import io.lettuce.core.ReadFrom;
 import io.lettuce.core.resource.ClientResources;
 import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration.LettuceSslClientConfigurationBuilder;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.util.ReflectionUtils;
@@ -44,6 +47,8 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private static final String METHOD_REFRESH_PERIOD = "refreshPeriod";
     private static final String METHOD_DISCONNECTED_BEHAVIOR = "disconnectedBehavior";
     private static final String METHOD_CLIENT_OPTIONS = "clientOptions";
+    private static final String METHOD_DYNAMIC_REFRESH_SOURCES = "dynamicRefreshSources";
+    private static final String METHOD_CLOSE_STALE_CONNECTIONS = "closeStaleConnections";
 
     private static final String DISCONNECTED_BEHAVIOR_REJECT_COMMANDS = "REJECT_COMMANDS";
     private static final String DISCONNECTED_BEHAVIOR_DEFAULT = "DEFAULT";
@@ -149,7 +154,13 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
         builder.commandTimeout(Duration.ofMillis(config.getTimeoutMs()))
                 .shutdownTimeout(Duration.ofMillis(config.getLettuce().getShutdownTimeoutMs()));
         if (config.isSsl()) {
-            builder.useSsl();
+            LettuceSslClientConfigurationBuilder sslBuilder = builder.useSsl();
+            if (!config.isSslVerifyPeer()) {
+                sslBuilder.disablePeerVerification();
+            }
+        }
+        if (mode == RedisSourceMode.CLUSTER) {
+            builder.readFrom(resolveReadFrom(config.getLettuce().getReadFrom()));
         }
         if (clientResources != null) {
             applyClientResources(builder, clientResources);
@@ -165,7 +176,31 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
         poolConfiguration.setMaxIdle(pool.getMaxIdle());
         poolConfiguration.setMinIdle(pool.getMinIdle());
         poolConfiguration.setMaxWaitMillis(pool.getMaxWaitMs());
+        poolConfiguration.setTimeBetweenEvictionRunsMillis(pool.getTimeBetweenEvictionRunsMs());
         return poolConfiguration;
+    }
+
+    private ReadFrom resolveReadFrom(String readFromCode) {
+        RedisReadFrom readFrom = RedisReadFrom.fromCode(readFromCode);
+        if (readFrom == null) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006, ErrorMessage.LETTUCE_READ_FROM_UNSUPPORTED);
+        }
+        switch (readFrom) {
+            case MASTER:
+                return ReadFrom.MASTER;
+            case MASTER_PREFERRED:
+                return ReadFrom.MASTER_PREFERRED;
+            case REPLICA:
+                return ReadFrom.REPLICA;
+            case REPLICA_PREFERRED:
+                return ReadFrom.REPLICA_PREFERRED;
+            case NEAREST:
+                return ReadFrom.NEAREST;
+            case ANY:
+                return ReadFrom.ANY;
+            default:
+                throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006, ErrorMessage.LETTUCE_READ_FROM_UNSUPPORTED);
+        }
     }
 
     private ClientResources createClientResources(SimpleRedisRouteProperties.DataSourceConfig config,
@@ -201,15 +236,14 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private void applyClientOptions(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
                                     SimpleRedisRouteProperties.DataSourceConfig config,
                                     RedisSourceMode mode) {
-        // Lettuce 5.x / 6.x 的构建器 API 有差异，生产安全默认值通过反射按可用方法设置。
         try {
             Object socketOptions = createSocketOptions(config.getConnectTimeoutMs());
             Object clientOptions = mode == RedisSourceMode.CLUSTER
                     ? createClusterClientOptions(config, socketOptions)
                     : createClientOptions(config, socketOptions);
             applyClientOptions(builder, clientOptions);
-        } catch (Exception ignored) {
-            // 低版本 Lettuce API 差异时保留 command timeout，由连接阶段暴露真实问题。
+        } catch (Exception e) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006, ErrorMessage.LETTUCE_CLIENT_OPTIONS_UNSUPPORTED, e);
         }
     }
 
@@ -250,6 +284,10 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private Object createClusterTopologyRefreshOptions(SimpleRedisRouteProperties.DataSourceConfig config) throws Exception {
         Class<?> refreshOptionsClass = Class.forName(LETTUCE_CLUSTER_TOPOLOGY_REFRESH_OPTIONS_CLASS);
         Object refreshBuilder = invokeStatic(refreshOptionsClass, METHOD_BUILDER);
+        invoke(refreshBuilder, METHOD_DYNAMIC_REFRESH_SOURCES,
+                config.getLettuce().isClusterDynamicRefreshSources());
+        invoke(refreshBuilder, METHOD_CLOSE_STALE_CONNECTIONS,
+                config.getLettuce().isClusterCloseStaleConnections());
         if (config.getLettuce().isClusterAdaptiveRefresh()) {
             invokeIfPresent(refreshBuilder, METHOD_ENABLE_ALL_ADAPTIVE_REFRESH_TRIGGERS);
         }
@@ -273,10 +311,11 @@ public class DefaultRedisConnectionFactoryFactory implements RedisConnectionFact
     private void applyClientOptions(LettuceClientConfiguration.LettuceClientConfigurationBuilder builder,
                                     Object clientOptions) {
         Method method = findCompatibleMethod(builder.getClass(), METHOD_CLIENT_OPTIONS, new Object[]{clientOptions});
-        if (method != null) {
-            ReflectionUtils.makeAccessible(method);
-            ReflectionUtils.invokeMethod(method, builder, clientOptions);
+        if (method == null) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_006, ErrorMessage.LETTUCE_CLIENT_OPTIONS_UNSUPPORTED);
         }
+        ReflectionUtils.makeAccessible(method);
+        ReflectionUtils.invokeMethod(method, builder, clientOptions);
     }
 
     private Object invokeStatic(Class<?> type, String methodName) throws Exception {

@@ -1,10 +1,7 @@
 package io.github.surezzzzzz.sdk.redis.route.validator;
 
 import io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteProperties;
-import io.github.surezzzzzz.sdk.redis.route.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.redis.route.constant.ErrorMessage;
-import io.github.surezzzzzz.sdk.redis.route.constant.RedisSourceMode;
-import io.github.surezzzzzz.sdk.redis.route.constant.RouteMatchType;
+import io.github.surezzzzzz.sdk.redis.route.constant.*;
 import io.github.surezzzzzz.sdk.redis.route.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.redis.route.matcher.RedisRoutePatternMatcher;
 import io.github.surezzzzzz.sdk.redis.route.support.RedisRouteStringHelper;
@@ -76,6 +73,7 @@ public class RedisRoutePropertiesValidator {
             validateCluster(datasourceKey, config);
         }
         validateClusterTopologyAddressFollowNodes(datasourceKey, config, mode);
+        validateLettuceClusterOptions(datasourceKey, config, mode);
     }
 
     private void validateCommonSource(String datasourceKey, SimpleRedisRouteProperties.DataSourceConfig config) {
@@ -128,6 +126,48 @@ public class RedisRoutePropertiesValidator {
             throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
                     String.format(ErrorMessage.CONFIG_LETTUCE_POOL_MAX_WAIT_INVALID,
                             datasourceKey, pool.getMaxWaitMs()));
+        }
+        if (pool.getTimeBetweenEvictionRunsMs() < -1L) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_POOL_EVICTION_PERIOD_INVALID,
+                            datasourceKey, pool.getTimeBetweenEvictionRunsMs()));
+        }
+    }
+
+    private void validateLettuceClusterOptions(String datasourceKey,
+                                               SimpleRedisRouteProperties.DataSourceConfig config,
+                                               RedisSourceMode mode) {
+        SimpleRedisRouteProperties.LettuceConfig lettuce = config.getLettuce();
+        RedisReadFrom readFrom = RedisReadFrom.fromCode(lettuce.getReadFrom());
+        if (readFrom == null) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_READ_FROM_INVALID,
+                            datasourceKey, lettuce.getReadFrom(), join(RedisReadFrom.getAllCodes())));
+        }
+        if (mode == RedisSourceMode.CLUSTER) {
+            return;
+        }
+        validateStandaloneClusterOption(datasourceKey, "read-from",
+                RedisReadFrom.MASTER.getCode().equals(readFrom.getCode()));
+        validateStandaloneClusterOption(datasourceKey, "cluster-adaptive-refresh",
+                lettuce.isClusterAdaptiveRefresh() == SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_ADAPTIVE_REFRESH);
+        validateStandaloneClusterOption(datasourceKey, "cluster-periodic-refresh",
+                lettuce.isClusterPeriodicRefresh() == SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_PERIODIC_REFRESH);
+        validateStandaloneClusterOption(datasourceKey, "cluster-refresh-period-ms",
+                lettuce.getClusterRefreshPeriodMs()
+                        == SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_REFRESH_PERIOD_MS);
+        validateStandaloneClusterOption(datasourceKey, "cluster-dynamic-refresh-sources",
+                lettuce.isClusterDynamicRefreshSources()
+                        == SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_DYNAMIC_REFRESH_SOURCES);
+        validateStandaloneClusterOption(datasourceKey, "cluster-close-stale-connections",
+                lettuce.isClusterCloseStaleConnections()
+                        == SimpleRedisRouteConstant.DEFAULT_LETTUCE_CLUSTER_CLOSE_STALE_CONNECTIONS);
+    }
+
+    private void validateStandaloneClusterOption(String datasourceKey, String property, boolean defaultValue) {
+        if (!defaultValue) {
+            throw new ConfigurationException(ErrorCode.REDIS_ROUTE_005,
+                    String.format(ErrorMessage.CONFIG_LETTUCE_CLUSTER_OPTION_STANDALONE, datasourceKey, property));
         }
     }
 

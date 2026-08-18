@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.redis.route.test.cases;
 import io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteProperties;
 import io.github.surezzzzzz.sdk.redis.route.constant.RedisSourceMode;
 import io.github.surezzzzzz.sdk.redis.route.factory.DefaultRedisConnectionFactoryFactory;
+import io.lettuce.core.ReadFrom;
 import io.lettuce.core.RedisURI;
 import io.lettuce.core.resource.ClientResources;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +59,9 @@ public class DefaultRedisConnectionFactoryFactoryTest {
         assertNotNull(topologyRefreshOptions);
         assertEquals(Boolean.TRUE, invoke(topologyRefreshOptions, "isPeriodicRefreshEnabled"));
         assertEquals(Duration.ofMillis(45000L), invoke(topologyRefreshOptions, "getRefreshPeriod"));
+        assertEquals(Boolean.TRUE, invoke(topologyRefreshOptions, "useDynamicRefreshSources"));
+        assertEquals(Boolean.TRUE, invoke(topologyRefreshOptions, "isCloseStaleConnections"));
+        assertSame(ReadFrom.MASTER, clientConfiguration.getReadFrom().orElse(null));
     }
 
     @Test
@@ -207,9 +211,23 @@ public class DefaultRedisConnectionFactoryFactoryTest {
         assertEquals(16, pooledConfiguration.getPoolConfig().getMaxIdle());
         assertEquals(4, pooledConfiguration.getPoolConfig().getMinIdle());
         assertEquals(1000L, pooledConfiguration.getPoolConfig().getMaxWaitMillis());
+        assertEquals(-1L, pooledConfiguration.getPoolConfig().getTimeBetweenEvictionRunsMillis());
         assertEquals(Duration.ofMillis(config.getTimeoutMs()), pooledConfiguration.getCommandTimeout());
         assertEquals(Duration.ofMillis(config.getLettuce().getShutdownTimeoutMs()),
                 pooledConfiguration.getShutdownTimeout());
+    }
+
+    @Test
+    public void testPooledStandaloneClientConfigurationMapsEvictionPeriod() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        configurePool(config, 32, 16, 4, 1000L);
+        config.getLettuce().getPool().setTimeBetweenEvictionRunsMs(30000L);
+
+        LettucePoolingClientConfiguration clientConfiguration =
+                (LettucePoolingClientConfiguration) createClientConfiguration(config, RedisSourceMode.STANDALONE);
+
+        log.info("连接池空闲驱逐间隔={}", clientConfiguration.getPoolConfig().getTimeBetweenEvictionRunsMillis());
+        assertEquals(30000L, clientConfiguration.getPoolConfig().getTimeBetweenEvictionRunsMillis());
     }
 
     @Test
@@ -238,6 +256,46 @@ public class DefaultRedisConnectionFactoryFactoryTest {
     }
 
     @Test
+    public void testClusterClientConfigurationMapsReadAndRefreshOptions() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        config.setMode(RedisSourceMode.CLUSTER.getCode());
+        config.setNodes(Arrays.asList("localhost:7000", "localhost:7001", "localhost:7002"));
+        config.getLettuce().setReadFrom("replica-preferred");
+        config.getLettuce().setClusterDynamicRefreshSources(false);
+        config.getLettuce().setClusterCloseStaleConnections(false);
+
+        LettuceClientConfiguration clientConfiguration = createClientConfiguration(config, RedisSourceMode.CLUSTER);
+        Object clientOptions = clientConfiguration.getClientOptions().orElse(null);
+        Object topologyRefreshOptions = invoke(clientOptions, "getTopologyRefreshOptions");
+
+        log.info("Cluster readFrom={}，dynamicRefreshSources={}，closeStaleConnections={}",
+                clientConfiguration.getReadFrom().orElse(null),
+                invoke(topologyRefreshOptions, "useDynamicRefreshSources"),
+                invoke(topologyRefreshOptions, "isCloseStaleConnections"));
+        assertSame(ReadFrom.REPLICA_PREFERRED, clientConfiguration.getReadFrom().orElse(null));
+        assertEquals(Boolean.FALSE, invoke(topologyRefreshOptions, "useDynamicRefreshSources"));
+        assertEquals(Boolean.FALSE, invoke(topologyRefreshOptions, "isCloseStaleConnections"));
+    }
+
+    @Test
+    public void testSslClientConfigurationKeepsPeerVerificationDefaultAndCanDisableIt() {
+        SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
+        config.setSsl(true);
+
+        LettuceClientConfiguration defaultClientConfiguration = createClientConfiguration(config, RedisSourceMode.STANDALONE);
+
+        assertTrue(defaultClientConfiguration.isUseSsl());
+        assertTrue(defaultClientConfiguration.isVerifyPeer());
+
+        config.setSslVerifyPeer(false);
+        LettuceClientConfiguration disabledClientConfiguration = createClientConfiguration(config, RedisSourceMode.STANDALONE);
+
+        log.info("SSL peerVerification 默认值={}，显式关闭后={}", defaultClientConfiguration.isVerifyPeer(),
+                disabledClientConfiguration.isVerifyPeer());
+        assertFalse(disabledClientConfiguration.isVerifyPeer());
+    }
+
+    @Test
     public void testLettuceProductionSafetyDefaults() {
         SimpleRedisRouteProperties.DataSourceConfig config = new SimpleRedisRouteProperties.DataSourceConfig();
         log.info("Lettuce 默认配置：自动重连={}，拒绝断连命令={}，队列上限={}",
@@ -250,11 +308,16 @@ public class DefaultRedisConnectionFactoryFactoryTest {
         assertTrue(config.getLettuce().isClusterAdaptiveRefresh());
         assertTrue(config.getLettuce().isClusterPeriodicRefresh());
         assertEquals(60000L, config.getLettuce().getClusterRefreshPeriodMs());
+        assertTrue(config.getLettuce().isClusterDynamicRefreshSources());
+        assertTrue(config.getLettuce().isClusterCloseStaleConnections());
+        assertEquals("master", config.getLettuce().getReadFrom());
+        assertTrue(config.isSslVerifyPeer());
         assertFalse(config.getLettuce().getPool().isEnabled());
         assertEquals(8, config.getLettuce().getPool().getMaxActive());
         assertEquals(8, config.getLettuce().getPool().getMaxIdle());
         assertEquals(0, config.getLettuce().getPool().getMinIdle());
         assertEquals(-1L, config.getLettuce().getPool().getMaxWaitMs());
+        assertEquals(-1L, config.getLettuce().getPool().getTimeBetweenEvictionRunsMs());
     }
 
     private void configurePool(SimpleRedisRouteProperties.DataSourceConfig config,

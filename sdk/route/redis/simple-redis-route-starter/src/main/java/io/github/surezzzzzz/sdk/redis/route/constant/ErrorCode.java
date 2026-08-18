@@ -39,9 +39,14 @@ public final class ErrorCode {
     public static final String REDIS_ROUTE_014 = "REDIS_ROUTE_014";
 
     /**
-     * Spring Redis 默认 Bean 冲突
+     * Spring Redis 连接工厂所有权冲突
      */
     public static final String REDIS_ROUTE_015 = "REDIS_ROUTE_015";
+
+    /**
+     * Spring Redis 模板未绑定 Route 默认连接工厂
+     */
+    public static final String REDIS_ROUTE_016 = "REDIS_ROUTE_016";
 
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class");

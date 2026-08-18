@@ -27,6 +27,13 @@ public final class SimpleRedisRouteConstant {
     public static final int DEFAULT_LETTUCE_POOL_MAX_IDLE = 8;
     public static final int DEFAULT_LETTUCE_POOL_MIN_IDLE = 0;
     public static final long DEFAULT_LETTUCE_POOL_MAX_WAIT_MS = -1L;
+    public static final long DEFAULT_LETTUCE_POOL_TIME_BETWEEN_EVICTION_RUNS_MS = -1L;
+    public static final boolean DEFAULT_SSL_VERIFY_PEER = true;
+    public static final boolean DEFAULT_LETTUCE_CLUSTER_ADAPTIVE_REFRESH = true;
+    public static final boolean DEFAULT_LETTUCE_CLUSTER_PERIODIC_REFRESH = true;
+    public static final boolean DEFAULT_LETTUCE_CLUSTER_DYNAMIC_REFRESH_SOURCES = true;
+    public static final boolean DEFAULT_LETTUCE_CLUSTER_CLOSE_STALE_CONNECTIONS = true;
+    public static final String DEFAULT_LETTUCE_READ_FROM = RedisReadFrom.MASTER.getCode();
 
     /**
      * 默认是否探测 Redis Server 信息
