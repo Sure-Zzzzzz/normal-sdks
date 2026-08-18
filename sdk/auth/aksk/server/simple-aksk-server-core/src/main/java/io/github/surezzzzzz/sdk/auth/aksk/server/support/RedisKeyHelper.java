@@ -19,38 +19,33 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RedisKeyHelper {
 
-    private final SimpleAkskServerProperties properties;
-
-    // ==================== 公共常量 ====================
-
     /**
      * Redis Key前缀模板: sure-auth-aksk:{me}:
      */
     public static final String REDIS_KEY_PREFIX_TEMPLATE = "sure-auth-aksk:%s:";
 
+    // ==================== 公共常量 ====================
     /**
      * OAuth2 Authorization缓存名称（按ID索引）
      */
     public static final String CACHE_OAUTH2_AUTHORIZATION = "oauth2:authorization";
-
     /**
      * OAuth2 Authorization缓存名称（按Token索引）
      */
     public static final String CACHE_OAUTH2_AUTHORIZATION_TOKEN = "oauth2:authorization:token";
-
     /**
      * OAuth2 Registered Client Entity 缓存名称（按 clientId 索引）
      */
     public static final String CACHE_OAUTH2_CLIENT_ENTITY = "oauth2:client:entity";
+    private static final String SEPARATOR_DOUBLE_COLON = "::";
 
     // ==================== 私有常量 ====================
-
-    private static final String SEPARATOR_DOUBLE_COLON = "::";
     private static final String SEPARATOR_COLON = ":";
     private static final String WILDCARD = "*";
     private static final String BRACE_PREFIX = "{";
     private static final String BRACE_SUFFIX = "}";
     private static final String STRING_NULL = "null";
+    private final SimpleAkskServerProperties properties;
 
     // ==================== 公共方法 ====================
 

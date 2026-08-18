@@ -38,11 +38,6 @@ public enum TokenEventType {
         this.description = description;
     }
 
-    @Override
-    public String toString() {
-        return code;
-    }
-
     /**
      * 根据 code 获取枚举
      *
@@ -83,5 +78,10 @@ public enum TokenEventType {
             codes[i] = types[i].code;
         }
         return codes;
+    }
+
+    @Override
+    public String toString() {
+        return code;
     }
 }

@@ -38,11 +38,6 @@ public class SimpleAkskServerProperties {
     private AdminConfig admin = new AdminConfig();
 
     /**
-     * Introspect 端点配置
-     */
-    private IntrospectConfig introspect = new IntrospectConfig();
-
-    /**
      * 限流配置
      */
     private LimiterConfig limiter = new LimiterConfig();
@@ -92,19 +87,6 @@ public class SimpleAkskServerProperties {
         private String password;
 
         private Integer sessionTimeoutMinutes = 30;
-    }
-
-    @Data
-    public static class IntrospectConfig {
-
-        /**
-         * introspect 端点是否需要客户端认证，默认 true。
-         *
-         * <p><b>安全警告</b>：设置为 false 时，任何人无需认证即可查询任意 token 的状态，
-         * 会暴露 token 信息（clientId、scope、user_id 等）。
-         * 仅在网络隔离的内网/测试环境中使用，<b>生产环境请保持默认值 true</b>。
-         */
-        private boolean requireAuthentication = true;
     }
 
     @Data

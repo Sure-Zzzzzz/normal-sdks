@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.core.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.core.test.SimpleAkskServerCoreTestApplication;
@@ -12,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Simple AKSK Server Properties Test
+ * Simple AKSK Server 配置测试
  *
  * @author surezzzzzz
  */
@@ -46,6 +47,52 @@ class SimpleAkskServerPropertiesTest {
         assertFalse(hasMethod(SimpleAkskServerProperties.RedisConfig.class, "setEnabled", Boolean.class));
     }
 
+    @Test
+    void shouldExposeManagementAuthorizationContracts() {
+        assertEquals(JwtClaimConstant.APPLICATION_AUTHORIZATION,
+                SimpleAkskServerConstant.JWT_CLAIM_APPLICATION_AUTHORIZATION);
+        assertEquals("aksk-server", SimpleAkskServerConstant.MANAGEMENT_APPLICATION_CODE);
+
+        assertEquals("akskClient", SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT);
+        assertEquals("akskToken", SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN);
+        assertEquals("akskApplicationAuthorization",
+                SimpleAkskServerConstant.MANAGEMENT_RESOURCE_APPLICATION_AUTHORIZATION);
+
+        assertEquals("create", SimpleAkskServerConstant.MANAGEMENT_ACTION_CREATE);
+        assertEquals("read", SimpleAkskServerConstant.MANAGEMENT_ACTION_READ);
+        assertEquals("update", SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE);
+        assertEquals("delete", SimpleAkskServerConstant.MANAGEMENT_ACTION_DELETE);
+        assertEquals("revoke", SimpleAkskServerConstant.MANAGEMENT_ACTION_REVOKE);
+
+        assertEquals("akskApplicationAuthorization:create",
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_APPLICATION_AUTHORIZATION_CREATE);
+        assertEquals("akskApplicationAuthorization:read",
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_APPLICATION_AUTHORIZATION_READ);
+        assertEquals("akskApplicationAuthorization:update",
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_APPLICATION_AUTHORIZATION_UPDATE);
+        assertEquals("akskApplicationAuthorization:revoke",
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_APPLICATION_AUTHORIZATION_REVOKE);
+        assertEquals("akskClient:create", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_CREATE);
+        assertEquals("akskClient:read", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_READ);
+        assertEquals("akskClient:update", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_UPDATE);
+        assertEquals("akskClient:delete", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_DELETE);
+        assertEquals("akskToken:read", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_READ);
+        assertEquals("akskToken:update", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE);
+        assertEquals("akskToken:delete", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_DELETE);
+
+        assertEquals("applicationCode", SimpleAkskServerConstant.MANAGEMENT_DIMENSION_APPLICATION_CODE);
+        assertEquals("clientId", SimpleAkskServerConstant.MANAGEMENT_DIMENSION_CLIENT_ID);
+        assertEquals("clientType", SimpleAkskServerConstant.MANAGEMENT_DIMENSION_CLIENT_TYPE);
+        assertEquals("ownerUserId", SimpleAkskServerConstant.MANAGEMENT_DIMENSION_OWNER_USER_ID);
+        assertEquals("tokenId", SimpleAkskServerConstant.MANAGEMENT_DIMENSION_TOKEN_ID);
+    }
+
+    @Test
+    void shouldNotExposeAnonymousIntrospectConfiguration() {
+        assertFalse(hasMethod(SimpleAkskServerProperties.class, "getIntrospect"));
+        assertFalse(hasNestedClass(SimpleAkskServerProperties.class, "IntrospectConfig"));
+    }
+
     private void assertEndpointConfig(SimpleAkskServerProperties.LimiterConfig.EndpointLimitConfig config,
                                       String fallback, Integer count) {
         assertNotNull(config);
@@ -65,5 +112,14 @@ class SimpleAkskServerPropertiesTest {
         } catch (NoSuchMethodException ex) {
             return false;
         }
+    }
+
+    private boolean hasNestedClass(Class<?> type, String simpleName) {
+        for (Class<?> nestedClass : type.getDeclaredClasses()) {
+            if (simpleName.equals(nestedClass.getSimpleName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
