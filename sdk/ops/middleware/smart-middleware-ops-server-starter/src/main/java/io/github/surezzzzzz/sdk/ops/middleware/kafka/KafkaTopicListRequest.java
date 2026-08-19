@@ -19,6 +19,10 @@ public class KafkaTopicListRequest implements MiddlewareOpsRequest {
      */
     private final String datasourceKey;
     /**
+     * 字面量名称前缀。
+     */
+    private final String prefix;
+    /**
      * 结果数量。
      */
     private final int size;

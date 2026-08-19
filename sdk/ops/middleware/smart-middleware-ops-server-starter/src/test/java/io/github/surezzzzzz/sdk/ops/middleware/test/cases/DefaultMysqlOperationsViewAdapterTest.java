@@ -2,10 +2,7 @@ package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
 import io.github.surezzzzzz.sdk.mysql.route.registry.SimpleMysqlRouteRegistry;
 import io.github.surezzzzzz.sdk.mysql.route.template.MySqlRouteTemplate;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.DefaultMysqlOperationsViewAdapter;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlDatasourceStatusResponse;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -138,6 +135,7 @@ class DefaultMysqlOperationsViewAdapterTest {
         PreparedStatement statement = configuredStatement(fixture.jdbcTemplate);
         verify(statement).setQueryTimeout(2);
         verify(statement).setMaxRows(2);
+        verifySelectSql(fixture.jdbcTemplate, "SELECT id, name FROM orders LIMIT 2");
     }
 
     @Test
@@ -203,6 +201,136 @@ class DefaultMysqlOperationsViewAdapterTest {
         assertTrue(response.getTruncated());
     }
 
+    @Test
+    void shouldListTablesWithCurrentDatabaseBoundedPrefixAndResultLimit() throws Exception {
+        Fixture fixture = fixture(1000L, 4, 32, 128);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.next()).thenReturn(true, true, true);
+        when(resultSet.getString(1)).thenReturn("orders", "orders_archive", "payments");
+        when(resultSet.getString(2)).thenReturn("BASE TABLE");
+        when(resultSet.getString(3)).thenReturn("InnoDB");
+        when(resultSet.getObject(4)).thenReturn(12L);
+        stubSelectQuery(fixture.jdbcTemplate, resultSet);
+
+        MysqlTableListResponse response = fixture.adapter.listTables(MysqlTableListRequest.builder()
+                .datasourceKey("orders-reader").prefix("orders").size(2).build());
+
+        assertEquals(2, response.getItems().size());
+        assertEquals(2, response.getReturned());
+        assertTrue(response.getTruncated());
+        assertFalse(response.getTraversalComplete());
+        assertEquals("RESULT_LIMIT", response.getStopReason());
+        verify(fixture.routeTemplate).executeOn(eq("orders-reader"), any(Supplier.class));
+
+        PreparedStatement statement = configuredStatement(fixture.jdbcTemplate);
+        verify(statement).setString(1, "orders");
+        verify(statement).setString(2, "orders");
+        verify(statement).setString(3, "orders");
+        verify(statement).setInt(4, 3);
+        verify(statement).setMaxRows(3);
+    }
+
+    @Test
+    void shouldMarkTableListTruncatedWhenResponseBudgetStopsTraversal() throws Exception {
+        Fixture fixture = fixture(1000L, 4, 32, 5);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.next()).thenReturn(true);
+        when(resultSet.getString(1)).thenReturn("orders");
+        when(resultSet.getString(2)).thenReturn("BASE TABLE");
+        when(resultSet.getString(3)).thenReturn("InnoDB");
+        when(resultSet.getObject(4)).thenReturn(1L);
+        stubSelectQuery(fixture.jdbcTemplate, resultSet);
+
+        MysqlTableListResponse response = fixture.adapter.listTables(MysqlTableListRequest.builder()
+                .datasourceKey("orders-reader").prefix(null).size(2).build());
+
+        assertTrue(response.getItems().isEmpty());
+        assertTrue(response.getTruncated());
+        assertFalse(response.getTraversalComplete());
+        assertEquals("RESPONSE_LIMIT", response.getStopReason());
+    }
+
+    @Test
+    void shouldProjectColumnAndIndexMetadataWithoutDefaultValue() throws Exception {
+        Fixture columnFixture = fixture(1000L, 4, 32, 128);
+        ResultSet columnResultSet = mock(ResultSet.class);
+        when(columnResultSet.next()).thenReturn(true, false);
+        when(columnResultSet.getString(1)).thenReturn("id");
+        when(columnResultSet.getInt(2)).thenReturn(1);
+        when(columnResultSet.getString(3)).thenReturn("bigint");
+        when(columnResultSet.getString(4)).thenReturn("bigint unsigned");
+        when(columnResultSet.getString(5)).thenReturn("NO");
+        when(columnResultSet.getObject(6)).thenReturn(42);
+        when(columnResultSet.getString(7)).thenReturn("PRI");
+        when(columnResultSet.getString(8)).thenReturn("auto_increment");
+        stubSelectQuery(columnFixture.jdbcTemplate, columnResultSet);
+
+        MysqlTableColumnsResponse columns = columnFixture.adapter.listTableColumns(MysqlTableColumnsRequest.builder()
+                .datasourceKey("orders-reader").table("orders").build());
+
+        assertEquals(1, columns.getItems().size());
+        assertTrue(columns.getItems().get(0).getDefaultPresent());
+        PreparedStatement columnStatement = configuredStatement(columnFixture.jdbcTemplate);
+        verify(columnStatement).setString(1, "orders");
+        verify(columnStatement).setMaxRows(5);
+
+        Fixture indexFixture = fixture(1000L, 4, 32, 128);
+        ResultSet indexResultSet = mock(ResultSet.class);
+        when(indexResultSet.next()).thenReturn(true, false);
+        when(indexResultSet.getString(1)).thenReturn("PRIMARY");
+        when(indexResultSet.getBoolean(2)).thenReturn(false);
+        when(indexResultSet.getString(3)).thenReturn("BTREE");
+        when(indexResultSet.getString(4)).thenReturn("id");
+        stubSelectQuery(indexFixture.jdbcTemplate, indexResultSet);
+
+        MysqlTableIndexesResponse indexes = indexFixture.adapter.listTableIndexes(MysqlTableIndexesRequest.builder()
+                .datasourceKey("orders-reader").table("orders").build());
+
+        assertEquals(1, indexes.getItems().size());
+        assertTrue(indexes.getItems().get(0).getUnique());
+        assertNull(indexes.getItems().get(0).getVisible());
+        assertEquals(Arrays.asList("id"), indexes.getItems().get(0).getColumns());
+        PreparedStatement indexStatement = configuredStatement(indexFixture.jdbcTemplate);
+        verify(indexStatement).setString(1, "orders");
+        verify(indexStatement).setMaxRows(17);
+    }
+
+    @Test
+    void shouldExecuteServerControlledExplainInsideRouteScope() throws Exception {
+        Fixture fixture = fixture(1000L, 4, 32, 128);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.next()).thenReturn(true, false);
+        when(resultSet.getString("select_type")).thenReturn("SIMPLE");
+        when(resultSet.getString("table")).thenReturn("orders");
+        when(resultSet.getString("type")).thenReturn("ref");
+        when(resultSet.getString("possible_keys")).thenReturn("idx_state");
+        when(resultSet.getString("key")).thenReturn("idx_state");
+        when(resultSet.getString("key_len")).thenReturn("4");
+        when(resultSet.getString("ref")).thenReturn("const");
+        when(resultSet.getObject("rows")).thenReturn(3L);
+        when(resultSet.getObject("filtered")).thenReturn(100.0D);
+        when(resultSet.getString("Extra")).thenReturn("Using where");
+        stubSelectQuery(fixture.jdbcTemplate, resultSet);
+
+        MysqlExplainResponse response = fixture.adapter.explain(MysqlExplainRequest.builder()
+                .datasourceKey("orders-reader").sql("SELECT id FROM orders WHERE state = 'NEW'").build());
+
+        assertEquals(1, response.getItems().size());
+        assertEquals("orders", response.getItems().get(0).getTable());
+        assertEquals("Using where", response.getItems().get(0).getExtra());
+        assertFalse(response.getTruncated());
+        verify(fixture.routeTemplate).executeOn(eq("orders-reader"), any(Supplier.class));
+
+        ArgumentCaptor<PreparedStatementCreator> creatorCaptor = ArgumentCaptor.forClass(PreparedStatementCreator.class);
+        verify(fixture.jdbcTemplate).query(creatorCaptor.capture(), any(ResultSetExtractor.class));
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(connection.prepareStatement("EXPLAIN SELECT id FROM orders WHERE state = 'NEW'")).thenReturn(statement);
+        creatorCaptor.getValue().createPreparedStatement(connection);
+        verify(connection).prepareStatement("EXPLAIN SELECT id FROM orders WHERE state = 'NEW'");
+        verify(statement).setMaxRows(5);
+    }
+
     private Fixture fixture(long deadlineMillis, int maxColumns, int maxCellLength, int maxResponseLength) {
         SimpleMysqlRouteRegistry registry = mock(SimpleMysqlRouteRegistry.class);
         when(registry.containsDatasource("orders-reader")).thenReturn(true);
@@ -237,6 +365,16 @@ class DefaultMysqlOperationsViewAdapterTest {
         when(connection.prepareStatement(any(String.class))).thenReturn(statement);
         creatorCaptor.getValue().createPreparedStatement(connection);
         return statement;
+    }
+
+    private void verifySelectSql(JdbcTemplate jdbcTemplate, String expectedSql) throws Exception {
+        ArgumentCaptor<PreparedStatementCreator> creatorCaptor = ArgumentCaptor.forClass(PreparedStatementCreator.class);
+        verify(jdbcTemplate).query(creatorCaptor.capture(), any(ResultSetExtractor.class));
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        when(connection.prepareStatement(expectedSql)).thenReturn(statement);
+        creatorCaptor.getValue().createPreparedStatement(connection);
+        verify(connection).prepareStatement(expectedSql);
     }
 
     private ResultSet resultSet(int columnCount, String[] labels, Boolean... nextValues) {

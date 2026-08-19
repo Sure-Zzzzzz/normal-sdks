@@ -136,6 +136,9 @@ io:
                 port: 16379
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
+                lettuce:
+                  pool:
+                    enabled: true
               redis5Standalone:
                 mode: standalone
                 host: localhost
@@ -163,6 +166,8 @@ io:
                   cluster-adaptive-refresh: true
                   cluster-periodic-refresh: true
                   cluster-refresh-period-ms: 30000
+                  pool:
+                    enabled: true
               redis5Cluster:
                 mode: cluster
                 nodes:

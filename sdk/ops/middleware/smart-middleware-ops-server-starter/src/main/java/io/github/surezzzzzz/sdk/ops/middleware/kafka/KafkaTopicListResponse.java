@@ -18,4 +18,9 @@ public class KafkaTopicListResponse {
      * topic 安全摘要。
      */
     private final List<KafkaTopicResponse> items;
+    private final Integer limit;
+    private final Integer returned;
+    private final Boolean truncated;
+    private final Boolean traversalComplete;
+    private final String stopReason;
 }

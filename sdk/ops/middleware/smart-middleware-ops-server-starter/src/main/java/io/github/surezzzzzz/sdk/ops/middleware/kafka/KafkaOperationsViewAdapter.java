@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.ops.middleware.kafka;
 
 /**
- * Kafka Route 只读运维视图适配口。
+ * Kafka 受控运维视图适配口。
  *
  * @author surezzzzzz
  */
@@ -29,6 +29,22 @@ public interface KafkaOperationsViewAdapter {
      * @return 消费组清单
      */
     KafkaConsumerGroupListResponse listConsumerGroups(KafkaConsumerGroupListRequest request);
+
+    /**
+     * 获取精确 Topic 的固定白名单配置。
+     *
+     * @param request 查询请求
+     * @return Topic 配置
+     */
+    KafkaTopicConfigResponse getTopicConfig(KafkaTopicConfigRequest request);
+
+    /**
+     * 获取精确消费组的安全详情。
+     *
+     * @param request 查询请求
+     * @return 消费组详情
+     */
+    KafkaConsumerGroupDetailResponse getConsumerGroupDetail(KafkaConsumerGroupDetailRequest request);
 
     /**
      * 获取手工输入 Topic 的分区状态。

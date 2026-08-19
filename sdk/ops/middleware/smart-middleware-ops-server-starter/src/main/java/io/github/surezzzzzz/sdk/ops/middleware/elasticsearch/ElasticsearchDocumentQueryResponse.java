@@ -1,57 +1,30 @@
 package io.github.surezzzzzz.sdk.ops.middleware.elasticsearch;
 
-import lombok.Builder;
+import com.fasterxml.jackson.annotation.JsonValue;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.Getter;
 
-import java.util.List;
-import java.util.Map;
-
 /**
- * Elasticsearch 当前请求的受限文档响应。
+ * Elasticsearch 当前查询的原始结构响应。
  *
  * @author surezzzzzz
  */
 @Getter
-@Builder
 public class ElasticsearchDocumentQueryResponse {
 
-    /**
-     * 当前页码。
-     */
-    private final int page;
-    /**
-     * 当前页窗口大小。
-     */
-    private final int size;
-    /**
-     * 本次响应命中。
-     */
-    private final List<Hit> items;
-    /**
-     * 是否还有下一页。
-     */
-    private final Boolean hasMore;
+    private final JsonNode value;
 
     /**
-     * 单个命中的安全投影。
+     * 创建 Elasticsearch 原始结构响应。
      *
-     * @author surezzzzzz
+     * @param value Elasticsearch 响应 JSON
      */
-    @Getter
-    @Builder
-    public static class Hit {
+    public ElasticsearchDocumentQueryResponse(JsonNode value) {
+        this.value = value;
+    }
 
-        /**
-         * 文档索引。
-         */
-        private final String index;
-        /**
-         * 文档标识。
-         */
-        private final String id;
-        /**
-         * 当前命中 source。
-         */
-        private final Map<String, Object> source;
+    @JsonValue
+    public JsonNode jsonValue() {
+        return value;
     }
 }

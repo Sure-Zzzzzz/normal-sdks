@@ -39,6 +39,44 @@ button {
     background: #fff;
 }
 
+.ops-topbar-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+}
+
+.ops-global-time-zone {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #66758d;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ops-global-time-zone select {
+    height: 32px;
+    padding: 0 30px 0 10px;
+    border: 1px solid #d8e1ef;
+    border-radius: 7px;
+    outline: none;
+    color: #52627b;
+    background-color: #f8faff;
+    background-image: linear-gradient(45deg, transparent 50%, #66758d 50%), linear-gradient(135deg, #66758d 50%, transparent 50%);
+    background-position: calc(100% - 14px) calc(50% - 2px), calc(100% - 9px) calc(50% - 2px);
+    background-repeat: no-repeat;
+    background-size: 5px 5px, 5px 5px;
+    appearance: none;
+    font-size: 12px;
+}
+
+.ops-global-time-zone select:focus {
+    border-color: #2455d6;
+    box-shadow: 0 0 0 3px rgba(36, 85, 214, .12);
+}
+
 .ops-title {
     display: flex;
     align-items: center;
@@ -130,15 +168,29 @@ button {
     font-weight: 700;
 }
 
-.ops-user-caret {
+.ops-user-caret, .ops-console-panel-caret {
+    display: inline-flex;
+    width: 18px;
+    height: 18px;
+    flex: none;
+    align-items: center;
+    justify-content: center;
     color: #8190a5;
-    font-size: 16px;
-    line-height: 1;
-    transition: transform .15s ease;
+    font-size: 0;
 }
 
-.ops-user-menu[open] .ops-user-caret {
-    transform: rotate(180deg);
+.ops-user-caret::before, .ops-console-panel-caret::before {
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    content: '';
+    transform: rotate(45deg);
+    transition: transform .16s ease;
+}
+
+.ops-user-menu[open] .ops-user-caret::before, .ops-console-panel-toggle[aria-expanded="true"] .ops-console-panel-caret::before {
+    transform: rotate(225deg);
 }
 
 .ops-user-menu-panel {
@@ -167,6 +219,13 @@ button {
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.ops-draft-state {
+    margin: 6px 0 0;
+    color: #66758d;
+    font-size: 11px;
+    line-height: 1.45;
 }
 
 .ops-user-menu-panel form {
@@ -328,7 +387,7 @@ button {
     gap: 16px;
 }
 
-.ops-overview-card, .ops-overview-notice {
+.ops-overview-card {
     border: 1px solid #d8e1ef;
     border-radius: 12px;
     background: #fff;
@@ -345,7 +404,7 @@ button {
     margin-bottom: 16px;
 }
 
-.ops-overview-card-heading h2, .ops-overview-notice h2 {
+.ops-overview-card-heading h2 {
     margin: 0 0 6px;
     color: #172033;
     font-size: 16px;
@@ -354,18 +413,6 @@ button {
 
 .ops-overview-card-heading .ops-state {
     margin: 0;
-}
-
-.ops-overview-notice {
-    padding: 20px 24px;
-}
-
-.ops-overview-notice p {
-    max-width: 680px;
-    margin: 0;
-    color: #66758d;
-    font-size: 12px;
-    line-height: 1.65;
 }
 
 .ops-datasource-grid {
@@ -497,14 +544,11 @@ button {
 }
 
 .ops-console-panel-caret {
-    color: #2455d6;
-    font-size: 18px;
-    line-height: 1;
-    transition: transform .15s ease;
+    color: #52627b;
 }
 
-.ops-console-panel-toggle[aria-expanded="true"] .ops-console-panel-caret {
-    transform: rotate(180deg);
+.ops-console-panel-toggle:hover .ops-console-panel-caret, .ops-console-panel-toggle:focus-visible .ops-console-panel-caret {
+    color: #2455d6;
 }
 
 .ops-console-panel-body {
@@ -681,6 +725,15 @@ button {
     height: 40px;
 }
 
+.ops-form-grid select, .ops-elasticsearch-context-fields select, .ops-audit-filter select {
+    appearance: none;
+    padding-right: 38px;
+    background-image: linear-gradient(45deg, transparent 50%, #66758d 50%), linear-gradient(135deg, #66758d 50%, transparent 50%);
+    background-position: calc(100% - 16px) calc(50% - 2px), calc(100% - 11px) calc(50% - 2px);
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
 .ops-form-grid input:focus, .ops-form-grid select:focus, .ops-form-grid textarea:focus, .ops-audit-filter select:focus, .ops-audit-filter input:focus {
     border-color: #2455d6;
     box-shadow: 0 0 0 3px rgba(36, 85, 214, .12);
@@ -695,18 +748,228 @@ button {
     line-height: 1.55;
 }
 
-#elasticsearch-console-form textarea {
-    height: 130px;
-    min-height: 130px;
+#elasticsearch-console-form {
+    display: grid;
+    gap: 14px;
+}
+
+.ops-elasticsearch-context-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.ops-elasticsearch-context-fields label {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 7px;
+    color: #172033;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ops-elasticsearch-context-fields select, .ops-elasticsearch-context-fields input {
+    width: 100%;
+    height: 40px;
+    padding: 10px 12px;
+    border: 1px solid #c8d5e6;
+    border-radius: 7px;
+    outline: none;
+    color: #172033;
+    background: #fff;
+    font-weight: 400;
+}
+
+#elasticsearch-query-panel {
+    container-type: inline-size;
+}
+
+.ops-elasticsearch-workbench {
+    --elasticsearch-request-pane-width: 50%;
+    display: grid;
+    grid-template-columns: minmax(320px, var(--elasticsearch-request-pane-width)) 10px minmax(320px, 1fr);
+    min-width: 0;
+    gap: 0;
+}
+
+.ops-elasticsearch-pane {
+    display: grid;
+    min-width: 0;
+}
+
+.ops-elasticsearch-request-pane {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    padding-right: 14px;
+}
+
+.ops-elasticsearch-response-pane {
+    grid-template-rows: auto minmax(0, 1fr);
+    padding-left: 14px;
+}
+
+.ops-elasticsearch-pane-header {
+    display: flex;
+    min-width: 0;
+    min-height: 36px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.ops-elasticsearch-pane-heading {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+}
+
+.ops-elasticsearch-pane-header h2 {
+    flex: none;
+    margin: 0;
+    color: #172033;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.ops-elasticsearch-pane-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.ops-elasticsearch-pane-actions .ops-primary-button, .ops-elasticsearch-pane-actions .ops-secondary-button {
+    height: 34px;
+}
+
+.ops-elasticsearch-splitter {
+    position: relative;
+    z-index: 1;
+    width: 10px;
+    min-height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.ops-elasticsearch-splitter::before {
+    position: absolute;
+    top: 50%;
+    left: 3px;
+    width: 4px;
+    height: 48px;
+    border-radius: 4px;
+    background: #d8e1ef;
+    content: "";
+    transform: translateY(-50%);
+}
+
+.ops-elasticsearch-splitter:hover::before, .ops-elasticsearch-splitter:focus-visible::before {
+    background: #7896d4;
+}
+
+.ops-elasticsearch-splitter:focus-visible {
+    outline: none;
+}
+
+.ops-dsl-editor {
+    position: relative;
+    min-width: 0;
+}
+
+#elasticsearch-dsl-input, #elasticsearch-console-response-output {
+    width: 100%;
+    height: clamp(320px, 46dvh, 560px);
+    min-height: 320px;
+    padding: 14px 16px;
+    overflow: auto;
+    border: 1px solid #172236;
+    border-radius: 7px;
+    outline: none;
+    resize: none;
+    color: #dde8ff;
+    background: #172236;
+    font-family: Consolas, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre;
+}
+
+#elasticsearch-dsl-input:focus, #elasticsearch-console-response-output:focus {
+    border-color: #2455d6;
+    box-shadow: 0 0 0 3px rgba(36, 85, 214, .12);
+}
+
+#elasticsearch-console-response-output {
+    cursor: default;
+}
+
+.ops-elasticsearch-request-pane .ops-console-help {
+    margin-top: 10px;
+}
+
+.ops-elasticsearch-response-pane .ops-state {
+    overflow: hidden;
+    margin: 0;
+    color: #66758d;
+    font-size: 12px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ops-screen-reader-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+.ops-dsl-suggestions {
+    position: absolute;
+    z-index: 4;
+    right: 0;
+    bottom: 8px;
+    left: 0;
+    display: grid;
+    max-height: 192px;
+    overflow-y: auto;
+    padding: 5px;
+    border: 1px solid #7896d4;
+    border-radius: 7px;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(23, 32, 51, .18);
+}
+
+.ops-dsl-suggestions[hidden] {
+    display: none;
+}
+
+.ops-dsl-suggestion {
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    color: #172033;
+    text-align: left;
+    background: transparent;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    font-size: 12px;
+}
+
+.ops-dsl-suggestion:hover, .ops-dsl-suggestion:focus-visible, .ops-dsl-suggestion[aria-selected="true"] {
+    outline: none;
+    color: #173b9b;
+    background: #e5edff;
 }
 
 #mysql-select-console-form textarea {
     height: 112px;
     min-height: 112px;
-}
-
-#elasticsearch-console-result {
-    min-height: 232px;
 }
 
 .ops-index-state {
@@ -715,97 +978,99 @@ button {
     font-size: 12px;
 }
 
-.ops-elasticsearch-result {
-    display: grid;
-    min-height: 232px;
-    grid-template-columns: minmax(300px, .85fr) minmax(0, 1.15fr);
-    margin-top: 18px;
-    overflow: hidden;
-    border: 1px solid #d8e1ef;
-    border-radius: 8px;
-    background: #fff;
+.ops-console-help {
+    margin: 0;
+    color: #66758d;
+    font-size: 12px;
+    line-height: 1.6;
 }
 
-.ops-elasticsearch-result-list {
+.ops-console-help p {
+    margin: 0 0 10px;
+}
+
+.ops-console-help ul {
+    margin: 0 0 10px;
+    padding-left: 20px;
+}
+
+.mysql-suggestion-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.mysql-suggestion-action {
+    display: flex;
+    width: min(100%, 520px);
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+}
+
+.mysql-suggestion-action .ops-secondary-button {
+    flex: 0 0 auto;
+}
+
+.mysql-suggestion-action label {
     display: flex;
     min-width: 0;
-    min-height: 232px;
-    flex-direction: column;
-    border-right: 1px solid #d8e1ef;
-}
-
-.ops-elasticsearch-result-list h2, .ops-elasticsearch-document-viewer h2 {
-    margin: 0;
-    padding: 14px 16px 6px;
+    flex: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
     color: #172033;
-    font-size: 13px;
-    line-height: 1.4;
-}
-
-.ops-elasticsearch-result-list > .ops-state {
-    padding: 0 16px 12px;
-}
-
-.ops-elasticsearch-hit-list {
-    display: grid;
-    gap: 6px;
-    padding: 0 10px 12px;
-}
-
-.ops-elasticsearch-hit {
-    width: 100%;
-    padding: 10px 12px;
-    overflow: hidden;
-    border: 1px solid #d8e1ef;
-    border-radius: 6px;
-    color: #52627b;
-    text-align: left;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    background: #f6f8fc;
-    font-family: Consolas, monospace;
     font-size: 12px;
-}
-
-.ops-elasticsearch-hit:hover, .ops-elasticsearch-hit:focus {
-    border-color: #2455d6;
-    outline: none;
-    background: #edf3ff;
-}
-
-.ops-elasticsearch-hit.is-selected {
-    border-color: #2455d6;
-    color: #173b9b;
-    background: #e5edff;
     font-weight: 700;
 }
 
-.ops-elasticsearch-document-viewer {
+.mysql-suggestion-action input {
+    width: auto;
     min-width: 0;
-    background: #172236;
+    flex: 1;
 }
 
-.ops-elasticsearch-document-viewer h2 {
-    color: #dde8ff;
-}
-
-.ops-elasticsearch-document-viewer .ops-state {
-    padding: 0 16px 12px;
-    color: #b8c8e4;
-}
-
-.ops-elasticsearch-document-viewer pre {
-    min-height: 158px;
-    max-height: 270px;
-    margin: 0;
-    padding: 12px 16px 16px;
-    overflow: auto;
-    color: #dde8ff;
-    font-family: Consolas, monospace;
+.mysql-suggestion-label {
+    color: #172033;
     font-size: 12px;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    word-break: break-word;
+    font-weight: 700;
+}
+
+.mysql-column-options {
+    display: flex;
+    width: min(100%, 520px);
+    min-height: 40px;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #d8e1ef;
+    border-radius: 7px;
+    color: #66758d;
+    background: #fff;
+    font-size: 12px;
+}
+
+#mysql-select-console-form .mysql-column-option {
+    display: inline-flex;
+    min-width: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    color: #172033;
+    font-weight: 700;
+}
+
+.mysql-column-option input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+}
+
+.mysql-column-options + .ops-form-actions {
+    margin-top: 12px;
 }
 
 .ops-full-width, .ops-form-actions {
@@ -850,10 +1115,10 @@ button {
 
 .ops-result {
     min-height: 112px;
-    max-height: 232px;
     margin: 14px 0 0;
     padding: 14px 16px;
-    overflow: auto;
+    overflow-x: auto;
+    overflow-y: visible;
     border-radius: 7px;
     color: #dde8ff;
     background: #172236;
@@ -929,6 +1194,7 @@ button {
     line-height: 1.4;
 }
 
+
 .ops-section[data-section-panel="audit"] > .ops-state {
     margin: 0 0 12px;
 }
@@ -942,7 +1208,7 @@ button {
 
 .ops-table-wrap table {
     width: 100%;
-    min-width: 1068px;
+    min-width: 1400px;
     border-collapse: collapse;
     table-layout: fixed;
 }
@@ -971,39 +1237,45 @@ button {
 }
 
 .ops-table-wrap th:nth-child(1) {
-    width: 150px;
+    width: 172px;
 }
 
 .ops-table-wrap th:nth-child(2) {
-    width: 110px;
+    width: 180px;
 }
 
 .ops-table-wrap th:nth-child(3) {
-    width: 130px;
+    width: 144px;
 }
 
 .ops-table-wrap th:nth-child(4) {
-    width: 130px;
+    width: 180px;
 }
 
 .ops-table-wrap th:nth-child(5) {
-    width: 150px;
+    width: 200px;
 }
 
 .ops-table-wrap th:nth-child(6) {
-    width: 170px;
+    width: 72px;
+    text-align: center;
 }
 
 .ops-table-wrap th:nth-child(7) {
-    width: 70px;
+    width: 360px;
 }
 
 .ops-table-wrap th:nth-child(8) {
-    width: 260px;
+    width: 92px;
+    text-align: right;
 }
 
-.ops-table-wrap th:nth-child(9) {
-    width: 75px;
+.ops-table-wrap td:nth-child(6) {
+    text-align: center;
+}
+
+.ops-table-wrap td:nth-child(8) {
+    text-align: right;
 }
 
 .ops-pagination {
@@ -1232,6 +1504,21 @@ button {
     }
 }
 
+@container (max-width: 760px) {
+    .ops-elasticsearch-workbench {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
+    }
+
+    .ops-elasticsearch-request-pane, .ops-elasticsearch-response-pane {
+        padding: 0;
+    }
+
+    .ops-elasticsearch-splitter {
+        display: none;
+    }
+}
+
 @media (min-width: 2560px) {
     .ops-main {
         padding-right: 64px;
@@ -1305,6 +1592,14 @@ button {
         white-space: nowrap;
     }
 
+    .ops-topbar-actions {
+        gap: 8px;
+    }
+
+    .ops-global-time-zone {
+        gap: 6px;
+    }
+
     .ops-sidebar {
         position: relative;
         top: auto;
@@ -1369,9 +1664,6 @@ button {
         padding: 18px 16px;
     }
 
-    .ops-overview-notice {
-        padding: 16px;
-    }
 
     .ops-datasource-card {
         grid-template-columns: minmax(0, 1fr) auto;
@@ -1407,17 +1699,21 @@ button {
         min-width: 720px;
     }
 
-    .ops-elasticsearch-result {
+    .ops-elasticsearch-context-fields {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .ops-elasticsearch-result-list {
-        border-right: 0;
-        border-bottom: 1px solid #d8e1ef;
+    .ops-elasticsearch-workbench {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 18px;
     }
 
-    .ops-elasticsearch-document-viewer {
-        min-height: 220px;
+    .ops-elasticsearch-request-pane, .ops-elasticsearch-response-pane {
+        padding: 0;
+    }
+
+    .ops-elasticsearch-splitter {
+        display: none;
     }
 
     .ops-audit-filter {
@@ -1433,6 +1729,7 @@ button {
     .ops-audit-effective {
         padding: 4px 0;
     }
+
 
     .ops-pagination {
         flex-wrap: wrap;
@@ -1460,6 +1757,19 @@ button {
 @media (max-width: 479px) {
     .ops-topbar {
         padding: 8px 10px;
+    }
+
+    .ops-topbar-actions {
+        gap: 4px;
+    }
+
+    .ops-global-time-zone {
+        gap: 0;
+        font-size: 0;
+    }
+
+    .ops-global-time-zone select {
+        width: 94px;
     }
 
     .ops-user-menu summary {
@@ -1490,9 +1800,6 @@ button {
         padding: 16px 12px;
     }
 
-    .ops-overview-notice {
-        padding: 14px 12px;
-    }
 
     .ops-login-body {
         padding-right: 10px;

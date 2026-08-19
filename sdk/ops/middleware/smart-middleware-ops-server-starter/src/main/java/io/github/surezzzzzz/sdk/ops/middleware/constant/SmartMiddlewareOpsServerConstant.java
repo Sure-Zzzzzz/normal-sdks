@@ -61,8 +61,12 @@ public final class SmartMiddlewareOpsServerConstant {
     public static final int DEFAULT_MAX_CELL_LENGTH = 1024;
     public static final int DEFAULT_MAX_KEY_LENGTH = 256;
     public static final int MAX_ELASTICSEARCH_INDEX_LIST_SIZE = 100;
+    public static final int MAX_ELASTICSEARCH_FIELD_CAPABILITIES_SIZE = 200;
     public static final int MAX_ELASTICSEARCH_INDEX_RESPONSE_LENGTH = 131072;
+    public static final int MAX_ELASTICSEARCH_FIELD_CAPABILITIES_RESPONSE_LENGTH = 262144;
+    public static final int MAX_ELASTICSEARCH_DOCUMENT_RESPONSE_LENGTH = 262144;
     public static final int DEFAULT_MAX_VALUE_LENGTH = 4096;
+    public static final int DEFAULT_ELASTICSEARCH_MAX_OFFSET = 10000;
     public static final long DEFAULT_DEADLINE_MILLIS = 5000L;
     public static final int DEFAULT_GLOBAL_CONCURRENCY = 16;
     public static final int DEFAULT_DATASOURCE_CONCURRENCY = 4;

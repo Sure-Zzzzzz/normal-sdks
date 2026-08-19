@@ -199,7 +199,8 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     @ConditionalOnBean(SimpleRedisRouteRegistry.class)
     public RedisOperationsViewAdapter redisOperationsViewAdapter(SimpleRedisRouteRegistry registry,
                                                                  SmartMiddlewareOpsServerProperties properties) {
-        return new DefaultRedisOperationsViewAdapter(registry, properties.getQuery().getMaxResponseLength());
+        return new DefaultRedisOperationsViewAdapter(registry, properties.getQuery().getDeadlineMillis(),
+                properties.getQuery().getMaxResponseLength());
     }
 
     /**
@@ -266,6 +267,82 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     }
 
     /**
+     * 注册 MySQL 受控 EXPLAIN 执行器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlExplainExecutor mysqlExplainExecutor(MysqlOperationsViewAdapter adapter) {
+        return new MysqlExplainExecutor(adapter);
+    }
+
+    /**
+     * 注册 MySQL 受控 EXPLAIN 请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlExplainRequestValidator mysqlExplainRequestValidator(SmartMiddlewareOpsServerProperties properties) {
+        return new MysqlExplainRequestValidator(properties.getQuery().getMaxSqlLength(),
+                properties.getQuery().getMaxColumns());
+    }
+
+    /**
+     * 注册 MySQL 表和视图目录执行器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableListExecutor mysqlTableListExecutor(MysqlOperationsViewAdapter adapter) {
+        return new MysqlTableListExecutor(adapter);
+    }
+
+    /**
+     * 注册 MySQL 表和视图目录请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableListRequestValidator mysqlTableListRequestValidator(SmartMiddlewareOpsServerProperties properties) {
+        return new MysqlTableListRequestValidator(properties.getQuery().getMaxResourceNameLength(),
+                properties.getQuery().getMaxSize());
+    }
+
+    /**
+     * 注册 MySQL 列目录执行器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableColumnsExecutor mysqlTableColumnsExecutor(MysqlOperationsViewAdapter adapter) {
+        return new MysqlTableColumnsExecutor(adapter);
+    }
+
+    /**
+     * 注册 MySQL 列目录请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableColumnsRequestValidator mysqlTableColumnsRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new MysqlTableColumnsRequestValidator(properties.getQuery().getMaxResourceNameLength());
+    }
+
+    /**
+     * 注册 MySQL 索引目录执行器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableIndexesExecutor mysqlTableIndexesExecutor(MysqlOperationsViewAdapter adapter) {
+        return new MysqlTableIndexesExecutor(adapter);
+    }
+
+    /**
+     * 注册 MySQL 索引目录请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(MysqlOperationsViewAdapter.class)
+    public MysqlTableIndexesRequestValidator mysqlTableIndexesRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new MysqlTableIndexesRequestValidator(properties.getQuery().getMaxResourceNameLength());
+    }
+
+    /**
      * 注册 Elasticsearch 摘要执行器。
      */
     @Bean
@@ -302,6 +379,26 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     }
 
     /**
+     * 注册 Elasticsearch 字段能力目录执行器。
+     */
+    @Bean
+    @ConditionalOnBean(ElasticsearchOperationsViewAdapter.class)
+    public ElasticsearchFieldCapabilitiesExecutor elasticsearchFieldCapabilitiesExecutor(
+            ElasticsearchOperationsViewAdapter adapter) {
+        return new ElasticsearchFieldCapabilitiesExecutor(adapter);
+    }
+
+    /**
+     * 注册 Elasticsearch 字段能力目录请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(ElasticsearchOperationsViewAdapter.class)
+    public ElasticsearchFieldCapabilitiesRequestValidator elasticsearchFieldCapabilitiesRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new ElasticsearchFieldCapabilitiesRequestValidator(properties.getQuery().getMaxResourceNameLength());
+    }
+
+    /**
      * 注册 Elasticsearch JSON DSL 执行器。
      */
     @Bean
@@ -318,7 +415,8 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     public ElasticsearchDocumentQueryRequestValidator elasticsearchDocumentQueryRequestValidator(
             SmartMiddlewareOpsServerProperties properties) {
         return new ElasticsearchDocumentQueryRequestValidator(properties.getQuery().getMaxResourceNameLength(),
-                properties.getQuery().getMaxDslLength(), properties.getQuery().getMaxSize(), new ObjectMapper());
+                properties.getQuery().getMaxDslLength(), properties.getQuery().getMaxSize(),
+                properties.getQuery().getElasticsearchMaxOffset(), new ObjectMapper());
     }
 
     /**
@@ -355,6 +453,26 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     @ConditionalOnBean(RedisOperationsViewAdapter.class)
     public RedisSummaryRequestValidator redisSummaryRequestValidator() {
         return new RedisSummaryRequestValidator();
+    }
+
+    /**
+     * 注册 Redis 字面量前缀 key 发现执行器。
+     */
+    @Bean
+    @ConditionalOnBean(RedisOperationsViewAdapter.class)
+    public RedisKeyDiscoveryExecutor redisKeyDiscoveryExecutor(RedisOperationsViewAdapter adapter) {
+        return new RedisKeyDiscoveryExecutor(adapter);
+    }
+
+    /**
+     * 注册 Redis 字面量前缀 key 发现请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(RedisOperationsViewAdapter.class)
+    public RedisKeyDiscoveryRequestValidator redisKeyDiscoveryRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new RedisKeyDiscoveryRequestValidator(properties.getQuery().getMaxResourceNameLength(),
+                properties.getQuery().getMaxSize());
     }
 
     /**
@@ -447,6 +565,44 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     public KafkaConsumerGroupListRequestValidator kafkaConsumerGroupListRequestValidator(
             SmartMiddlewareOpsServerProperties properties) {
         return new KafkaConsumerGroupListRequestValidator(properties.getQuery().getMaxSize());
+    }
+
+    /**
+     * 注册 Kafka Topic 固定配置执行器。
+     */
+    @Bean
+    @ConditionalOnBean(KafkaOperationsViewAdapter.class)
+    public KafkaTopicConfigExecutor kafkaTopicConfigExecutor(KafkaOperationsViewAdapter adapter) {
+        return new KafkaTopicConfigExecutor(adapter);
+    }
+
+    /**
+     * 注册 Kafka Topic 固定配置请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(KafkaOperationsViewAdapter.class)
+    public KafkaTopicConfigRequestValidator kafkaTopicConfigRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new KafkaTopicConfigRequestValidator(properties.getQuery().getMaxResourceNameLength());
+    }
+
+    /**
+     * 注册 Kafka 消费组安全详情执行器。
+     */
+    @Bean
+    @ConditionalOnBean(KafkaOperationsViewAdapter.class)
+    public KafkaConsumerGroupDetailExecutor kafkaConsumerGroupDetailExecutor(KafkaOperationsViewAdapter adapter) {
+        return new KafkaConsumerGroupDetailExecutor(adapter);
+    }
+
+    /**
+     * 注册 Kafka 消费组安全详情请求校验器。
+     */
+    @Bean
+    @ConditionalOnBean(KafkaOperationsViewAdapter.class)
+    public KafkaConsumerGroupDetailRequestValidator kafkaConsumerGroupDetailRequestValidator(
+            SmartMiddlewareOpsServerProperties properties) {
+        return new KafkaConsumerGroupDetailRequestValidator(properties.getQuery().getMaxResourceNameLength());
     }
 
     /**

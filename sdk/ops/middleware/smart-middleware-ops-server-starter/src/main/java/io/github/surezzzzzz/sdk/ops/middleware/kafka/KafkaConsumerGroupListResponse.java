@@ -18,4 +18,9 @@ public class KafkaConsumerGroupListResponse {
      * 消费组安全摘要。
      */
     private final List<KafkaConsumerGroupResponse> items;
+    private final Integer limit;
+    private final Integer returned;
+    private final Boolean truncated;
+    private final Boolean traversalComplete;
+    private final String stopReason;
 }

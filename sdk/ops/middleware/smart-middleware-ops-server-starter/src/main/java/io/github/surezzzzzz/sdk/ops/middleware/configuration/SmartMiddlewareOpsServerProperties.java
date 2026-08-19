@@ -80,6 +80,7 @@ public class SmartMiddlewareOpsServerProperties {
                 || query.getMaxCellLength() == null || query.getMaxCellLength() <= 0
                 || query.getMaxResourceNameLength() == null || query.getMaxResourceNameLength() <= 0
                 || query.getMaxResponseLength() == null || query.getMaxResponseLength() <= 0
+                || query.getElasticsearchMaxOffset() == null || query.getElasticsearchMaxOffset() <= 0
                 || query.getDeadlineMillis() == null || query.getDeadlineMillis() <= 0) {
             throw new IllegalStateException("query 限制必须为正数，且 max-size 不得小于 default-size");
         }
@@ -216,6 +217,10 @@ public class SmartMiddlewareOpsServerProperties {
          * 单次响应中业务数据最大字符数。
          */
         private Integer maxResponseLength = SmartMiddlewareOpsServerConstant.DEFAULT_MAX_VALUE_LENGTH;
+        /**
+         * Elasticsearch offset 分页最大命中位置。
+         */
+        private Integer elasticsearchMaxOffset = SmartMiddlewareOpsServerConstant.DEFAULT_ELASTICSEARCH_MAX_OFFSET;
         /**
          * 单个 capability 截止时间毫秒数。
          */

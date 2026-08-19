@@ -23,10 +23,12 @@ import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceCatalogResponse
 import io.github.surezzzzzz.sdk.ops.middleware.configuration.SmartMiddlewareOpsServerAutoConfiguration;
 import io.github.surezzzzzz.sdk.ops.middleware.controller.MiddlewareOpsController;
 import io.github.surezzzzzz.sdk.ops.middleware.controller.MiddlewareOpsHttpExceptionHandler;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListExecutor;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListRequestValidator;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.*;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
 import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyDiscoveryExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyDiscoveryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisOperationsViewAdapter;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsServerEngine;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareType;
 import io.github.surezzzzzz.sdk.ops.middleware.ui.MiddlewareOpsPageController;
@@ -148,6 +150,22 @@ class SmartMiddlewareOpsServerAutoConfigurationTest {
     }
 
     @Test
+    void shouldRegisterRedisDiscoveryOnlyWhenRouteRegistryExists() {
+        SimpleRedisRouteRegistry registry = mock(SimpleRedisRouteRegistry.class);
+
+        contextRunner.run(context -> {
+            assertTrue(context.getBeansOfType(RedisOperationsViewAdapter.class).isEmpty());
+            assertTrue(context.getBeansOfType(RedisKeyDiscoveryExecutor.class).isEmpty());
+            assertTrue(context.getBeansOfType(RedisKeyDiscoveryRequestValidator.class).isEmpty());
+        });
+        contextRunner.withBean(SimpleRedisRouteRegistry.class, () -> registry).run(context -> {
+            assertEquals(1, context.getBeansOfType(RedisOperationsViewAdapter.class).size());
+            assertEquals(1, context.getBeansOfType(RedisKeyDiscoveryExecutor.class).size());
+            assertEquals(1, context.getBeansOfType(RedisKeyDiscoveryRequestValidator.class).size());
+        });
+    }
+
+    @Test
     void shouldRegisterMysqlCapabilityOnlyWhenRouteRegistryAndTemplateExist() {
         SimpleMysqlRouteRegistry mysqlRegistry = mock(SimpleMysqlRouteRegistry.class);
 
@@ -165,6 +183,34 @@ class SmartMiddlewareOpsServerAutoConfigurationTest {
                     assertEquals(1, context.getBeansOfType(MysqlDatasourceStatusRequestValidator.class).size());
                     assertEquals(1, context.getBeansOfType(MysqlSelectExecutor.class).size());
                     assertEquals(1, context.getBeansOfType(MysqlSelectRequestValidator.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlExplainExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlExplainRequestValidator.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableListExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableListRequestValidator.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableColumnsExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableColumnsRequestValidator.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableIndexesExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(MysqlTableIndexesRequestValidator.class).size());
+                });
+    }
+
+    @Test
+    void shouldRegisterKafkaCapabilitiesOnlyWithCompleteRouteOwnedResources() {
+        SimpleKafkaRouteRegistry registry = mock(SimpleKafkaRouteRegistry.class);
+
+        contextRunner.withBean(SimpleKafkaRouteRegistry.class, () -> registry).run(context -> {
+            assertTrue(context.getBeansOfType(KafkaOperationsViewAdapter.class).isEmpty());
+            assertTrue(context.getBeansOfType(KafkaTopicConfigExecutor.class).isEmpty());
+            assertTrue(context.getBeansOfType(KafkaConsumerGroupDetailExecutor.class).isEmpty());
+        });
+        contextRunner.withBean(SimpleKafkaRouteRegistry.class, () -> registry)
+                .withBean(KafkaRouteDiagnostics.class, () -> mock(KafkaRouteDiagnostics.class))
+                .withBean(KafkaRouteAdminClientFactory.class, () -> mock(KafkaRouteAdminClientFactory.class)).run(context -> {
+                    assertEquals(1, context.getBeansOfType(KafkaOperationsViewAdapter.class).size());
+                    assertEquals(1, context.getBeansOfType(KafkaTopicConfigExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(KafkaTopicConfigRequestValidator.class).size());
+                    assertEquals(1, context.getBeansOfType(KafkaConsumerGroupDetailExecutor.class).size());
+                    assertEquals(1, context.getBeansOfType(KafkaConsumerGroupDetailRequestValidator.class).size());
                 });
     }
 
@@ -176,11 +222,15 @@ class SmartMiddlewareOpsServerAutoConfigurationTest {
             assertTrue(context.getBeansOfType(ElasticsearchOperationsViewAdapter.class).isEmpty());
             assertTrue(context.getBeansOfType(ElasticsearchIndexListExecutor.class).isEmpty());
             assertTrue(context.getBeansOfType(ElasticsearchIndexListRequestValidator.class).isEmpty());
+            assertTrue(context.getBeansOfType(ElasticsearchFieldCapabilitiesExecutor.class).isEmpty());
+            assertTrue(context.getBeansOfType(ElasticsearchFieldCapabilitiesRequestValidator.class).isEmpty());
         });
         contextRunner.withBean(SimpleElasticsearchRouteRegistry.class, () -> registry).run(context -> {
             assertEquals(1, context.getBeansOfType(ElasticsearchOperationsViewAdapter.class).size());
             assertEquals(1, context.getBeansOfType(ElasticsearchIndexListExecutor.class).size());
             assertEquals(1, context.getBeansOfType(ElasticsearchIndexListRequestValidator.class).size());
+            assertEquals(1, context.getBeansOfType(ElasticsearchFieldCapabilitiesExecutor.class).size());
+            assertEquals(1, context.getBeansOfType(ElasticsearchFieldCapabilitiesRequestValidator.class).size());
         });
     }
 

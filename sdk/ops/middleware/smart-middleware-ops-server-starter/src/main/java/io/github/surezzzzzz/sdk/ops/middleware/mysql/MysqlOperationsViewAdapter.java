@@ -22,4 +22,18 @@ public interface MysqlOperationsViewAdapter {
      * @return 受限结果窗口
      */
     MysqlSelectResponse select(MysqlSelectRequest request);
+
+    /**
+     * 执行已校验的受控 EXPLAIN。
+     *
+     * @param request 已校验查询请求
+     * @return 固定执行计划投影
+     */
+    MysqlExplainResponse explain(MysqlExplainRequest request);
+
+    MysqlTableListResponse listTables(MysqlTableListRequest request);
+
+    MysqlTableColumnsResponse listTableColumns(MysqlTableColumnsRequest request);
+
+    MysqlTableIndexesResponse listTableIndexes(MysqlTableIndexesRequest request);
 }

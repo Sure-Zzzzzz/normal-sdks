@@ -10,10 +10,7 @@ import io.github.surezzzzzz.sdk.ops.middleware.controller.response.MiddlewareOps
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.*;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlDatasourceStatusRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlDatasourceStatusResponse;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
 import io.github.surezzzzzz.sdk.ops.middleware.redis.*;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsCapability;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsRequest;
@@ -41,7 +38,7 @@ class MiddlewareOpsControllerTest {
         CapturingEngine engine = new CapturingEngine();
         MiddlewareOpsController controller = controller(engine);
 
-        KafkaTopicListResponse response = controller.kafkaTopics("default", null);
+        KafkaTopicListResponse response = controller.kafkaTopics("default", null, null);
         log.info("控制器构造请求：datasource={}，size={}", "default", 50);
 
         assertSame(engine.response, response);
@@ -79,6 +76,43 @@ class MiddlewareOpsControllerTest {
         assertEquals(10, request.getSize());
         assertEquals("controlled-select", request.getResourceScope());
         assertEquals(MysqlSelectResponse.class, engine.responseType);
+
+        controller.mysqlExplain("orders", sql);
+        assertEquals(MysqlExplainRequest.class, engine.request.getClass());
+        MysqlExplainRequest explainRequest = (MysqlExplainRequest) engine.request;
+        assertEquals(sql, explainRequest.getSql());
+        assertEquals("controlled-explain", explainRequest.getResourceScope());
+        assertEquals(MysqlExplainResponse.class, engine.responseType);
+
+        controller.mysqlTables("orders", "order", 10);
+        assertEquals(MysqlTableListRequest.class, engine.request.getClass());
+        MysqlTableListRequest tablesRequest = (MysqlTableListRequest) engine.request;
+        assertEquals("order", tablesRequest.getPrefix());
+        assertEquals(10, tablesRequest.getSize());
+        assertEquals("table-list", tablesRequest.getResourceScope());
+        assertEquals(MysqlTableListResponse.class, engine.responseType);
+
+        controller.mysqlTables("orders", null, null);
+        tablesRequest = (MysqlTableListRequest) engine.request;
+        assertNull(tablesRequest.getPrefix());
+        assertEquals(200, tablesRequest.getSize());
+
+        SmartMiddlewareOpsServerProperties properties = new SmartMiddlewareOpsServerProperties();
+        properties.getQuery().setDefaultSize(1);
+        properties.getQuery().setMaxSize(100);
+        controller = controller(engine, properties, new CapturingAuditSearchService(properties));
+        controller.mysqlTables("orders", null, null);
+        assertEquals(100, ((MysqlTableListRequest) engine.request).getSize());
+
+        controller.mysqlTableColumns("orders", "orders_2026");
+        assertEquals(MysqlTableColumnsRequest.class, engine.request.getClass());
+        assertEquals("table-columns:orders_2026", engine.request.getResourceScope());
+        assertEquals(MysqlTableColumnsResponse.class, engine.responseType);
+
+        controller.mysqlTableIndexes("orders", "orders_2026");
+        assertEquals(MysqlTableIndexesRequest.class, engine.request.getClass());
+        assertEquals("table-indexes:orders_2026", engine.request.getResourceScope());
+        assertEquals(MysqlTableIndexesResponse.class, engine.responseType);
     }
 
     @Test
@@ -119,14 +153,20 @@ class MiddlewareOpsControllerTest {
         assertEquals("index-list", engine.request.getResourceScope());
         assertEquals(ElasticsearchIndexListResponse.class, engine.responseType);
 
+        controller.elasticsearchFieldCapabilities("search-primary", "orders");
+        assertEquals(ElasticsearchFieldCapabilitiesRequest.class, engine.request.getClass());
+        ElasticsearchFieldCapabilitiesRequest fieldRequest = (ElasticsearchFieldCapabilitiesRequest) engine.request;
+        assertEquals("search-primary", fieldRequest.getDatasourceKey());
+        assertEquals("orders", fieldRequest.getIndex());
+        assertEquals("field-capabilities:orders", fieldRequest.getResourceScope());
+        assertEquals(ElasticsearchFieldCapabilitiesResponse.class, engine.responseType);
+
         controller.elasticsearchDocuments("search-primary", "orders",
-                "eyJxdWVyeSI6eyJtYXRjaF9hbGwiOnt9fX0", 2, 10);
+                "eyJxdWVyeSI6eyJtYXRjaF9hbGwiOnt9fX0");
         assertEquals(ElasticsearchDocumentQueryRequest.class, engine.request.getClass());
         ElasticsearchDocumentQueryRequest documentRequest = (ElasticsearchDocumentQueryRequest) engine.request;
         assertEquals("orders", documentRequest.getIndex());
         assertEquals("{\"query\":{\"match_all\":{}}}", documentRequest.getDsl());
-        assertEquals(2, documentRequest.getPage());
-        assertEquals(10, documentRequest.getSize());
         assertEquals(ElasticsearchDocumentQueryResponse.class, engine.responseType);
 
         controller.redisDatasourceOverview();
@@ -141,6 +181,18 @@ class MiddlewareOpsControllerTest {
         assertEquals(RedisSummaryRequest.class, engine.request.getClass());
         assertEquals("cache-primary", ((RedisSummaryRequest) engine.request).getDatasourceKey());
         assertEquals(RedisDatasourceResponse.class, engine.responseType);
+        controller.redisKeyDiscovery("cache-primary", "order:", null);
+        assertEquals(RedisKeyDiscoveryRequest.class, engine.request.getClass());
+        RedisKeyDiscoveryRequest discoveryRequest = (RedisKeyDiscoveryRequest) engine.request;
+        assertEquals("cache-primary", discoveryRequest.getDatasourceKey());
+        assertEquals("order:", discoveryRequest.getPrefix());
+        assertEquals(50, discoveryRequest.getSize());
+        assertEquals(MiddlewareOpsCapability.REDIS_KEY_DISCOVERY, discoveryRequest.getCapability());
+        assertEquals("key-discovery", discoveryRequest.getResourceScope());
+        assertEquals(RedisKeyDiscoveryResponse.class, engine.responseType);
+        controller.redisKeyDiscovery("cache-primary", "order:", 20);
+        assertEquals(20, ((RedisKeyDiscoveryRequest) engine.request).getSize());
+
         controller.redisKeyMetadata("cache-primary", "order:1");
         assertEquals(RedisKeyMetadataRequest.class, engine.request.getClass());
         assertEquals("order:1", ((RedisKeyMetadataRequest) engine.request).getKey());
@@ -161,14 +213,22 @@ class MiddlewareOpsControllerTest {
         assertEquals(KafkaDatasourceListRequest.class, engine.request.getClass());
         assertTrue(engine.request.isAuditRequired());
         assertEquals(KafkaDatasourceListResponse.class, engine.responseType);
-        controller.kafkaTopics("kafka-primary", 20);
+        controller.kafkaTopics("kafka-primary", null, 20);
         assertEquals(KafkaTopicListRequest.class, engine.request.getClass());
         assertEquals(20, ((KafkaTopicListRequest) engine.request).getSize());
         assertEquals(KafkaTopicListResponse.class, engine.responseType);
-        controller.kafkaConsumerGroups("kafka-primary", 20);
+        controller.kafkaConsumerGroups("kafka-primary", null, 20);
         assertEquals(KafkaConsumerGroupListRequest.class, engine.request.getClass());
         assertEquals(20, ((KafkaConsumerGroupListRequest) engine.request).getSize());
         assertEquals(KafkaConsumerGroupListResponse.class, engine.responseType);
+        controller.kafkaTopicConfig("kafka-primary", "order-events");
+        assertEquals(KafkaTopicConfigRequest.class, engine.request.getClass());
+        assertEquals("order-events", ((KafkaTopicConfigRequest) engine.request).getTopic());
+        assertEquals(KafkaTopicConfigResponse.class, engine.responseType);
+        controller.kafkaConsumerGroupDetail("kafka-primary", "order-group");
+        assertEquals(KafkaConsumerGroupDetailRequest.class, engine.request.getClass());
+        assertEquals("order-group", ((KafkaConsumerGroupDetailRequest) engine.request).getGroupId());
+        assertEquals(KafkaConsumerGroupDetailResponse.class, engine.responseType);
         controller.kafkaTopicRuntime("kafka-primary", "order-events");
         assertEquals(KafkaTopicRuntimeRequest.class, engine.request.getClass());
         assertEquals("order-events", ((KafkaTopicRuntimeRequest) engine.request).getTopic());
@@ -239,7 +299,7 @@ class MiddlewareOpsControllerTest {
         MiddlewareOpsController controller = controller(engine);
 
         MiddlewareOpsException exception = assertThrows(MiddlewareOpsException.class,
-                () -> controller.kafkaTopics("default", 201));
+                () -> controller.kafkaTopics("default", null, 201));
         log.info("非法分页数量结果：status={}，message={}", exception.getStatus(), exception.getMessage());
 
         assertEquals(400, exception.getStatus().value());

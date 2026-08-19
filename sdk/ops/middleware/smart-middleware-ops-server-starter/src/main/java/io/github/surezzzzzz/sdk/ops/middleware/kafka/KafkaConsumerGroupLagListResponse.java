@@ -15,4 +15,5 @@ import java.util.List;
 public class KafkaConsumerGroupLagListResponse {
 
     private final List<KafkaConsumerGroupLagResponse> items;
+    private final Boolean truncated;
 }

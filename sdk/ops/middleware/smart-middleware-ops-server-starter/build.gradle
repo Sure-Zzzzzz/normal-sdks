@@ -1,10 +1,12 @@
 dependencies {
     api 'io.github.sure-zzzzzz:simple-elasticsearch-route-starter:1.2.1'
-    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
     api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.5'
     api 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
     api 'io.github.sure-zzzzzz:simple-elasticsearch-search-starter:1.7.2'
     api 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.1.1'
+
+    runtimeOnly 'org.apache.commons:commons-pool2'
 
     api 'org.springframework.boot:spring-boot-starter-thymeleaf'
     api 'org.springframework.boot:spring-boot-starter-security'

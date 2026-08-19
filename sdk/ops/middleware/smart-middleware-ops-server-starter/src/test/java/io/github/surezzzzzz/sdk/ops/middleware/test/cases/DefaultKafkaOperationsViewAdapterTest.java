@@ -13,6 +13,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.ConfigResource;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -40,7 +41,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         KafkaFuture<java.util.Set<String>> topicNames = Mockito.mock(KafkaFuture.class);
         Mockito.when(adminClient.listTopics()).thenReturn(result);
         Mockito.when(result.names()).thenReturn(topicNames);
-        Mockito.when(topicNames.get(Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS)))
+        Mockito.when(topicNames.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
                 .thenThrow(new TimeoutException("sensitive endpoint detail"));
 
         AtomicBoolean callbackOpen = new AtomicBoolean();
@@ -60,6 +61,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         };
         SimpleKafkaRouteRegistry registry = Mockito.mock(SimpleKafkaRouteRegistry.class);
         Mockito.when(registry.getDatasourceKeys()).thenReturn(Collections.singleton("default"));
+        Mockito.when(registry.containsDatasource("default")).thenReturn(true);
         DefaultKafkaOperationsViewAdapter adapter = new DefaultKafkaOperationsViewAdapter(
                 registry, Mockito.mock(KafkaRouteDiagnostics.class), factory, 100L, 10);
 
@@ -71,9 +73,10 @@ class DefaultKafkaOperationsViewAdapterTest {
         assertEquals("Kafka 运维查询已超时", exception.getMessage());
         assertTrue(callbackCompleted.get());
         assertFalse(callbackOpen.get());
-        ArgumentCaptor<Long> timeoutMillis = ArgumentCaptor.forClass(Long.class);
-        Mockito.verify(topicNames).get(timeoutMillis.capture(), Mockito.eq(TimeUnit.MILLISECONDS));
-        assertTrue(timeoutMillis.getValue() > 0L && timeoutMillis.getValue() <= 100L);
+        Mockito.verify(topicNames).cancel(true);
+        ArgumentCaptor<Long> timeoutNanos = ArgumentCaptor.forClass(Long.class);
+        Mockito.verify(topicNames).get(timeoutNanos.capture(), Mockito.eq(TimeUnit.NANOSECONDS));
+        assertTrue(timeoutNanos.getValue() > 0L && timeoutNanos.getValue() <= TimeUnit.MILLISECONDS.toNanos(100L));
     }
 
     @Test
@@ -84,7 +87,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         KafkaFuture<Set<String>> topicNames = Mockito.mock(KafkaFuture.class);
         Mockito.when(adminClient.listTopics()).thenReturn(result);
         Mockito.when(result.names()).thenReturn(topicNames);
-        Mockito.when(topicNames.get(Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS)))
+        Mockito.when(topicNames.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
                 .thenReturn(Collections.unmodifiableSet(new java.util.LinkedHashSet<>(Arrays.asList(
                         "topic-c", "topic-a", "topic-b"))));
 
@@ -97,6 +100,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         };
         SimpleKafkaRouteRegistry registry = Mockito.mock(SimpleKafkaRouteRegistry.class);
         Mockito.when(registry.getDatasourceKeys()).thenReturn(Collections.singleton("default"));
+        Mockito.when(registry.containsDatasource("default")).thenReturn(true);
         DefaultKafkaOperationsViewAdapter adapter = new DefaultKafkaOperationsViewAdapter(
                 registry, Mockito.mock(KafkaRouteDiagnostics.class), factory, 100L, 10);
 
@@ -155,7 +159,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         KafkaFuture<Map<String, TopicDescription>> descriptions = Mockito.mock(KafkaFuture.class);
         Mockito.when(adminClient.describeTopics(Mockito.anyCollection())).thenReturn(describeTopicsResult);
         Mockito.when(describeTopicsResult.all()).thenReturn(descriptions);
-        Mockito.when(descriptions.get(Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS))).thenReturn(
+        Mockito.when(descriptions.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS))).thenReturn(
                 Collections.singletonMap(topic, description), Collections.singletonMap(topic, description),
                 Collections.singletonMap(topic, shortDescription));
 
@@ -180,8 +184,8 @@ class DefaultKafkaOperationsViewAdapterTest {
         latest.put(partition0, new ListOffsetsResult.ListOffsetsResultInfo(15L, -1L, Optional.of(1)));
         latest.put(partition1, new ListOffsetsResult.ListOffsetsResultInfo(28L, -1L, Optional.of(1)));
         latest.put(partition2, new ListOffsetsResult.ListOffsetsResultInfo(35L, -1L, Optional.of(1)));
-        Mockito.when(earliestOffsets.get(Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS))).thenReturn(earliest);
-        Mockito.when(latestOffsets.get(Mockito.anyLong(), Mockito.eq(TimeUnit.MILLISECONDS))).thenReturn(latest);
+        Mockito.when(earliestOffsets.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS))).thenReturn(earliest);
+        Mockito.when(latestOffsets.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS))).thenReturn(latest);
 
         KafkaRouteAdminClientFactory factory = new KafkaRouteAdminClientFactory() {
             @Override
@@ -192,6 +196,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         };
         SimpleKafkaRouteRegistry registry = Mockito.mock(SimpleKafkaRouteRegistry.class);
         Mockito.when(registry.getDatasourceKeys()).thenReturn(Collections.singleton("default"));
+        Mockito.when(registry.containsDatasource("default")).thenReturn(true);
         DefaultKafkaOperationsViewAdapter adapter = new DefaultKafkaOperationsViewAdapter(
                 registry, Mockito.mock(KafkaRouteDiagnostics.class), factory, 100L, 2);
 
@@ -231,5 +236,167 @@ class DefaultKafkaOperationsViewAdapterTest {
         assertEquals(Arrays.asList(partition0, partition1, partition2), new java.util.ArrayList<>(requests.get(3).keySet()));
         assertEquals(Arrays.asList(partition0, partition1), new java.util.ArrayList<>(requests.get(4).keySet()));
         assertEquals(Arrays.asList(partition0, partition1), new java.util.ArrayList<>(requests.get(5).keySet()));
+    }
+
+    @Test
+    void shouldReturnEmptyTopicRuntimeWithoutSubmittingEmptyOffsetRequest() throws Exception {
+        AdminClient adminClient = Mockito.mock(AdminClient.class);
+        DescribeTopicsResult describeTopicsResult = Mockito.mock(DescribeTopicsResult.class);
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Map<String, TopicDescription>> descriptions = Mockito.mock(KafkaFuture.class);
+        TopicDescription description = new TopicDescription("empty-topic", false, Collections.emptyList());
+        Mockito.when(adminClient.describeTopics(Mockito.anyCollection())).thenReturn(describeTopicsResult);
+        Mockito.when(describeTopicsResult.all()).thenReturn(descriptions);
+        Mockito.when(descriptions.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
+                .thenReturn(Collections.singletonMap("empty-topic", description));
+
+        KafkaTopicRuntimeResponse response = adapter(adminClient, 10).getTopicRuntime(KafkaTopicRuntimeRequest.builder()
+                .datasourceKey("default").topic("empty-topic").build());
+
+        assertTrue(response.getPartitions().isEmpty());
+        assertFalse(response.isTruncated());
+        Mockito.verify(adminClient, Mockito.never()).listOffsets(Mockito.anyMap());
+    }
+
+    @Test
+    void shouldReturnEmptyConsumerGroupLagWithoutSubmittingEmptyOffsetRequest() throws Exception {
+        AdminClient adminClient = Mockito.mock(AdminClient.class);
+        ListConsumerGroupOffsetsResult result = Mockito.mock(ListConsumerGroupOffsetsResult.class);
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Map<TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata>> offsets = Mockito.mock(KafkaFuture.class);
+        Mockito.when(adminClient.listConsumerGroupOffsets("empty-group")).thenReturn(result);
+        Mockito.when(result.partitionsToOffsetAndMetadata()).thenReturn(offsets);
+        Mockito.when(offsets.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
+                .thenReturn(Collections.emptyMap());
+
+        KafkaConsumerGroupLagListResponse response = adapter(adminClient, 10).getConsumerGroupLag(
+                KafkaConsumerGroupLagListRequest.builder().datasourceKey("default").groupId("empty-group").size(10).build());
+
+        assertTrue(response.getItems().isEmpty());
+        assertFalse(response.getTruncated());
+        Mockito.verify(adminClient, Mockito.never()).listOffsets(Mockito.anyMap());
+    }
+
+    @Test
+    void shouldProjectOnlyAllowedNonSensitiveTopicConfiguration() throws Exception {
+        AdminClient adminClient = Mockito.mock(AdminClient.class);
+        DescribeConfigsResult result = Mockito.mock(DescribeConfigsResult.class);
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Map<ConfigResource, Config>> values = Mockito.mock(KafkaFuture.class);
+        Config config = Mockito.mock(Config.class);
+        ConfigEntry retention = Mockito.mock(ConfigEntry.class);
+        ConfigEntry sensitive = Mockito.mock(ConfigEntry.class);
+        ConfigEntry unsupported = Mockito.mock(ConfigEntry.class);
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, "orders");
+        Mockito.when(adminClient.describeConfigs(Mockito.anyCollection())).thenReturn(result);
+        Mockito.when(result.all()).thenReturn(values);
+        Mockito.when(values.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
+                .thenReturn(Collections.singletonMap(resource, config));
+        Mockito.when(config.entries()).thenReturn(Arrays.asList(retention, sensitive, unsupported));
+        Mockito.when(retention.name()).thenReturn("retention.ms");
+        Mockito.when(retention.value()).thenReturn("604800000");
+        Mockito.when(retention.source()).thenReturn(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG);
+        Mockito.when(retention.isReadOnly()).thenReturn(false);
+        Mockito.when(sensitive.name()).thenReturn("retention.bytes");
+        Mockito.when(sensitive.isSensitive()).thenReturn(true);
+        Mockito.when(unsupported.name()).thenReturn("unclean.leader.election.enable");
+        Mockito.when(unsupported.isSensitive()).thenReturn(false);
+
+        KafkaTopicConfigResponse response = adapter(adminClient, 10).getTopicConfig(KafkaTopicConfigRequest.builder()
+                .datasourceKey("default").topic("orders").build());
+
+        assertEquals("orders", response.getTopic());
+        assertEquals(1, response.getItems().size());
+        KafkaTopicConfigResponse.Item item = response.getItems().get(0);
+        assertEquals("retention.ms", item.getName());
+        assertEquals("604800000", item.getValue());
+        assertEquals("DYNAMIC_TOPIC_CONFIG", item.getSource());
+        assertFalse(item.getReadOnly());
+        ArgumentCaptor<Collection> resources = ArgumentCaptor.forClass(Collection.class);
+        Mockito.verify(adminClient).describeConfigs(resources.capture());
+        assertEquals(Collections.singleton(resource), new LinkedHashSet<>(resources.getValue()));
+    }
+
+    @Test
+    void shouldReportUnsupportedAndCompleteConsumerGroupAssignmentContracts() throws Exception {
+        ConsumerGroupDescription unsupported = Mockito.mock(ConsumerGroupDescription.class);
+        Mockito.when(unsupported.groupId()).thenReturn("legacy-group");
+        Mockito.when(unsupported.isSimpleConsumerGroup()).thenReturn(true);
+        Mockito.when(unsupported.members()).thenReturn(Collections.emptyList());
+        KafkaConsumerGroupDetailResponse unsupportedResponse = getGroupDetail(unsupported, 10);
+        assertEquals("simple", unsupportedResponse.getProtocolType());
+        assertEquals("UNSUPPORTED_PROTOCOL", unsupportedResponse.getAssignmentStatus());
+        assertTrue(unsupportedResponse.getAssignments().isEmpty());
+        assertFalse(unsupportedResponse.getTruncated());
+
+        ConsumerGroupDescription standard = Mockito.mock(ConsumerGroupDescription.class);
+        Mockito.when(standard.groupId()).thenReturn("orders-group");
+        Mockito.when(standard.isSimpleConsumerGroup()).thenReturn(false);
+        Mockito.when(standard.partitionAssignor()).thenReturn("cooperative-sticky");
+        Mockito.when(standard.members()).thenReturn(Collections.emptyList());
+        KafkaConsumerGroupDetailResponse completeResponse = getGroupDetail(standard, 10);
+        assertEquals("consumer", completeResponse.getProtocolType());
+        assertEquals("COMPLETE", completeResponse.getAssignmentStatus());
+        assertEquals(0, completeResponse.getMemberCount());
+        assertTrue(completeResponse.getAssignments().isEmpty());
+        assertFalse(completeResponse.getTruncated());
+    }
+
+    @Test
+    void shouldMarkConsumerGroupAssignmentTruncatedAtServerBound() throws Exception {
+        MemberDescription first = Mockito.mock(MemberDescription.class);
+        MemberDescription second = Mockito.mock(MemberDescription.class);
+        MemberAssignment firstAssignment = Mockito.mock(MemberAssignment.class);
+        MemberAssignment secondAssignment = Mockito.mock(MemberAssignment.class);
+        Mockito.when(first.consumerId()).thenReturn("member-a");
+        Mockito.when(second.consumerId()).thenReturn("member-b");
+        Mockito.when(first.assignment()).thenReturn(firstAssignment);
+        Mockito.when(second.assignment()).thenReturn(secondAssignment);
+        Mockito.when(firstAssignment.topicPartitions()).thenReturn(Collections.singleton(new TopicPartition("orders", 0)));
+        Mockito.when(secondAssignment.topicPartitions()).thenReturn(Collections.singleton(new TopicPartition("orders", 1)));
+        ConsumerGroupDescription description = Mockito.mock(ConsumerGroupDescription.class);
+        Mockito.when(description.groupId()).thenReturn("orders-group");
+        Mockito.when(description.isSimpleConsumerGroup()).thenReturn(false);
+        Mockito.when(description.partitionAssignor()).thenReturn("range");
+        Mockito.when(description.members()).thenReturn(Arrays.asList(second, first));
+
+        KafkaConsumerGroupDetailResponse response = getGroupDetail(description, 1);
+
+        assertEquals("TRUNCATED", response.getAssignmentStatus());
+        assertTrue(response.getTruncated());
+        assertEquals(2, response.getMemberCount());
+        assertEquals(1, response.getAssignments().size());
+        assertEquals("orders", response.getAssignments().get(0).getTopic());
+        assertEquals(Collections.singletonList(0), response.getAssignments().get(0).getPartitions());
+    }
+
+    private KafkaConsumerGroupDetailResponse getGroupDetail(ConsumerGroupDescription description, int maxSize)
+            throws Exception {
+        AdminClient adminClient = Mockito.mock(AdminClient.class);
+        DescribeConsumerGroupsResult result = Mockito.mock(DescribeConsumerGroupsResult.class);
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Map<String, ConsumerGroupDescription>> descriptions = Mockito.mock(KafkaFuture.class);
+        Mockito.when(adminClient.describeConsumerGroups(Mockito.anyCollection())).thenReturn(result);
+        Mockito.when(result.all()).thenReturn(descriptions);
+        String groupId = description.groupId();
+        Mockito.when(descriptions.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
+                .thenReturn(Collections.singletonMap(groupId, description));
+        return adapter(adminClient, maxSize).getConsumerGroupDetail(KafkaConsumerGroupDetailRequest.builder()
+                .datasourceKey("default").groupId(groupId).build());
+    }
+
+    private DefaultKafkaOperationsViewAdapter adapter(AdminClient adminClient, int maxSize) {
+        KafkaRouteAdminClientFactory factory = new KafkaRouteAdminClientFactory() {
+            @Override
+            public <T> T withAdminClient(String datasourceKey,
+                                         io.github.surezzzzzz.sdk.kafka.route.factory.KafkaRouteAdminClientCallback<T> callback) {
+                return callback.doWithAdminClient(adminClient);
+            }
+        };
+        SimpleKafkaRouteRegistry registry = Mockito.mock(SimpleKafkaRouteRegistry.class);
+        Mockito.when(registry.getDatasourceKeys()).thenReturn(Collections.singleton("default"));
+        Mockito.when(registry.containsDatasource("default")).thenReturn(true);
+        return new DefaultKafkaOperationsViewAdapter(registry, Mockito.mock(KafkaRouteDiagnostics.class), factory, 100L,
+                maxSize);
     }
 }

@@ -2,8 +2,6 @@
 
 内部中间件只读运维 Server SDK。使用方配置既有的 Elasticsearch、Redis、Kafka、MySQL Route Starter 后，引入本 Starter 即可提供统一的受控观察页面和 HTTP 接口。
 
-一期不提供任意协议透传、原始中间件请求、业务数据读取或任何写操作。
-
 ## 适用范围与兼容性
 
 | 项目 | 说明 |
@@ -24,11 +22,13 @@
 4. 配置 Ops 的路径、查询上限和并发预算。
 5. 启动应用，登录 `/middleware-ops/login`，执行一次人工操作并确认审计页面可查到该记录。
 
+页面右上角提供全局时间显示设置，默认使用北京时间，可切换为 UTC；选择保存在当前浏览器的 `localStorage` 中，并同时影响审计显示、有效查询范围和自定义时间输入。服务端审计索引仍按 UTC 日期写入。
+
 ## 1. 引入依赖
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.0.1'
 
     // Ops 以 compileOnly 声明中间件实现；按实际启用能力提供运行时实现
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -40,6 +40,8 @@ dependencies {
 ```
 
 四个 Route Starter、Elasticsearch Search/Persistence、Thymeleaf 与 Spring Security 都由 Ops Starter 通过 `api` 传递引入，使用方只直接引入 Ops Starter，不重复声明这些依赖。上例同时启用四类能力；未启用的中间件实现可以移除。MySQL 启用时保留 JDBC Starter 与实际数据库驱动。
+
+Redis Route 仅在任一数据源显式启用 `lettuce.pool.enabled=true` 时需要 Commons Pool2；Ops 以无版本 `runtimeOnly` 提供该运行时类路径，版本由 Spring Boot 2.7.9 BOM 管理。未启用连接池时不会创建池化 client。
 
 `spring-boot-autoconfigure`、`spring-boot-starter-web`、`spring-boot-starter-validation` 与 `spring-boot-configuration-processor` 是模块构建期的 `compileOnly` 依赖，不需要由使用方额外声明。
 
@@ -289,8 +291,8 @@ Search `MASK` 是 SQL、DSL、Key、Hash field、Topic、Consumer Group 审计�
 
 | 工作区 | 自动显示的安全状态 | 控制台可执行的人工只读操作 |
 | --- | --- | --- |
-| Elasticsearch | Route 版本与探测摘要 | 受限 JSON DSL 首窗口。 |
-| Redis | Redis 版本与部署模式 | 精确 Key 的元数据及已检测类型的受限值窗口。 |
+| Elasticsearch | Route 版本与探测摘要 | 受限 JSON DSL 首窗口；支持精确索引、通配模式和逗号分隔的多个模式。字段能力补全仅支持精确索引。 |
+| Redis | Redis 版本与部署模式 | 字面量前缀的单次受限 Key 发现，以及精确 Key 的元数据和已检测类型受限值窗口。 |
 | Kafka | Route 诊断、WARN 原因、集群标识、Broker 数与 Controller 可见性 | Topic 清单、Consumer Group 清单、Topic 运行态与 Consumer Group 积压。 |
 | MySQL | 连接、逻辑数据库、服务端版本、普通只读与强制只读保护 | 单表、无 schema、无锁的受控 SELECT 首窗口。 |
 
@@ -310,8 +312,8 @@ Kafka topic 与消费组查询只通过 `KafkaRouteAdminClientFactory#withAdminC
 | `query.max-sql-length` | MySQL SQL 最大字符数。 |
 | `query.max-columns` | MySQL 结果最大列数。 |
 | `query.max-cell-length` | 单元格内容最大字符数。 |
-| `query.max-response-length` | 单个安全摘要字段的最大字符数。 |
-| `query.deadline-millis` | Kafka 等下游操作的 deadline。 |
+| `query.max-response-length` | 安全响应内容的最大字符预算；Redis discovery 对返回 Key 的总字符数使用同一预算。 |
+| `query.deadline-millis` | Kafka、Redis discovery 等下游操作的总 deadline。 |
 | `concurrency.global` | 全部请求的最大并发预算。 |
 | `concurrency.datasource` | 单数据源的最大并发预算。 |
 
@@ -334,7 +336,9 @@ Kafka topic 与消费组查询只通过 `KafkaRouteAdminClientFactory#withAdminC
 | GET | `/kafka/datasources/overview` | 概览自动加载的 Kafka 数据源安全诊断，不写审计。 |
 | GET | `/kafka/datasources` | 人工控制台查询的 Kafka Route 诊断安全清单，写审计。 |
 | GET | `/elasticsearch/catalog`、`/redis/catalog`、`/kafka/catalog`、`/mysql/catalog` | 当前工作区的启动期数据源快照。 |
-| GET | `/elasticsearch/datasources/{datasourceKey}/documents?index=&dsl=&size=` | 受限 JSON DSL 首窗口。 |
+| GET | `/elasticsearch/datasources/{datasourceKey}/documents?index=&dsl=&size=` | 受限 JSON DSL 首窗口；`index` 支持精确索引、通配模式与逗号分隔的多个模式，仅展开公开 open 索引。 |
+| GET | `/elasticsearch/datasources/{datasourceKey}/fields?index=` | 精确索引的字段能力安全目录；不支持通配模式或多索引目标。 |
+| GET | `/redis/datasources/{datasourceKey}/keys/discovery?prefix=&size=` | 只接受必填字面量前缀的单次受限 Key 发现；返回 `items`、`limit`、`returned`、`truncated`、`traversalComplete`、`stopReason`，不提供续传。 |
 | GET | `/redis/datasources/{datasourceKey}/keys/metadata?key=` | 精确 Key 的存在性、类型与 TTL。 |
 | GET | `/redis/datasources/{datasourceKey}/keys/value?key=&field=&offset=&size=` | 已检测类型的受限值窗口。 |
 | GET | `/kafka/datasources/{datasourceKey}/topics?size=` | 固定排序的 Topic 首窗口。 |
@@ -369,7 +373,8 @@ DROP USER 'middleware_ops_reader'@'middleware-ops.test';
 
 ### 固定安全约束
 
-- Elasticsearch 仅接受受限 JSON DSL；Redis 仅允许精确 Key 的已检测类型受限读取。
+- Elasticsearch 仅接受受限 JSON DSL。文档查询的 `index` 支持精确名称、`*`、`?` 和逗号分隔的多个模式，但拒绝隐藏索引、`_all`、路径片段和控制字符，并固定只展开公开 open 索引；字段能力目录仅接受精确非隐藏索引。Redis 允许精确 Key 的已检测类型受限读取，以及必填字面量前缀的单次有界 `SCAN` 发现。前缀拒绝控制字符、`*`、`?`、`[`、`]`、`\\`；服务端只由已校验前缀构造内部 `prefix + "*"` match。
+- Redis discovery 不使用 `KEYS`、raw `execute`、Lua、native client 或用户命令；不返回 value、cursor、nextCursor、node、host、port、slot、endpoint 或 topology，不建立查询会话。Cluster 只扫描 master；任一 topology 或 master 扫描失败返回 `503` 且丢弃候选，deadline 返回 `504` 且丢弃候选。`traversalComplete=true` 仅表示本次 selected cursor 全部结束，不表示完整、一致或时间点快照；并发写入、resharding 或 topology 变化时可能重复或遗漏 Key。
 - Kafka 不提供消息、payload/header、任意 Admin 命令、Topic/ACL/config/offset/Consumer Group 修改。
 - MySQL 只允许单条、单表、无 schema、无 Join、无函数、无锁的 SELECT。
 - 不返回 Route 配置、地址、凭据、安全属性、原始中间件响应、原始异常或实现类名。
@@ -398,6 +403,10 @@ LDAP 用户认证的配置和页面/API 入口见“用户系统：Windows AD / 
 | 不支持的 HTTP 方法 | 405 |
 | 瞬时并发预算耗尽 | 429 |
 | Route 或中间件不可用 | 503 |
-| Kafka 查询超过 deadline | 504 |
+| Kafka 或 Redis discovery 查询超过 deadline | 504 |
 
 详细资源所有权、扩展边界与非目标见 [DESIGN.md](DESIGN.md)。
+
+## 版本变更
+
+- [1.0.1](CHANGELOG.1.0.1.md)：完善 Elasticsearch、Redis、Kafka、MySQL 的受控只读观察闭环，新增 Redis 有界 Key 发现并适配 Redis Route 1.2.2。

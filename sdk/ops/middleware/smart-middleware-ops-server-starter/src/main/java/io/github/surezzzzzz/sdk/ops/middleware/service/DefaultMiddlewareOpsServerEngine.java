@@ -160,7 +160,8 @@ public class DefaultMiddlewareOpsServerEngine implements MiddlewareOpsServerEngi
                 && capability != MiddlewareOpsCapability.KAFKA_DATASOURCE_CATALOG
                 && capability != MiddlewareOpsCapability.MYSQL_DATASOURCE_CATALOG
                 && capability != MiddlewareOpsCapability.ELASTICSEARCH_SUMMARY
-                && capability != MiddlewareOpsCapability.ELASTICSEARCH_INDEX_LIST;
+                && capability != MiddlewareOpsCapability.ELASTICSEARCH_INDEX_LIST
+                && capability != MiddlewareOpsCapability.ELASTICSEARCH_FIELD_CAPABILITIES;
     }
 
     /**

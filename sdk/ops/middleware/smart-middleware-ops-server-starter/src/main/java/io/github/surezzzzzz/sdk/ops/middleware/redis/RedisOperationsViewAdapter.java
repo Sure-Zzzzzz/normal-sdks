@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.ops.middleware.redis;
 
 /**
- * Redis Route 只读运维视图适配口。
+ * Redis 受控运维视图适配口。
  *
  * @author surezzzzzz
  */
@@ -29,6 +29,14 @@ public interface RedisOperationsViewAdapter {
      * @return key 元数据
      */
     RedisKeyMetadataResponse getKeyMetadata(RedisKeyMetadataRequest request);
+
+    /**
+     * 按字面量前缀发现受限 Redis key。
+     *
+     * @param request 查询请求
+     * @return key 发现响应
+     */
+    RedisKeyDiscoveryResponse discoverKeys(RedisKeyDiscoveryRequest request);
 
     /**
      * 读取精确 key 的实际类型数据。

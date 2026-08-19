@@ -4,24 +4,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.elasticsearch.route.model.ClusterInfo;
 import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearchRouteRegistry;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.ElasticsearchReflectionHelper;
-import io.github.surezzzzzz.sdk.elasticsearch.route.support.XContentCompatibilityHelper;
 import io.github.surezzzzzz.sdk.ops.middleware.constant.SmartMiddlewareOpsServerConstant;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import org.apache.http.HttpEntity;
-import org.elasticsearch.action.ActionListener;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.*;
-import org.elasticsearch.search.SearchHit;
-import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.http.HttpStatus;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Method;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -46,7 +37,7 @@ public class DefaultElasticsearchOperationsViewAdapter implements ElasticsearchO
      *
      * @param registry          Elasticsearch Route Registry
      * @param deadlineMillis    单次查询截止时间
-     * @param maxResponseLength 单条命中 source 最大字符数
+     * @param maxResponseLength 原始响应最大字节数
      */
     public DefaultElasticsearchOperationsViewAdapter(SimpleElasticsearchRouteRegistry registry, long deadlineMillis,
                                                      int maxResponseLength) {
@@ -74,8 +65,19 @@ public class DefaultElasticsearchOperationsViewAdapter implements ElasticsearchO
         }
         Request request = new Request("GET", "/_aliases");
         request.addParameter("expand_wildcards", "open");
-        Response response = awaitIndexList(datasourceKey, request);
+        Response response = awaitMetadata(datasourceKey, request);
         return parseIndexList(datasourceKey, response);
+    }
+
+    @Override
+    public ElasticsearchFieldCapabilitiesResponse getFieldCapabilities(ElasticsearchFieldCapabilitiesRequest request) {
+        if (registry.getClusterInfo(request.getDatasourceKey()) == null) {
+            throw new MiddlewareOpsException(HttpStatus.NOT_FOUND, "目标数据源不存在");
+        }
+        Request fieldCapabilitiesRequest = new Request("GET", "/" + request.getIndex() + "/_field_caps");
+        fieldCapabilitiesRequest.addParameter("fields", "*");
+        return parseFieldCapabilities(request.getDatasourceKey(), request.getIndex(),
+                awaitMetadata(request.getDatasourceKey(), fieldCapabilitiesRequest));
     }
 
     @Override
@@ -83,20 +85,26 @@ public class DefaultElasticsearchOperationsViewAdapter implements ElasticsearchO
         if (registry.getClusterInfo(request.getDatasourceKey()) == null) {
             throw new MiddlewareOpsException(HttpStatus.NOT_FOUND, "目标数据源不存在");
         }
-        SearchSourceBuilder source = parseSource(request.getDsl());
-        source.from((request.getPage() - 1) * request.getSize());
-        source.size(request.getSize() + 1);
-        SearchResponse response = awaitSearch(request.getDatasourceKey(), new SearchRequest(request.getIndex()).source(source));
-        List<ElasticsearchDocumentQueryResponse.Hit> items = new ArrayList<>();
-        SearchHit[] hits = response.getHits().getHits();
-        int limit = Math.min(request.getSize(), hits.length);
-        for (int index = 0; index < limit; index++) {
-            SearchHit hit = hits[index];
-            items.add(ElasticsearchDocumentQueryResponse.Hit.builder().index(hit.getIndex()).id(hit.getId())
-                    .source(limitSource(hit.getSourceAsMap())).build());
+        Request searchRequest = new Request("POST", "/" + request.getIndex() + "/_search");
+        searchRequest.addParameter("expand_wildcards", "open");
+        searchRequest.setJsonEntity(buildSearchBody(request));
+        return parseDocumentQueryResponse(awaitMetadata(request.getDatasourceKey(), searchRequest));
+    }
+
+    private String buildSearchBody(ElasticsearchDocumentQueryRequest request) {
+        return request.getDsl();
+    }
+
+    private ElasticsearchDocumentQueryResponse parseDocumentQueryResponse(Response response) {
+        try (InputStream content = entityContent(response.getEntity(), maxResponseLength)) {
+            JsonNode root = objectMapper.readTree(content);
+            if (root == null || !root.isObject()) {
+                throw new IOException("文档查询响应格式无效");
+            }
+            return new ElasticsearchDocumentQueryResponse(root);
+        } catch (IOException | RuntimeException e) {
+            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 运维查询暂不可用");
         }
-        return ElasticsearchDocumentQueryResponse.builder().page(request.getPage()).size(request.getSize())
-                .items(items).hasMore(hits.length > request.getSize()).build();
     }
 
     private ElasticsearchIndexListResponse parseIndexList(String datasourceKey, Response response) {
@@ -134,19 +142,95 @@ public class DefaultElasticsearchOperationsViewAdapter implements ElasticsearchO
                 .items(Collections.unmodifiableList(new ArrayList<>(names))).truncated(truncated).build();
     }
 
-    private InputStream entityContent(HttpEntity entity) throws IOException {
-        if (entity == null || entity.getContent() == null) {
-            throw new IOException("索引目录响应为空");
+    private ElasticsearchFieldCapabilitiesResponse parseFieldCapabilities(String datasourceKey, String index,
+                                                                          Response response) {
+        try {
+            return parseFieldCapabilities(datasourceKey, index, entityContent(response.getEntity(),
+                    SmartMiddlewareOpsServerConstant.MAX_ELASTICSEARCH_FIELD_CAPABILITIES_RESPONSE_LENGTH));
+        } catch (IOException e) {
+            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 字段补全暂不可用");
         }
-        return new BoundedInputStream(entity.getContent(),
-                SmartMiddlewareOpsServerConstant.MAX_ELASTICSEARCH_INDEX_RESPONSE_LENGTH);
+    }
+
+    ElasticsearchFieldCapabilitiesResponse parseFieldCapabilities(String datasourceKey, String index, InputStream input) {
+        TreeMap<String, ElasticsearchFieldCapabilitiesResponse.Item> fields = new TreeMap<>();
+        boolean truncated = false;
+        try (InputStream content = input) {
+            JsonNode root = objectMapper.readTree(content);
+            JsonNode fieldNodes = root == null ? null : root.get("fields");
+            if (fieldNodes == null || !fieldNodes.isObject()) {
+                throw new IOException("字段能力响应格式无效");
+            }
+            Iterator<Map.Entry<String, JsonNode>> values = fieldNodes.fields();
+            while (values.hasNext()) {
+                Map.Entry<String, JsonNode> value = values.next();
+                String name = value.getKey();
+                if (isInternalField(name)) {
+                    continue;
+                }
+                ElasticsearchFieldCapabilitiesResponse.Item item = toFieldCapability(name, value.getValue());
+                if (item == null) {
+                    continue;
+                }
+                fields.put(name, item);
+                if (fields.size() > SmartMiddlewareOpsServerConstant.MAX_ELASTICSEARCH_FIELD_CAPABILITIES_SIZE) {
+                    fields.pollLastEntry();
+                    truncated = true;
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 字段补全暂不可用");
+        }
+        return ElasticsearchFieldCapabilitiesResponse.builder().datasourceKey(datasourceKey).index(index)
+                .items(Collections.unmodifiableList(new ArrayList<>(fields.values()))).truncated(truncated).build();
+    }
+
+    private ElasticsearchFieldCapabilitiesResponse.Item toFieldCapability(String name, JsonNode types) {
+        if (types == null || !types.isObject()) {
+            return null;
+        }
+        TreeSet<String> names = new TreeSet<>();
+        boolean searchable = false;
+        boolean aggregatable = false;
+        Iterator<Map.Entry<String, JsonNode>> entries = types.fields();
+        while (entries.hasNext()) {
+            Map.Entry<String, JsonNode> entry = entries.next();
+            JsonNode capability = entry.getValue();
+            if (capability == null || !capability.isObject()) {
+                continue;
+            }
+            names.add(entry.getKey());
+            searchable |= capability.path("searchable").asBoolean(false);
+            aggregatable |= capability.path("aggregatable").asBoolean(false);
+        }
+        if (names.isEmpty() || (!searchable && !aggregatable)) {
+            return null;
+        }
+        return ElasticsearchFieldCapabilitiesResponse.Item.builder().name(name)
+                .types(Collections.unmodifiableList(new ArrayList<>(names))).searchable(searchable)
+                .aggregatable(aggregatable).build();
+    }
+
+    private InputStream entityContent(HttpEntity entity) throws IOException {
+        return entityContent(entity, SmartMiddlewareOpsServerConstant.MAX_ELASTICSEARCH_INDEX_RESPONSE_LENGTH);
+    }
+
+    private InputStream entityContent(HttpEntity entity, int maxLength) throws IOException {
+        if (entity == null || entity.getContent() == null) {
+            throw new IOException("Elasticsearch 响应为空");
+        }
+        return new BoundedInputStream(entity.getContent(), maxLength);
     }
 
     private boolean isHidden(String name) {
         return name == null || name.startsWith(".");
     }
 
-    private Response awaitIndexList(String datasourceKey, Request request) {
+    private boolean isInternalField(String name) {
+        return name == null || name.startsWith("_");
+    }
+
+    private Response awaitMetadata(String datasourceKey, Request request) {
         CompletableFuture<Response> future = new CompletableFuture<>();
         AtomicReference<Cancellable> cancellable = new AtomicReference<>();
         try {
@@ -175,79 +259,6 @@ public class DefaultElasticsearchOperationsViewAdapter implements ElasticsearchO
         } catch (ExecutionException | RuntimeException e) {
             throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 运维查询暂不可用");
         }
-    }
-
-    private SearchResponse awaitSearch(String datasourceKey, SearchRequest request) {
-        CompletableFuture<SearchResponse> future = new CompletableFuture<>();
-        AtomicReference<Cancellable> cancellable = new AtomicReference<>();
-        try {
-            cancellable.set(registry.getHighLevelClient(datasourceKey).searchAsync(request,
-                    org.elasticsearch.client.RequestOptions.DEFAULT, new ActionListener<SearchResponse>() {
-                        @Override
-                        public void onResponse(SearchResponse response) {
-                            future.complete(response);
-                        }
-
-                        @Override
-                        public void onFailure(Exception exception) {
-                            future.completeExceptionally(exception);
-                        }
-                    }));
-            return future.get(deadlineMillis, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            Cancellable current = cancellable.get();
-            if (current != null) {
-                current.cancel();
-            }
-            throw new MiddlewareOpsException(HttpStatus.GATEWAY_TIMEOUT, "Elasticsearch 运维查询已超时");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 运维查询暂不可用");
-        } catch (ExecutionException | RuntimeException e) {
-            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Elasticsearch 运维查询暂不可用");
-        }
-    }
-
-    private SearchSourceBuilder parseSource(String dsl) {
-        Object parser = null;
-        try {
-            parser = XContentCompatibilityHelper.createParser(dsl.getBytes(StandardCharsets.UTF_8));
-            SearchSourceBuilder source = new SearchSourceBuilder();
-            ElasticsearchReflectionHelper.invoke(parseXContentMethod(parser), source, parser);
-            return source;
-        } catch (RuntimeException e) {
-            throw new MiddlewareOpsException(HttpStatus.BAD_REQUEST, "JSON DSL 不符合 Elasticsearch 查询规范");
-        } finally {
-            XContentCompatibilityHelper.closeParser(parser);
-        }
-    }
-
-    private Method parseXContentMethod(Object parser) {
-        for (Method method : SearchSourceBuilder.class.getMethods()) {
-            if ("parseXContent".equals(method.getName()) && method.getParameterTypes().length == 1
-                    && method.getParameterTypes()[0].isAssignableFrom(parser.getClass())) {
-                return method;
-            }
-        }
-        throw new IllegalStateException("Elasticsearch DSL 解析器不可用");
-    }
-
-    private Map<String, Object> limitSource(Map<String, Object> source) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        if (source == null) {
-            return result;
-        }
-        int remaining = maxResponseLength;
-        for (Map.Entry<String, Object> entry : source.entrySet()) {
-            if (remaining <= 0) {
-                break;
-            }
-            String value = String.valueOf(entry.getValue());
-            int length = Math.min(value.length(), remaining);
-            result.put(entry.getKey(), value.length() == length ? entry.getValue() : value.substring(0, length));
-            remaining -= entry.getKey().length() + length;
-        }
-        return result;
     }
 
     private String valueOf(Object value) {

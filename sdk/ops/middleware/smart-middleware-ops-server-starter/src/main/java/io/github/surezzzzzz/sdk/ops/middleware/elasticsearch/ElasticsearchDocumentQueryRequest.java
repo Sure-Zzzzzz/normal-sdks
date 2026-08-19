@@ -26,15 +26,6 @@ public class ElasticsearchDocumentQueryRequest implements MiddlewareOpsRequest {
      * 已解码的 JSON DSL。
      */
     private final String dsl;
-    /**
-     * 当前页码。
-     */
-    @Builder.Default
-    private final int page = 1;
-    /**
-     * 单页结果数量。
-     */
-    private final int size;
 
     @Override
     public MiddlewareOpsCapability getCapability() {

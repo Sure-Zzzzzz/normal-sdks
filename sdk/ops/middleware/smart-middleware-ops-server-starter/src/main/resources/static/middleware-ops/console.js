@@ -15,9 +15,12 @@
     var workspaceStates = {};
     var resultStates = {};
     var resultPageSize = 20;
+    var auditTimeZone = 'beijing';
+    var auditTimeZoneStorageKey = 'middleware-ops-audit-time-zone:v1:' + window.location.origin + ':' + apiBasePath;
+    var auditTimeZoneSelect = document.getElementById('ops-audit-time-zone');
     var defaultConsolePanels = {
         elasticsearch: 'query',
-        redis: 'key-read',
+        redis: 'key-discovery',
         kafka: 'topic-list',
         mysql: 'select'
     };
@@ -54,13 +57,38 @@
             indexLoading: false,
             indexSequence: 0,
             indexController: null,
+            fieldDatasourceKey: null,
+            fieldIndex: null,
+            fieldItems: [],
+            fieldTruncated: false,
+            fieldError: null,
+            fieldLoading: false,
+            fieldSequence: 0,
+            fieldController: null,
+            dslSuggestionItems: [],
+            dslSuggestionIndex: -1,
             documentData: null,
             documentDatasourceKey: null,
-            documentSelectedIndex: -1,
             documentError: null,
             documentLoading: false,
             documentSequence: 0,
-            documentController: null
+            documentController: null,
+            mysqlTableDatasourceKey: null,
+            mysqlTableItems: [],
+            mysqlTableTruncated: false,
+            mysqlTableError: null,
+            mysqlTableLoading: false,
+            mysqlTableSequence: 0,
+            mysqlTableController: null,
+            mysqlColumnDatasourceKey: null,
+            mysqlColumnTable: null,
+            mysqlColumnItems: [],
+            mysqlSelectedColumnTable: null,
+            mysqlSelectedColumnNames: [],
+            mysqlColumnError: null,
+            mysqlColumnLoading: false,
+            mysqlColumnSequence: 0,
+            mysqlColumnController: null
         };
     });
 
@@ -68,7 +96,100 @@
         document.getElementById('kafka-topic-console-state').textContent = message;
     }
 
+    var draftStorageVersion = 'v1';
+    var draftStorageKey = 'middleware-ops-console-drafts:' + draftStorageVersion + ':' + window.location.origin + ':' + apiBasePath;
+    var draftSaveTimer = null;
+
+    function draftFields() {
+        return Array.prototype.slice.call(document.querySelectorAll('.ops-workspace .ops-section[data-section-panel="console"] form input[name], .ops-workspace .ops-section[data-section-panel="console"] form textarea[name], .ops-workspace .ops-section[data-section-panel="console"] form select[name]'));
+    }
+
+    function setDraftState(message) {
+        document.getElementById('ops-draft-state').textContent = message;
+    }
+
+    function consoleDrafts() {
+        var drafts = {};
+        draftFields().forEach(function (field) {
+            if (field.type !== 'hidden' && field.type !== 'submit' && field.type !== 'button') {
+                drafts[field.closest('.ops-workspace').getAttribute('data-workspace-panel') + ':' + field.form.id + ':' + field.name]
+                    = field.value;
+            }
+        });
+        workspaceNames.forEach(function (workspace) {
+            drafts[workspace + ':datasourceKey'] = workspaceStates[workspace].selectedDatasourceKey || '';
+        });
+        drafts['mysql:selectedColumnTable'] = workspaceStates.mysql.mysqlSelectedColumnTable || '';
+        drafts['mysql:selectedColumnNames'] = workspaceStates.mysql.mysqlSelectedColumnNames.join(',');
+        return drafts;
+    }
+
+    function scheduleDraftSave() {
+        if (draftSaveTimer) {
+            window.clearTimeout(draftSaveTimer);
+        }
+        draftSaveTimer = window.setTimeout(function () {
+            try {
+                window.localStorage.setItem(draftStorageKey, JSON.stringify(consoleDrafts()));
+                setDraftState('输入草稿仅保存在当前浏览器。');
+            } catch (error) {
+                setDraftState('当前浏览器无法保存输入草稿。');
+            }
+        }, 200);
+    }
+
+    function clearConsoleDrafts() {
+        if (draftSaveTimer) {
+            window.clearTimeout(draftSaveTimer);
+            draftSaveTimer = null;
+        }
+        try {
+            window.localStorage.removeItem(draftStorageKey);
+            setDraftState('输入草稿已清除。');
+        } catch (error) {
+            setDraftState('当前浏览器无法清除输入草稿。');
+        }
+    }
+
+    function restoreConsoleDrafts() {
+        var drafts;
+        try {
+            drafts = JSON.parse(window.localStorage.getItem(draftStorageKey) || '{}');
+        } catch (error) {
+            setDraftState('已忽略无效的本地输入草稿。');
+            return;
+        }
+        if (!drafts || typeof drafts !== 'object') {
+            return;
+        }
+        draftFields().forEach(function (field) {
+            var workspace = field.closest('.ops-workspace').getAttribute('data-workspace-panel');
+            var key = workspace + ':' + field.form.id + ':' + field.name;
+            var value = drafts[key];
+            if (typeof value === 'string' && value.length <= 8192) {
+                field.value = value;
+            }
+        });
+        workspaceNames.forEach(function (workspace) {
+            var datasourceKey = drafts[workspace + ':datasourceKey'];
+            if (typeof datasourceKey === 'string' && datasourceKey.length <= 256) {
+                workspaceStates[workspace].selectedDatasourceKey = datasourceKey || null;
+            }
+        });
+        var selectedColumnTable = drafts['mysql:selectedColumnTable'];
+        var selectedColumnNames = drafts['mysql:selectedColumnNames'];
+        if (typeof selectedColumnTable === 'string' && isMysqlTableName(selectedColumnTable)
+            && typeof selectedColumnNames === 'string' && selectedColumnNames.length <= 8192) {
+            workspaceStates.mysql.mysqlSelectedColumnTable = selectedColumnTable;
+            workspaceStates.mysql.mysqlSelectedColumnNames = selectedColumnNames.split(',').filter(stateColumnName);
+        }
+        if (Object.keys(drafts).length) {
+            setDraftState('已恢复未执行的输入草稿。');
+        }
+    }
+
     function clearWorkspaceMemory() {
+        clearConsoleDrafts();
         workspaceNames.forEach(function (workspace) {
             var state = workspaceStates[workspace];
             state.consolePanel = defaultConsolePanels[workspace];
@@ -95,21 +216,31 @@
             state.auditPendingSnapshot = null;
             cancelIndexRequest(state);
             cancelDocumentRequest(state);
+            cancelElasticsearchFieldRequest(state);
             state.indexDatasourceKey = null;
             state.indexItems = [];
             state.indexTruncated = false;
             state.indexError = null;
             state.indexLoading = false;
-            document.getElementById('elasticsearch-index-input').value = '';
+            state.fieldDatasourceKey = null;
+            state.fieldIndex = null;
+            state.fieldItems = [];
+            state.fieldTruncated = false;
+            state.fieldError = null;
+            state.fieldLoading = false;
             state.documentData = null;
             state.documentDatasourceKey = null;
-            state.documentSelectedIndex = -1;
             state.documentError = null;
             state.documentLoading = false;
+            if (workspace === 'mysql') {
+                clearMysqlSuggestions(state);
+            }
             resetConsolePanel(workspace);
         });
-        document.querySelector('#kafka-topic-console-form input[name="topic"]').value = '';
-        document.querySelector('#kafka-lag-console-form input[name="groupId"]').value = '';
+        Array.prototype.forEach.call(document.querySelectorAll('.ops-workspace .ops-section[data-section-panel="console"] form'),
+            function (form) {
+                form.reset();
+            });
         Array.prototype.forEach.call(document.querySelectorAll('.ops-result'), function (result) {
             setResult(result.id, '会话已失效，查询结果已清除。');
         });
@@ -253,6 +384,23 @@
         result.appendChild(card);
     }
 
+    function renderRedisKeyDiscovery(content) {
+        renderResultTable('redis-key-discovery-console-result', 'Redis Key 发现结果', ['Key', '操作'], content.items,
+            function (row, item) {
+                appendResultCell(row, item, 'ops-result-long-value');
+                appendResultAction(row, '填入精确 Key', '填入精确 Key：' + resultValue(item), function () {
+                    fillRedisKey(item);
+                });
+            });
+        var result = document.getElementById('redis-key-discovery-console-result');
+        var summary = document.createElement('p');
+        summary.className = 'ops-state';
+        summary.textContent = '已返回 ' + resultValue(content.returned) + ' 项，结果上限 '
+            + resultValue(content.limit) + '，遍历' + booleanValue(content.traversalComplete, '已完成', '未完成')
+            + '，停止原因：' + resultValue(content.stopReason) + '。';
+        result.appendChild(summary);
+    }
+
     function renderRedisDatasourceList(content) {
         renderResultTable('redis-datasource-console-result', 'Redis 数据源摘要',
             ['数据源', '版本探测', 'Redis 版本', '部署模式'], content.items, function (row, item) {
@@ -305,6 +453,100 @@
             });
     }
 
+    function renderMysqlExplain(content) {
+        renderResultTable('mysql-explain-console-result', '受控 Explain 结果',
+            ['SELECT 类型', '表', '访问类型', '候选索引', '实际索引', '索引长度', '引用', '估算行数', '过滤率', 'Extra'],
+            content.items, function (row, item) {
+                appendResultCell(row, item.selectType);
+                appendResultCell(row, item.table);
+                appendResultCell(row, item.accessType);
+                appendResultCell(row, item.possibleKeys);
+                appendResultCell(row, item.key);
+                appendResultCell(row, item.keyLength);
+                appendResultCell(row, item.ref);
+                appendResultCell(row, item.estimatedRows);
+                appendResultCell(row, item.filteredPercent);
+                appendResultCell(row, item.extra);
+            });
+    }
+
+    function renderMysqlTableList(content) {
+        renderResultTable('mysql-table-list-console-result', 'MySQL 表和视图目录',
+            ['名称', '类型', '存储引擎', '估算行数', '操作'], content.items, function (row, item) {
+                appendResultCell(row, item.name, 'ops-result-long-value');
+                appendResultCell(row, item.kind);
+                appendResultCell(row, item.engine);
+                appendResultCell(row, item.estimatedRows);
+                appendResultAction(row, '填入表名', '填入表名：' + resultValue(item.name), function () {
+                    fillMysqlTable(item.name);
+                });
+            });
+        var result = document.getElementById('mysql-table-list-console-result');
+        var summary = document.createElement('p');
+        summary.className = 'ops-state';
+        summary.textContent = '已返回 ' + resultValue(content.returned) + ' 项，结果上限 ' + resultValue(content.limit)
+            + '，遍历' + booleanValue(content.traversalComplete, '已完成', '未完成')
+            + '，停止原因：' + resultValue(content.stopReason) + '。';
+        result.appendChild(summary);
+    }
+
+    function renderMysqlTableColumns(content) {
+        renderResultTable('mysql-table-columns-console-result', 'MySQL 列目录',
+            ['名称', '顺序', '数据类型', '列定义', '允许空值', '存在默认值', '键角色', 'Extra'], content.items,
+            function (row, item) {
+                appendResultCell(row, item.name, 'ops-result-long-value');
+                appendResultCell(row, item.position);
+                appendResultCell(row, item.dataType);
+                appendResultCell(row, item.columnType, 'ops-result-long-value');
+                appendResultCell(row, booleanValue(item.nullable, '是', '否'));
+                appendResultCell(row, booleanValue(item.defaultPresent, '是', '否'));
+                appendResultCell(row, item.keyRole);
+                appendResultCell(row, item.extra);
+            });
+    }
+
+    function renderMysqlTableIndexes(content) {
+        renderResultTable('mysql-table-indexes-console-result', 'MySQL 索引目录',
+            ['名称', '唯一', '类型', '可见性', '列'], content.items, function (row, item) {
+                appendResultCell(row, item.name, 'ops-result-long-value');
+                appendResultCell(row, booleanValue(item.unique, '是', '否'));
+                appendResultCell(row, item.type);
+                appendResultCell(row, item.visible === null || item.visible === undefined ? '当前版本未提供' : booleanValue(item.visible, '是', '否'));
+                appendResultCell(row, (item.columns || []).join(', '), 'ops-result-long-value');
+            });
+    }
+
+    function renderKafkaTopicConfig(content) {
+        renderResultTable('kafka-topic-config-console-result', 'Kafka Topic 固定配置',
+            ['配置项', '值', '来源', '只读'], content.items, function (row, item) {
+                appendResultCell(row, item.name, 'ops-result-long-value');
+                appendResultCell(row, item.value, 'ops-result-long-value');
+                appendResultCell(row, item.source);
+                appendResultCell(row, booleanValue(item.readOnly, '是', '否'));
+            });
+    }
+
+    function renderKafkaGroupDetail(content) {
+        renderResultTable('kafka-group-detail-console-result', 'Kafka 消费组详情', ['字段', '值'], [
+            {label: '消费组', value: content.groupId},
+            {label: '状态', value: content.state},
+            {label: '协议类型', value: content.protocolType},
+            {label: '分配状态', value: content.assignmentStatus},
+            {label: '成员数', value: content.memberCount},
+            {label: '结果截断', value: booleanValue(content.truncated, '是', '否')}
+        ], function (row, item) {
+            appendResultCell(row, item.label);
+            appendResultCell(row, item.value, 'ops-result-long-value');
+        });
+        var result = document.getElementById('kafka-group-detail-console-result');
+        var assignments = document.createElement('p');
+        assignments.className = 'ops-result-note';
+        assignments.textContent = '分配摘要：' + (content.assignments || []).map(function (item) {
+            return item.topic + ' [' + (item.partitions || []).join(', ') + ']';
+        }).join('；');
+        result.appendChild(assignments);
+    }
+
     function renderKafkaTopicRuntime(content) {
         renderResultTable('kafka-topic-console-result', 'Kafka Topic 运行态',
             ['Topic', '分区', 'Leader', '副本', 'ISR', '最早 Offset', '最新 Offset'], content.partitions,
@@ -342,6 +584,10 @@
         if (!content || typeof content !== 'object') {
             return false;
         }
+        if (id === 'redis-key-discovery-console-result' && Array.isArray(content.items)) {
+            renderRedisKeyDiscovery(content);
+            return true;
+        }
         if (id === 'redis-datasource-console-result' && Array.isArray(content.items)) {
             renderRedisDatasourceList(content);
             return true;
@@ -367,6 +613,14 @@
             renderKafkaGroupList(content);
             return true;
         }
+        if (id === 'kafka-topic-config-console-result' && Array.isArray(content.items)) {
+            renderKafkaTopicConfig(content);
+            return true;
+        }
+        if (id === 'kafka-group-detail-console-result' && content.groupId) {
+            renderKafkaGroupDetail(content);
+            return true;
+        }
         if (id === 'kafka-topic-console-result' && Array.isArray(content.partitions)) {
             renderKafkaTopicRuntime(content);
             return true;
@@ -377,6 +631,22 @@
         }
         if (id === 'mysql-select-console-result' && Array.isArray(content.columns) && Array.isArray(content.rows)) {
             renderMysqlSelect(content);
+            return true;
+        }
+        if (id === 'mysql-explain-console-result' && Array.isArray(content.items)) {
+            renderMysqlExplain(content);
+            return true;
+        }
+        if (id === 'mysql-table-list-console-result' && Array.isArray(content.items)) {
+            renderMysqlTableList(content);
+            return true;
+        }
+        if (id === 'mysql-table-columns-console-result' && Array.isArray(content.items)) {
+            renderMysqlTableColumns(content);
+            return true;
+        }
+        if (id === 'mysql-table-indexes-console-result' && Array.isArray(content.items)) {
+            renderMysqlTableIndexes(content);
             return true;
         }
         if (id === 'mysql-status-console-result' && content.datasourceKey) {
@@ -454,22 +724,29 @@
             setResult(result.id, '切换数据源后已清除查询结果。');
         });
         if (workspace === 'kafka') {
-            document.querySelector('#kafka-topic-console-form input[name="topic"]').value = '';
-            document.querySelector('#kafka-lag-console-form input[name="groupId"]').value = '';
             resetKafkaTopicConsoleState('切换数据源后已清除查询状态。');
+        }
+        if (workspace === 'mysql') {
+            clearMysqlSuggestions(state);
+            renderMysqlSuggestions(state);
         }
         if (workspace === 'elasticsearch') {
             cancelIndexRequest(state);
             cancelDocumentRequest(state);
+            cancelElasticsearchFieldRequest(state);
             state.indexDatasourceKey = null;
             state.indexItems = [];
             state.indexTruncated = false;
             state.indexError = null;
             state.indexLoading = false;
-            document.getElementById('elasticsearch-index-input').value = '';
+            state.fieldDatasourceKey = null;
+            state.fieldIndex = null;
+            state.fieldItems = [];
+            state.fieldTruncated = false;
+            state.fieldError = null;
+            state.fieldLoading = false;
             state.documentData = null;
             state.documentDatasourceKey = null;
-            state.documentSelectedIndex = -1;
             state.documentError = null;
             state.documentLoading = false;
             renderElasticsearchIndices(state);
@@ -576,14 +853,22 @@
         setConsolePanelExpanded(workspace, defaultConsolePanels[workspace]);
     }
 
+    function fillRedisKey(key) {
+        document.querySelector('#redis-console-form input[name="key"]').value = key;
+        setConsolePanelExpanded('redis', 'key-read');
+        scheduleDraftSave();
+    }
+
     function fillKafkaTopic(topic) {
         document.querySelector('#kafka-topic-console-form input[name="topic"]').value = topic;
         setConsolePanelExpanded('kafka', 'topic-runtime');
+        scheduleDraftSave();
     }
 
     function fillKafkaGroup(groupId) {
         document.querySelector('#kafka-lag-console-form input[name="groupId"]').value = groupId;
         setConsolePanelExpanded('kafka', 'group-lag');
+        scheduleDraftSave();
     }
 
     function selectedDatasource(workspace) {
@@ -604,8 +889,12 @@
         }
         state.selectedDatasourceKey = item ? item.datasourceKey : null;
         clearWorkspaceResults(workspace);
-        if (workspace === 'elasticsearch' && item) {
-            loadElasticsearchIndices(item.datasourceKey);
+        scheduleDraftSave();
+        if (workspace === 'elasticsearch') {
+            if (item) {
+                loadElasticsearchIndices(item.datasourceKey);
+            }
+            updateElasticsearchFieldCapabilities();
         }
         Array.prototype.forEach.call(workspaceSelects(workspace), function (select) {
             select.value = state.selectedDatasourceKey || '';
@@ -627,6 +916,9 @@
         selected = selectedDatasource(workspace);
         if (workspace === 'elasticsearch' && selected && state.indexDatasourceKey !== selected.datasourceKey) {
             loadElasticsearchIndices(selected.datasourceKey);
+        }
+        if (workspace === 'elasticsearch') {
+            updateElasticsearchFieldCapabilities();
         }
         Array.prototype.forEach.call(workspaceSelects(workspace), function (select) {
             select.textContent = '';
@@ -892,6 +1184,329 @@
         }
     }
 
+    function cancelElasticsearchFieldRequest(state) {
+        state.fieldSequence++;
+        if (state.fieldController) {
+            state.fieldController.abort();
+            state.fieldController = null;
+        }
+    }
+
+    function isExactElasticsearchIndex(value) {
+        return /^[a-z0-9][a-z0-9._+\-]*$/.test(value) && value.length <= 256;
+    }
+
+    function renderElasticsearchFieldState(state) {
+        var node = document.getElementById('elasticsearch-field-state');
+        if (!state.selectedDatasourceKey || !isExactElasticsearchIndex(document.getElementById('elasticsearch-index-input').value.trim())) {
+            node.textContent = '字段补全仅支持精确索引；通配模式可直接执行查询。';
+        } else if (state.fieldLoading) {
+            node.textContent = '正在加载当前索引的字段能力。';
+        } else if (state.fieldError) {
+            node.textContent = '字段能力加载失败，仍可输入受限 JSON DSL。';
+        } else if (state.fieldTruncated) {
+            node.textContent = '已加载前 ' + state.fieldItems.length + ' 个安全字段（含 '
+                + aggregatableElasticsearchFieldCount(state.fieldItems) + ' 个可聚合字段），候选已截断。';
+        } else {
+            node.textContent = '已加载 ' + state.fieldItems.length + ' 个安全字段（含 '
+                + aggregatableElasticsearchFieldCount(state.fieldItems) + ' 个可聚合字段），用于当前 DSL 补全。';
+        }
+    }
+
+    function aggregatableElasticsearchFieldCount(items) {
+        return items.filter(function (item) {
+            return item.aggregatable;
+        }).length;
+    }
+
+    function loadElasticsearchFieldCapabilities(datasourceKey, index) {
+        var state = workspaceStates.elasticsearch;
+        cancelElasticsearchFieldRequest(state);
+        state.fieldDatasourceKey = datasourceKey;
+        state.fieldIndex = index;
+        state.fieldItems = [];
+        state.fieldTruncated = false;
+        state.fieldError = null;
+        state.fieldLoading = true;
+        renderElasticsearchFieldState(state);
+        var sequence = state.fieldSequence;
+        var controller = new AbortController();
+        state.fieldController = controller;
+        request('/elasticsearch/datasources/' + encodeURIComponent(datasourceKey) + '/fields?'
+            + queryString({index: index}), controller.signal).then(function (data) {
+            if (state.fieldSequence !== sequence || state.selectedDatasourceKey !== datasourceKey
+                || document.getElementById('elasticsearch-index-input').value.trim() !== index) {
+                return;
+            }
+            state.fieldItems = Array.isArray(data.items) ? data.items : [];
+            state.fieldTruncated = !!data.truncated;
+        }).catch(function (error) {
+            if (state.fieldSequence === sequence && error.name !== 'AbortError') {
+                state.fieldError = true;
+            }
+        }).then(function () {
+            if (state.fieldSequence === sequence) {
+                state.fieldLoading = false;
+                state.fieldController = null;
+                renderElasticsearchFieldState(state);
+            }
+        });
+    }
+
+    function updateElasticsearchFieldCapabilities() {
+        var state = workspaceStates.elasticsearch;
+        var datasource = selectedDatasource('elasticsearch');
+        var index = document.getElementById('elasticsearch-index-input').value.trim();
+        if (!datasource || !isExactElasticsearchIndex(index)) {
+            cancelElasticsearchFieldRequest(state);
+            state.fieldDatasourceKey = null;
+            state.fieldIndex = null;
+            state.fieldItems = [];
+            state.fieldTruncated = false;
+            state.fieldError = null;
+            state.fieldLoading = false;
+            renderElasticsearchFieldState(state);
+            return;
+        }
+        if (state.fieldDatasourceKey !== datasource.datasourceKey || state.fieldIndex !== index) {
+            loadElasticsearchFieldCapabilities(datasource.datasourceKey, index);
+        }
+    }
+
+    function cancelMysqlTableRequest(state) {
+        state.mysqlTableSequence++;
+        if (state.mysqlTableController) {
+            state.mysqlTableController.abort();
+            state.mysqlTableController = null;
+        }
+    }
+
+    function cancelMysqlColumnRequest(state) {
+        state.mysqlColumnSequence++;
+        if (state.mysqlColumnController) {
+            state.mysqlColumnController.abort();
+            state.mysqlColumnController = null;
+        }
+    }
+
+    function clearMysqlSuggestions(state) {
+        cancelMysqlTableRequest(state);
+        cancelMysqlColumnRequest(state);
+        state.mysqlTableDatasourceKey = null;
+        state.mysqlTableItems = [];
+        state.mysqlTableTruncated = false;
+        state.mysqlTableError = null;
+        state.mysqlTableLoading = false;
+        state.mysqlColumnDatasourceKey = null;
+        state.mysqlColumnTable = null;
+        state.mysqlColumnItems = [];
+        state.mysqlSelectedColumnTable = null;
+        state.mysqlSelectedColumnNames = [];
+        state.mysqlColumnError = null;
+        state.mysqlColumnLoading = false;
+        document.getElementById('mysql-query-table-options').textContent = '';
+        document.getElementById('mysql-query-column-options').textContent = '';
+        document.getElementById('mysql-query-helper-state').textContent = '选择数据源后可加载有界表候选；选定精确表后才可加载当前表的字段候选。';
+    }
+
+    function renderMysqlSuggestions(state) {
+        var tableOptions = document.getElementById('mysql-query-table-options');
+        var columnOptions = document.getElementById('mysql-query-column-options');
+        var stateNode = document.getElementById('mysql-query-helper-state');
+        tableOptions.textContent = '';
+        columnOptions.textContent = '';
+        state.mysqlTableItems.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.name;
+            tableOptions.appendChild(option);
+        });
+        if (state.mysqlColumnItems.length) {
+            state.mysqlColumnItems.forEach(function (item) {
+                var label = document.createElement('label');
+                var input = document.createElement('input');
+                input.type = 'checkbox';
+                input.value = item.name;
+                input.checked = state.mysqlSelectedColumnNames.indexOf(item.name) >= 0;
+                input.addEventListener('change', function () {
+                    var selected = state.mysqlSelectedColumnNames;
+                    if (input.checked && selected.indexOf(item.name) < 0) {
+                        selected.push(item.name);
+                    } else if (!input.checked) {
+                        state.mysqlSelectedColumnNames = selected.filter(function (name) {
+                            return name !== item.name;
+                        });
+                    }
+                    scheduleDraftSave();
+                });
+                label.className = 'mysql-column-option';
+                label.appendChild(input);
+                label.appendChild(document.createTextNode(item.name));
+                columnOptions.appendChild(label);
+            });
+        } else if (state.mysqlColumnLoading) {
+            columnOptions.textContent = '正在加载字段候选。';
+        } else if (state.mysqlColumnError) {
+            columnOptions.textContent = '字段候选暂不可用。';
+        } else {
+            columnOptions.textContent = '加载字段候选后可多选。';
+        }
+        if (!state.selectedDatasourceKey) {
+            stateNode.textContent = '请选择数据源后加载有界表候选。';
+        } else if (state.mysqlTableLoading) {
+            stateNode.textContent = '正在加载当前数据源的表候选。';
+        } else if (state.mysqlColumnLoading) {
+            stateNode.textContent = '正在加载当前表的字段候选。';
+        } else if (state.mysqlTableError) {
+            stateNode.textContent = state.mysqlTableError;
+        } else if (state.mysqlColumnError) {
+            stateNode.textContent = state.mysqlColumnError;
+        } else if (state.mysqlColumnTable) {
+            stateNode.textContent = '已加载表 ' + state.mysqlColumnTable + ' 的 ' + state.mysqlColumnItems.length + ' 个字段候选。';
+        } else if (state.mysqlTableItems.length) {
+            stateNode.textContent = '已加载 ' + state.mysqlTableItems.length + ' 个表候选'
+                + (state.mysqlTableTruncated ? '，结果已截断；仍可手动输入精确表名。' : '。');
+        } else {
+            stateNode.textContent = '当前数据源暂无表候选，仍可手动输入精确表名。';
+        }
+    }
+
+    function loadMysqlTableSuggestions(datasourceKey) {
+        var state = workspaceStates.mysql;
+        cancelMysqlTableRequest(state);
+        cancelMysqlColumnRequest(state);
+        state.mysqlTableDatasourceKey = datasourceKey;
+        state.mysqlTableItems = [];
+        state.mysqlTableTruncated = false;
+        state.mysqlTableError = null;
+        state.mysqlTableLoading = true;
+        state.mysqlColumnDatasourceKey = null;
+        state.mysqlColumnTable = null;
+        state.mysqlColumnItems = [];
+        state.mysqlSelectedColumnTable = null;
+        state.mysqlSelectedColumnNames = [];
+        state.mysqlColumnError = null;
+        state.mysqlColumnLoading = false;
+        renderMysqlSuggestions(state);
+        var sequence = state.mysqlTableSequence;
+        var controller = new AbortController();
+        state.mysqlTableController = controller;
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/tables', controller.signal).then(function (data) {
+            if (state.mysqlTableSequence !== sequence || state.selectedDatasourceKey !== datasourceKey) {
+                return;
+            }
+            state.mysqlTableItems = Array.isArray(data.items) ? data.items : [];
+            state.mysqlTableTruncated = !!data.truncated;
+        }).catch(function (error) {
+            if (state.mysqlTableSequence === sequence && error.name !== 'AbortError') {
+                state.mysqlTableError = error.message + '，仍可手动输入精确表名。';
+            }
+        }).then(function () {
+            if (state.mysqlTableSequence === sequence) {
+                state.mysqlTableLoading = false;
+                state.mysqlTableController = null;
+                renderMysqlSuggestions(state);
+            }
+        });
+    }
+
+    function isMysqlTableName(value) {
+        return /^[A-Za-z0-9_$]+$/.test(value);
+    }
+
+    function clearMysqlColumnSuggestions(state) {
+        cancelMysqlColumnRequest(state);
+        state.mysqlColumnDatasourceKey = null;
+        state.mysqlColumnTable = null;
+        state.mysqlColumnItems = [];
+        state.mysqlSelectedColumnTable = null;
+        state.mysqlSelectedColumnNames = [];
+        state.mysqlColumnError = null;
+        state.mysqlColumnLoading = false;
+    }
+
+    function loadMysqlColumnSuggestions(datasourceKey, table) {
+        var state = workspaceStates.mysql;
+        cancelMysqlColumnRequest(state);
+        state.mysqlColumnDatasourceKey = datasourceKey;
+        state.mysqlColumnTable = null;
+        state.mysqlColumnItems = [];
+        if (state.mysqlSelectedColumnTable !== table) {
+            state.mysqlSelectedColumnTable = null;
+            state.mysqlSelectedColumnNames = [];
+        }
+        state.mysqlColumnError = null;
+        state.mysqlColumnLoading = true;
+        renderMysqlSuggestions(state);
+        var sequence = state.mysqlColumnSequence;
+        var controller = new AbortController();
+        state.mysqlColumnController = controller;
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/tables/'
+            + encodeURIComponent(table) + '/columns', controller.signal).then(function (data) {
+            if (state.mysqlColumnSequence !== sequence || state.selectedDatasourceKey !== datasourceKey) {
+                return;
+            }
+            state.mysqlColumnTable = table;
+            state.mysqlColumnItems = Array.isArray(data.items) ? data.items : [];
+            if (state.mysqlSelectedColumnTable === table) {
+                state.mysqlSelectedColumnNames = state.mysqlSelectedColumnNames.filter(function (name) {
+                    return state.mysqlColumnItems.some(function (item) {
+                        return item.name === name;
+                    });
+                });
+            } else {
+                state.mysqlSelectedColumnTable = table;
+            }
+        }).catch(function (error) {
+            if (state.mysqlColumnSequence === sequence && error.name !== 'AbortError') {
+                state.mysqlColumnError = error.message + '，仍可手动编辑受控 SELECT。';
+            }
+        }).then(function () {
+            if (state.mysqlColumnSequence === sequence) {
+                state.mysqlColumnLoading = false;
+                state.mysqlColumnController = null;
+                renderMysqlSuggestions(state);
+            }
+        });
+    }
+
+    function fillMysqlTable(table) {
+        document.getElementById('mysql-query-table-input').value = table;
+        document.querySelector('#mysql-table-columns-console-form input[name="table"]').value = table;
+        document.querySelector('#mysql-table-indexes-console-form input[name="table"]').value = table;
+        if (workspaceStates.mysql.consolePanel !== 'table-columns') {
+            setConsolePanelExpanded('mysql', 'table-columns');
+        }
+        scheduleDraftSave();
+    }
+
+    function insertMysqlDraft(formId) {
+        var state = workspaceStates.mysql;
+        var table = document.getElementById('mysql-query-table-input').value.trim();
+        if (!isMysqlTableName(table)) {
+            document.getElementById('mysql-query-helper-state').textContent = '请先选择或输入仅含字母、数字、下划线或 $ 的精确表名。';
+            return;
+        }
+        if (state.mysqlColumnTable !== table) {
+            document.getElementById('mysql-query-helper-state').textContent = '请先加载当前表的字段候选并勾选字段。';
+            return;
+        }
+        var columns = state.mysqlColumnItems.map(function (item) {
+            return item.name;
+        }).filter(function (name) {
+            return state.mysqlSelectedColumnNames.indexOf(name) >= 0 && stateColumnName(name);
+        });
+        if (!columns.length) {
+            document.getElementById('mysql-query-helper-state').textContent = '请至少勾选一个字段后再填入草稿。';
+            return;
+        }
+        document.querySelector('#' + formId + ' textarea[name="sql"]').value = 'SELECT ' + columns.join(', ') + ' FROM ' + table;
+        scheduleDraftSave();
+    }
+
+    function stateColumnName(value) {
+        return /^[A-Za-z0-9_$]+$/.test(value);
+    }
+
     function renderElasticsearchIndices(state) {
         var input = document.getElementById('elasticsearch-index-input');
         var options = document.getElementById('elasticsearch-index-options');
@@ -952,59 +1567,231 @@
         });
     }
 
-    function renderElasticsearchDocuments(state, message) {
-        var stateNode = document.getElementById('elasticsearch-console-result-state');
-        var hitsNode = document.getElementById('elasticsearch-console-result-hits');
-        var metaNode = document.getElementById('elasticsearch-console-result-document-meta');
-        var documentNode = document.getElementById('elasticsearch-console-result-document');
-        hitsNode.textContent = '';
-        if (message) {
-            stateNode.textContent = message;
-        } else if (state.documentLoading) {
-            stateNode.textContent = '正在查询。';
-        } else if (state.documentError) {
-            stateNode.textContent = state.documentError;
-        } else if (!state.documentData || !state.documentData.items || !state.documentData.items.length) {
-            stateNode.textContent = '本次查询没有命中文档。';
-        } else {
-            stateNode.textContent = '已命中 ' + state.documentData.items.length + ' 条文档。';
-            state.documentData.items.forEach(function (hit, index) {
-                var button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'ops-elasticsearch-hit';
-                button.classList.toggle('is-selected', index === state.documentSelectedIndex);
-                button.textContent = hit.index + ' / ' + hit.id;
-                button.title = button.textContent;
-                button.addEventListener('click', function () {
-                    state.documentSelectedIndex = index;
-                    renderElasticsearchDocuments(state);
-                });
-                hitsNode.appendChild(button);
-            });
-        }
-        var selected = state.documentData && state.documentData.items && state.documentData.items[state.documentSelectedIndex];
-        if (selected) {
-            metaNode.textContent = selected.index + ' / ' + selected.id;
-            documentNode.textContent = JSON.stringify(selected.source || {}, null, 2);
-        } else {
-            metaNode.textContent = '未选择文档。';
-            documentNode.textContent = state.documentLoading ? '正在加载。' : '等待查询。';
-        }
-        var pager = document.getElementById('elasticsearch-console-result-pagination');
-        var hasData = !!state.documentData;
-        pager.hidden = !hasData;
-        document.getElementById('elasticsearch-console-result-page').textContent = hasData
-            ? '第 ' + state.documentData.page + ' 页' : '';
-        document.getElementById('elasticsearch-console-result-previous').disabled = !hasData || state.documentData.page <= 1;
-        document.getElementById('elasticsearch-console-result-next').disabled = !hasData || !state.documentData.hasMore;
+    var elasticsearchDslTokens = [
+        'query', 'match_all', 'bool', 'must', 'filter', 'should', 'must_not', 'term', 'terms', 'match',
+        'match_phrase', 'range', 'exists', 'aggs', 'aggregations', 'field', 'size', 'sort', 'order', 'asc', 'desc'
+    ];
+
+    function dslTokenContext(input) {
+        var caret = input.selectionStart;
+        var before = input.value.substring(0, caret);
+        var match = /[A-Za-z0-9_.-]*$/.exec(before);
+        var token = match ? match[0] : '';
+        var start = caret - token.length;
+        var propertyKey = /(?:^|[,{])\s*"[A-Za-z0-9_.-]*$/.test(before);
+        var fieldValue = /"field"\s*:\s*"[A-Za-z0-9_.-]*$/.test(before);
+        var queryField = /"(?:term|terms|match|match_phrase|range)"\s*:\s*\{[\s\S]*?"[A-Za-z0-9_.-]*$/.test(before);
+        var existsField = /"exists"\s*:\s*\{\s*"field"\s*:\s*"[A-Za-z0-9_.-]*$/.test(before);
+        var sortField = /"sort"\s*:\s*\[[\s\S]*?"[A-Za-z0-9_.-]*$/.test(before);
+        return {
+            token: token, start: start, end: caret, field: fieldValue || queryField || existsField || sortField,
+            structural: propertyKey
+        };
     }
 
-    function loadElasticsearchDocuments(datasourceKey, index, dsl, page) {
+    function elasticsearchFieldSuggestion(item) {
+        var types = Array.isArray(item.types) && item.types.length ? item.types.join('/') : '未知类型';
+        return {
+            value: item.name,
+            label: item.name + ' · ' + types + (item.aggregatable ? ' · 可聚合' : '')
+        };
+    }
+
+    function dslSuggestionValues(context) {
+        var values = context.field ? workspaceStates.elasticsearch.fieldItems.map(elasticsearchFieldSuggestion)
+            : context.structural ? elasticsearchDslTokens.map(function (token) {
+                return {value: token, label: token};
+            }) : [];
+        var normalized = context.token.toLowerCase();
+        return values.filter(function (item) {
+            return item.value.toLowerCase().indexOf(normalized) === 0;
+        }).slice(0, 10);
+    }
+
+    function closeElasticsearchDslSuggestions() {
+        var input = document.getElementById('elasticsearch-dsl-input');
+        var list = document.getElementById('elasticsearch-dsl-suggestions');
+        var state = workspaceStates.elasticsearch;
+        state.dslSuggestionItems = [];
+        state.dslSuggestionIndex = -1;
+        list.hidden = true;
+        list.textContent = '';
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+    }
+
+    function renderElasticsearchDslSuggestions() {
+        var input = document.getElementById('elasticsearch-dsl-input');
+        var list = document.getElementById('elasticsearch-dsl-suggestions');
+        var state = workspaceStates.elasticsearch;
+        var context = dslTokenContext(input);
+        var items = dslSuggestionValues(context);
+        closeElasticsearchDslSuggestions();
+        if (!items.length || input !== document.activeElement) {
+            return;
+        }
+        state.dslSuggestionItems = items;
+        state.dslSuggestionIndex = 0;
+        list.textContent = '';
+        items.forEach(function (item, index) {
+            var option = document.createElement('button');
+            option.type = 'button';
+            option.id = 'elasticsearch-dsl-suggestion-' + index;
+            option.className = 'ops-dsl-suggestion';
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+            option.textContent = item.label;
+            option.title = item.label;
+            option.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+                applyElasticsearchDslSuggestion(index);
+            });
+            list.appendChild(option);
+        });
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', 'elasticsearch-dsl-suggestion-0');
+    }
+
+    function updateElasticsearchDslSuggestionSelection() {
+        var input = document.getElementById('elasticsearch-dsl-input');
+        var state = workspaceStates.elasticsearch;
+        Array.prototype.forEach.call(document.querySelectorAll('#elasticsearch-dsl-suggestions [role="option"]'), function (item, index) {
+            item.setAttribute('aria-selected', String(index === state.dslSuggestionIndex));
+        });
+        input.setAttribute('aria-activedescendant', 'elasticsearch-dsl-suggestion-' + state.dslSuggestionIndex);
+    }
+
+    function applyElasticsearchDslSuggestion(index) {
+        var input = document.getElementById('elasticsearch-dsl-input');
+        var state = workspaceStates.elasticsearch;
+        var item = state.dslSuggestionItems[index];
+        if (!item) {
+            return;
+        }
+        var context = dslTokenContext(input);
+        input.value = input.value.substring(0, context.start) + item.value + input.value.substring(context.end);
+        input.selectionStart = context.start + item.value.length;
+        input.selectionEnd = input.selectionStart;
+        closeElasticsearchDslSuggestions();
+        scheduleDraftSave();
+        input.focus();
+    }
+
+    function handleElasticsearchDslKeydown(event) {
+        var state = workspaceStates.elasticsearch;
+        if (!state.dslSuggestionItems.length) {
+            return;
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            state.dslSuggestionIndex = (state.dslSuggestionIndex + (event.key === 'ArrowDown' ? 1 : -1)
+                + state.dslSuggestionItems.length) % state.dslSuggestionItems.length;
+            updateElasticsearchDslSuggestionSelection();
+        } else if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            applyElasticsearchDslSuggestion(state.dslSuggestionIndex);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeElasticsearchDslSuggestions();
+        }
+    }
+
+    function renderElasticsearchDocuments(state, message) {
+        var stateNode = document.getElementById('elasticsearch-console-result-state');
+        var output = document.getElementById('elasticsearch-console-response-output');
+        if (message) {
+            stateNode.textContent = message;
+            output.value = '';
+        } else if (state.documentLoading) {
+            stateNode.textContent = '正在查询。';
+            output.value = '';
+        } else if (state.documentError) {
+            stateNode.textContent = state.documentError;
+            output.value = '';
+        } else if (state.documentData) {
+            stateNode.textContent = '已返回 Elasticsearch 响应。';
+            output.value = JSON.stringify(state.documentData, null, 2);
+        } else {
+            stateNode.textContent = '等待查询。';
+            output.value = '';
+        }
+    }
+
+    function initializeElasticsearchWorkbenchSplitter() {
+        var workbench = document.getElementById('elasticsearch-console-workbench');
+        var splitter = document.getElementById('elasticsearch-console-splitter');
+        var min = 30;
+        var max = 70;
+        var step = 5;
+
+        function isSplitLayout() {
+            return window.getComputedStyle(splitter).display !== 'none';
+        }
+
+        function setRequestPaneWidth(value) {
+            var width = Math.max(min, Math.min(max, value));
+            workbench.style.setProperty('--elasticsearch-request-pane-width', width + '%');
+            splitter.setAttribute('aria-valuenow', String(width));
+            splitter.setAttribute('aria-valuetext', '请求区域占工作台宽度 ' + width + '%');
+        }
+
+        function setRequestPaneWidthFromPointer(event) {
+            var bounds = workbench.getBoundingClientRect();
+            if (bounds.width > 0) {
+                setRequestPaneWidth((event.clientX - bounds.left) * 100 / bounds.width);
+            }
+        }
+
+        splitter.addEventListener('pointerdown', function (event) {
+            if (!isSplitLayout()) {
+                return;
+            }
+            event.preventDefault();
+            splitter.setPointerCapture(event.pointerId);
+            setRequestPaneWidthFromPointer(event);
+        });
+        splitter.addEventListener('pointermove', function (event) {
+            if (splitter.hasPointerCapture(event.pointerId) && isSplitLayout()) {
+                setRequestPaneWidthFromPointer(event);
+            }
+        });
+        splitter.addEventListener('pointerup', function (event) {
+            if (splitter.hasPointerCapture(event.pointerId)) {
+                splitter.releasePointerCapture(event.pointerId);
+            }
+        });
+        splitter.addEventListener('pointercancel', function (event) {
+            if (splitter.hasPointerCapture(event.pointerId)) {
+                splitter.releasePointerCapture(event.pointerId);
+            }
+        });
+        splitter.addEventListener('keydown', function (event) {
+            if (!isSplitLayout()) {
+                return;
+            }
+            var current = Number(splitter.getAttribute('aria-valuenow'));
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                setRequestPaneWidth(current - step);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                setRequestPaneWidth(current + step);
+            } else if (event.key === 'Home') {
+                event.preventDefault();
+                setRequestPaneWidth(min);
+            } else if (event.key === 'End') {
+                event.preventDefault();
+                setRequestPaneWidth(max);
+            }
+        });
+    }
+
+    function loadElasticsearchDocuments(datasourceKey, index, dsl) {
         var state = workspaceStates.elasticsearch;
         cancelDocumentRequest(state);
         state.documentDatasourceKey = datasourceKey;
         state.documentData = null;
-        state.documentSelectedIndex = -1;
         state.documentError = null;
         state.documentLoading = true;
         renderElasticsearchDocuments(state);
@@ -1012,13 +1799,12 @@
         var controller = new AbortController();
         state.documentController = controller;
         request('/elasticsearch/datasources/' + encodeURIComponent(datasourceKey) + '/documents?'
-            + queryString({index: index, dsl: encodeBase64Url(dsl), page: page, size: 20}), controller.signal)
+            + queryString({index: index, dsl: encodeBase64Url(dsl)}), controller.signal)
             .then(function (data) {
                 if (state.documentSequence !== sequence || state.selectedDatasourceKey !== datasourceKey) {
                     return;
                 }
                 state.documentData = data;
-                state.documentSelectedIndex = data.items && data.items.length ? 0 : -1;
             }).catch(function (error) {
             if (state.documentSequence === sequence && error.name !== 'AbortError') {
                 state.documentError = error.message;
@@ -1041,6 +1827,8 @@
             range: document.getElementById(workspace + '-audit-range'),
             from: document.getElementById(workspace + '-audit-from'),
             to: document.getElementById(workspace + '-audit-to'),
+            fromLabel: document.getElementById(workspace + '-audit-from-label'),
+            toLabel: document.getElementById(workspace + '-audit-to-label'),
             query: document.getElementById(workspace + '-audit-query'),
             effective: document.getElementById(workspace + '-audit-effective'),
             previous: document.getElementById(workspace + '-audit-previous'),
@@ -1087,11 +1875,104 @@
         }).join('；');
     }
 
+    function auditTimeZoneLabel() {
+        return auditTimeZone === 'utc' ? 'UTC' : '北京时间';
+    }
+
+    function auditTimeZoneOffset() {
+        return auditTimeZone === 'utc' ? 0 : 8 * 60 * 60 * 1000;
+    }
+
+    function padDateTimePart(value) {
+        return String(value).padStart(2, '0');
+    }
+
+    function dateTimeParts(value) {
+        var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value || '');
+        if (!match) {
+            return null;
+        }
+        return {
+            year: Number(match[1]),
+            month: Number(match[2]),
+            day: Number(match[3]),
+            hour: Number(match[4]),
+            minute: Number(match[5]),
+            second: Number(match[6] || '00')
+        };
+    }
+
+    function dateFromWallClock(value, timeZone) {
+        var parts = dateTimeParts(value);
+        if (!parts) {
+            return null;
+        }
+        var timestamp = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+        var date = new Date(timestamp);
+        if (date.getUTCFullYear() !== parts.year || date.getUTCMonth() !== parts.month - 1
+            || date.getUTCDate() !== parts.day || date.getUTCHours() !== parts.hour
+            || date.getUTCMinutes() !== parts.minute || date.getUTCSeconds() !== parts.second) {
+            return null;
+        }
+        return new Date(timestamp - (timeZone === 'utc' ? 0 : 8 * 60 * 60 * 1000));
+    }
+
+    function auditInstant(value) {
+        var plainDateTime = dateFromWallClock(value, 'utc');
+        if (plainDateTime) {
+            return plainDateTime;
+        }
+        var timestamp = Date.parse(value);
+        return isNaN(timestamp) ? null : new Date(timestamp);
+    }
+
+    function utcDateTime(value) {
+        var date = dateFromWallClock(value, auditTimeZone);
+        if (!date) {
+            return null;
+        }
+        return date.getUTCFullYear() + '-' + padDateTimePart(date.getUTCMonth() + 1) + '-'
+            + padDateTimePart(date.getUTCDate()) + 'T' + padDateTimePart(date.getUTCHours()) + ':'
+            + padDateTimePart(date.getUTCMinutes()) + ':' + padDateTimePart(date.getUTCSeconds());
+    }
+
+    function auditInputDateTime(value, timeZone) {
+        var date = value instanceof Date ? value : auditInstant(value);
+        if (!date) {
+            return value;
+        }
+        var displayDate = new Date(date.getTime() + (timeZone === 'utc' ? 0 : 8 * 60 * 60 * 1000));
+        return displayDate.getUTCFullYear() + '-' + padDateTimePart(displayDate.getUTCMonth() + 1) + '-'
+            + padDateTimePart(displayDate.getUTCDate()) + 'T' + padDateTimePart(displayDate.getUTCHours()) + ':'
+            + padDateTimePart(displayDate.getUTCMinutes()) + ':' + padDateTimePart(displayDate.getUTCSeconds());
+    }
+
+    function formatAuditDateTime(value, inputValue) {
+        var date = value instanceof Date ? value : auditInstant(value);
+        if (!date) {
+            return value;
+        }
+        if (inputValue) {
+            return auditInputDateTime(date, auditTimeZone);
+        }
+        return new Intl.DateTimeFormat('zh-CN', {
+            timeZone: auditTimeZone === 'utc' ? 'UTC' : 'Asia/Shanghai',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23'
+        }).format(date);
+    }
+
     function effectiveAuditRange(data) {
         if (!data.from || !data.to) {
             return '未返回有效时间范围。';
         }
-        return '实际查询范围（UTC）：' + data.from + ' 至 ' + data.to;
+        return '实际查询范围（' + auditTimeZoneLabel() + '）：' + formatAuditDateTime(data.from)
+            + ' 至 ' + formatAuditDateTime(data.to);
     }
 
     function auditOperation(capability) {
@@ -1108,20 +1989,47 @@
             KAFKA_DATASOURCE_CATALOG: '读取数据源目录',
             KAFKA_DATASOURCE_LIST: '读取数据源诊断',
             KAFKA_TOPIC_LIST: '读取 Topic 清单',
+            KAFKA_TOPIC_CONFIG: '读取 Topic 固定配置',
             KAFKA_TOPIC_RUNTIME: '读取 Topic 运行态',
             KAFKA_CONSUMER_GROUP_LIST: '读取消费组清单',
+            KAFKA_CONSUMER_GROUP_DETAIL: '读取消费组详情',
             KAFKA_CONSUMER_GROUP_LAG_LIST: '读取消费组积压',
             MYSQL_DATASOURCE_CATALOG: '读取数据源目录',
             MYSQL_DATASOURCE_STATUS: '探测数据源状态',
-            MYSQL_SELECT: '执行受控查询'
+            MYSQL_SELECT: '执行受控查询',
+            MYSQL_EXPLAIN: '执行受控 Explain',
+            MYSQL_TABLE_LIST: '读取表和视图目录',
+            MYSQL_TABLE_COLUMNS: '读取列目录',
+            MYSQL_TABLE_INDEXES: '读取索引目录'
         };
         return names[capability] || '受限读取操作';
+    }
+
+    function formatAuditTime(value) {
+        return formatAuditDateTime(value);
+    }
+
+    function renderAuditItems(workspace, items) {
+        var body = document.getElementById(workspace + '-audit-body');
+        clearAuditBody(workspace);
+        items.forEach(function (item) {
+            var row = document.createElement('tr');
+            var values = [formatAuditTime(item.occurredAt), item.subject, auditOperation(item.capability),
+                item.datasourceKey, tagText(item.clusterTag), item.httpStatus, auditContext(workspace, item),
+                item.durationMillis == null ? null : item.durationMillis + ' ms'];
+            values.forEach(function (value) {
+                var cell = document.createElement('td');
+                cell.textContent = value == null || value === '' ? '-' : value;
+                cell.title = cell.textContent;
+                row.appendChild(cell);
+            });
+            body.appendChild(row);
+        });
     }
 
     function renderAudit(workspace, data) {
         var state = workspaceStates[workspace];
         var stateNode = document.getElementById(workspace + '-audit-state');
-        var body = document.getElementById(workspace + '-audit-body');
         var controls = auditControls(workspace);
         var items = data.items || [];
         state.auditData = data;
@@ -1136,28 +2044,77 @@
         state.auditPendingTo = null;
         state.auditPendingSnapshot = null;
         controls.effective.textContent = effectiveAuditRange(data);
-        clearAuditBody(workspace);
         document.getElementById(workspace + '-audit-page').textContent = '第 ' + state.auditPage + ' 页';
         controls.previous.disabled = state.auditPage <= 1;
         controls.next.disabled = !state.auditHasMore;
         if (!items.length) {
+            clearAuditBody(workspace);
             stateNode.textContent = state.auditPage === 1 ? '暂无可读取审计记录。' : '当前页没有审计记录。';
             return;
         }
         stateNode.textContent = '已展示 ' + items.length + ' 条脱敏审计记录。';
-        items.forEach(function (item) {
-            var row = document.createElement('tr');
-            var values = [item.occurredAt, item.subject, auditOperation(item.capability), item.datasourceKey,
-                tagText(item.clusterTag), item.resourceDigest, item.httpStatus, auditContext(workspace, item),
-                item.durationMillis == null ? null : item.durationMillis + ' ms'];
-            values.forEach(function (value) {
-                var cell = document.createElement('td');
-                cell.textContent = value == null || value === '' ? '-' : value;
-                cell.title = cell.textContent;
-                row.appendChild(cell);
-            });
-            body.appendChild(row);
+        renderAuditItems(workspace, items);
+    }
+
+    function refreshAuditTimeZoneLabels(workspace) {
+        var controls = auditControls(workspace);
+        controls.fromLabel.textContent = '开始时间（' + auditTimeZoneLabel() + '）';
+        controls.toLabel.textContent = '结束时间（' + auditTimeZoneLabel() + '）';
+    }
+
+    function refreshAuditTimeZoneDisplay() {
+        workspaceNames.forEach(function (workspace) {
+            var state = workspaceStates[workspace];
+            var controls = auditControls(workspace);
+            refreshAuditTimeZoneLabels(workspace);
+            if (state.auditData && !state.auditLoading) {
+                controls.effective.textContent = effectiveAuditRange(state.auditData);
+                renderAuditItems(workspace, state.auditData.items || []);
+            }
         });
+    }
+
+    function restoreAuditTimeZone() {
+        var storedValue;
+        try {
+            storedValue = window.localStorage.getItem(auditTimeZoneStorageKey);
+        } catch (error) {
+            storedValue = null;
+        }
+        auditTimeZone = storedValue === 'utc' ? 'utc' : 'beijing';
+        auditTimeZoneSelect.value = auditTimeZone;
+        refreshAuditTimeZoneDisplay();
+    }
+
+    function setAuditTimeZone(value) {
+        var previousTimeZone = auditTimeZone;
+        var customInputs = {};
+        workspaceNames.forEach(function (workspace) {
+            var controls = auditControls(workspace);
+            if (controls.range.value === 'custom') {
+                customInputs[workspace] = {
+                    from: dateFromWallClock(controls.from.value, previousTimeZone),
+                    to: dateFromWallClock(controls.to.value, previousTimeZone)
+                };
+            }
+        });
+        auditTimeZone = value === 'utc' ? 'utc' : 'beijing';
+        auditTimeZoneSelect.value = auditTimeZone;
+        Object.keys(customInputs).forEach(function (workspace) {
+            var controls = auditControls(workspace);
+            if (customInputs[workspace].from) {
+                controls.from.value = auditInputDateTime(customInputs[workspace].from, auditTimeZone);
+            }
+            if (customInputs[workspace].to) {
+                controls.to.value = auditInputDateTime(customInputs[workspace].to, auditTimeZone);
+            }
+        });
+        try {
+            window.localStorage.setItem(auditTimeZoneStorageKey, auditTimeZone);
+        } catch (error) {
+            // 无法保存时仍保持当前页面展示设置。
+        }
+        refreshAuditTimeZoneDisplay();
     }
 
     function restoreAuditSnapshot(workspace, snapshot) {
@@ -1227,23 +2184,6 @@
         });
     }
 
-    function utcDateTime(value) {
-        var match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value);
-        if (!match) {
-            return null;
-        }
-        var second = match[6] || '00';
-        var timestamp = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]),
-            Number(match[5]), Number(second));
-        var date = new Date(timestamp);
-        if (date.getUTCFullYear() !== Number(match[1]) || date.getUTCMonth() !== Number(match[2]) - 1
-            || date.getUTCDate() !== Number(match[3]) || date.getUTCHours() !== Number(match[4])
-            || date.getUTCMinutes() !== Number(match[5]) || date.getUTCSeconds() !== Number(second)) {
-            return null;
-        }
-        return match[1] + '-' + match[2] + '-' + match[3] + 'T' + match[4] + ':' + match[5] + ':' + second;
-    }
-
     function submitAuditQuery(workspace) {
         var state = workspaceStates[workspace];
         var controls = auditControls(workspace);
@@ -1253,7 +2193,7 @@
         if (range === 'custom') {
             from = utcDateTime(controls.from.value);
             to = utcDateTime(controls.to.value);
-            if (!from || !to || from >= to || Date.parse(to) - Date.parse(from)
+            if (!from || !to || from >= to || auditInstant(to).getTime() - auditInstant(from).getTime()
                 > auditMaxRangeDays * 24 * 60 * 60 * 1000) {
                 document.getElementById(workspace + '-audit-state').textContent = '自定义时间范围无效，最长不超过 '
                     + auditMaxRangeDays + ' 天。';
@@ -1270,7 +2210,7 @@
         state.auditHasMore = false;
         state.auditLoaded = false;
         state.auditPage = 1;
-        controls.effective.textContent = '正在确认新的 UTC 查询范围。';
+        controls.effective.textContent = '正在确认新的 ' + auditTimeZoneLabel() + ' 查询范围。';
         loadAudit(workspace);
     }
 
@@ -1286,11 +2226,30 @@
             cancelAuditRequest(previousState);
             if (activeWorkspace === 'elasticsearch') {
                 cancelDocumentRequest(previousState);
+                cancelIndexRequest(previousState);
+                cancelElasticsearchFieldRequest(previousState);
+                previousState.indexDatasourceKey = null;
+                previousState.indexItems = [];
+                previousState.indexTruncated = false;
+                previousState.indexError = null;
+                previousState.indexLoading = false;
+                previousState.fieldDatasourceKey = null;
+                previousState.fieldIndex = null;
+                previousState.fieldItems = [];
+                previousState.fieldTruncated = false;
+                previousState.fieldError = null;
+                previousState.fieldLoading = false;
                 previousState.documentData = null;
                 previousState.documentDatasourceKey = null;
-                previousState.documentSelectedIndex = -1;
                 previousState.documentLoading = false;
+                closeElasticsearchDslSuggestions();
+                renderElasticsearchIndices(previousState);
+                renderElasticsearchFieldState(previousState);
                 renderElasticsearchDocuments(previousState, '切换工作区后已清除查询结果。');
+            }
+            if (activeWorkspace === 'mysql') {
+                clearMysqlSuggestions(previousState);
+                renderMysqlSuggestions(previousState);
             }
             previousState.auditLoading = false;
             if (previousSnapshot) {
@@ -1310,8 +2269,6 @@
                 });
                 resetConsolePanel(current);
                 if (current === 'kafka') {
-                    document.querySelector('#kafka-topic-console-form input[name="topic"]').value = '';
-                    document.querySelector('#kafka-lag-console-form input[name="groupId"]').value = '';
                     resetKafkaTopicConsoleState('切换工作区后已清除查询状态。');
                 }
             }
@@ -1321,7 +2278,6 @@
             cancelDocumentRequest(state);
             state.documentData = null;
             state.documentDatasourceKey = null;
-            state.documentSelectedIndex = -1;
             state.documentError = null;
             state.documentLoading = false;
             renderElasticsearchDocuments(state, '切换工作区后已清除查询结果。');
@@ -1360,6 +2316,14 @@
         });
         discardOtherConsoleResults(activeWorkspace);
         loadCatalog(activeWorkspace);
+        if (activeWorkspace === 'elasticsearch') {
+            var elasticsearchState = workspaceStates.elasticsearch;
+            var elasticsearchDatasource = selectedDatasource('elasticsearch');
+            if (elasticsearchDatasource && elasticsearchState.indexDatasourceKey !== elasticsearchDatasource.datasourceKey) {
+                loadElasticsearchIndices(elasticsearchDatasource.datasourceKey);
+            }
+            updateElasticsearchFieldCapabilities();
+        }
         if (activeSection === 'audit' && !workspaceStates[activeWorkspace].auditRequested
             && !workspaceStates[activeWorkspace].auditLoading) {
             workspaceStates[activeWorkspace].auditRequested = true;
@@ -1394,6 +2358,34 @@
             });
         });
     });
+
+    draftFields().forEach(function (field) {
+        field.addEventListener('input', scheduleDraftSave);
+        field.addEventListener('change', scheduleDraftSave);
+    });
+
+    document.getElementById('ops-clear-drafts').addEventListener('click', function () {
+        clearConsoleDrafts();
+        Array.prototype.forEach.call(document.querySelectorAll('.ops-workspace .ops-section[data-section-panel="console"] form'),
+            function (form) {
+                form.reset();
+            });
+        workspaceNames.forEach(function (workspace) {
+            var state = workspaceStates[workspace];
+            state.selectedDatasourceKey = null;
+            clearWorkspaceResults(workspace);
+            if (workspace === 'elasticsearch') {
+                closeElasticsearchDslSuggestions();
+                renderElasticsearchFieldState(state);
+            }
+            if (state.catalog) {
+                renderCatalog(workspace, state.catalog);
+            }
+        });
+        renderActiveState();
+    });
+
+    document.getElementById('ops-logout-form').addEventListener('submit', clearConsoleDrafts);
 
     document.getElementById('redis-datasource-console-form').addEventListener('submit', function (event) {
         event.preventDefault();
@@ -1446,7 +2438,7 @@
         }
         setResult('kafka-topic-list-console-result', '正在查询 Topic 清单。');
         request('/kafka/datasources/' + encodeURIComponent(datasourceKey) + '/topics?'
-            + queryString({size: form.get('size')})).then(function (data) {
+            + queryString({prefix: form.get('prefix'), size: form.get('size')})).then(function (data) {
             setPagedResult('kafka-topic-list-console-result', data);
         }).catch(function (error) {
             setResult('kafka-topic-list-console-result', error.message);
@@ -1465,21 +2457,131 @@
         }
         setResult('kafka-group-list-console-result', '正在查询消费组清单。');
         request('/kafka/datasources/' + encodeURIComponent(datasourceKey) + '/consumer-groups?'
-            + queryString({size: form.get('size')})).then(function (data) {
+            + queryString({prefix: form.get('prefix'), size: form.get('size')})).then(function (data) {
             setPagedResult('kafka-group-list-console-result', data);
         }).catch(function (error) {
             setResult('kafka-group-list-console-result', error.message);
         });
     });
 
+    document.getElementById('kafka-topic-config-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('kafka');
+        } catch (error) {
+            setResult('kafka-topic-config-console-result', error.message);
+            return;
+        }
+        setResult('kafka-topic-config-console-result', '正在查询 Topic 固定配置。');
+        request('/kafka/datasources/' + encodeURIComponent(datasourceKey) + '/topics/config?'
+            + queryString({topic: form.get('topic')})).then(function (data) {
+            setResult('kafka-topic-config-console-result', data);
+        }).catch(function (error) {
+            setResult('kafka-topic-config-console-result', error.message);
+        });
+    });
+
+    document.getElementById('kafka-group-detail-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('kafka');
+        } catch (error) {
+            setResult('kafka-group-detail-console-result', error.message);
+            return;
+        }
+        setResult('kafka-group-detail-console-result', '正在查询消费组详情。');
+        request('/kafka/datasources/' + encodeURIComponent(datasourceKey) + '/consumer-groups/detail?'
+            + queryString({groupId: form.get('groupId')})).then(function (data) {
+            setResult('kafka-group-detail-console-result', data);
+        }).catch(function (error) {
+            setResult('kafka-group-detail-console-result', error.message);
+        });
+    });
+
+    document.getElementById('elasticsearch-index-input').addEventListener('input', function () {
+        scheduleDraftSave();
+        updateElasticsearchFieldCapabilities();
+    });
+
+    document.getElementById('elasticsearch-dsl-input').addEventListener('input', function () {
+        scheduleDraftSave();
+        renderElasticsearchDslSuggestions();
+    });
+
+    document.getElementById('elasticsearch-dsl-input').addEventListener('keydown', handleElasticsearchDslKeydown);
+    document.getElementById('elasticsearch-dsl-input').addEventListener('click', renderElasticsearchDslSuggestions);
+    document.getElementById('elasticsearch-dsl-input').addEventListener('blur', function () {
+        window.setTimeout(closeElasticsearchDslSuggestions, 100);
+    });
+
     document.getElementById('elasticsearch-format-dsl').addEventListener('click', function () {
-        var input = document.querySelector('#elasticsearch-console-form textarea[name="dsl"]');
+        var input = document.getElementById('elasticsearch-dsl-input');
         try {
             input.value = JSON.stringify(JSON.parse(input.value), null, 2);
+            scheduleDraftSave();
+            document.getElementById('elasticsearch-console-result-state').textContent = 'JSON 格式有效，索引或通配模式提交后仍由服务端校验。';
         } catch (error) {
             document.getElementById('elasticsearch-console-result-state').textContent = 'JSON 格式无效。';
         }
     });
+
+    document.getElementById('mysql-load-table-suggestions').addEventListener('click', function () {
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            document.getElementById('mysql-query-helper-state').textContent = error.message;
+            return;
+        }
+        loadMysqlTableSuggestions(datasourceKey);
+    });
+
+    document.getElementById('mysql-query-table-input').addEventListener('input', function () {
+        var state = workspaceStates.mysql;
+        if ((state.mysqlColumnTable || state.mysqlSelectedColumnTable)
+            && state.mysqlSelectedColumnTable !== this.value.trim()) {
+            clearMysqlColumnSuggestions(state);
+            renderMysqlSuggestions(state);
+        }
+    });
+
+    document.getElementById('mysql-load-column-suggestions').addEventListener('click', function () {
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            document.getElementById('mysql-query-helper-state').textContent = error.message;
+            return;
+        }
+        var table = document.getElementById('mysql-query-table-input').value.trim();
+        if (!isMysqlTableName(table)) {
+            document.getElementById('mysql-query-helper-state').textContent = '请先选择或输入仅含字母、数字、下划线或 $ 的精确表名。';
+            return;
+        }
+        loadMysqlColumnSuggestions(datasourceKey, table);
+    });
+
+    document.getElementById('mysql-insert-select-draft').addEventListener('click', function () {
+        insertMysqlDraft('mysql-select-console-form');
+    });
+
+    document.getElementById('mysql-insert-explain-draft').addEventListener('click', function () {
+        insertMysqlDraft('mysql-explain-console-form');
+    });
+
+    function clearElasticsearchDocuments(message) {
+        var state = workspaceStates.elasticsearch;
+        cancelDocumentRequest(state);
+        state.documentData = null;
+        state.documentDatasourceKey = null;
+        state.documentError = null;
+        state.documentLoading = false;
+        renderElasticsearchDocuments(state, message);
+    }
 
     document.getElementById('elasticsearch-console-form').addEventListener('submit', function (event) {
         event.preventDefault();
@@ -1488,35 +2590,36 @@
         try {
             datasourceKey = requireDatasource('elasticsearch');
         } catch (error) {
-            renderElasticsearchDocuments(workspaceStates.elasticsearch, error.message);
+            clearElasticsearchDocuments(error.message);
             return;
         }
         var dsl = form.get('dsl');
         try {
             JSON.parse(dsl);
         } catch (error) {
-            renderElasticsearchDocuments(workspaceStates.elasticsearch, 'JSON 格式无效。');
+            clearElasticsearchDocuments('JSON 格式无效。');
             return;
         }
-        loadElasticsearchDocuments(datasourceKey, form.get('index'), dsl, 1);
+        loadElasticsearchDocuments(datasourceKey, form.get('index'), dsl);
     });
 
-    document.getElementById('elasticsearch-console-result-previous').addEventListener('click', function () {
-        var state = workspaceStates.elasticsearch;
-        if (!state.documentLoading && state.documentData && state.documentData.page > 1) {
-            var form = new FormData(document.getElementById('elasticsearch-console-form'));
-            loadElasticsearchDocuments(state.documentDatasourceKey, form.get('index'), form.get('dsl'),
-                state.documentData.page - 1);
+    document.getElementById('redis-key-discovery-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('redis');
+        } catch (error) {
+            setResult('redis-key-discovery-console-result', error.message);
+            return;
         }
-    });
-
-    document.getElementById('elasticsearch-console-result-next').addEventListener('click', function () {
-        var state = workspaceStates.elasticsearch;
-        if (!state.documentLoading && state.documentData && state.documentData.hasMore) {
-            var form = new FormData(document.getElementById('elasticsearch-console-form'));
-            loadElasticsearchDocuments(state.documentDatasourceKey, form.get('index'), form.get('dsl'),
-                state.documentData.page + 1);
-        }
+        setResult('redis-key-discovery-console-result', '正在发现受限 Key。');
+        request('/redis/datasources/' + encodeURIComponent(datasourceKey) + '/keys/discovery?'
+            + queryString({prefix: form.get('prefix'), size: form.get('size')})).then(function (data) {
+            setPagedResult('redis-key-discovery-console-result', data);
+        }).catch(function (error) {
+            setResult('redis-key-discovery-console-result', error.message);
+        });
     });
 
     document.getElementById('redis-console-form').addEventListener('submit', function (event) {
@@ -1586,6 +2689,82 @@
         });
     });
 
+    document.getElementById('mysql-explain-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            setResult('mysql-explain-console-result', error.message);
+            return;
+        }
+        setResult('mysql-explain-console-result', '正在执行受控 Explain。');
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/explain?'
+            + queryString({sql: form.get('sql')})).then(function (data) {
+            setResult('mysql-explain-console-result', data);
+        }).catch(function (error) {
+            setResult('mysql-explain-console-result', error.message);
+        });
+    });
+
+    document.getElementById('mysql-table-list-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            setResult('mysql-table-list-console-result', error.message);
+            return;
+        }
+        setResult('mysql-table-list-console-result', '正在查询表和视图目录。');
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/tables?'
+            + queryString({prefix: form.get('prefix'), size: form.get('size')})).then(function (data) {
+            setResult('mysql-table-list-console-result', data);
+        }).catch(function (error) {
+            setResult('mysql-table-list-console-result', error.message);
+        });
+    });
+
+    document.getElementById('mysql-table-columns-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            setResult('mysql-table-columns-console-result', error.message);
+            return;
+        }
+        setResult('mysql-table-columns-console-result', '正在查询列目录。');
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/tables/'
+            + encodeURIComponent(form.get('table')) + '/columns').then(function (data) {
+            setResult('mysql-table-columns-console-result', data);
+        }).catch(function (error) {
+            setResult('mysql-table-columns-console-result', error.message);
+        });
+    });
+
+    document.getElementById('mysql-table-indexes-console-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = new FormData(event.currentTarget);
+        var datasourceKey;
+        try {
+            datasourceKey = requireDatasource('mysql');
+        } catch (error) {
+            setResult('mysql-table-indexes-console-result', error.message);
+            return;
+        }
+        setResult('mysql-table-indexes-console-result', '正在查询索引目录。');
+        request('/mysql/datasources/' + encodeURIComponent(datasourceKey) + '/tables/'
+            + encodeURIComponent(form.get('table')) + '/indexes').then(function (data) {
+            setResult('mysql-table-indexes-console-result', data);
+        }).catch(function (error) {
+            setResult('mysql-table-indexes-console-result', error.message);
+        });
+    });
+
     document.getElementById('kafka-topic-console-form').addEventListener('submit', function (event) {
         event.preventDefault();
         var form = new FormData(event.currentTarget);
@@ -1630,8 +2809,9 @@
         });
     });
 
-    ['redis-console-result', 'kafka-topic-list-console-result', 'kafka-group-list-console-result',
-        'mysql-select-console-result', 'kafka-topic-console-result', 'kafka-lag-console-result']
+    ['redis-key-discovery-console-result', 'redis-console-result', 'kafka-topic-list-console-result',
+        'kafka-group-list-console-result', 'mysql-select-console-result', 'kafka-topic-console-result',
+        'kafka-lag-console-result']
         .forEach(initializeResultPagination);
 
     workspaceNames.forEach(function (workspace) {
@@ -1674,6 +2854,12 @@
         });
     });
 
+    initializeElasticsearchWorkbenchSplitter();
+    restoreAuditTimeZone();
+    auditTimeZoneSelect.addEventListener('change', function () {
+        setAuditTimeZone(auditTimeZoneSelect.value);
+    });
+    restoreConsoleDrafts();
     window.addEventListener('hashchange', parseHash);
     parseHash();
 }());

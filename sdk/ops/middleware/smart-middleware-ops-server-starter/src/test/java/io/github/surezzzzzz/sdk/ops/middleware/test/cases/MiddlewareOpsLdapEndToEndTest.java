@@ -6,6 +6,8 @@ import io.github.surezzzzzz.sdk.elasticsearch.route.registry.SimpleElasticsearch
 import io.github.surezzzzzz.sdk.kafka.route.diagnostic.KafkaRouteDiagnostics;
 import io.github.surezzzzzz.sdk.kafka.route.registry.SimpleKafkaRouteRegistry;
 import io.github.surezzzzzz.sdk.mysql.route.registry.SimpleMysqlRouteRegistry;
+import io.github.surezzzzzz.sdk.ops.middleware.configuration.SmartMiddlewareOpsServerProperties;
+import io.github.surezzzzzz.sdk.ops.middleware.constant.SmartMiddlewareOpsServerConstant;
 import io.github.surezzzzzz.sdk.ops.middleware.controller.MiddlewareOpsController;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.DefaultElasticsearchOperationsViewAdapter;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchOperationsViewAdapter;
@@ -18,6 +20,7 @@ import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisOperationsViewAdapter;
 import io.github.surezzzzzz.sdk.ops.middleware.service.DefaultMiddlewareOpsServerEngine;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsServerEngine;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareType;
+import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsDigestHelper;
 import io.github.surezzzzzz.sdk.ops.middleware.test.MiddlewareOpsLdapEndToEndTestConfiguration;
 import io.github.surezzzzzz.sdk.ops.middleware.test.SmartMiddlewareOpsServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
@@ -28,6 +31,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -35,6 +41,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -57,9 +68,19 @@ class MiddlewareOpsLdapEndToEndTest {
             "redis3Cluster", "redis5Cluster", "redis7Cluster"));
     private static final Set<String> REDIS_CLUSTER_DATASOURCES = new HashSet<>(Arrays.asList(
             "redis3Cluster", "redis5Cluster", "redis7Cluster"));
+    private static final Set<String> REDIS_POOL_DATASOURCES = new HashSet<>(Arrays.asList(
+            "redis3Standalone", "redis3Cluster"));
     private static final String REDIS_HASH_FIXTURE_KEY = "middleware-ops:fixture:local::{hash}";
+    private static final String REDIS_DISCOVERY_STANDALONE_PREFIX = "middleware-ops:fixture:discovery:standalone:";
+    private static final String REDIS_DISCOVERY_CLUSTER_PREFIX = "middleware-ops:fixture:discovery:cluster:";
+    private static final Set<String> REDIS_DISCOVERY_CLUSTER_KEYS = new HashSet<>(Arrays.asList(
+            "middleware-ops:fixture:discovery:cluster:{alpha}:key",
+            "middleware-ops:fixture:discovery:cluster:{bravo}:key",
+            "middleware-ops:fixture:discovery:cluster:{charlie}:key"));
     private static final String REDIS_HASH_FIXTURE_FIELD = "state";
     private static final String REDIS_HASH_FIXTURE_VALUE = "ready";
+    private static final DateTimeFormatter AUDIT_TIME_FORMATTER = DateTimeFormatter.ofPattern(
+            SmartMiddlewareOpsServerConstant.AUDIT_TIME_PATTERN);
     private static final Set<String> KAFKA_DATASOURCES = new HashSet<>(Arrays.asList(
             "default", "event", "v110", "v28", "v37", "tx37", "cluster"));
     private static final Set<String> MYSQL_DATASOURCES = new LinkedHashSet<>(Arrays.asList(
@@ -82,6 +103,9 @@ class MiddlewareOpsLdapEndToEndTest {
 
     @Autowired
     private MiddlewareOpsController controller;
+
+    @Autowired
+    private SmartMiddlewareOpsServerProperties properties;
 
     @Autowired
     private RequestMappingHandlerMapping requestMappingHandlerMapping;
@@ -124,17 +148,18 @@ class MiddlewareOpsLdapEndToEndTest {
         assertAuthenticationFailures();
         assertHttpInputFailures();
         assertAutomaticOverviewLoadsDoNotWriteAudit();
+        assertElasticsearchFieldCapabilities();
         assertAsyncElasticsearchDocumentAudit();
         assertRedisDatasources();
+        assertRedisKeyDiscovery();
         assertAsyncRedisKeyAuditMasking();
         assertKafkaDatasources();
         assertAsyncKafkaDiagnosticAudits();
         assertMysqlDatasources();
         assertAsyncMysqlStatusAudit();
-        assertAuditRecords();
-        assertExplicitAuditRange();
         assertAsyncAuditWriteAndRead();
-        assertAsyncMysqlAuditMasking();
+        JsonNode mysqlAuditRecord = assertAsyncMysqlAuditMasking();
+        assertExplicitAuditRange(mysqlAuditRecord);
         assertNotNull(identityResolver.getIdentity());
         log.info("默认链路认证身份：subject={}，mechanism={}", identityResolver.getIdentity().getSubject(),
                 identityResolver.getIdentity().getAuthenticationMechanism());
@@ -160,6 +185,9 @@ class MiddlewareOpsLdapEndToEndTest {
         assertError("/elasticsearch/datasources/missing/summary", 404);
         assertError("/elasticsearch/datasources/missing/indices", 404);
         assertError("/redis/datasources/missing/summary", 404);
+        assertError(redisDiscoveryUri("missing", "middleware-ops:fixture:", 1), 404);
+        assertError(redisDiscoveryUri("redis7Standalone", "middleware-ops:fixture:*", 1), 400);
+        assertError(redisDiscoveryUri("redis7Standalone", "middleware-ops:fixture:", 0), 400);
         assertError("/kafka/datasources/missing/topics?size=1", 404);
         assertError("/kafka/datasources/missing/consumer-groups?size=1", 404);
         assertError("/mysql/datasources/missing/status", 404);
@@ -168,6 +196,10 @@ class MiddlewareOpsLdapEndToEndTest {
                 .getForEntity(mysqlSelectUri("mysql57-ops", rejectedSql, 1), String.class);
         assertEquals(400, rejected.getStatusCodeValue(), rejected.getBody());
         assertEquals("no-store", rejected.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
+        JsonNode rejectedBody = objectMapper.readTree(rejected.getBody());
+        assertEquals("SELECT 投影仅支持显式的当前表字段", rejectedBody.path("message").asText());
+        assertFalse(rejected.getBody().contains(rejectedSql));
+        assertFalse(rejected.getBody().contains("test_route_marker"));
         String rejectedRequestId = requestId(rejected);
         JsonNode rejectedAudit = awaitAuditRecord("mysql", rejectedRequestId);
         assertEquals(400, rejectedAudit.path("httpStatus").asInt());
@@ -193,6 +225,7 @@ class MiddlewareOpsLdapEndToEndTest {
                 .anyMatch(mapping -> matchesElasticsearchSummaryPath(mapping)));
         assertTrue(matchesPath("/api/v1/middleware-ops/elasticsearch/datasources/{datasourceKey}/indices"));
         assertTrue(matchesPath("/api/v1/middleware-ops/redis/datasources/overview"));
+        assertTrue(matchesPath("/api/v1/middleware-ops/redis/datasources/{datasourceKey}/keys/discovery"));
         assertTrue(matchesPath("/api/v1/middleware-ops/kafka/datasources/overview"));
         assertTrue(matchesPath("/api/v1/middleware-ops/mysql/datasources/{datasourceKey}/overview-status"));
         assertCatalogRoutes();
@@ -205,10 +238,24 @@ class MiddlewareOpsLdapEndToEndTest {
             assertNotNull(elasticsearchRegistry.getClusterInfo(datasourceKey));
         }
         assertEquals(REDIS_DATASOURCES, redisRegistry.getDatasourceKeys());
+        assertRedisPoolConfiguration();
         assertEquals(KAFKA_DATASOURCES, kafkaRegistry.getDatasourceKeys());
         assertEquals(MYSQL_DATASOURCES, mysqlRegistry.getDatasources());
         for (String datasourceKey : KAFKA_DATASOURCES) {
             assertNotNull(kafkaDiagnostics.getDiagnosticResult(datasourceKey));
+        }
+    }
+
+    private void assertRedisPoolConfiguration() {
+        log.info("验证 Redis Route 启用连接池与默认非池化 datasource 的 client configuration");
+        for (String datasourceKey : REDIS_DATASOURCES) {
+            RedisConnectionFactory connectionFactory = redisRegistry.getConnectionFactory(datasourceKey);
+            assertTrue(connectionFactory instanceof LettuceConnectionFactory,
+                    "Redis datasource 必须由 LettuceConnectionFactory 管理：" + datasourceKey);
+            LettuceConnectionFactory lettuceConnectionFactory = (LettuceConnectionFactory) connectionFactory;
+            assertEquals(REDIS_POOL_DATASOURCES.contains(datasourceKey),
+                    lettuceConnectionFactory.getClientConfiguration() instanceof LettucePoolingClientConfiguration,
+                    "Redis datasource 连接池状态不符合 fixture 配置：" + datasourceKey);
         }
     }
 
@@ -332,26 +379,78 @@ class MiddlewareOpsLdapEndToEndTest {
         assertNoAuditRecords("mysql", mysqlRequestIds);
     }
 
-    private void assertAsyncElasticsearchDocumentAudit() throws Exception {
-        log.info("验证 Elasticsearch 文档查询进入审计，自动摘要与索引候选不进入审计");
-        String dsl = "{\"query\":{\"match_all\":{}}}";
-        String encodedDsl = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(dsl.getBytes(StandardCharsets.UTF_8));
-        URI uri = UriComponentsBuilder.fromHttpUrl(url("/elasticsearch/datasources/{datasourceKey}/documents"))
-                .queryParam("index", "test_index_a").queryParam("dsl", encodedDsl)
-                .queryParam("page", 1).queryParam("size", 20).buildAndExpand("primary").encode().toUri();
-        ResponseEntity<String> operation = restTemplate.withBasicAuth("ops-user", ldapUserPassword)
-                .getForEntity(uri, String.class);
-        assertEquals(200, operation.getStatusCodeValue(), operation.getBody());
-        assertEquals("no-store", operation.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
-        JsonNode response = objectMapper.readTree(operation.getBody());
-        assertEquals(1, response.path("page").asInt());
-        assertEquals(20, response.path("size").asInt());
-        assertFalse(response.path("items").isEmpty());
-        assertTrue(response.path("hasMore").asBoolean());
-        String requestId = operation.getHeaders().getFirst("X-Request-Id");
-        assertNotNull(requestId);
+    private void assertElasticsearchFieldCapabilities() throws Exception {
+        log.info("验证 Elasticsearch 字段能力返回 keyword 子字段及可聚合标记");
+        JsonNode response = success("/elasticsearch/datasources/primary/fields?index=test_index_a");
+        Map<String, JsonNode> fields = itemsBy(response.path("items"), "name");
+        assertTrue(fields.containsKey("sequence"), "请先按 LOCAL_TEST_COMMANDS.md 准备固定 Elasticsearch fixture");
+        assertTrue(fields.containsKey("message"), "请先按 LOCAL_TEST_COMMANDS.md 准备固定 Elasticsearch fixture");
+        assertTrue(fields.containsKey("message.keyword"), "请先按 LOCAL_TEST_COMMANDS.md 准备固定 Elasticsearch fixture");
+        assertTrue(fields.get("sequence").path("searchable").asBoolean());
+        assertTrue(fields.get("sequence").path("aggregatable").asBoolean());
+        assertTrue(fields.get("message").path("searchable").asBoolean());
+        assertFalse(fields.get("message").path("aggregatable").asBoolean());
+        assertTrue(fields.get("message.keyword").path("searchable").asBoolean());
+        assertTrue(fields.get("message.keyword").path("aggregatable").asBoolean());
+        assertSafeProjection(response, "mapping", "settings", "endpoint", "host", "port");
+    }
 
+    private void assertAsyncElasticsearchDocumentAudit() throws Exception {
+        log.info("验证 Elasticsearch 原生响应、过滤、聚合与受限 DSL 均通过 Route 受控查询链路");
+        String firstPageDsl = "{\"query\":{\"match_all\":{}},\"from\":0,\"size\":20}";
+        ResponseEntity<String> firstPageOperation = successResponse(elasticsearchDocumentUri(firstPageDsl));
+        JsonNode firstPage = objectMapper.readTree(firstPageOperation.getBody());
+        assertEquals(21, firstPage.path("hits").path("total").asInt());
+        assertEquals(20, firstPage.path("hits").path("hits").size());
+        assertTrue(firstPage.has("took"));
+        assertFalse(firstPage.has("page"));
+        assertFalse(firstPage.has("items"));
+        assertFalse(firstPage.has("hasMore"));
+
+        String secondPageDsl = "{\"query\":{\"match_all\":{}},\"from\":20,\"size\":20}";
+        JsonNode secondPage = success(elasticsearchDocumentUri(secondPageDsl));
+        assertEquals(1, secondPage.path("hits").path("hits").size());
+
+        String termDsl = "{\"query\":{\"term\":{\"message.keyword\":\"middleware-ops-fixture-7\"}},\"size\":20}";
+        JsonNode exactMatch = success(elasticsearchDocumentUri(termDsl));
+        assertEquals(1, exactMatch.path("hits").path("hits").size());
+        assertEquals(7, exactMatch.path("hits").path("hits").get(0).path("_source").path("sequence").asInt());
+        assertEquals("middleware-ops-fixture-7", exactMatch.path("hits").path("hits").get(0).path("_source")
+                .path("message").asText());
+
+        String emptyDsl = "{\"query\":{\"term\":{\"message.keyword\":\"middleware-ops-fixture-missing\"}},\"size\":20}";
+        JsonNode empty = success(elasticsearchDocumentUri(emptyDsl));
+        assertTrue(empty.path("hits").path("hits").isEmpty());
+
+        String statsDsl = "{\"size\":0,\"aggs\":{\"sequence_stats\":{\"stats\":{\"field\":\"sequence\"}}}}";
+        JsonNode stats = success(elasticsearchDocumentUri(statsDsl));
+        assertTrue(stats.path("hits").path("hits").isEmpty());
+        assertEquals(21, stats.path("aggregations").path("sequence_stats").path("count").asInt());
+        assertEquals(1.0d, stats.path("aggregations").path("sequence_stats").path("min").asDouble());
+        assertEquals(21.0d, stats.path("aggregations").path("sequence_stats").path("max").asDouble());
+        assertEquals(231.0d, stats.path("aggregations").path("sequence_stats").path("sum").asDouble());
+        assertEquals(11.0d, stats.path("aggregations").path("sequence_stats").path("avg").asDouble());
+
+        String termsDsl = "{\"size\":0,\"aggs\":{\"by_message\":{\"terms\":{\"field\":\"message.keyword\",\"size\":30}}}}";
+        JsonNode terms = success(elasticsearchDocumentUri(termsDsl));
+        assertEquals(21, terms.path("aggregations").path("by_message").path("buckets").size());
+
+        String queryWithAggregationDsl = "{\"query\":{\"range\":{\"sequence\":{\"gte\":10}}},\"size\":20,\"aggs\":{\"sequence_stats\":{\"stats\":{\"field\":\"sequence\"}}}}";
+        JsonNode queryWithAggregation = success(elasticsearchDocumentUri(queryWithAggregationDsl));
+        assertEquals(12, queryWithAggregation.path("hits").path("hits").size());
+        assertEquals(12, queryWithAggregation.path("aggregations").path("sequence_stats").path("count").asInt());
+        assertEquals(10.0d, queryWithAggregation.path("aggregations").path("sequence_stats").path("min").asDouble());
+        assertEquals(21.0d, queryWithAggregation.path("aggregations").path("sequence_stats").path("max").asDouble());
+
+        assertRejectedElasticsearchDsl("{\"scroll\":\"1m\"}");
+        assertRejectedElasticsearchDsl("{\"pit\":{\"id\":\"fixture\"}}");
+        assertRejectedElasticsearchDsl("{\"search_after\":[1]}");
+        assertRejectedElasticsearchDsl("{\"runtime_mappings\":{\"derived\":{\"type\":\"keyword\"}}}");
+        assertRejectedElasticsearchDsl("{\"script_fields\":{\"derived\":{\"script\":\"1\"}}}");
+        assertRejectedElasticsearchDsl("{\"profile\":true}");
+        assertRejectedElasticsearchDsl("{\"query\":{\"script\":{\"script\":\"1\"}}}");
+
+        String requestId = requestId(firstPageOperation);
         JsonNode record = awaitAuditRecord("elasticsearch", requestId);
         assertEquals(requestId, record.path("id").asText());
         assertEquals("ELASTICSEARCH_DOCUMENT_QUERY", record.path("capability").asText());
@@ -359,8 +458,19 @@ class MiddlewareOpsLdapEndToEndTest {
         assertEquals("primary", record.path("datasourceKey").asText());
         assertEquals(200, record.path("httpStatus").asInt());
         assertNotEquals("test_index_a", record.path("elasticsearchIndex").asText());
-        assertNotEquals(dsl, record.path("elasticsearchDsl").asText());
+        assertNotEquals(firstPageDsl, record.path("elasticsearchDsl").asText());
         assertSafeProjection(record, "url", "username", "password", "request", "response", "exception");
+    }
+
+    private URI elasticsearchDocumentUri(String dsl) {
+        String encodedDsl = Base64.getUrlEncoder().withoutPadding().encodeToString(dsl.getBytes(StandardCharsets.UTF_8));
+        return UriComponentsBuilder.fromHttpUrl(url("/elasticsearch/datasources/{datasourceKey}/documents"))
+                .queryParam("index", "test_index_a").queryParam("dsl", encodedDsl).buildAndExpand("primary").encode()
+                .toUri();
+    }
+
+    private void assertRejectedElasticsearchDsl(String dsl) throws Exception {
+        assertError(elasticsearchDocumentUri(dsl), 400);
     }
 
     private void assertRedisDatasources() throws Exception {
@@ -377,6 +487,40 @@ class MiddlewareOpsLdapEndToEndTest {
             JsonNode summary = success("/redis/datasources/" + datasourceKey + "/summary");
             assertEquals(datasource, summary);
         }
+    }
+
+    private void assertRedisKeyDiscovery() throws Exception {
+        log.info("验证 Redis 字面量前缀 Key 发现的受限 standalone 与 Cluster 链路");
+        ResponseEntity<String> standaloneOperation = successResponse(redisDiscoveryUri("redis7Standalone",
+                REDIS_DISCOVERY_STANDALONE_PREFIX, 1));
+        JsonNode standalone = objectMapper.readTree(standaloneOperation.getBody());
+        assertEquals(1, standalone.path("limit").asInt());
+        assertEquals(1, standalone.path("returned").asInt());
+        assertTrue(standalone.path("truncated").asBoolean());
+        assertFalse(standalone.path("traversalComplete").asBoolean());
+        assertEquals("RESULT_LIMIT", standalone.path("stopReason").asText());
+        assertTrue(standalone.path("items").get(0).asText().startsWith(REDIS_DISCOVERY_STANDALONE_PREFIX),
+                "请先按 LOCAL_TEST_COMMANDS.md 准备固定 standalone discovery fixture");
+        assertSafeProjection(standalone, "cursor", "nextCursor", "value", "topology", "endpoint", "host", "port", "slot");
+
+        JsonNode standaloneAudit = awaitAuditRecord("redis", requestId(standaloneOperation));
+        assertEquals("REDIS_KEY_DISCOVERY", standaloneAudit.path("capability").asText());
+        assertEquals("redis7Standalone", standaloneAudit.path("datasourceKey").asText());
+        assertEquals(MiddlewareOpsDigestHelper.sha256("key-discovery"), standaloneAudit.path("resourceDigest").asText());
+        assertTrue(standaloneAudit.path("redisKey").isMissingNode() || standaloneAudit.path("redisKey").isNull());
+        assertTrue(standaloneAudit.path("redisField").isMissingNode() || standaloneAudit.path("redisField").isNull());
+        assertTrue(standaloneAudit.path("size").isMissingNode() || standaloneAudit.path("size").isNull());
+        assertFalse(standaloneAudit.toString().contains(REDIS_DISCOVERY_STANDALONE_PREFIX));
+        assertSafeProjection(standaloneAudit, "cursor", "nextCursor", "value", "topology", "endpoint", "host", "port", "slot");
+
+        JsonNode cluster = success(redisDiscoveryUri("redis7Cluster", REDIS_DISCOVERY_CLUSTER_PREFIX, 100));
+        assertEquals(100, cluster.path("limit").asInt());
+        assertFalse(cluster.path("truncated").asBoolean());
+        assertTrue(cluster.path("traversalComplete").asBoolean());
+        assertEquals("COMPLETED", cluster.path("stopReason").asText());
+        assertTrue(stringValues(cluster.path("items")).containsAll(REDIS_DISCOVERY_CLUSTER_KEYS),
+                "请先按 LOCAL_TEST_COMMANDS.md 在至少两个 Redis Cluster master 准备固定 discovery fixture");
+        assertSafeProjection(cluster, "cursor", "nextCursor", "value", "topology", "endpoint", "host", "port", "slot");
     }
 
     private void assertAsyncRedisKeyAuditMasking() throws Exception {
@@ -521,36 +665,26 @@ class MiddlewareOpsLdapEndToEndTest {
                 "database", "serverVersion", "host", "port", "jdbcUrl");
     }
 
-    private void assertAuditRecords() throws Exception {
-        log.info("验证四个工作区通过审计日索引通配读取的隔离查询与安全投影");
-        Map<String, String> workspaceAuditPaths = new LinkedHashMap<>();
-        workspaceAuditPaths.put("elasticsearch", "/audit/elasticsearch/records");
-        workspaceAuditPaths.put("redis", "/audit/redis/records");
-        workspaceAuditPaths.put("kafka", "/audit/kafka/records");
-        workspaceAuditPaths.put("mysql", "/audit/mysql/records");
-        for (Map.Entry<String, String> workspace : workspaceAuditPaths.entrySet()) {
-            JsonNode response = success(workspace.getValue() + "?page=1&size=100");
-            assertTrue(response.path("total").asLong() >= 1L);
-            assertEquals(1, response.path("page").asInt());
-            assertEquals(100, response.path("size").asInt());
-            assertFalse(response.path("from").asText().isEmpty());
-            assertFalse(response.path("to").asText().isEmpty());
-            JsonNode record = auditRecord(response.path("items"), "middleware-ops-audit-" + workspace.getKey());
-            assertNotNull(record, "固定审计 fixture 必须可经日索引通配查询");
-            assertEquals(workspace.getKey(), record.path("middlewareType").asText());
-            assertFalse(record.path("occurredAt").asText().isEmpty());
-            assertEquals("ops-user", record.path("subject").asText());
-            assertFalse(record.path("capability").asText().isEmpty());
-            assertEquals(200, record.path("httpStatus").asInt());
-            assertTrue(record.path("durationMillis").asLong() >= 0L);
-            assertSafeProjection(record, "url", "username", "password", "request", "response", "exception");
-        }
-    }
+    private void assertExplicitAuditRange(JsonNode mysqlAuditRecord) throws Exception {
+        log.info("验证真实 MySQL 审计记录经动态 UTC 月范围通配读取并保持工作区隔离");
+        String requestId = mysqlAuditRecord.path("id").asText();
+        assertFalse(requestId.isEmpty());
+        LocalDate occurredDate = Instant.parse(mysqlAuditRecord.path("occurredAt").asText())
+                .atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDateTime monthStart = occurredDate.withDayOfMonth(1).atStartOfDay();
+        String from = AUDIT_TIME_FORMATTER.format(monthStart);
+        String to = AUDIT_TIME_FORMATTER.format(monthStart.plusMonths(1));
 
-    private void assertExplicitAuditRange() throws Exception {
-        JsonNode response = success("/audit/redis/records?page=1&size=100&from=2026-08-01T00:00:00&to=2026-08-31T00:00:00");
-        assertEquals("2026-08-01T00:00:00", response.path("from").asText());
-        assertEquals("2026-08-31T00:00:00", response.path("to").asText());
+        JsonNode record = findAuditRecord("mysql", requestId, from, to);
+        assertNotNull(record, "真实 MySQL 审计记录必须可经动态 UTC 月范围和日索引通配查询");
+        assertEquals(requestId, record.path("id").asText());
+        assertEquals("mysql", record.path("middlewareType").asText());
+        assertEquals("MYSQL_SELECT", record.path("capability").asText());
+        assertFalse(record.path("mysqlSql").asText().isEmpty());
+        assertSafeProjection(record, "url", "username", "password", "request", "response", "exception");
+
+        assertNull(findAuditRecord("redis", requestId, from, to),
+                "MySQL 审计记录不得穿透 Redis 工作区类型过滤");
     }
 
     private void assertAsyncAuditWriteAndRead() throws Exception {
@@ -572,7 +706,7 @@ class MiddlewareOpsLdapEndToEndTest {
         assertSafeProjection(record, "url", "username", "password", "request", "response", "exception");
     }
 
-    private void assertAsyncMysqlAuditMasking() throws Exception {
+    private JsonNode assertAsyncMysqlAuditMasking() throws Exception {
         log.info("验证 MySQL 受控查询完整入库后经 Search MASK 展示");
         String sql = "SELECT cluster_id, database_name FROM test_route_marker";
         ResponseEntity<String> operation = restTemplate.withBasicAuth("ops-user", ldapUserPassword)
@@ -592,19 +726,16 @@ class MiddlewareOpsLdapEndToEndTest {
         assertTrue(record.path("mysqlSql").asText().startsWith("SELECT clust"));
         assertTrue(record.path("mysqlSql").asText().endsWith("e_marker"));
         assertSafeProjection(record, "url", "username", "password", "request", "response", "exception");
+        return record;
     }
 
     private void assertNoAuditRecords(String middlewareType, Collection<String> requestIds) throws Exception {
         log.info("验证 {} 自动概览请求均不写审计", middlewareType);
         long deadline = System.currentTimeMillis() + 5000L;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode response = success("/audit/" + middlewareType + "/records?page=1&size=100");
-            assertFalse(response.path("from").asText().isEmpty());
-            assertFalse(response.path("to").asText().isEmpty());
-            for (JsonNode item : response.path("items")) {
-                assertFalse(requestIds.contains(item.path("id").asText()),
-                        "自动概览请求不得写入审计，requestId=" + item.path("id").asText());
-            }
+            JsonNode record = findAuditRecordOnce(middlewareType, requestIds, null, null);
+            assertNull(record, "自动概览请求不得写入审计，requestId="
+                    + (record == null ? "" : record.path("id").asText()));
             Thread.sleep(100L);
         }
     }
@@ -612,19 +743,68 @@ class MiddlewareOpsLdapEndToEndTest {
     private JsonNode awaitAuditRecord(String middlewareType, String requestId) throws Exception {
         long deadline = System.currentTimeMillis() + 5000L;
         while (System.currentTimeMillis() < deadline) {
-            JsonNode response = success("/audit/" + middlewareType + "/records?page=1&size=100");
-            assertFalse(response.path("from").asText().isEmpty());
-            assertFalse(response.path("to").asText().isEmpty());
-            JsonNode items = response.path("items");
-            for (JsonNode item : items) {
-                if (requestId.equals(item.path("id").asText())) {
-                    return item;
-                }
+            JsonNode record = findAuditRecordOnce(middlewareType, Collections.singleton(requestId), null, null);
+            if (record != null) {
+                return record;
             }
             Thread.sleep(100L);
         }
         fail("异步审计记录未在限定时间内经日索引通配查询可见，requestId=" + requestId);
         return null;
+    }
+
+    private JsonNode findAuditRecord(String middlewareType, String requestId, String from, String to) throws Exception {
+        return findAuditRecordOnce(middlewareType, Collections.singleton(requestId), from, to);
+    }
+
+    private JsonNode findAuditRecordOnce(String middlewareType, Collection<String> requestIds, String from, String to)
+            throws Exception {
+        for (int page = 1; ; page++) {
+            JsonNode response = success(auditRecordsUri(middlewareType, page, from, to));
+            assertEquals(page, response.path("page").asInt());
+            assertEquals(auditPageSize(), response.path("size").asInt());
+            assertAuditRange(response, from, to);
+            long total = response.path("total").asLong();
+            assertTrue(total >= 0L);
+            assertTrue(total <= maximumInspectableAuditRecords(),
+                    "审计记录超出公开 offset 查询可验证窗口，middlewareType=" + middlewareType + "，total=" + total);
+            for (JsonNode item : response.path("items")) {
+                if (requestIds.contains(item.path("id").asText())) {
+                    return item;
+                }
+            }
+            if ((long) page * auditPageSize() >= total) {
+                return null;
+            }
+        }
+    }
+
+    private int auditPageSize() {
+        return Math.min(properties.getQuery().getMaxSize(), properties.getAudit().getMaxOffset());
+    }
+
+    private long maximumInspectableAuditRecords() {
+        return (long) (properties.getAudit().getMaxOffset() / auditPageSize()) * auditPageSize();
+    }
+
+    private URI auditRecordsUri(String middlewareType, int page, String from, String to) {
+        UriComponentsBuilder builder = UriComponentsBuilder
+                .fromHttpUrl(url("/audit/" + middlewareType + "/records"))
+                .queryParam("page", page).queryParam("size", auditPageSize());
+        if (from != null) {
+            builder.queryParam("from", from).queryParam("to", to);
+        }
+        return builder.build().encode().toUri();
+    }
+
+    private void assertAuditRange(JsonNode response, String from, String to) {
+        if (from == null) {
+            assertFalse(response.path("from").asText().isEmpty());
+            assertFalse(response.path("to").asText().isEmpty());
+            return;
+        }
+        assertEquals(from, response.path("from").asText());
+        assertEquals(to, response.path("to").asText());
     }
 
     private void assertMysqlDatasources() throws Exception {
@@ -662,15 +842,6 @@ class MiddlewareOpsLdapEndToEndTest {
         assertEquals(expectedDatabase, select.path("rows").get(0).get(1).asText());
         assertFalse(select.path("truncated").asBoolean());
         assertSafeProjection(select, "url", "username", "password", "target", "host", "port");
-    }
-
-    private JsonNode auditRecord(JsonNode items, String id) {
-        for (JsonNode item : items) {
-            if (id.equals(item.path("id").asText())) {
-                return item;
-            }
-        }
-        return null;
     }
 
     private List<String> stringValues(JsonNode values) {
@@ -719,6 +890,11 @@ class MiddlewareOpsLdapEndToEndTest {
             previous = groupId;
             assertSafeProjection(item, "member", "host", "client", "endpoint", "payload", "header");
         }
+    }
+
+    private URI redisDiscoveryUri(String datasourceKey, String prefix, int size) {
+        return UriComponentsBuilder.fromHttpUrl(url("/redis/datasources/{datasourceKey}/keys/discovery"))
+                .queryParam("prefix", prefix).queryParam("size", size).buildAndExpand(datasourceKey).encode().toUri();
     }
 
     private URI mysqlSelectUri(String datasourceKey, String sql, int size) {

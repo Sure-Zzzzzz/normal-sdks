@@ -26,7 +26,19 @@ public class KafkaTopicListRequestValidator extends DefaultMiddlewareOpsRequestV
     @Override
     public void validate(KafkaTopicListRequest request) {
         requireDatasource(request.getDatasourceKey());
+        requireLiteralPrefix(request.getPrefix(), "Kafka Topic 前缀不符合查询规范");
         requireSize(request.getSize());
+    }
+
+    private void requireLiteralPrefix(String prefix, String message) {
+        if (prefix == null) {
+            return;
+        }
+        for (int index = 0; index < prefix.length(); index++) {
+            if (Character.isISOControl(prefix.charAt(index))) {
+                throw new MiddlewareOpsException(HttpStatus.BAD_REQUEST, message);
+            }
+        }
     }
 
     private void requireSize(int size) {

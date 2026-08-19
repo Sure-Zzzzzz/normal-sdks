@@ -27,7 +27,19 @@ public class KafkaConsumerGroupListRequestValidator
     @Override
     public void validate(KafkaConsumerGroupListRequest request) {
         requireDatasource(request.getDatasourceKey());
+        requireLiteralPrefix(request.getPrefix());
         requireSize(request.getSize());
+    }
+
+    private void requireLiteralPrefix(String prefix) {
+        if (prefix == null) {
+            return;
+        }
+        for (int index = 0; index < prefix.length(); index++) {
+            if (Character.isISOControl(prefix.charAt(index))) {
+                throw new MiddlewareOpsException(HttpStatus.BAD_REQUEST, "Kafka 消费组前缀不符合查询规范");
+            }
+        }
     }
 
     private void requireSize(int size) {

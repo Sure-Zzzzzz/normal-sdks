@@ -11,10 +11,7 @@ import io.github.surezzzzzz.sdk.ops.middleware.controller.response.MiddlewareOps
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.*;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlDatasourceStatusRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlDatasourceStatusResponse;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
 import io.github.surezzzzzz.sdk.ops.middleware.redis.*;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsServerEngine;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareType;
@@ -96,18 +93,25 @@ public class MiddlewareOpsController {
     }
 
     /**
+     * 获取精确 Elasticsearch 索引的受限字段能力目录。
+     */
+    @GetMapping("/elasticsearch/datasources/{datasourceKey}/fields")
+    public ElasticsearchFieldCapabilitiesResponse elasticsearchFieldCapabilities(@PathVariable String datasourceKey,
+                                                                                 @RequestParam String index) {
+        return engine.execute(ElasticsearchFieldCapabilitiesRequest.builder().datasourceKey(datasourceKey).index(index)
+                .build(), ElasticsearchFieldCapabilitiesResponse.class);
+    }
+
+    /**
      * 使用 GET 参数执行受控 Elasticsearch JSON DSL 查询。
      */
     @GetMapping("/elasticsearch/datasources/{datasourceKey}/documents")
     public ElasticsearchDocumentQueryResponse elasticsearchDocuments(@PathVariable String datasourceKey,
                                                                      @RequestParam String index,
-                                                                     @RequestParam String dsl,
-                                                                     @RequestParam(required = false) Integer page,
-                                                                     @RequestParam(required = false) Integer size) {
+                                                                     @RequestParam String dsl) {
         String decodedDsl = ElasticsearchDocumentQueryTransport.decodeDsl(dsl, properties.getQuery().getMaxDslLength());
         return engine.execute(ElasticsearchDocumentQueryRequest.builder().datasourceKey(datasourceKey).index(index)
-                        .dsl(decodedDsl).page(resolvePage(page)).size(resolveSize(size)).build(),
-                ElasticsearchDocumentQueryResponse.class);
+                .dsl(decodedDsl).build(), ElasticsearchDocumentQueryResponse.class);
     }
 
     /**
@@ -138,6 +142,44 @@ public class MiddlewareOpsController {
     }
 
     /**
+     * 执行受控的 MySQL EXPLAIN。
+     */
+    @GetMapping("/mysql/datasources/{datasourceKey}/explain")
+    public MysqlExplainResponse mysqlExplain(@PathVariable String datasourceKey, @RequestParam String sql) {
+        return engine.execute(MysqlExplainRequest.builder().datasourceKey(datasourceKey).sql(sql).build(),
+                MysqlExplainResponse.class);
+    }
+
+    /**
+     * 获取当前 MySQL 数据源的表和视图目录。
+     */
+    @GetMapping("/mysql/datasources/{datasourceKey}/tables")
+    public MysqlTableListResponse mysqlTables(@PathVariable String datasourceKey,
+                                              @RequestParam(required = false) String prefix,
+                                              @RequestParam(required = false) Integer size) {
+        return engine.execute(MysqlTableListRequest.builder().datasourceKey(datasourceKey).prefix(prefix)
+                .size(size == null ? properties.getQuery().getMaxSize() : resolveSize(size)).build(), MysqlTableListResponse.class);
+    }
+
+    /**
+     * 获取当前 MySQL 数据源中精确表或视图的列目录。
+     */
+    @GetMapping("/mysql/datasources/{datasourceKey}/tables/{table}/columns")
+    public MysqlTableColumnsResponse mysqlTableColumns(@PathVariable String datasourceKey, @PathVariable String table) {
+        return engine.execute(MysqlTableColumnsRequest.builder().datasourceKey(datasourceKey).table(table).build(),
+                MysqlTableColumnsResponse.class);
+    }
+
+    /**
+     * 获取当前 MySQL 数据源中精确表的索引目录。
+     */
+    @GetMapping("/mysql/datasources/{datasourceKey}/tables/{table}/indexes")
+    public MysqlTableIndexesResponse mysqlTableIndexes(@PathVariable String datasourceKey, @PathVariable String table) {
+        return engine.execute(MysqlTableIndexesRequest.builder().datasourceKey(datasourceKey).table(table).build(),
+                MysqlTableIndexesResponse.class);
+    }
+
+    /**
      * 获取 Redis 数据源概览安全状态。
      */
     @GetMapping("/redis/datasources/overview")
@@ -160,6 +202,16 @@ public class MiddlewareOpsController {
     public RedisDatasourceResponse redisSummary(@PathVariable String datasourceKey) {
         return engine.execute(RedisSummaryRequest.builder().datasourceKey(datasourceKey).build(),
                 RedisDatasourceResponse.class);
+    }
+
+    /**
+     * 通过字面量前缀发现受限 Redis key。
+     */
+    @GetMapping("/redis/datasources/{datasourceKey}/keys/discovery")
+    public RedisKeyDiscoveryResponse redisKeyDiscovery(@PathVariable String datasourceKey, @RequestParam String prefix,
+                                                       @RequestParam(required = false) Integer size) {
+        return engine.execute(RedisKeyDiscoveryRequest.builder().datasourceKey(datasourceKey).prefix(prefix)
+                .size(resolveSize(size)).build(), RedisKeyDiscoveryResponse.class);
     }
 
     /**
@@ -204,9 +256,19 @@ public class MiddlewareOpsController {
      */
     @GetMapping("/kafka/datasources/{datasourceKey}/topics")
     public KafkaTopicListResponse kafkaTopics(@PathVariable String datasourceKey,
+                                              @RequestParam(required = false) String prefix,
                                               @RequestParam(required = false) Integer size) {
-        return engine.execute(KafkaTopicListRequest.builder().datasourceKey(datasourceKey)
+        return engine.execute(KafkaTopicListRequest.builder().datasourceKey(datasourceKey).prefix(prefix)
                 .size(resolveSize(size)).build(), KafkaTopicListResponse.class);
+    }
+
+    /**
+     * 获取精确 Topic 的固定白名单配置。
+     */
+    @GetMapping("/kafka/datasources/{datasourceKey}/topics/config")
+    public KafkaTopicConfigResponse kafkaTopicConfig(@PathVariable String datasourceKey, @RequestParam String topic) {
+        return engine.execute(KafkaTopicConfigRequest.builder().datasourceKey(datasourceKey).topic(topic).build(),
+                KafkaTopicConfigResponse.class);
     }
 
     /**
@@ -214,9 +276,20 @@ public class MiddlewareOpsController {
      */
     @GetMapping("/kafka/datasources/{datasourceKey}/consumer-groups")
     public KafkaConsumerGroupListResponse kafkaConsumerGroups(@PathVariable String datasourceKey,
+                                                              @RequestParam(required = false) String prefix,
                                                               @RequestParam(required = false) Integer size) {
-        return engine.execute(KafkaConsumerGroupListRequest.builder().datasourceKey(datasourceKey)
+        return engine.execute(KafkaConsumerGroupListRequest.builder().datasourceKey(datasourceKey).prefix(prefix)
                 .size(resolveSize(size)).build(), KafkaConsumerGroupListResponse.class);
+    }
+
+    /**
+     * 获取精确消费组的状态和受限分配摘要。
+     */
+    @GetMapping("/kafka/datasources/{datasourceKey}/consumer-groups/detail")
+    public KafkaConsumerGroupDetailResponse kafkaConsumerGroupDetail(@PathVariable String datasourceKey,
+                                                                     @RequestParam String groupId) {
+        return engine.execute(KafkaConsumerGroupDetailRequest.builder().datasourceKey(datasourceKey).groupId(groupId)
+                .build(), KafkaConsumerGroupDetailResponse.class);
     }
 
     /**

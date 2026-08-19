@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.ops.middleware.authorization.MiddlewareOpsAuthor
 import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceCatalogRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceTagResolver;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchFieldCapabilitiesRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchSummaryRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
@@ -116,6 +117,9 @@ class DefaultMiddlewareOpsServerEngineTest {
         assertEquals("safe", engine.execute(ElasticsearchIndexListRequest.builder().datasourceKey("primary").build(),
                 String.class));
         assertNull(event.get());
+        assertEquals("safe", engine.execute(ElasticsearchFieldCapabilitiesRequest.builder().datasourceKey("primary")
+                .index("orders").build(), String.class));
+        assertNull(event.get());
         assertEquals("safe", engine.execute(RedisDatasourceListRequest.forOverview(), String.class));
         assertNull(event.get());
         assertEquals("safe", engine.execute(KafkaDatasourceListRequest.forOverview(), String.class));
@@ -149,7 +153,7 @@ class DefaultMiddlewareOpsServerEngineTest {
         AtomicReference<MiddlewareOpsAuditEvent> event = new AtomicReference<>();
         MiddlewareOpsServerEngine engine = genericEngine(event::set);
         ElasticsearchDocumentQueryRequest request = ElasticsearchDocumentQueryRequest.builder().datasourceKey("primary")
-                .index("orders-2026.08.07").dsl("{\"query\":{\"match_all\":{}}}").page(1).size(20).build();
+                .index("orders-2026.08.07").dsl("{\"query\":{\"match_all\":{}},\"from\":0,\"size\":20}").build();
 
         assertEquals("safe", engine.execute(request, String.class));
 

@@ -3,7 +3,8 @@ package io.github.surezzzzzz.sdk.ops.middleware.redis;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import io.github.surezzzzzz.sdk.redis.route.model.RedisServerInfo;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
-import org.springframework.data.redis.connection.DataType;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
+import org.springframework.data.redis.connection.*;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.connection.stream.StreamReadOptions;
@@ -13,7 +14,12 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.http.HttpStatus;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 仅通过 Redis Route Registry 获取安全视图的适配器。
@@ -28,18 +34,28 @@ public class DefaultRedisOperationsViewAdapter implements RedisOperationsViewAda
     private static final String TYPE_SET = "set";
     private static final String TYPE_ZSET = "zset";
     private static final String TYPE_STREAM = "stream";
+    private static final String STOP_REASON_COMPLETED = "COMPLETED";
+    private static final String STOP_REASON_RESULT_LIMIT = "RESULT_LIMIT";
+    private static final String STOP_REASON_RESPONSE_LIMIT = "RESPONSE_LIMIT";
+    private static final String STOP_REASON_WORK_LIMIT = "WORK_LIMIT";
+    private static final String STOP_REASON_UNSUPPORTED_KEY_ENCODING = "UNSUPPORTED_KEY_ENCODING";
+    private static final int DISCOVERY_SCAN_COUNT = 50;
+    private static final int DISCOVERY_MAX_OBSERVED_ENTRIES = 1000;
 
     private final SimpleRedisRouteRegistry registry;
+    private final long deadlineMillis;
     private final int maxValueLength;
 
     /**
      * 创建 Redis Route 适配器。
      *
      * @param registry       Redis Route Registry
-     * @param maxValueLength 单个值最大字符数
+     * @param deadlineMillis 单次查询截止时间
+     * @param maxValueLength 响应最大字符数
      */
-    public DefaultRedisOperationsViewAdapter(SimpleRedisRouteRegistry registry, int maxValueLength) {
+    public DefaultRedisOperationsViewAdapter(SimpleRedisRouteRegistry registry, long deadlineMillis, int maxValueLength) {
         this.registry = registry;
+        this.deadlineMillis = deadlineMillis;
         this.maxValueLength = maxValueLength;
     }
 
@@ -108,6 +124,158 @@ public class DefaultRedisOperationsViewAdapter implements RedisOperationsViewAda
         throw new MiddlewareOpsException(HttpStatus.BAD_REQUEST, "当前 Redis key 类型不支持读取");
     }
 
+    @Override
+    public RedisKeyDiscoveryResponse discoverKeys(RedisKeyDiscoveryRequest request) {
+        requireDatasource(request.getDatasourceKey());
+        long deadlineNanos = operationDeadlineNanos();
+        RedisConnectionFactory factory = registry.getConnectionFactory(request.getDatasourceKey());
+        try {
+            RedisClusterConnection clusterConnection = clusterConnection(factory);
+            if (clusterConnection != null) {
+                return discoverCluster(clusterConnection, request, deadlineNanos);
+            }
+            return discoverStandalone(factory.getConnection(), request, deadlineNanos);
+        } catch (MiddlewareOpsException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw unavailable();
+        }
+    }
+
+    private RedisClusterConnection clusterConnection(RedisConnectionFactory factory) {
+        try {
+            return factory.getClusterConnection();
+        } catch (InvalidDataAccessApiUsageException e) {
+            return null;
+        } catch (RuntimeException e) {
+            throw unavailable();
+        }
+    }
+
+    private RedisKeyDiscoveryResponse discoverStandalone(RedisConnection connection, RedisKeyDiscoveryRequest request,
+                                                         long deadlineNanos) {
+        Cursor<byte[]> cursor = connection.scan(discoveryScanOptions(request.getPrefix()));
+        try {
+            return scan(cursor, request, deadlineNanos);
+        } finally {
+            try {
+                closeCursor(cursor);
+            } finally {
+                connection.close();
+            }
+        }
+    }
+
+    private RedisKeyDiscoveryResponse discoverCluster(RedisClusterConnection connection, RedisKeyDiscoveryRequest request,
+                                                      long deadlineNanos) {
+        try {
+            List<RedisClusterNode> masters = masterNodes(connection.clusterGetNodes());
+            if (masters.isEmpty()) {
+                throw unavailable();
+            }
+            DiscoveryAccumulator accumulator = new DiscoveryAccumulator(request.getSize(), maxValueLength);
+            for (RedisClusterNode master : masters) {
+                checkDeadline(deadlineNanos);
+                Cursor<byte[]> cursor = connection.scan(master, discoveryScanOptions(request.getPrefix()));
+                try {
+                    RedisKeyDiscoveryResponse response = scan(cursor, request, deadlineNanos, accumulator);
+                    if (response != null) {
+                        return response;
+                    }
+                } finally {
+                    closeCursor(cursor);
+                }
+            }
+            return accumulator.response(STOP_REASON_COMPLETED);
+        } finally {
+            connection.close();
+        }
+    }
+
+    private List<RedisClusterNode> masterNodes(Iterable<RedisClusterNode> nodes) {
+        List<RedisClusterNode> masters = new ArrayList<>();
+        if (nodes == null) {
+            return masters;
+        }
+        for (RedisClusterNode node : nodes) {
+            if (node != null && node.getFlags() != null && node.getFlags().contains(RedisClusterNode.Flag.MASTER)) {
+                masters.add(node);
+            }
+        }
+        return masters;
+    }
+
+    private RedisKeyDiscoveryResponse scan(Cursor<byte[]> cursor, RedisKeyDiscoveryRequest request, long deadlineNanos) {
+        DiscoveryAccumulator accumulator = new DiscoveryAccumulator(request.getSize(), maxValueLength);
+        RedisKeyDiscoveryResponse response = scan(cursor, request, deadlineNanos, accumulator);
+        return response == null ? accumulator.response(STOP_REASON_COMPLETED) : response;
+    }
+
+    private RedisKeyDiscoveryResponse scan(Cursor<byte[]> cursor, RedisKeyDiscoveryRequest request, long deadlineNanos,
+                                           DiscoveryAccumulator accumulator) {
+        while (true) {
+            checkDeadline(deadlineNanos);
+            if (!cursor.hasNext()) {
+                return null;
+            }
+            if (accumulator.isResultLimitReached()) {
+                return accumulator.response(STOP_REASON_RESULT_LIMIT);
+            }
+            if (!accumulator.canObserve()) {
+                return accumulator.response(STOP_REASON_WORK_LIMIT);
+            }
+            checkDeadline(deadlineNanos);
+            byte[] key = cursor.next();
+            accumulator.observe();
+            String decoded = decodeKey(key);
+            if (decoded == null) {
+                return accumulator.response(STOP_REASON_UNSUPPORTED_KEY_ENCODING);
+            }
+            if (!decoded.startsWith(request.getPrefix()) || accumulator.contains(decoded)) {
+                continue;
+            }
+            if (!accumulator.canAdd(decoded)) {
+                return accumulator.response(STOP_REASON_RESPONSE_LIMIT);
+            }
+            accumulator.add(decoded);
+        }
+    }
+
+    private ScanOptions discoveryScanOptions(String prefix) {
+        return ScanOptions.scanOptions().match(prefix + "*").count(DISCOVERY_SCAN_COUNT).build();
+    }
+
+    private void closeCursor(Cursor<?> cursor) {
+        try {
+            cursor.close();
+        } catch (Exception e) {
+            throw unavailable();
+        }
+    }
+
+    private String decodeKey(byte[] value) {
+        try {
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(value)).toString();
+        } catch (CharacterCodingException e) {
+            return null;
+        }
+    }
+
+    private long operationDeadlineNanos() {
+        return System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(deadlineMillis);
+    }
+
+    private void checkDeadline(long deadlineNanos) {
+        if (System.nanoTime() >= deadlineNanos) {
+            throw new MiddlewareOpsException(HttpStatus.GATEWAY_TIMEOUT, "Redis 运维查询已超时");
+        }
+    }
+
+    private MiddlewareOpsException unavailable() {
+        return new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "Redis 运维查询暂不可用");
+    }
+
     private RedisKeyReadResponse readHash(StringRedisTemplate template, RedisKeyReadRequest request) {
         List<RedisKeyReadResponse.FieldValue> entries = new ArrayList<>();
         if (request.getField() != null && !request.getField().trim().isEmpty()) {
@@ -127,7 +295,7 @@ public class DefaultRedisOperationsViewAdapter implements RedisOperationsViewAda
                         .value(limitValue(entry.getValue() == null ? null : String.valueOf(entry.getValue()))).build());
             }
         } finally {
-            cursor.close();
+            closeCursor(cursor);
         }
         return RedisKeyReadResponse.builder().dataType(TYPE_HASH).hashEntries(entries).build();
     }
@@ -249,5 +417,51 @@ public class DefaultRedisOperationsViewAdapter implements RedisOperationsViewAda
         return RedisDatasourceResponse.builder().datasourceKey(info.getDatasourceKey()).versionKnown(info.isKnown())
                 .version(info.getVersion() == null ? null : info.getVersion().toString())
                 .deploymentMode(info.getRedisMode()).build();
+    }
+
+    private static class DiscoveryAccumulator {
+
+        private final int limit;
+        private final int responseLengthLimit;
+        private final Set<String> items = new LinkedHashSet<>();
+        private int observedEntries;
+        private int responseLength;
+
+        private DiscoveryAccumulator(int limit, int responseLengthLimit) {
+            this.limit = limit;
+            this.responseLengthLimit = responseLengthLimit;
+        }
+
+        private boolean canObserve() {
+            return observedEntries < DISCOVERY_MAX_OBSERVED_ENTRIES;
+        }
+
+        private void observe() {
+            observedEntries++;
+        }
+
+        private boolean contains(String key) {
+            return items.contains(key);
+        }
+
+        private boolean canAdd(String key) {
+            return key.length() <= responseLengthLimit - responseLength;
+        }
+
+        private void add(String key) {
+            items.add(key);
+            responseLength += key.length();
+        }
+
+        private boolean isResultLimitReached() {
+            return items.size() >= limit;
+        }
+
+        private RedisKeyDiscoveryResponse response(String stopReason) {
+            boolean traversalComplete = STOP_REASON_COMPLETED.equals(stopReason);
+            return RedisKeyDiscoveryResponse.builder().items(new ArrayList<>(items)).limit(limit)
+                    .returned(items.size()).truncated(!traversalComplete).traversalComplete(traversalComplete)
+                    .stopReason(stopReason).build();
+        }
     }
 }

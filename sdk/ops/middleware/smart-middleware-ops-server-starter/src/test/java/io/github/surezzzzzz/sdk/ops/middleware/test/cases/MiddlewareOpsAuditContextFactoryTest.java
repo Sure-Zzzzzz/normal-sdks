@@ -3,11 +3,9 @@ package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 import io.github.surezzzzzz.sdk.ops.middleware.audit.MiddlewareOpsAuditContext;
 import io.github.surezzzzzz.sdk.ops.middleware.audit.MiddlewareOpsAuditContextFactory;
 import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaConsumerGroupLagListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaConsumerGroupListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaTopicListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaTopicRuntimeRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyDiscoveryRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyMetadataRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyReadRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisSummaryRequest;
@@ -25,13 +23,14 @@ class MiddlewareOpsAuditContextFactoryTest {
 
     @Test
     void shouldCaptureOnlyTypedElasticsearchQueryParameters() {
+        String dsl = "{\"query\":{\"match_all\":{}},\"from\":50,\"size\":50}";
         MiddlewareOpsAuditContext context = MiddlewareOpsAuditContextFactory.capture(ElasticsearchDocumentQueryRequest.builder()
-                .datasourceKey("primary").index("orders-v1").dsl("{\"query\":{\"match_all\":{}}}").page(2).size(50).build());
+                .datasourceKey("primary").index("orders-v1").dsl(dsl).build());
 
         assertEquals("orders-v1", context.getElasticsearchIndex());
-        assertEquals("{\"query\":{\"match_all\":{}}}", context.getElasticsearchDsl());
-        assertEquals(2, context.getPage());
-        assertEquals(50, context.getSize());
+        assertEquals(dsl, context.getElasticsearchDsl());
+        assertNull(context.getPage());
+        assertNull(context.getSize());
         assertEmptyNonElasticsearchFields(context);
     }
 
@@ -56,12 +55,34 @@ class MiddlewareOpsAuditContextFactoryTest {
         assertEquals(10L, read.getOffset());
         assertEquals(20, read.getSize());
         assertNull(read.getMysqlSql());
+
+        MiddlewareOpsAuditContext explain = MiddlewareOpsAuditContextFactory.capture(MysqlExplainRequest.builder()
+                .datasourceKey("mysql84-ops").sql("SELECT id FROM orders WHERE id = 7").build());
+        assertEquals("SELECT id FROM orders WHERE id = 7", explain.getMysqlSql());
+        assertNull(explain.getSize());
+
+        MiddlewareOpsAuditContext tableList = MiddlewareOpsAuditContextFactory.capture(MysqlTableListRequest.builder()
+                .datasourceKey("mysql84-ops").prefix("orders").size(20).build());
+        MiddlewareOpsAuditContext columns = MiddlewareOpsAuditContextFactory.capture(MysqlTableColumnsRequest.builder()
+                .datasourceKey("mysql84-ops").table("orders").build());
+        MiddlewareOpsAuditContext indexes = MiddlewareOpsAuditContextFactory.capture(MysqlTableIndexesRequest.builder()
+                .datasourceKey("mysql84-ops").table("orders").build());
+        assertEmptyNonElasticsearchFields(tableList);
+        assertNull(tableList.getSize());
+        assertEmptyNonElasticsearchFields(columns);
+        assertNull(columns.getSize());
+        assertEmptyNonElasticsearchFields(indexes);
+        assertNull(indexes.getSize());
     }
 
     @Test
     void shouldCaptureOnlyTypedKafkaParameters() {
         MiddlewareOpsAuditContext runtime = MiddlewareOpsAuditContextFactory.capture(KafkaTopicRuntimeRequest.builder()
                 .datasourceKey("v37").topic("order-events").build());
+        MiddlewareOpsAuditContext config = MiddlewareOpsAuditContextFactory.capture(KafkaTopicConfigRequest.builder()
+                .datasourceKey("v37").topic("order-events").build());
+        MiddlewareOpsAuditContext detail = MiddlewareOpsAuditContextFactory.capture(KafkaConsumerGroupDetailRequest.builder()
+                .datasourceKey("v37").groupId("order-group").build());
         MiddlewareOpsAuditContext lag = MiddlewareOpsAuditContextFactory.capture(KafkaConsumerGroupLagListRequest.builder()
                 .datasourceKey("v37").groupId("order-group").size(30).build());
         MiddlewareOpsAuditContext topics = MiddlewareOpsAuditContextFactory.capture(KafkaTopicListRequest.builder()
@@ -71,6 +92,11 @@ class MiddlewareOpsAuditContextFactoryTest {
 
         assertEquals("order-events", runtime.getKafkaTopic());
         assertNull(runtime.getKafkaGroupId());
+        assertEquals("order-events", config.getKafkaTopic());
+        assertNull(config.getKafkaGroupId());
+        assertEquals("order-group", detail.getKafkaGroupId());
+        assertNull(detail.getKafkaTopic());
+        assertNull(detail.getSize());
         assertEquals("order-group", lag.getKafkaGroupId());
         assertEquals(30, lag.getSize());
         assertNull(lag.getKafkaTopic());
@@ -82,7 +108,19 @@ class MiddlewareOpsAuditContextFactoryTest {
     void shouldKeepContextEmptyForOperationsWithoutAdditionalParameters() {
         MiddlewareOpsAuditContext context = MiddlewareOpsAuditContextFactory.capture(RedisSummaryRequest.builder()
                 .datasourceKey("redis7Standalone").build());
+        MiddlewareOpsAuditContext discovery = MiddlewareOpsAuditContextFactory.capture(RedisKeyDiscoveryRequest.builder()
+                .datasourceKey("redis7Standalone").prefix("private:prefix:").size(20).build());
 
+        assertEmptyNonElasticsearchFields(context);
+        assertEmptyNonElasticsearchFields(discovery);
+        assertEmptyDiscoveryContext(discovery);
+        assertNull(context.getElasticsearchIndex());
+        assertNull(context.getElasticsearchDsl());
+        assertNull(context.getPage());
+        assertNull(context.getSize());
+    }
+
+    private void assertEmptyDiscoveryContext(MiddlewareOpsAuditContext context) {
         assertEmptyNonElasticsearchFields(context);
         assertNull(context.getElasticsearchIndex());
         assertNull(context.getElasticsearchDsl());
