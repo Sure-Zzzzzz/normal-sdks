@@ -79,17 +79,17 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_DELETE_SUCCESS = "删除成功";
 
-    public static final String ADMIN_DELETE_FAILED = "删除失败：%s";
+    public static final String ADMIN_DELETE_FAILED = "删除失败";
 
-    public static final String ADMIN_QUERY_FAILED = "查询失败：%s";
+    public static final String ADMIN_QUERY_FAILED = "查询失败";
 
     public static final String ADMIN_ENABLE_SUCCESS = "启用成功";
 
-    public static final String ADMIN_ENABLE_FAILED = "启用失败：%s";
+    public static final String ADMIN_ENABLE_FAILED = "启用失败";
 
     public static final String ADMIN_DISABLE_SUCCESS = "禁用成功";
 
-    public static final String ADMIN_DISABLE_FAILED = "禁用失败：%s";
+    public static final String ADMIN_DISABLE_FAILED = "禁用失败";
 
     public static final String ADMIN_OWNER_INFO_UPDATE_SUCCESS = "归属信息更新成功";
 
@@ -116,7 +116,7 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_TOKEN_REQUEST_FAILED = "Token请求失败: %s";
 
-    public static final String ADMIN_TOKEN_AUTH_FAILED = "认证失败: %s - %s";
+    public static final String ADMIN_TOKEN_AUTH_FAILED = "认证失败: HTTP %s";
 
     public static final String ADMIN_TOKEN_EXCHANGE_FAILED = "换Token失败: %s";
 
@@ -144,7 +144,25 @@ public final class ServerErrorMessage {
 
     public static final String ADMIN_NAME_UPDATE_SUCCESS = "名称更新成功";
 
-    public static final String ADMIN_UPDATE_FAILED = "更新失败：%s";
+    public static final String ADMIN_UPDATE_FAILED = "更新失败";
+
+    // ==================== Admin页面-应用授权消息 ====================
+
+    public static final String ADMIN_CREATE_FAILED = "创建 AKSK 失败";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_LOAD_FAILED = "应用授权读取失败";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_SAVE_SUCCESS = "应用授权保存成功";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_APPLICATION_CODE_IMMUTABLE = "应用编码创建后不可修改";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_DATA_GRANT_INVALID = "DATA 授权项或约束不完整";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_REQUEST_INVALID = "应用授权请求无效";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_REVOKE_SUCCESS = "应用授权已撤销";
+
+    public static final String ADMIN_APPLICATION_AUTHORIZATION_REVOKE_FAILED = "应用授权撤销失败";
 
     // ==================== Client API消息 ====================
 

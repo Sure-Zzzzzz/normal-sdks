@@ -45,8 +45,6 @@ io:
                 enabled: true
                 username: admin
                 password: # 请在 application-local.yml 中配置真实密码
-              introspect:
-                require-authentication: true  # 默认 true，改为 false 则允许匿名 introspect
               limiter:
                 oauth2:
                   token:

@@ -28,7 +28,8 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      * @param pageable 分页参数
      * @return 授权实体分页结果
      */
-    @Query("SELECT a FROM OAuth2AuthorizationEntity a ORDER BY a.accessTokenIssuedAt DESC")
+    @Query("SELECT a FROM OAuth2AuthorizationEntity a WHERE a.accessTokenValue IS NOT NULL "
+            + "AND a.accessTokenIssuedAt IS NOT NULL ORDER BY a.accessTokenIssuedAt DESC")
     Page<OAuth2AuthorizationEntity> findAllOrderByIssuedAtDesc(Pageable pageable);
 
     /**
@@ -38,7 +39,11 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      * @param pageable           分页参数
      * @return 授权实体分页结果
      */
-    Page<OAuth2AuthorizationEntity> findByRegisteredClientIdOrderByAccessTokenIssuedAtDesc(String registeredClientId, Pageable pageable);
+    @Query("SELECT a FROM OAuth2AuthorizationEntity a WHERE a.registeredClientId = :registeredClientId "
+            + "AND a.accessTokenValue IS NOT NULL AND a.accessTokenIssuedAt IS NOT NULL "
+            + "ORDER BY a.accessTokenIssuedAt DESC")
+    Page<OAuth2AuthorizationEntity> findByRegisteredClientIdOrderByAccessTokenIssuedAtDesc(
+            @Param("registeredClientId") String registeredClientId, Pageable pageable);
 
     /**
      * 按注册客户端ID列表分页查询授权记录
@@ -47,7 +52,9 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
      * @param pageable            分页参数
      * @return 授权实体分页结果
      */
-    @Query("SELECT a FROM OAuth2AuthorizationEntity a WHERE a.registeredClientId IN :registeredClientIds ORDER BY a.accessTokenIssuedAt DESC")
+    @Query("SELECT a FROM OAuth2AuthorizationEntity a WHERE a.registeredClientId IN :registeredClientIds "
+            + "AND a.accessTokenValue IS NOT NULL AND a.accessTokenIssuedAt IS NOT NULL "
+            + "ORDER BY a.accessTokenIssuedAt DESC")
     Page<OAuth2AuthorizationEntity> findByRegisteredClientIdInOrderByAccessTokenIssuedAtDesc(List<String> registeredClientIds, Pageable pageable);
 
     /**

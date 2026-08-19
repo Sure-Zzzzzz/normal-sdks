@@ -5,6 +5,7 @@ import com.nimbusds.jose.crypto.AESEncrypter;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import io.github.surezzzzzz.sdk.auth.aksk.core.support.AkskRouteKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
@@ -104,6 +105,7 @@ public class JweOAuth2TokenGenerator implements OAuth2TokenGenerator<OAuth2Acces
             EncryptionMethod encAlg = EncryptionMethod.parse(SimpleAkskServerConstant.JWE_CONTENT_ENCRYPTION_ALGORITHM);
             JWEHeader header = new JWEHeader.Builder(keyAlg, encAlg)
                     .contentType(SimpleAkskServerConstant.JWE_CONTENT_TYPE_JWT)
+                    .keyID(AkskRouteKeyHelper.createRouteKey(properties.getJwt().getKeyId()))
                     .build();
 
             JWEObject jweObject = new JWEObject(header, new Payload(jwsCompact));

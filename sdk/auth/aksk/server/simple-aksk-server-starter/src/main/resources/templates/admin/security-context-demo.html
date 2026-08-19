@@ -1,27 +1,17 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Context演示</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">Security Context演示</h2>
-        <div>
-            <a href="/admin/token/test" class="btn btn-secondary">返回Token测试</a>
-            <a href="/admin" class="btn btn-secondary">返回AKSK管理</a>
-        </div>
-    </div>
+<head th:replace="admin/fragments/layout :: head('安全上下文')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('security-context', ${null})"></div>
+<main class="admin-main"><header th:replace="admin/fragments/layout :: topbar('安全上下文', '仅传递业务上下文，不作为接口权限或数据权限来源')"></header><section class="admin-content">
+    <div class="admin-actions mb-3"><a href="/admin/token/test" class="btn btn-outline-secondary">返回 Token 测试</a></div>
 
     <!-- 说明卡片 -->
     <div class="alert alert-info" role="alert">
         <h5 class="alert-heading">功能说明</h5>
-        <p>用户级AKSK支持在换取Token时传递<strong>自定义安全上下文(security_context)</strong>,该上下文会被编码到JWT Token中。</p>
-        <p class="mb-0">典型应用场景:多租户系统、权限隔离、请求追踪等。</p>
+        <p>用户级 AKSK 支持在换取 Token 时传递<strong>自定义业务上下文（security_context）</strong>，该上下文会被编码到 JWT Token 中。</p>
+        <p>它由 Client 自行提交，仅用于业务上下文传递，不是可信的 API permission 或 DATA 授权来源。</p>
+        <p class="mb-0"><strong>仅用于本地演示：</strong>不要粘贴生产环境的敏感业务数据。</p>
     </div>
 
     <!-- 步骤1: 换取Token -->
@@ -58,46 +48,26 @@
                     <input type="text" class="form-control" id="scope" name="scope" placeholder="留空则使用 Client 默认 scope">
                 </div>
 
-                <button type="submit" class="btn btn-primary">换取Token</button>
-                <button type="reset" class="btn btn-secondary">重置</button>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn btn-primary">换取Token</button>
+                    <button type="reset" class="btn btn-secondary">重置</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <!-- 步骤2: Token结果和JWT解析 -->
+    <!-- 步骤2: 服务端验证结果 -->
     <div id="tokenResultSection" class="card mb-4" style="display:none;">
         <div class="card-header bg-success text-white">
-            <h5>步骤2: Token结果 & Claims解析</h5>
+            <h5>步骤2: 服务端验证结果</h5>
         </div>
         <div class="card-body">
-            <!-- Access Token -->
-            <div class="mb-4">
-                <label class="form-label"><strong>Access Token (JWE):</strong></label>
-                <div class="input-group">
-                    <textarea class="form-control" id="accessToken" rows="4" readonly></textarea>
-                    <button class="btn btn-outline-secondary" type="button" onclick="copyAccessToken()">复制</button>
-                </div>
-                <small class="text-muted">2.0.0 起 token 格式为 JWE（5段），payload 已加密，无法在客户端直接解析。</small>
+            <div class="alert alert-info">
+                Token 不会回显或交给浏览器解析。页面仅通过带认证 Introspect 展示服务端验证状态和 security_context。
             </div>
-
-            <!-- JWE 解密过程说明 -->
-            <div class="mb-4">
-                <h6><strong>JWE → JWS → Claims 解析过程:</strong></h6>
-                <div class="card border-info">
-                    <div class="card-body bg-light">
-                        <ol class="mb-2 small text-muted">
-                            <li>调用 <code>/admin/token/introspect</code>，server 侧用 AES-256 密钥解密 JWE → JWS</li>
-                            <li>用 RSA 公钥验签 JWS，提取 claims</li>
-                            <li>返回完整 claims（含 security_context）</li>
-                        </ol>
-                        <pre id="jwtPayload" class="mb-0" style="max-height: 400px; overflow-y: auto;"></pre>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Security Context高亮显示 -->
+            <div id="introspectionStatus" class="alert" style="display:none;"></div>
             <div id="securityContextDisplay" class="alert alert-success" style="display:none;">
-                <h6><strong>Security Context (从JWT中提取):</strong></h6>
+                <h6><strong>Security Context（服务端验证后返回）:</strong></h6>
                 <pre id="extractedSecurityContext" class="mb-0"></pre>
             </div>
 
@@ -125,36 +95,14 @@
             <h6>1. 创建用户级AKSK</h6>
             <p>在 <a href="/admin/create-user">创建用户级AKSK</a> 页面创建一个用户级的Access Key和Secret Key。</p>
 
-            <h6>2. 携带Security Context换取Token</h6>
-            <p>在OAuth2 Token请求中添加<code>security_context</code>参数:</p>
-            <pre class="bg-light p-2"><code>POST /oauth2/token
-Authorization: Basic {base64(clientId:clientSecret)}
-Content-Type: application/x-www-form-urlencoded
+            <h6>2. 携带 Security Context 换取 Token</h6>
+            <p>在 OAuth2 Token 请求中添加 <code>security_context</code> 参数。实际凭据和 Token 仅在受保护的请求中传输，不在页面结果区回显。</p>
 
-grant_type=client_credentials
-&scope=read write
-&security_context={"tenantId":"tenant001","userId":"user456"}</code></pre>
-
-            <h6>3. JWT中的Security Context</h6>
-            <p>换取的JWT Token的payload会包含<code>security_context</code> claim:</p>
-            <pre class="bg-light p-2"><code>{
-  "sub": "AKxxx...",
-  "client_id": "AKxxx...",
-  "client_type": "user",
-  "user_id": "user123",
-  "username": "testuser",
-  "security_context": {
-    "tenantId": "tenant001",
-    "userId": "user456",
-    "role": "admin"
-  },
-  "scope": ["read", "write"],
-  "exp": 1768985014,
-  "iat": 1768981414
-}</code></pre>
+            <h6>3. 服务端验证 Security Context</h6>
+            <p>页面通过带认证 Introspect 请求，由服务端验证 Token 后仅展示 security_context 业务上下文；不会在浏览器端解密或解析 Token。</p>
 
             <h6>4. 后端验证Security Context</h6>
-            <p>在API端点中,可以从JWT中提取security_context并用于权限验证、数据隔离等:</p>
+            <p>在 API 端点中，可以从 JWT 中提取 security_context 作为业务上下文；API permission 和 DATA 授权必须使用 aksk_authorization 快照完成校验：</p>
             <pre class="bg-light p-2"><code>// Spring Security获取JWT claims
 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 Jwt jwt = (Jwt) auth.getPrincipal();
@@ -164,23 +112,8 @@ String tenantId = (String) securityContext.get("tenantId");
 // 根据tenantId进行数据过滤...</code></pre>
         </div>
     </div>
-</div>
-
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+</section></main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script th:inline="javascript">
 /*<![CDATA[*/
     const csrfToken = /*[[${_csrf.token}]]*/ '';
@@ -218,20 +151,16 @@ String tenantId = (String) securityContext.get("tenantId");
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText}`);
+                throw new Error('HTTP ' + response.status);
             }
 
             const data = await response.json();
 
-            // 显示Token
-            document.getElementById('accessToken').value = data.access_token;
             document.getElementById('tokenType').textContent = data.token_type || 'Bearer';
             document.getElementById('expiresIn').textContent = data.expires_in || 3600;
             document.getElementById('returnedScope').textContent = data.scope || scope;
 
-            // 解析JWT claims（通过 introspect 端点，兼容 JWE）
-            await parseAndDisplayJWT(data.access_token, clientId, clientSecret);
+            await verifyAndDisplaySecurityContext(data.access_token, clientId, clientSecret);
 
             // 显示结果区域
             document.getElementById('tokenResultSection').style.display = 'block';
@@ -240,13 +169,14 @@ String tenantId = (String) securityContext.get("tenantId");
             document.getElementById('tokenResultSection').scrollIntoView({ behavior: 'smooth' });
 
         } catch (error) {
-            alert('换取Token失败: ' + error.message);
+            alert('换取 Token 未完成，请检查输入和状态后重试。');
         }
     });
 
-    async function parseAndDisplayJWT(token, clientId, clientSecret) {
+    async function verifyAndDisplaySecurityContext(token, clientId, clientSecret) {
+        const status = document.getElementById('introspectionStatus');
+        const contextDisplay = document.getElementById('securityContextDisplay');
         try {
-            // 通过 introspect 端点获取 claims，兼容 JWE 格式
             const params = new URLSearchParams();
             params.append('clientId', clientId);
             params.append('clientSecret', clientSecret);
@@ -254,50 +184,38 @@ String tenantId = (String) securityContext.get("tenantId");
 
             const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
             if (csrfHeader) headers[csrfHeader] = csrfToken;
-            console.log('csrf header:', csrfHeader, 'csrf token:', csrfToken);
 
             const response = await fetch('/admin/token/introspect', {
                 method: 'POST',
                 headers: headers,
                 body: params
             });
-
+            if (!response.ok) {
+                throw new Error('请求未完成');
+            }
             const result = await response.json();
-            console.log('introspect result:', JSON.stringify(result));
+            status.style.display = 'block';
+            status.className = result.success && result.active ? 'alert alert-success' : 'alert alert-danger';
+            status.textContent = result.success && result.active
+                ? '服务端 Introspect 验证通过，Token 当前有效。'
+                : '服务端 Introspect 未验证到有效 Token。';
 
-            if (!result.success && result.active === undefined) {
-                document.getElementById('jwtPayload').textContent = 'Claims 获取失败: ' + (result.message || '未知错误');
-                return;
-            }
-
-            // 格式化显示完整 claims
-            const claims = Object.fromEntries(
-                Object.entries(result).filter(([k]) => k !== 'success' && k !== 'status')
-            );
-            document.getElementById('jwtPayload').textContent = JSON.stringify(claims, null, 2);
-
-            // 提取并高亮显示 security_context
-            if (claims.security_context) {
-                const sc = typeof claims.security_context === 'string'
-                    ? JSON.parse(claims.security_context)
-                    : claims.security_context;
+            if (result.success && result.active && result.security_context) {
+                const securityContext = typeof result.security_context === 'string'
+                    ? JSON.parse(result.security_context)
+                    : result.security_context;
                 document.getElementById('extractedSecurityContext').textContent =
-                    JSON.stringify(sc, null, 2);
-                document.getElementById('securityContextDisplay').style.display = 'block';
+                    JSON.stringify(securityContext, null, 2);
+                contextDisplay.style.display = 'block';
             } else {
-                document.getElementById('securityContextDisplay').style.display = 'none';
+                contextDisplay.style.display = 'none';
             }
-
         } catch (error) {
-            document.getElementById('jwtPayload').textContent = 'Claims 获取失败: ' + error.message;
+            status.style.display = 'block';
+            status.className = 'alert alert-danger';
+            status.textContent = '服务端 Introspect 调用失败。';
+            contextDisplay.style.display = 'none';
         }
-    }
-
-    function copyAccessToken() {
-        const tokenInput = document.getElementById('accessToken');
-        tokenInput.select();
-        document.execCommand('copy');
-        alert('Access Token已复制到剪贴板');
     }
 /*]]>*/
 </script>

@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
@@ -20,8 +22,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.core.OAuth2Token;
+import org.springframework.security.jackson2.SecurityJackson2Modules;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
@@ -81,6 +86,10 @@ public class AuthorizationServerConfiguration {
                 jdbcTemplate,
                 registeredClientRepository()
         );
+        OAuth2AuthorizationRowMapper rowMapper = new OAuth2AuthorizationRowMapper(
+                registeredClientRepository());
+        rowMapper.setObjectMapper(authorizationObjectMapper());
+        jdbcService.setAuthorizationRowMapper(rowMapper);
 
         log.info("Smart cache (L1+L2) enabled for OAuth2 authorization storage");
         OAuth2AuthorizationService service = new CachedOAuth2AuthorizationService(jdbcService, smartCacheManager, redisKeyHelper);
@@ -90,6 +99,19 @@ public class AuthorizationServerConfiguration {
         log.info("Auditable OAuth2 authorization service initialized");
 
         return service;
+    }
+
+    private ObjectMapper authorizationObjectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModules(SecurityJackson2Modules.getModules(
+                JdbcOAuth2AuthorizationService.class.getClassLoader()));
+        objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
+        objectMapper.addMixIn(Long.class, LongMixin.class);
+        return objectMapper;
+    }
+
+    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
+    private abstract static class LongMixin {
     }
 
     @Bean

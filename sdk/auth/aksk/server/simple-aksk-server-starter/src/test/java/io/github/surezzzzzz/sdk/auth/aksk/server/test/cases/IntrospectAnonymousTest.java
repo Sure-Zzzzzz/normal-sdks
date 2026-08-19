@@ -1,10 +1,12 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,9 +26,9 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Introspect 端点无认证模式测试
+ * Introspect 端点认证强制测试。
  *
- * <p>验证 introspect.require-authentication=false 时，无需凭证即可调用 introspect。
+ * <p>验证遗留的 require-authentication=false 配置不能开启匿名 introspect。
  *
  * @author surezzzzzz
  */
@@ -56,6 +58,9 @@ class IntrospectAnonymousTest {
     private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     private String clientId;
@@ -67,6 +72,7 @@ class IntrospectAnonymousTest {
         ClientInfoResponse client = clientManagementService.createPlatformClient("Introspect Anonymous Test Client");
         clientId = client.getClientId();
         clientSecret = client.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client);
         accessToken = fetchToken(clientId, clientSecret);
         assertNotNull(accessToken);
         log.info("测试准备完成: clientId={}", clientId);
@@ -84,8 +90,8 @@ class IntrospectAnonymousTest {
     }
 
     @Test
-    void testIntrospectWithoutCredentialsSucceeds() {
-        log.info("========== 测试：require-authentication=false 时无需凭证即可 introspect ==========");
+    void testLegacyAnonymousConfigurationStillRequiresCredentials() {
+        log.info("========== 测试：遗留匿名配置不能绕过 introspect 客户端认证 ==========");
 
         // 使用 Apache HttpClient 避免 HttpURLConnection 对 401 的自动重试行为
         org.apache.http.impl.client.CloseableHttpClient httpClient =
@@ -120,14 +126,11 @@ class IntrospectAnonymousTest {
             );
 
             log.info("无认证 introspect 响应状态: {}", response.getStatusCode());
-            log.info("无认证 introspect 响应: {}", response.getBody());
 
-            assertEquals(HttpStatus.OK, response.getStatusCode(),
-                    "require-authentication=false 时无认证 introspect 应返回 200");
-            assertEquals(true, response.getBody().get("active"),
-                    "有效 token 应该 active=true");
+            assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode(),
+                    "遗留配置不能开启匿名 introspect");
 
-            log.info("✓ 无认证 introspect 成功，active={}", response.getBody().get("active"));
+            log.info("✓ 无认证 introspect 正确返回 401");
         } finally {
             try { httpClient.close(); } catch (Exception ignored) {}
         }

@@ -57,12 +57,12 @@ class AdminLogoutTest {
 
         String csrfToken = extractCsrfToken(loginPageResponse.getBody());
         assertNotNull(csrfToken, "应该能从登录页面提取CSRF token");
-        log.info("提取到CSRF token: {}", csrfToken);
+        log.info("已提取登录 CSRF token");
 
         List<String> cookies = loginPageResponse.getHeaders().get(HttpHeaders.SET_COOKIE);
         String sessionCookie = extractSessionCookie(cookies);
         assertNotNull(sessionCookie, "应该能获取到session cookie");
-        log.info("获取到session cookie: {}", sessionCookie);
+        log.info("已获取登录会话");
 
         // Step 2: 提交登录表单
         log.info("Step 2: 提交登录表单");
@@ -100,7 +100,7 @@ class AdminLogoutTest {
             String newSessionCookie = extractSessionCookie(loginCookies);
             if (newSessionCookie != null) {
                 sessionCookie = newSessionCookie;
-                log.info("更新session cookie: {}", sessionCookie);
+                log.info("已更新登录会话");
             }
         }
 
@@ -118,14 +118,14 @@ class AdminLogoutTest {
         );
 
         assertEquals(HttpStatus.OK, adminResponse.getStatusCode(), "登录后应该能访问admin页面");
-        assertTrue(adminResponse.getBody().contains("AKSK管理"), "admin页面应该包含标题");
+        assertTrue(adminResponse.getBody().contains("Client 管理"), "admin页面应该包含当前控制台标题");
         log.info("成功访问admin页面");
 
         // Step 4: 从admin页面提取CSRF token用于logout
         log.info("Step 4: 从admin页面提取CSRF token");
         String logoutCsrfToken = extractCsrfToken(adminResponse.getBody());
         assertNotNull(logoutCsrfToken, "应该能从admin页面提取CSRF token");
-        log.info("提取到logout CSRF token: {}", logoutCsrfToken);
+        log.info("已提取登出 CSRF token");
 
         // Step 5: 执行logout
         log.info("Step 5: 执行logout");

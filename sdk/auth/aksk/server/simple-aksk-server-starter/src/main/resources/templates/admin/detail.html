@@ -1,22 +1,20 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AKSK详情</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h4>AKSK详情</h4>
+<head th:replace="admin/fragments/layout :: head('Client 详情')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('clients', ${client})"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('Client 详情', '查看与维护 Client 配置及 Token 生命周期')"></header>
+    <section class="admin-content">
+        <div th:replace="admin/fragments/layout :: flash"></div>
+<div class="admin-detail-grid">
+        <div>
+            <div class="admin-card">
+                <div class="admin-card-header">
+                    <h2>Client 配置</h2>
                 </div>
-                <div class="card-body">
-                    <table class="table table-bordered">
+                <div class="admin-card-body">
+                    <table class="table admin-kv-table">
                         <tbody>
                         <tr>
                             <th width="30%">Client ID</th>
@@ -53,7 +51,7 @@
                             <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
                         </tr>
                         <tr>
-                            <th>API 权限范围</th>
+                            <th>OAuth2 Scope</th>
                             <td>
                                 <div th:if="${client.scopes != null and !client.scopes.isEmpty()}">
                                     <ul class="list-unstyled mb-0">
@@ -64,6 +62,18 @@
                                 </div>
                                 <span th:if="${client.scopes == null or client.scopes.isEmpty()}"
                                       class="text-muted">未设置（默认：read,write）</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>应用授权</th>
+                            <td>
+                                <span th:if="${authorization == null}" class="badge bg-warning text-dark">未配置</span>
+                                <span th:if="${authorization != null and authorization.enabled and authorization.admitted}"
+                                      class="badge bg-success">已准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
+                                <span th:if="${authorization != null and authorization.enabled and !authorization.admitted}"
+                                      class="badge bg-secondary">未准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
+                                <span th:if="${authorization != null and !authorization.enabled}"
+                                      class="badge bg-danger">已撤销（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
                             </td>
                         </tr>
                         <tr>
@@ -78,39 +88,21 @@
                     <div class="alert alert-info" role="alert">
                         <strong>提示：</strong>Client Secret仅在创建时显示一次，后续无法查看。
                     </div>
-
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-secondary"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editNameModal">
-                            编辑名称
-                        </button>
-                        <button type="button" class="btn btn-warning"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editScopesModal">
-                            编辑权限范围
-                        </button>
-                        <button th:if="${client.clientType == 2}" type="button" class="btn btn-info"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editOwnerInfoModal">
-                            编辑归属信息
-                        </button>
-                        <button type="button" class="btn btn-danger"
-                                data-bs-toggle="modal"
-                                data-bs-target="#revokeAllTokensModal">
-                            撤销所有Token
-                        </button>
-                        <button type="button" class="btn btn-success"
-                                data-bs-toggle="modal"
-                                data-bs-target="#resetSecretModal">
-                            重置Secret
-                        </button>
-                        <a href="/admin" class="btn btn-primary">返回管理页面</a>
-                    </div>
                 </div>
             </div>
         </div>
-    </div>
+        <aside class="admin-card">
+            <div class="admin-card-header"><h2>管理操作</h2></div>
+            <div class="admin-card-body"><div class="admin-actions flex-column align-items-stretch">
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNameModal">编辑名称</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editScopesModal">编辑 OAuth2 Scope</button>
+                <button th:if="${client.clientType == 2}" type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editOwnerInfoModal">编辑归属信息</button>
+                <a class="btn btn-primary" th:href="@{/admin/{id}/authorization(id=${client.clientId})}">管理应用授权</a>
+                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#revokeAllTokensModal">撤销该 Client 的全部活跃 Token</button>
+                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#resetSecretModal">重置 Secret</button>
+                <a href="/admin" class="btn btn-outline-primary">返回 Client 管理</a>
+            </div></div>
+        </aside>
 </div>
 
 <!-- 编辑名称 Modal -->
@@ -141,32 +133,29 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">编辑 API 权限范围</h5>
+                <h5 class="modal-title">编辑 OAuth2 Scope</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
             <div class="modal-body">
                 <div class="mb-3">
-                    <label for="editScopes" class="form-label">API 权限范围</label>
+                    <label for="editScopes" class="form-label">OAuth2 Scope</label>
                     <textarea class="form-control" id="editScopes" rows="5"
                               th:text="${#strings.listJoin(client.scopes, ',')}"></textarea>
                     <div class="form-text">
-                        多个权限用逗号分隔，支持通配符 (*)
+                        多个 Scope 用逗号分隔
                     </div>
                     <div class="form-text text-danger" id="scopeError" style="display:none;">
                         ⚠️ 检测到回车换行，请使用逗号分隔
                     </div>
                     <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
                         <strong>Scope 格式说明：</strong><br>
-                        <strong>接口权限</strong>：如 <code>/api/*</code>（通配符 * 匹配所有路径），多个接口用逗号分隔，如 <code>/api/orders,/api/products</code><br>
-                        <strong>数据权限</strong>：如 <code>data:*</code>（访问全部数据）、<code>data:dept:华东</code>（按部门限制数据范围）<br>
-                        <strong>生效规则</strong>：接口权限和数据权限均为 <strong>固有能力</strong>，签发时确定，运行时不可覆盖；两者同时满足才放行<br>
-                        <strong>示例</strong>：<code>/api/orders,/api/products,data:dept:华东</code> 表示可调 orders 和 products 接口，且只能操作华东数据
+                        OAuth2 Scope 仅表示令牌请求范围，不是 API permission 或 DATA grant。应用授权请使用 Client 详情中的“管理应用授权”入口单独配置。
                     </div>
                 </div>
 
                 <div class="alert alert-warning" role="alert">
-                    <strong>⚠️ 注意：</strong>修改后，下次换取 Token 时生效（最多 1 小时延迟）
+                    <strong>注意：</strong>修改后，新签发 Token 使用新的 Scope；已签发 Token 不会被 Scope 修改自动撤销。
                 </div>
             </div>
 
@@ -264,21 +253,9 @@
     </div>
 </div>
 
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+</section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script th:inline="javascript">
     /*<![CDATA[*/
     const csrfToken = /*[[${_csrf.token}]]*/ '';
@@ -344,13 +321,13 @@
         })
         .then(response => {
             if (!response.ok) {
-                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
+                throw new Error('操作未完成');
             }
             const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
             if (modal) modal.hide();
             location.reload();
         })
-        .catch(error => alert('更新失败：' + error.message));
+        .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
 
     function updateScopes() {
@@ -384,15 +361,13 @@
         })
         .then(response => {
             if (!response.ok) {
-                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
+                throw new Error('操作未完成');
             }
             const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
             if (modal) modal.hide();
             location.reload();
         })
-        .catch(error => {
-            alert('更新失败：' + error.message);
-        });
+        .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
 
     function revokeAllTokens() {
@@ -402,18 +377,17 @@
             method: 'DELETE',
             headers: { [csrfHeader]: csrfToken }
         })
-        .then(response => response.json())
-        .then(data => {
-            alert('成功撤销 ' + data.revokedCount + ' 个Token');
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('操作未完成');
+            }
             const modal = bootstrap.Modal.getInstance(document.getElementById('revokeAllTokensModal'));
             if (modal) {
                 modal.hide();
             }
             location.reload();
         })
-        .catch(error => {
-            alert('撤销失败：' + error);
-        });
+        .catch(() => alert('撤销未完成，请检查状态后重试。'));
     }
 
     function resetSecret() {
@@ -423,16 +397,14 @@
             method: 'PUT',
             headers: { [csrfHeader]: csrfToken }
         })
-        .then(response => response.json())
-        .then(data => {
-            // 跳转到创建成功页面显示新Secret
-            window.location.href = '/admin/create-success?clientId=' + data.clientId +
-                '&clientSecret=' + data.clientSecret +
-                '&message=' + encodeURIComponent('Secret 重置成功！请妥善保存新 Client Secret，此信息仅显示一次。');
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('操作未完成');
+            }
+            // Secret 由当前认证会话一次性交付，导航地址不携带敏感值
+            window.location.href = '/admin/create-success';
         })
-        .catch(error => {
-            alert('重置失败：' + error);
-        });
+        .catch(() => alert('重置未完成，请检查状态后重试。'));
     }
     function updateOwnerInfo() {
         const ownerUserId = document.getElementById('editOwnerUserId').value.trim();
@@ -448,13 +420,13 @@
         })
         .then(response => {
             if (!response.ok) {
-                return response.json().then(data => { throw new Error(data.message || '更新失败'); });
+                throw new Error('操作未完成');
             }
             const modal = bootstrap.Modal.getInstance(document.getElementById('editOwnerInfoModal'));
             if (modal) modal.hide();
             location.reload();
         })
-        .catch(error => alert('更新失败：' + error.message));
+        .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
     /*]]>*/
 </script>

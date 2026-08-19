@@ -4,11 +4,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.BatchRevokeResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +50,9 @@ class BatchRevokeServiceTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     private String testClientId;
@@ -63,6 +68,7 @@ class BatchRevokeServiceTest {
         );
         testClientId = client.getClientId();
         testClientSecret = client.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client);
 
         log.info("创建测试Client: {}", testClientId);
     }

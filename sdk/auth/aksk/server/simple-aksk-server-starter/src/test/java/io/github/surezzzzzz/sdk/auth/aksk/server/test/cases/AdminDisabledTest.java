@@ -1,10 +1,12 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -54,6 +56,9 @@ class AdminDisabledTest {
 
     @Autowired
     private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
+
+    @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
 
     @Autowired
     private RedisTemplate<String, Object> redisTemplate;
@@ -124,9 +129,9 @@ class AdminDisabledTest {
 
         // Step 1: 创建平台级AKSK
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Admin Disabled Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
-        log.info("创建AKSK成功 - ClientId: {}, ClientSecret: {}",
-                clientInfo.getClientId(), clientInfo.getClientSecret());
+        log.info("创建AKSK成功: clientId={}", clientInfo.getClientId());
 
         assertNotNull(clientInfo.getClientId());
         assertNotNull(clientInfo.getClientSecret());
@@ -146,11 +151,11 @@ class AdminDisabledTest {
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-        log.info("请求Token - URL: {}, ClientId: {}", tokenUrl, clientInfo.getClientId());
+        log.info("请求 Token，Client 标识已创建");
 
         ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
 
-        log.info("Token响应 - Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+        log.info("Token响应状态: {}", response.getStatusCode());
 
         // Step 3: 验证Token响应
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -161,8 +166,7 @@ class AdminDisabledTest {
         assertNotNull(tokenResponse.get("token_type"));
         assertNotNull(tokenResponse.get("expires_in"));
 
-        String accessToken = (String) tokenResponse.get("access_token");
-        log.info("获取到Access Token: {}", accessToken.substring(0, Math.min(50, accessToken.length())) + "...");
+        assertTrue(tokenResponse.get("access_token") instanceof String);
 
         log.info("admin.enabled=false时OAuth2流程测试通过");
     }

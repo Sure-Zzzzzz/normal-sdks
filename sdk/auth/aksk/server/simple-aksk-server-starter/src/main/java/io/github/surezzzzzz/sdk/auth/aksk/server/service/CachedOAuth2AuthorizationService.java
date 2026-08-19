@@ -134,8 +134,7 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
         try {
             String nullTypeKey = redisKeyHelper.buildCacheKeyByToken(tokenValue, null);
             String accessTokenTypeKey = redisKeyHelper.buildCacheKeyByToken(tokenValue, OAuth2TokenType.ACCESS_TOKEN.getValue());
-            log.info("[Pub/Sub] Publishing eviction message for token: {}, nullTypeKey: {}, accessTokenTypeKey: {}",
-                    tokenValue.substring(0, Math.min(20, tokenValue.length())), nullTypeKey, accessTokenTypeKey);
+            log.info("[Pub/Sub] Publishing Token cache eviction message");
             smartCacheManager.evict(
                     RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN,
                     nullTypeKey
@@ -144,12 +143,11 @@ public class CachedOAuth2AuthorizationService implements OAuth2AuthorizationServ
                     RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN,
                     accessTokenTypeKey
             );
-            log.info("[Pub/Sub] Eviction message published successfully for token: {}",
-                    tokenValue.substring(0, Math.min(20, tokenValue.length())));
+            log.info("[Pub/Sub] Token cache eviction message published successfully");
         } catch (Exception e) {
             log.error("[Pub/Sub] Failed to evict token cache via smart cache", e);
             throw new SimpleAkskServerException(ErrorCode.CACHE_OPERATION_FAILED,
-                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, tokenValue), e);
+                    String.format(ServerErrorMessage.CACHE_OPERATION_FAILED, "access-token"), e);
         }
     }
 }

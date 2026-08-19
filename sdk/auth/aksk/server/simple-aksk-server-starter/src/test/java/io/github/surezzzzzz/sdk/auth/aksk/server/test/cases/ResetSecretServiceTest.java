@@ -6,10 +6,12 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoR
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +51,9 @@ class ResetSecretServiceTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     private String testClientId;
@@ -64,8 +69,9 @@ class ResetSecretServiceTest {
         );
         testClientId = client.getClientId();
         testClientSecret = client.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client);
 
-        log.info("创建测试Client: {}, Secret: {}", testClientId, testClientSecret);
+        log.info("创建测试Client: {}", testClientId);
     }
 
     @AfterEach
@@ -128,7 +134,7 @@ class ResetSecretServiceTest {
                 .count();
         assertEquals(0, activeAfter, "revokeTokens=true 时不应有 ACTIVE token");
 
-        log.info("重置Secret成功（撤销Token），新Secret长度: {}", response.getClientSecret().length());
+        log.info("重置 Secret 成功（撤销 Token）");
     }
 
     @Test
@@ -165,7 +171,7 @@ class ResetSecretServiceTest {
                 .count();
         assertEquals(activeBefore, activeAfter, "revokeTokens=false 时 token 应仍有效");
 
-        log.info("重置Secret成功（不撤销Token），新Secret长度: {}", response.getClientSecret().length());
+        log.info("重置 Secret 成功（不撤销 Token）");
     }
 
     @Test

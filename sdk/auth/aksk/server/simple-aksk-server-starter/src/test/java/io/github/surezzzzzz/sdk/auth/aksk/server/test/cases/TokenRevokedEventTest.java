@@ -1,11 +1,14 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +62,9 @@ class TokenRevokedEventTest {
     private OAuth2AuthorizationEntityRepository authorizationEntityRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
@@ -73,6 +79,7 @@ class TokenRevokedEventTest {
         ClientInfoResponse client = clientManagementService.createPlatformClient("Token Revocation Test Client");
         clientId = client.getClientId();
         clientSecret = client.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client);
         log.info("创建测试客户端: clientId={}", clientId);
     }
 
@@ -95,9 +102,9 @@ class TokenRevokedEventTest {
         // 获取 token
         String token = fetchToken(clientId, clientSecret);
         assertNotNull(token, "Token 不应为 null");
-        log.info("获取 token 成功，长度: {}", token.length());
+        log.info("获取 Token 成功");
 
-        // 撤销 token
+        // 撤销 Token
         revokeToken(clientId, clientSecret, token);
         log.info("撤销 token 请求已发送");
 
@@ -107,7 +114,7 @@ class TokenRevokedEventTest {
         assertEquals(1, eventListener.events.size(), "应该只收到1个事件");
 
         TokenRevokedEvent event = eventListener.events.get(0);
-        assertEquals(token, event.getTokenValue(), "事件中的 token 值应与撤销的 token 一致");
+        assertEquals(TokenEventCause.OAUTH2_REVOKE, event.getCause());
         assertNotNull(event.getExpiresAt(), "事件中的过期时间不应为 null");
         assertTrue(event.getExpiresAt().isAfter(java.time.Instant.now()), "token 过期时间应在当前时间之后");
 
@@ -124,7 +131,7 @@ class TokenRevokedEventTest {
 
         // 撤销前 introspect，应该 active=true
         Map<String, Object> beforeRevoke = introspectToken(clientId, clientSecret, token);
-        log.info("撤销前 introspect 响应: {}", beforeRevoke);
+        log.info("撤销前内省状态: active={}", beforeRevoke.get("active"));
         assertEquals(true, beforeRevoke.get("active"), "撤销前 token 应该是 active");
 
         // 撤销 token
@@ -135,7 +142,7 @@ class TokenRevokedEventTest {
 
         // 撤销后 introspect，应该 active=false
         Map<String, Object> afterRevoke = introspectToken(clientId, clientSecret, token);
-        log.info("撤销后 introspect 响应: {}", afterRevoke);
+        log.info("撤销后内省状态: active={}", afterRevoke.get("active"));
         assertEquals(false, afterRevoke.get("active"), "撤销后 token 应该是 inactive");
 
         log.info("✓ introspect 正确反映了 token 撤销状态");
@@ -210,8 +217,8 @@ class TokenRevokedEventTest {
 
         @EventListener
         public void onTokenRevokedEvent(TokenRevokedEvent event) {
-            log.info("收到 TokenRevokedEvent: tokenLength={}, expiresAt={}",
-                    event.getTokenValue().length(), event.getExpiresAt());
+            log.info("收到 TokenRevokedEvent: cause={}, expiresAt={}",
+                    event.getCause(), event.getExpiresAt());
             events.add(event);
             latch.countDown();
         }

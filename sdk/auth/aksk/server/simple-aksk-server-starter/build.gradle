@@ -1,6 +1,23 @@
+import org.springframework.boot.gradle.tasks.bundling.BootJar
+
+sourceSets {
+    e2eServer {
+        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+configurations {
+    e2eServerImplementation.extendsFrom testImplementation
+    e2eServerRuntimeOnly.extendsFrom testRuntimeOnly
+    e2eServerAnnotationProcessor.extendsFrom testAnnotationProcessor
+}
+
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:2.0.3'
+    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
 
     // SmartCache / SmartLimiter
     api 'io.github.sure-zzzzzz:smart-cache-starter:1.1.2'
@@ -36,4 +53,14 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-security'
     testImplementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+}
+
+tasks.register('e2eServerBootJar', BootJar) {
+    group = 'verification'
+    description = '构建 AKSK 协作 E2E Server 可执行 jar'
+    dependsOn(tasks.named('e2eServerClasses'))
+    archiveFileName.set('simple-aksk-e2e-server.jar')
+    destinationDirectory.set(rootProject.layout.buildDirectory.dir('iam-aksk-e2e'))
+    mainClass.set('io.github.surezzzzzz.sdk.auth.aksk.server.e2eserver.AkskE2eServerApplication')
+    classpath = sourceSets.e2eServer.runtimeClasspath
 }

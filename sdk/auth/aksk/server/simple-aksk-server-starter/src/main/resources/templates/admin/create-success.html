@@ -1,17 +1,13 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>创建成功</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card border-success">
+<head th:replace="admin/fragments/layout :: head('Client 凭据交付')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('Client 凭据交付', '凭据仅在当前会话中显示一次')"></header>
+    <section class="admin-content">
+<div class="admin-form-card">
+    <div class="card border-success">
                 <div class="card-header bg-success text-white">
                     <h4 th:text="${message != null ? message.contains('重置') ? '✓ Secret 重置成功' : '✓ AKSK创建成功' : '✓ AKSK创建成功'}">
                         ✓ AKSK创建成功</h4>
@@ -52,26 +48,11 @@
                         <a href="/admin" class="btn btn-primary">返回管理页面</a>
                     </div>
                 </div>
-            </div>
-        </div>
     </div>
 </div>
-
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script>
     function copyToClipboard(elementId) {
         const element = document.getElementById(elementId);

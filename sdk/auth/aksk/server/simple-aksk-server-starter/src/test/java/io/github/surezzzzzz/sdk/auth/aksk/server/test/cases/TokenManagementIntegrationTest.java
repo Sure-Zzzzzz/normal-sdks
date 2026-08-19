@@ -4,10 +4,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoR
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.JwtTokenTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -59,6 +62,9 @@ class TokenManagementIntegrationTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private OAuth2AuthorizationRepository authorizationRepository;
 
     @Autowired
@@ -89,6 +95,7 @@ class TokenManagementIntegrationTest {
         );
         bootstrapClientId = bootstrapClient.getClientId();
         bootstrapClientSecret = bootstrapClient.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, bootstrapClient);
 
         log.info("Bootstrap client创建成功: {}", bootstrapClientId);
 
@@ -106,6 +113,7 @@ class TokenManagementIntegrationTest {
         );
         testClientId1 = client1.getClientId();
         testClientSecret1 = client1.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client1);
 
         ClientInfoResponse client2 = clientManagementService.createUserClient(
                 "integrationUser",
@@ -115,6 +123,7 @@ class TokenManagementIntegrationTest {
         );
         testClientId2 = client2.getClientId();
         testClientSecret2 = client2.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client2);
 
         log.info("创建测试Client: {}, {}", testClientId1, testClientId2);
 
@@ -142,6 +151,7 @@ class TokenManagementIntegrationTest {
         try {
             // 清理所有授权记录
             authorizationRepository.deleteAll();
+            applicationAuthorizationRepository.deleteAll();
         } catch (Exception e) {
             log.warn("清理授权记录失败: {}", e.getMessage());
         }
@@ -495,6 +505,7 @@ class TokenManagementIntegrationTest {
         );
         String clientId = newClient.getClientId();
         String clientSecret = newClient.getClientSecret();
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, newClient);
         log.info("创建测试Client: {}", clientId);
 
         // Step 2: 换取Token
@@ -570,33 +581,24 @@ class TokenManagementIntegrationTest {
     }
 
     @Test
-    void testAccessDeniedWithoutRequiredScope() {
-        log.info("测试没有所需scope时访问被拒绝");
+    void testAccessDeniedWithClientPermissionOnly() {
+        ClientInfoResponse testClient = clientManagementService.createPlatformClient("Client Permission Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, testClient);
+        AkskApplicationAuthorizationEntity authorization = applicationAuthorizationRepository
+                .findByClientId(testClient.getClientId())
+                .orElseThrow(() -> new IllegalStateException("测试授权投影不存在"));
+        authorization.setApiPermissionsJson("[\"akskClient:read\"]");
+        applicationAuthorizationRepository.save(authorization);
 
-        // Given - 创建一个只有 read,write scope 的client（没有 /api/token scope）
-        ClientInfoResponse testClient = clientManagementService.createPlatformClient(
-                "Test Client without API Scope",
-                Arrays.asList("read", "write")
-        );
-
-        // When - 使用这个client的token尝试访问 /api/token API
-        String tokenWithoutApiScope = JwtTokenTestHelper.getTokenByClientCredentials(
-                restTemplate, port, testClient.getClientId(), testClient.getClientSecret(), "read write"
-        );
-
-        String url = String.format("http://localhost:%d/api/token", port);
-        HttpEntity<Void> request = JwtTokenTestHelper.createAuthEntity(tokenWithoutApiScope);
+        String token = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, testClient.getClientId(), testClient.getClientSecret());
         ResponseEntity<String> response = restTemplate.exchange(
-                url,
+                String.format("http://localhost:%d/api/token", port),
                 HttpMethod.GET,
-                request,
-                String.class
-        );
+                JwtTokenTestHelper.createAuthEntity(token),
+                String.class);
 
-        // Then - 应该返回403 Forbidden
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-
-        log.info("没有所需scope时访问被正确拒绝");
     }
 
     /**

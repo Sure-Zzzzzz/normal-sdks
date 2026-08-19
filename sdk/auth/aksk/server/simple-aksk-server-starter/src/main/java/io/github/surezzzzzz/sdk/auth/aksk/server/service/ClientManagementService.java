@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoR
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 
 import java.util.List;
 import java.util.Map;
@@ -165,4 +166,33 @@ public interface ClientManagementService {
      * @param ownerUsername 新的所属用户名
      */
     void updateOwnerInfo(String clientId, String ownerUserId, String ownerUsername);
+
+    ClientInfoResponse createPlatformClient(String clientName, List<String> scopes, DataAccessPlan plan);
+
+    ClientInfoResponse createUserClient(String ownerUserId, String ownerUsername, String clientName, List<String> scopes,
+                                        DataAccessPlan plan);
+
+    void deleteClient(String clientId, DataAccessPlan clientPlan, DataAccessPlan tokenPlan);
+
+    ClientInfoResponse getClientById(String clientId, DataAccessPlan plan);
+
+    Map<String, ClientInfoResponse> batchGetClientsByIds(List<String> clientIds, DataAccessPlan plan);
+
+    PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Integer page, Integer size,
+                                                 DataAccessPlan plan);
+
+    int syncUserScopes(String ownerUserId, List<String> scopes, DataAccessPlan plan);
+
+    void disableClient(String clientId, DataAccessPlan plan);
+
+    void enableClient(String clientId, DataAccessPlan plan);
+
+    void updateClientScopes(String clientId, List<String> scopes, DataAccessPlan plan);
+
+    ResetSecretResponse resetSecret(String clientId, boolean revokeTokens, DataAccessPlan clientPlan,
+                                    DataAccessPlan tokenPlan);
+
+    void updateClientName(String clientId, String clientName, DataAccessPlan plan);
+
+    void updateOwnerInfo(String clientId, String ownerUserId, String ownerUsername, DataAccessPlan plan);
 }

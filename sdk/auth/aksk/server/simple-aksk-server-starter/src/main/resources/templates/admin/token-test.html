@@ -1,150 +1,110 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>换Token测试</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><img src="/admin/img/aksk-logo.svg" height="36" style="vertical-align:middle;margin-right:12px;">换Token测试</h2>
-        <div>
-            <a href="/admin/token" class="btn btn-secondary">返回Token管理</a>
-            <a href="/admin" class="btn btn-secondary">返回AKSK管理</a>
-        </div>
-    </div>
+<head th:replace="admin/fragments/layout :: head('Token 测试')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('token-test', ${null})"></div>
+<main class="admin-main"><header th:replace="admin/fragments/layout :: topbar('Token 测试', '仅在当前浏览器内存完成受保护请求，不回显或存储凭据和 Token')"></header><section class="admin-content">
+    <div class="admin-actions mb-3"><a href="/admin/token" class="btn btn-outline-secondary">返回 Token 管理</a></div>
 
-    <!-- 消息提示 -->
-    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
-        <span th:text="${message}"></span>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
-        <span th:text="${error}"></span>
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-
-    <!-- 换Token表单 -->
     <div class="card mb-4">
         <div class="card-header">
             <h5>AKSK换Token</h5>
         </div>
         <div class="card-body">
-            <form method="post" action="/admin/token/test">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
-
+            <form id="tokenForm">
                 <div class="mb-3">
                     <label for="clientId" class="form-label">Client ID *</label>
                     <input type="text" class="form-control" id="clientId" name="clientId"
-                           th:value="${clientId}" placeholder="输入AKSK的Client ID" required>
+                           placeholder="输入AKSK的Client ID" required>
                     <div class="form-text">AKSK的Access Key</div>
                 </div>
 
                 <div class="mb-3">
                     <label for="clientSecret" class="form-label">Client Secret *</label>
                     <input type="password" class="form-control" id="clientSecret" name="clientSecret"
-                           placeholder="输入AKSK的Client Secret" required>
-                    <div class="form-text">AKSK的Secret Key（仅创建时显示一次）</div>
+                           placeholder="输入AKSK的Client Secret" required autocomplete="off">
+                    <div class="form-text">仅用于本次受保护请求，页面不会回显或保存。</div>
                 </div>
 
                 <div class="mb-3">
-                    <label for="scope" class="form-label">Scope（可选）</label>
+                    <label for="scope" class="form-label">OAuth2 Scope（可选）</label>
                     <input type="text" class="form-control" id="scope" name="scope"
-                           th:value="${scope}" placeholder="留空则使用数据库中注册的scope">
-                    <div class="form-text">权限范围，多个权限用空格分隔。留空则使用数据库中注册的所有scope</div>
+                           placeholder="留空则使用数据库中注册的 Scope">
+                    <div class="form-text">多个 Scope 使用空格分隔；它不代表 API permission 或 DATA grant。</div>
                 </div>
 
-                <button type="submit" class="btn btn-primary">换取Token</button>
-                <button type="reset" class="btn btn-secondary">重置</button>
+                <div class="admin-form-actions">
+                    <button type="submit" class="btn btn-primary">换取Token</button>
+                    <button type="reset" class="btn btn-secondary">重置</button>
+                </div>
             </form>
         </div>
     </div>
 
-    <!-- Token结果展示 -->
-    <div th:if="${accessToken != null}" class="card mb-4">
+    <div id="tokenResultSection" class="card mb-4" style="display:none;">
         <div class="card-header bg-success text-white">
             <h5>换Token成功</h5>
         </div>
         <div class="card-body">
-            <!-- 隐藏字段保存 clientSecret 供撤销/introspect 使用 -->
-            <input type="hidden" id="savedClientSecret" th:value="${savedClientSecret}"/>
-            <div class="mb-3">
-                <label for="accessToken" class="form-label"><strong>Access Token:</strong></label>
-                <div class="input-group">
-                    <input type="text" class="form-control" id="accessToken" th:value="${accessToken}" readonly>
-                    <button class="btn btn-outline-secondary" type="button" onclick="copyAccessToken()">复制</button>
-                </div>
+            <div class="alert alert-info" role="alert">
+                Token 和 Client Secret 不会回显、复制或写入页面。它们只在本页的浏览器内存中用于本次测试操作；刷新或离开页面后即丢失。
             </div>
 
             <div class="row mb-3">
                 <div class="col-md-6">
                     <label class="form-label"><strong>Token类型:</strong></label>
-                    <p th:text="${tokenType != null ? tokenType : 'Bearer'}"></p>
+                    <p id="tokenType" class="mb-0"></p>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label"><strong>过期时间（秒）:</strong></label>
-                    <p th:text="${expiresIn}"></p>
+                    <p id="expiresIn" class="mb-0"></p>
                 </div>
             </div>
 
-            <div th:if="${returnedScope != null}" class="mb-3">
-                <label class="form-label"><strong>Scope:</strong></label>
-                <p th:text="${returnedScope}"></p>
+            <div id="returnedScopeContainer" class="mb-3" style="display:none;">
+                <label class="form-label"><strong>OAuth2 Scope:</strong></label>
+                <p id="returnedScope" class="mb-0"></p>
             </div>
 
-            <div class="alert alert-info" role="alert">
-                <strong>提示:</strong> 此Token已保存到MySQL和Redis中,可在Token管理页面查看和管理。
-            </div>
-
-            <!-- 测试Token功能 -->
             <div class="mt-3">
-                <button class="btn btn-success" onclick="testToken()">测试Token - 调用 GET /api/client</button>
-                <button class="btn btn-warning ms-2" onclick="introspectToken()">Introspect Token</button>
-                <button class="btn btn-danger ms-2" onclick="revokeToken()">撤销 Token</button>
-                <button class="btn btn-info ms-2" onclick="compareIntrospect()">对比 Introspect（验证 require-authentication 配置）</button>
+                <div class="admin-actions">
+                    <button class="btn btn-success" type="button" onclick="testToken()">测试Token - 调用 GET /api/client</button>
+                    <button class="btn btn-warning" type="button" onclick="introspectToken()">Introspect Token</button>
+                    <button class="btn btn-danger" type="button" onclick="revokeToken()">撤销 Token</button>
+                    <button class="btn btn-info" type="button" onclick="compareIntrospect()">对比 Introspect</button>
+                </div>
                 <div id="testResult" class="mt-3" style="display:none;">
                     <div class="card">
                         <div class="card-header">
-                            <strong id="testResultTitle">API响应:</strong>
+                            <strong id="testResultTitle">操作结果</strong>
                         </div>
                         <div class="card-body">
-                            <pre id="testResultContent" class="bg-light p-2" style="max-height: 400px; overflow-y: auto;"></pre>
+                            <pre id="testResultContent" class="bg-light p-2 mb-0"></pre>
                         </div>
                     </div>
                 </div>
-                <!-- 对比 Introspect 结果区域 -->
                 <div id="compareResult" class="mt-3" style="display:none;">
                     <div class="alert alert-secondary">
-                        <strong>说明：</strong>
-                        带认证的 Introspect 使用 clientId + clientSecret 调用，正常情况下始终返回结果。
-                        匿名 Introspect 不携带任何认证信息，结果取决于 server 端的
-                        <code>introspect.require-authentication</code> 配置：
-                        <ul class="mb-0 mt-1">
-                            <li>返回 <strong class="text-success">200 + active 字段</strong> → <code>require-authentication=false</code>，无需认证即可查询</li>
-                            <li>返回 <strong class="text-danger">400 {"error":"invalid_client"}</strong> → <code>require-authentication=true</code>（默认），需要客户端认证</li>
-                        </ul>
+                        <strong>说明：</strong>带认证的 Introspect 只显示安全摘要；匿名 Introspect 固定未授权，不能通过旧配置开启。
                     </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-success text-white">
-                                    <strong>带认证 Introspect（clientId + clientSecret）</strong>
+                                    <strong>带认证 Introspect</strong>
                                 </div>
                                 <div class="card-body">
-                                    <pre id="compareAuthResult" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;">查询中...</pre>
+                                    <pre id="compareAuthResult" class="bg-light p-2 mb-0">查询中...</pre>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="card">
                                 <div class="card-header bg-warning">
-                                    <strong>匿名 Introspect（不携带任何认证）</strong>
+                                    <strong>匿名 Introspect</strong>
                                 </div>
                                 <div class="card-body">
-                                    <pre id="compareAnonResult" class="bg-light p-2" style="max-height: 300px; overflow-y: auto;">查询中...</pre>
+                                    <pre id="compareAnonResult" class="bg-light p-2 mb-0">查询中...</pre>
                                 </div>
                             </div>
                         </div>
@@ -154,110 +114,85 @@
         </div>
     </div>
 
-    <!-- 使用说明 -->
     <div class="card">
         <div class="card-header">
             <h5>使用说明</h5>
         </div>
         <div class="card-body">
             <h6>1. 获取AKSK</h6>
-            <p>在<a href="/admin">AKSK管理页面</a>创建平台级或用户级AKSK，创建成功后会显示Client ID和Client Secret（仅显示一次，请妥善保存）。</p>
+            <p>在<a href="/admin">AKSK管理页面</a>创建平台级或用户级 AKSK；Client Secret 仅在创建或重置成功时显示一次。</p>
 
             <h6>2. 换取Token</h6>
-            <p>使用Client ID和Client Secret通过OAuth2 Client Credentials Grant流程换取Access Token。</p>
+            <p>使用 Client ID 和 Client Secret 通过 OAuth2 Client Credentials Grant 换取 Access Token。</p>
 
-            <h6>3. 使用Token</h6>
-            <p>在API请求的Authorization头中携带Token：</p>
-            <pre class="bg-light p-2"><code>Authorization: Bearer {access_token}</code></pre>
+            <h6>3. 验证和撤销</h6>
+            <p>本页可对本次换取的 Token 执行 API 调用、带认证 Introspect、匿名 Introspect 对比和撤销；结果只展示状态和有效性摘要。</p>
 
             <h6>4. Token管理</h6>
-            <p>可在<a href="/admin/token">Token管理页面</a>查看、搜索、删除Token。</p>
+            <p>可在<a href="/admin/token">Token管理页面</a>查看、搜索、删除 Token。</p>
         </div>
     </div>
-</div>
-
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+</section></main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script th:inline="javascript">
     /*<![CDATA[*/
     const csrfToken = /*[[${_csrf.token}]]*/ '';
     const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
-    /*]]>*/
+    let issuedTokenState = null;
 
-    function compareIntrospect() {
-        const accessToken = document.getElementById('accessToken').value;
-        const clientId = document.getElementById('clientId').value;
-        const clientSecret = document.getElementById('savedClientSecret') ?
-            document.getElementById('savedClientSecret').value :
-            document.querySelector('input[name="clientSecret"]').value;
+    document.getElementById('tokenForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const clientId = document.getElementById('clientId').value.trim();
+        const clientSecretInput = document.getElementById('clientSecret');
+        const clientSecret = clientSecretInput.value;
+        const scope = document.getElementById('scope').value.trim();
+        const requestBody = new URLSearchParams({ grant_type: 'client_credentials' });
+        if (scope) {
+            requestBody.append('scope', scope);
+        }
 
-        document.getElementById('compareResult').style.display = 'block';
-        document.getElementById('compareAuthResult').textContent = '查询中...';
-        document.getElementById('compareAnonResult').textContent = '查询中...';
+        try {
+            const response = await fetch('/oauth2/token', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: requestBody
+            });
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const tokenResponse = await response.json();
+            if (!tokenResponse.access_token) {
+                throw new Error('未获得有效 Token');
+            }
 
-        // 带认证的 introspect
-        const authFormData = new FormData();
-        authFormData.append('clientId', clientId);
-        authFormData.append('clientSecret', clientSecret);
-        authFormData.append('token', accessToken);
+            issuedTokenState = {
+                token: tokenResponse.access_token,
+                clientId: clientId,
+                clientSecret: clientSecret
+            };
+            clientSecretInput.value = '';
+            document.getElementById('tokenType').textContent = tokenResponse.token_type || 'Bearer';
+            document.getElementById('expiresIn').textContent = tokenResponse.expires_in || 3600;
+            const returnedScope = tokenResponse.scope || scope;
+            document.getElementById('returnedScope').textContent = returnedScope;
+            document.getElementById('returnedScopeContainer').style.display = returnedScope ? 'block' : 'none';
+            document.getElementById('tokenResultSection').style.display = 'block';
+            document.getElementById('tokenResultSection').scrollIntoView({ behavior: 'smooth' });
+        } catch (error) {
+            issuedTokenState = null;
+            alert('换取 Token 未完成，请检查输入和状态后重试。');
+        }
+    });
 
-        fetch('/admin/token/introspect', {
-            method: 'POST',
-            headers: { [csrfHeader]: csrfToken },
-            body: authFormData
-        })
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('compareAuthResult').textContent =
-                'HTTP 200\n\n' + JSON.stringify(data, null, 2);
-        })
-        .catch(err => {
-            document.getElementById('compareAuthResult').textContent = '请求失败: ' + err.message;
-        });
-
-        // 匿名 introspect（直接调标准端点，不带认证）
-        const anonFormData = new FormData();
-        anonFormData.append('token', accessToken);
-
-        fetch('/oauth2/introspect', {
-            method: 'POST',
-            body: anonFormData
-        })
-        .then(r => {
-            const status = r.status;
-            return r.text().then(text => ({ status, text }));
-        })
-        .then(({ status, text }) => {
-            let content = 'HTTP ' + status + '\n\n';
-            try { content += JSON.stringify(JSON.parse(text), null, 2); }
-            catch { content += text || '(无响应体)'; }
-            const el = document.getElementById('compareAnonResult');
-            el.textContent = content;
-            el.className = 'p-2 ' + (status === 200 ? 'bg-success text-white' : 'bg-danger text-white');
-        })
-        .catch(err => {
-            document.getElementById('compareAnonResult').textContent = '请求失败: ' + err.message;
-        });
-    }
-
-    function copyAccessToken() {
-        const tokenInput = document.getElementById('accessToken');
-        tokenInput.select();
-        document.execCommand('copy');
-        alert('Access Token已复制到剪贴板');
+    function requireIssuedToken() {
+        if (issuedTokenState) {
+            return issuedTokenState;
+        }
+        showResult('操作未执行', '请先在当前页面成功换取 Token。', true);
+        return null;
     }
 
     function showResult(title, content, isError) {
@@ -267,95 +202,117 @@
         resultDiv.style.display = 'block';
         resultTitle.textContent = title;
         resultContent.textContent = content;
-        resultContent.className = 'p-2 ' + (isError ? 'bg-danger text-white' : 'bg-light');
+        resultContent.className = 'p-2 mb-0 ' + (isError ? 'bg-danger text-white' : 'bg-light');
     }
 
     function testToken() {
-        const accessToken = document.getElementById('accessToken').value;
-        showResult('API响应:', '正在调用API...', false);
-
+        const state = requireIssuedToken();
+        if (!state) {
+            return;
+        }
+        showResult('API 调用结果', '正在调用...', false);
         fetch('/api/client', {
             method: 'GET',
-            headers: { 'Authorization': 'Bearer ' + accessToken }
-        })
-        .then(response => {
-            const statusText = `HTTP ${response.status} ${response.statusText}`;
-            return response.text().then(text => ({ status: response.status, statusText, text }));
-        })
-        .then(result => {
-            let content = `状态: ${result.statusText}\n\n响应内容:\n`;
-            try { content += JSON.stringify(JSON.parse(result.text), null, 2); }
-            catch { content += result.text; }
-            if (result.status === 403) content += '\n\n提示: 当前Token没有 /api/client scope权限。';
-            showResult('GET /api/client 响应:', content, result.status >= 400);
-        })
-        .catch(error => showResult('调用失败:', error.message, true));
+            headers: { 'Authorization': 'Bearer ' + state.token }
+        }).then(response => {
+            const content = 'HTTP ' + response.status + '\n' +
+                (response.ok ? '请求已被服务端接受。' : '请求未被服务端接受。');
+            if (response.status === 403) {
+                showResult('GET /api/client 结果', content + '\n当前 Token 缺少精确 API permission 或对应 DATA 范围。', true);
+                return;
+            }
+            showResult('GET /api/client 结果', content, !response.ok);
+        }).catch(() => showResult('API 调用结果', '请求失败。', true));
     }
 
-    function introspectToken() {
-        const accessToken = document.getElementById('accessToken').value;
-        const clientId = document.getElementById('clientId').value;
-        const clientSecret = document.getElementById('savedClientSecret') ?
-            document.getElementById('savedClientSecret').value :
-            document.querySelector('input[name="clientSecret"]').value;
-
-        showResult('Introspect 响应:', '正在查询...', false);
-
+    function safeIntrospect(state) {
         const formData = new FormData();
-        formData.append('clientId', clientId);
-        formData.append('clientSecret', clientSecret);
-        formData.append('token', accessToken);
-
-        fetch('/admin/token/introspect', {
+        formData.append('clientId', state.clientId);
+        formData.append('clientSecret', state.clientSecret);
+        formData.append('token', state.token);
+        return fetch('/admin/token/introspect', {
             method: 'POST',
             headers: { [csrfHeader]: csrfToken },
             body: formData
-        })
-        .then(r => r.json())
-        .then(data => {
-            const active = data.active;
-            const content = JSON.stringify(data, null, 2);
-            showResult(
-                'Introspect 结果: ' + (active ? '✅ active=true（Token有效）' : '❌ active=false（Token已撤销或无效）'),
-                content,
-                !active
-            );
-        })
-        .catch(error => showResult('Introspect 失败:', error.message, true));
+        }).then(async response => {
+            if (!response.ok) {
+                throw new Error('请求未完成');
+            }
+            return { status: response.status, body: await response.json() };
+        });
+    }
+
+    function introspectToken() {
+        const state = requireIssuedToken();
+        if (!state) {
+            return;
+        }
+        showResult('Introspect 结果', '正在查询...', false);
+        safeIntrospect(state).then(result => {
+            const active = result.body.success === true && result.body.active === true;
+            showResult('Introspect 结果', 'HTTP ' + (result.body.status || result.status) + '\nactive=' + active, !active);
+        }).catch(() => showResult('Introspect 结果', '请求失败。', true));
+    }
+
+    function compareIntrospect() {
+        const state = requireIssuedToken();
+        if (!state) {
+            return;
+        }
+        document.getElementById('compareResult').style.display = 'block';
+        document.getElementById('compareAuthResult').textContent = '查询中...';
+        document.getElementById('compareAnonResult').textContent = '查询中...';
+
+        safeIntrospect(state).then(result => {
+            const active = result.body.success === true && result.body.active === true;
+            document.getElementById('compareAuthResult').textContent =
+                'HTTP ' + (result.body.status || result.status) + '\nactive=' + active;
+        }).catch(() => {
+            document.getElementById('compareAuthResult').textContent = '请求失败。';
+        });
+
+        const anonymousForm = new FormData();
+        anonymousForm.append('token', state.token);
+        fetch('/oauth2/introspect', {
+            method: 'POST',
+            body: anonymousForm
+        }).then(response => {
+            const element = document.getElementById('compareAnonResult');
+            element.textContent = 'HTTP ' + response.status + '\nactive=false';
+            element.className = 'p-2 mb-0 ' + (response.status === 401 ? 'bg-success text-white' : 'bg-danger text-white');
+        }).catch(() => {
+            document.getElementById('compareAnonResult').textContent = '请求失败。';
+        });
     }
 
     function revokeToken() {
-        const accessToken = document.getElementById('accessToken').value;
-        const clientId = document.getElementById('clientId').value;
-        const clientSecret = document.getElementById('savedClientSecret') ?
-            document.getElementById('savedClientSecret').value :
-            document.querySelector('input[name="clientSecret"]').value;
-
-        if (!confirm('确认撤销此 Token？撤销后将立即失效。')) return;
-
-        showResult('撤销结果:', '正在撤销...', false);
-
+        const state = requireIssuedToken();
+        if (!state || !confirm('确认撤销此 Token？撤销后将立即失效。')) {
+            return;
+        }
+        showResult('撤销结果', '正在撤销...', false);
         const formData = new FormData();
-        formData.append('clientId', clientId);
-        formData.append('clientSecret', clientSecret);
-        formData.append('token', accessToken);
-
+        formData.append('clientId', state.clientId);
+        formData.append('clientSecret', state.clientSecret);
+        formData.append('token', state.token);
         fetch('/admin/token/revoke', {
             method: 'POST',
             headers: { [csrfHeader]: csrfToken },
             body: formData
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                showResult('✅ Token 撤销成功', JSON.stringify(data, null, 2), false);
-                setTimeout(() => introspectToken(), 500);
-            } else {
-                showResult('❌ Token 撤销失败', JSON.stringify(data, null, 2), true);
+        }).then(async response => {
+            if (!response.ok) {
+                throw new Error('请求未完成');
             }
-        })
-        .catch(error => showResult('撤销失败:', error.message, true));
+            return { status: response.status, body: await response.json() };
+        }).then(result => {
+              const success = result.body.success === true;
+              showResult('撤销结果', 'HTTP ' + (result.body.status || result.status) + '\n撤销' + (success ? '成功。' : '失败。'), !success);
+              if (success) {
+                  introspectToken();
+              }
+          }).catch(() => showResult('撤销结果', '请求失败。', true));
     }
+    /*]]>*/
 </script>
 </body>
 </html>

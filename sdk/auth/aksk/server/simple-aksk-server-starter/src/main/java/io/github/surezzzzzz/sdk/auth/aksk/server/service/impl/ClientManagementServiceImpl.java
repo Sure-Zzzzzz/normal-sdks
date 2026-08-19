@@ -11,12 +11,16 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoR
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.ManagementDataAccessPlanHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.OAuth2SettingsHelper;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,6 +28,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
@@ -171,6 +176,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     }
 
     @Override
+    @Transactional
     public void deleteClient(String clientId) {
         OAuth2RegisteredClientEntity entity = clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new ClientException(
@@ -180,7 +186,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
 
         try {
             // 先撤销该 Client 下所有活跃 Token，避免孤儿数据
-            tokenManagementService.revokeAllByClientId(clientId);
+            tokenManagementService.revokeAllByClientId(clientId, TokenEventCause.CLIENT_DELETED);
             // 再删除 Client
             clientRepository.delete(entity);
             cachedClientEntityService.evict(clientId);
@@ -436,10 +442,11 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     }
 
     @Override
+    @Transactional
     public ResetSecretResponse resetSecret(String clientId, boolean revokeTokens) {
         // 若 revokeTokens=true，先批量撤销（先撤销再换 Secret，避免新 Secret 颁发的 token 被误撤销）
         if (revokeTokens) {
-            tokenManagementService.revokeAllByClientId(clientId);
+            tokenManagementService.revokeAllByClientId(clientId, TokenEventCause.CLIENT_SECRET_RESET);
         }
         // 复用已有方法生成新 Secret 并更新 DB（内部校验 client 存在，不存在抛 CLIENT_002）
         String newSecret = regenerateSecretKey(clientId);
@@ -500,5 +507,136 @@ public class ClientManagementServiceImpl implements ClientManagementService {
                     e
             );
         }
+    }
+
+    @Override
+    public ClientInfoResponse createPlatformClient(String clientName, List<String> scopes, DataAccessPlan plan) {
+        requireCreateAllowed(plan, ClientType.PLATFORM, null);
+        return createPlatformClient(clientName, scopes);
+    }
+
+    @Override
+    public ClientInfoResponse createUserClient(String ownerUserId, String ownerUsername, String clientName,
+                                               List<String> scopes, DataAccessPlan plan) {
+        requireCreateAllowed(plan, ClientType.USER, ownerUserId);
+        return createUserClient(ownerUserId, ownerUsername, clientName, scopes);
+    }
+
+    @Override
+    public void deleteClient(String clientId, DataAccessPlan clientPlan, DataAccessPlan tokenPlan) {
+        OAuth2RegisteredClientEntity client = requireClient(clientId);
+        requireClientAllowed(clientPlan, client);
+        tokenManagementService.requireAllByClientIdAllowed(clientId, tokenPlan);
+        deleteClient(clientId);
+    }
+
+    @Override
+    public ClientInfoResponse getClientById(String clientId, DataAccessPlan plan) {
+        OAuth2RegisteredClientEntity client = requireClient(clientId);
+        requireClientAllowed(plan, client);
+        return toClientInfoResponse(client);
+    }
+
+    @Override
+    public Map<String, ClientInfoResponse> batchGetClientsByIds(List<String> clientIds, DataAccessPlan plan) {
+        return clientRepository.findAllByClientIdIn(clientIds).stream()
+                .filter(client -> ManagementDataAccessPlanHelper.isClientAllowed(plan, client))
+                .map(this::toClientInfoResponse)
+                .collect(Collectors.toMap(ClientInfoResponse::getClientId, Function.identity()));
+    }
+
+    @Override
+    public PageResponse<ClientInfoResponse> listClients(String ownerUserId, String type, Integer page, Integer size,
+                                                        DataAccessPlan plan) {
+        int currentPage = Math.max(1, page);
+        int pageSize = Math.max(1, size);
+        List<OAuth2RegisteredClientEntity> clients = clientRepository.findAll().stream()
+                .filter(client -> ownerUserId == null || ownerUserId.trim().isEmpty()
+                        || ownerUserId.equals(client.getOwnerUserId()))
+                .filter(client -> type == null || type.trim().isEmpty()
+                        || type.equalsIgnoreCase(clientTypeValue(client)))
+                .filter(client -> ManagementDataAccessPlanHelper.isClientAllowed(plan, client))
+                .sorted((left, right) -> right.getClientIdIssuedAt().compareTo(left.getClientIdIssuedAt()))
+                .collect(Collectors.toList());
+        int startIndex = Math.min((currentPage - 1) * pageSize, clients.size());
+        int endIndex = Math.min(startIndex + pageSize, clients.size());
+        List<ClientInfoResponse> responses = clients.subList(startIndex, endIndex).stream()
+                .map(this::toClientInfoResponse)
+                .collect(Collectors.toList());
+        return PageResponse.of(responses, (long) clients.size(), currentPage, pageSize);
+    }
+
+    @Override
+    public int syncUserScopes(String ownerUserId, List<String> scopes, DataAccessPlan plan) {
+        List<OAuth2RegisteredClientEntity> clients = clientRepository
+                .findByOwnerUserIdAndClientType(ownerUserId, ClientType.USER.getCode());
+        for (OAuth2RegisteredClientEntity client : clients) {
+            requireClientAllowed(plan, client);
+        }
+        return syncUserScopes(ownerUserId, scopes);
+    }
+
+    @Override
+    public void disableClient(String clientId, DataAccessPlan plan) {
+        requireClientAllowed(plan, requireClient(clientId));
+        disableClient(clientId);
+    }
+
+    @Override
+    public void enableClient(String clientId, DataAccessPlan plan) {
+        requireClientAllowed(plan, requireClient(clientId));
+        enableClient(clientId);
+    }
+
+    @Override
+    public void updateClientScopes(String clientId, List<String> scopes, DataAccessPlan plan) {
+        requireClientAllowed(plan, requireClient(clientId));
+        updateClientScopes(clientId, scopes);
+    }
+
+    @Override
+    public ResetSecretResponse resetSecret(String clientId, boolean revokeTokens, DataAccessPlan clientPlan,
+                                           DataAccessPlan tokenPlan) {
+        OAuth2RegisteredClientEntity client = requireClient(clientId);
+        requireClientAllowed(clientPlan, client);
+        if (revokeTokens) {
+            tokenManagementService.requireAllByClientIdAllowed(clientId, tokenPlan);
+        }
+        return resetSecret(clientId, revokeTokens);
+    }
+
+    @Override
+    public void updateClientName(String clientId, String clientName, DataAccessPlan plan) {
+        requireClientAllowed(plan, requireClient(clientId));
+        updateClientName(clientId, clientName);
+    }
+
+    @Override
+    public void updateOwnerInfo(String clientId, String ownerUserId, String ownerUsername, DataAccessPlan plan) {
+        requireClientAllowed(plan, requireClient(clientId));
+        updateOwnerInfo(clientId, ownerUserId, ownerUsername);
+    }
+
+    private OAuth2RegisteredClientEntity requireClient(String clientId) {
+        return clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)));
+    }
+
+    private void requireCreateAllowed(DataAccessPlan plan, ClientType clientType, String ownerUserId) {
+        if (!ManagementDataAccessPlanHelper.isCreateAllowed(plan, clientType, ownerUserId)) {
+            throw new ManagementAccessDeniedException();
+        }
+    }
+
+    private void requireClientAllowed(DataAccessPlan plan, OAuth2RegisteredClientEntity client) {
+        if (!ManagementDataAccessPlanHelper.isClientAllowed(plan, client)) {
+            throw new ManagementAccessDeniedException();
+        }
+    }
+
+    private String clientTypeValue(OAuth2RegisteredClientEntity client) {
+        ClientType clientType = ClientType.fromCode(client.getClientType());
+        return clientType == null ? null : clientType.getValue();
     }
 }

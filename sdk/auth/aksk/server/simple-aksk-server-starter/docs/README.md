@@ -1,171 +1,84 @@
-# Simple AKSK Server 数据库初始化指南
+# Simple AKSK Server 3.0.0 数据库初始化指南
 
 ## 概述
 
-本目录包含 Simple AKSK Server 所需的数据库初始化SQL脚本，基于 **Spring Authorization Server 0.4.0** 标准表结构并进行了扩展。
+本目录包含 Simple AKSK Server 3.0.0 的数据库脚本。表结构基于 **Spring Authorization Server 0.4.1**，并增加 AKSK Client 元数据与应用授权投影。
 
-## SQL文件说明
+## SQL 文件说明
 
-| 文件名 | 说明 | 是否必需 |
-|--------|------|----------|
-| `00_database.sql` | 数据库创建脚本 | ✅ 必需 |
-| `01_schema.sql` | 表结构创建脚本 | ✅ 必需 |
+| 文件名 | 使用场景 | 说明 |
+|--------|----------|------|
+| `00_database.sql` | 首次部署 | 创建默认数据库，可按部署需要自行调整数据库名 |
+| `01_schema_3.0.0.sql` | 首次部署或允许重建数据的环境 | 3.0.0 完整初始化脚本，会重建 AKSK 相关表 |
+| `02_upgrade_3.0.0.sql` | 从 2.x 升级 | 保留历史 Client 与 Token 表，新建应用授权投影表与查询索引，仅执行一次 |
+| `03_install_3.0.0.md` | 新装 | 基础设施、精确依赖、初始化和首个 Client 准入闭环 |
+| `04_upgrade_2.x_to_3.0.0.md` | 升级 | 备份、停写、一次迁移、历史 Token 处置与回退边界 |
+| `05_operations_3.0.0.md` | 运维 | Redis/JWE、应用授权、故障处置、日志与 IAM 可选协作边界 |
+| `06_release_acceptance_3.0.0.md` | 发布验收 | 新装、升级、Token、并发、管理安全、IAM 和质量门禁 |
+| `07_dependency_resolution_3.0.0.md` | 依赖收口 | Central 解析、同步切换上游依赖与干净消费者验证 |
 
-### 00_database.sql - 数据库创建
+> 历史 `01_schema.sql` 仅保留给已冻结的旧版本参考，不用于 3.0.0 新部署。
 
-**内容**：
-- 创建数据库 `sure_auth_aksk`（可自定义）
-- 设置字符集为 `utf8mb4`
+## 3.0.0 表结构
 
-### 01_schema.sql - 表结构
+| 表 | 用途 |
+|----|------|
+| `oauth2_registered_client` | Spring Authorization Server 注册 Client，包含 AKSK 所属用户、类型与启用状态等扩展字段 |
+| `oauth2_authorization` | Spring Authorization Server 授权与 Token 持久化信息 |
+| `aksk_application_authorization` | AKSK Server 自主维护的应用授权投影，保存角色、页面权限、精确 API permission、`DataGrantDocument`、准入与撤销状态 |
 
-**内容**：
-- Spring Authorization Server 0.4.0 标准表：
-  - `oauth2_registered_client` - 客户端注册信息
-  - `oauth2_authorization` - 授权信息
-- 扩展字段：
-  - `owner_user_id` - 所属用户ID（用户级AKSK）
-  - `owner_username` - 所属用户名（用户级AKSK）
-  - `client_type` - 客户端类型（1=平台级，2=用户级）
-  - `enabled` - 是否启用（1=启用，0=禁用）
-- 索引优化
-
----
+`aksk_application_authorization` 中的 `authorization_version` 是对外可见的授权快照版本；`lock_version` 是 JPA 持久化乐观锁版本。两者职责不同，不能混用。
 
 ## 执行步骤
 
 ### 前置要求
 
 - MySQL 5.7+ 或 MySQL 8.0+
-- 具有DDL权限的数据库用户
-- 已安装MySQL客户端工具
+- 具有 DDL 权限的数据库用户
+- 可执行 MySQL 脚本的部署工具或客户端
 
-### 方式1：逐个执行（推荐）
-
-```bash
-# 1. 创建数据库
-mysql -u your_username -p < 00_database.sql
-
-# 2. 创建表结构
-mysql -u your_username -p sure_auth_aksk < 01_schema.sql
-```
-
-### 方式2：一键执行
+### 首次部署
 
 ```bash
-cat 00_database.sql 01_schema.sql | mysql -u your_username -p
+mysql -u <database-user> -p <database-name> < 01_schema_3.0.0.sql
 ```
 
-### 方式3：MySQL命令行内执行
+`01_schema_3.0.0.sql` 含有 `DROP TABLE IF EXISTS`，仅能用于首次初始化或确认允许清空 AKSK 数据的环境。
 
-```sql
--- 登录MySQL
-mysql -u your_username -p
+### 从 2.x 升级
 
--- 执行脚本
-SOURCE /path/to/00_database.sql;
-SOURCE /path/to/01_schema.sql;
+先完成数据库备份并停止 2.x 服务写入，确认目标库尚不存在 `aksk_application_authorization` 后，执行一次：
+
+```bash
+mysql -u <database-user> -p <database-name> < 02_upgrade_3.0.0.sql
 ```
 
----
+该脚本保留 `oauth2_registered_client` 与 `oauth2_authorization` 的存量数据，只新增 3.0 所需的应用授权投影表与查询索引。它不会从旧 `scope` 推导角色、页面权限、API permission 或 DATA grant，也不会自动准入任何 Client。
 
-## 验证安装
+升级至 3.0 服务后，管理员必须逐 Client 完成以下顺序：先处理该 Client 的全部 2.x 存量活跃 Token，再配置完整应用授权，最后显式准入。未配置、未准入或已撤销的 Client 不能签发有效 Token，存量 Token 的内省也会被判为 inactive。
 
-执行以下SQL验证表结构：
+不要省略升级期 Token 处置：内省会按当前授权投影重建授权。进入 3.0 后，完整替换或撤销应用授权会在同一事务中撤销该 Client 的活跃 Token，因此替换前 Token 不会获得新投影。该升级脚本不是可重复执行的迁移工具，已部署历史版本的生产数据迁移必须先完成评估和备份，不得直接套用初始化脚本。完整步骤见 [2.x 升级手册](04_upgrade_2.x_to_3.0.0.md)。
+
+## 安装验证
 
 ```sql
--- 1. 查看数据库
-SHOW DATABASES LIKE 'sure_auth_aksk';
-
--- 2. 切换数据库
-USE sure_auth_aksk;
-
--- 3. 查看表结构
 SHOW TABLES;
-
--- 4. 验证扩展字段
-DESC oauth2_registered_client;
-
--- 5. 查看索引
-SHOW INDEX FROM oauth2_registered_client;
+DESC aksk_application_authorization;
+SHOW INDEX FROM aksk_application_authorization;
 ```
 
-**预期结果**：
-- 2个表：`oauth2_registered_client`, `oauth2_authorization`
-- `oauth2_registered_client` 包含扩展字段：`owner_user_id`, `owner_username`, `client_type`, `enabled`
-
----
-
-## 重要注意事项
-
-### 1. 数据库名称
-- 默认数据库名：`sure_auth_aksk`
-- 如需修改，请在 `00_database.sql` 中修改 `CREATE DATABASE` 语句
-- 执行后续SQL前，确保已 `USE` 正确的数据库
-
-### 2. 字符集
-- 建议使用 `utf8mb4` 字符集
-- 支持完整的Unicode字符（包括emoji）
-
-### 3. 权限要求
-- 数据库用户需要 `CREATE`, `ALTER`, `INDEX` 权限
-- 生产环境建议使用专用数据库用户
-
-### 4. 备份
-- 执行DDL操作前，请先备份现有数据库
-- 如果表已存在，脚本会先删除（`DROP TABLE IF EXISTS`）
-
----
-
-## 故障排查
-
-### 问题1：表已存在
-
-**错误**: `Table 'oauth2_registered_client' already exists`
-
-**解决**: 脚本已包含 `DROP TABLE IF EXISTS`，如仍报错，请手动删除表或检查权限
-
-### 问题2：数据库不存在
-
-**错误**: `Unknown database 'sure_auth_aksk'`
-
-**解决**: 确保先执行 `00_database.sql` 创建数据库
-
-### 问题3：字符集问题
-
-**错误**: 中文乱码
-
-**解决**:
-```sql
-SET NAMES utf8mb4;
-ALTER DATABASE sure_auth_aksk CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-### 问题4：权限不足
-
-**错误**: `Access denied`
-
-**解决**: 授予用户必要权限
-```sql
-GRANT CREATE, ALTER, INDEX, SELECT ON sure_auth_aksk.* TO 'your_username'@'localhost';
-FLUSH PRIVILEGES;
-```
-
----
+预期可见三张表，并且 `aksk_application_authorization` 含有 `authorization_version` 与 `lock_version` 字段。
 
 ## 下一步
 
-数据库初始化完成后：
-
-1. ✅ 配置 `application.yml` 中的数据库连接信息
-2. ✅ 启动 Simple AKSK Server 应用
-3. ✅ 通过 Admin 管理页面或 REST API 创建和管理 AKSK
-4. ✅ 运行端到端测试验证功能
-
----
+1. 配置应用的数据源、Redis 与 JWE 密钥材料。
+2. 启动 Simple AKSK Server。
+3. 通过 Admin 页面创建 Client，并配置应用授权投影。
+4. 只有完成显式准入后，才请求带 `aksk_authorization` 快照的 Token。
+5. 使用受保护的管理 REST API 时，同时配置精确 API permission 与 `DataAccessPlan`。
 
 ## 参考资料
 
-- [Spring Authorization Server 官方文档](https://docs.spring.io/spring-authorization-server/docs/0.4.0/reference/html/index.html)
+- [Spring Authorization Server 0.4.1](https://docs.spring.io/spring-authorization-server/docs/0.4.1/reference/html/index.html)
 - [OAuth 2.0 Client Credentials Grant](https://datatracker.ietf.org/doc/html/rfc6749#section-4.4)
-- [BCrypt密码加密](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html#authentication-password-storage-bcrypt)
+- [BCrypt 密码存储](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html#authentication-password-storage-bcrypt)

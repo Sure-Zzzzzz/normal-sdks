@@ -1,19 +1,22 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.controller;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.ClientType;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.core.annotation.RequireExpression;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.CreateClientRequest;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.ManagementApiAuthorizationHelper;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +33,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/client")
 @RequiredArgsConstructor
-@RequireExpression(
-        value = "#context['scope'] != null && " +
-                "(' ' + #context['scope'] + ' ').contains(' /api/client ')",
-        message = "Access denied: /api/client scope required"
-)
 public class ClientManagementController {
 
     private final ClientManagementService clientManagementService;
@@ -43,23 +41,25 @@ public class ClientManagementController {
      * 创建Client（统一接口，通过type区分平台级/用户级）
      */
     @PostMapping
-    public ResponseEntity<CreateClientResponse> createClient(@RequestBody CreateClientRequest request) {
+    public ResponseEntity<CreateClientResponse> createClient(HttpServletRequest httpRequest,
+                                                             @RequestBody CreateClientRequest request) {
         log.info("Creating client: type={}, name={}", request.getType(), request.getName());
+        DataAccessPlan plan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
 
         ClientInfoResponse clientInfo;
 
         if (ClientType.PLATFORM.getValue().equalsIgnoreCase(request.getType())) {
-            // 创建平台级AKSK
-            clientInfo = clientManagementService.createPlatformClient(request.getName());
+            clientInfo = clientManagementService.createPlatformClient(request.getName(), request.getScopes(), plan);
         } else if (ClientType.USER.getValue().equalsIgnoreCase(request.getType())) {
-            // 创建用户级AKSK
             if (request.getOwnerUserId() == null || request.getOwnerUsername() == null) {
                 return ResponseEntity.badRequest().build();
             }
             clientInfo = clientManagementService.createUserClient(
                     request.getOwnerUserId(),
                     request.getOwnerUsername(),
-                    request.getName()
+                    request.getName(),
+                    request.getScopes(),
+                    plan
             );
         } else {
             return ResponseEntity.badRequest().build();
@@ -90,7 +90,8 @@ public class ClientManagementController {
             @RequestParam(required = false) String ownerUserId,
             @RequestParam(required = false) String type,
             @RequestParam(required = false, defaultValue = "1") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer size) {
+            @RequestParam(required = false, defaultValue = "20") Integer size,
+            HttpServletRequest httpRequest) {
 
         // 优先处理批量查询
         if (clientIds != null && !clientIds.isEmpty()) {
@@ -101,7 +102,8 @@ public class ClientManagementController {
                     .map(String::trim)
                     .collect(Collectors.toList());
 
-            Map<String, ClientInfoResponse> clientMap = clientManagementService.batchGetClientsByIds(trimmedIds);
+            Map<String, ClientInfoResponse> clientMap = clientManagementService.batchGetClientsByIds(trimmedIds,
+                    ManagementApiAuthorizationHelper.currentPlan(httpRequest));
 
             BatchClientResponse response = new BatchClientResponse();
             response.setClients(clientMap);
@@ -114,7 +116,7 @@ public class ClientManagementController {
                 ownerUserId, type, page, size);
 
         PageResponse<ClientInfoResponse> response = clientManagementService.listClients(
-                ownerUserId, type, page, size);
+                ownerUserId, type, page, size, ManagementApiAuthorizationHelper.currentPlan(httpRequest));
 
         return ResponseEntity.ok(response);
     }
@@ -123,11 +125,15 @@ public class ClientManagementController {
      * 查询Client详情
      */
     @GetMapping("/{clientId}")
-    public ResponseEntity<ClientInfoResponse> getClient(@PathVariable String clientId) {
+    public ResponseEntity<ClientInfoResponse> getClient(@PathVariable String clientId,
+                                                        HttpServletRequest httpRequest) {
         try {
-            ClientInfoResponse clientInfo = clientManagementService.getClientById(clientId);
+            ClientInfoResponse clientInfo = clientManagementService.getClientById(clientId,
+                    ManagementApiAuthorizationHelper.currentPlan(httpRequest));
             return ResponseEntity.ok(clientInfo);
-        } catch (Exception e) {
+        } catch (ManagementAccessDeniedException exception) {
+            throw exception;
+        } catch (Exception exception) {
             log.warn("Client not found: {}", clientId);
             return ResponseEntity.notFound().build();
         }
@@ -137,9 +143,14 @@ public class ClientManagementController {
      * 删除Client
      */
     @DeleteMapping("/{clientId}")
-    public ResponseEntity<Void> deleteClient(@PathVariable String clientId) {
+    public ResponseEntity<Void> deleteClient(@PathVariable String clientId, HttpServletRequest httpRequest) {
         log.info("Deleting client: {}", clientId);
-        clientManagementService.deleteClient(clientId);
+        DataAccessPlan clientPlan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
+        DataAccessPlan tokenPlan = ManagementApiAuthorizationHelper.requiredPlan(httpRequest,
+                SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
+                SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE,
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE);
+        clientManagementService.deleteClient(clientId, clientPlan, tokenPlan);
         return ResponseEntity.ok().build();
     }
 
@@ -149,11 +160,13 @@ public class ClientManagementController {
     @PatchMapping
     public ResponseEntity<SyncScopesResponse> syncUserScopes(
             @RequestParam(SimpleAkskServerConstant.PARAM_OWNER_USER_ID) String userId,
-            @RequestBody UpdateClientRequest request) {
+            @RequestBody UpdateClientRequest request,
+            HttpServletRequest httpRequest) {
 
         log.info("Syncing scopes for user: {}, new scopes: {}", userId, request.getScopes());
 
-        int updatedCount = clientManagementService.syncUserScopes(userId, request.getScopes());
+        int updatedCount = clientManagementService.syncUserScopes(userId, request.getScopes(),
+                ManagementApiAuthorizationHelper.currentPlan(httpRequest));
 
         SyncScopesResponse response = new SyncScopesResponse();
         response.setOwnerUserId(userId);
@@ -169,9 +182,17 @@ public class ClientManagementController {
     @PutMapping("/{clientId}/secret")
     public ResponseEntity<ResetSecretResponse> resetSecret(
             @PathVariable String clientId,
-            @RequestParam(defaultValue = "true") boolean revokeTokens) {
+            @RequestParam(defaultValue = "true") boolean revokeTokens,
+            HttpServletRequest httpRequest) {
         log.info("Resetting secret for client: {}, revokeTokens={}", clientId, revokeTokens);
-        return ResponseEntity.ok(clientManagementService.resetSecret(clientId, revokeTokens));
+        DataAccessPlan clientPlan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
+        DataAccessPlan tokenPlan = revokeTokens
+                ? ManagementApiAuthorizationHelper.requiredPlan(httpRequest,
+                SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
+                SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE,
+                SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE)
+                : null;
+        return ResponseEntity.ok(clientManagementService.resetSecret(clientId, revokeTokens, clientPlan, tokenPlan));
     }
 
     /**
@@ -180,21 +201,23 @@ public class ClientManagementController {
     @PatchMapping("/{clientId}")
     public ResponseEntity<ApiResponse> updateClient(
             @PathVariable String clientId,
-            @RequestBody UpdateClientRequest request) {
+            @RequestBody UpdateClientRequest request,
+            HttpServletRequest httpRequest) {
         log.info("Updating client: {}", clientId);
+        DataAccessPlan plan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
 
         if (request.getEnabled() != null) {
             if (request.getEnabled()) {
-                clientManagementService.enableClient(clientId);
+                clientManagementService.enableClient(clientId, plan);
             } else {
-                clientManagementService.disableClient(clientId);
+                clientManagementService.disableClient(clientId, plan);
             }
         } else if (request.getScopes() != null) {
-            clientManagementService.updateClientScopes(clientId, request.getScopes());
+            clientManagementService.updateClientScopes(clientId, request.getScopes(), plan);
         } else if (request.getName() != null) {
-            clientManagementService.updateClientName(clientId, request.getName());
+            clientManagementService.updateClientName(clientId, request.getName(), plan);
         } else if (request.getOwnerUserId() != null) {
-            clientManagementService.updateOwnerInfo(clientId, request.getOwnerUserId(), request.getOwnerUsername());
+            clientManagementService.updateOwnerInfo(clientId, request.getOwnerUserId(), request.getOwnerUsername(), plan);
         } else {
             return ResponseEntity.badRequest().build();
         }

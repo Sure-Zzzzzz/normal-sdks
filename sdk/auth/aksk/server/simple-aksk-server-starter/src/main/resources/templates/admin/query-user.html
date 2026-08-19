@@ -1,17 +1,13 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>查询用户级AKSK</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
+<head th:replace="admin/fragments/layout :: head('查询用户 Client')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('查询用户 Client', '按用户标识查找其全部用户级 Client')"></header>
+    <section class="admin-content"><div th:replace="admin/fragments/layout :: flash"></div>
+<div class="admin-form-card">
+    <div class="card">
                 <div class="card-header">
                     <h4>查询用户级AKSK</h4>
                 </div>
@@ -21,7 +17,7 @@
                         <span th:text="${error}"></span>
                     </div>
 
-                    <form th:action="@{/admin/query-user-result}" method="get">
+                    <form th:action="@{/admin/query-user/result}" method="get">
                         <div class="mb-3">
                             <label for="userId" class="form-label">用户ID <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="userId" name="userId"
@@ -35,25 +31,10 @@
                         </div>
                     </form>
                 </div>
-            </div>
-        </div>
     </div>
 </div>
-
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 </body>
 </html>

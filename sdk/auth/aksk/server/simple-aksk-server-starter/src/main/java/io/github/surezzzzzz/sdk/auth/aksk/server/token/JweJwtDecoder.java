@@ -6,6 +6,7 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.JWTClaimsSet;
+import io.github.surezzzzzz.sdk.auth.aksk.core.support.AkskRouteKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
@@ -85,6 +86,16 @@ public class JweJwtDecoder {
         try {
             // Step 1: AES-256 解密 JWE → JWS
             JWEObject jweObject = JWEObject.parse(jweToken);
+            String expectedRouteKey = AkskRouteKeyHelper.createRouteKey(properties.getJwt().getKeyId());
+            if (!SimpleAkskServerConstant.JWE_KEY_ENCRYPTION_ALGORITHM
+                    .equals(jweObject.getHeader().getAlgorithm().getName())
+                    || !SimpleAkskServerConstant.JWE_CONTENT_ENCRYPTION_ALGORITHM
+                    .equals(jweObject.getHeader().getEncryptionMethod().getName())
+                    || !SimpleAkskServerConstant.JWE_CONTENT_TYPE_JWT
+                    .equals(jweObject.getHeader().getContentType())
+                    || !expectedRouteKey.equals(jweObject.getHeader().getKeyID())) {
+                throw new ConfigurationException("AKSK JWE Access Token协议无效");
+            }
 
             JWEDecrypter decrypter = new AESDecrypter(this.aesKey);
             jweObject.decrypt(decrypter);

@@ -1,17 +1,13 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>创建平台级AKSK</title>
-    <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
-</head>
-<body>
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card">
+<head th:replace="admin/fragments/layout :: head('创建平台级 Client')"></head>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('创建平台级 Client', '创建后默认不配置应用授权')"></header>
+    <section class="admin-content"><div th:replace="admin/fragments/layout :: flash"></div>
+<div class="admin-form-card">
+    <div class="card">
                 <div class="card-header">
                     <h4>创建平台级AKSK</h4>
                 </div>
@@ -32,21 +28,19 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="scopes" class="form-label">API 权限范围</label>
+                            <label for="scopes" class="form-label">OAuth2 Scope（可选）</label>
                             <textarea class="form-control" id="scopes" name="scopes" rows="4"
-                                      placeholder="例如：/api/*,data:*">/api/*,data:*</textarea>
+                                      placeholder="例如：orders.read,orders.write"></textarea>
                             <div class="form-text">
-                                多个权限用<strong>逗号</strong>分隔，支持通配符 (*)。<span class="text-danger">不允许使用回车换行</span>
+                                多个 Scope 用<strong>逗号</strong>分隔。<span class="text-danger">不允许使用回车换行</span>
                             </div>
                             <div class="form-text text-danger" id="scopeError" style="display:none;">
                                 ⚠️ 检测到回车换行或空格，请使用逗号分隔
                             </div>
                             <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
                                 <strong>Scope 格式说明：</strong><br>
-                                <strong>接口权限</strong>：如 <code>/api/*</code>（通配符 * 匹配所有路径），多个接口用逗号分隔，如 <code>/api/orders,/api/products</code><br>
-                                <strong>数据权限</strong>：如 <code>data:*</code>（访问全部数据）、<code>data:dept:华东</code>（按部门限制数据范围）<br>
-                                <strong>生效规则</strong>：接口权限和数据权限均为 <strong>AKP 固有能力</strong>，签发时确定，运行时不可覆盖；两者同时满足才放行<br>
-                                <strong>示例</strong>：<code>/api/orders,/api/products,data:dept:华东</code> 表示可调 orders 和 products 接口，且只能操作华东数据
+                                OAuth2 Scope 仅表示令牌请求范围，例如 <code>orders.read</code>、<code>orders.write</code>。<br>
+                                Scope 不会自动生成 API permission 或 DATA grant；应用授权请在 Client 详情中单独配置。
                             </div>
                         </div>
 
@@ -56,26 +50,11 @@
                         </div>
                     </form>
                 </div>
-            </div>
-        </div>
     </div>
 </div>
-
-<script src="/admin/js/bootstrap.bundle.min.js"></script>
-<script>
-    // 统一处理 session 失效，服务重启后自动跳转登录页
-    (function() {
-        const _fetch = window.fetch;
-        window.fetch = function() {
-            return _fetch.apply(this, arguments).then(function(response) {
-                if (response.status === 401) {
-                    window.location.href = "/admin/login";
-                }
-                return response;
-            });
-        };
-    })();
-</script>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script>
     (function() {
         const scopesTextarea = document.getElementById('scopes');
@@ -136,9 +115,9 @@
             const scopesValue = scopesTextarea.value;
 
             // 检查是否包含换行符
-            if (/[\r\n]/.test(scopesValue)) {
+            if (/[\r\n\s]/.test(scopesValue)) {
                 e.preventDefault();
-                scopeError.textContent = '⚠️ 检测到回车换行，请使用逗号分隔';
+                scopeError.textContent = '⚠️ 检测到回车换行或空格，请使用逗号分隔';
                 scopeError.style.display = 'block';
                 scopesTextarea.classList.add('is-invalid');
                 scopesTextarea.focus();

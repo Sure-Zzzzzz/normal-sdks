@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.service;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenIntrospectedEvent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenIssuedEvent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRemovedEvent;
@@ -19,10 +20,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Auditable OAuth2 Authorization Service
+ * 可审计的 OAuth2 授权服务包装器。
  *
- * <p>Wraps any {@link OAuth2AuthorizationService} and publishes token lifecycle events
- * for audit purposes. Always active regardless of Redis configuration.
+ * <p>包装任意 {@link OAuth2AuthorizationService} 并发布 Token 生命周期事件；是否持久化、重试或
+ * 可靠消费由独立审计处理器负责。本服务不依赖 Redis 是否启用。
  *
  * @author surezzzzzz
  */
@@ -60,7 +61,8 @@ public class AuditableOAuth2AuthorizationService implements OAuth2AuthorizationS
 
             if (accessToken.isInvalidated()) {
                 eventPublisher.publishEvent(new TokenRevokedEvent(
-                        this, clientId, clientType, userId, username,
+                        this, TokenEventCause.OAUTH2_REVOKE,
+                        clientId, clientType, userId, username,
                         tokenValue, scopes, issuedAt, expiresAt));
                 log.debug("Published TokenRevokedEvent: clientId={}", clientId);
             } else if (isNew) {

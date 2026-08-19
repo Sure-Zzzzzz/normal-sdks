@@ -1,10 +1,12 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
@@ -61,6 +63,9 @@ class SmartCachePubSubTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private SmartCacheManager smartCacheManager;
 
     @Autowired
@@ -84,12 +89,14 @@ class SmartCachePubSubTest {
     @BeforeEach
     void setUp() {
         ClientInfoResponse client = clientManagementService.createPlatformClient("PubSub Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, client);
         clientId = client.getClientId();
         clientSecret = client.getClientSecret();
     }
 
     @AfterEach
     void tearDown() {
+        applicationAuthorizationRepository.deleteAll();
         clientRepository.deleteAll();
         Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
         if (keys != null && !keys.isEmpty()) {

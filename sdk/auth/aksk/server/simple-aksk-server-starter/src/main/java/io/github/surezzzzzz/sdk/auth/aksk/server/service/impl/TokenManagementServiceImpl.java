@@ -15,15 +15,19 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoRe
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2AuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.RedisTokenRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.ManagementDataAccessPlanHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -37,11 +41,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Token Management Service Implementation
+ * Token 管理服务实现。
+ *
+ * <p>撤销操作同时维护授权状态、缓存与生命周期事件；事件构造或发布失败时必须上抛，
+ * 由外层事务避免提交不完整的状态变更。
  *
  * @author surezzzzzz
  */
@@ -50,7 +59,6 @@ import java.util.stream.Collectors;
 public class TokenManagementServiceImpl implements TokenManagementService {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-    private static final String JWT_TOKEN_PREFIX = "eyJ";
     private static final String PROP_ACCESS_TOKEN_ISSUED_AT = "accessTokenIssuedAt";
     private static final String INVALIDATED_KEY = "metadata.token.invalidated";
     private static final String JSON_FIELD_TOKEN_VALUE = "tokenValue";
@@ -169,6 +177,10 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     @Override
     @Transactional
     public void revokeToken(String id) {
+        revokeToken(id, TokenEventCause.TOKEN_MANAGEMENT);
+    }
+
+    private void revokeToken(String id, TokenEventCause cause) {
         OAuth2AuthorizationEntity entity = authorizationEntityRepository.findById(id).orElse(null);
         if (entity == null) {
             // MySQL 里没有，但 Redis 里可能有
@@ -182,10 +194,10 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
             if (redisToken != null) {
                 log.info("Token found in Redis, revoking: {}", id);
-                // 发布 TokenRevokedEvent 事件
                 try {
+                    // 事件构造或发布失败时不能继续删除 Redis 数据，否则会形成状态已变更但生命周期事件缺失的伪成功。
                     eventPublisher.publishEvent(new TokenRevokedEvent(
-                            this,
+                            this, cause,
                             redisToken.getClientId(),
                             null,
                             redisToken.getOwnerUserId(),
@@ -197,7 +209,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
                     ));
                     log.debug("Published TokenRevokedEvent for Redis-only token: {}", id);
                 } catch (Exception e) {
-                    log.warn("Failed to publish TokenRevokedEvent for Redis-only token: {}", id, e);
+                    throw tokenOperationFailed(id, e);
                 }
             }
 
@@ -234,7 +246,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         evictTokenCache(id, entity);
 
         // 3. 发布撤销事件
-        publishRevokedEvent(entity);
+        publishRevokedEvent(entity, cause);
 
         log.info("Token revoked: {}", id);
     }
@@ -301,30 +313,27 @@ public class TokenManagementServiceImpl implements TokenManagementService {
 
     private String deserializeTokenValue(byte[] bytes) {
         if (bytes == null || bytes.length == 0) return null;
+        String tokenValue = new String(bytes, UTF_8);
         try {
-            String tokenStr = new String(bytes, UTF_8);
-            // 2.0.0 JWE token 以 eyJ 开头，直接返回原始 token
-            if (tokenStr.startsWith(JWT_TOKEN_PREFIX)) {
-                return tokenStr;
-            }
-            // 1.x 旧数据，token 包装在 JSON 中
-            JsonNode root = OBJECT_MAPPER.readTree(tokenStr);
-            JsonNode tokenValue = root.get(JSON_FIELD_TOKEN_VALUE);
-            return tokenValue != null ? tokenValue.asText() : null;
+            JsonNode root = OBJECT_MAPPER.readTree(tokenValue);
+            JsonNode embeddedToken = root == null ? null : root.get(JSON_FIELD_TOKEN_VALUE);
+            return embeddedToken == null ? tokenValue : embeddedToken.asText();
         } catch (Exception e) {
-            log.debug("Failed to deserialize token value", e);
-            return null;
+            return tokenValue;
         }
     }
 
-    private void publishRevokedEvent(OAuth2AuthorizationEntity entity) {
+    private void publishRevokedEvent(OAuth2AuthorizationEntity entity, TokenEventCause cause) {
         try {
+            // 撤销事件必须具有最小上下文；缺失时让外层事务回滚，不能以不完整事件掩盖真实变更。
             TokenInfo tokenInfo = mysqlRepository.findById(entity.getId());
-            if (tokenInfo == null) return;
+            if (tokenInfo == null) {
+                throw new IllegalStateException("Token audit data not found");
+            }
             eventPublisher.publishEvent(new TokenRevokedEvent(
-                    this,
+                    this, cause,
                     tokenInfo.getClientId(),
-                    null,  // clientType 从 JWT claims 里取，这里暂不解析
+                    null,  // clientType 由 JWT claims 提供；当前审计数据源不保存该字段，因此不伪造值
                     tokenInfo.getOwnerUserId(),
                     tokenInfo.getOwnerUsername(),
                     tokenInfo.getTokenValue(),
@@ -334,11 +343,20 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             ));
             log.debug("Published TokenRevokedEvent: {}", entity.getId());
         } catch (Exception e) {
-            log.warn("Failed to publish TokenRevokedEvent: {}", entity.getId(), e);
+            throw tokenOperationFailed(entity.getId(), e);
         }
     }
 
+    /**
+     * 将生命周期事件链路失败提升为业务失败，使外层事务不会提交缺少对应事件的 Token 状态。
+     */
+    private SimpleAkskServerException tokenOperationFailed(String tokenId, Exception cause) {
+        return new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, tokenId), cause);
+    }
+
     @Override
+    @Transactional
     public void deleteToken(String id) {
         // 先撤销（这会处理撤销事件和清理Redis）
         try {
@@ -486,7 +504,14 @@ public class TokenManagementServiceImpl implements TokenManagementService {
     }
 
     @Override
+    @Transactional
     public BatchRevokeResponse revokeAllByClientId(String clientId) {
+        return revokeAllByClientId(clientId, TokenEventCause.TOKEN_MANAGEMENT);
+    }
+
+    @Override
+    @Transactional
+    public BatchRevokeResponse revokeAllByClientId(String clientId, TokenEventCause cause) {
         if (clientId == null || clientId.trim().isEmpty()) {
             throw new ClientException(
                     ErrorCode.TOKEN_CLIENT_ID_REQUIRED,
@@ -494,7 +519,6 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             );
         }
 
-        // 通过 clientId（AKSK 字符串）查找 registered client 的 UUID
         OAuth2RegisteredClientEntity clientEntity = clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new ClientException(
                         ErrorCode.CLIENT_NOT_FOUND,
@@ -505,6 +529,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
         int page = 0;
         int batchSize = 200;
         Instant now = Instant.now();
+        Set<String> processedTokenIds = new HashSet<>();
         org.springframework.data.domain.Page<OAuth2AuthorizationEntity> batch;
 
         do {
@@ -513,17 +538,16 @@ public class TokenManagementServiceImpl implements TokenManagementService {
                     .findByRegisteredClientIdOrderByAccessTokenIssuedAtDesc(clientEntity.getId(), pageable);
 
             for (OAuth2AuthorizationEntity entity : batch.getContent()) {
-                // 跳过已过期的 token
+                processedTokenIds.add(entity.getId());
                 if (entity.getAccessTokenExpiresAt() != null
                         && entity.getAccessTokenExpiresAt().isBefore(now)) {
                     continue;
                 }
-                // 跳过已撤销的 token
                 if (isAlreadyRevoked(entity.getAccessTokenMetadata())) {
                     continue;
                 }
                 try {
-                    revokeToken(entity.getId());
+                    revokeToken(entity.getId(), cause);
                     revokedCount++;
                 } catch (Exception e) {
                     log.warn("Failed to revoke token: {}", entity.getId(), e);
@@ -534,7 +558,208 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             page++;
         } while (batch.hasNext());
 
+        for (TokenInfo token : redisRepository.findAllFromRedis()) {
+            if (!clientId.equals(token.getClientId())
+                    || processedTokenIds.contains(token.getId())
+                    || token.getStatus() != TokenInfo.TokenStatus.ACTIVE) {
+                continue;
+            }
+            try {
+                revokeToken(token.getId(), cause);
+                revokedCount++;
+            } catch (Exception e) {
+                log.warn("Failed to revoke Redis token: {}", token.getId(), e);
+                throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED,
+                        String.format(ServerErrorMessage.TOKEN_OPERATION_FAILED, token.getId()), e);
+            }
+        }
+
         log.info("Batch revoked {} tokens for client: {}", revokedCount, clientId);
         return new BatchRevokeResponse(revokedCount);
+    }
+
+    @Override
+    public PageResponse<TokenInfoResponse> queryTokens(TokenQueryRequest request, DataAccessPlan plan) {
+        TokenQueryRequest query = new TokenQueryRequest();
+        query.setClientId(request.getClientId());
+        query.setClientType(request.getClientType());
+        query.setSearch(request.getSearch());
+        List<TokenInfo> tokens = queryAllMysqlTokens(query).stream()
+                .filter(token -> request.getStatus() == null || token.getStatus() == request.getStatus())
+                .filter(token -> ManagementDataAccessPlanHelper.isTokenAllowed(plan, token))
+                .collect(Collectors.toList());
+        return pageTokens(tokens, request.getPage(), request.getSize());
+    }
+
+    @Override
+    public PageResponse<TokenInfoResponse> queryRedisTokens(TokenInfo.TokenStatus status, int page, int size,
+                                                            DataAccessPlan plan) {
+        List<TokenInfo> tokens = redisRepository.findAllFromRedis().stream()
+                .map(this::enrichClientInfo)
+                .filter(token -> status == null || token.getStatus() == status)
+                .filter(token -> ManagementDataAccessPlanHelper.isTokenAllowed(plan, token))
+                .collect(Collectors.toList());
+        return pageTokens(tokens, page, size);
+    }
+
+    @Override
+    public TokenInfoResponse getTokenById(String id, DataAccessPlan plan) {
+        TokenInfo token = findToken(id);
+        if (token == null) {
+            return null;
+        }
+        requireTokenAllowed(plan, token);
+        return toTokenInfoResponse(token);
+    }
+
+    @Override
+    @Transactional
+    public void revokeToken(String id, DataAccessPlan plan) {
+        requireTokenAllowed(plan, requireToken(id));
+        revokeToken(id, TokenEventCause.TOKEN_MANAGEMENT);
+    }
+
+    @Override
+    public void deleteToken(String id, DataAccessPlan plan) {
+        requireTokenAllowed(plan, requireToken(id));
+        deleteToken(id);
+    }
+
+    @Override
+    public int deleteExpiredTokens(DataAccessPlan plan) {
+        List<TokenInfo> tokens = queryAllMysqlTokens(expiredRequest()).stream()
+                .filter(token -> ManagementDataAccessPlanHelper.isTokenAllowed(plan, token))
+                .collect(Collectors.toList());
+        List<TokenInfo> redisTokens = redisRepository.findAllFromRedis().stream()
+                .map(this::enrichClientInfo)
+                .filter(token -> token.getStatus() == TokenInfo.TokenStatus.EXPIRED)
+                .filter(token -> ManagementDataAccessPlanHelper.isTokenAllowed(plan, token))
+                .collect(Collectors.toList());
+        for (TokenInfo token : tokens) {
+            mysqlRepository.deleteById(token.getId());
+        }
+        for (TokenInfo token : redisTokens) {
+            redisRepository.deleteById(token.getId());
+        }
+        return tokens.size() + redisTokens.size();
+    }
+
+    @Override
+    public TokenStatisticsResponse getStatistics(DataAccessPlan plan) {
+        List<TokenInfo> tokens = queryAllMysqlTokens(new TokenQueryRequest()).stream()
+                .filter(token -> ManagementDataAccessPlanHelper.isTokenAllowed(plan, token))
+                .collect(Collectors.toList());
+        TokenStatisticsResponse statistics = new TokenStatisticsResponse();
+        long active = tokens.stream().filter(token -> token.getStatus() == TokenInfo.TokenStatus.ACTIVE).count();
+        long revoked = tokens.stream().filter(token -> token.getStatus() == TokenInfo.TokenStatus.REVOKED).count();
+        long expired = tokens.stream().filter(token -> token.getStatus() == TokenInfo.TokenStatus.EXPIRED).count();
+        statistics.setTotalCount((long) tokens.size());
+        statistics.setActiveCount(active);
+        statistics.setRevokedCount(revoked);
+        statistics.setExpiredCount(expired);
+        statistics.setMysqlCount((long) tokens.size());
+        statistics.setRedisCount(0L);
+        statistics.setBothCount(0L);
+        return statistics;
+    }
+
+    @Override
+    public BatchRevokeResponse revokeAllByClientId(String clientId, DataAccessPlan plan) {
+        return revokeAllByClientId(clientId, plan, TokenEventCause.TOKEN_MANAGEMENT);
+    }
+
+    @Override
+    @Transactional
+    public BatchRevokeResponse revokeAllByClientId(String clientId, DataAccessPlan plan, TokenEventCause cause) {
+        requireAllByClientIdAllowed(clientId, plan);
+        return revokeAllByClientId(clientId, cause);
+    }
+
+    @Override
+    public void requireAllByClientIdAllowed(String clientId, DataAccessPlan plan) {
+        OAuth2RegisteredClientEntity client = clientRepository.findByClientId(clientId)
+                .orElseThrow(() -> new ClientException(ErrorCode.CLIENT_NOT_FOUND,
+                        String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)));
+        List<TokenInfo> mysqlTokens = queryAllMysqlTokens(clientRequest(client.getClientId()));
+        for (TokenInfo token : mysqlTokens) {
+            if (token.getStatus() == TokenInfo.TokenStatus.ACTIVE) {
+                requireTokenAllowed(plan, token);
+            }
+        }
+        for (TokenInfo token : redisRepository.findAllFromRedis().stream()
+                .map(this::enrichClientInfo)
+                .filter(token -> clientId.equals(token.getClientId()))
+                .filter(token -> token.getStatus() == TokenInfo.TokenStatus.ACTIVE)
+                .collect(Collectors.toList())) {
+            requireTokenAllowed(plan, token);
+        }
+    }
+
+    private List<TokenInfo> queryAllMysqlTokens(TokenQueryRequest request) {
+        TokenQueryRequest query = request == null ? new TokenQueryRequest() : request;
+        List<TokenInfo> tokens = new ArrayList<>();
+        int pageNumber = 0;
+        int batchSize = 200;
+        Page<TokenInfo> page;
+        do {
+            page = mysqlRepository.queryTokensWithFilters(query.getClientId(), query.getClientType(),
+                    query.getStatus(), query.getSearch(), PageRequest.of(pageNumber, batchSize,
+                            Sort.by(Sort.Direction.DESC, PROP_ACCESS_TOKEN_ISSUED_AT)));
+            tokens.addAll(page.getContent());
+            pageNumber++;
+        } while (page.hasNext());
+        return tokens;
+    }
+
+    private PageResponse<TokenInfoResponse> pageTokens(List<TokenInfo> tokens, int page, int size) {
+        List<TokenInfo> sorted = tokens.stream()
+                .sorted((left, right) -> right.getIssuedAt().compareTo(left.getIssuedAt()))
+                .collect(Collectors.toList());
+        int currentPage = Math.max(1, page);
+        int pageSize = Math.max(1, size);
+        int startIndex = Math.min((currentPage - 1) * pageSize, sorted.size());
+        int endIndex = Math.min(startIndex + pageSize, sorted.size());
+        List<TokenInfoResponse> response = sorted.subList(startIndex, endIndex).stream()
+                .map(this::toTokenInfoResponse)
+                .collect(Collectors.toList());
+        return PageResponse.of(response, (long) sorted.size(), currentPage, pageSize);
+    }
+
+    private TokenInfo requireToken(String id) {
+        TokenInfo token = findToken(id);
+        if (token == null) {
+            throw new ManagementAccessDeniedException();
+        }
+        return token;
+    }
+
+    private TokenInfo findToken(String id) {
+        TokenInfo token = mysqlRepository.findById(id);
+        if (token != null) {
+            return token;
+        }
+        return redisRepository.findAllFromRedis().stream()
+                .filter(candidate -> id.equals(candidate.getId()))
+                .findFirst()
+                .map(this::enrichClientInfo)
+                .orElse(null);
+    }
+
+    private TokenQueryRequest expiredRequest() {
+        TokenQueryRequest request = new TokenQueryRequest();
+        request.setStatus(TokenInfo.TokenStatus.EXPIRED);
+        return request;
+    }
+
+    private TokenQueryRequest clientRequest(String clientId) {
+        TokenQueryRequest request = new TokenQueryRequest();
+        request.setClientId(clientId);
+        return request;
+    }
+
+    private void requireTokenAllowed(DataAccessPlan plan, TokenInfo token) {
+        if (!ManagementDataAccessPlanHelper.isTokenAllowed(plan, token)) {
+            throw new ManagementAccessDeniedException();
+        }
     }
 }

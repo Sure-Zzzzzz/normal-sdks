@@ -6,12 +6,17 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.github.surezzzzzz.sdk.auth.aksk.core.support.AkskRouteKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +61,9 @@ class JwtTokenValidationTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
@@ -64,9 +72,13 @@ class JwtTokenValidationTest {
     @Autowired
     private JwtKeyProvider jwtKeyProvider;
 
+    @Autowired
+    private JweJwtDecoder jweJwtDecoder;
+
     @AfterEach
     void cleanupData() {
         log.info("清理测试数据...");
+        applicationAuthorizationRepository.deleteAll();
         clientRepository.deleteAll();
         Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
         if (keys != null && !keys.isEmpty()) {
@@ -81,9 +93,10 @@ class JwtTokenValidationTest {
         log.info("测试 JWE token 格式");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Format Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         String accessToken = getAccessToken(clientInfo);
 
-        log.info("获取到 Access Token: {}...", accessToken.substring(0, 30));
+        log.info("获取到 Access Token，长度={}", accessToken.length());
 
         // JWE 格式：5段，用"."分隔
         String[] parts = accessToken.split("\\.");
@@ -91,12 +104,14 @@ class JwtTokenValidationTest {
 
         // 解析 JWE
         JWEObject jweObject = JWEObject.parse(accessToken);
-        log.info("JWE 解析成功，Header: {}", jweObject.getHeader().toJSONObject());
+        log.info("JWE Header 已完成解析");
 
         // 验证 JWE header
         assertEquals("A256GCMKW", jweObject.getHeader().getAlgorithm().toString());
         assertEquals("A256GCM", jweObject.getHeader().getEncryptionMethod().toString());
         assertEquals("JWT", jweObject.getHeader().getContentType());
+        assertEquals(AkskRouteKeyHelper.createRouteKey(properties.getJwt().getKeyId()),
+                jweObject.getHeader().getKeyID());
 
         log.info("JWE token 格式验证通过");
     }
@@ -106,6 +121,7 @@ class JwtTokenValidationTest {
         log.info("测试 JWE token 解密");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Decrypt Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         String accessToken = getAccessToken(clientInfo);
 
         // 解密 JWE → JWS
@@ -116,7 +132,7 @@ class JwtTokenValidationTest {
         jweObject.decrypt(new AESDecrypter(aesKey));
 
         String jwsCompact = jweObject.getPayload().toString();
-        log.info("JWE 解密成功，JWS: {}...", jwsCompact.substring(0, 50));
+        log.info("JWE 解密成功，JWS 长度={}", jwsCompact.length());
 
         // 验证 JWS（用 RSA 公钥验签）
         SignedJWT signedJWT = SignedJWT.parse(jwsCompact);
@@ -132,6 +148,7 @@ class JwtTokenValidationTest {
         log.info("测试 JWE token claims");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("JWT Claims Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         String accessToken = getAccessToken(clientInfo);
 
         // 解密 JWE → JWS → claims
@@ -142,7 +159,7 @@ class JwtTokenValidationTest {
         SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
         JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-        log.info("JWT Claims: {}", claims.toJSONObject());
+        log.info("JWT Claims 已完成解析");
 
         // 验证基础 claims
         assertNotNull(claims.getSubject());
@@ -171,6 +188,7 @@ class JwtTokenValidationTest {
         String userId = "10086";
         String username = "zhangsan";
         ClientInfoResponse clientInfo = clientManagementService.createUserClient(userId, username, "User JWT Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         String accessToken = getAccessToken(clientInfo);
 
         byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
@@ -180,7 +198,7 @@ class JwtTokenValidationTest {
         SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
         JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
 
-        log.info("用户级 AKSK JWT Claims: {}", claims.toJSONObject());
+        log.info("用户级 AKSK JWT Claims 已完成解析");
 
         // 验证 client_type = user
         String clientType = claims.getStringClaim("client_type");
@@ -202,6 +220,7 @@ class JwtTokenValidationTest {
         log.info("测试 security_context 在 JWE token claims 中");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Security Context Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
         String securityContext = "{\"user_id\":\"10086\",\"tenant_id\":\"tenant-123\"}";
 
@@ -238,10 +257,33 @@ class JwtTokenValidationTest {
     }
 
     @Test
+    void testJweTokenWithUnexpectedRouteKeyIsRejected() throws Exception {
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Unexpected Route Key Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
+        String accessToken = getAccessToken(clientInfo);
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        JWEObject unexpectedRouteKeyToken = new JWEObject(
+                new com.nimbusds.jose.JWEHeader.Builder(
+                        jweObject.getHeader().getAlgorithm(), jweObject.getHeader().getEncryptionMethod())
+                        .contentType(jweObject.getHeader().getContentType())
+                        .keyID(AkskRouteKeyHelper.createRouteKey("unexpected-key-id"))
+                        .build()
+                        .toBase64URL(),
+                jweObject.getEncryptedKey(),
+                jweObject.getIV(),
+                jweObject.getCipherText(),
+                jweObject.getAuthTag());
+
+        assertThrows(ConfigurationException.class,
+                () -> jweJwtDecoder.decode(unexpectedRouteKeyToken.serialize()));
+    }
+
+    @Test
     void testTamperedJweTokenIsRejected() throws Exception {
         log.info("测试篡改 JWE token 后 /api 接口返回 401");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Tamper Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         // 先获取一个有效 token 用于创建 /api/client scope 的 token
         String validToken = getAccessToken(clientInfo);
 
@@ -269,9 +311,10 @@ class JwtTokenValidationTest {
         log.info("测试 security_context 超过大小限制时返回 400");
 
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Security Context Size Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
         // 构造超过 4096 字节的 security_context
-        String largeContext = "{\"data\":\"" + "x".repeat(4200) + "\"}";
+        String largeContext = "{\"data\":\"" + new String(new char[4200]).replace('\0', 'x') + "\"}";
 
         String tokenUrl = "http://localhost:" + port + "/oauth2/token";
         HttpHeaders headers = new HttpHeaders();

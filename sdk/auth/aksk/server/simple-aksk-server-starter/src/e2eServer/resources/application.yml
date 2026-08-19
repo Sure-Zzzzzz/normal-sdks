@@ -1,0 +1,89 @@
+server:
+  address: 127.0.0.1
+  port: 0
+
+iam:
+  aksk:
+    e2e:
+      aksk:
+        manifest-file: ${IAM_AKSK_E2E_AKSK_MANIFEST_FILE}
+        control-token: ${IAM_AKSK_E2E_AKSK_CONTROL_TOKEN}
+        credentials-file: ${IAM_AKSK_E2E_CREDENTIALS_FILE}
+
+spring:
+  datasource:
+    url: ${IAM_AKSK_E2E_AKSK_DATASOURCE_URL}
+    username: ${IAM_AKSK_E2E_DB_USERNAME}
+    password: ${IAM_AKSK_E2E_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            server:
+              jwt:
+                key-id: iam-aksk-e2e-aksk-key
+                public-key: ${IAM_AKSK_E2E_AKSK_JWT_PUBLIC_KEY}
+                private-key: ${IAM_AKSK_E2E_AKSK_JWT_PRIVATE_KEY}
+                encryption-key: ${IAM_AKSK_E2E_AKSK_ENCRYPTION_KEY}
+                expires-in: 600
+              redis:
+                token:
+                  me: iam-aksk-e2e-aksk
+              admin:
+                enabled: false
+              limiter:
+                oauth2:
+                  enable: false
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: ${IAM_AKSK_E2E_REDIS_HOST}
+                port: ${IAM_AKSK_E2E_REDIS_PORT}
+                database: ${IAM_AKSK_E2E_AKSK_REDIS_DATABASE}
+                username: ${IAM_AKSK_E2E_REDIS_USERNAME:}
+                password: ${IAM_AKSK_E2E_REDIS_PASSWORD:}
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        lock:
+          redis:
+            route:
+              enable: true
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: iam-aksk-e2e-aksk
+              mode: annotation
+        cache:
+          key-prefix: iam-aksk-e2e-aksk
+          me: iam-aksk-e2e-aksk
+          l1:
+            enabled: true
+          l2:
+            enabled: true
+          consistency:
+            mode: strong
+          pubsub:
+            mode: routed
+          route:
+            scan-enabled: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk.server: INFO
+    org.springframework.security: WARN

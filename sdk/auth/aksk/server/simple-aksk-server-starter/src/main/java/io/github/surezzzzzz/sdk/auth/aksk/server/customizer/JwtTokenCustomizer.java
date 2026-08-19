@@ -6,11 +6,15 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerP
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.claim.ApplicationAuthorizationContextClaimMapper;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientCredentialsAuthenticationToken;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
@@ -38,6 +42,7 @@ import java.util.Map;
 public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
+    private final AkskApplicationAuthorizationService applicationAuthorizationService;
     private final SimpleAkskServerProperties properties;
 
     @Override
@@ -54,6 +59,7 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
         // 2. 添加基础 claims
         // client_id: 客户端标识（与标准claim sub相同，但更明确）
         context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_CLIENT_ID, clientId);
+        addApplicationAuthorization(context, clientId);
 
         // auth_server_id: 认证服务器标识，用于多认证服务器场景
         // 从配置的 jwt.key-id 中获取，通常与 JWT Header 的 kid 保持一致
@@ -105,7 +111,7 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
                             }
                         }
                         context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_SECURITY_CONTEXT, securityContext);
-                        log.debug("添加security_context claim: clientId={}, securityContext={}", clientId, securityContext);
+                        log.debug("添加 security_context claim: clientId={}", clientId);
                     }
                 }
             }
@@ -116,5 +122,24 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
             // 其他异常仅记录日志，不影响token签发
             log.warn("读取security_context参数失败: clientId={}", clientId, e);
         }
+    }
+
+    private void addApplicationAuthorization(JwtEncodingContext context, String clientId) {
+        if (!org.springframework.security.oauth2.server.authorization.OAuth2TokenType.ACCESS_TOKEN
+                .equals(context.getTokenType())) {
+            return;
+        }
+        java.time.Instant issuedAt = context.getClaims().build().getIssuedAt();
+        java.time.Instant expiresAt = context.getClaims().build().getExpiresAt();
+        ApplicationAuthorizationContext authorization = applicationAuthorizationService.loadActiveContext(
+                clientId, issuedAt, expiresAt);
+        if (authorization == null) {
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.INVALID_CLIENT,
+                    "AKSK客户端未获应用资源授权",
+                    null));
+        }
+        context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_APPLICATION_AUTHORIZATION,
+                ApplicationAuthorizationContextClaimMapper.toClaim(authorization));
     }
 }

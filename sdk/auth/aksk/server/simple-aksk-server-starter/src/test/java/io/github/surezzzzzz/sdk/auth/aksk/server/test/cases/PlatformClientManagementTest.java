@@ -358,7 +358,7 @@ class PlatformClientManagementTest {
         log.info("测试使用长名称创建平台级客户端");
 
         // Given - Create a long client name (within 200 char limit)
-        String longName = "A".repeat(200);
+        String longName = new String(new char[200]).replace('\0', 'A');
 
         // When
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient(longName);

@@ -1,8 +1,8 @@
 # Simple AKSK Server Starter
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.3**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **3.0.0（待发布）**：本文档对应本地 AKSK Server Starter 3.0.0 候选版本；外部发布状态以 Maven Central / Central Portal 实证为准。2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 
-[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -20,7 +20,7 @@ OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全�
 - ✅ **OAuth2 标准协议**：基于 Spring Authorization Server 0.4.1，完全符合 OAuth2 规范
 - ✅ **JWE Token 签发**：JWE（A256GCMKW）加密，payload 密文不可读
 - ✅ **Token 即时撤销**：`/oauth2/revoke` 撤销后 introspect 立即返回 `active=false`
-- ✅ **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件
+- ✅ **Token 审计事件**：颁发、撤销、删除、introspect 全生命周期事件；可选 3.0 审计 listener 在事务提交后投递不含 Token 原文的记录
 - ✅ **L1+L2 两级缓存**：Caffeine 本地缓存 + Redis 分布式缓存，introspect 热路径命中 L1 无需访问 Redis
 - ✅ **多实例缓存一致性**：Redis Pub/Sub 广播缓存失效，多副本间 L1 缓存强一致
 - ✅ **Admin 管理界面**：AKSK 和 Token 的创建、查询、启用/禁用、撤销、删除
@@ -36,7 +36,10 @@ OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:2.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -49,13 +52,18 @@ dependencies {
 ### 2. 初始化数据库
 
 ```bash
-mysql -u root -p < docs/00_database.sql
-mysql -u root -p sure_auth_aksk < docs/01_schema.sql
+# 新部署或允许重建时：执行 3.0.0 完整初始化脚本
+mysql -u <database-user> -p <database-name> < docs/01_schema_3.0.0.sql
+
+# 从 2.x 升级：先备份并停写，再仅执行一次升级脚本
+mysql -u <database-user> -p <database-name> < docs/02_upgrade_3.0.0.sql
 ```
+
+> `01_schema_3.0.0.sql` 会重建 AKSK 相关表，仅用于新部署或确认允许清空数据的环境。`02_upgrade_3.0.0.sql` 仅用于 2.x 升级：它保留现有 Client 与 Token 数据、新建应用授权投影表，但不会从旧 Scope 自动推导或自动准入任何授权；每个 Client 在首次 3.0 准入前必须先处理其 2.x 存量活跃 Token，再配置完整授权并显式准入。同一数据库不要重复执行。进入 3.0 后，完整替换或撤销应用授权会事务性撤销该 Client 的活跃 Token，历史 Token 不会因当前投影更新而获得新授权。
 
 ### 3. 配置应用
 
-**最小配置（2.0.3 起 Redis 必需）**：
+**最小配置（3.0.0 起 Redis 必需）**：
 
 ```yaml
 io:
@@ -103,9 +111,17 @@ io:
 
 > `redis.token.me`、`limiter.redis.smart.me`、`cache.me` 必须使用同一个应用标识。同一 AKSK Server 集群中不要为不同实例配置不同 `me`，否则 Token 缓存、L1 失效广播和 OAuth2 限流都会落到不同 Redis 命名空间。
 
+### 可选：接入 Token 审计 listener
+
+```gradle
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:3.0.0'
+```
+
+该扩展不由 Starter 自动引入。应用授权完整替换或撤销会为每个实际失效 Token 产生 `REVOKED` 事件，`cause` 分别为 `APPLICATION_AUTHORIZATION_REPLACED` 或 `APPLICATION_AUTHORIZATION_REVOKED`；详见审计 listener 的 README。Handler 接收的审计 record 不含 Token 原文。
+
 ### 4. 访问 Admin 管理页面
 
-启动后访问 `http://localhost:8080/admin`，使用配置的用户名密码登录。
+启动后访问部署地址的 `/admin`，使用部署侧配置的管理员账号登录。
 
 ---
 
@@ -131,116 +147,78 @@ ClientInfo client = clientManagementService.createUserClient("user123", "张三"
 
 ### 获取 Access Token
 
-```bash
-curl -X POST http://localhost:8080/oauth2/token \
-  -u "AKP1234567890abcdefgh:SK1234567890abcdefghijklmnopqrstuvwxyz1234" \
-  -d "grant_type=client_credentials&scope=read write"
-```
+使用标准 OAuth2 Client Credentials 请求 `/oauth2/token`。Client ID 和 Client Secret 仅通过受保护的部署配置提供给调用方；不要把认证信息、Access Token 或完整响应写入文档、日志和测试输出。
 
-响应：
-
-```json
-{
-  "access_token": "<JWE 5段 Base64URL 字符串>",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "scope": "read write"
-}
-```
+请求的 `scope` 只能在 Client 注册范围内缩小，且不参与 API permission 或 DATA grant 推导。
 
 > JWE Token 结构为 5 段（`Header.EncryptedKey.IV.Ciphertext.Tag`），payload 已加密，无法在客户端直接解析。
 
-### 权限模型：Scope 与 Security Context
+### 3.0 权限模型：OAuth Scope、security_context 与 aksk_authorization
 
-AKSK 的权限体系由两层组成：
+3.0 将 OAuth 请求范围、运行时业务上下文和可信应用授权快照严格分离：
 
-| 层级 | 载体 | 生命周期 | 谁决定 | 不可覆盖 |
-|------|------|---------|--------|---------|
-| AKSK 权限 | **scope** | AKSK 创建时 | 签发方 | ✅ 不可被运行时覆盖 |
-| 业务上下文 | **security_context** | 每次请求 token 时 | 使用方 | ❌ 可动态传入 |
+| 载体 | 作用 | 来源 | 是否可信授权来源 |
+|------|------|------|------------------|
+| `scope` | OAuth2 请求范围，决定本次令牌请求是否在 Client 注册范围内 | OAuth Client 配置与 token 请求 | 否，不推导 API permission 或 DATA grant |
+| `security_context` | 业务运行时上下文，例如租户、用户或请求来源 | 每次 token 请求由调用方传入 | 否，不得作为 API/DATA 授权来源 |
+| `aksk_authorization` | 服务端保存的应用授权快照，包含角色、页面权限、精确 API permission 和 `DataGrantDocument` | Admin 页面或应用授权管理 REST | 是，签发时从当前投影生成 |
 
-**Scope**：AKSK 签发时确定的所有权限集合，包括接口权限和数据权限。写入后不可被运行时参数覆盖，是 AKSK 的能力边界。
+Client 创建只注册 OAuth Client，不自动创建应用授权。没有启用且已准入的应用授权投影时，Server 默认拒绝签发带授权快照的 Token；因此接入顺序必须是：
 
-**Security Context**：业务方自定义的运行时上下文，补充 scope 之外的动态信息（如当前租户、请求来源等）。由使用方在请求 token 时传入，不属于 AKSK 的固有能力。
+1. 创建 Client，并安全保存一次性 Client Secret；
+2. 在 Admin 的“应用授权管理”页面，或 `/api/application-authorization` REST 资源中完整配置应用编码、准入状态、角色、页面权限、精确 API permission 和 DATA 文档；
+3. 显式准入后再调用 `/oauth2/token` 获取 Token；
+4. 资源服务按 Token 中的 `aksk_authorization` 快照执行 API 与 DATA 校验。
 
-> **设计原则**：scope 和 security_context 职责不重叠。如果出现字段冲突，说明权限设计有问题，应调整 scope 或 security_context 的字段划分。
+#### OAuth Scope 请求方式
 
-#### Scope 请求方式
+| 请求方式 | 说明 |
+|---------|------|
+| 不传 `scope` | 使用 Client 注册的默认 OAuth Scope |
+| 指定 `scope` | 只能在 Client 注册范围内缩小请求范围，不能扩大权限 |
 
-| 请求方式     | 说明                        |
-|----------|---------------------------|
-| 不传 scope | 使用 Client 注册时配置的所有 scope  |
-| 指定 scope | 必须在 Client 授权范围内，可缩小但不能扩大 |
+Scope 不是 API permission，也不是 DATA grant。不要使用 `/api/*`、`data:*` 或 `data:dept:*` 这类 Scope 文本代替应用授权；应用授权中的 permission 和 DATA grant 必须由服务端明确配置并严格校验。
 
-#### 最佳实践
+#### security_context 使用边界
 
-**1. Scope 承载固定权限**
-
-接口权限和数据权限统一写在 scope 中，AKSK 创建时确定，运行时不可变：
-
-```
-AKP 示例：`"/api/orders,/api/products,data:*"`
-AKP 示例：`"/api/orders,/api/products,data:dept:华东"`
-```
-
-| scope | 含义 |
-|-------|------|
-| `/api/*` | 可调所有 API |
-| `/api/orders` | 仅可调 orders 接口 |
-| `data:*` | 可访问全部数据 |
-| `data:dept:华东` | 仅可访问华东数据 |
-
-资源侧通过 `@RequireExpression` 鉴权表达式判断：
-
-```java
-// 判断是否有华东数据权限
-@RequireExpression("#context['scope'] != null && (' ' + #context['scope'] + ' ').contains(' data:dept:华东 ')")
-public Order getOrder(String orderId) { ... }
-```
-
-**2. Security Context 承载动态上下文**
-
-运行时变化的业务信息放在 security_context 中，每次请求 token 时传入：
+`security_context` 适合携带每次请求变化的业务上下文：
 
 ```bash
-curl -X POST /oauth2/token \
-  -u "AKP...:SK..." \
-  -d "grant_type=client_credentials&security_context={\"tenant_id\":\"t123\",\"request_source\":\"mobile\"}"
+curl -X POST https://<aksk-server>/oauth2/token \
+  -u "<client-id>:<client-secret>" \
+  -d "grant_type=client_credentials" \
+  -d 'security_context={"tenant_id":"<tenant-id>","request_source":"<request-source>"}'
 ```
 
-资源侧通过 `SimpleAkskSecurityContextProvider` 读取：
+资源侧可通过 `SimpleAkskSecurityContextProvider` 读取它，但必须把它当作不可信输入；租户范围、API permission 和 DATA grant 仍以 `aksk_authorization` 为准。
 
-```java
-@Autowired
-private SimpleAkskSecurityContextProvider contextProvider;
+#### 应用授权管理 REST
 
-String tenantId = contextProvider.get("tenant_id");
-```
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/application-authorization` | 为已有 Client 创建首次授权投影，重复创建返回 409 |
+| `GET` | `/api/application-authorization/{clientId}` | 查询指定 Client 授权 |
+| `GET` | `/api/application-authorization` | 按 `DataAccessPlan` 过滤后再统计和分页 |
+| `PUT` | `/api/application-authorization/{clientId}` | 完整替换授权，递增授权版本并撤销该 Client 活跃 Token |
+| `POST` | `/api/application-authorization/{clientId}/revoke` | 撤销授权并撤销该 Client 活跃 Token |
 
-**3. 不要在 Security Context 中重复 Scope 已有的字段**
+机器 REST 使用精确应用授权 permission 和 `DataAccessPlan`；Admin 页面使用本地 session + form login + CSRF，两者是不同的控制面。IAM 后续可以通过可选 adapter 或受认证 REST contract 调用该 REST 资源，不共享数据库，也不成为 AKSK 签发 Token 的运行时前置依赖。
 
-```
-❌ scope 包含 data:dept:华东，security_context 又传 region:华南
-   → 字段冲突，说明权限设计有问题
+### 文档导航
 
-✅ scope 包含 data:dept:华东（数据权限，固定），security_context 传 request_source:mobile（动态上下文）
-   → 职责清晰，互不重叠
-```
+- [3.0.0 新装手册](docs/03_install_3.0.0.md)
+- [2.x 升级手册](docs/04_upgrade_2.x_to_3.0.0.md)
+- [运维手册](docs/05_operations_3.0.0.md)
+- [发布验收清单](docs/06_release_acceptance_3.0.0.md)
+- [依赖解析验证](docs/07_dependency_resolution_3.0.0.md)
+
+### 与 IAM 协作资源服务（可选）
+
+AKSK Server 可以独立部署和使用。若同一业务 API 还需要接受 IAM 人员身份，应由业务资源服务组合公共资源层、IAM Provider 与 AKSK Provider；认证源二选一，不共享数据库、不回退认证，也不合并权限。接入方式见 [IAM 与 AKSK 协作接入](../../../README.IAM-AKSK协作.md)。
 
 ### 撤销 Token
 
-```bash
-# 标准 OAuth2 撤销端点（client 自己撤销自己的 token）
-curl -X POST http://localhost:8080/oauth2/revoke \
-  -u "AKP1234567890abcdefgh:SK..." \
-  -d "token=eyJraWQi..."
-
-# 撤销后 introspect 返回 active=false（L1+L2 缓存同步清除）
-curl -X POST http://localhost:8080/oauth2/introspect \
-  -u "AKP1234567890abcdefgh:SK..." \
-  -d "token=eyJraWQi..."
-# {"active": false}
-```
+调用标准 OAuth2 `/oauth2/revoke` 可撤销当前 Client 的 Token。撤销后 introspect 返回 `active=false`，并同步清除 L1、L2 缓存。认证材料、Token 值和 introspection 完整响应均不应记录或展示。
 
 ### 监听审计事件
 
@@ -266,23 +244,11 @@ public void onTokenIntrospected(TokenIntrospectedEvent event) {
 
 ### 携带自定义安全上下文
 
-```bash
-curl -X POST http://localhost:8080/oauth2/token \
-  -u "AKP...:SK..." \
-  -d "grant_type=client_credentials&security_context={\"tenant_id\":\"t123\"}"
-```
+在 token 请求中可选携带 JSON 格式的 `security_context`。它会进入 JWE Token 的同名 claim，供业务读取运行时上下文；它不授予 API permission 或 DATA grant，也不能覆盖 `aksk_authorization`。
 
-生成的 JWE Token 中会包含 `security_context` claim（introspect 返回的 claims 中可见）。
+### introspect 调用边界
 
-### introspect 端点匿名访问（可选）
-
-适用于内网/测试环境，允许无需认证调用 introspect：
-
-```yaml
-io.github.surezzzzzz.sdk.auth.aksk.server:
-  introspect:
-    require-authentication: false  # 默认 true，生产环境请勿修改
-```
+`/oauth2/introspect` 必须使用已认证的 Client 调用。资源服务应通过受保护配置保存内省客户端认证材料；不要启用匿名内省，也不要记录认证材料、Token 或完整响应。
 
 ---
 
@@ -296,22 +262,9 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `/oauth2/jwks`                            | GET  | 公钥集合（JWK Set）   | 公开                |
 | `/.well-known/oauth-authorization-server` | GET  | 服务器元数据          | 公开                |
 
-### introspect 响应示例
+### introspect 响应
 
-```json
-{
-  "active": true,
-  "sub": "AKP1234567890abcdefgh",
-  "client_id": "AKP1234567890abcdefgh",
-  "client_type": "platform",
-  "scope": "read write",
-  "auth_server_id": "sure-auth-aksk-2026",
-  "iss": "http://your-server:8080",
-  "exp": 1775638763,
-  "iat": 1775635163,
-  "token_type": "Bearer"
-}
-```
+introspect 用于确认 Token 是否有效及读取经过服务端校验的 claims。生产调用方仅应消费自身所需字段；不要记录或对外暴露完整 introspection 响应。
 
 ### APISIX 集成建议
 
@@ -320,7 +273,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | introspect 验证 | 调用 `/oauth2/introspect` | 可即时感知撤销，L1 缓存加速 | 每次请求多一次 HTTP 调用（命中 L1 时极低延迟） |
 | 本地验证     | 自定义插件/业务自行实现 JWE 解密与 claims 校验 | 无额外 introspect HTTP 调用 | 需要安全分发 AES-256 密钥，且必须自行处理撤销状态一致性 |
 
-> **推荐方式**：2.x Token 为 JWE 格式，APISIX 内置 `jwt-auth` 不能直接验证该 JWE。生产环境建议通过 introspect 验证，由 AKSK Server 统一处理 JWE 解密、撤销状态和缓存一致性。
+> **推荐方式**：AKSK Token 为 JWE 格式，APISIX 内置 `jwt-auth` 不能直接验证该 JWE。生产环境建议通过 introspect 验证，由 AKSK Server 统一处理 JWE 解密、撤销状态和缓存一致性。
 
 ---
 
@@ -332,11 +285,11 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `/api/client`                        | GET    | 查询 Client 列表（分页/批量） |
 | `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
 | `/api/client/{clientId}`             | DELETE | 删除 Client           |
-| `/api/client/{clientId}`             | PATCH  | 更新 Client（enabled/scopes/name/ownerUserId） |
-| `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户权限            |
+| `/api/client/{clientId}`             | PATCH  | 更新 Client（enabled、OAuth Scope、名称或归属） |
+| `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户 OAuth Scope |
 | `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
 
-以上接口需要携带有效 token，且 token 的 scope 中包含 `/api/client`。
+以上接口属于机器管理控制面。调用 Token 必须包含对应的精确 API permission；涉及读取、更新、删除或批量操作时，还必须通过目标 Client 的 `DataAccessPlan` 校验。Scope 与 `security_context` 均不能替代这两项校验。
 
 ## Token 管理 API
 
@@ -351,7 +304,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 | `/api/token/expired`     | DELETE | 清理过期 Token                 |
 | `/api/token/statistics`  | GET    | 获取 Token 统计信息              |
 
-以上接口需要携带有效 token，且 token 的 scope 中包含 `/api/token`。
+以上接口属于机器管理控制面。调用 Token 必须包含对应的精确 API permission；涉及指定 Client 或 Token 的读取、更新、删除时，还必须通过目标资源的 `DataAccessPlan` 校验。Scope 与 `security_context` 均不能替代这两项校验。
 
 ---
 
@@ -370,7 +323,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server:
 
 ### Redis 配置
 
-2.0.3 起 Redis 为必需依赖，不再提供无 Redis 模式。
+3.0.0 起 Redis 为必需依赖，不再提供无 Redis 模式。
 
 | 配置项              | 说明            | 默认值     |
 |------------------|---------------|---------|
@@ -442,12 +395,6 @@ io:
 | `admin.password`                | Admin 密码         | -     |
 | `admin.session-timeout-minutes` | Session 超时时间（分钟） | 30    |
 
-### Introspect 配置
-
-| 配置项                                 | 说明                     | 默认值  |
-|-------------------------------------|------------------------|------|
-| `introspect.require-authentication` | introspect 端点是否需要客户端认证 | true |
-
 ---
 
 ## AKSK 类型说明
@@ -483,7 +430,7 @@ io.github.surezzzzzz.sdk.auth.aksk.server.admin.enabled: false
 
 ### 4. Redis 是否必需？
 
-是。2.0.3 起 Redis 为必需基础设施，用于 Token 缓存、撤销同步、多实例 L1 缓存失效广播和 OAuth2 端点限流。
+是。3.0.0 起 Redis 为必需基础设施，用于 Token 缓存、撤销同步、多实例 L1 缓存失效广播和 OAuth2 端点限流。
 
 ### 5. 多实例部署时缓存如何保持一致？
 
@@ -510,7 +457,11 @@ logging:
 
 ---
 
-## 版本历史
+## 待发布变更与版本历史
+
+### 3.0.0（待发布）
+
+应用授权自闭环候选版本。新增 AKSK Server 自主维护的 `aksk_application_authorization` 投影与 Admin / REST 管理入口；Token 签发和内省按已启用、已准入的授权快照 fail-close。管理 REST 从 Scope 模型迁移至精确 API permission + `DataAccessPlan`，并在授权替换或撤销前执行 Token 范围预检。Admin Secret 改为认证会话一次性交付，禁止通过 URL 或通用 Admin JSON 暴露。发布后再以实际版本记录为准。
 
 ### 2.0.3 (2026-06-22)
 

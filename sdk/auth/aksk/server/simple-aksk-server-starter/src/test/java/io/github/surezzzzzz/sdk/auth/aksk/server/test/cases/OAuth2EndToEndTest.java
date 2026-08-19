@@ -1,11 +1,13 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -54,6 +56,9 @@ class OAuth2EndToEndTest {
     private OAuth2AuthorizationEntityRepository authorizationRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     @Autowired
@@ -87,9 +92,9 @@ class OAuth2EndToEndTest {
 
         // Step 1: 创建平台级AKSK
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("OAuth2 Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
-        log.info("创建AKSK成功 - ClientId: {}, ClientSecret: {}",
-                clientInfo.getClientId(), clientInfo.getClientSecret());
+        log.info("创建AKSK成功 - ClientId: {}", clientInfo.getClientId());
 
         assertNotNull(clientInfo.getClientId());
         assertNotNull(clientInfo.getClientSecret());
@@ -109,11 +114,11 @@ class OAuth2EndToEndTest {
 
         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-        log.info("请求Token - URL: {}, ClientId: {}", tokenUrl, clientInfo.getClientId());
+        log.info("请求 Token，Client 标识已创建");
 
         ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
 
-        log.info("Token响应 - Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+        log.info("Token响应状态: {}", response.getStatusCode());
 
         // Step 3: 验证Token响应
         assertEquals(HttpStatus.OK, response.getStatusCode());
@@ -125,7 +130,7 @@ class OAuth2EndToEndTest {
         assertNotNull(tokenResponse.get("expires_in"));
 
         String accessToken = (String) tokenResponse.get("access_token");
-        log.info("获取到Access Token: {}", accessToken.substring(0, Math.min(50, accessToken.length())) + "...");
+        log.info("获取到 Access Token，长度={}", accessToken.length());
 
         log.info("完整OAuth2流程测试通过");
     }
@@ -136,6 +141,7 @@ class OAuth2EndToEndTest {
 
         // Step 1: 创建AKSK并换取Token
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Redis Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
         String tokenUrl = "http://localhost:" + port + "/oauth2/token";
         HttpHeaders headers = new HttpHeaders();
@@ -151,7 +157,7 @@ class OAuth2EndToEndTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         String accessToken = (String) response.getBody().get("access_token");
-        log.info("获取Token成功: {}", accessToken.substring(0, Math.min(30, accessToken.length())) + "...");
+        log.info("获取 Token 成功，长度={}", accessToken.length());
 
         // Step 2: 验证Redis中存储了Token相关数据
         Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
@@ -159,7 +165,7 @@ class OAuth2EndToEndTest {
         assertFalse(keys.isEmpty(), "Redis中应该有Token相关数据");
 
         log.info("Redis中找到 {} 个相关key", keys.size());
-        keys.forEach(key -> log.info("Redis Key: {}", key));
+        log.info("Redis 中已验证到授权缓存键");
 
         // 验证至少有authorization相关的key
         boolean hasAuthorizationKey = keys.stream()
@@ -175,6 +181,7 @@ class OAuth2EndToEndTest {
 
         // Step 1: 创建平台级AKSK
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Disabled Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
         log.info("创建AKSK成功 - ClientId: {}", clientInfo.getClientId());
 
@@ -212,6 +219,7 @@ class OAuth2EndToEndTest {
 
         // Step 1: 创建平台级AKSK
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Enable Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
 
         log.info("创建AKSK成功 - ClientId: {}", clientInfo.getClientId());
 
@@ -240,7 +248,7 @@ class OAuth2EndToEndTest {
 
         ResponseEntity<Map> response = restTemplate.postForEntity(tokenUrl, request, Map.class);
 
-        log.info("Token响应 - Status: {}, Body: {}", response.getStatusCode(), response.getBody());
+        log.info("Token响应状态: {}", response.getStatusCode());
 
         // Step 5: 验证请求成功
         assertEquals(HttpStatus.OK, response.getStatusCode(), "启用的AKSK应该能成功获取Token");
@@ -262,6 +270,7 @@ class OAuth2EndToEndTest {
 
         // Step 1: 创建客户端
         ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Cache Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
         String clientId = clientInfo.getClientId();
         String clientSecret = clientInfo.getClientSecret();
 

@@ -2,10 +2,12 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterRedisKeyConstant;
 import lombok.extern.slf4j.Slf4j;
@@ -62,6 +64,9 @@ class OAuth2LimiterEndToEndTest {
     private OAuth2AuthorizationEntityRepository authorizationRepository;
 
     @Autowired
+    private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
+
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
     @BeforeEach
@@ -80,6 +85,8 @@ class OAuth2LimiterEndToEndTest {
 
         ClientInfoResponse firstClient = clientManagementService.createPlatformClient("OAuth2 Limiter E2E Client A");
         ClientInfoResponse secondClient = clientManagementService.createPlatformClient("OAuth2 Limiter E2E Client B");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, firstClient);
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, secondClient);
         HttpEntity<MultiValueMap<String, String>> firstClientRequest = buildTokenRequest(
                 firstClient.getClientId(), firstClient.getClientSecret());
         HttpEntity<MultiValueMap<String, String>> secondClientRequest = buildTokenRequest(
@@ -90,12 +97,9 @@ class OAuth2LimiterEndToEndTest {
         ResponseEntity<Map> secondResponse = restTemplate.exchange(tokenUrl, HttpMethod.POST, firstClientRequest, Map.class);
         ResponseEntity<Map> otherClientResponse = restTemplate.exchange(tokenUrl, HttpMethod.POST, secondClientRequest, Map.class);
 
-        log.info("第一次 token 响应: status={}, headers={}, body={}",
-                firstResponse.getStatusCode(), firstResponse.getHeaders(), firstResponse.getBody());
-        log.info("同 clientId 第二次 token 响应: status={}, headers={}, body={}",
-                secondResponse.getStatusCode(), secondResponse.getHeaders(), secondResponse.getBody());
-        log.info("不同 clientId token 响应: status={}, headers={}, body={}",
-                otherClientResponse.getStatusCode(), otherClientResponse.getHeaders(), otherClientResponse.getBody());
+        log.info("第一次 token 响应状态: {}", firstResponse.getStatusCode());
+        log.info("同 clientId 第二次 token 响应状态: {}", secondResponse.getStatusCode());
+        log.info("不同 clientId token 响应状态: {}", otherClientResponse.getStatusCode());
 
         assertEquals(HttpStatus.OK, firstResponse.getStatusCode(), "第一次请求应通过限流并成功获取 token");
         assertNotNull(firstResponse.getBody(), "第一次响应体不应为空");
