@@ -3,7 +3,10 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.event;
 import lombok.Getter;
 
 /**
- * Token Event Type
+ * Token 生命周期事件类型。
+ *
+ * <p>类型只表达发生的动作；撤销等动作的业务来源由 {@link TokenEventCause} 单独表达，
+ * 不应为来源扩展新的类型值。
  *
  * @author surezzzzzz
  */

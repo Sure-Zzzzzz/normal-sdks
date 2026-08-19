@@ -4,9 +4,9 @@ import java.time.Instant;
 import java.util.Set;
 
 /**
- * Token Issued Event
+ * Token 签发事件。
  *
- * <p>Published when a new token is successfully issued via {@code /oauth2/token}.
+ * <p>通过 {@code /oauth2/token} 成功签发新 Token 时发布。
  *
  * @author surezzzzzz
  */

@@ -6,9 +6,9 @@ import java.time.Instant;
 import java.util.Set;
 
 /**
- * Token Introspected Event
+ * Token 自省事件。
  *
- * <p>Published when a token is introspected via {@code /oauth2/introspect}.
+ * <p>通过 {@code /oauth2/introspect} 自省 Token 时发布。
  *
  * @author surezzzzzz
  */
@@ -16,7 +16,8 @@ import java.util.Set;
 public class TokenIntrospectedEvent extends AbstractTokenEvent {
 
     /**
-     * token 是否有效
+     * 本次自省请求得到的即时有效性结论；仅对当前 {@code INTROSPECTED} 事件有效，
+     * 不代表 Token 在后续时刻的永久状态。
      */
     private final boolean active;
 

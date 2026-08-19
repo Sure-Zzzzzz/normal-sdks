@@ -4,9 +4,9 @@ import java.time.Instant;
 import java.util.Set;
 
 /**
- * Token Removed Event
+ * Token 删除事件。
  *
- * <p>Published when a token is removed by Spring Authorization Server internally.
+ * <p>Spring Authorization Server 内部删除 Token 时发布。
  *
  * @author surezzzzzz
  */
