@@ -9,7 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 /**
  * 默认日志 Token 审计处理器
  *
- * <p>将 Token 生命周期审计记录输出到日志。
+ * <p>仅将事件类型、原因及非敏感主体摘要输出到日志，不输出 Token 原文或完整审计记录。
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -26,6 +26,8 @@ public class LogServerTokenAuditHandler implements ServerTokenAuditHandler {
 
     @Override
     public void handle(ServerTokenAuditRecord record) {
-        log.info("AKSK_SERVER_AUDIT - {}", record);
+        log.info("AKSK_SERVER_AUDIT eventType={}, cause={}, clientId={}, clientType={}, userId={}, active={}",
+                record.getEventType(), record.getCause(), record.getClientId(), record.getClientType(),
+                record.getUserId(), record.getActive());
     }
 }

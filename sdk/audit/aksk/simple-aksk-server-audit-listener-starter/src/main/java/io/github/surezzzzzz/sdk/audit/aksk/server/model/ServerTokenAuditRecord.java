@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.audit.aksk.server.model;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,11 +22,15 @@ import java.util.Set;
 @AllArgsConstructor
 public class ServerTokenAuditRecord {
     /**
-     * 事件类型：ISSUED / REVOKED / REMOVED / INTROSPECTED
+     * 稳定的生命周期动作类型；业务来源由 {@link #cause} 独立表达。
      */
     private TokenEventType eventType;
     /**
-     * 事件发生时间
+     * 触发该动作的业务来源；旧事件会归一化为未指定原因。
+     */
+    private TokenEventCause cause;
+    /**
+     * 事件对象创建时间，不等同于 Token 的签发或过期时间。
      */
     private Instant eventTime;
     /**
@@ -49,7 +54,7 @@ public class ServerTokenAuditRecord {
      */
     private Set<String> scopes;
     /**
-     * Token 值
+     * 历史兼容字段；3.0 起监听器始终传递 {@code null}。处理器不得依赖、记录或重新构造 Token 原文。
      */
     private String tokenValue;
     /**
@@ -61,7 +66,7 @@ public class ServerTokenAuditRecord {
      */
     private Instant expiresAt;
     /**
-     * token 是否有效（仅 INTROSPECTED 事件有效）
+     * 本次自省请求的即时有效性结论；仅 {@code INTROSPECTED} 事件有值，其他类型保持 {@code null}。
      */
     private Boolean active;
 }

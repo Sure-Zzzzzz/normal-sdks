@@ -26,7 +26,7 @@ public class TestServerTokenAuditHandler implements ServerTokenAuditHandler {
 
     @Override
     public void handle(ServerTokenAuditRecord record) {
-        log.info("Received server token audit record: eventType={}, clientId={}, userId={}",
+        log.info("收到 Server Token 审计记录: eventType={}, clientId={}, userId={}",
                 record.getEventType(), record.getClientId(), record.getUserId());
         if (expectedType == null || expectedType == record.getEventType()) {
             records.add(record);

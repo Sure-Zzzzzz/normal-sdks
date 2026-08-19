@@ -1,36 +1,39 @@
 package io.github.surezzzzzz.sdk.audit.aksk.server.test.cases;
 
+import io.github.surezzzzzz.sdk.audit.aksk.server.handler.ServerTokenAuditHandler;
+import io.github.surezzzzzz.sdk.audit.aksk.server.listener.ServerTokenAuditEventListener;
 import io.github.surezzzzzz.sdk.audit.aksk.server.model.ServerTokenAuditRecord;
 import io.github.surezzzzzz.sdk.audit.aksk.server.test.ServerTokenAuditListenerTestApplication;
 import io.github.surezzzzzz.sdk.audit.aksk.server.test.TestServerTokenAuditHandler;
-import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventType;
-import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenIntrospectedEvent;
-import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenIssuedEvent;
-import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenRevokedEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.event.*;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Server Token 审计监听器测试
+ * Server Token 审计监听器测试。
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
 @Slf4j
 @SpringBootTest(classes = ServerTokenAuditListenerTestApplication.class)
-public class ServerTokenAuditListenerTest {
+class ServerTokenAuditListenerTest {
+
+    private static final Instant ISSUED_AT = Instant.parse("2026-01-01T00:00:00Z");
+    private static final Instant EXPIRES_AT = Instant.parse("2026-01-01T01:00:00Z");
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -38,119 +41,138 @@ public class ServerTokenAuditListenerTest {
     @Autowired
     private TestServerTokenAuditHandler testHandler;
 
-    private static final Instant ISSUED_AT = Instant.parse("2026-01-01T00:00:00Z");
-    private static final Instant EXPIRES_AT = Instant.parse("2026-01-01T01:00:00Z");
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         testHandler.reset();
     }
 
     @Test
-    public void testIssuedEvent() throws InterruptedException {
-        log.info("========== 测试：TokenIssuedEvent ==========");
-
-        Set<String> scopes = new HashSet<>(Arrays.asList("read", "write"));
+    void shouldConsumeNonTransactionalEventAndOmitTokenValue() {
         eventPublisher.publishEvent(new TokenIssuedEvent(
-                this,
-                "AKP-platform-client", "platform",
-                null, null,
-                "token-value-issued",
-                scopes,
-                ISSUED_AT, EXPIRES_AT
-        ));
+                this, "client-id", "platform", null, null,
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
 
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received, "Handler should receive the event");
-
+        assertEquals(1, testHandler.records.size());
         ServerTokenAuditRecord record = testHandler.records.get(0);
         assertEquals(TokenEventType.ISSUED, record.getEventType());
-        assertEquals("AKP-platform-client", record.getClientId());
-        assertEquals("platform", record.getClientType());
-        assertNull(record.getUserId());
-        assertNull(record.getUsername());
-        assertEquals("token-value-issued", record.getTokenValue());
-        assertTrue(record.getScopes().containsAll(scopes));
-        assertEquals(ISSUED_AT, record.getIssuedAt());
-        assertEquals(EXPIRES_AT, record.getExpiresAt());
-        assertNull(record.getActive(), "active should be null for non-introspect events");
+        assertEquals(TokenEventCause.UNSPECIFIED, record.getCause());
+        assertEquals("client-id", record.getClientId());
+        assertEquals(Collections.singleton("read"), record.getScopes());
+        assertNull(record.getTokenValue());
+        assertNull(record.getActive());
         assertNotNull(record.getEventTime());
-
-        log.info("testIssuedEvent passed: {}", record);
     }
 
     @Test
-    public void testRevokedEvent() throws InterruptedException {
-        log.info("========== 测试：TokenRevokedEvent（user 级） ==========");
+    void shouldHandleCommittedTransactionOnly() {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.executeWithoutResult(status -> eventPublisher.publishEvent(new TokenRevokedEvent(
+                this, TokenEventCause.APPLICATION_AUTHORIZATION_REVOKED,
+                "client-id", "platform", null, null,
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT)));
 
+        assertEquals(1, testHandler.records.size());
+        assertEquals(TokenEventCause.APPLICATION_AUTHORIZATION_REVOKED, testHandler.records.get(0).getCause());
+
+        testHandler.reset();
+        Boolean rollbackCompleted = transactionTemplate.execute(status -> {
+            eventPublisher.publishEvent(new TokenRevokedEvent(
+                    this, TokenEventCause.APPLICATION_AUTHORIZATION_REVOKED,
+                    "client-id", "platform", null, null,
+                    "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
+            status.setRollbackOnly();
+            return Boolean.TRUE;
+        });
+        assertTrue(Boolean.TRUE.equals(rollbackCompleted));
+
+        assertTrue(testHandler.records.isEmpty());
+    }
+
+    @Test
+    void shouldContinueToNextHandlerWhenHandlerFails() {
+        List<ServerTokenAuditRecord> handledRecords = new ArrayList<ServerTokenAuditRecord>();
+        ServerTokenAuditHandler failingHandler = record -> {
+            throw new IllegalStateException("handler failed");
+        };
+        ServerTokenAuditHandler succeedingHandler = handledRecords::add;
+        ServerTokenAuditEventListener listener = new ServerTokenAuditEventListener(
+                Arrays.asList(failingHandler, succeedingHandler));
+
+        listener.onTokenEvent(new TokenRevokedEvent(
+                this, TokenEventCause.APPLICATION_AUTHORIZATION_REPLACED,
+                "client-id", "platform", null, null,
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
+
+        assertEquals(1, handledRecords.size());
+        assertEquals(TokenEventCause.APPLICATION_AUTHORIZATION_REPLACED, handledRecords.get(0).getCause());
+        assertNull(handledRecords.get(0).getTokenValue());
+    }
+
+    @Test
+    void shouldRetainExplicitRevocationCauseAndOmitTokenValue() {
         eventPublisher.publishEvent(new TokenRevokedEvent(
-                this,
-                "AKU-user-client", "user",
-                "user-123", "testuser",
-                "token-value-revoked",
-                new HashSet<>(Arrays.asList("read")),
-                ISSUED_AT, EXPIRES_AT
-        ));
+                this, TokenEventCause.APPLICATION_AUTHORIZATION_REPLACED,
+                "client-id", "user", "user-id", "username",
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
 
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received);
-
+        assertEquals(1, testHandler.records.size());
         ServerTokenAuditRecord record = testHandler.records.get(0);
         assertEquals(TokenEventType.REVOKED, record.getEventType());
-        assertEquals("AKU-user-client", record.getClientId());
-        assertEquals("user", record.getClientType());
-        assertEquals("user-123", record.getUserId());
-        assertEquals("testuser", record.getUsername());
+        assertEquals(TokenEventCause.APPLICATION_AUTHORIZATION_REPLACED, record.getCause());
+        assertEquals("user-id", record.getUserId());
+        assertEquals("username", record.getUsername());
+        assertNull(record.getTokenValue());
         assertNull(record.getActive());
-
-        log.info("testRevokedEvent passed: {}", record);
     }
 
     @Test
-    public void testIntrospectedActiveEvent() throws InterruptedException {
-        log.info("========== 测试：TokenIntrospectedEvent（active=true） ==========");
-
+    void shouldRetainIntrospectionActiveStateAndOmitTokenValue() {
         eventPublisher.publishEvent(new TokenIntrospectedEvent(
-                this,
-                "AKP-platform-client", "platform",
-                null, null,
-                "token-value-active",
-                new HashSet<>(Arrays.asList("read")),
-                ISSUED_AT, EXPIRES_AT,
-                true
-        ));
+                this, "client-id", "platform", null, null,
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT, false));
 
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received);
-
+        log.info("验证无效 Token 自省记录仅保留 active=false 与非敏感元数据");
+        assertEquals(1, testHandler.records.size());
         ServerTokenAuditRecord record = testHandler.records.get(0);
         assertEquals(TokenEventType.INTROSPECTED, record.getEventType());
-        assertTrue(record.getActive(), "active should be true");
-
-        log.info("testIntrospectedActiveEvent passed: {}", record);
+        assertEquals(TokenEventCause.UNSPECIFIED, record.getCause());
+        assertFalse(record.getActive());
+        assertNull(record.getTokenValue());
     }
 
     @Test
-    public void testIntrospectedInactiveEvent() throws InterruptedException {
-        log.info("========== 测试：TokenIntrospectedEvent（active=false，token 已失效） ==========");
+    void shouldConsumeRemovedEventAndOmitTokenValue() {
+        eventPublisher.publishEvent(new TokenRemovedEvent(
+                this, "client-id", "platform", null, null,
+                "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
 
-        eventPublisher.publishEvent(new TokenIntrospectedEvent(
-                this,
-                "AKP-platform-client", "platform",
-                null, null,
-                "token-value-expired",
-                new HashSet<>(Arrays.asList("read")),
-                ISSUED_AT, EXPIRES_AT,
-                false
-        ));
-
-        boolean received = testHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received);
-
+        log.info("验证删除事件保留生命周期类型且不下发 Token 原文");
+        assertEquals(1, testHandler.records.size());
         ServerTokenAuditRecord record = testHandler.records.get(0);
-        assertEquals(TokenEventType.INTROSPECTED, record.getEventType());
-        assertFalse(record.getActive(), "active should be false for expired token");
+        assertEquals(TokenEventType.REMOVED, record.getEventType());
+        assertEquals(TokenEventCause.UNSPECIFIED, record.getCause());
+        assertNull(record.getActive());
+        assertNull(record.getTokenValue());
+    }
 
-        log.info("testIntrospectedInactiveEvent passed: {}", record);
+    @Test
+    void shouldPreserveEveryRevocationCauseAndOmitTokenValue() {
+        for (TokenEventCause cause : TokenEventCause.values()) {
+            testHandler.reset();
+            eventPublisher.publishEvent(new TokenRevokedEvent(
+                    this, cause, "client-id", "platform", null, null,
+                    "sensitive-value", Collections.singleton("read"), ISSUED_AT, EXPIRES_AT));
+
+            assertEquals(1, testHandler.records.size(), "每个撤销原因都应产生一条审计记录");
+            ServerTokenAuditRecord record = testHandler.records.get(0);
+            assertEquals(TokenEventType.REVOKED, record.getEventType());
+            assertEquals(cause, record.getCause(), "审计监听器不得转换撤销原因");
+            assertNull(record.getTokenValue(), "审计记录不得包含 Token 原文");
+            assertNull(record.getActive(), "撤销事件不应携带自省状态");
+        }
+        log.info("验证全部撤销原因均按 Core 契约原样传递且不下发 Token 原文");
     }
 }

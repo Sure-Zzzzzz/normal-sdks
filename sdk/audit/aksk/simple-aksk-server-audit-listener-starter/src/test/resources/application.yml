@@ -42,8 +42,6 @@ io:
                   me: "audit-test-app"
               admin:
                 enabled: false
-              introspect:
-                require-authentication: false
         limiter:
           redis:
             smart:
