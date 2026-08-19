@@ -1,0 +1,12 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        http:
+          xff:
+            capture:
+              enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.http.xff: DEBUG

@@ -1,0 +1,32 @@
+package io.github.surezzzzzz.sdk.http.xff.constant;
+
+import org.springframework.core.Ordered;
+
+/**
+ * Simple XFF Capture Web 常量。
+ *
+ * @author surezzzzzz
+ */
+public final class SimpleXffCaptureWebConstant {
+
+    /**
+     * Filter Bean 名称。
+     */
+    public static final String FILTER_BEAN_NAME = "simpleXffCaptureFilterRegistration";
+    /**
+     * Filter 注册名称。
+     */
+    public static final String FILTER_NAME = "simpleXffCaptureFilter";
+    /**
+     * Filter URL Pattern。
+     */
+    public static final String FILTER_URL_PATTERN = "/*";
+    /**
+     * Filter 顺序。
+     */
+    public static final int FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10;
+
+    private SimpleXffCaptureWebConstant() {
+        throw new UnsupportedOperationException("Utility class");
+    }
+}
