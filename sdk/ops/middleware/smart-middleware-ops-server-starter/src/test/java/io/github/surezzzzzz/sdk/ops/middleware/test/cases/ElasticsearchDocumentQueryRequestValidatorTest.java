@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryRequestValidator;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;

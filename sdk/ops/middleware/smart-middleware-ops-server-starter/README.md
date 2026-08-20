@@ -28,7 +28,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.1.0'
 
     // Ops 以 compileOnly 声明中间件实现；按实际启用能力提供运行时实现
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -312,10 +312,12 @@ Kafka topic 与消费组查询只通过 `KafkaRouteAdminClientFactory#withAdminC
 | `query.max-sql-length` | MySQL SQL 最大字符数。 |
 | `query.max-columns` | MySQL 结果最大列数。 |
 | `query.max-cell-length` | 单元格内容最大字符数。 |
-| `query.max-response-length` | 安全响应内容的最大字符预算；Redis discovery 对返回 Key 的总字符数使用同一预算。 |
+| `query.max-response-length` | 通用安全响应内容的最大字符预算；Redis discovery 对返回 Key 的总字符数使用同一预算。 |
 | `query.deadline-millis` | Kafka、Redis discovery 等下游操作的总 deadline。 |
 | `concurrency.global` | 全部请求的最大并发预算。 |
 | `concurrency.datasource` | 单数据源的最大并发预算。 |
+
+Elasticsearch 文档查询响应使用 Starter 内部固定的 256 KiB（262144 字节）上限，不读取 `query.max-response-length`，也不提供配置项覆盖。`query.max-response-length` 的默认值仍为 4096 字节，仅作用于通用安全响应预算及 Redis discovery 的 Key 总字符预算。
 
 ### 审计时间范围
 
@@ -409,4 +411,5 @@ LDAP 用户认证的配置和页面/API 入口见“用户系统：Windows AD / 
 
 ## 版本变更
 
+- [1.1.0](CHANGELOG.1.1.0.md)：修复 Elasticsearch 文档响应被通用 4096 字节上限误判为 503 的可靠性问题，并按能力域迁移 Elasticsearch、Redis、Kafka、MySQL Java 包；HTTP 路径、JSON 契约、配置边界、自动配置注册和 Route 所有权保持不变。
 - [1.0.1](CHANGELOG.1.0.1.md)：完善 Elasticsearch、Redis、Kafka、MySQL 的受控只读观察闭环，新增 Redis 有界 Key 发现并适配 Redis Route 1.2.2。

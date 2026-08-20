@@ -1,11 +1,16 @@
 package io.github.surezzzzzz.sdk.ops.middleware.audit;
 
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlExplainRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyMetadataRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyReadRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.detail.KafkaConsumerGroupDetailRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.lag.KafkaConsumerGroupLagListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.list.KafkaConsumerGroupListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config.KafkaTopicConfigRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.list.KafkaTopicListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.runtime.KafkaTopicRuntimeRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlExplainRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.metadata.RedisKeyMetadataRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.read.RedisKeyReadRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.service.MiddlewareOpsRequest;
 
 /**

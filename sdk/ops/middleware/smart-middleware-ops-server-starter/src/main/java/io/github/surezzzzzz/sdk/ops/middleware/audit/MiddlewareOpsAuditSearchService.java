@@ -106,7 +106,7 @@ public class MiddlewareOpsAuditSearchService {
                     .size(response.getSize()).hasMore(hasMore(response.getTotal(), page, size))
                     .from(rangeFrom(request)).to(rangeTo(request)).items(toRecords(response.getItems())).build();
         } catch (RuntimeException e) {
-            throw unavailable();
+            throw unavailable(e);
         }
     }
 
@@ -191,5 +191,9 @@ public class MiddlewareOpsAuditSearchService {
 
     private MiddlewareOpsException unavailable() {
         return new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "审计查询暂不可用");
+    }
+
+    private MiddlewareOpsException unavailable(Throwable cause) {
+        return new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "审计查询暂不可用", cause);
     }
 }

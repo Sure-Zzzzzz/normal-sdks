@@ -1,7 +1,11 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.*;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.adapter.DefaultRedisOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.read.RedisKeyReadRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.read.RedisKeyReadResponse;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -416,6 +420,8 @@ class DefaultRedisOperationsViewAdapterTest {
 
         assertEquals(503, exception.getStatus().value());
         assertEquals("Redis 运维查询暂不可用", exception.getMessage());
+        assertEquals(IOException.class, exception.getCause().getClass());
+        assertEquals("fixture failure", exception.getCause().getMessage());
         verify(connection).close();
         verify(cursor).close();
     }
@@ -435,6 +441,8 @@ class DefaultRedisOperationsViewAdapterTest {
 
         assertEquals(503, exception.getStatus().value());
         assertEquals("Redis 运维查询暂不可用", exception.getMessage());
+        assertNotNull(exception.getCause());
+        assertEquals("fixture failure", exception.getCause().getMessage());
         verify(registry, never()).getStringRedisTemplate(anyString());
     }
 

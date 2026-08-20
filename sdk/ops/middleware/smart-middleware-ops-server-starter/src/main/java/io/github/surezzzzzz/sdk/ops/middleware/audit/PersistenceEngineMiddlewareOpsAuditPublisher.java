@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.option.Inde
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.core.model.request.IndexRequest;
 import io.github.surezzzzzz.sdk.elasticsearch.persistence.engine.PersistenceEngine;
 import io.github.surezzzzzz.sdk.ops.middleware.constant.SmartMiddlewareOpsServerConstant;
+import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsLogHelper;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.CompletableFuture;
@@ -42,12 +43,13 @@ public class PersistenceEngineMiddlewareOpsAuditPublisher implements MiddlewareO
                 future.whenComplete((result, throwable) -> {
                     if (throwable != null) {
                         log.warn("中间件运维审计异步写入失败，capability={}，status={}", event.getCapability(),
-                                event.getStatus());
+                                event.getStatus(), MiddlewareOpsLogHelper.sanitizedThrowable(throwable));
                     }
                 });
             }
         } catch (RuntimeException e) {
-            log.warn("中间件运维审计异步提交失败，capability={}，status={}", event.getCapability(), event.getStatus());
+            log.warn("中间件运维审计异步提交失败，capability={}，status={}", event.getCapability(), event.getStatus(),
+                    MiddlewareOpsLogHelper.sanitizedThrowable(e));
         }
     }
 }

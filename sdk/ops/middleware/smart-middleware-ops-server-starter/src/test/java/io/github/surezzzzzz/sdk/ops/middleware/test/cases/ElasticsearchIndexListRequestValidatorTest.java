@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.catalog.ElasticsearchIndexListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.catalog.ElasticsearchIndexListRequestValidator;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;

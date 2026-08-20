@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.MysqlSelectRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectRequestValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 

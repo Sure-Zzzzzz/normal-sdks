@@ -25,10 +25,53 @@ import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceCatalogExecutor
 import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceCatalogRequestValidator;
 import io.github.surezzzzzz.sdk.ops.middleware.constant.SmartMiddlewareOpsServerConstant;
 import io.github.surezzzzzz.sdk.ops.middleware.controller.MiddlewareOpsResponseHeaderFilter;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.*;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.*;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.adapter.DefaultElasticsearchOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.adapter.ElasticsearchOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.catalog.ElasticsearchIndexListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.catalog.ElasticsearchIndexListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.field.ElasticsearchFieldCapabilitiesExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.field.ElasticsearchFieldCapabilitiesRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.summary.ElasticsearchSummaryExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.summary.ElasticsearchSummaryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.adapter.DefaultKafkaOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.adapter.KafkaOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.detail.KafkaConsumerGroupDetailExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.detail.KafkaConsumerGroupDetailRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.lag.KafkaConsumerGroupLagListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.lag.KafkaConsumerGroupLagListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.list.KafkaConsumerGroupListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.list.KafkaConsumerGroupListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.datasource.KafkaDatasourceListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.datasource.KafkaDatasourceListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config.KafkaTopicConfigExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config.KafkaTopicConfigRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.list.KafkaTopicListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.list.KafkaTopicListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.runtime.KafkaTopicRuntimeExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.runtime.KafkaTopicRuntimeRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.adapter.DefaultMysqlOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.adapter.MysqlOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.datasource.MysqlDatasourceStatusExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.datasource.MysqlDatasourceStatusRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlExplainExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlExplainRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.table.*;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.adapter.DefaultRedisOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.adapter.RedisOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.datasource.RedisDatasourceListExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.datasource.RedisDatasourceListRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.metadata.RedisKeyMetadataExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.metadata.RedisKeyMetadataRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.read.RedisKeyReadExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.read.RedisKeyReadRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.summary.RedisSummaryExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.summary.RedisSummaryRequestValidator;
 import io.github.surezzzzzz.sdk.ops.middleware.service.*;
 import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsConcurrencyGuard;
 import io.github.surezzzzzz.sdk.redis.route.configuration.SimpleRedisRouteConfiguration;
@@ -188,8 +231,7 @@ public class SmartMiddlewareOpsServerAutoConfiguration {
     @ConditionalOnBean(SimpleElasticsearchRouteRegistry.class)
     public ElasticsearchOperationsViewAdapter elasticsearchOperationsViewAdapter(SimpleElasticsearchRouteRegistry registry,
                                                                                  SmartMiddlewareOpsServerProperties properties) {
-        return new DefaultElasticsearchOperationsViewAdapter(registry, properties.getQuery().getDeadlineMillis(),
-                properties.getQuery().getMaxResponseLength());
+        return new DefaultElasticsearchOperationsViewAdapter(registry, properties.getQuery().getDeadlineMillis());
     }
 
     /**

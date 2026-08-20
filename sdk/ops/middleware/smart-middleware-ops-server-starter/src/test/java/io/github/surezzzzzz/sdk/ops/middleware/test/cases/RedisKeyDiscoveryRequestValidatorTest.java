@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyDiscoveryRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisKeyDiscoveryRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.key.discovery.RedisKeyDiscoveryRequestValidator;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

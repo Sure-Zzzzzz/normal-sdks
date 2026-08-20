@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.ops.middleware.constant.SmartMiddlewareOpsServer
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsConcurrencyGuard;
 import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsDigestHelper;
+import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsLogHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -125,9 +126,24 @@ public class DefaultMiddlewareOpsServerEngine implements MiddlewareOpsServerEngi
             }
         } catch (MiddlewareOpsException e) {
             status = e.getStatus();
+            if (e.getCause() != null) {
+                log.warn("中间件运维查询失败，capability={}，middlewareType={}，datasourceKey={}，status={}",
+                        request == null ? null : request.getCapability(),
+                        request == null || request.getCapability() == null
+                                ? null : request.getCapability().getMiddlewareType(),
+                        request == null ? null : MiddlewareOpsLogHelper.identifier(request.getDatasourceKey()),
+                        status.value(), MiddlewareOpsLogHelper.sanitizedThrowable(e.getCause()));
+            }
             throw e;
         } catch (Exception e) {
-            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE, "中间件运维查询暂不可用");
+            log.warn("中间件运维查询发生未预期异常，capability={}，middlewareType={}，datasourceKey={}",
+                    request == null ? null : request.getCapability(),
+                    request == null || request.getCapability() == null
+                            ? null : request.getCapability().getMiddlewareType(),
+                    request == null ? null : MiddlewareOpsLogHelper.identifier(request.getDatasourceKey()),
+                    MiddlewareOpsLogHelper.sanitizedThrowable(e));
+            throw new MiddlewareOpsException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "中间件运维查询暂不可用", e);
         } finally {
             publishAudit(request, auditContext, identity, status, System.currentTimeMillis() - startedAt);
         }
@@ -150,7 +166,8 @@ public class DefaultMiddlewareOpsServerEngine implements MiddlewareOpsServerEngi
                     .context(auditContext).status(status.value())
                     .durationMillis(durationMillis).requestId(requestId()).build());
         } catch (RuntimeException e) {
-            log.warn("中间件运维审计事件发布失败，capability={}，status={}", request.getCapability(), status.value());
+            log.warn("中间件运维审计事件发布失败，capability={}，status={}", request.getCapability(), status.value(),
+                    MiddlewareOpsLogHelper.sanitizedThrowable(e));
         }
     }
 

@@ -7,15 +7,21 @@ import io.github.surezzzzzz.sdk.ops.middleware.authentication.MiddlewareOpsIdent
 import io.github.surezzzzzz.sdk.ops.middleware.authorization.MiddlewareOpsAuthorizationPolicy;
 import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceCatalogRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.catalog.DatasourceTagResolver;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchDocumentQueryRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchFieldCapabilitiesRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchIndexListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchSummaryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.catalog.ElasticsearchIndexListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.document.ElasticsearchDocumentQueryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.field.ElasticsearchFieldCapabilitiesRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.summary.ElasticsearchSummaryRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaDatasourceListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.mysql.*;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisDatasourceListRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.redis.RedisSummaryRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.datasource.KafkaDatasourceListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.adapter.MysqlOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.datasource.MysqlDatasourceStatusExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.datasource.MysqlDatasourceStatusRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.datasource.MysqlDatasourceStatusResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectExecutor;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.mysql.query.MysqlSelectResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.datasource.RedisDatasourceListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.redis.summary.RedisSummaryRequest;
 import io.github.surezzzzzz.sdk.ops.middleware.service.*;
 import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsConcurrencyGuard;
 import io.github.surezzzzzz.sdk.ops.middleware.support.MiddlewareOpsDigestHelper;
@@ -47,6 +53,41 @@ class DefaultMiddlewareOpsServerEngineTest {
 
         assertEquals(401, exception.getStatus().value());
         assertEquals("需要先完成身份认证", exception.getMessage());
+    }
+
+    @Test
+    void shouldRetainUnexpectedExecutorFailureCause() {
+        IllegalStateException failure = new IllegalStateException("fixture failure");
+        MiddlewareOpsExecutor<RedisSummaryRequest, String> executor = new MiddlewareOpsExecutor<RedisSummaryRequest, String>() {
+            @Override
+            public Class<RedisSummaryRequest> getRequestType() {
+                return RedisSummaryRequest.class;
+            }
+
+            @Override
+            public String execute(RedisSummaryRequest value) {
+                throw failure;
+            }
+        };
+        MiddlewareOpsRequestValidator<RedisSummaryRequest> validator =
+                new DefaultMiddlewareOpsRequestValidator<RedisSummaryRequest>(RedisSummaryRequest.class) {
+                    @Override
+                    public void validate(RedisSummaryRequest value) {
+                        requireDatasource(value.getDatasourceKey());
+                    }
+                };
+        MiddlewareOpsExecutorRegistry registry = new DefaultMiddlewareOpsExecutorRegistry(
+                Collections.<MiddlewareOpsExecutor<?, ?>>singletonList(executor),
+                Collections.<MiddlewareOpsRequestValidator<?>>singletonList(validator));
+        MiddlewareOpsServerEngine engine = new DefaultMiddlewareOpsServerEngine(identity(), context -> true, registry,
+                new MiddlewareOpsConcurrencyGuard(2, 1));
+
+        MiddlewareOpsException exception = assertThrows(MiddlewareOpsException.class,
+                () -> engine.execute(request(), String.class));
+
+        assertEquals(503, exception.getStatus().value());
+        assertEquals("中间件运维查询暂不可用", exception.getMessage());
+        assertSame(failure, exception.getCause());
     }
 
     @Test

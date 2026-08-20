@@ -6,7 +6,17 @@ import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteBrokerDiagnosticResu
 import io.github.surezzzzzz.sdk.kafka.route.model.KafkaRouteDiagnosticStatus;
 import io.github.surezzzzzz.sdk.kafka.route.registry.SimpleKafkaRouteRegistry;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
-import io.github.surezzzzzz.sdk.ops.middleware.kafka.*;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.adapter.DefaultKafkaOperationsViewAdapter;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.detail.KafkaConsumerGroupDetailRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.detail.KafkaConsumerGroupDetailResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.lag.KafkaConsumerGroupLagListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.lag.KafkaConsumerGroupLagListResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.datasource.KafkaDatasourceListResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config.KafkaTopicConfigRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config.KafkaTopicConfigResponse;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.list.KafkaTopicListRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.runtime.KafkaTopicRuntimeRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.runtime.KafkaTopicRuntimeResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.common.KafkaFuture;
@@ -18,7 +28,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -80,6 +92,27 @@ class DefaultKafkaOperationsViewAdapterTest {
     }
 
     @Test
+    void shouldRetainKafkaExecutionFailureCause() throws Exception {
+        AdminClient adminClient = Mockito.mock(AdminClient.class);
+        ListTopicsResult result = Mockito.mock(ListTopicsResult.class);
+        @SuppressWarnings("unchecked")
+        KafkaFuture<Set<String>> topicNames = Mockito.mock(KafkaFuture.class);
+        IOException failure = new IOException("fixture failure");
+        Mockito.when(adminClient.listTopics()).thenReturn(result);
+        Mockito.when(result.names()).thenReturn(topicNames);
+        Mockito.when(topicNames.get(Mockito.anyLong(), Mockito.eq(TimeUnit.NANOSECONDS)))
+                .thenThrow(new ExecutionException(failure));
+
+        DefaultKafkaOperationsViewAdapter adapter = adapter(adminClient, 10);
+        MiddlewareOpsException exception = assertThrows(MiddlewareOpsException.class,
+                () -> adapter.listTopics(KafkaTopicListRequest.builder().datasourceKey("default").size(10).build()));
+
+        assertEquals(503, exception.getStatus().value());
+        assertEquals("Kafka 运维查询暂不可用", exception.getMessage());
+        assertSame(failure, exception.getCause());
+    }
+
+    @Test
     void shouldReturnSortedLimitedTopicWindow() throws Exception {
         AdminClient adminClient = Mockito.mock(AdminClient.class);
         ListTopicsResult result = Mockito.mock(ListTopicsResult.class);
@@ -104,7 +137,7 @@ class DefaultKafkaOperationsViewAdapterTest {
         DefaultKafkaOperationsViewAdapter adapter = new DefaultKafkaOperationsViewAdapter(
                 registry, Mockito.mock(KafkaRouteDiagnostics.class), factory, 100L, 10);
 
-        io.github.surezzzzzz.sdk.ops.middleware.kafka.KafkaTopicListResponse response = adapter.listTopics(
+        io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.list.KafkaTopicListResponse response = adapter.listTopics(
                 KafkaTopicListRequest.builder().datasourceKey("default").size(2).build());
         log.info("Kafka 首窗口结果：items={}", response.getItems());
 

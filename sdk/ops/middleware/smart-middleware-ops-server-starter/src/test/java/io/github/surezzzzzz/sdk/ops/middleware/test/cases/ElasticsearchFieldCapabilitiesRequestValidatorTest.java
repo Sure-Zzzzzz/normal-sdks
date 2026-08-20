@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.ops.middleware.test.cases;
 
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchFieldCapabilitiesRequest;
-import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.ElasticsearchFieldCapabilitiesRequestValidator;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.field.ElasticsearchFieldCapabilitiesRequest;
+import io.github.surezzzzzz.sdk.ops.middleware.elasticsearch.field.ElasticsearchFieldCapabilitiesRequestValidator;
 import io.github.surezzzzzz.sdk.ops.middleware.exception.MiddlewareOpsException;
 import org.junit.jupiter.api.Test;
 
