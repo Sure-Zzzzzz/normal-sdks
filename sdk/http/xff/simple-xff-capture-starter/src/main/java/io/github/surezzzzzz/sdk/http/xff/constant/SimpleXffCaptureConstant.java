@@ -18,6 +18,10 @@ public final class SimpleXffCaptureConstant {
      */
     public static final String CONFIG_ENABLE = "enable";
     /**
+     * Filter 顺序配置名称。
+     */
+    public static final String CONFIG_ORDER = "order";
+    /**
      * 默认是否启用。
      */
     public static final boolean DEFAULT_ENABLE = false;

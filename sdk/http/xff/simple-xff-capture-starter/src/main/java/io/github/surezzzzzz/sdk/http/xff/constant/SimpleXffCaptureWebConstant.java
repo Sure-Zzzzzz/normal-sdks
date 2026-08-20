@@ -22,7 +22,7 @@ public final class SimpleXffCaptureWebConstant {
      */
     public static final String FILTER_URL_PATTERN = "/*";
     /**
-     * Filter 顺序。
+     * Filter 默认顺序。
      */
     public static final int FILTER_ORDER = Ordered.HIGHEST_PRECEDENCE + 10;
 

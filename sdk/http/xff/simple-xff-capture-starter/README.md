@@ -2,13 +2,13 @@
 
 面向 Spring MVC 应用的 XFF 事实采集 Starter。它依赖 `simple-xff-capture-core`，自动通过 Servlet Filter 读取应用实际看到的 `X-Forwarded-For` 和固定入口转发上下文，形成 Core 不可变快照并通过 Spring 进程内事件总线发布 `XffCaptureEvent`，不判断真实客户端 IP。
 
-Starter 1.0.0 传递依赖 `simple-xff-capture-core:1.0.0`，调用方无需重复声明 Core。
+Starter 1.0.1 传递依赖 `simple-xff-capture-core:1.0.0`，调用方无需重复声明 Core。未配置 Filter 顺序时，行为与 1.0.0 保持一致。
 
 ## 接入
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.0.1'
 }
 ```
 
@@ -21,7 +21,11 @@ io:
           xff:
             capture:
               enable: true
+              # 可选，默认值为 Ordered.HIGHEST_PRECEDENCE + 10
+              order: -2147483638
 ```
+
+`order` 用于协调 XFF Filter 与应用自身的 Filter（例如 Spring Security）。省略时使用 `Ordered.HIGHEST_PRECEDENCE + 10`；只有明确掌握应用容器与安全链的实际顺序时才覆盖该值。
 
 开启后无需修改 Controller 或 Service。Filter 对首次外部 REQUEST 自动采集；异步、错误、转发等二次 dispatch 不重复发布。
 
@@ -76,4 +80,4 @@ Event 不统计响应状态、耗时、用户、设备、租户、业务动作�
 - Java 8+
 - Spring Boot `2.2.13.RELEASE`、`2.3.12.RELEASE`、`2.4.5`、`2.7.9`
 
-Starter 1.0.0 使用已发布的 `simple-xff-capture-core:1.0.0` 完整测试通过以上四个 Spring Boot 基线。
+Starter 1.0.1 继续使用已发布的 `simple-xff-capture-core:1.0.0`，已完成以上四个 Spring Boot 基线的完整测试。

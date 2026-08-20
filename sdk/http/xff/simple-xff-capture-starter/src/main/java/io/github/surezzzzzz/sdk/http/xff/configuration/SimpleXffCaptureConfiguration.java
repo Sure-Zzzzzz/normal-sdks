@@ -44,18 +44,19 @@ public class SimpleXffCaptureConfiguration {
      * 注册 XFF 自动采集 Filter。
      *
      * @param xffCaptureService XFF 采集服务
+     * @param properties        XFF Capture 配置
      * @return Filter 注册 Bean
      */
     @Bean(name = SimpleXffCaptureWebConstant.FILTER_BEAN_NAME)
     @ConditionalOnMissingBean(name = SimpleXffCaptureWebConstant.FILTER_BEAN_NAME)
     public FilterRegistrationBean<SimpleXffCaptureFilter> simpleXffCaptureFilterRegistration(
-            XffCaptureService xffCaptureService) {
+            XffCaptureService xffCaptureService, SimpleXffCaptureProperties properties) {
         FilterRegistrationBean<SimpleXffCaptureFilter> registrationBean = new FilterRegistrationBean<>();
         registrationBean.setFilter(new SimpleXffCaptureFilter(xffCaptureService));
         registrationBean.setName(SimpleXffCaptureWebConstant.FILTER_NAME);
         registrationBean.setUrlPatterns(Collections.singletonList(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN));
         registrationBean.setDispatcherTypes(DispatcherType.REQUEST);
-        registrationBean.setOrder(SimpleXffCaptureWebConstant.FILTER_ORDER);
+        registrationBean.setOrder(properties.getOrder());
         return registrationBean;
     }
 }

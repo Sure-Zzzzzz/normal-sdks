@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.http.xff.test.cases;
 
 import io.github.surezzzzzz.sdk.http.xff.configuration.SimpleXffCaptureConfiguration;
+import io.github.surezzzzzz.sdk.http.xff.configuration.SimpleXffCaptureProperties;
 import io.github.surezzzzzz.sdk.http.xff.constant.SimpleXffCaptureConstant;
 import io.github.surezzzzzz.sdk.http.xff.constant.SimpleXffCaptureWebConstant;
 import io.github.surezzzzzz.sdk.http.xff.filter.SimpleXffCaptureFilter;
@@ -35,6 +36,8 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = SimpleXffCaptureTestApplication.class)
 class SimpleXffCaptureAutoConfigurationTest {
 
+    private static final int CONFIGURED_FILTER_ORDER = -123456789;
+
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     DispatcherServletAutoConfiguration.class,
@@ -60,7 +63,7 @@ class SimpleXffCaptureAutoConfigurationTest {
         SimpleXffCaptureConfiguration configuration = new SimpleXffCaptureConfiguration();
         XffCaptureService service = mock(XffCaptureService.class);
         FilterRegistrationBean<SimpleXffCaptureFilter> registration =
-                configuration.simpleXffCaptureFilterRegistration(service);
+                configuration.simpleXffCaptureFilterRegistration(service, new SimpleXffCaptureProperties());
         ServletContext servletContext = mock(ServletContext.class);
         FilterRegistration.Dynamic dynamicRegistration = mock(FilterRegistration.Dynamic.class);
         when(servletContext.addFilter(eq(SimpleXffCaptureWebConstant.FILTER_NAME),
@@ -81,16 +84,41 @@ class SimpleXffCaptureAutoConfigurationTest {
                     FilterRegistrationBean<?> registration =
                             context.getBean(SimpleXffCaptureWebConstant.FILTER_BEAN_NAME, FilterRegistrationBean.class);
 
-                    log.info("开启时 Service 数量：{}，Filter order={}",
+                    log.info("开启时 Service 数量：{}，默认 Filter order={}",
                             context.getBeansOfType(XffCaptureService.class).size(), registration.getOrder());
                     assertEquals(1, context.getBeansOfType(XffCaptureService.class).size(),
                             "开启时应精确注册一个 XFF Service");
                     assertTrue(registration.getFilter() instanceof SimpleXffCaptureFilter,
                             "应注册 XFF 自动采集 Filter");
                     assertEquals(SimpleXffCaptureWebConstant.FILTER_ORDER, registration.getOrder(),
-                            "Filter order 应与稳定常量一致");
+                            "未配置时 Filter order 应使用稳定默认值");
                     assertEquals(Collections.singleton(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN),
                             registration.getUrlPatterns(), "Filter 应覆盖全部 URL");
+                });
+    }
+
+    @Test
+    void shouldUseConfiguredFilterOrder() {
+        contextRunner.withPropertyValues(
+                        SimpleXffCaptureConstant.CONFIG_PREFIX + ".enable=true",
+                        SimpleXffCaptureConstant.CONFIG_PREFIX + "."
+                                + SimpleXffCaptureConstant.CONFIG_ORDER + "=" + CONFIGURED_FILTER_ORDER)
+                .run(context -> {
+                    FilterRegistrationBean<?> registration =
+                            context.getBean(SimpleXffCaptureWebConstant.FILTER_BEAN_NAME, FilterRegistrationBean.class);
+                    SimpleXffCaptureProperties properties = context.getBean(SimpleXffCaptureProperties.class);
+
+                    log.info("自定义 Filter order：{}", registration.getOrder());
+                    assertEquals(CONFIGURED_FILTER_ORDER, properties.getOrder(),
+                            "配置属性应绑定自定义 Filter order");
+                    assertEquals(CONFIGURED_FILTER_ORDER, registration.getOrder(),
+                            "Filter 注册顺序应使用配置值");
+                    assertEquals(1, context.getBeansOfType(XffCaptureService.class).size(),
+                            "自定义 order 不应改变 XFF Service 注册");
+                    assertTrue(registration.getFilter() instanceof SimpleXffCaptureFilter,
+                            "自定义 order 不应改变 Filter 类型");
+                    assertEquals(Collections.singleton(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN),
+                            registration.getUrlPatterns(), "自定义 order 不应改变 Filter URL 范围");
                 });
     }
 }
