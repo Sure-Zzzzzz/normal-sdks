@@ -7,11 +7,7 @@ import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticati
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationOutcome;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceSubjectType;
 import io.github.surezzzzzz.sdk.auth.resource.core.exception.ResourceAuthenticationException;
-import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
-import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationResult;
-import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
-import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
-import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.*;
 import io.github.surezzzzzz.sdk.auth.resource.core.support.ResourceAuthenticationContextHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
