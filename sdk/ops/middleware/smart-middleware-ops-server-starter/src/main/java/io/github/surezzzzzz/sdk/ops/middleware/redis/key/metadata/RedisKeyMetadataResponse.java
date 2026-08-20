@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.ops.middleware.redis;
+package io.github.surezzzzzz.sdk.ops.middleware.redis.key.metadata;
 
 import lombok.Builder;
 import lombok.Getter;

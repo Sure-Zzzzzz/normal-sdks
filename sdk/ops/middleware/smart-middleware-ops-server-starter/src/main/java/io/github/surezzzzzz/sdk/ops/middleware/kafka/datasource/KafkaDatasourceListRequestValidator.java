@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.ops.middleware.kafka;
+package io.github.surezzzzzz.sdk.ops.middleware.kafka.datasource;
 
 import io.github.surezzzzzz.sdk.ops.middleware.service.DefaultMiddlewareOpsRequestValidator;
 

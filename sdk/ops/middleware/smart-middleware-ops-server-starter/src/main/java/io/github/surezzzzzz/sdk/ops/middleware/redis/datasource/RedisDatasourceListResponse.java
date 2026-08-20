@@ -1,5 +1,6 @@
-package io.github.surezzzzzz.sdk.ops.middleware.redis;
+package io.github.surezzzzzz.sdk.ops.middleware.redis.datasource;
 
+import io.github.surezzzzzz.sdk.ops.middleware.redis.summary.RedisDatasourceResponse;
 import lombok.Builder;
 import lombok.Getter;
 

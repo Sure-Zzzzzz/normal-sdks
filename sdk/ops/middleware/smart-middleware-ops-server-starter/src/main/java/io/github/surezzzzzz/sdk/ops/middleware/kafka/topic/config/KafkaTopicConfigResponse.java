@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.ops.middleware.kafka;
+package io.github.surezzzzzz.sdk.ops.middleware.kafka.topic.config;
 
 import lombok.Builder;
 import lombok.Getter;

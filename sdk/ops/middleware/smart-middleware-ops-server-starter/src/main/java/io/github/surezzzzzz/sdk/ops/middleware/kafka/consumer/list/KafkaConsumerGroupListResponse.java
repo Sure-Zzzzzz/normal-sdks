@@ -1,4 +1,4 @@
-package io.github.surezzzzzz.sdk.ops.middleware.kafka;
+package io.github.surezzzzzz.sdk.ops.middleware.kafka.consumer.list;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -6,18 +6,18 @@ import lombok.Getter;
 import java.util.List;
 
 /**
- * Kafka topic 分页响应。
+ * Kafka 消费组分页响应。
  *
  * @author surezzzzzz
  */
 @Getter
 @Builder
-public class KafkaTopicListResponse {
+public class KafkaConsumerGroupListResponse {
 
     /**
-     * topic 安全摘要。
+     * 消费组安全摘要。
      */
-    private final List<KafkaTopicResponse> items;
+    private final List<KafkaConsumerGroupResponse> items;
     private final Integer limit;
     private final Integer returned;
     private final Boolean truncated;
