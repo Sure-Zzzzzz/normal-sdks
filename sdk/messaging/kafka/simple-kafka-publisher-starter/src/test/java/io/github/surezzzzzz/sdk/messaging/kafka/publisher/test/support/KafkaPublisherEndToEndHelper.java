@@ -24,11 +24,9 @@ import java.util.concurrent.ExecutionException;
  */
 public final class KafkaPublisherEndToEndHelper {
 
-    public static final String V110_BOOTSTRAP_SERVERS = "localhost:18091";
-    public static final String V28_BOOTSTRAP_SERVERS = "localhost:18092";
-    public static final String V37_BOOTSTRAP_SERVERS = "localhost:18094";
-    public static final String CLUSTER_BOOTSTRAP_SERVERS = "localhost:19192,localhost:19193,localhost:19194";
+    public static final String DATASOURCE_V110 = "v110";
     public static final String DATASOURCE_V28 = "v28";
+    public static final String DATASOURCE_V37 = "v37";
     public static final String DATASOURCE_CLUSTER = "cluster";
     public static final String ROUTE_KEY_V37 = "mock-route-v37-a";
     public static final String TOPIC_V110_PREFIX = "mock.publisher.v110.e2e.";

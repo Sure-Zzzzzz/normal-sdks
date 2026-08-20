@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteProperties;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublishEnvelopeCustomizer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.customizer.KafkaPublishHeaderCustomizer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
@@ -18,6 +19,7 @@ import org.springframework.core.Ordered;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -40,20 +42,23 @@ public class KafkaPublisherEndToEndCustomizerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private SimpleKafkaRouteProperties routeProperties;
+
     @Test
     public void testHeaderAndEnvelopeCustomizersTakeEffectEndToEnd() throws Exception {
         String suffix = KafkaPublisherEndToEndHelper.suffix();
         String topic = KafkaPublisherEndToEndHelper.topic(
                 KafkaPublisherEndToEndHelper.TOPIC_V37_ROUTE_PREFIX, suffix);
         String key = KafkaPublisherEndToEndHelper.key(suffix + "-customizer");
-        KafkaPublisherEndToEndHelper.createTopic(KafkaPublisherEndToEndHelper.V37_BOOTSTRAP_SERVERS,
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37),
                 topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
                 KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
         KafkaPublishMessage<String> message = message(topic, key, "message-customizer-" + suffix);
 
         publisher.publish(message).get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         ConsumerRecord<String, String> record = KafkaPublisherEndToEndHelper.consumeRecord(
-                KafkaPublisherEndToEndHelper.V37_BOOTSTRAP_SERVERS, topic, key,
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, key,
                 KafkaPublisherEndToEndHelper.CONSUME_TIMEOUT_MS);
         assertNotNull(record, "应消费到 customizer 测试消息");
         JsonNode envelope = objectMapper.readTree(record.value());
@@ -71,6 +76,18 @@ public class KafkaPublisherEndToEndCustomizerTest {
                 "消费端 envelope attributes 应包含 e2eAttribute");
         assertEquals("custom-attribute-value", envelope.get("attributes").get("e2eAttribute").asText(),
                 "envelope customizer 补充的 attribute 应进入消费端 envelope attributes JSON");
+    }
+
+    private String bootstrapServers(String datasourceKey) {
+        SimpleKafkaRouteProperties.DataSourceConfig source = routeProperties.getSources().get(datasourceKey);
+        if (source == null) {
+            throw new IllegalStateException("缺少 Kafka Route datasource 配置: " + datasourceKey);
+        }
+        List<String> servers = source.getBootstrapServers();
+        if (servers == null || servers.isEmpty()) {
+            throw new IllegalStateException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
+        }
+        return String.join(",", servers);
     }
 
     private KafkaPublishMessage<String> message(String topic, String key, String messageId) {
