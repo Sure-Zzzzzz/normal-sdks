@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: xff-capture-audit-test-service
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        http:
+          xff:
+            capture:
+              enable: true
+        audit:
+          http:
+            xff:
+              capture:
+                listener:
+                  enable: true
+                  executor:
+                    core-size: 1
+                    max-size: 2
+                    queue-capacity: 100
+                    keep-alive-seconds: 10
+                    await-termination-seconds: 5
+                persistence:
+                  elasticsearch:
+                    enable: true
+        elasticsearch:
+          route:
+            enable: true
+            default-source: secondary
+            write-index:
+              zone-id: Asia/Shanghai
+            sources:
+              secondary:
+                urls: ${xff.audit.test.es.url:http://localhost:9200}
+                server-version: ${xff.audit.test.es.version:7.17.16}
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+            rules:
+              - pattern: xff-capture-audit
+                datasource: secondary
+                type: exact
+                priority: 10
+                write-index:
+                  template: xff-capture-audit-test-e2e-{yyyy.MM.dd}
+                  zone-id: Asia/Shanghai
+                async-write: false
+          persistence:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.http.xff: DEBUG

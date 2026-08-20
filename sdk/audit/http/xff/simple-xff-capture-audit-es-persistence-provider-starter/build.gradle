@@ -1,0 +1,17 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.0.0'
+    api "io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.1.1"
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-context'
+
+    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.apache.httpcomponents:httpclient'
+    testImplementation 'org.apache.httpcomponents:httpcore'
+}

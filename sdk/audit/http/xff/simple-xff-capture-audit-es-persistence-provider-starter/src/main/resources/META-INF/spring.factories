@@ -1,0 +1,2 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+io.github.surezzzzzz.sdk.audit.http.xff.es.persistence.configuration.XffCaptureAuditEsProviderConfiguration
