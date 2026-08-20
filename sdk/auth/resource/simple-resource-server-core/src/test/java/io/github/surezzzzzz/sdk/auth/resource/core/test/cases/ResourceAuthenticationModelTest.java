@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticati
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationOutcome;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceSubjectType;
 import io.github.surezzzzzz.sdk.auth.resource.core.exception.ResourceAuthenticationException;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationResult;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
@@ -76,6 +77,20 @@ class ResourceAuthenticationModelTest {
         assertThrows(ResourceAuthenticationException.class,
                 () -> ResourceAuthenticationContextHelper.createVerifiedContext(notApplicable, "request-a"),
                 "不适用结果不得创建已验证上下文");
+    }
+
+    @Test
+    void shouldKeepBearerCredentialReadableAndRedacted() {
+        ResourceAuthenticationSourceId sourceId = new ResourceAuthenticationSourceId("provider-a");
+        String credentialText = "credential-value";
+        BearerResourceCredential credential = new BearerResourceCredential(sourceId, credentialText);
+
+        assertEquals(sourceId, credential.getSourceId(), "Provider必须取得已路由来源");
+        assertEquals(credentialText, credential.getToken(), "Provider必须取得待验证凭据");
+        assertEquals("BearerResourceCredential[REDACTED]", credential.toString(),
+                "凭据日志必须保持固定脱敏文本");
+        assertFalse(credential.toString().contains(sourceId.getValue()), "凭据日志不得暴露来源");
+        assertFalse(credential.toString().contains(credentialText), "凭据日志不得暴露凭据文本");
     }
 
     @Test

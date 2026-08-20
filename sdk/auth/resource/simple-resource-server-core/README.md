@@ -9,6 +9,7 @@
 | 类型 | 含义 |
 | --- | --- |
 | `ResourceAuthenticationSourceId` | Provider 自己声明的稳定来源标识。 |
+| `BearerResourceCredential` | 公共层完成来源路由后交给 Provider 的短生命周期凭据，日志固定脱敏。 |
 | `VerifiedResourcePrincipal` | 仅含来源、主体类型和 Provider 内稳定主体标识。 |
 | `ResourceAuthenticationResult` | Provider 返回的认证成功、拒绝或不适用结果。 |
 | `VerifiedResourceContext` | 已绑定主体与应用授权快照的请求级上下文。 |
@@ -24,7 +25,7 @@ VerifiedResourceContext context = ResourceAuthenticationContextHelper.createVeri
 ## 安全约束
 
 - Provider 负责 token、JWE/JWS、introspection、issuer、audience、撤销与缓存。
-- Core 不保存 raw token、cookie、证书、claims、用户显示名、邮箱、角色、scope 或请求对象。
+- Core 不保存 cookie、证书、claims、用户显示名、邮箱、角色、scope 或请求对象；`BearerResourceCredential` 仅在一次 Provider 调用期携带原始凭据，禁止进入日志、事件或已验证上下文。
 - `AUTHENTICATED` 只能同时携带主体和完整应用授权快照。
 - `REJECTED` 只能携带安全失败分类；`NOT_APPLICABLE` 不携带主体或失败事实。
 - 两个不同来源即使 subjectId 文本相同，也不会自动合并。
