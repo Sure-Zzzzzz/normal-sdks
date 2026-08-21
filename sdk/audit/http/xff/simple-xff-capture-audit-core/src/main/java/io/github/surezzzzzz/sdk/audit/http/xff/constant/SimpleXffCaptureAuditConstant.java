@@ -120,6 +120,7 @@ public final class SimpleXffCaptureAuditConstant {
      * 分类版本非法详情。
      */
     public static final String DETAIL_CLASSIFICATION_VERSION_INVALID = "classificationVersion 必须与 Core 分类版本一致";
+
     private SimpleXffCaptureAuditConstant() {
         throw new UnsupportedOperationException("Utility class");
     }

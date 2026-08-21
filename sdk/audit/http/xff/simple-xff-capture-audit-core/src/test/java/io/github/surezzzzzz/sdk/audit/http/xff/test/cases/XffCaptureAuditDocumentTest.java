@@ -3,6 +3,11 @@ package io.github.surezzzzzz.sdk.audit.http.xff.test.cases;
 import io.github.surezzzzzz.sdk.audit.http.xff.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.audit.http.xff.exception.XffCaptureAuditValidationException;
 import io.github.surezzzzzz.sdk.audit.http.xff.model.XffCaptureAuditDocument;
+import io.github.surezzzzzz.sdk.http.xff.core.constant.RequestBodyCaptureStatus;
+import io.github.surezzzzzz.sdk.http.xff.core.constant.RequestDataCaptureStatus;
+import io.github.surezzzzzz.sdk.http.xff.core.model.RequestBodySnapshot;
+import io.github.surezzzzzz.sdk.http.xff.core.model.RequestDataSnapshot;
+import io.github.surezzzzzz.sdk.http.xff.core.model.RequestParameterSnapshot;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
@@ -60,11 +65,54 @@ class XffCaptureAuditDocumentTest {
     }
 
     @Test
-    void shouldUseEmptyExtensionsForLegacyConstructor() {
-        XffCaptureAuditDocument document = document(true, Collections.singletonList("8.8.8.8"),
-                Collections.singletonList("8.8.8.8"), Collections.singletonList("8.8.8.8"));
+    void shouldProjectImmutableRequestDataAndKeepLegacyConstructorDisabled() {
+        RequestDataSnapshot requestData = requestData();
+        XffCaptureAuditDocument document = new XffCaptureAuditDocument(
+                "event-request-data", "2026-08-20T00:00:00.000Z", "test-service",
+                null, null, "POST", "/request-data", Collections.<String>emptyList(), false,
+                Collections.<String>emptyList(), Collections.<String>emptyList(),
+                Collections.<String>emptyList(), "10.0.0.1", "10.0.0.1", "iana-2025-10-09",
+                Collections.<String, String>emptyMap(), requestData);
+        XffCaptureAuditDocument legacy = document(false, Collections.<String>emptyList(),
+                Collections.<String>emptyList(), Collections.<String>emptyList());
 
-        assertTrue(document.getExtensions().isEmpty(), "旧构造器应默认空 extensions");
+        log.info("请求数据文档状态：query={}，form={}，body={}",
+                document.getRequestData().getQueryParameters().getStatus(),
+                document.getRequestData().getFormParameters().getStatus(),
+                document.getRequestData().getBody().getStatus());
+        assertSame(requestData, document.getRequestData(), "Document 应持有 Event 的不可变请求数据快照");
+        assertEquals(Collections.singletonList("query-value"),
+                document.getRequestData().getQueryParameters().getValues().get("query"),
+                "Query 应完整投影");
+        assertEquals(Collections.singletonList("form-value"),
+                document.getRequestData().getFormParameters().getValues().get("form"),
+                "Form 应完整投影");
+        assertEquals("{\"body\":true}", document.getRequestData().getBody().getText(),
+                "Body 应完整投影");
+        assertEquals(RequestDataCaptureStatus.DISABLED,
+                legacy.getRequestData().getQueryParameters().getStatus(),
+                "旧构造器的 Query 应默认关闭");
+        assertEquals(RequestBodyCaptureStatus.DISABLED,
+                legacy.getRequestData().getBody().getStatus(),
+                "旧构造器的 Body 应默认关闭");
+        assertTrue(legacy.getExtensions().isEmpty(), "旧构造器应默认空 extensions");
+        assertFalse(document.toString().contains("query-value"), "Document toString 不能泄漏 Query 值");
+        assertFalse(document.toString().contains("{\"body\":true}"), "Document toString 不能泄漏 Body 文本");
+    }
+
+    @Test
+    void shouldRejectNullRequestData() {
+        XffCaptureAuditValidationException exception = assertThrows(
+                XffCaptureAuditValidationException.class, () -> new XffCaptureAuditDocument(
+                        "event-request-data", "2026-08-20T00:00:00.000Z", "test-service",
+                        null, null, "POST", "/request-data", Collections.<String>emptyList(), false,
+                        Collections.<String>emptyList(), Collections.<String>emptyList(),
+                        Collections.<String>emptyList(), "10.0.0.1", "10.0.0.1", "iana-2025-10-09",
+                        Collections.<String, String>emptyMap(), null));
+
+        log.info("空请求数据异常：errorCode={}，message={}", exception.getErrorCode(), exception.getMessage());
+        assertEquals(ErrorCode.REQUIRED_VALUE_MISSING, exception.getErrorCode(),
+                "requestData 为空必须使用必填字段错误码");
     }
 
     @Test
@@ -170,5 +218,18 @@ class XffCaptureAuditDocumentTest {
                 Collections.singletonList("8.8.8.8"), Collections.singletonList("8.8.8.8"),
                 Collections.singletonList("8.8.8.8"), "10.0.0.1", "10.0.0.1",
                 "iana-2025-10-09", extensions);
+    }
+
+    private RequestDataSnapshot requestData() {
+        RequestParameterSnapshot query = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.CAPTURED,
+                Collections.singletonMap("query", Collections.singletonList("query-value")));
+        RequestParameterSnapshot form = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.CAPTURED,
+                Collections.singletonMap("form", Collections.singletonList("form-value")));
+        RequestBodySnapshot body = new RequestBodySnapshot(
+                RequestBodyCaptureStatus.CAPTURED, "application/json", 14L, 14L,
+                "{\"body\":true}");
+        return new RequestDataSnapshot(query, form, body);
     }
 }

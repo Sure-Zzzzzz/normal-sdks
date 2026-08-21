@@ -6,7 +6,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.0'
 }
 ```
 
@@ -31,7 +31,7 @@ public class CustomXffCaptureAuditPersistenceProvider
 
 ## 审计文档契约
 
-`XffCaptureAuditDocument` 保存一次 Capture Event 的不可变审计快照，包含以下 15 个核心字段：
+`XffCaptureAuditDocument` 保存一次 Capture Event 的不可变审计快照，包含以下 16 个核心字段：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -50,6 +50,9 @@ public class CustomXffCaptureAuditPersistenceProvider
 | `applicationRawRemoteAddress` | 应用看到的原始远端地址 |
 | `applicationRemoteIp` | 规范化后的合法应用远端 IP，可为空 |
 | `classificationVersion` | IP 分类规则版本 |
+| `requestData` | Capture Event 中的 Query、Form、Body 不可变请求数据快照 |
+
+`requestData` 直接复用 Capture Core 的不可变快照契约，包含 Query 参数、Form 参数和 Body 状态/元数据/受限文本；Core 不重新采集、不推断敏感字段，也不改变 Capture 端的默认关闭和 URI 规则。
 
 所有 List 和 Map 都会防御性复制，对外只暴露不可修改视图。`xffPresent=false` 时，`xffRawList`、`xffIpList` 与 `publicIpList` 必须均为空；`publicIpList` 只能包含 `xffIpList` 中的 `PUBLIC` 地址。
 
@@ -77,4 +80,4 @@ Core 不采集 HTTP 请求、不发布或监听 Spring Event、不创建线程�
 
 ## 兼容性
 
-`1.0.x` 中，15 个核心字段、扩展字段 envelope、`XffCaptureAuditPersistenceProvider` 方法签名，以及文档的不可变与校验语义均为稳定契约。新增字段应通过固定扩展 envelope 承载；破坏性字段或语义调整应使用新 minor 版本。
+`1.1.0` 新增固定顶层 `requestData` 字段。旧构造器会写入 `RequestDataSnapshot.disabled()`，保持既有调用方兼容；新增构造器直接接收 Capture Event 的不可变请求数据快照。`1.0.x` 中的核心字段、扩展字段 envelope、`XffCaptureAuditPersistenceProvider` 方法签名，以及文档的不可变与校验语义继续保持稳定。

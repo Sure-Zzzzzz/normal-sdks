@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.audit.http.xff.constant.SimpleXffCaptureAuditCon
 import io.github.surezzzzzz.sdk.audit.http.xff.exception.XffCaptureAuditValidationException;
 import io.github.surezzzzzz.sdk.http.xff.core.constant.SimpleXffCaptureCoreConstant;
 import io.github.surezzzzzz.sdk.http.xff.core.constant.XffIpScope;
+import io.github.surezzzzzz.sdk.http.xff.core.model.RequestDataSnapshot;
 import io.github.surezzzzzz.sdk.http.xff.core.model.XffAddressInfo;
 import io.github.surezzzzzz.sdk.http.xff.core.support.XffAddressHelper;
 import lombok.EqualsAndHashCode;
@@ -27,7 +28,7 @@ import java.util.*;
 @EqualsAndHashCode
 @ToString(exclude = {"requestId", "traceId", "requestUri", "hostList", "xffRawList",
         "xffIpList", "publicIpList", "applicationRawRemoteAddress", "applicationRemoteIp",
-        "extensions"})
+        "extensions", "requestData"})
 public final class XffCaptureAuditDocument {
 
     private final String eventId;
@@ -46,6 +47,7 @@ public final class XffCaptureAuditDocument {
     private final String applicationRemoteIp;
     private final String classificationVersion;
     private final Map<String, String> extensions;
+    private final RequestDataSnapshot requestData;
 
     /**
      * 创建不可变审计文档。
@@ -74,7 +76,8 @@ public final class XffCaptureAuditDocument {
                                    String applicationRemoteIp, String classificationVersion) {
         this(eventId, capturedTime, applicationName, requestId, traceId, requestMethod, requestUri,
                 hostList, xffPresent, xffRawList, xffIpList, publicIpList, applicationRawRemoteAddress,
-                applicationRemoteIp, classificationVersion, Collections.<String, String>emptyMap());
+                applicationRemoteIp, classificationVersion, Collections.<String, String>emptyMap(),
+                RequestDataSnapshot.disabled());
     }
 
     /**
@@ -104,6 +107,39 @@ public final class XffCaptureAuditDocument {
                                    List<String> publicIpList, String applicationRawRemoteAddress,
                                    String applicationRemoteIp, String classificationVersion,
                                    Map<String, String> extensions) {
+        this(eventId, capturedTime, applicationName, requestId, traceId, requestMethod, requestUri,
+                hostList, xffPresent, xffRawList, xffIpList, publicIpList, applicationRawRemoteAddress,
+                applicationRemoteIp, classificationVersion, extensions, RequestDataSnapshot.disabled());
+    }
+
+    /**
+     * 创建包含请求数据的不可变审计文档。
+     *
+     * @param eventId                     事件标识
+     * @param capturedTime                捕获时间
+     * @param applicationName             应用名称
+     * @param requestId                   请求标识
+     * @param traceId                     链路标识
+     * @param requestMethod               请求方法
+     * @param requestUri                  请求 URI
+     * @param hostList                    Host 列表
+     * @param xffPresent                  是否存在 XFF
+     * @param xffRawList                  原始 XFF 列表
+     * @param xffIpList                   规范化 XFF IP 列表
+     * @param publicIpList                公网 IP 列表
+     * @param applicationRawRemoteAddress 应用原始远端地址
+     * @param applicationRemoteIp         应用远端 IP
+     * @param classificationVersion       分类版本
+     * @param extensions                  业务扩展字段
+     * @param requestData                 请求数据快照
+     */
+    public XffCaptureAuditDocument(String eventId, String capturedTime, String applicationName,
+                                   String requestId, String traceId, String requestMethod,
+                                   String requestUri, List<String> hostList, boolean xffPresent,
+                                   List<String> xffRawList, List<String> xffIpList,
+                                   List<String> publicIpList, String applicationRawRemoteAddress,
+                                   String applicationRemoteIp, String classificationVersion,
+                                   Map<String, String> extensions, RequestDataSnapshot requestData) {
         this.eventId = requireText(eventId, SimpleXffCaptureAuditConstant.FIELD_EVENT_ID);
         this.capturedTime = requireText(capturedTime, SimpleXffCaptureAuditConstant.FIELD_CAPTURED_TIME);
         this.applicationName = requireText(applicationName, SimpleXffCaptureAuditConstant.FIELD_APPLICATION_NAME);
@@ -121,6 +157,11 @@ public final class XffCaptureAuditDocument {
         this.classificationVersion = requireText(classificationVersion,
                 SimpleXffCaptureAuditConstant.FIELD_CLASSIFICATION_VERSION);
         this.extensions = immutableExtensionCopy(extensions);
+        if (requestData == null) {
+            throw new XffCaptureAuditValidationException(ErrorCode.REQUIRED_VALUE_MISSING,
+                    String.format(ErrorMessage.REQUIRED_VALUE_MISSING, "requestData"));
+        }
+        this.requestData = requestData;
         validateState();
     }
 
