@@ -65,6 +65,7 @@ HTTP 采集模块应创建并发布 `XffCaptureEvent`。事件保存采集事实
 | `requestUri` | 不包含查询参数的请求 URI |
 | `applicationRawRemoteAddress` | Filter 执行时应用通过 `getRemoteAddr()` 看到的原始远端地址，不属于 XFF 链 |
 | `snapshot` | XFF 链与固定转发 Header 的不可变快照 |
+| `requestData` | 可选的 Query、Form、Body 请求数据不可变快照 |
 
 `snapshot` 包含：
 
@@ -72,6 +73,20 @@ HTTP 采集模块应创建并发布 `XffCaptureEvent`。事件保存采集事实
 - `ForwardedContext`：`Host`、`X-Real-IP`、`X-Forwarded-Host`、`X-Forwarded-Port`、`X-Forwarded-Proto` 的原始 Header 快照。
 
 所有快照模型都会校验状态并对集合进行防御性复制。原始 Header、请求 URI 和远端地址不会出现在模型的 `toString()` 中，但调用方仍应避免将原始采集内容直接输出到不受控日志。
+
+### 请求数据快照
+
+`requestData` 仅保存采集模块明确允许的数据，不持有 Servlet 请求、输入流或 Reader：
+
+| 字段 | 内容 |
+| --- | --- |
+| `queryParameters` | Query 参数及重复值，状态由 `RequestDataCaptureStatus` 表示 |
+| `formParameters` | `application/x-www-form-urlencoded` 表单参数及重复值，状态由 `RequestDataCaptureStatus` 表示 |
+| `body` | Content-Type、声明长度、实际保留字节数、UTF-8 文本及 `RequestBodyCaptureStatus` |
+
+参数状态包括 `DISABLED`、`RULE_NOT_MATCHED`、`ABSENT`、`CAPTURED`、`TRUNCATED`、`READ_FAILED`；Body 状态还包括 `NO_BODY`、`CONTENT_TYPE_SKIPPED`。`CAPTURED` 参数保留重复值，Body 达到上限时仅保留有界前缀并明确标记 `TRUNCATED`。参数值和 Body 文本均排除在相关模型及事件的 `toString()` 之外。
+
+请求数据快照默认由 Starter 关闭；Core 只定义不可变事件契约，不会自行读取请求或扩大采集范围。
 
 ## 信任边界
 
@@ -89,5 +104,11 @@ XFF 与转发 Header 都是请求携带的事实，不等于可信客户端身�
 `1.0.x` 中，`XffCaptureEvent` 的字段和构造器、快照模型字段、`XffIpVersion` / `XffIpScope` 枚举、规范化格式与地址分类行为均为稳定契约。新增入口协议或破坏性语义调整应使用新事件类型或新 minor 版本，不能直接扩展既有构造器。
 
 `simple-xff-capture-starter` 负责 HTTP 采集和 Spring Event 发布；可选 Listener 负责消费 Core 事件并进行外部投影。它们在 Core 发布后按各自版本独立发布。
+
+`requestData` 为 1.1.0 的加法契约：保留原有构造器，旧构造路径始终得到全维度 `DISABLED` 快照。请求数据不会自动进入 Audit、Elasticsearch、Listener、Provider、Route 或 Persistence；任何持久化扩展都必须另行定义脱敏、字段白名单、访问控制、保留周期和存储映射。
+
+## 版本记录
+
+- [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：待发布的请求数据快照契约扩展。
 
 生产代码仅使用 JDK 8 API；完整测试已在 Spring Boot 2.7.9、2.4.5、2.3.12.RELEASE 和 2.2.13.RELEASE 基线通过。

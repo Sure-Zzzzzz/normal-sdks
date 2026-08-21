@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.http.xff.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.http.xff.core.constant.SimpleXffCaptureCoreConstant;
 import io.github.surezzzzzz.sdk.http.xff.core.exception.XffCaptureValidationException;
 import io.github.surezzzzzz.sdk.http.xff.core.model.ForwardedContext;
+import io.github.surezzzzzz.sdk.http.xff.core.model.RequestDataSnapshot;
 import io.github.surezzzzzz.sdk.http.xff.core.model.XffCaptureSnapshot;
 import io.github.surezzzzzz.sdk.http.xff.core.model.XffChain;
 import lombok.EqualsAndHashCode;
@@ -56,7 +57,12 @@ public final class XffCaptureEvent {
     private final XffCaptureSnapshot snapshot;
 
     /**
-     * 创建 XFF 采集事件。
+     * 请求参数与请求体快照。
+     */
+    private final RequestDataSnapshot requestData;
+
+    /**
+     * 创建兼容旧版本的 XFF 采集事件。
      *
      * @param eventId                     唯一事件标识
      * @param occurredAt                  采集时间
@@ -67,6 +73,24 @@ public final class XffCaptureEvent {
      */
     public XffCaptureEvent(String eventId, Instant occurredAt, String requestMethod, String requestUri,
                            String applicationRawRemoteAddress, XffCaptureSnapshot snapshot) {
+        this(eventId, occurredAt, requestMethod, requestUri, applicationRawRemoteAddress, snapshot,
+                RequestDataSnapshot.disabled());
+    }
+
+    /**
+     * 创建包含完整请求数据的 XFF 采集事件。
+     *
+     * @param eventId                     唯一事件标识
+     * @param occurredAt                  采集时间
+     * @param requestMethod               HTTP 方法
+     * @param requestUri                  请求 URI
+     * @param applicationRawRemoteAddress 应用可见原始远端地址，允许为空
+     * @param snapshot                    完整采集快照
+     * @param requestData                 请求数据快照
+     */
+    public XffCaptureEvent(String eventId, Instant occurredAt, String requestMethod, String requestUri,
+                           String applicationRawRemoteAddress, XffCaptureSnapshot snapshot,
+                           RequestDataSnapshot requestData) {
         this.eventId = requireText(eventId, SimpleXffCaptureCoreConstant.FIELD_EVENT_ID);
         if (occurredAt == null) {
             throw new XffCaptureValidationException(ErrorCode.REQUIRED_VALUE_MISSING,
@@ -83,6 +107,11 @@ public final class XffCaptureEvent {
                             SimpleXffCaptureCoreConstant.FIELD_CAPTURE_SNAPSHOT));
         }
         this.snapshot = snapshot;
+        if (requestData == null) {
+            throw new XffCaptureValidationException(ErrorCode.REQUIRED_VALUE_MISSING,
+                    String.format(ErrorMessage.REQUIRED_VALUE_MISSING, "requestData"));
+        }
+        this.requestData = requestData;
     }
 
     private static String requireText(String value, String name) {

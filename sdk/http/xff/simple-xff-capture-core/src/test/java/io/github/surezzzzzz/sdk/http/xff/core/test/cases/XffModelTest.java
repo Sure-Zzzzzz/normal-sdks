@@ -1,8 +1,6 @@
 package io.github.surezzzzzz.sdk.http.xff.core.test.cases;
 
-import io.github.surezzzzzz.sdk.http.xff.core.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.http.xff.core.constant.XffIpScope;
-import io.github.surezzzzzz.sdk.http.xff.core.constant.XffIpVersion;
+import io.github.surezzzzzz.sdk.http.xff.core.constant.*;
 import io.github.surezzzzzz.sdk.http.xff.core.event.XffCaptureEvent;
 import io.github.surezzzzzz.sdk.http.xff.core.exception.SimpleXffCaptureCoreException;
 import io.github.surezzzzzz.sdk.http.xff.core.exception.XffCaptureValidationException;
@@ -12,9 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -93,7 +89,7 @@ class XffModelTest {
 
     @Test
     void shouldPreserveExceptionCodeMessageAndCause() {
-        Throwable cause = new IllegalStateException("cause");
+        Throwable cause = new SimpleXffCaptureCoreException("CAUSE_TEST", "cause");
         SimpleXffCaptureCoreException coreException = new SimpleXffCaptureCoreException(
                 "CORE_TEST", "core message", cause);
         XffCaptureValidationException validationException = new XffCaptureValidationException(
@@ -157,6 +153,88 @@ class XffModelTest {
         assertFalse(event.toString().contains("127.0.0.1"), "toString 不应泄漏应用可见远端地址");
         assertFalse(event.toString().contains("192.0.2.1"), "toString 不应泄漏 XFF 链");
         assertFalse(event.toString().contains("secret-host"), "toString 不应泄漏转发 Header");
+    }
+
+    @Test
+    void shouldExposeCompleteEventRequestDataContractAndKeepItImmutable() {
+        Instant occurredAt = Instant.ofEpochMilli(1700000000000L);
+        XffChain chain = new XffChain(true, Collections.singletonList("192.0.2.1"),
+                Collections.singletonList("192.0.2.1"));
+        ForwardedContext forwardedContext = emptyForwardedContext();
+        Map<String, List<String>> queryValues = new LinkedHashMap<>();
+        queryValues.put("tag", new ArrayList<>(Arrays.asList("one", "two")));
+        RequestParameterSnapshot queryParameters = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.CAPTURED, queryValues);
+        RequestParameterSnapshot formParameters = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.ABSENT, Collections.<String, List<String>>emptyMap());
+        RequestBodySnapshot body = new RequestBodySnapshot(
+                RequestBodyCaptureStatus.CAPTURED, "application/json", 31L, 31L,
+                "{\"message\":\"request-body\"}");
+        RequestDataSnapshot requestData = new RequestDataSnapshot(
+                queryParameters, formParameters, body);
+        XffCaptureEvent event = new XffCaptureEvent("event-1", occurredAt, "POST",
+                "/resource/item", "127.0.0.1",
+                new XffCaptureSnapshot(chain, forwardedContext), requestData);
+        queryValues.get("tag").set(0, "changed");
+
+        log.info("完整事件请求数据：queryStatus={}，queryKeys={}，formStatus={}，bodyStatus={}，bodyBytes={}",
+                event.getRequestData().getQueryParameters().getStatus(),
+                event.getRequestData().getQueryParameters().getValues().keySet(),
+                event.getRequestData().getFormParameters().getStatus(),
+                event.getRequestData().getBody().getStatus(),
+                event.getRequestData().getBody().getCapturedByteCount());
+        assertEquals(RequestDataCaptureStatus.CAPTURED,
+                event.getRequestData().getQueryParameters().getStatus());
+        assertEquals(Arrays.asList("one", "two"),
+                event.getRequestData().getQueryParameters().getValues().get("tag"));
+        assertEquals(RequestDataCaptureStatus.ABSENT,
+                event.getRequestData().getFormParameters().getStatus());
+        assertEquals(RequestBodyCaptureStatus.CAPTURED,
+                event.getRequestData().getBody().getStatus());
+        assertEquals("application/json", event.getRequestData().getBody().getContentType());
+        assertEquals(Long.valueOf(31L), event.getRequestData().getBody().getDeclaredContentLength());
+        assertEquals(31L, event.getRequestData().getBody().getCapturedByteCount());
+        assertEquals("{\"message\":\"request-body\"}", event.getRequestData().getBody().getText());
+        assertThrows(UnsupportedOperationException.class,
+                () -> event.getRequestData().getQueryParameters().getValues().get("tag").add("changed"));
+        assertFalse(event.toString().contains("request-body"),
+                "事件 toString 不应泄漏请求体");
+        assertFalse(event.toString().contains("one"),
+                "事件 toString 不应泄漏请求参数值");
+    }
+
+    @Test
+    void shouldKeepLegacyEventConstructorRequestDataDisabled() {
+        XffChain chain = new XffChain(false, Collections.<String>emptyList(), Collections.<String>emptyList());
+        XffCaptureEvent event = new XffCaptureEvent("event-legacy", Instant.now(), "GET", "/", null,
+                new XffCaptureSnapshot(chain, emptyForwardedContext()));
+
+        log.info("旧事件构造器默认请求数据状态：query={}，form={}，body={}",
+                event.getRequestData().getQueryParameters().getStatus(),
+                event.getRequestData().getFormParameters().getStatus(),
+                event.getRequestData().getBody().getStatus());
+        assertEquals(RequestDataCaptureStatus.DISABLED,
+                event.getRequestData().getQueryParameters().getStatus());
+        assertEquals(RequestDataCaptureStatus.DISABLED,
+                event.getRequestData().getFormParameters().getStatus());
+        assertEquals(RequestBodyCaptureStatus.DISABLED,
+                event.getRequestData().getBody().getStatus());
+    }
+
+    @Test
+    void shouldRejectNullRequestDataParts() {
+        RequestParameterSnapshot parameters = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.DISABLED, Collections.<String, List<String>>emptyMap());
+        RequestBodySnapshot body = new RequestBodySnapshot(
+                RequestBodyCaptureStatus.DISABLED, null, null, 0L, null);
+
+        log.info("验证请求数据快照必填维度");
+        assertThrows(XffCaptureValidationException.class,
+                () -> new RequestDataSnapshot(null, parameters, body));
+        assertThrows(XffCaptureValidationException.class,
+                () -> new RequestDataSnapshot(parameters, null, body));
+        assertThrows(XffCaptureValidationException.class,
+                () -> new RequestDataSnapshot(parameters, parameters, null));
     }
 
     @Test
