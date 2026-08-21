@@ -8,7 +8,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-core:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-core:1.1.0'
 }
 ```
 
@@ -109,6 +109,6 @@ XFF 与转发 Header 都是请求携带的事实，不等于可信客户端身�
 
 ## 版本记录
 
-- [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：待发布的请求数据快照契约扩展。
+- [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：请求数据快照契约扩展。
 
 生产代码仅使用 JDK 8 API；完整测试已在 Spring Boot 2.7.9、2.4.5、2.3.12.RELEASE 和 2.2.13.RELEASE 基线通过。

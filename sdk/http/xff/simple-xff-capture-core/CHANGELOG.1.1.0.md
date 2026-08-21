@@ -64,4 +64,4 @@
 
 ## 模块协作
 
-Starter 在当前仓库构建中通过 Gradle `project(':sdk:http:xff:simple-xff-capture-core')` 使用 Core 源码，确保请求数据事件契约与 Starter 采集实现同步验证。外部依赖坐标由 Starter 的独立版本变更维护。
+Starter 通过精确坐标 `io.github.sure-zzzzzz:simple-xff-capture-core:1.1.0` 使用本版本 Core 契约，Core 不引入 Starter 或其他 Web 运行时依赖。
