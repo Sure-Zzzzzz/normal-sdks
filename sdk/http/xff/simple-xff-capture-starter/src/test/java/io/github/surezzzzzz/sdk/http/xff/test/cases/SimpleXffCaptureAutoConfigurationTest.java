@@ -37,6 +37,7 @@ import static org.mockito.Mockito.*;
 class SimpleXffCaptureAutoConfigurationTest {
 
     private static final int CONFIGURED_FILTER_ORDER = -123456789;
+    private static final int DEFAULT_FILTER_ORDER = Integer.MAX_VALUE - 100;
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -90,10 +91,30 @@ class SimpleXffCaptureAutoConfigurationTest {
                             "开启时应精确注册一个 XFF Service");
                     assertTrue(registration.getFilter() instanceof SimpleXffCaptureFilter,
                             "应注册 XFF 自动采集 Filter");
-                    assertEquals(SimpleXffCaptureWebConstant.FILTER_ORDER, registration.getOrder(),
-                            "未配置时 Filter order 应使用稳定默认值");
+                    assertEquals(DEFAULT_FILTER_ORDER, registration.getOrder(),
+                            "未配置时 Filter order 应使用最低优先级默认值");
                     assertEquals(Collections.singleton(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN),
                             registration.getUrlPatterns(), "Filter 应覆盖全部 URL");
+                });
+    }
+
+    @Test
+    void shouldBindExcludedPathPatternsWithoutChangingFilterUrlRange() {
+        contextRunner.withPropertyValues(
+                        SimpleXffCaptureConstant.CONFIG_PREFIX + ".enable=true",
+                        SimpleXffCaptureConstant.CONFIG_PREFIX + "."
+                                + SimpleXffCaptureConstant.CONFIG_EXCLUDED_PATH_PATTERNS + "[0]=/actuator/**")
+                .run(context -> {
+                    FilterRegistrationBean<?> registration =
+                            context.getBean(SimpleXffCaptureWebConstant.FILTER_BEAN_NAME, FilterRegistrationBean.class);
+                    SimpleXffCaptureProperties properties = context.getBean(SimpleXffCaptureProperties.class);
+
+                    log.info("配置排除路径模式：{}，Filter URL 范围：{}",
+                            properties.getExcludedPathPatterns(), registration.getUrlPatterns());
+                    assertEquals(Collections.singletonList("/actuator/**"), properties.getExcludedPathPatterns(),
+                            "配置属性应绑定排除路径模式");
+                    assertEquals(Collections.singleton(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN),
+                            registration.getUrlPatterns(), "排除路径模式不应缩小 Filter URL 注册范围");
                 });
     }
 

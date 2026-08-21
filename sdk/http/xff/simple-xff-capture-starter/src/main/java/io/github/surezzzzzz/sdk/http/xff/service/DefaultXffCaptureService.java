@@ -7,10 +7,7 @@ import io.github.surezzzzzz.sdk.http.xff.core.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.http.xff.core.constant.SimpleXffCaptureCoreConstant;
 import io.github.surezzzzzz.sdk.http.xff.core.event.XffCaptureEvent;
 import io.github.surezzzzzz.sdk.http.xff.core.exception.XffCaptureValidationException;
-import io.github.surezzzzzz.sdk.http.xff.core.model.ForwardedContext;
-import io.github.surezzzzzz.sdk.http.xff.core.model.HeaderValueSnapshot;
-import io.github.surezzzzzz.sdk.http.xff.core.model.XffCaptureSnapshot;
-import io.github.surezzzzzz.sdk.http.xff.core.model.XffChain;
+import io.github.surezzzzzz.sdk.http.xff.core.model.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -160,6 +157,18 @@ public class DefaultXffCaptureService implements XffCaptureService {
                 || value == SimpleXffCaptureConstant.OPTIONAL_WHITESPACE_TAB;
     }
 
+    private RequestDataSnapshot requestDataSnapshot(HttpServletRequest request) {
+        Object requestData = request.getAttribute(
+                SimpleXffCaptureConstant.REQUEST_ATTRIBUTE_REQUEST_DATA_SNAPSHOT);
+        if (requestData instanceof RequestDataSnapshot) {
+            return (RequestDataSnapshot) requestData;
+        }
+        if (requestData != null) {
+            log.warn("请求数据快照属性类型异常，按未启用处理");
+        }
+        return RequestDataSnapshot.disabled();
+    }
+
     private void publish(HttpServletRequest request, XffCaptureSnapshot snapshot) {
         XffCaptureEvent event = new XffCaptureEvent(
                 UUID.randomUUID().toString(),
@@ -167,13 +176,13 @@ public class DefaultXffCaptureService implements XffCaptureService {
                 request.getMethod(),
                 request.getRequestURI(),
                 request.getRemoteAddr(),
-                snapshot
+                snapshot,
+                requestDataSnapshot(request)
         );
         try {
             eventPublisher.publishEvent(event);
         } catch (RuntimeException e) {
-            log.warn("XFF 采集事件发布失败，eventId=[{}]，异常类型=[{}]",
-                    event.getEventId(), e.getClass().getName());
+            log.warn("XFF 采集事件发布失败，eventId=[{}]", event.getEventId(), e);
         }
     }
 }

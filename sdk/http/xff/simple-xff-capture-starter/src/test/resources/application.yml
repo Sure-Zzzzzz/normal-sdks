@@ -6,7 +6,112 @@ io:
           xff:
             capture:
               enable: true
+              excluded-path-patterns:
+                - /actuator/prometheus
 
 logging:
   level:
     io.github.surezzzzzz.sdk.http.xff: DEBUG
+---
+spring:
+  profiles: request-data-json
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        http:
+          xff:
+            capture:
+              request-data:
+                query-parameters:
+                  enabled: true
+                body:
+                  enabled: true
+                  max-bytes: 8
+                  allowed-content-types:
+                    - application/json
+                whitelist:
+                  - method: GET
+                    path-pattern: /request-data/crud
+                  - method: POST
+                    path-pattern: /request-data/**
+                  - method: PUT
+                    path-pattern: /request-data/crud
+                  - method: PATCH
+                    path-pattern: /request-data/crud
+                  - method: DELETE
+                    path-pattern: /request-data/crud
+                blacklist:
+                  - method: POST
+                    path-pattern: /request-data/excluded
+---
+spring:
+  profiles: request-data-form
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        http:
+          xff:
+            capture:
+              excluded-path-patterns:
+                - /actuator/prometheus
+                - /request-form-with-query-raw
+                - /request-form-same-name-raw
+                - /request-form-empty-raw
+              request-data:
+                form-parameters:
+                  enabled: true
+                body:
+                  max-bytes: 64
+                whitelist:
+                  - method: POST
+                    path-pattern: /request-form
+                  - method: POST
+                    path-pattern: /request-form-with-query
+                  - method: POST
+                    path-pattern: /request-form-overflow
+                  - method: POST
+                    path-pattern: /request-form-same-name
+                  - method: POST
+                    path-pattern: /request-form-empty
+---
+
+spring:
+  profiles: request-data-form-body
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        http:
+          xff:
+            capture:
+              request-data:
+                form-parameters:
+                  enabled: true
+                body:
+                  enabled: true
+                  max-bytes: 8
+                  allowed-content-types:
+                    - application/x-www-form-urlencoded
+                whitelist:
+                  - method: POST
+                    path-pattern: /request-form-body-and-form

@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.http.xff.constant.SimpleXffCaptureConstant;
 import io.github.surezzzzzz.sdk.http.xff.constant.SimpleXffCaptureWebConstant;
 import io.github.surezzzzzz.sdk.http.xff.filter.SimpleXffCaptureFilter;
 import io.github.surezzzzzz.sdk.http.xff.service.XffCaptureService;
+import io.github.surezzzzzz.sdk.http.xff.support.RequestDataCapturePreparer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -52,7 +53,8 @@ public class SimpleXffCaptureConfiguration {
     public FilterRegistrationBean<SimpleXffCaptureFilter> simpleXffCaptureFilterRegistration(
             XffCaptureService xffCaptureService, SimpleXffCaptureProperties properties) {
         FilterRegistrationBean<SimpleXffCaptureFilter> registrationBean = new FilterRegistrationBean<>();
-        registrationBean.setFilter(new SimpleXffCaptureFilter(xffCaptureService));
+        registrationBean.setFilter(new SimpleXffCaptureFilter(xffCaptureService,
+                properties.getExcludedPathPatterns(), new RequestDataCapturePreparer(properties)));
         registrationBean.setName(SimpleXffCaptureWebConstant.FILTER_NAME);
         registrationBean.setUrlPatterns(Collections.singletonList(SimpleXffCaptureWebConstant.FILTER_URL_PATTERN));
         registrationBean.setDispatcherTypes(DispatcherType.REQUEST);

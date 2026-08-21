@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.http.xff.constant;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Simple XFF Capture Starter 常量。
  *
@@ -21,6 +24,14 @@ public final class SimpleXffCaptureConstant {
      * Filter 顺序配置名称。
      */
     public static final String CONFIG_ORDER = "order";
+    /**
+     * 排除路径模式配置名称。
+     */
+    public static final String CONFIG_EXCLUDED_PATH_PATTERNS = "excluded-path-patterns";
+    /**
+     * 默认排除路径模式。
+     */
+    public static final List<String> DEFAULT_EXCLUDED_PATH_PATTERNS = Collections.emptyList();
     /**
      * 默认是否启用。
      */
@@ -78,6 +89,11 @@ public final class SimpleXffCaptureConstant {
      */
     public static final String REQUEST_ATTRIBUTE_CAPTURE_SNAPSHOT =
             "io.github.surezzzzzz.sdk.http.xff.capture.XffCaptureSnapshot";
+    /**
+     * 请求内请求数据快照属性名。
+     */
+    public static final String REQUEST_ATTRIBUTE_REQUEST_DATA_SNAPSHOT =
+            "io.github.surezzzzzz.sdk.http.xff.capture.RequestDataSnapshot";
 
     // ==================== 请求生命周期常量 ====================
 
