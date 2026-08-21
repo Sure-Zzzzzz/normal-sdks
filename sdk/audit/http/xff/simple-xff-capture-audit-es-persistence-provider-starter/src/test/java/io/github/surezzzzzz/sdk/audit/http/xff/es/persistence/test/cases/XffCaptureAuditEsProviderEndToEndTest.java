@@ -23,11 +23,9 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.http.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.*;
@@ -57,13 +55,9 @@ class XffCaptureAuditEsProviderEndToEndTest {
     private static final String PRIVATE_IPV4 = "10.20.30.40";
     private static final String PUBLIC_IPV6_RAW = "2001:4860:4860:0:0:0:0:8888";
     private static final String PUBLIC_IPV6_NORMALIZED = "2001:4860:4860::8888";
+    private static final String REQUEST_BODY = "{\"message\":\"audit-body\"}";
     private static final long WAIT_TIMEOUT_MILLIS = 10000L;
     private static final long WAIT_INTERVAL_MILLIS = 100L;
-    private static final Set<String> CORE_FIELD_NAMES = new LinkedHashSet<>(Arrays.asList(
-            "eventId", "capturedTime", "applicationName", "requestId", "traceId",
-            "requestMethod", "requestUri", "hostList", "xffPresent", "xffRawList", "xffIpList",
-            "publicIpList", "applicationRawRemoteAddress", "applicationRemoteIp",
-            "classificationVersion"));
 
     private RestClient client;
     private String physicalIndex;
@@ -99,23 +93,23 @@ class XffCaptureAuditEsProviderEndToEndTest {
         headers.add(TestAuditContextProvider.CLIENT_ID_HEADER, CLIENT_ID);
         headers.add(TestAuditContextProvider.UNMAPPED_EXTENSION_HEADER,
                 UNMAPPED_EXTENSION_VALUE);
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-        ResponseEntity<String> response = restTemplate.exchange("/audit-e2e", HttpMethod.GET,
-                new HttpEntity<>(headers), String.class);
+        ResponseEntity<String> response = restTemplate.exchange("/audit-e2e?tag=one&tag=two", HttpMethod.POST,
+                new HttpEntity<String>(REQUEST_BODY, headers), String.class);
         Map<String, Object> hit = awaitHitByRequestId(REQUEST_ID);
         Map<String, Object> source = map(hit.get("_source"));
 
-        log.info("E2E 响应状态：{}，物理索引：{}，文档ID={}，字段：{}",
-                response.getStatusCodeValue(), physicalIndex, hit.get("_id"), source.keySet());
+        log.info("E2E 响应状态：{}，物理索引：{}，文档ID={}，字段={}，requestData字段={}",
+                response.getStatusCodeValue(), physicalIndex, hit.get("_id"), source.keySet(),
+                map(source.get("requestData")).keySet());
         assertEquals(200, response.getStatusCodeValue(), "真实 HTTP 请求应成功");
+        assertEquals(REQUEST_BODY, response.getBody(), "Capture 不得破坏 Controller 接收的完整 Body");
         assertTrue(ElasticsearchLowLevelRequestHelper.indexExists(client, physicalIndex),
                 "首次真实写入应由 Persistence/Route 创建物理日索引");
         assertFalse(ElasticsearchLowLevelRequestHelper.indexExists(client, LOGICAL_INDEX),
                 "逻辑索引不能被直接作为物理索引写入");
-        Set<String> expectedDocumentFields = new LinkedHashSet<>(CORE_FIELD_NAMES);
-        expectedDocumentFields.add("extensions");
-        assertEquals(expectedDocumentFields, source.keySet(),
-                "最终文档只能包含 15 个核心字段和固定 extensions 信封");
+        assertTrue(source.containsKey("requestData"), "Listener 的请求数据快照必须写入 ES 文档");
         assertFalse(source.containsKey(TestAuditContextProvider.CLIENT_ID_EXTENSION),
                 "业务扩展不能平铺到审计文档顶层");
         assertEquals(source.get("eventId"), hit.get("_id"), "ES 文档 ID 必须等于 eventId");
@@ -123,7 +117,7 @@ class XffCaptureAuditEsProviderEndToEndTest {
                 "应用名应来自 spring.application.name");
         assertEquals(REQUEST_ID, source.get("requestId"), "requestId 应由同步 Provider 补充");
         assertEquals(TRACE_ID, source.get("traceId"), "traceId 应由同步 Provider 补充");
-        assertEquals("GET", source.get("requestMethod"), "HTTP 方法应准确");
+        assertEquals("POST", source.get("requestMethod"), "HTTP 方法应准确");
         assertEquals("/audit-e2e", source.get("requestUri"), "URI 应不含 query string");
         List<?> hostList = (List<?>) source.get("hostList");
         assertNotNull(hostList, "Host 列表应存在");
@@ -150,19 +144,39 @@ class XffCaptureAuditEsProviderEndToEndTest {
         assertEquals(UNMAPPED_EXTENSION_VALUE,
                 extensions.get(TestAuditContextProvider.UNMAPPED_EXTENSION),
                 "未声明扩展字段必须可保留在 _source");
+        assertRequestData(source.get("requestData"));
 
         assertEquals(1L, countByTerm("publicIpList", PUBLIC_IPV4),
                 "应能按公网 IP 精确查询");
         assertEquals(1L, countByTerm("xffIpList", "10.20.0.0/16"),
                 "应能按内网 CIDR 查询");
-        assertEquals(1L, countByTerm("extensions.clientId", CLIENT_ID),
-                "应能按已声明扩展字段精确查询");
-        assertEquals(0L, countByTerm("extensions.unmappedExtension", UNMAPPED_EXTENSION_VALUE),
-                "未声明扩展字段不能自动变为可查询字段");
-        assertMappingType("xffIpList", "ip");
-        assertMappingType("publicIpList", "ip");
-        assertMappingType("applicationRemoteIp", "ip");
-        assertExtensionsMapping();
+        assertEquals(1L, countByTerm("requestData.queryParameters.values.tag", "one"),
+                "请求 Query 参数值应能直接精确查询");
+        assertEquals(1L, countByTerm("requestData.body.text", REQUEST_BODY),
+                "请求 Body 原文应能直接精确查询");
+        assertEquals(1L, countByTerm(
+                        "extensions." + TestAuditContextProvider.CLIENT_ID_EXTENSION, CLIENT_ID),
+                "业务扩展值应能直接精确查询");
+        assertKnownMappingTypes();
+    }
+
+    private void assertRequestData(Object value) {
+        Map<String, Object> requestData = map(value);
+        Map<String, Object> query = map(requestData.get("queryParameters"));
+        Map<String, Object> form = map(requestData.get("formParameters"));
+        Map<String, Object> body = map(requestData.get("body"));
+
+        log.info("requestData 快照：query={}，form={}，body={}", requestData.keySet(),
+                form.keySet(), body.keySet());
+        assertEquals("CAPTURED", query.get("status"), "Query 状态必须随文档写入");
+        assertEquals(Arrays.asList("one", "two"),
+                map(query.get("values")).get("tag"), "Query 多值必须完整写入");
+        assertEquals("DISABLED", form.get("status"), "未启用 Form 时状态必须原样保留");
+        assertEquals("CAPTURED", body.get("status"), "Body 状态必须随文档写入");
+        assertEquals("application/json", body.get("contentType"), "Body Content-Type 必须保留");
+        assertEquals(REQUEST_BODY, body.get("text"), "Body 文本必须原样写入");
+        assertEquals(REQUEST_BODY.length(), ((Number) body.get("capturedByteCount")).longValue(),
+                "Body 保留字节数必须准确");
     }
 
     private Map<String, Object> awaitHitByRequestId(String requestId) throws Exception {
@@ -190,7 +204,13 @@ class XffCaptureAuditEsProviderEndToEndTest {
     }
 
     private long countByTerm(String field, String value) throws Exception {
-        String body = "{\"query\":{\"term\":{\"" + field + "\":\"" + value + "\"}}}";
+        Map<String, Object> term = new LinkedHashMap<>();
+        term.put(field, value);
+        Map<String, Object> query = new LinkedHashMap<>();
+        query.put("term", term);
+        Map<String, Object> requestBody = new LinkedHashMap<>();
+        requestBody.put("query", query);
+        String body = new ObjectMapper().writeValueAsString(requestBody);
         Request request = ElasticsearchLowLevelRequestHelper.newJsonRequest(
                 SimpleElasticsearchRouteConstant.HTTP_METHOD_POST,
                 "/" + physicalIndex + "/_count", body);
@@ -199,7 +219,7 @@ class XffCaptureAuditEsProviderEndToEndTest {
                 .longValue();
     }
 
-    private void assertMappingType(String field, String expectedType) throws Exception {
+    private void assertKnownMappingTypes() throws Exception {
         Request request = ElasticsearchLowLevelRequestHelper.newRequest(
                 SimpleElasticsearchRouteConstant.HTTP_METHOD_GET,
                 "/" + physicalIndex + "/_mapping");
@@ -210,36 +230,71 @@ class XffCaptureAuditEsProviderEndToEndTest {
         Map<String, Object> properties = mappings.containsKey("_doc")
                 ? map(map(mappings.get("_doc")).get("properties"))
                 : map(mappings.get("properties"));
-        String actualType = String.valueOf(map(properties.get(field)).get("type"));
 
-        log.info("mapping 字段类型：field={}，type={}", field, actualType);
-        assertEquals(expectedType, actualType, field + " mapping 类型应准确");
-    }
+        Map<String, String> expectedTypes = new LinkedHashMap<>();
+        expectedTypes.put("eventId", "keyword");
+        expectedTypes.put("capturedTime", "date");
+        expectedTypes.put("applicationName", "keyword");
+        expectedTypes.put("requestId", "keyword");
+        expectedTypes.put("traceId", "keyword");
+        expectedTypes.put("requestMethod", "keyword");
+        expectedTypes.put("requestUri", "keyword");
+        expectedTypes.put("hostList", "keyword");
+        expectedTypes.put("xffPresent", "boolean");
+        expectedTypes.put("xffRawList", "keyword");
+        expectedTypes.put("xffIpList", "ip");
+        expectedTypes.put("publicIpList", "ip");
+        expectedTypes.put("applicationRawRemoteAddress", "keyword");
+        expectedTypes.put("applicationRemoteIp", "ip");
+        expectedTypes.put("classificationVersion", "keyword");
 
-    private void assertExtensionsMapping() throws Exception {
-        Request request = ElasticsearchLowLevelRequestHelper.newRequest(
-                SimpleElasticsearchRouteConstant.HTTP_METHOD_GET,
-                "/" + physicalIndex + "/_mapping");
-        Map<String, Object> body = parse(ElasticsearchLowLevelRequestHelper.readResponseBody(
-                ElasticsearchLowLevelRequestHelper.execute(client, request)));
-        Map<String, Object> indexMapping = map(body.get(physicalIndex));
-        Map<String, Object> mappings = map(indexMapping.get("mappings"));
-        Map<String, Object> properties = mappings.containsKey("_doc")
-                ? map(map(mappings.get("_doc")).get("properties"))
-                : map(mappings.get("properties"));
-        Map<String, Object> extensionsMapping = map(properties.get("extensions"));
-        Map<String, Object> extensionProperties = map(extensionsMapping.get("properties"));
-        String clientIdType = String.valueOf(map(extensionProperties.get(
-                TestAuditContextProvider.CLIENT_ID_EXTENSION)).get("type"));
+        for (Map.Entry<String, String> entry : expectedTypes.entrySet()) {
+            assertEquals(entry.getValue(), String.valueOf(map(properties.get(entry.getKey())).get("type")),
+                    entry.getKey() + " mapping 类型应准确");
+        }
 
-        log.info("extensions mapping：type={}，dynamic={}，clientId.type={}",
-                extensionsMapping.get("type"), extensionsMapping.get("dynamic"), clientIdType);
-        Object extensionsType = extensionsMapping.get("type");
-        assertTrue(extensionsType == null || "object".equals(extensionsType),
-                "extensions 必须为 object，ES 6/7 回显可省略 object 类型");
-        assertEquals("false", String.valueOf(extensionsMapping.get("dynamic")),
-                "extensions 必须使用 dynamic:false");
-        assertEquals("keyword", clientIdType, "extensions.clientId 必须为 keyword");
+        Map<String, Object> requestData = map(properties.get("requestData"));
+        Map<String, Object> requestDataProperties = map(requestData.get("properties"));
+        Map<String, Object> queryParameters = map(requestDataProperties.get("queryParameters"));
+        Map<String, Object> formParameters = map(requestDataProperties.get("formParameters"));
+        Map<String, Object> requestBody = map(requestDataProperties.get("body"));
+        assertNotNull(requestDataProperties, "requestData 必须定义固定子字段");
+        assertNotNull(queryParameters.get("properties"), "queryParameters 必须定义固定子字段");
+        assertNotNull(formParameters.get("properties"), "formParameters 必须定义固定子字段");
+        assertNotNull(requestBody.get("properties"), "body 必须定义固定子字段");
+
+        Map<String, Object> queryProperties = map(queryParameters.get("properties"));
+        Map<String, Object> formProperties = map(formParameters.get("properties"));
+        Map<String, Object> bodyProperties = map(requestBody.get("properties"));
+        assertEquals("keyword", map(queryProperties.get("status")).get("type"),
+                "Query status mapping 类型应准确");
+        Map<String, Object> queryValuesProperties = map(map(queryProperties.get("values"))
+                .get("properties"));
+        assertEquals("keyword", map(queryValuesProperties.get("tag")).get("type"),
+                "动态 Query 参数值必须映射为 keyword");
+        assertEquals("keyword", map(formProperties.get("status")).get("type"),
+                "Form status mapping 类型应准确");
+        assertNotNull(formProperties.get("values"),
+                "Form values 固定容器必须保留");
+        assertEquals("keyword", map(bodyProperties.get("status")).get("type"),
+                "Body status mapping 类型应准确");
+        assertEquals("keyword", map(bodyProperties.get("contentType")).get("type"),
+                "Body contentType mapping 类型应准确");
+        assertEquals("long", map(bodyProperties.get("declaredContentLength")).get("type"),
+                "Body declaredContentLength mapping 类型应准确");
+        assertEquals("long", map(bodyProperties.get("capturedByteCount")).get("type"),
+                "Body capturedByteCount mapping 类型应准确");
+        Map<String, Object> bodyTextMapping = map(bodyProperties.get("text"));
+        assertEquals("keyword", bodyTextMapping.get("type"), "Body text mapping 类型应准确");
+        assertEquals(32766, ((Number) bodyTextMapping.get("ignore_above")).intValue(),
+                "Body text 的精确索引长度上限应准确");
+
+        Map<String, Object> extensionProperties = map(map(properties.get("extensions"))
+                .get("properties"));
+        assertEquals("keyword", map(extensionProperties.get(
+                        TestAuditContextProvider.CLIENT_ID_EXTENSION)).get("type"),
+                "业务扩展值必须映射为 keyword");
+        log.info("已知 Audit Document 与 requestData mapping 已验证，字段数={}", expectedTypes.size());
     }
 
     private void deleteTestResources() throws Exception {
@@ -282,9 +337,9 @@ class XffCaptureAuditEsProviderEndToEndTest {
     @RestController
     static class TestController {
 
-        @GetMapping("/audit-e2e")
-        String audit() {
-            return "ok";
+        @PostMapping("/audit-e2e")
+        String audit(@RequestBody String requestBody) {
+            return requestBody;
         }
     }
 }

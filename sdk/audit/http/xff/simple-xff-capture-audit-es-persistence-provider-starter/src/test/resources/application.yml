@@ -10,6 +10,17 @@ io:
           xff:
             capture:
               enable: true
+              request-data:
+                query-parameters:
+                  enabled: true
+                body:
+                  enabled: true
+                  max-bytes: 64
+                  allowed-content-types:
+                    - application/json
+                whitelist:
+                  - method: POST
+                    path-pattern: /audit-e2e
         audit:
           http:
             xff:
