@@ -61,17 +61,18 @@ public class XffCaptureAuditEventListener {
             document = documentFactory.create(event);
         } catch (RuntimeException e) {
             log.warn("XFF 审计文档转换失败，eventId=[{}]，异常类型=[{}]",
-                    event.getEventId(), e.getClass().getName());
+                    event.getEventId(), e.getClass().getName(), e);
             return;
         }
 
         try {
             executor.execute(() -> persist(document));
         } catch (RejectedExecutionException e) {
-            log.warn("XFF 审计队列已满，eventId=[{}]", document.getEventId());
+            log.warn("XFF 审计队列已满，eventId=[{}]，异常类型=[{}]",
+                    document.getEventId(), e.getClass().getName(), e);
         } catch (RuntimeException e) {
             log.warn("XFF 审计任务提交失败，eventId=[{}]，异常类型=[{}]",
-                    document.getEventId(), e.getClass().getName());
+                    document.getEventId(), e.getClass().getName(), e);
         }
     }
 
@@ -81,7 +82,7 @@ public class XffCaptureAuditEventListener {
                 provider.persist(document);
             } catch (RuntimeException e) {
                 log.warn("XFF 审计 Provider 执行失败，eventId=[{}]，provider=[{}]，异常类型=[{}]",
-                        document.getEventId(), provider.getClass().getName(), e.getClass().getName());
+                        document.getEventId(), provider.getClass().getName(), e.getClass().getName(), e);
             }
         }
     }

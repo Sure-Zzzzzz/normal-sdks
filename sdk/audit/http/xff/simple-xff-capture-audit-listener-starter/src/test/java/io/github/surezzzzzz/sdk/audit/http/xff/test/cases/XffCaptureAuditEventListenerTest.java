@@ -4,15 +4,17 @@ import io.github.surezzzzzz.sdk.audit.http.xff.factory.XffCaptureAuditDocumentFa
 import io.github.surezzzzzz.sdk.audit.http.xff.listener.XffCaptureAuditEventListener;
 import io.github.surezzzzzz.sdk.audit.http.xff.model.XffCaptureAuditDocument;
 import io.github.surezzzzzz.sdk.audit.http.xff.provider.XffCaptureAuditPersistenceProvider;
+import io.github.surezzzzzz.sdk.http.xff.core.constant.RequestBodyCaptureStatus;
+import io.github.surezzzzzz.sdk.http.xff.core.constant.RequestDataCaptureStatus;
 import io.github.surezzzzzz.sdk.http.xff.core.event.XffCaptureEvent;
-import io.github.surezzzzzz.sdk.http.xff.core.model.ForwardedContext;
-import io.github.surezzzzzz.sdk.http.xff.core.model.HeaderValueSnapshot;
-import io.github.surezzzzzz.sdk.http.xff.core.model.XffCaptureSnapshot;
-import io.github.surezzzzzz.sdk.http.xff.core.model.XffChain;
+import io.github.surezzzzzz.sdk.http.xff.core.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -20,8 +22,7 @@ import java.util.Collections;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.*;
  * @author surezzzzzz
  */
 @Slf4j
+@ExtendWith(OutputCaptureExtension.class)
 class XffCaptureAuditEventListenerTest {
 
     @Test
@@ -68,10 +70,30 @@ class XffCaptureAuditEventListenerTest {
     }
 
     @Test
+    void shouldLogFullProviderThrowableWithoutBlockingFollowingProvider(CapturedOutput output) {
+        XffCaptureAuditPersistenceProvider failedProvider = mock(XffCaptureAuditPersistenceProvider.class);
+        XffCaptureAuditPersistenceProvider followingProvider = mock(XffCaptureAuditPersistenceProvider.class);
+        RuntimeException failure = new RuntimeException("provider-failure-marker");
+        doThrow(failure).when(failedProvider).persist(any(XffCaptureAuditDocument.class));
+        XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
+        XffCaptureEvent event = event("event-provider-log", true);
+        XffCaptureAuditDocument document = document("event-provider-log");
+        when(factory.create(event)).thenReturn(document);
+        XffCaptureAuditEventListener listener = new XffCaptureAuditEventListener(
+                Arrays.asList(failedProvider, followingProvider), factory, Runnable::run);
+
+        assertDoesNotThrow(() -> listener.onXffCaptureEvent(event));
+
+        log.info("Provider 异常堆栈输出长度：{}", output.getOut().length());
+        assertTrue(output.getOut().contains("provider-failure-marker"), "Provider 异常消息必须进入完整堆栈日志");
+        verify(followingProvider).persist(document);
+    }
+
+    @Test
     void shouldContinueBroadcastWhenOneProviderFails() {
         XffCaptureAuditPersistenceProvider failedProvider = mock(XffCaptureAuditPersistenceProvider.class);
         XffCaptureAuditPersistenceProvider followingProvider = mock(XffCaptureAuditPersistenceProvider.class);
-        doThrow(new RuntimeException("sensitive-test-value")).when(failedProvider)
+        doThrow(new RuntimeException("provider-failure-without-log-assertion")).when(failedProvider)
                 .persist(any(XffCaptureAuditDocument.class));
         XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
         XffCaptureEvent event = event("event-provider-failure", true);
@@ -89,11 +111,27 @@ class XffCaptureAuditEventListenerTest {
     }
 
     @Test
+    void shouldLogFullConversionThrowable(CapturedOutput output) {
+        XffCaptureAuditPersistenceProvider provider = mock(XffCaptureAuditPersistenceProvider.class);
+        XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
+        XffCaptureEvent event = event("event-convert-log", true);
+        when(factory.create(event)).thenThrow(new RuntimeException("conversion-failure-marker"));
+        XffCaptureAuditEventListener listener = new XffCaptureAuditEventListener(
+                Collections.singletonList(provider), factory, Runnable::run);
+
+        assertDoesNotThrow(() -> listener.onXffCaptureEvent(event));
+
+        log.info("转换异常堆栈输出长度：{}", output.getOut().length());
+        assertTrue(output.getOut().contains("conversion-failure-marker"), "转换异常必须进入完整堆栈日志");
+        verifyNoInteractions(provider);
+    }
+
+    @Test
     void shouldIsolateDocumentConversionFailure() {
         XffCaptureAuditPersistenceProvider provider = mock(XffCaptureAuditPersistenceProvider.class);
         XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
         XffCaptureEvent event = event("event-convert-failure", true);
-        when(factory.create(event)).thenThrow(new RuntimeException("sensitive-test-value"));
+        when(factory.create(event)).thenThrow(new RuntimeException("provider-failure-without-log-assertion"));
         XffCaptureAuditEventListener listener = new XffCaptureAuditEventListener(
                 Collections.singletonList(provider), factory, Runnable::run);
 
@@ -101,6 +139,25 @@ class XffCaptureAuditEventListenerTest {
                 "文档转换失败不能传播到 Capture 事件发布线程");
 
         log.info("验证转换失败不调用 Provider：eventId={}", event.getEventId());
+        verifyNoInteractions(provider);
+    }
+
+    @Test
+    void shouldLogFullQueueRejectionThrowable(CapturedOutput output) {
+        XffCaptureAuditPersistenceProvider provider = mock(XffCaptureAuditPersistenceProvider.class);
+        XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
+        XffCaptureEvent event = event("event-rejected-log", true);
+        when(factory.create(event)).thenReturn(document("event-rejected-log"));
+        Executor rejectedExecutor = command -> {
+            throw new RejectedExecutionException("queue-rejection-marker");
+        };
+        XffCaptureAuditEventListener listener = new XffCaptureAuditEventListener(
+                Collections.singletonList(provider), factory, rejectedExecutor);
+
+        assertDoesNotThrow(() -> listener.onXffCaptureEvent(event));
+
+        log.info("队列异常堆栈输出长度：{}", output.getOut().length());
+        assertTrue(output.getOut().contains("queue-rejection-marker"), "队列拒绝异常必须进入完整堆栈日志");
         verifyNoInteractions(provider);
     }
 
@@ -123,6 +180,25 @@ class XffCaptureAuditEventListenerTest {
         verifyNoInteractions(provider);
     }
 
+    @Test
+    void shouldLogFullTaskSubmissionThrowable(CapturedOutput output) {
+        XffCaptureAuditPersistenceProvider provider = mock(XffCaptureAuditPersistenceProvider.class);
+        XffCaptureAuditDocumentFactory factory = mock(XffCaptureAuditDocumentFactory.class);
+        XffCaptureEvent event = event("event-submit-log", true);
+        when(factory.create(event)).thenReturn(document("event-submit-log"));
+        Executor failedExecutor = command -> {
+            throw new RuntimeException("submission-failure-marker");
+        };
+        XffCaptureAuditEventListener listener = new XffCaptureAuditEventListener(
+                Collections.singletonList(provider), factory, failedExecutor);
+
+        assertDoesNotThrow(() -> listener.onXffCaptureEvent(event));
+
+        log.info("提交异常堆栈输出长度：{}", output.getOut().length());
+        assertTrue(output.getOut().contains("submission-failure-marker"), "提交异常必须进入完整堆栈日志");
+        verifyNoInteractions(provider);
+    }
+
     private XffCaptureAuditDocument document(String eventId) {
         return new XffCaptureAuditDocument(eventId, "2026-08-19T00:00:00.000Z", "test-service",
                 null, null, "GET", "/test", Collections.singletonList("test.example"),
@@ -139,6 +215,19 @@ class XffCaptureAuditEventListenerTest {
         HeaderValueSnapshot absent = new HeaderValueSnapshot(false, Collections.<String>emptyList());
         ForwardedContext context = new ForwardedContext(absent, absent, absent, absent, absent);
         return new XffCaptureEvent(eventId, Instant.parse("2026-08-19T00:00:00Z"),
-                "GET", "/test", "10.0.0.10", new XffCaptureSnapshot(chain, context));
+                "GET", "/test", "10.0.0.10", new XffCaptureSnapshot(chain, context), requestData());
+    }
+
+    private RequestDataSnapshot requestData() {
+        RequestParameterSnapshot query = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.CAPTURED,
+                Collections.singletonMap("query", Collections.singletonList("query-value")));
+        RequestParameterSnapshot form = new RequestParameterSnapshot(
+                RequestDataCaptureStatus.CAPTURED,
+                Collections.singletonMap("form", Collections.singletonList("form-value")));
+        RequestBodySnapshot body = new RequestBodySnapshot(
+                RequestBodyCaptureStatus.CAPTURED, "application/json", 16L, 16L,
+                "{\"body\":true}");
+        return new RequestDataSnapshot(query, form, body);
     }
 }

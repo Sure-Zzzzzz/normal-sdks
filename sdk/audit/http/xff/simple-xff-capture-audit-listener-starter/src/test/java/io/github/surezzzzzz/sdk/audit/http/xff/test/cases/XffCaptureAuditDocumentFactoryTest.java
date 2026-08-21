@@ -13,6 +13,9 @@ import io.github.surezzzzzz.sdk.http.xff.core.model.XffCaptureSnapshot;
 import io.github.surezzzzzz.sdk.http.xff.core.model.XffChain;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 
 import java.time.Instant;
@@ -26,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
+@ExtendWith(OutputCaptureExtension.class)
 class XffCaptureAuditDocumentFactoryTest {
 
     @Test
@@ -112,10 +116,10 @@ class XffCaptureAuditDocumentFactoryTest {
     }
 
     @Test
-    void shouldIsolateProviderFailureAndKeepNetworkFacts() {
+    void shouldIsolateProviderFailureAndKeepNetworkFacts(CapturedOutput output) {
         SimpleXffCaptureAuditListenerProperties properties = properties("test-service");
         XffCaptureAuditContextProvider provider = () -> {
-            throw new RuntimeException("sensitive-provider-value");
+            throw new RuntimeException("context-provider-failure-marker");
         };
         XffCaptureAuditDocumentFactory factory = new XffCaptureAuditDocumentFactory(
                 properties, new MockEnvironment(), Optional.of(provider));
@@ -123,7 +127,10 @@ class XffCaptureAuditDocumentFactoryTest {
         XffCaptureAuditDocument document = assertDoesNotThrow(() -> factory.create(event()),
                 "Provider 失败不能丢失网络事实审计");
 
-        log.info("Provider 失败后 XFF IP 数量：{}", document.getXffIpList().size());
+        log.info("Provider 失败后 XFF IP 数量：{}，异常堆栈输出长度：{}",
+                document.getXffIpList().size(), output.getOut().length());
+        assertTrue(output.getOut().contains("context-provider-failure-marker"),
+                "Context Provider 异常必须进入完整堆栈日志");
         assertNull(document.getRequestId(), "Provider 失败时 requestId 应为空");
         assertNull(document.getTraceId(), "Provider 失败时 traceId 应为空");
         assertTrue(document.getExtensions().isEmpty(), "Provider 失败时扩展字段不能投影");

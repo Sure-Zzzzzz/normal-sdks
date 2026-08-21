@@ -100,7 +100,8 @@ public class XffCaptureAuditDocumentFactory {
                 event.getApplicationRawRemoteAddress(),
                 applicationRemoteIp,
                 SimpleXffCaptureCoreConstant.IP_CLASSIFICATION_VERSION,
-                context == null ? Collections.<String, String>emptyMap() : context.getExtensions()
+                context == null ? Collections.<String, String>emptyMap() : context.getExtensions(),
+                event.getRequestData()
         );
     }
 
@@ -111,7 +112,7 @@ public class XffCaptureAuditDocumentFactory {
         try {
             return contextProvider.get().currentContext();
         } catch (RuntimeException e) {
-            log.warn("XFF 审计上下文读取失败，异常类型=[{}]", e.getClass().getName());
+            log.warn("XFF 审计上下文读取失败，异常类型=[{}]", e.getClass().getName(), e);
             return null;
         }
     }

@@ -7,8 +7,8 @@ XFF Capture Audit 的事件监听与 Provider 广播层。模块监听 `simple-x
 ## 接入
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.0.0'
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.0'
 ```
 
 ```yaml
@@ -74,7 +74,7 @@ public XffCaptureAuditPersistenceProvider customAuditProvider() {
 }
 ```
 
-所有 Provider 都会收到同一份不可变文档，并按容器顺序同步调用。某个 Provider 抛出运行时异常时，Listener 只记录事件标识、Provider 类型和异常类型，然后继续调用后续 Provider。Provider 不应依赖其他 Provider 的成功或创建独立线程池。
+所有 Provider 都会收到同一份不可变文档，并按容器顺序同步调用。某个 Provider 抛出运行时异常时，Listener 记录事件标识、Provider 类型和完整 Throwable 堆栈，然后继续调用后续 Provider。Provider 不应依赖其他 Provider 的成功或创建独立线程池。
 
 ## 可选上下文
 
@@ -98,10 +98,16 @@ public XffCaptureAuditContextProvider xffCaptureAuditContextProvider() {
 
 需要 Elasticsearch 写入时，另外引入并启用 `simple-xff-capture-audit-es-persistence-provider-starter`。Persistence、Route、物理日期索引、模板和真实 Elasticsearch E2E 不属于本模块。
 
+## Capture 1.1.0 请求数据投影
+
+Capture 负责 Query、Form、Body 的采集开关、URI 规则、Content-Type 约束、截断和读取状态。Listener 不新增第二套配置，也不重新读取 HTTP 请求；Factory 直接将 `XffCaptureEvent.requestData` 放入 `XffCaptureAuditDocument.requestData`，因此 Event 中已经完成的不可变快照会原样进入每个 Provider 收到的同一份 Document。
+
+Listener 只在同步事件线程构造文档，随后通过唯一有界执行器异步广播；Provider 不得修改请求数据快照或文档。
+
 ## 行为边界
 
 - Listener 只负责事件监听、同步上下文快照、不可变文档构造和异步 Provider 广播。
 - Listener 不定义业务扩展字段的存储或查询语义；需要 Elasticsearch 查询时由 Provider 与部署模板显式声明 mapping。
 - Listener 不创建 Elasticsearch Client、Persistence Engine、Route、物理索引、模板或 Search。
-- 事件转换失败、队列拒绝和 Provider 异常不会传播到 Capture 事件发布线程。
-- 1.0.0 是 best effort，不承诺进程崩溃时队列内任务不丢失。
+- 事件转换失败、队列拒绝、任务提交失败、Context Provider 失败和 Provider 异常不会传播到 Capture 事件发布线程，且均记录完整 Throwable 堆栈。
+- 1.1.0 是 best effort，不承诺进程崩溃时队列内任务不丢失。
