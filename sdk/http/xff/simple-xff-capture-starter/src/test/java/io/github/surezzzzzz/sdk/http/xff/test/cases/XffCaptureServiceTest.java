@@ -85,13 +85,8 @@ class XffCaptureServiceTest {
         XffChain entryChain = xffCaptureService.capture(entryRequest);
         HttpServletRequest businessRequest = new XffHeaderRequestWrapper(
                 entryRequest, "198.51.100.10, 10.0.0.10");
-        logRequestView("入口采集后", entryRequest);
-        logRequestView("业务阶段", businessRequest);
         XffChain businessChain = xffCaptureService.capture(businessRequest);
         List<XffCaptureEvent> events = eventListener.snapshot();
-
-        log.info("入口与业务请求 identity：entry={}，business={}，事件数量={}",
-                System.identityHashCode(entryRequest), System.identityHashCode(businessRequest), events.size());
         assertNotEquals(System.identityHashCode(entryRequest), System.identityHashCode(businessRequest),
                 "测试应使用独立的业务阶段 RequestWrapper");
         assertFalse(entryChain.isPresent(), "入口 request 无 XFF 时首次快照应为空");
@@ -113,8 +108,6 @@ class XffCaptureServiceTest {
         assertSame(entryChain, businessChain,
                 "当前实现命中入口快照后不会重新读取业务阶段的 Header 视图");
         assertEquals(1, events.size(), "入口与业务阶段重复调用不得产生重复事件");
-        log.info("当前事件 XFF 快照：present={}，rawList={}",
-                events.get(0).getXffChain().isPresent(), events.get(0).getXffChain().getRawList());
         assertFalse(events.get(0).getXffChain().isPresent(),
                 "当前事件仍固定为入口阶段的空 XFF 快照");
         assertEquals(Collections.emptyList(), events.get(0).getXffChain().getRawList(),
@@ -340,16 +333,6 @@ class XffCaptureServiceTest {
 
         log.info("null 请求错误码：{}", exception.getErrorCode());
         assertEquals(ErrorCode.REQUIRED_VALUE_MISSING, exception.getErrorCode(), "错误码应表示必填值缺失");
-    }
-
-    private void logRequestView(String stage, HttpServletRequest request) {
-        List<String> xffValues = Collections.list(request.getHeaders(
-                SimpleXffCaptureConstant.HEADER_X_FORWARDED_FOR));
-        boolean hasXffHeaderName = containsHeaderIgnoreCase(request.getHeaderNames(),
-                SimpleXffCaptureConstant.HEADER_X_FORWARDED_FOR);
-        log.info("XFF 请求视图：阶段={}，identity={}，类型={}，remoteAddr={}，getHeader={}，getHeaders={}，hasXffName={}",
-                stage, System.identityHashCode(request), request.getClass().getName(), request.getRemoteAddr(),
-                request.getHeader(SimpleXffCaptureConstant.HEADER_X_FORWARDED_FOR), xffValues, hasXffHeaderName);
     }
 
     private boolean containsHeaderIgnoreCase(Enumeration<String> names, String expectedName) {

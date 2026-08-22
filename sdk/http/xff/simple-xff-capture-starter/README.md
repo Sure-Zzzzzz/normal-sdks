@@ -2,13 +2,13 @@
 
 面向 Spring MVC 应用的 XFF 事实采集 Starter。它依赖 `simple-xff-capture-core`，自动通过 Servlet Filter 读取应用实际看到的 `X-Forwarded-For` 和固定入口转发上下文，形成 Core 不可变快照并通过 Spring 进程内事件总线发布 `XffCaptureEvent`，不判断真实客户端 IP。
 
-Starter 当前版本为 1.1.0，传递依赖已发布的 `simple-xff-capture-core:1.1.0`，调用方无需重复声明 Core。请求数据采集能力已纳入本版本，并已使用该精确坐标完成验证。
+Starter 当前版本为 1.1.1，传递依赖 `simple-xff-capture-core:1.1.0`，调用方无需重复声明 Core。请求数据采集能力已纳入 1.1.0，1.1.1 增加默认关闭的 XFF 入口诊断日志。
 
 ## 接入
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.1'
 }
 ```
 
@@ -107,6 +107,20 @@ io:
 
 请求数据能力不会改变 XFF 事实边界：`X-Forwarded-For` 只来自请求 Header，`applicationRawRemoteAddress` 只记录 `request.getRemoteAddr()`，两者不会互相回填。
 
+## XFF 入口诊断（1.1.1）
+
+当需要定位 XFF 在入口、请求包装或事件发布前哪个阶段不可见时，临时开启 Starter 主包 DEBUG：
+
+```yaml
+logging:
+  level:
+    io.github.surezzzzzz.sdk.http.xff: DEBUG
+```
+
+一次自动采集会依次输出 `filter-enter`、`capture-before`、`event-publish` 三段日志：前两段展示原始 Servlet Request 与请求数据准备后实际传入 Capture 的 Request 视图，最后一段展示可按 `eventId` 关联下游审计文档的最终 XFF 快照。
+
+日志只记录 HTTP 方法、不含 query 的 URI、`remoteAddr`、请求对象类型与 identity，以及 XFF 原始 Header 值和拆分链；不会记录 Query、Body、Cookie、Authorization、JWT、Token、全量 Header 或请求数据快照。DEBUG 未开启时不会枚举 XFF Header，不改变既有采集和请求体回放行为。
+
 ## 业务可选读取
 
 业务确实需要自行选择链中地址时，可以注入 `XffCaptureService`：
@@ -158,9 +172,10 @@ Event 不统计响应状态、耗时、用户、设备、租户、业务动作�
 - Java 8+
 - Spring Boot `2.2.13.RELEASE`、`2.3.12.RELEASE`、`2.4.5`、`2.7.9`
 
-Starter 1.1.0 使用已发布的 `simple-xff-capture-core:1.1.0`，已完成以上四个 Spring Boot 基线的完整测试。
+Starter 1.1.1 使用 `simple-xff-capture-core:1.1.0`，兼容以上四个 Spring Boot 基线。
 
 ## 版本记录
 
+- [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)：XFF 入口、请求包装与事件快照的 DEBUG 诊断日志。
 - [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：请求数据采集能力与兼容性边界。
 - [CHANGELOG.1.0.1.md](CHANGELOG.1.0.1.md)：已发布的 Filter 顺序配置能力。

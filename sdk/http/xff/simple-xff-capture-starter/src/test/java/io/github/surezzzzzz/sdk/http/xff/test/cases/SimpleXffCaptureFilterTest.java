@@ -95,9 +95,6 @@ class SimpleXffCaptureFilterTest {
             HttpServletRequest wrappedRequest = new XffHeaderRequestWrapper(
                     (HttpServletRequest) request, "198.51.100.10, 10.0.0.10");
             businessRequest[0] = wrappedRequest;
-            log.info("业务阶段读取 XFF：identity={}，type={}，header={}",
-                    System.identityHashCode(wrappedRequest), wrappedRequest.getClass().getName(),
-                    wrappedRequest.getHeader(SimpleXffCaptureConstant.HEADER_X_FORWARDED_FOR));
             XffChain businessChain = service.capture(wrappedRequest);
             businessInvoked.set(true);
             assertTrue(wrappedRequest.getHeaderNames().hasMoreElements(),
@@ -109,9 +106,6 @@ class SimpleXffCaptureFilterTest {
                     "当前实现复用入口快照，业务阶段不会覆盖已缓存的空链");
         });
 
-        log.info("Filter 入口请求：identity={}，type={}，事件数量={}，业务是否执行={}",
-                System.identityHashCode(entryRequest), entryRequest.getClass().getName(),
-                events.size(), businessInvoked.get());
         assertTrue(businessInvoked.get(), "Filter 采集后必须继续执行下游业务链");
         assertNotNull(businessRequest[0], "下游应收到业务阶段 RequestWrapper");
         assertNotSame(entryRequest, businessRequest[0], "业务阶段应使用独立 RequestWrapper");

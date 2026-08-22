@@ -118,6 +118,7 @@ public class SimpleXffCaptureFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+        logXffRequestView("filter-enter", request);
         HttpServletRequest captureRequest = request;
         try {
             try {
@@ -128,6 +129,7 @@ public class SimpleXffCaptureFilter extends OncePerRequestFilter {
             } catch (RuntimeException e) {
                 log.warn("请求数据准备失败，保留原始 XFF 自动采集", e);
             }
+            logXffRequestView("capture-before", captureRequest);
             try {
                 xffCaptureService.capture(captureRequest);
             } catch (RuntimeException e) {
@@ -138,6 +140,22 @@ public class SimpleXffCaptureFilter extends OncePerRequestFilter {
             if (captureRequest instanceof ReplayableRequestBodyWrapper) {
                 ((ReplayableRequestBodyWrapper) captureRequest).deleteReplayFile();
             }
+        }
+    }
+
+    private void logXffRequestView(String stage, HttpServletRequest request) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        try {
+            List<String> xffHeaderValueList = Collections.list(request.getHeaders(
+                    SimpleXffCaptureConstant.HEADER_X_FORWARDED_FOR));
+            log.debug("XFF 调试[{}]：method=[{}]，uri=[{}]，remoteAddr=[{}]，requestType=[{}]，"
+                            + "requestIdentity=[{}]，xffHeaderValues=[{}]",
+                    stage, request.getMethod(), request.getRequestURI(), request.getRemoteAddr(),
+                    request.getClass().getName(), System.identityHashCode(request), xffHeaderValueList);
+        } catch (RuntimeException e) {
+            log.debug("XFF 调试[{}]：读取请求视图失败，不影响原请求", stage, e);
         }
     }
 

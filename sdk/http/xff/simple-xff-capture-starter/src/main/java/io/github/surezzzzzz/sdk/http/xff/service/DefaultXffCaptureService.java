@@ -179,6 +179,15 @@ public class DefaultXffCaptureService implements XffCaptureService {
                 snapshot,
                 requestDataSnapshot(request)
         );
+        if (log.isDebugEnabled()) {
+            log.debug("XFF 调试[event-publish]：eventId=[{}]，method=[{}]，uri=[{}]，remoteAddr=[{}]，"
+                            + "requestType=[{}]，requestIdentity=[{}]，xffPresent=[{}]，"
+                            + "xffRawHeaderList=[{}]，xffRawList=[{}]",
+                    event.getEventId(), event.getRequestMethod(), event.getRequestUri(),
+                    event.getApplicationRawRemoteAddress(), request.getClass().getName(),
+                    System.identityHashCode(request), event.getXffChain().isPresent(),
+                    event.getXffChain().getRawHeaderList(), event.getXffChain().getRawList());
+        }
         try {
             eventPublisher.publishEvent(event);
         } catch (RuntimeException e) {
