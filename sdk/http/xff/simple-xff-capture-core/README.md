@@ -8,7 +8,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-core:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-core:1.1.1'
 }
 ```
 
@@ -55,7 +55,7 @@ boolean publicIp = XffAddressHelper.isPublicIp("8.8.8.8");
 
 ## 事件契约
 
-HTTP 采集模块应创建并发布 `XffCaptureEvent`。事件保存采集事实，不保存 Servlet 生命周期对象或业务结果：
+Core 不直接执行 HTTP 请求采集。上层 HTTP 模块可以通过自动 Filter 触发采集，也可以由业务显式调用采集服务；无论入口如何，事件只保存采集调用时 Servlet 容器暴露的事实，不保存 Servlet 生命周期对象或业务结果：
 
 | 字段 | 含义 |
 | --- | --- |
@@ -63,14 +63,14 @@ HTTP 采集模块应创建并发布 `XffCaptureEvent`。事件保存采集事实
 | `occurredAt` | 采集时间 |
 | `requestMethod` | HTTP 方法 |
 | `requestUri` | 不包含查询参数的请求 URI |
-| `applicationRawRemoteAddress` | Filter 执行时应用通过 `getRemoteAddr()` 看到的原始远端地址，不属于 XFF 链 |
+| `applicationRawRemoteAddress` | 采集执行时 `HttpServletRequest.getRemoteAddr()` 返回的原始字符串；Servlet 容器可能已依据 Forwarded Header 策略改写，不保证是 TCP 对端、最终客户端或请求者出口地址 |
 | `snapshot` | XFF 链与固定转发 Header 的不可变快照 |
 | `requestData` | 可选的 Query、Form、Body 请求数据不可变快照 |
 
 `snapshot` 包含：
 
-- `XffChain`：XFF Header 是否存在、Servlet 容器暴露的原始 Header 值，以及按逗号机械拆分并去除两侧 HTTP 可选空白后的有序值链；
-- `ForwardedContext`：`Host`、`X-Real-IP`、`X-Forwarded-Host`、`X-Forwarded-Port`、`X-Forwarded-Proto` 的原始 Header 快照。
+- `XffChain`：XFF Header 是否存在、采集执行时 Servlet 容器暴露的原始 Header 值，以及按逗号机械拆分并去除两侧 HTTP 可选空白后的有序值链；更早容器组件已消费的 Header 不会由快照恢复；
+- `ForwardedContext`：`Host`、`X-Real-IP`、`X-Forwarded-Host`、`X-Forwarded-Port`、`X-Forwarded-Proto` 各自独立的原始 Header 快照，不互相替代、合并或推断。
 
 所有快照模型都会校验状态并对集合进行防御性复制。原始 Header、请求 URI 和远端地址不会出现在模型的 `toString()` 中，但调用方仍应避免将原始采集内容直接输出到不受控日志。
 
@@ -109,6 +109,7 @@ XFF 与转发 Header 都是请求携带的事实，不等于可信客户端身�
 
 ## 版本记录
 
+- [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)：采集调用时可见 Servlet 事实的字段语义维护。
 - [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：请求数据快照契约扩展。
 
 生产代码仅使用 JDK 8 API；完整测试已在 Spring Boot 2.7.9、2.4.5、2.3.12.RELEASE 和 2.2.13.RELEASE 基线通过。

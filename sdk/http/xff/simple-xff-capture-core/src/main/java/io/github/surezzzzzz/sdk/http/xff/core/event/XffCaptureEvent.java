@@ -17,7 +17,8 @@ import java.time.Instant;
 /**
  * XFF 采集事件。
  *
- * <p>事件不持有 Servlet 生命周期对象，也不推导可信客户端 IP。</p>
+ * <p>事件不持有 Servlet 生命周期对象，也不推导可信客户端 IP。事件中的远端地址和各 Header
+ * 快照只代表采集执行时 Servlet 容器暴露的事实。</p>
  *
  * @author surezzzzzz
  */
@@ -47,7 +48,9 @@ public final class XffCaptureEvent {
     private final String requestUri;
 
     /**
-     * Capture Filter 执行时应用通过 getRemoteAddr() 看到的原始远端地址，不属于 XFF 链。
+     * 采集执行时 {@code HttpServletRequest.getRemoteAddr()} 返回的原始字符串。
+     * Servlet 容器可能在采集前依据 Forwarded Header 处理策略改写该值；它不保证代表
+     * TCP 对端、最终客户端或请求者出口地址，也不属于 XFF 链。
      */
     private final String applicationRawRemoteAddress;
 

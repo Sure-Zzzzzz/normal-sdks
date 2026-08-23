@@ -11,7 +11,8 @@ import lombok.ToString;
 /**
  * HTTP 入口转发上下文。
  *
- * <p>所有字段都是 Servlet 容器暴露的原始 Header 快照，不做 fallback、合并、校验或可信解释。</p>
+ * <p>所有字段都是采集执行时 Servlet 容器暴露的独立原始 Header 快照，不做
+ * fallback、相互替代、合并、校验或可信解释；不承诺还原更早组件已经消费的入口 Header。</p>
  *
  * @author surezzzzzz
  */

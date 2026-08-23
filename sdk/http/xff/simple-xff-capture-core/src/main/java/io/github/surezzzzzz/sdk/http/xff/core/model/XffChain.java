@@ -15,7 +15,8 @@ import java.util.List;
 /**
  * 应用通过 Servlet 容器看到的 XFF 不可变快照。
  *
- * <p>链元素只代表接收到的 Header 事实，不代表可信客户端 IP。</p>
+ * <p>链元素只代表采集执行时 Servlet 容器暴露的 Header 事实，不代表可信客户端 IP。
+ * 如果更早的容器组件已经消费 Header，快照不承诺还原 LB、Ingress 或代理最初传入的值。</p>
  *
  * @author surezzzzzz
  */
@@ -30,7 +31,8 @@ public final class XffChain {
     private final boolean present;
 
     /**
-     * Servlet 容器按枚举顺序暴露的原始 Header 值列表。
+     * 采集执行时 Servlet 容器按枚举顺序暴露的原始 Header 值列表。
+     * 该列表保留同名 Header 的边界，不保证是入口最初收到的完整 Header。
      */
     private final List<String> rawHeaderList;
 

@@ -15,7 +15,8 @@ import java.util.List;
 /**
  * 单个 HTTP Header 的不可变原始值快照。
  *
- * <p>快照只反映 Servlet 容器暴露的值，不校验、不合并，也不解释可信性。</p>
+ * <p>快照只反映采集执行时 Servlet 容器暴露的值，不校验、不合并、不替代
+ * 其他 Header，也不解释可信性；更早组件消费的 Header 不会由此快照恢复。</p>
  *
  * @author surezzzzzz
  */
