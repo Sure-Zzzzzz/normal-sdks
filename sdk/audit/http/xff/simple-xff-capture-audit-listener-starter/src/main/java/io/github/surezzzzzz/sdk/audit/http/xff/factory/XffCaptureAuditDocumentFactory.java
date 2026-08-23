@@ -10,8 +10,10 @@ import io.github.surezzzzzz.sdk.audit.http.xff.support.XffCaptureAuditApplicatio
 import io.github.surezzzzzz.sdk.http.xff.core.constant.SimpleXffCaptureCoreConstant;
 import io.github.surezzzzzz.sdk.http.xff.core.constant.XffIpScope;
 import io.github.surezzzzzz.sdk.http.xff.core.event.XffCaptureEvent;
+import io.github.surezzzzzz.sdk.http.xff.core.model.ForwardedContext;
 import io.github.surezzzzzz.sdk.http.xff.core.model.HeaderValueSnapshot;
 import io.github.surezzzzzz.sdk.http.xff.core.model.XffAddressInfo;
+import io.github.surezzzzzz.sdk.http.xff.core.model.XffChain;
 import io.github.surezzzzzz.sdk.http.xff.core.support.XffAddressHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -21,9 +23,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
- * XFF Capture 审计文档 Factory。
+ * XFF Capture 完整审计文档 Factory。
  *
- * <p>Factory 在事件同步线程完成所有上下文读取和类型化投影。</p>
+ * <p>Factory 在事件同步线程完成上下文读取、原始 Header 事实投影和类型化 IP 投影。</p>
  *
  * @author surezzzzzz
  */
@@ -56,14 +58,16 @@ public class XffCaptureAuditDocumentFactory {
     }
 
     /**
-     * 将 Capture Event 转换为最小审计文档。
+     * 将 Capture Event 转换为完整审计文档。
      *
      * @param event Capture Event
      * @return 不可变审计文档
      */
     public XffCaptureAuditDocument create(XffCaptureEvent event) {
         XffCaptureAuditContext context = currentContext();
-        List<String> xffRawList = event.getXffChain().getRawList();
+        XffChain xffChain = event.getXffChain();
+        ForwardedContext forwardedContext = event.getForwardedContext();
+        List<String> xffRawList = xffChain.getRawList();
         Set<String> xffIpSet = new LinkedHashSet<>();
         Set<String> publicIpSet = new LinkedHashSet<>();
         for (String rawValue : xffRawList) {
@@ -82,7 +86,7 @@ public class XffCaptureAuditDocumentFactory {
                 event.getApplicationRawRemoteAddress());
         String applicationRemoteIp = applicationRemoteAddressInfo.isIpLiteral()
                 ? applicationRemoteAddressInfo.getNormalizedIp() : null;
-        HeaderValueSnapshot host = event.getForwardedContext().getHost();
+        HeaderValueSnapshot host = forwardedContext.getHost();
 
         return new XffCaptureAuditDocument(
                 event.getEventId(),
@@ -93,8 +97,13 @@ public class XffCaptureAuditDocumentFactory {
                 event.getRequestMethod(),
                 event.getRequestUri(),
                 host.getRawValueList(),
-                event.getXffChain().isPresent(),
+                xffChain.isPresent(),
+                xffChain.getRawHeaderList(),
                 xffRawList,
+                forwardedContext.getXRealIp().getRawValueList(),
+                forwardedContext.getXForwardedHost().getRawValueList(),
+                forwardedContext.getXForwardedPort().getRawValueList(),
+                forwardedContext.getXForwardedProto().getRawValueList(),
                 new ArrayList<>(xffIpSet),
                 new ArrayList<>(publicIpSet),
                 event.getApplicationRawRemoteAddress(),

@@ -60,9 +60,19 @@ class XffCaptureAuditDocumentFactoryTest {
         assertEquals(Collections.singletonList("api.example.test"), document.getHostList(),
                 "Host 应原样保留");
         assertTrue(document.isXffPresent(), "XFF present 应保留");
+        assertEquals(Arrays.asList("8.8.8.8, 10.0.0.1, unknown", " , 8.8.8.8, 2001:4860:4860:0:0:0:0:8888"),
+                document.getXffRawHeaderList(), "同名 XFF Header 边界和顺序必须完整保留");
         assertEquals(Arrays.asList("8.8.8.8", "10.0.0.1", "unknown", "", "8.8.8.8",
                         "2001:4860:4860:0:0:0:0:8888"),
                 document.getXffRawList(), "原始 XFF 逻辑链不得去重或丢脏值");
+        assertEquals(Collections.singletonList("10.0.0.1"), document.getXRealIpList(),
+                "X-Real-IP 原始值必须完整投影");
+        assertEquals(Arrays.asList("api.example.test", "edge.example.test"),
+                document.getXForwardedHostList(), "X-Forwarded-Host 原始值必须完整投影");
+        assertEquals(Collections.singletonList("443"), document.getXForwardedPortList(),
+                "X-Forwarded-Port 原始值必须完整投影");
+        assertEquals(Collections.singletonList("https"), document.getXForwardedProtoList(),
+                "X-Forwarded-Proto 原始值必须完整投影");
         assertEquals(Arrays.asList("8.8.8.8", "10.0.0.1", "2001:4860:4860::8888"),
                 document.getXffIpList(), "合法 IP 应规范化并按首次出现顺序去重");
         assertEquals(Arrays.asList("8.8.8.8", "2001:4860:4860::8888"),
@@ -73,6 +83,49 @@ class XffCaptureAuditDocumentFactoryTest {
                 "合法应用远端地址应写入 IP 投影");
         assertEquals(SimpleXffCaptureCoreConstant.IP_CLASSIFICATION_VERSION,
                 document.getClassificationVersion(), "分类版本应准确");
+    }
+
+    @Test
+    void shouldKeepXffFactsEmptyWhenEventDoesNotContainXff() {
+        XffChain absentChain = new XffChain(false, Collections.<String>emptyList(),
+                Collections.<String>emptyList());
+        HeaderValueSnapshot host = new HeaderValueSnapshot(true,
+                Collections.singletonList("api.example.test"));
+        HeaderValueSnapshot xRealIp = new HeaderValueSnapshot(true,
+                Collections.singletonList("203.0.113.10"));
+        HeaderValueSnapshot xForwardedHost = new HeaderValueSnapshot(true,
+                Collections.singletonList("edge.example.test"));
+        HeaderValueSnapshot xForwardedPort = new HeaderValueSnapshot(true,
+                Collections.singletonList("443"));
+        HeaderValueSnapshot xForwardedProto = new HeaderValueSnapshot(true,
+                Collections.singletonList("https"));
+        XffCaptureEvent eventWithoutXff = new XffCaptureEvent("event-without-xff",
+                Instant.parse("2026-08-19T00:00:00.123Z"), "GET", "/api/test", "10.20.30.40",
+                new XffCaptureSnapshot(absentChain, new ForwardedContext(host, xRealIp,
+                        xForwardedHost, xForwardedPort, xForwardedProto)));
+        XffCaptureAuditDocumentFactory factory = new XffCaptureAuditDocumentFactory(
+                properties("test-service"), new MockEnvironment(),
+                Optional.<XffCaptureAuditContextProvider>empty());
+
+        XffCaptureAuditDocument document = factory.create(eventWithoutXff);
+
+        log.info("缺失 XFF 的原始 Header 数量：{}，原始值数量：{}",
+                document.getXffRawHeaderList().size(), document.getXffRawList().size());
+        assertFalse(document.isXffPresent(), "XFF 缺失状态应保留");
+        assertEquals(Collections.singletonList("api.example.test"), document.getHostList(),
+                "XFF 缺失时 Host 事实仍应独立投影");
+        assertEquals(Collections.singletonList("203.0.113.10"), document.getXRealIpList(),
+                "XFF 缺失时 X-Real-IP 事实仍应独立投影");
+        assertEquals(Collections.singletonList("edge.example.test"), document.getXForwardedHostList(),
+                "XFF 缺失时 X-Forwarded-Host 事实仍应独立投影");
+        assertEquals(Collections.singletonList("443"), document.getXForwardedPortList(),
+                "XFF 缺失时 X-Forwarded-Port 事实仍应独立投影");
+        assertEquals(Collections.singletonList("https"), document.getXForwardedProtoList(),
+                "XFF 缺失时 X-Forwarded-Proto 事实仍应独立投影");
+        assertTrue(document.getXffRawHeaderList().isEmpty(), "XFF 缺失时不能补造原始 Header");
+        assertTrue(document.getXffRawList().isEmpty(), "XFF 缺失时不能补造原始值链");
+        assertTrue(document.getXffIpList().isEmpty(), "XFF 缺失时不能产生类型化 IP");
+        assertTrue(document.getPublicIpList().isEmpty(), "XFF 缺失时不能产生公网 IP");
     }
 
     @Test
@@ -162,13 +215,21 @@ class XffCaptureAuditDocumentFactoryTest {
 
     private XffCaptureEvent event() {
         XffChain chain = new XffChain(true,
-                Collections.singletonList("8.8.8.8, 10.0.0.1, unknown, , 8.8.8.8, 2001:4860:4860:0:0:0:0:8888"),
+                Arrays.asList("8.8.8.8, 10.0.0.1, unknown", " , 8.8.8.8, 2001:4860:4860:0:0:0:0:8888"),
                 Arrays.asList("8.8.8.8", "10.0.0.1", "unknown", "", "8.8.8.8",
                         "2001:4860:4860:0:0:0:0:8888"));
         HeaderValueSnapshot host = new HeaderValueSnapshot(true,
                 Collections.singletonList("api.example.test"));
-        HeaderValueSnapshot absent = new HeaderValueSnapshot(false, Collections.<String>emptyList());
-        ForwardedContext context = new ForwardedContext(host, absent, absent, absent, absent);
+        HeaderValueSnapshot xRealIp = new HeaderValueSnapshot(true,
+                Collections.singletonList("10.0.0.1"));
+        HeaderValueSnapshot xForwardedHost = new HeaderValueSnapshot(true,
+                Arrays.asList("api.example.test", "edge.example.test"));
+        HeaderValueSnapshot xForwardedPort = new HeaderValueSnapshot(true,
+                Collections.singletonList("443"));
+        HeaderValueSnapshot xForwardedProto = new HeaderValueSnapshot(true,
+                Collections.singletonList("https"));
+        ForwardedContext context = new ForwardedContext(host, xRealIp, xForwardedHost,
+                xForwardedPort, xForwardedProto);
         return new XffCaptureEvent("event-1", Instant.parse("2026-08-19T00:00:00.123Z"),
                 "POST", "/api/test", "10.20.30.40", new XffCaptureSnapshot(chain, context));
     }

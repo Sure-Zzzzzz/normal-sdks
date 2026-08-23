@@ -1,7 +1,7 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.1'
 
-    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.2'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

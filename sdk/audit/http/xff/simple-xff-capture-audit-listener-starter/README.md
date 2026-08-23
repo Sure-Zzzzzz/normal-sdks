@@ -7,8 +7,8 @@ XFF Capture Audit 的事件监听与 Provider 广播层。模块监听 `simple-x
 ## 接入
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.0'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.2'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.1'
 ```
 
 ```yaml
@@ -98,11 +98,24 @@ public XffCaptureAuditContextProvider xffCaptureAuditContextProvider() {
 
 需要 Elasticsearch 写入时，另外引入并启用 `simple-xff-capture-audit-es-persistence-provider-starter`。Persistence、Route、物理日期索引、模板和真实 Elasticsearch E2E 不属于本模块。
 
-## Capture 1.1.0 请求数据投影
+## Capture 请求数据投影
 
-Capture 负责 Query、Form、Body 的采集开关、URI 规则、Content-Type 约束、截断和读取状态。Listener 不新增第二套配置，也不重新读取 HTTP 请求；Factory 直接将 `XffCaptureEvent.requestData` 放入 `XffCaptureAuditDocument.requestData`，因此 Event 中已经完成的不可变快照会原样进入每个 Provider 收到的同一份 Document。
+Capture 负责 Query、Form、Body 的采集开关、URI 规则、Content-Type 约束、截断和读取状态。Listener 不新增第二套配置，也不重新读取 HTTP 请求；Factory 直接将 `XffCaptureEvent.requestData` 放入 `XffCaptureAuditDocument.requestData`，并完整投影 Event 的 `XffChain.rawHeaderList`、`rawList` 与 `ForwardedContext` 的 Host、X-Real-IP、X-Forwarded-Host、X-Forwarded-Port、X-Forwarded-Proto 原始值列表。因此 Event 中已经完成的不可变快照会原样进入每个 Provider 收到的同一份 Document。Capture Starter 1.1.2 继续提供默认关闭的入口 DEBUG 诊断日志，不改变这条投影链路。
 
 Listener 只在同步事件线程构造文档，随后通过唯一有界执行器异步广播；Provider 不得修改请求数据快照或文档。
+
+## 兼容性与验证
+
+Listener 是面向多个宿主应用的通用 Starter，1.1.1 已按完整测试集通过以下精确 Spring Boot 版本矩阵：
+
+| Spring Boot | 测试结果 |
+| --- | --- |
+| `2.2.13.RELEASE` | `BUILD SUCCESSFUL` |
+| `2.3.12.RELEASE` | `BUILD SUCCESSFUL` |
+| `2.4.5` | `BUILD SUCCESSFUL` |
+| `2.7.9` | `BUILD SUCCESSFUL` |
+
+矩阵覆盖事件转换、上下文读取、异步广播、Provider 顺序与异常隔离、自动配置注册，以及完整 Header 事实投影。每个矩阵项均执行完整 `test`，通过条件为 `failures=0`、`errors=0`、`skipped=0`；本次最终报告为 6 个测试报告文件、30 个测试、0 failures、0 errors、0 skipped。
 
 ## 行为边界
 
@@ -110,4 +123,4 @@ Listener 只在同步事件线程构造文档，随后通过唯一有界执行�
 - Listener 不定义业务扩展字段的存储或查询语义；需要 Elasticsearch 查询时由 Provider 与部署模板显式声明 mapping。
 - Listener 不创建 Elasticsearch Client、Persistence Engine、Route、物理索引、模板或 Search。
 - 事件转换失败、队列拒绝、任务提交失败、Context Provider 失败和 Provider 异常不会传播到 Capture 事件发布线程，且均记录完整 Throwable 堆栈。
-- 1.1.0 是 best effort，不承诺进程崩溃时队列内任务不丢失。
+- 审计广播为 best effort，不承诺进程崩溃时队列内任务不丢失。
