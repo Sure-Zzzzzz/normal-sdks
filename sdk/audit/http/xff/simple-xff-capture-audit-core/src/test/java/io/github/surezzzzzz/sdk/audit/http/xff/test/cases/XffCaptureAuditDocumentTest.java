@@ -43,6 +43,32 @@ class XffCaptureAuditDocumentTest {
     }
 
     @Test
+    void shouldKeepCompleteEventHeaderFacts() {
+        XffCaptureAuditDocument document = new XffCaptureAuditDocument("event-complete",
+                "2026-08-20T00:00:00.000Z", "test-service", null, null, "GET", "/test",
+                Collections.singletonList("api.example.test"), true,
+                Arrays.asList("8.8.8.8, 10.0.0.1", "2001:4860:4860:0:0:0:0:8888"),
+                Arrays.asList("8.8.8.8", "10.0.0.1", "2001:4860:4860:0:0:0:0:8888"),
+                Collections.singletonList("10.0.0.1"),
+                Collections.singletonList("api.example.test"),
+                Collections.singletonList("443"), Collections.singletonList("https"),
+                Arrays.asList("8.8.8.8", "10.0.0.1", "2001:4860:4860::8888"),
+                Arrays.asList("8.8.8.8", "2001:4860:4860::8888"), "10.0.0.1", "10.0.0.1",
+                "iana-2025-10-09", Collections.<String, String>emptyMap(), RequestDataSnapshot.disabled());
+
+        assertEquals(Arrays.asList("8.8.8.8, 10.0.0.1", "2001:4860:4860:0:0:0:0:8888"),
+                document.getXffRawHeaderList(), "完整文档必须保留同名 XFF Header 边界");
+        assertEquals(Collections.singletonList("10.0.0.1"), document.getXRealIpList(),
+                "完整文档必须保留 X-Real-IP");
+        assertEquals(Collections.singletonList("api.example.test"), document.getXForwardedHostList(),
+                "完整文档必须保留 X-Forwarded-Host");
+        assertEquals(Collections.singletonList("443"), document.getXForwardedPortList(),
+                "完整文档必须保留 X-Forwarded-Port");
+        assertEquals(Collections.singletonList("https"), document.getXForwardedProtoList(),
+                "完整文档必须保留 X-Forwarded-Proto");
+    }
+
+    @Test
     void shouldDefensivelyCopyAndNormalizeExtensions() {
         Map<String, String> extensions = new LinkedHashMap<>();
         extensions.put(" clientId ", " client-1 ");

@@ -32,9 +32,29 @@ public final class SimpleXffCaptureAuditConstant {
      */
     public static final String FIELD_HOST_LIST = "hostList";
     /**
+     * XFF 原始 Header 列表字段名。
+     */
+    public static final String FIELD_XFF_RAW_HEADER_LIST = "xffRawHeaderList";
+    /**
      * XFF 原始列表字段名。
      */
     public static final String FIELD_XFF_RAW_LIST = "xffRawList";
+    /**
+     * X-Real-IP 列表字段名。
+     */
+    public static final String FIELD_X_REAL_IP_LIST = "xRealIpList";
+    /**
+     * X-Forwarded-Host 列表字段名。
+     */
+    public static final String FIELD_X_FORWARDED_HOST_LIST = "xForwardedHostList";
+    /**
+     * X-Forwarded-Port 列表字段名。
+     */
+    public static final String FIELD_X_FORWARDED_PORT_LIST = "xForwardedPortList";
+    /**
+     * X-Forwarded-Proto 列表字段名。
+     */
+    public static final String FIELD_X_FORWARDED_PROTO_LIST = "xForwardedProtoList";
     /**
      * XFF IP 列表字段名。
      */
@@ -85,12 +105,17 @@ public final class SimpleXffCaptureAuditConstant {
      * XFF 缺失状态非法详情。
      */
     public static final String DETAIL_XFF_ABSENT_STATE_INVALID =
-            "XFF Header 不存在时 xffRawList、xffIpList 和 publicIpList 必须为空";
+            "XFF Header 不存在时 xffRawHeaderList、xffRawList、xffIpList 和 publicIpList 必须为空";
     /**
      * XFF 存在状态非法详情。
      */
     public static final String DETAIL_XFF_PRESENT_STATE_INVALID =
             "XFF Header 存在时 xffRawList 必须非空";
+    /**
+     * 完整投影 XFF 原始 Header 缺失详情。
+     */
+    public static final String DETAIL_COMPLETE_XFF_RAW_HEADER_LIST_INVALID =
+            "完整 XFF 投影时 xffRawHeaderList 必须与 XFF Header 存在状态一致";
     /**
      * 公网列表子集关系非法详情。
      */

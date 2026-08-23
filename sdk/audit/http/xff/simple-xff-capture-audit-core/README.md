@@ -6,7 +6,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.1'
 }
 ```
 
@@ -31,7 +31,7 @@ public class CustomXffCaptureAuditPersistenceProvider
 
 ## 审计文档契约
 
-`XffCaptureAuditDocument` 保存一次 Capture Event 的不可变审计快照，包含以下 16 个核心字段：
+`XffCaptureAuditDocument` 保存一次 Capture Event 的不可变审计快照，完整保留 Event 中的 Header 事实与 IP 派生结果：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -44,7 +44,12 @@ public class CustomXffCaptureAuditPersistenceProvider
 | `requestUri` | 不含查询参数的请求 URI |
 | `hostList` | 原始 Host Header 快照 |
 | `xffPresent` | XFF Header 是否存在 |
-| `xffRawList` | 原始 XFF 值链 |
+| `xffRawHeaderList` | Servlet 暴露的原始 XFF Header 值列表，保留同名 Header 边界与顺序 |
+| `xffRawList` | 按逗号拆分后的原始 XFF 值链 |
+| `xRealIpList` | 原始 `X-Real-IP` 值列表 |
+| `xForwardedHostList` | 原始 `X-Forwarded-Host` 值列表 |
+| `xForwardedPortList` | 原始 `X-Forwarded-Port` 值列表 |
+| `xForwardedProtoList` | 原始 `X-Forwarded-Proto` 值列表 |
 | `xffIpList` | 规范化后的合法 XFF IP 列表 |
 | `publicIpList` | `xffIpList` 中的公网 IP 子集 |
 | `applicationRawRemoteAddress` | 应用看到的原始远端地址 |
@@ -54,7 +59,7 @@ public class CustomXffCaptureAuditPersistenceProvider
 
 `requestData` 直接复用 Capture Core 的不可变快照契约，包含 Query 参数、Form 参数和 Body 状态/元数据/受限文本；Core 不重新采集、不推断敏感字段，也不改变 Capture 端的默认关闭和 URI 规则。
 
-所有 List 和 Map 都会防御性复制，对外只暴露不可修改视图。`xffPresent=false` 时，`xffRawList`、`xffIpList` 与 `publicIpList` 必须均为空；`publicIpList` 只能包含 `xffIpList` 中的 `PUBLIC` 地址。
+所有 List 和 Map 都会防御性复制，对外只暴露不可修改视图。完整 Event 投影中，`xffPresent=false` 时，`xffRawHeaderList`、`xffRawList`、`xffIpList` 与 `publicIpList` 必须均为空；`publicIpList` 只能包含 `xffIpList` 中的 `PUBLIC` 地址。`X-Real-IP` 和各 `X-Forwarded-*` 列表是独立原始事实，不参与 XFF 推断或互相回填。
 
 原始请求 URI、Host、XFF、远端地址及业务扩展不会出现在 `toString()` 中。调用方仍不应将完整审计文档输出到不受控日志。
 
@@ -79,5 +84,7 @@ public class CustomXffCaptureAuditPersistenceProvider
 Core 不采集 HTTP 请求、不发布或监听 Spring Event、不创建线程池、不创建 Elasticsearch Client，也不管理 Persistence、Route、索引、模板或查询能力。
 
 ## 兼容性
+
+`1.1.1` 新增完整 Capture Event 投影构造器及原始 Header 字段。该构造器要求 `xffRawHeaderList` 与 `xffPresent` 保持一致，并直接保存 `X-Real-IP`、`X-Forwarded-Host`、`X-Forwarded-Port`、`X-Forwarded-Proto` 的独立原始值列表；既有构造器继续保留，并为新增字段写入空列表，保持历史调用方兼容。
 
 `1.1.0` 新增固定顶层 `requestData` 字段。旧构造器会写入 `RequestDataSnapshot.disabled()`，保持既有调用方兼容；新增构造器直接接收 Capture Event 的不可变请求数据快照。`1.0.x` 中的核心字段、扩展字段 envelope、`XffCaptureAuditPersistenceProvider` 方法签名，以及文档的不可变与校验语义继续保持稳定。
