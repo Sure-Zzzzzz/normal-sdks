@@ -2,18 +2,11 @@
 
 `simple-aksk-resource-core` 是 AKSK Resource 3.0 的纯 Java 协议模块。它只导出 AKSK 内省响应的 `active` 字段常量，供 AKSK Resource Provider 判断令牌是否仍有效；不创建或参与 Web、安全过滤器、业务授权和数据查询。
 
-## 业务服务如何接入
+## 使用边界
 
-业务服务不应单独引入本模块。接入 AKSK 服务身份时，使用公共 Resource Server 加 AKSK Provider：
+业务服务不应直接引入本模块。本模块由 `simple-aksk-resource-server-starter` 作为 AKSK Provider 的协议依赖使用，仅提供 AKSK 内省响应所需的公共常量。
 
-```gradle
-dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.0'
-}
-```
-
-同一服务还需要 IAM 人员身份时，额外接入 IAM Resource Provider。IAM 和 AKSK 进入同一公共安全链，Controller 只维护一套应用准入、精确 API permission 和 DATA 授权规则。
+业务服务的 AKSK 接入方式、公共 Resource Server 组合关系和 IAM 协作方式，请以对应 Server Starter 的接入文档为准。
 
 ## 安全边界
 
