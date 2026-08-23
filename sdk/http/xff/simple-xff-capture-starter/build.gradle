@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-xff-capture-core:1.1.0'
+    api "io.github.sure-zzzzzz:simple-xff-capture-core:1.1.1"
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
