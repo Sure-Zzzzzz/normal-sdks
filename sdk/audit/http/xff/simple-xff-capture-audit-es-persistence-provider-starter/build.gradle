@@ -1,13 +1,14 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.0'
-    api "io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.1.1"
+    api 'io.github.sure-zzzzzz:simple-xff-capture-audit-core:1.1.1'
+    api 'io.github.sure-zzzzzz:simple-elasticsearch-persistence-starter:1.1.1'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework:spring-context'
 
-    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
-    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.2'
+    testImplementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.1'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'

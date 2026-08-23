@@ -55,6 +55,10 @@ class XffCaptureAuditEsProviderEndToEndTest {
     private static final String PRIVATE_IPV4 = "10.20.30.40";
     private static final String PUBLIC_IPV6_RAW = "2001:4860:4860:0:0:0:0:8888";
     private static final String PUBLIC_IPV6_NORMALIZED = "2001:4860:4860::8888";
+    private static final String X_REAL_IP = "10.20.30.41";
+    private static final String X_FORWARDED_HOST = "audit.example.test";
+    private static final String X_FORWARDED_PORT = "443";
+    private static final String X_FORWARDED_PROTO = "https";
     private static final String REQUEST_BODY = "{\"message\":\"audit-body\"}";
     private static final long WAIT_TIMEOUT_MILLIS = 10000L;
     private static final long WAIT_INTERVAL_MILLIS = 100L;
@@ -86,8 +90,12 @@ class XffCaptureAuditEsProviderEndToEndTest {
     @Test
     void shouldCaptureHttpRequestAndWriteFinalDocumentToDailyIndex() throws Exception {
         HttpHeaders headers = new HttpHeaders();
-        headers.add("X-Forwarded-For", PUBLIC_IPV4 + ", " + PRIVATE_IPV4
-                + ", unknown, , " + PUBLIC_IPV4 + ", " + PUBLIC_IPV6_RAW);
+        headers.add("X-Forwarded-For", PUBLIC_IPV4 + ", " + PRIVATE_IPV4 + ", unknown");
+        headers.add("X-Forwarded-For", PUBLIC_IPV4 + ", " + PUBLIC_IPV6_RAW);
+        headers.add("X-Real-IP", X_REAL_IP);
+        headers.add("X-Forwarded-Host", X_FORWARDED_HOST);
+        headers.add("X-Forwarded-Port", X_FORWARDED_PORT);
+        headers.add("X-Forwarded-Proto", X_FORWARDED_PROTO);
         headers.add(TestAuditContextProvider.REQUEST_ID_HEADER, REQUEST_ID);
         headers.add(TestAuditContextProvider.TRACE_ID_HEADER, TRACE_ID);
         headers.add(TestAuditContextProvider.CLIENT_ID_HEADER, CLIENT_ID);
@@ -125,8 +133,19 @@ class XffCaptureAuditEsProviderEndToEndTest {
         assertTrue(String.valueOf(hostList.get(0)).contains("localhost"),
                 "Host 应来自真实随机端口请求");
         assertEquals(Boolean.TRUE, source.get("xffPresent"), "XFF present 应准确");
-        assertEquals(Arrays.asList(PUBLIC_IPV4, PRIVATE_IPV4, "unknown", "", PUBLIC_IPV4,
+        assertEquals(Arrays.asList(PUBLIC_IPV4 + ", " + PRIVATE_IPV4 + ", unknown",
+                        PUBLIC_IPV4 + ", " + PUBLIC_IPV6_RAW),
+                source.get("xffRawHeaderList"), "同名 XFF Header 边界应完整保留");
+        assertEquals(Arrays.asList(PUBLIC_IPV4, PRIVATE_IPV4, "unknown", PUBLIC_IPV4,
                 PUBLIC_IPV6_RAW), source.get("xffRawList"), "原始 XFF 链应完整保留");
+        assertEquals(Collections.singletonList(X_REAL_IP), source.get("xRealIpList"),
+                "X-Real-IP 应完整入库");
+        assertEquals(Collections.singletonList(X_FORWARDED_HOST), source.get("xForwardedHostList"),
+                "X-Forwarded-Host 应完整入库");
+        assertEquals(Collections.singletonList(X_FORWARDED_PORT), source.get("xForwardedPortList"),
+                "X-Forwarded-Port 应完整入库");
+        assertEquals(Collections.singletonList(X_FORWARDED_PROTO), source.get("xForwardedProtoList"),
+                "X-Forwarded-Proto 应完整入库");
         assertEquals(Arrays.asList(PUBLIC_IPV4, PRIVATE_IPV4, PUBLIC_IPV6_NORMALIZED),
                 source.get("xffIpList"), "合法 IP 应规范化并去重");
         assertEquals(Arrays.asList(PUBLIC_IPV4, PUBLIC_IPV6_NORMALIZED),
@@ -146,6 +165,16 @@ class XffCaptureAuditEsProviderEndToEndTest {
                 "未声明扩展字段必须可保留在 _source");
         assertRequestData(source.get("requestData"));
 
+        assertEquals(1L, countByTerm("xffRawHeaderList", PUBLIC_IPV4 + ", " + PRIVATE_IPV4 + ", unknown"),
+                "应能按原始 XFF Header 精确查询");
+        assertEquals(1L, countByTerm("xRealIpList", X_REAL_IP),
+                "应能按 X-Real-IP 精确查询");
+        assertEquals(1L, countByTerm("xForwardedHostList", X_FORWARDED_HOST),
+                "应能按 X-Forwarded-Host 精确查询");
+        assertEquals(1L, countByTerm("xForwardedPortList", X_FORWARDED_PORT),
+                "应能按 X-Forwarded-Port 精确查询");
+        assertEquals(1L, countByTerm("xForwardedProtoList", X_FORWARDED_PROTO),
+                "应能按 X-Forwarded-Proto 精确查询");
         assertEquals(1L, countByTerm("publicIpList", PUBLIC_IPV4),
                 "应能按公网 IP 精确查询");
         assertEquals(1L, countByTerm("xffIpList", "10.20.0.0/16"),
@@ -241,7 +270,12 @@ class XffCaptureAuditEsProviderEndToEndTest {
         expectedTypes.put("requestUri", "keyword");
         expectedTypes.put("hostList", "keyword");
         expectedTypes.put("xffPresent", "boolean");
+        expectedTypes.put("xffRawHeaderList", "keyword");
         expectedTypes.put("xffRawList", "keyword");
+        expectedTypes.put("xRealIpList", "keyword");
+        expectedTypes.put("xForwardedHostList", "keyword");
+        expectedTypes.put("xForwardedPortList", "keyword");
+        expectedTypes.put("xForwardedProtoList", "keyword");
         expectedTypes.put("xffIpList", "ip");
         expectedTypes.put("publicIpList", "ip");
         expectedTypes.put("applicationRawRemoteAddress", "keyword");

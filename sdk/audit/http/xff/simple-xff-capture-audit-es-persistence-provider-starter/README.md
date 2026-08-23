@@ -7,9 +7,9 @@ XFF Capture Audit 的可选 Elasticsearch Persistence Provider。它实现 Audit
 业务应用需要引入 XFF Capture、Audit Listener 和本 Provider。Audit Core 由 Listener 的传递依赖带入；Elasticsearch Persistence 与 Route 由本 Provider 的传递依赖带入：
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.0'
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.0'
-implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-es-persistence-provider-starter:1.1.0'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-starter:1.1.2'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-listener-starter:1.1.1'
+implementation 'io.github.sure-zzzzzz:simple-xff-capture-audit-es-persistence-provider-starter:1.1.1'
 ```
 
 ### 最小可运行配置
@@ -164,7 +164,7 @@ Provider 不创建执行器、Elasticsearch Client、模板或物理日期索引
 
 Audit Document 固定使用顶层 `extensions` 信封承载业务字段，类型为 `Map<String, String>`。业务应在同步上下文中提供已经脱敏的字符串扩展值；默认日志 Provider 不会输出它们。
 
-生产模板的根级 mapping 保持 Elasticsearch 默认宽松 dynamic 行为，不使用 `dynamic: strict` 阻断未来字段；但 Audit Document 和 `requestData` 的已知字段必须显式定义类型。未知业务扩展、Query 参数名和 Form 参数名仍由 dynamic 自动建立字段，并通过 dynamic template 映射为 `keyword`，满足请求参数值的精确查询语义。
+生产模板的根级 mapping 保持 Elasticsearch 默认宽松 dynamic 行为，不使用 `dynamic: strict` 阻断未来字段；但 Audit Document 和 `requestData` 的已知字段必须显式定义类型。`xffRawHeaderList`、`xRealIpList`、`xForwardedHostList`、`xForwardedPortList`、`xForwardedProtoList` 都是原始 Header 事实，固定映射为 `keyword`，不作为 IP 或可信客户端字段解释。未知业务扩展、Query 参数名和 Form 参数名仍由 dynamic 自动建立字段，并通过 dynamic template 映射为 `keyword`，满足请求参数值的精确查询语义。
 
 ```json
 "dynamic_templates": [
@@ -193,7 +193,12 @@ Audit Document 固定使用顶层 `extensions` 信封承载业务字段，类型
   "requestUri": {"type": "keyword"},
   "hostList": {"type": "keyword"},
   "xffPresent": {"type": "boolean"},
+  "xffRawHeaderList": {"type": "keyword"},
   "xffRawList": {"type": "keyword"},
+  "xRealIpList": {"type": "keyword"},
+  "xForwardedHostList": {"type": "keyword"},
+  "xForwardedPortList": {"type": "keyword"},
+  "xForwardedProtoList": {"type": "keyword"},
   "xffIpList": {"type": "ip"},
   "publicIpList": {"type": "ip"},
   "applicationRawRemoteAddress": {"type": "keyword"},
@@ -233,6 +238,109 @@ Audit Document 固定使用顶层 `extensions` 信封承载业务字段，类型
 ```
 
 `requestData` 的固定 Query、Form、Body 结构使用上面的显式 mapping；其中 `values` 下的参数名和参数值仍按宽松 dynamic 写入，但字符串参数值由 dynamic template 映射为 `keyword`，可直接使用 `term` 精确查询。Body `text` 同样使用 `keyword` 并设置 `ignore_above: 32766`：长度在限制内时可精确查询，超出限制时仍保留在 `_source` 但不建立倒排索引。`extensions` 容器已显式定义为 `object`，其业务键也映射为可精确查询的 `keyword`。不要将业务扩展平铺到审计文档顶层，也不要使用 `flattened`，以保持 Elasticsearch 6/7 兼容。
+
+## Legacy Index Template 更新
+
+部署方必须在应用首次写入前，向实际 Elasticsearch 集群更新覆盖物理日索引的 Legacy Index Template。模板名称由部署侧统一约定，索引匹配模式必须覆盖 Route 的物理索引，例如 `xff-capture-audit-*`；Provider 不会安装、更新或校验模板。下面的请求体是完整模板契约，地址、认证和 TLS 参数由部署环境注入，不包含任何凭据：
+
+```bash
+ES_URL="${ES_URL:?请由部署环境提供 Elasticsearch 地址}"
+TEMPLATE_NAME="${TEMPLATE_NAME:?请由部署侧提供模板名称}"
+ES_VERSION="${ES_VERSION:?请提供 Elasticsearch 主版本}"
+INCLUDE_TYPE_NAME=""
+case "$ES_VERSION" in
+  6.*) ;;
+  7.*) INCLUDE_TYPE_NAME="?include_type_name=true" ;;
+  *) echo "不支持的 Elasticsearch 主版本：$ES_VERSION" >&2; exit 1 ;;
+esac
+
+curl -fsS -X PUT "$ES_URL/_template/$TEMPLATE_NAME$INCLUDE_TYPE_NAME" \\
+  -H "Content-Type: application/json" \\
+  --data-binary @- <<'JSON'
+{
+  "index_patterns": ["xff-capture-audit-*"],
+  "mappings": {
+    "_doc": {
+      "_meta": {"schemaVersion": "1.1"},
+      "dynamic_templates": [
+        {
+          "request_parameter_values_as_keyword": {
+            "path_match": "requestData.*Parameters.values.*",
+            "match_mapping_type": "string",
+            "mapping": {"type": "keyword", "ignore_above": 32766}
+          }
+        },
+        {
+          "extension_values_as_keyword": {
+            "path_match": "extensions.*",
+            "match_mapping_type": "string",
+            "mapping": {"type": "keyword", "ignore_above": 32766}
+          }
+        }
+      ],
+      "properties": {
+        "eventId": {"type": "keyword"},
+        "capturedTime": {"type": "date"},
+        "applicationName": {"type": "keyword"},
+        "requestId": {"type": "keyword"},
+        "traceId": {"type": "keyword"},
+        "requestMethod": {"type": "keyword"},
+        "requestUri": {"type": "keyword"},
+        "hostList": {"type": "keyword"},
+        "xffPresent": {"type": "boolean"},
+        "xffRawHeaderList": {"type": "keyword"},
+        "xffRawList": {"type": "keyword"},
+        "xRealIpList": {"type": "keyword"},
+        "xForwardedHostList": {"type": "keyword"},
+        "xForwardedPortList": {"type": "keyword"},
+        "xForwardedProtoList": {"type": "keyword"},
+        "xffIpList": {"type": "ip"},
+        "publicIpList": {"type": "ip"},
+        "applicationRawRemoteAddress": {"type": "keyword"},
+        "applicationRemoteIp": {"type": "ip"},
+        "classificationVersion": {"type": "keyword"},
+        "extensions": {"type": "object", "properties": {}},
+        "requestData": {
+          "type": "object",
+          "properties": {
+            "queryParameters": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "keyword"},
+                "values": {"type": "object", "properties": {}}
+              }
+            },
+            "formParameters": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "keyword"},
+                "values": {"type": "object", "properties": {}}
+              }
+            },
+            "body": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "keyword"},
+                "contentType": {"type": "keyword"},
+                "declaredContentLength": {"type": "long"},
+                "capturedByteCount": {"type": "long"},
+                "text": {"type": "keyword", "ignore_above": 32766}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+JSON
+
+curl -fsS "$ES_URL/_template/$TEMPLATE_NAME"
+```
+
+部署工具必须按 Elasticsearch 主版本选择 Legacy Template API：Elasticsearch 7 使用 `include_type_name=true` 并保留 `_doc` mapping；Elasticsearch 6 使用相同 Legacy Template 路径但不携带该参数。更新后使用 `GET /_template/<template-name>` 核对 `index_patterns`、五个新增原始 Header 字段的 `keyword` mapping 和既有 mapping，不能只提交字段片段而覆盖 `requestData`、`extensions`、dynamic template 或其他已知字段。
+
+模板更新只影响更新后首次创建的物理日索引，不会回写当天或历史已存在的 `xff-capture-audit-YYYY.MM.DD`。对已存在且字段尚未建立、可以安全追加的物理索引，由部署方对具体索引执行受控 `PUT /<physical-index>/_mapping`，补齐上述字段；如果 dynamic mapping 已将字段建立为不兼容类型，Elasticsearch 不能原地改类型，必须创建带正确 mapping 的新索引并由部署方受控 reindex、校验和切换。Provider 不执行这些迁移操作。模板中的 `_meta.schemaVersion: "1.1"` 表示审计索引 schema 线，不等同于 Maven patch 版本 `1.1.1`。
 
 ## 模板与 E2E
 
