@@ -4,9 +4,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationFailureCategory;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
 import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServerStarterConstant;
-import io.github.surezzzzzz.sdk.auth.resource.server.model.BearerResourceCredential;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.Base64;

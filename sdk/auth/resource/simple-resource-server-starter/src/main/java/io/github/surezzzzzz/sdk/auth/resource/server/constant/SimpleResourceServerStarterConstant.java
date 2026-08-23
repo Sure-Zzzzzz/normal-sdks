@@ -32,6 +32,10 @@ public final class SimpleResourceServerStarterConstant {
      */
     public static final String HEADER_COOKIE = "Cookie";
     /**
+     * User-Agent请求头名称。
+     */
+    public static final String HEADER_USER_AGENT = "User-Agent";
+    /**
      * Header与凭据分隔空白。
      */
     public static final String HEADER_VALUE_SEPARATOR = " ";

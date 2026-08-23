@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.resource.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationFailureCategory;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.BearerCredentialResolution;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.BearerCredentialResolver;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +42,10 @@ class BearerCredentialResolverTest {
         log.info("Bearer外层头来源解析结果: {}", resolution.isResolved());
         assertTrue(resolution.isResolved(), "合法受保护头必须解析唯一来源");
         assertEquals(SOURCE_ID, resolution.getCredential().getSourceId().getValue(), "来源必须来自kid命名空间");
+        assertTrue(resolution.getCredential() instanceof BearerResourceCredential,
+                "公共解析结果必须满足Provider的Core凭据契约");
+        assertEquals(BearerResourceCredential.class, resolution.getCredential().getClass(),
+                "公共解析器不得创建Starter私有凭据类型");
     }
 
     /**

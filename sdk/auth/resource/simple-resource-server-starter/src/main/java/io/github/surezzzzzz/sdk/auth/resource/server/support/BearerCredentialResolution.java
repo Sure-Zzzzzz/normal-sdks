@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.resource.server.support;
 
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationFailureCategory;
-import io.github.surezzzzzz.sdk.auth.resource.server.model.BearerResourceCredential;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
 import lombok.Getter;
 
 /**

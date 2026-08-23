@@ -5,9 +5,11 @@ import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationR
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.support.ResourceAuthenticationContextHelper;
 import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServerStarterConstant;
+import io.github.surezzzzzz.sdk.auth.resource.server.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceSecurityPathHelper;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.VerifiedResourceAuthentication;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -28,16 +30,30 @@ public final class ResourceAuthenticationFilter extends OncePerRequestFilter {
 
     private final ResourceServerEngine engine;
     private final Collection<String> protectedPaths;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 创建通用资源认证过滤器。
      *
      * @param engine         认证编排引擎
      * @param protectedPaths 受保护路径
+     * @param eventPublisher 已验证访问事件发布器
      */
-    public ResourceAuthenticationFilter(ResourceServerEngine engine, Collection<String> protectedPaths) {
+    public ResourceAuthenticationFilter(ResourceServerEngine engine, Collection<String> protectedPaths,
+                                        ApplicationEventPublisher eventPublisher) {
         this.engine = engine;
         this.protectedPaths = protectedPaths;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * 创建不发布访问事件的资源认证过滤器。
+     *
+     * @param engine         认证编排引擎
+     * @param protectedPaths 受保护路径
+     */
+    public ResourceAuthenticationFilter(ResourceServerEngine engine, Collection<String> protectedPaths) {
+        this(engine, protectedPaths, null);
     }
 
     /**
@@ -71,9 +87,22 @@ public final class ResourceAuthenticationFilter extends OncePerRequestFilter {
         }
         try {
             SecurityContextHolder.getContext().setAuthentication(new VerifiedResourceAuthentication(context));
+            publishAccessEvent(context, request);
             filterChain.doFilter(request, response);
         } finally {
             SecurityContextHolder.clearContext();
+        }
+    }
+
+    private void publishAccessEvent(VerifiedResourceContext context, HttpServletRequest request) {
+        if (eventPublisher == null) {
+            return;
+        }
+        try {
+            eventPublisher.publishEvent(new ResourceAccessEvent(this, context, request.getRequestURI(), request.getMethod(),
+                    request.getRemoteAddr(), request.getHeader(SimpleResourceServerStarterConstant.HEADER_USER_AGENT)));
+        } catch (RuntimeException ignored) {
+            // 事件观察失败不能改变已建立的认证结果
         }
     }
 

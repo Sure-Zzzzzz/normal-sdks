@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.resource.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -20,6 +21,7 @@ public class ResourceServerLegacySecurityConfiguration extends WebSecurityConfig
 
     private final ResourceServerProperties properties;
     private final ResourceServerEngine engine;
+    private final ApplicationEventPublisher eventPublisher;
     private final Environment environment;
 
     /**
@@ -30,9 +32,10 @@ public class ResourceServerLegacySecurityConfiguration extends WebSecurityConfig
      * @param environment Spring环境
      */
     public ResourceServerLegacySecurityConfiguration(ResourceServerProperties properties, ResourceServerEngine engine,
-                                                     Environment environment) {
+                                                     ApplicationEventPublisher eventPublisher, Environment environment) {
         this.properties = properties;
         this.engine = engine;
+        this.eventPublisher = eventPublisher;
         this.environment = environment;
     }
 
@@ -44,6 +47,6 @@ public class ResourceServerLegacySecurityConfiguration extends WebSecurityConfig
      */
     @Override
     protected void configure(HttpSecurity http) throws Exception {
-        ResourceServerSecurityConfigurer.configure(http, properties, engine, environment);
+        ResourceServerSecurityConfigurer.configure(http, properties, engine, eventPublisher, environment);
     }
 }

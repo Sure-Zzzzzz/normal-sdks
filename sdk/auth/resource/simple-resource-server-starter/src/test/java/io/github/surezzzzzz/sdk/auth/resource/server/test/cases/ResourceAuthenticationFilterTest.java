@@ -8,10 +8,13 @@ import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationR
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
+import io.github.surezzzzzz.sdk.auth.resource.server.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.server.filter.ResourceAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -142,6 +145,67 @@ class ResourceAuthenticationFilterTest {
         }
     }
 
+    /**
+     * 验证认证成功后发布不含凭据的公共访问事件。
+     *
+     * @throws Exception 过滤器调用异常
+     */
+    @Test
+    void shouldPublishSanitizedAccessEventAfterAuthentication() throws Exception {
+        ResourceAuthenticationSourceId sourceId = new ResourceAuthenticationSourceId("aksk");
+        ResourceServerEngine engine = request -> ResourceAuthenticationResult.authenticated(
+                new VerifiedResourcePrincipal(sourceId, ResourceSubjectType.SERVICE, "service-a"),
+                serviceAuthorization("service-a"));
+        CapturingEventPublisher eventPublisher = new CapturingEventPublisher();
+        ResourceAuthenticationFilter filter = new ResourceAuthenticationFilter(engine,
+                Collections.singletonList("/api/**"), eventPublisher);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/orders");
+        request.addHeader("User-Agent", "agent-summary");
+
+        filter.doFilter(request, new MockHttpServletResponse(), new FilterChain() {
+            @Override
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+            }
+        });
+
+        ResourceAccessEvent event = eventPublisher.event;
+        log.info("公共访问事件来源: {}", event.getAuthenticationSourceId());
+        assertEquals("aksk", event.getAuthenticationSourceId(), "事件必须记录认证来源");
+        assertEquals(ResourceSubjectType.SERVICE, event.getSubjectType(), "事件必须记录已验证主体类型");
+        assertEquals("service-a", event.getSubjectId(), "事件必须记录已验证主体标识");
+        assertEquals("app-a", event.getApplicationCode(), "事件必须记录已授权应用");
+        assertEquals("/api/orders", event.getRequestUri(), "事件必须记录请求路径摘要");
+        assertEquals("GET", event.getHttpMethod(), "事件必须记录请求方法摘要");
+    }
+
+    /**
+     * 验证事件观察失败不改变认证结果。
+     *
+     * @throws Exception 过滤器调用异常
+     */
+    @Test
+    void shouldContinueWhenAccessEventPublisherFails() throws Exception {
+        ResourceAuthenticationSourceId sourceId = new ResourceAuthenticationSourceId("iam");
+        ResourceServerEngine engine = request -> ResourceAuthenticationResult.authenticated(
+                new VerifiedResourcePrincipal(sourceId, ResourceSubjectType.HUMAN, "subject-a"),
+                authorization("subject-a"));
+        ResourceAuthenticationFilter filter = new ResourceAuthenticationFilter(engine,
+                Collections.singletonList("/api/**"), event -> {
+            throw new IllegalStateException("event failure");
+        });
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/orders");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new FilterChain() {
+            @Override
+            public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse) {
+            }
+        });
+
+        log.info("事件发布失败状态: {}", response.getStatus());
+        assertEquals(Integer.valueOf(200), Integer.valueOf(response.getStatus()), "事件失败不能改变认证成功结果");
+    }
+
     private ApplicationAuthorizationContext authorization(String subjectId) {
         Instant now = Instant.now();
         return new ApplicationAuthorizationContext(SimpleApplicationAuthorizationConstant.PROTOCOL,
@@ -149,6 +213,33 @@ class ResourceAuthenticationFilterTest {
                 "app-a", true, Collections.<String>emptyList(), Collections.<String>emptyList(),
                 Collections.singletonList("read"), null, 1L, "manifest-a", "digest-a", now.minusSeconds(1L),
                 now.plusSeconds(60L));
+    }
+
+    private ApplicationAuthorizationContext serviceAuthorization(String subjectId) {
+        Instant now = Instant.now();
+        return new ApplicationAuthorizationContext(SimpleApplicationAuthorizationConstant.PROTOCOL,
+                SimpleApplicationAuthorizationConstant.VERSION, ApplicationAuthorizationSubjectType.SERVICE, subjectId,
+                "app-a", true, Collections.<String>emptyList(), Collections.<String>emptyList(),
+                Collections.singletonList("read"), null, 1L, "manifest-a", "digest-a", now.minusSeconds(1L),
+                now.plusSeconds(60L));
+    }
+
+    /**
+     * 捕获公共访问事件的发布器。
+     */
+    private static final class CapturingEventPublisher implements ApplicationEventPublisher {
+
+        private ResourceAccessEvent event;
+
+        @Override
+        public void publishEvent(ApplicationEvent event) {
+            this.event = (ResourceAccessEvent) event;
+        }
+
+        @Override
+        public void publishEvent(Object event) {
+            this.event = (ResourceAccessEvent) event;
+        }
     }
 
     /**

@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServ
 import io.github.surezzzzzz.sdk.auth.resource.server.filter.ResourceAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceSecurityPathHelper;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -28,14 +29,15 @@ final class ResourceServerSecurityConfigurer {
     /**
      * 配置资源服务安全策略。
      *
-     * @param http        Spring Security配置器
-     * @param properties  资源服务配置
-     * @param engine      资源认证编排引擎
-     * @param environment Spring环境
+     * @param http           Spring Security配置器
+     * @param properties     资源服务配置
+     * @param engine         资源认证编排引擎
+     * @param eventPublisher 已验证访问事件发布器
+     * @param environment    Spring环境
      * @throws Exception 配置异常
      */
     static void configure(HttpSecurity http, ResourceServerProperties properties, ResourceServerEngine engine,
-                          Environment environment) throws Exception {
+                          ApplicationEventPublisher eventPublisher, Environment environment) throws Exception {
         String contextPath = environment.getProperty(
                 SimpleResourceServerStarterConstant.PROPERTY_SERVER_SERVLET_CONTEXT_PATH);
         List<String> protectedPaths = ResourceSecurityPathHelper.normalizePaths(
@@ -62,7 +64,8 @@ final class ResourceServerSecurityConfigurer {
                 .accessDeniedHandler((request, response, exception) -> response.sendError(
                         SimpleResourceServerStarterConstant.HTTP_STATUS_FORBIDDEN,
                         SimpleResourceServerStarterConstant.MESSAGE_FORBIDDEN)));
-        http.addFilterBefore(new ResourceAuthenticationFilter(engine, protectedPaths), AnonymousAuthenticationFilter.class);
+        http.addFilterBefore(new ResourceAuthenticationFilter(engine, protectedPaths, eventPublisher),
+                AnonymousAuthenticationFilter.class);
     }
 
     /**
