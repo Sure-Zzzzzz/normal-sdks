@@ -127,6 +127,7 @@ public final class Remote {
     getDescriptor() {
         return descriptor;
     }
+
     public interface WriteRequestOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.WriteRequest)
             com.google.protobuf.MessageOrBuilder {
@@ -187,6 +188,7 @@ public final class Remote {
         prometheus.Types.MetricMetadataOrBuilder getMetadataOrBuilder(
                 int index);
     }
+
     public interface ReadRequestOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.ReadRequest)
             com.google.protobuf.MessageOrBuilder {
@@ -292,6 +294,7 @@ public final class Remote {
          */
         int getAcceptedResponseTypesValue(int index);
     }
+
     public interface ReadResponseOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.ReadResponse)
             com.google.protobuf.MessageOrBuilder {
@@ -344,6 +347,7 @@ public final class Remote {
         prometheus.Remote.QueryResultOrBuilder getResultsOrBuilder(
                 int index);
     }
+
     public interface QueryOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.Query)
             com.google.protobuf.MessageOrBuilder {
@@ -409,6 +413,7 @@ public final class Remote {
          */
         prometheus.Types.ReadHintsOrBuilder getHintsOrBuilder();
     }
+
     public interface QueryResultOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.QueryResult)
             com.google.protobuf.MessageOrBuilder {
@@ -461,6 +466,7 @@ public final class Remote {
         prometheus.Types.TimeSeriesOrBuilder getTimeseriesOrBuilder(
                 int index);
     }
+
     public interface ChunkedReadResponseOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.ChunkedReadResponse)
             com.google.protobuf.MessageOrBuilder {
@@ -535,6 +541,7 @@ public final class Remote {
         private java.util.List<prometheus.Types.TimeSeries> timeseries_;
         private java.util.List<prometheus.Types.MetricMetadata> metadata_;
         private byte memoizedIsInitialized = -1;
+
         // Use WriteRequest.newBuilder() to construct.
         private WriteRequest(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -3122,6 +3129,7 @@ public final class Remote {
         private ReadResponse() {
             results_ = java.util.Collections.emptyList();
         }
+
         private ReadResponse(
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -4041,6 +4049,7 @@ public final class Remote {
         private Query() {
             matchers_ = java.util.Collections.emptyList();
         }
+
         private Query(
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -5196,6 +5205,7 @@ public final class Remote {
         private QueryResult() {
             timeseries_ = java.util.Collections.emptyList();
         }
+
         private QueryResult(
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6105,6 +6115,7 @@ public final class Remote {
         private java.util.List<prometheus.Types.ChunkedSeries> chunkedSeries_;
         private long queryIndex_;
         private byte memoizedIsInitialized = -1;
+
         // Use ChunkedReadResponse.newBuilder() to construct.
         private ChunkedReadResponse(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);

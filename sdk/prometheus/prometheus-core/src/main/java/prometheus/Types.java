@@ -166,6 +166,7 @@ public final class Types {
     getDescriptor() {
         return descriptor;
     }
+
     public interface MetricMetadataOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.MetricMetadata)
             com.google.protobuf.MessageOrBuilder {
@@ -239,6 +240,7 @@ public final class Types {
         com.google.protobuf.ByteString
         getUnitBytes();
     }
+
     public interface SampleOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.Sample)
             com.google.protobuf.MessageOrBuilder {
@@ -257,6 +259,7 @@ public final class Types {
          */
         long getTimestamp();
     }
+
     public interface TimeSeriesOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.TimeSeries)
             com.google.protobuf.MessageOrBuilder {
@@ -317,6 +320,7 @@ public final class Types {
         prometheus.Types.SampleOrBuilder getSamplesOrBuilder(
                 int index);
     }
+
     public interface LabelOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.Label)
             com.google.protobuf.MessageOrBuilder {
@@ -351,6 +355,7 @@ public final class Types {
         com.google.protobuf.ByteString
         getValueBytes();
     }
+
     public interface LabelsOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.Labels)
             com.google.protobuf.MessageOrBuilder {
@@ -383,6 +388,7 @@ public final class Types {
         prometheus.Types.LabelOrBuilder getLabelsOrBuilder(
                 int index);
     }
+
     public interface LabelMatcherOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.LabelMatcher)
             com.google.protobuf.MessageOrBuilder {
@@ -431,6 +437,7 @@ public final class Types {
         com.google.protobuf.ByteString
         getValueBytes();
     }
+
     public interface ReadHintsOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.ReadHints)
             com.google.protobuf.MessageOrBuilder {
@@ -561,6 +568,7 @@ public final class Types {
          */
         long getRangeMs();
     }
+
     public interface ChunkOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.Chunk)
             com.google.protobuf.MessageOrBuilder {
@@ -600,6 +608,7 @@ public final class Types {
          */
         com.google.protobuf.ByteString getData();
     }
+
     public interface ChunkedSeriesOrBuilder extends
             // @@protoc_insertion_point(interface_extends:prometheus.ChunkedSeries)
             com.google.protobuf.MessageOrBuilder {
@@ -740,6 +749,7 @@ public final class Types {
         private MetricMetadata(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
         }
+
         private MetricMetadata() {
             type_ = 0;
             metricFamilyName_ = "";
@@ -1941,6 +1951,7 @@ public final class Types {
         private double value_;
         private long timestamp_;
         private byte memoizedIsInitialized = -1;
+
         // Use Sample.newBuilder() to construct.
         private Sample(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -2532,6 +2543,7 @@ public final class Types {
         private java.util.List<prometheus.Types.Label> labels_;
         private java.util.List<prometheus.Types.Sample> samples_;
         private byte memoizedIsInitialized = -1;
+
         // Use TimeSeries.newBuilder() to construct.
         private TimeSeries(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -3723,6 +3735,7 @@ public final class Types {
         private volatile java.lang.Object name_;
         private volatile java.lang.Object value_;
         private byte memoizedIsInitialized = -1;
+
         // Use Label.newBuilder() to construct.
         private Label(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -4474,6 +4487,7 @@ public final class Types {
         private Labels() {
             labels_ = java.util.Collections.emptyList();
         }
+
         private Labels(
                 com.google.protobuf.CodedInputStream input,
                 com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -6288,6 +6302,7 @@ public final class Types {
         private boolean by_;
         private long rangeMs_;
         private byte memoizedIsInitialized = -1;
+
         // Use ReadHints.newBuilder() to construct.
         private ReadHints(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -7616,6 +7631,7 @@ public final class Types {
         private int type_;
         private com.google.protobuf.ByteString data_;
         private byte memoizedIsInitialized = -1;
+
         // Use Chunk.newBuilder() to construct.
         private Chunk(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);
@@ -8506,6 +8522,7 @@ public final class Types {
         private java.util.List<prometheus.Types.Label> labels_;
         private java.util.List<prometheus.Types.Chunk> chunks_;
         private byte memoizedIsInitialized = -1;
+
         // Use ChunkedSeries.newBuilder() to construct.
         private ChunkedSeries(com.google.protobuf.GeneratedMessageV3.Builder<?> builder) {
             super(builder);

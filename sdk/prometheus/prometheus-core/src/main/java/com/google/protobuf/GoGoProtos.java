@@ -1040,6 +1040,7 @@ public final class GoGoProtos {
         wktpointer.internalInit(descriptor.getExtensions().get(75));
         DescriptorProtos.getDescriptor();
     }
+
     private GoGoProtos() {
     }
 
