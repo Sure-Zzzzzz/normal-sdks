@@ -666,10 +666,19 @@
                                     class="ops-datasource-select" disabled name="datasourceKey" required>
                                 <option value="">请选择数据源</option>
                             </select></label><label>数量上限<input max="200" min="1" name="size" required type="number"
-                                                                   value="50"></label><label class="ops-full-width">受控
-                                SELECT<textarea maxlength="8192" name="sql"
-                                                placeholder="仅支持单表、无 schema、无 Join、无函数和无锁的 SELECT。"
-                                                required rows="8" spellcheck="false"></textarea></label>
+                                                                   value="50"></label>
+                                <div class="ops-full-width ops-sql-field"><label
+                                        for="mysql-select-sql-input">受控 SELECT</label>
+                                    <div class="ops-sql-editor"><textarea
+                                            aria-autocomplete="list" aria-controls="mysql-select-sql-suggestions"
+                                            aria-expanded="false" autocomplete="off" id="mysql-select-sql-input"
+                                            maxlength="8192"
+                                            name="sql" placeholder="仅支持单表、无 schema、无 Join、无函数和无锁的 SELECT。"
+                                            required rows="8" spellcheck="false"></textarea>
+                                        <div aria-label="SQL 补全建议" class="ops-sql-suggestions" hidden
+                                             id="mysql-select-sql-suggestions" role="listbox"></div>
+                                    </div>
+                                </div>
                                 <div class="ops-console-help ops-full-width">
                                     <p><strong>提交前规则</strong></p>
                                     <ul>
@@ -699,6 +708,12 @@
                                             </button>
                                             <span class="mysql-suggestion-label">字段（可多选）</span>
                                         </div>
+                                    </div>
+                                    <div class="mysql-column-options-heading">
+                                        <span class="mysql-suggestion-label">字段候选</span>
+                                        <button class="ops-secondary-button" disabled id="mysql-select-all-columns"
+                                                type="button">全选字段
+                                        </button>
                                     </div>
                                     <div aria-label="字段候选" aria-live="polite" class="mysql-column-options"
                                          id="mysql-query-column-options">加载字段候选后可多选。
@@ -741,11 +756,19 @@
                             <form class="ops-form-grid" id="mysql-explain-console-form"><label>数据源<select
                                     class="ops-datasource-select" disabled name="datasourceKey" required>
                                 <option value="">请选择数据源</option>
-                            </select></label><label class="ops-full-width">受控 SELECT<textarea maxlength="8192"
-                                                                                                name="sql"
-                                                                                                placeholder="仅支持与受控 SELECT 相同的单表只读语句。"
-                                                                                                required rows="6"
-                                                                                                spellcheck="false"></textarea></label>
+                            </select></label>
+                                <div class="ops-full-width ops-sql-field"><label
+                                        for="mysql-explain-sql-input">受控 SELECT</label>
+                                    <div class="ops-sql-editor"><textarea
+                                            aria-autocomplete="list" aria-controls="mysql-explain-sql-suggestions"
+                                            aria-expanded="false" autocomplete="off" id="mysql-explain-sql-input"
+                                            maxlength="8192"
+                                            name="sql" placeholder="仅支持与受控 SELECT 相同的单表只读语句。"
+                                            required rows="6" spellcheck="false"></textarea>
+                                        <div aria-label="SQL 补全建议" class="ops-sql-suggestions" hidden
+                                             id="mysql-explain-sql-suggestions" role="listbox"></div>
+                                    </div>
+                                </div>
                                 <div class="ops-console-help ops-full-width">
                                     <p><strong>提交前规则</strong></p>
                                     <ul>

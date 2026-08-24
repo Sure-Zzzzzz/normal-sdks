@@ -88,7 +88,10 @@
             mysqlColumnError: null,
             mysqlColumnLoading: false,
             mysqlColumnSequence: 0,
-            mysqlColumnController: null
+            mysqlColumnController: null,
+            mysqlSqlSuggestionItems: [],
+            mysqlSqlSuggestionIndex: -1,
+            mysqlSqlSuggestionInputId: null
         };
     });
 
@@ -1304,6 +1307,7 @@
         state.mysqlSelectedColumnNames = [];
         state.mysqlColumnError = null;
         state.mysqlColumnLoading = false;
+        closeMysqlSqlSuggestions();
         document.getElementById('mysql-query-table-options').textContent = '';
         document.getElementById('mysql-query-column-options').textContent = '';
         document.getElementById('mysql-query-helper-state').textContent = '选择数据源后可加载有界表候选；选定精确表后才可加载当前表的字段候选。';
@@ -1312,8 +1316,14 @@
     function renderMysqlSuggestions(state) {
         var tableOptions = document.getElementById('mysql-query-table-options');
         var columnOptions = document.getElementById('mysql-query-column-options');
+        var selectAllColumns = document.getElementById('mysql-select-all-columns');
         var stateNode = document.getElementById('mysql-query-helper-state');
         tableOptions.textContent = '';
+        selectAllColumns.disabled = !state.mysqlColumnItems.length || !state.mysqlColumnTable;
+        selectAllColumns.textContent = state.mysqlColumnItems.length
+        && state.mysqlSelectedColumnNames.length === state.mysqlColumnItems.length ? '取消全选' : '全选字段';
+        selectAllColumns.setAttribute('aria-pressed', String(!selectAllColumns.disabled
+            && state.mysqlSelectedColumnNames.length === state.mysqlColumnItems.length));
         columnOptions.textContent = '';
         state.mysqlTableItems.forEach(function (item) {
             var option = document.createElement('option');
@@ -1336,6 +1346,7 @@
                             return name !== item.name;
                         });
                     }
+                    renderMysqlSuggestions(state);
                     scheduleDraftSave();
                 });
                 label.className = 'mysql-column-option';
@@ -1372,6 +1383,7 @@
 
     function loadMysqlTableSuggestions(datasourceKey) {
         var state = workspaceStates.mysql;
+        closeMysqlSqlSuggestions();
         cancelMysqlTableRequest(state);
         cancelMysqlColumnRequest(state);
         state.mysqlTableDatasourceKey = datasourceKey;
@@ -1414,6 +1426,7 @@
     }
 
     function clearMysqlColumnSuggestions(state) {
+        closeMysqlSqlSuggestions();
         cancelMysqlColumnRequest(state);
         state.mysqlColumnDatasourceKey = null;
         state.mysqlColumnTable = null;
@@ -1426,6 +1439,7 @@
 
     function loadMysqlColumnSuggestions(datasourceKey, table) {
         var state = workspaceStates.mysql;
+        closeMysqlSqlSuggestions();
         cancelMysqlColumnRequest(state);
         state.mysqlColumnDatasourceKey = datasourceKey;
         state.mysqlColumnTable = null;
@@ -1505,6 +1519,220 @@
 
     function stateColumnName(value) {
         return /^[A-Za-z0-9_$]+$/.test(value);
+    }
+
+    var mysqlSqlKeywords = {
+        select: {value: 'SELECT', label: 'SELECT · 查询开始', spaceAfter: true},
+        from: {value: 'FROM', label: 'FROM · 数据来源', spaceAfter: true},
+        where: {value: 'WHERE', label: 'WHERE · 过滤条件', spaceAfter: true},
+        orderBy: {value: 'ORDER BY', label: 'ORDER BY · 排序', spaceAfter: true},
+        and: {value: 'AND', label: 'AND · 并且', spaceAfter: true},
+        or: {value: 'OR', label: 'OR · 或者', spaceAfter: true},
+        like: {value: 'LIKE', label: 'LIKE · 模式条件', spaceAfter: true},
+        in: {value: 'IN', label: 'IN · 集合条件', spaceAfter: true},
+        between: {value: 'BETWEEN', label: 'BETWEEN · 区间条件', spaceAfter: true},
+        isNull: {value: 'IS NULL', label: 'IS NULL · 空值条件', spaceAfter: true},
+        isNotNull: {value: 'IS NOT NULL', label: 'IS NOT NULL · 非空条件', spaceAfter: true},
+        asc: {value: 'ASC', label: 'ASC · 升序'},
+        desc: {value: 'DESC', label: 'DESC · 降序'}
+    };
+
+    function mysqlSqlInputs() {
+        return ['mysql-select-sql-input', 'mysql-explain-sql-input'].map(function (id) {
+            return document.getElementById(id);
+        });
+    }
+
+    function mysqlSqlList(input) {
+        return document.getElementById(input.getAttribute('aria-controls'));
+    }
+
+    function mysqlSqlTokenContext(input) {
+        if (input.selectionStart !== input.selectionEnd) {
+            return null;
+        }
+        var caret = input.selectionStart;
+        var before = input.value.substring(0, caret);
+        // 服务端会拒绝含注释或分号的 SQL，联想在此提前放弃，避免误导用户往会被拒绝的方向补全
+        if (/--|\/\*|\*\/|#|;/.test(input.value)) {
+            return null;
+        }
+        var match = /[A-Za-z0-9_$]*$/.exec(before);
+        var token = match ? match[0] : '';
+        return {before: before, token: token, start: caret - token.length, end: caret};
+    }
+
+    function mysqlSqlSourceTable(value) {
+        if (/--|\/\*|\*\/|#|;|\b(?:JOIN|UNION|WITH)\b|\./i.test(value)) {
+            return null;
+        }
+        var matches = value.match(/\bFROM\s+([A-Za-z0-9_$]+)\b/ig) || [];
+        if (matches.length !== 1) {
+            return null;
+        }
+        var match = /\bFROM\s+([A-Za-z0-9_$]+)\b/i.exec(matches[0]);
+        return match ? match[1] : null;
+    }
+
+    function mysqlSqlColumnSuggestions(input, context) {
+        var state = workspaceStates.mysql;
+        var table = mysqlSqlSourceTable(input.value);
+        var beforeToken = context.before.substring(0, context.start);
+        var projection = /^\s*SELECT\s+[\s\S]*$/i.test(beforeToken) && !/\bFROM\b/i.test(beforeToken);
+        var condition = /\b(?:WHERE|AND|OR)\s*$/i.test(beforeToken);
+        var ordering = /\bORDER\s+BY\s*$/i.test(beforeToken);
+        if (!table && projection) {
+            table = state.mysqlColumnTable;
+        }
+        if (!table || !state.selectedDatasourceKey || state.mysqlColumnDatasourceKey !== state.selectedDatasourceKey
+            || state.mysqlColumnTable !== table || !(projection || condition || ordering)) {
+            return [];
+        }
+        return state.mysqlColumnItems.map(function (item) {
+            return {value: item.name, label: item.name + ' · 字段候选'};
+        });
+    }
+
+    function mysqlSqlKeywordSuggestions(context) {
+        var before = context.before;
+        var beforeToken = before.substring(0, context.start);
+        var normalizedBefore = beforeToken.trim();
+        if (!normalizedBefore) {
+            return [mysqlSqlKeywords.select];
+        }
+        if (/^\s*SELECT\s+[\s\S]*$/i.test(beforeToken) && !/\bFROM\b/i.test(beforeToken)) {
+            return [mysqlSqlKeywords.from];
+        }
+        if (/\bFROM\s+[A-Za-z0-9_$]+\s*$/i.test(beforeToken)) {
+            return [mysqlSqlKeywords.where, mysqlSqlKeywords.orderBy];
+        }
+        if (/\bORDER\s+BY\s+[A-Za-z0-9_$]+\s*$/i.test(beforeToken)) {
+            return [mysqlSqlKeywords.asc, mysqlSqlKeywords.desc];
+        }
+        if (/\b(?:WHERE|AND|OR)\s+[A-Za-z0-9_$]+\s*$/i.test(beforeToken)) {
+            return [mysqlSqlKeywords.like, mysqlSqlKeywords.in, mysqlSqlKeywords.between,
+                mysqlSqlKeywords.isNull, mysqlSqlKeywords.isNotNull];
+        }
+        if (/(?:'[^']*'|\)|NULL)\s*$/i.test(beforeToken)) {
+            return [mysqlSqlKeywords.and, mysqlSqlKeywords.or, mysqlSqlKeywords.orderBy];
+        }
+        return [];
+    }
+
+    function mysqlSqlSuggestionValues(input, context) {
+        var state = workspaceStates.mysql;
+        var values = [];
+        var tableContext = /\bFROM\s*[A-Za-z0-9_$]*$/i.test(context.before);
+        if (tableContext && state.selectedDatasourceKey === state.mysqlTableDatasourceKey) {
+            values = state.mysqlTableItems.map(function (item) {
+                return {value: item.name, label: item.name + ' · 表候选'};
+            });
+        }
+        var columns = mysqlSqlColumnSuggestions(input, context);
+        var keywords = mysqlSqlKeywordSuggestions(context);
+        values = values.concat(columns, keywords).filter(function (item, index, all) {
+            return all.findIndex(function (candidate) {
+                return candidate.value.toLowerCase() === item.value.toLowerCase();
+            }) === index;
+        });
+        var token = context.token.toLowerCase();
+        // 候选列表上限固定为 10，避免字段很多的表把建议框撑到不可用
+        return values.filter(function (item) {
+            return item.value.toLowerCase().indexOf(token) === 0;
+        }).slice(0, 10);
+    }
+
+    function closeMysqlSqlSuggestions() {
+        var state = workspaceStates.mysql;
+        state.mysqlSqlSuggestionItems = [];
+        state.mysqlSqlSuggestionIndex = -1;
+        state.mysqlSqlSuggestionInputId = null;
+        mysqlSqlInputs().forEach(function (input) {
+            var list = mysqlSqlList(input);
+            list.hidden = true;
+            list.textContent = '';
+            input.setAttribute('aria-expanded', 'false');
+            input.removeAttribute('aria-activedescendant');
+        });
+    }
+
+    function renderMysqlSqlSuggestions(input) {
+        var context = mysqlSqlTokenContext(input);
+        closeMysqlSqlSuggestions();
+        if (!context || input !== document.activeElement) {
+            return;
+        }
+        var items = mysqlSqlSuggestionValues(input, context);
+        if (!items.length) {
+            return;
+        }
+        var state = workspaceStates.mysql;
+        var list = mysqlSqlList(input);
+        state.mysqlSqlSuggestionItems = items;
+        state.mysqlSqlSuggestionIndex = 0;
+        state.mysqlSqlSuggestionInputId = input.id;
+        items.forEach(function (item, index) {
+            var option = document.createElement('button');
+            option.type = 'button';
+            option.id = input.id + '-suggestion-' + index;
+            option.className = 'ops-sql-suggestion';
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', String(index === 0));
+            option.textContent = item.label;
+            option.title = item.label;
+            option.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+                applyMysqlSqlSuggestion(input, index);
+            });
+            list.appendChild(option);
+        });
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', input.id + '-suggestion-0');
+    }
+
+    function updateMysqlSqlSuggestionSelection(input) {
+        var state = workspaceStates.mysql;
+        Array.prototype.forEach.call(mysqlSqlList(input).querySelectorAll('[role="option"]'), function (item, index) {
+            item.setAttribute('aria-selected', String(index === state.mysqlSqlSuggestionIndex));
+        });
+        input.setAttribute('aria-activedescendant', input.id + '-suggestion-' + state.mysqlSqlSuggestionIndex);
+    }
+
+    function applyMysqlSqlSuggestion(input, index) {
+        var state = workspaceStates.mysql;
+        var item = state.mysqlSqlSuggestionItems[index];
+        var context = mysqlSqlTokenContext(input);
+        if (!item || !context) {
+            return;
+        }
+        var insertedValue = item.value + (item.spaceAfter ? ' ' : '');
+        input.value = input.value.substring(0, context.start) + insertedValue + input.value.substring(context.end);
+        input.selectionStart = context.start + insertedValue.length;
+        input.selectionEnd = input.selectionStart;
+        closeMysqlSqlSuggestions();
+        scheduleDraftSave();
+        input.focus();
+    }
+
+    function handleMysqlSqlKeydown(event) {
+        var state = workspaceStates.mysql;
+        if (!state.mysqlSqlSuggestionItems.length || state.mysqlSqlSuggestionInputId !== event.currentTarget.id) {
+            return;
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            state.mysqlSqlSuggestionIndex = (state.mysqlSqlSuggestionIndex
+                    + (event.key === 'ArrowDown' ? 1 : -1) + state.mysqlSqlSuggestionItems.length)
+                % state.mysqlSqlSuggestionItems.length;
+            updateMysqlSqlSuggestionSelection(event.currentTarget);
+        } else if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            applyMysqlSqlSuggestion(event.currentTarget, state.mysqlSqlSuggestionIndex);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeMysqlSqlSuggestions();
+        }
     }
 
     function renderElasticsearchIndices(state) {
@@ -2527,6 +2755,33 @@
         } catch (error) {
             document.getElementById('elasticsearch-console-result-state').textContent = 'JSON 格式无效。';
         }
+    });
+
+    document.getElementById('mysql-select-all-columns').addEventListener('click', function () {
+        var state = workspaceStates.mysql;
+        if (!state.mysqlColumnItems.length || !state.mysqlColumnTable) {
+            return;
+        }
+        var allSelected = state.mysqlSelectedColumnNames.length === state.mysqlColumnItems.length;
+        state.mysqlSelectedColumnNames = allSelected ? [] : state.mysqlColumnItems.map(function (item) {
+            return item.name;
+        });
+        renderMysqlSuggestions(state);
+        scheduleDraftSave();
+    });
+
+    mysqlSqlInputs().forEach(function (input) {
+        input.addEventListener('input', function () {
+            renderMysqlSqlSuggestions(input);
+        });
+        input.addEventListener('keydown', handleMysqlSqlKeydown);
+        input.addEventListener('click', function () {
+            renderMysqlSqlSuggestions(input);
+        });
+        input.addEventListener('blur', function () {
+            // 延迟关闭，让候选按钮的 mousedown（先于 blur 触发）能先完成候选填入
+            window.setTimeout(closeMysqlSqlSuggestions, 100);
+        });
     });
 
     document.getElementById('mysql-load-table-suggestions').addEventListener('click', function () {

@@ -28,7 +28,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:smart-middleware-ops-server-starter:1.1.1'
 
     // Ops 以 compileOnly 声明中间件实现；按实际启用能力提供运行时实现
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -294,9 +294,11 @@ Search `MASK` 是 SQL、DSL、Key、Hash field、Topic、Consumer Group 审计�
 | Elasticsearch | Route 版本与探测摘要 | 受限 JSON DSL 首窗口；支持精确索引、通配模式和逗号分隔的多个模式。字段能力补全仅支持精确索引。 |
 | Redis | Redis 版本与部署模式 | 字面量前缀的单次受限 Key 发现，以及精确 Key 的元数据和已检测类型受限值窗口。 |
 | Kafka | Route 诊断、WARN 原因、集群标识、Broker 数与 Controller 可见性 | Topic 清单、Consumer Group 清单、Topic 运行态与 Consumer Group 积压。 |
-| MySQL | 连接、逻辑数据库、服务端版本、普通只读与强制只读保护 | 单表、无 schema、无锁的受控 SELECT 首窗口。 |
+| MySQL | 连接、逻辑数据库、服务端版本、普通只读与强制只读保护 | 单表、无 schema、无锁的受控 SELECT 首窗口；可基于已显式加载的表和字段目录提供 SQL 输入联想。 |
 
 概览自动读取不写审计。控制台中由操作者显式提交的 Redis/Kafka 数据源清单和 MySQL 状态探测会写审计。所有路径复用相同的授权、并发、校验与安全 DTO 边界，不返回物理地址、凭据、Route 配置、原始下游响应或异常。
+
+MySQL SQL 输入框仅在操作者手工加载当前数据源的表候选、并手工加载精确表的字段候选后，基于浏览器内存提供表名、字段名和受控关键字联想。输入、移动光标和切换工作区不会自动请求表或字段目录；候选不持久化，切换数据源、工作区、登出或会话失效时清除。字段候选支持全选或取消全选，用于填入草稿。联想不会执行 SQL、扩大服务端白名单或替代服务端校验。
 
 Kafka topic 与消费组查询只通过 `KafkaRouteAdminClientFactory#withAdminClient(datasourceKey, callback)` 在 callback 内获取 Route 所有的 `AdminClient`。所有 `KafkaFuture` 都在 callback 内按 deadline 完成，callback 返回后不保留客户端或未完成异步任务。
 
@@ -411,5 +413,6 @@ LDAP 用户认证的配置和页面/API 入口见“用户系统：Windows AD / 
 
 ## 版本变更
 
+- [1.1.1](CHANGELOG.1.1.1.md)：MySQL 受控 SELECT/EXPLAIN 输入新增基于已加载表/字段目录的浏览器内 SQL 联想；纯前端易用性增强，不改变 HTTP 契约、审计边界或服务端校验。
 - [1.1.0](CHANGELOG.1.1.0.md)：修复 Elasticsearch 文档响应被通用 4096 字节上限误判为 503 的可靠性问题，并按能力域迁移 Elasticsearch、Redis、Kafka、MySQL Java 包；HTTP 路径、JSON 契约、配置边界、自动配置注册和 Route 所有权保持不变。
 - [1.0.1](CHANGELOG.1.0.1.md)：完善 Elasticsearch、Redis、Kafka、MySQL 的受控只读观察闭环，新增 Redis 有界 Key 发现并适配 Redis Route 1.2.2。

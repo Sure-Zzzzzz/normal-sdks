@@ -967,9 +967,84 @@ button {
     background: #e5edff;
 }
 
+.ops-sql-field {
+    min-width: 0;
+}
+
+.ops-sql-field > label {
+    display: block;
+    margin-bottom: 7px;
+    color: #172033;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ops-sql-editor {
+    position: relative;
+    min-width: 0;
+}
+
+.ops-sql-editor textarea {
+    display: block;
+}
+
+.ops-sql-suggestions {
+    position: absolute;
+    z-index: 4;
+    right: 0;
+    top: calc(100% + 4px);
+    left: 0;
+    display: grid;
+    max-height: 192px;
+    overflow-y: auto;
+    padding: 5px;
+    border: 1px solid #7896d4;
+    border-radius: 7px;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(23, 32, 51, .18);
+}
+
+.ops-sql-suggestions[hidden] {
+    display: none;
+}
+
+.ops-sql-suggestion {
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 5px;
+    color: #172033;
+    text-align: left;
+    background: transparent;
+    font-family: Consolas, "Microsoft YaHei", monospace;
+    font-size: 12px;
+}
+
+.ops-sql-suggestion:hover, .ops-sql-suggestion:focus-visible,
+.ops-sql-suggestion[aria-selected="true"] {
+    outline: none;
+    color: #173b9b;
+    background: #e5edff;
+}
+
 #mysql-select-console-form textarea {
     height: 112px;
     min-height: 112px;
+}
+
+.mysql-column-options-heading {
+    display: flex;
+    width: min(100%, 520px);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.mysql-column-options-heading .ops-secondary-button {
+    height: 32px;
+    padding: 0 12px;
 }
 
 .ops-index-state {
