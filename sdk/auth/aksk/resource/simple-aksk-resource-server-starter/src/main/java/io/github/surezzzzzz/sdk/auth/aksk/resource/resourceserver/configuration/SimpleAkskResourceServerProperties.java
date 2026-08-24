@@ -4,11 +4,8 @@ import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant.Simpl
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * Simple AKSK Resource Server Configuration Properties
+ * Simple AKSK Resource Server 配置属性。
  *
  * @author surezzzzzz
  */
@@ -22,32 +19,26 @@ public class SimpleAkskResourceServerProperties {
     private boolean enabled = true;
 
     /**
-     * Introspect 配置（调 /oauth2/introspect 验证 token）
+     * Introspect 配置（调用 /oauth2/introspect 验证凭据）
      */
     private Introspect introspect = new Introspect();
-
-    /**
-     * 安全配置
-     */
-    private Security security = new Security();
 
     @Data
     public static class Introspect {
 
         /**
          * introspect 端点地址
-         * 示例：http://localhost:8080/oauth2/introspect
+         * 示例：http://localhost:8280/oauth2/introspect
          */
         private String endpoint;
 
         /**
-         * 调 introspect 用的 clientId
-         * 留空则不带认证（仅适用于 server 端 require-authentication=false 的场景）
+         * 调用内省端点的独立客户端标识。
          */
         private String clientId;
 
         /**
-         * 调 introspect 用的 clientSecret
+         * 调用 introspect 使用的 clientSecret
          */
         private String clientSecret;
 
@@ -60,7 +51,7 @@ public class SimpleAkskResourceServerProperties {
         public static class LocalCacheConfig {
 
             /**
-             * 是否启用本地缓存（默认开启，撤销感知延迟 = TTL）
+             * 是否启用本地缓存（默认关闭）
              */
             private boolean enabled = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_ENABLED;
 
@@ -75,7 +66,7 @@ public class SimpleAkskResourceServerProperties {
             private int maxSize = SimpleAkskResourceServerConstant.DEFAULT_LOCAL_CACHE_MAX_SIZE;
 
             /**
-             * 统计日志打印间隔（秒），每次 cache miss 时判断是否到达间隔，默认 60s
+             * 统计日志打印间隔（秒），每次缓存未命中时判断是否到达间隔，默认 60 秒
              */
             private int statsLogIntervalSeconds = SimpleAkskResourceServerConstant.DEFAULT_STATS_LOG_INTERVAL_SECONDS;
 
@@ -105,26 +96,5 @@ public class SimpleAkskResourceServerProperties {
                 private int staleMaxSize = SimpleAkskResourceServerConstant.DEFAULT_STALE_MAX_SIZE;
             }
         }
-    }
-
-    @Data
-    public static class Security {
-
-        /**
-         * 需要保护的路径（需要认证），默认：/api/**
-         */
-        private List<String> protectedPaths = new ArrayList<String>() {{
-            add("/api/**");
-        }};
-
-        /**
-         * 白名单路径（不需要认证）
-         */
-        private List<String> permitAllPaths = new ArrayList<>();
-
-        /**
-         * 是否启用 context-path-aware 路径归一化，默认开启
-         */
-        private boolean contextPathAware = SimpleAkskResourceServerConstant.DEFAULT_CONTEXT_PATH_AWARE;
     }
 }

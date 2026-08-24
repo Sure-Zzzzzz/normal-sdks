@@ -1,119 +1,190 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter;
 
-import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.AkskResourceIntrospectionClaimConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.exception.SimpleAkskResourceServerConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.model.IntrospectResult;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.ConverterHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.IntrospectLocalCacheHelper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.security.core.GrantedAuthority;
+import org.springframework.http.*;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.server.resource.introspection.OAuth2IntrospectionException;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestOperations;
 
-import javax.servlet.http.HttpServletRequest;
-import java.util.Collection;
+import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Aksk Introspection Authenticator
- *
- * <p>包装 OpaqueTokenIntrospector，在 introspect 验证通过后提取 claims 到安全上下文并发布 AkskAccessEvent。
- * 若启用本地缓存（{@link IntrospectLocalCacheHelper}），命中缓存时跳过 HTTP 调用。
- * 若启用兜底缓存，端点不可用时使用兜底缓存放行（仅 active=true 的条目）。
+ * AKSK内省缓存适配器。
  *
  * @author surezzzzzz
  */
 @Slf4j
-@RequiredArgsConstructor
 public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntrospector {
 
-    private final OpaqueTokenIntrospector delegate;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IntrospectionClient client;
     private final IntrospectLocalCacheHelper cacheHelper;
+
+    /**
+     * 创建AKSK内省缓存适配器。
+     *
+     * @param endpoint       内省端点
+     * @param restOperations 已配置客户端认证的HTTP客户端
+     * @param cacheHelper    本地缓存
+     */
+    public AkskIntrospectionAuthenticationConverter(URI endpoint, RestOperations restOperations,
+                                                    IntrospectLocalCacheHelper cacheHelper) {
+        this(new HttpIntrospectionClient(endpoint, restOperations), cacheHelper);
+    }
+
+    /**
+     * 创建AKSK内省缓存适配器。
+     *
+     * @param delegate    内省器
+     * @param cacheHelper 本地缓存
+     */
+    public AkskIntrospectionAuthenticationConverter(OpaqueTokenIntrospector delegate,
+                                                    IntrospectLocalCacheHelper cacheHelper) {
+        this((IntrospectionClient) token -> {
+            try {
+                OAuth2AuthenticatedPrincipal principal = delegate.introspect(token);
+                if (principal == null || principal.getAttributes() == null) {
+                    throw new OAuth2IntrospectionException("AKSK内省响应为空");
+                }
+                Map<String, Object> attributes = principal.getAttributes();
+                return new IntrospectResult(Boolean.TRUE.equals(
+                        attributes.get(AkskResourceIntrospectionClaimConstant.ACTIVE)), attributes);
+            } catch (org.springframework.web.client.RestClientException exception) {
+                throw new IntrospectionEndpointUnavailableException("AKSK内省端点不可用", exception);
+            }
+        }, cacheHelper);
+    }
+
+    private AkskIntrospectionAuthenticationConverter(IntrospectionClient client, IntrospectLocalCacheHelper cacheHelper) {
+        if (client == null || cacheHelper == null) {
+            throw new SimpleAkskResourceServerConfigurationException("AKSK内省依赖不能为null");
+        }
+        this.client = client;
+        this.cacheHelper = cacheHelper;
+    }
 
     @Override
     public OAuth2AuthenticatedPrincipal introspect(String token) {
-        String tokenPrefix = token.length() > 8 ? token.substring(0, 8) : token;
-
-        // 查主缓存
         if (cacheHelper.isEnabled()) {
             IntrospectResult cached = cacheHelper.get(token);
             if (cached != null) {
-                log.info("Introspect local cache hit: token={}...", tokenPrefix);
-                return buildPrincipal(cached.getAttributes(), token);
+                log.debug("AKSK内省主缓存命中");
+                return buildPrincipal(cached);
             }
-            log.debug("Introspect local cache miss: token={}...", tokenPrefix);
             cacheHelper.logStatsIfNeeded();
         }
-
-        // 缓存未命中，发起 HTTP 调用
         try {
-            OAuth2AuthenticatedPrincipal principal = delegate.introspect(token);
-            Map<String, Object> attributes = principal.getAttributes();
-
-            // 写主缓存 + 兜底缓存（含 active=false，使撤销信息尽快传播到兜底层）
+            IntrospectResult result = client.introspect(token);
             if (cacheHelper.isEnabled()) {
-                Object activeObj = attributes.get(SimpleAkskResourceConstant.INTROSPECT_CLAIM_ACTIVE);
-                boolean active = activeObj instanceof Boolean
-                        ? (Boolean) activeObj
-                        : Boolean.parseBoolean(String.valueOf(activeObj));
-                cacheHelper.put(token, new IntrospectResult(active, attributes));
+                cacheHelper.put(token, result);
             }
-
-            return buildPrincipal(attributes, token);
-        } catch (Exception e) {
-            // 降级处理
-            if (cacheHelper.isFallbackEnabled()) {
-                IntrospectResult fallback = cacheHelper.getFallback(token);
-                if (fallback != null && fallback.isActive()) {
-                    cacheHelper.incrementFallbackHit();
-                    log.warn("Introspect endpoint unavailable, falling back to fallback cache: token={}...", tokenPrefix);
-                    return buildPrincipal(fallback.getAttributes(), token);
-                }
-                log.warn("Introspect endpoint unavailable, no valid fallback entry, rejecting: token={}...", tokenPrefix);
-            } else {
-                log.error("Introspect failed, fallback disabled, rejecting: token={}...", tokenPrefix, e);
-            }
-            throw e;
+            log.debug("AKSK内省完成，结果状态={}", result != null && result.isActive());
+            return buildPrincipal(result);
+        } catch (IntrospectionEndpointUnavailableException exception) {
+            log.warn("AKSK内省端点调用失败，进入故障降级判断，异常类型={}",
+                    exception.getClass().getName());
+            return fallback(token, exception);
         }
     }
 
-    private OAuth2AuthenticatedPrincipal buildPrincipal(Map<String, Object> attributes, String token) {
-        Map<String, String> context = extractContext(attributes);
+    private OAuth2AuthenticatedPrincipal fallback(String token, IntrospectionEndpointUnavailableException exception) {
+        if (!cacheHelper.isFallbackEnabled()) {
+            log.debug("AKSK内省故障降级未启用，拒绝认证");
+            throw exception;
+        }
+        IntrospectResult cached = cacheHelper.getFallback(token);
+        if (cached == null || !cached.isActive()) {
+            log.debug("AKSK内省故障降级未命中有效条目，拒绝认证");
+            throw exception;
+        }
+        cacheHelper.incrementFallbackHit();
+        log.warn("AKSK内省端点不可用，使用显式开启的兜底缓存");
+        return buildPrincipal(cached);
+    }
 
-        HttpServletRequest request = ConverterHelper.getCurrentRequest();
-        if (request != null) {
-            request.setAttribute(SimpleAkskResourceConstant.CONTEXT_ATTRIBUTE, context);
-            log.debug("Introspect context injected: {} fields", context.size());
+    private OAuth2AuthenticatedPrincipal buildPrincipal(IntrospectResult result) {
+        if (result == null || result.getAttributes() == null) {
+            throw new OAuth2IntrospectionException("AKSK内省响应为空");
+        }
+        if (!result.isActive()) {
+            return new DefaultOAuth2AuthenticatedPrincipal("inactive",
+                    result.getAttributes(), Collections.emptyList());
+        }
+        Object subject = result.getAttributes().get(JwtClaimConstant.SUB);
+        if (!(subject instanceof String)) {
+            throw new OAuth2IntrospectionException("AKSK内省响应缺少主体");
+        }
+        return new DefaultOAuth2AuthenticatedPrincipal((String) subject,
+                result.getAttributes(), Collections.emptyList());
+    }
 
+    @FunctionalInterface
+    private interface IntrospectionClient {
+
+        IntrospectResult introspect(String token);
+    }
+
+    private static final class HttpIntrospectionClient implements IntrospectionClient {
+
+        private final URI endpoint;
+        private final RestOperations restOperations;
+
+        private HttpIntrospectionClient(URI endpoint, RestOperations restOperations) {
+            if (endpoint == null || restOperations == null) {
+                throw new SimpleAkskResourceServerConfigurationException("AKSK内省HTTP依赖不能为null");
+            }
+            this.endpoint = endpoint;
+            this.restOperations = restOperations;
+        }
+
+        @Override
+        public IntrospectResult introspect(String token) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<String, String>();
+            form.add("token", token);
             try {
-                AkskAccessEvent event = ConverterHelper.buildAccessEvent(
-                        this, SimpleAkskResourceConstant.ACCESS_SOURCE_INTROSPECT, context, request);
-                eventPublisher.publishEvent(event);
-            } catch (Exception e) {
-                log.warn("Failed to publish AkskAccessEvent", e);
+                ResponseEntity<?> response = restOperations.exchange(endpoint, HttpMethod.POST,
+                        new HttpEntity<MultiValueMap<String, String>>(form, headers), Object.class);
+                if (!(response.getBody() instanceof Map)) {
+                    throw new OAuth2IntrospectionException("AKSK内省响应非法");
+                }
+                Map<?, ?> responseBody = (Map<?, ?>) response.getBody();
+                Object active = responseBody.get(AkskResourceIntrospectionClaimConstant.ACTIVE);
+                if (!(active instanceof Boolean)) {
+                    throw new OAuth2IntrospectionException("AKSK内省响应缺少active");
+                }
+                Map<String, Object> attributes = new HashMap<String, Object>();
+                for (Map.Entry<?, ?> entry : responseBody.entrySet()) {
+                    if (entry.getKey() instanceof String) {
+                        attributes.put((String) entry.getKey(), entry.getValue());
+                    }
+                }
+                return new IntrospectResult(Boolean.TRUE.equals(active), attributes);
+            } catch (RestClientException exception) {
+                throw new IntrospectionEndpointUnavailableException("AKSK内省端点不可用", exception);
             }
         }
-
-        Collection<GrantedAuthority> authorities = ConverterHelper.extractAuthorities(
-                context.get(SimpleAkskResourceConstant.FIELD_SCOPE));
-
-        return new DefaultOAuth2AuthenticatedPrincipal(
-                (String) attributes.get(SimpleAkskResourceConstant.JWT_CLAIM_SUB), attributes, authorities);
     }
 
-    private Map<String, String> extractContext(Map<String, Object> attributes) {
-        Map<String, String> context = new HashMap<>();
-        SimpleAkskResourceConstant.JWT_CLAIM_TO_FIELD.forEach((claimName, fieldName) -> {
-            Object value = attributes.get(claimName);
-            if (value != null) {
-                context.put(fieldName, ConverterHelper.claimValueToString(value));
-            }
-        });
-        return context;
+    private static final class IntrospectionEndpointUnavailableException extends OAuth2IntrospectionException {
+
+        private static final long serialVersionUID = 1L;
+
+        private IntrospectionEndpointUnavailableException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

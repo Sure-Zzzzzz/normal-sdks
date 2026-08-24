@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import java.util.Map;
 
 /**
- * Introspect 结果缓存模型
+ * Introspect 结果缓存模型。
  *
  * <p>缓存 introspect 完整响应，包含 active 标志和原始 attributes，
  * 命中缓存时可直接重建 OAuth2AuthenticatedPrincipal，无需二次解析。

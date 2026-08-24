@@ -15,23 +15,16 @@ io:
               server:
                 enabled: true
                 introspect:
-                  endpoint: http://localhost:8080/oauth2/introspect
-                  # client-id 和 client-secret 在 application-local.yml 中配置
-                security:
-                  # 需要保护的路径
-                  protected-paths:
-                    - /api/**
-                    - /test/**
-                  # 白名单路径（不需要认证）
-                  permit-all-paths:
-                    - /actuator/health
-                    - /public/**
-
-test:
-  oauth2:
-    client-id: 11111
-    client-secret: 22222
-    token-uri: http://localhost:8080/oauth2/token
+                # endpoint、client-id 和 client-secret 仅在被忽略的 application-local.yml 中配置
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/**
+                  - /test/**
+                permit-all-paths:
+                  - /actuator/health
+                  - /public/**
 
 # 日志配置
 logging:
@@ -39,5 +32,5 @@ logging:
     io.github.surezzzzzz.sdk.auth.aksk: DEBUG
     org.springframework.security: DEBUG
 
-# 本地测试配置: 请复制 application-local.yml.example 为 application-local.yml 并填入真实配置
-# Spring Boot 会自动加载 application-local.yml (如果存在)
+# 本地测试配置仅放在 Git 忽略的 application-local.yml
+# Spring Boot 会自动加载 application-local.yml（如果存在）

@@ -1,6 +1,9 @@
 dependencies {
-    // 依赖 resource-core（提供权限注解、切面、异常等）
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
+    // 依赖已发布的 AKSK 3.0 协议模块
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:3.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.0.1'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
@@ -9,14 +12,13 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-starter-security'
     compileOnly 'org.springframework.security:spring-security-oauth2-resource-server'
     compileOnly 'org.springframework.security:spring-security-oauth2-jose'
-    api 'com.nimbusds:oauth2-oidc-sdk:9.43.1'
-    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
     compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
 
-    // 本地缓存
-    api 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+    // 本地缓存（内部实现依赖，不暴露 Caffeine 类型）
+    implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 
     // 测试依赖
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-security'
@@ -24,6 +26,5 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-oauth2-jose'
     testImplementation 'com.nimbusds:oauth2-oidc-sdk:9.43.1'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 }

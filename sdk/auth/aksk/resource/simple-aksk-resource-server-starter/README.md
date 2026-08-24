@@ -1,42 +1,19 @@
 # Simple AKSK Resource Server Starter
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.1**。冻结快照见 [README.2.x.md](README.2.x.md)。
+AKSK Resource Server Provider Starter 3.0.0 为公共 Resource Server Starter 提供 AKSK 服务身份认证适配器。业务资源服务需要显式并列引入公共 Resource Server Starter 和本模块；本模块不会反向传递公共资源安全链。
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-
-> **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
-
-资源服务器端 Token 验证器，仅支持 INTROSPECT 模式，提供便捷的安全上下文 API（适用于无网关场景）。
-
----
-
-## 特性
-
-- ✅ **INTROSPECT 模式**：调 `/oauth2/introspect` 验证，支持即时感知 token 撤销
-- ✅ **本地缓存**：热路径命中缓存时无 HTTP 调用（默认 TTL 3s）
-- ✅ **兜底降级**：可选开启端点故障时用历史缓存放行
-- ✅ **安全上下文 API**：通过静态方法读取 claims，无需注入
-- ✅ **权限注解**：支持 `@RequireContext` / `@RequireField` / `@RequireExpression`
-- ✅ **审计事件**：每次验证通过后发布 `AkskAccessEvent`
-
----
-
-## 依赖
+## 接入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
-implementation 'org.springframework.boot:spring-boot-starter-web'
-implementation 'org.springframework.boot:spring-boot-starter-security'
-implementation 'org.springframework.security:spring-security-oauth2-resource-server'
-implementation 'org.springframework.security:spring-security-oauth2-jose'
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.0'
+}
 ```
 
----
+公共 Resource Starter 负责唯一 Bearer 入口、`kid` 来源路由、认证编排、统一 `401/403`、精确 API permission、DATA 授权和公共访问事件。本模块只注册 AKSK `ResourceAuthenticationAdapter`，不创建自己的 Bearer Filter、最终业务 `SecurityFilterChain`、路径权限链、AOP 权限链、Header/request context 或 AKSK 私有访问事件。
 
-## 快速开始
-
-每次请求调 `/oauth2/introspect` 验证，支持即时感知 token 撤销。内置本地缓存（默认开启，TTL 3s），热路径命中缓存时无 HTTP 调用：
+## 最小配置
 
 ```yaml
 io:
@@ -44,217 +21,80 @@ io:
     surezzzzzz:
       sdk:
         auth:
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/**
           aksk:
             resource:
               server:
                 enabled: true
                 introspect:
-                  endpoint: http://localhost:8080/oauth2/introspect
-                  client-id: AKP...      # 留空则不带认证（需 server 端 require-authentication=false）
-                  client-secret: SK...
-                security:
-                  protected-paths:
-                    - /api/**
-```
-
-### server.servlet.context-path 兼容
-
-2.0.1 起默认启用 `context-path-aware` 路径归一化。如果业务配置了：
-
-```yaml
-server:
-  servlet:
-    context-path: /api
-```
-
-则以下两种写法都可以保护外部 `/api/**` 接口：
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        auth:
-          aksk:
-            resource:
-              server:
-                security:
-                  # 外部访问路径写法，SDK 会自动归一化为 /**
-                  protected-paths:
-                    - /api/**
-
-                  # 或者直接使用 Spring Security 看到的应用内路径写法
-                  # protected-paths:
-                  #   - /**
-```
-
-如果确实需要保留 2.0.0 的路径匹配语义，可以关闭：
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        auth:
-          aksk:
-            resource:
-              server:
-                security:
-                  context-path-aware: false
-```
-
-> 注意：`spring.mvc.servlet.path` 和 `server.servlet.context-path` 不是同一层路径。2.0.1 只剥离 `server.servlet.context-path`，不剥离 `spring.mvc.servlet.path`。如果只配置 `spring.mvc.servlet.path=/api`，`protected-paths: /api/**` 通常不需要归一化即可匹配；如果同时配置 `server.servlet.context-path=/gateway` 和 `spring.mvc.servlet.path=/api`，外部 `/gateway/api/**` 会归一化为 matcher `/api/**`。
-
-> 注意：SDK 不引入 Actuator 依赖，`/actuator/health` 只作为普通路径处理。如需在 `server.servlet.context-path=/api` 下放行外部 `/api/actuator/health`，可配置 `permit-all-paths: /api/actuator/health`，SDK 会归一化为 `/actuator/health`。
-
-> 注意：不要通过 `permit-all-paths: /api/**` 解决 CORS 预检问题。该配置在 `server.servlet.context-path=/api` 下会归一化为 `/**`，并覆盖保护路径，2.0.1 会 fail fast。跨域 OPTIONS 放行应由业务自己的 CORS / Security 配置处理。
-
-> 注意：2.0.1 不改变业务自定义 `SecurityFilterChain` 场景的接管/退让语义。如果业务自行定义安全链路，需要业务自行处理 AKSK Resource Server 的 matcher 顺序、OAuth2 Resource Server 配置和 Spring Security 多链路优先级。
-
-本地缓存默认开启，可按需调整；可选开启兜底缓存，端点不可用时用历史缓存放行：
-
-```yaml
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        auth:
-          aksk:
-            resource:
-              server:
-                introspect:
+                  endpoint: https://aksk.example.com/oauth2/introspect
+                  client-id: ${AKSK_INTROSPECT_CLIENT_ID}
+                  client-secret: ${AKSK_INTROSPECT_CLIENT_SECRET}
                   local-cache:
-                    enabled: true
-                    expire-seconds: 3              # TTL（秒），默认 3s，撤销感知延迟 = TTL
-                    max-size: 10000
-                    stats-log-interval-seconds: 60 # 统计日志间隔（秒）
+                    enabled: false
                     fallback:
-                      enabled: false               # 兜底降级，默认关闭，开启后接受安全与可用性的权衡
-                      stale-ttl-multiplier: 10     # 兜底 TTL = expire-seconds × 此值
-                      stale-max-size: 10000
+                      enabled: false
 ```
 
----
+启用本模块时，`introspect.endpoint`、`client-id` 和 `client-secret` 必须配置；缺少任一项会在自动配置阶段抛出 `SimpleAkskResourceServerConfigurationException`。内省客户端必须由 AKSK Server 明确授权，凭据只能通过部署平台的受保护配置或密钥管理注入，不能写入源码、文档、日志、响应或前端。
 
-## 使用安全上下文
+## 认证边界
 
-验证通过后，claims 自动注入到请求上下文，通过静态 API 读取：
+公共资源层从 Bearer 凭据的外层 JOSE protected header 读取 `kid`，使用以下格式选择 Provider：
 
-```java
-String clientId = SimpleAkskSecurityContextHelper.getClientId();
-String clientType = SimpleAkskSecurityContextHelper.getClientType();
-String userId = SimpleAkskSecurityContextHelper.getUserId();
-String username = SimpleAkskSecurityContextHelper.getUsername();
-String scope = SimpleAkskSecurityContextHelper.getScope();
+```text
+kid = aksk/<key-id>
 ```
 
----
+`kid` 仅用于来源路由，不能证明令牌可信。AKSK Provider 仍通过 AKSK Server 完整校验令牌的有效状态、签发方、受众、时效、撤销状态和当前应用授权快照。
 
-## 权限注解
+Provider 只接受公共 Core 的 `BearerResourceCredential`，并要求：
 
-```java
-// 要求请求携带 AKSK 安全上下文
-@RequireContext
-public String protectedApi() { ...}
+- `sourceId` 为 `aksk`；
+- introspection 结果存在且 `active=true`；
+- `client_id` 为字符串；
+- 应用授权主体类型为 `SERVICE`；
+- `client_id` 与授权主体 ID 一致；
+- 应用授权快照和 `DataGrantDocument` 能够完整恢复。
 
-// 要求 userId 不为空
-@RequireField("userId")
-public String userApi() { ...}
+已选 AKSK Provider 认证失败后不会回退到其他 Provider。认证失败由公共安全链返回 `401`；已认证但应用未准入、缺少精确 API permission 或无法完整执行 DATA 范围时返回 `403`。
 
-// 要求 clientType = platform
-@RequireFieldValue(field = "clientType", value = "platform")
-public String platformApi() { ...}
-
-// SpEL 表达式
-@RequireExpression(
-        value = "#context['scope'] != null && #context['scope'].contains('/api/read')",
-        message = "需要 /api/read 权限"
-)
-public String readApi() { ... }
+```text
+Bearer / Provider 认证（401）
+→ 应用准入与精确 API permission（403）
+→ DATA 访问计划评估与完整范围执行（403）
+→ 业务领域约束
 ```
 
----
+API/DATA 权限不从 OAuth scope、角色、PAGE 权限、URL、HTTP method、Controller 名称或未验证 `security_context` 推导。业务接口使用公共资源层的路径规则或 `@RequireApiPermission` 声明精确 API permission。
 
-## 监听 AkskAccessEvent
+## 本地缓存与故障降级
 
-验证通过后发布 `AkskAccessEvent`，可用于审计日志：
+主 introspection 缓存默认关闭。只有主缓存显式开启后，`fallback.enabled=true` 才会初始化 stale fallback 缓存。
 
-```java
+- 主缓存 TTL 由 `local-cache.expire-seconds` 控制；
+- fallback TTL 为主缓存 TTL 乘以 `stale-ttl-multiplier`；
+- fallback 默认关闭，开启后是明确的可用性与撤销传播时效权衡；
+- 只有 `active=true` 条目允许在 introspection 端点不可用时通过 fallback；
+- `active=false` 条目会写入缓存用于传播撤销状态，但不会通过 fallback 放行；
+- fallback 未命中、条目失效或端点不可用时，认证失败并由公共链返回 `401`。
 
-@EventListener
-public void onAkskAccess(AkskAccessEvent event) {
-    log.info("Access: clientId={}, source={}, uri={}",
-            event.getClientId(), event.getSource(), event.getRequestUri());
-    // source: "introspect"
-}
-```
+fallback 不能替代 AKSK Server 的实时授权校验；生产环境应根据撤销容忍窗口审慎设置 TTL 和 multiplier，并通过受控配置管理这些值。
 
----
+## 安全日志与配置
 
-## 配置说明
+日志只记录状态、数量、缓存统计或非敏感标识。禁止输出 Authorization、Cookie、Token、JWT、client secret、完整 introspection response、完整授权响应、本机路径和本地凭据。测试 fixture 使用匿名样例，真实地址和凭据只放在 Git 忽略的 `application-local.yml`。
 
-| 配置项                                               | 说明                                    | 默认值     |
-|---------------------------------------------------|---------------------------------------|---------|
-| `enabled`                                          | 是否启用                                  | true    |
-| `introspect.endpoint`                              | introspect 端点地址                        | -       |
-| `introspect.client-id`                             | 调 introspect 用的 clientId（留空则不带认证）    | -       |
-| `introspect.client-secret`                         | 调 introspect 用的 clientSecret              | -       |
-| `introspect.local-cache.enabled`                   | 是否启用本地缓存                              | true    |
-| `introspect.local-cache.expire-seconds`            | 本地缓存 TTL（秒），撤销感知延迟 = TTL              | 3       |
-| `introspect.local-cache.max-size`                  | 本地缓存最大条目数                             | 10000   |
-| `introspect.local-cache.stats-log-interval-seconds` | 统计日志打印间隔（秒）                          | 60      |
-| `introspect.local-cache.fallback.enabled`           | 是否启用兜底降级                              | false   |
-| `introspect.local-cache.fallback.stale-ttl-multiplier` | 兜底 TTL 倍数（兜底 TTL = expire-seconds × 此值） | 10      |
-| `introspect.local-cache.fallback.stale-max-size`   | 兜底缓存最大条目数                             | 10000   |
-| `security.protected-paths`                          | 需要认证的路径                               | [/api/**] |
-| `security.permit-all-paths`                         | 白名单路径                                 | []      |
-| `security.context-path-aware`                       | 是否启用 context-path-aware 路径归一化         | true    |
+## 相关模块
 
----
-
-## 版本历史
-
-### 2.0.1 (2026-07-01)
-
-Patch Release：新增 `security.context-path-aware` 路径归一化，修复 `server.servlet.context-path=/api` 时默认 `protected-paths=/api/**` 无法保护应用内 `/xxx` Controller 的问题；对 `permit-all-paths` 同步归一化，并对高风险 `/**` 白名单覆盖保护路径配置 fail fast。
-
-详见 [CHANGELOG.2.0.1.md](CHANGELOG.2.0.1.md)
-
-### 2.0.0 (2026-05-25)
-
-Breaking Change：移除 JWT 本地验证模式，仅保留 INTROSPECT 模式（JWE 无法本地解密）。删除 VerificationMode、JwtAuthenticationConverter 等 JWT 相关类；AkskJwtContextProvider 重命名为 AkskUserContextProvider；移除 jwt.* 配置；resource-core 升级至 2.0.0。
-
-详见 [CHANGELOG.2.0.0.md](CHANGELOG.2.0.0.md)
-
-### 1.0.6 (2026-05-06)
-
-`com.nimbusds:oauth2-oidc-sdk` 依赖范围由 `compileOnly` 改为 `api`，确保接入方无需手动引入该依赖。
-
-### 1.0.5 (2026-05-02)
-
-升级 core 至 1.0.3，常量和工具方法迁移到 core，消除模块间重复代码。
-
-### 1.0.4 (2026-05-02)
-
-新增兜底缓存降级策略、缓存统计日志；默认验证模式改为 INTROSPECT；修复 testMaxSizeEviction flaky；代码重构提取 ConverterHelper。
-
-### 1.0.3 (2026-04-25)
-
-新增 Introspect 本地缓存（默认开启，TTL 3s），消除热路径 HTTP 往返；消除硬编码字符串。
-
-### 1.0.2 (2026-04-13)
-
-新增 Introspect 验证模式，修复 scope claim 解析 bug。
-
-### 1.0.1
-
-初始功能完善。
-
-### 1.0.0
-
-初始版本发布。
-
----
+- [公共 Resource Server Starter](../../../resource/simple-resource-server-starter/README.md)
+- [AKSK Resource Core](../simple-aksk-resource-core/README.md)
+- [AKSK Server Starter](../../server/simple-aksk-server-starter/README.md)
+- [历史 2.x 文档快照](README.2.x.md)
 
 ## 许可证
 

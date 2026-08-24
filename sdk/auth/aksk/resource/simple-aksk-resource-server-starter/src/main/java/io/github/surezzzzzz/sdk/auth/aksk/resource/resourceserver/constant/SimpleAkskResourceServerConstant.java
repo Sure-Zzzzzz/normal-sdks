@@ -1,11 +1,9 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant;
 
 /**
- * Simple AKSK Resource Server Constants
+ * Simple AKSK Resource Server 常量。
  *
- * <p>仅包含 resource-server-starter 专属常量。
- * 通用常量（ACCESS_SOURCE_*、FIELD_TRACE_ID、HEADER_USER_AGENT 等）已统一定义在
- * {@link io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.SimpleAkskResourceConstant}。
+ * <p>仅包含 AKSK Provider Starter 的配置和本地缓存常量。
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -13,89 +11,21 @@ package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.constant;
 public final class SimpleAkskResourceServerConstant {
 
     /**
-     * Configuration prefix
+     * 配置前缀
      */
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.auth.aksk.resource.server";
 
     /**
-     * Spring Boot servlet context-path 配置键
+     * 内省配置前缀
      */
-    public static final String PROPERTY_SERVER_SERVLET_CONTEXT_PATH = "server.servlet.context-path";
-
-    // ==================== Path Constants ====================
-
-    /**
-     * URL 路径分隔符
-     */
-    public static final String URL_PATH_SEPARATOR = "/";
-
-    /**
-     * URL query string 分隔符
-     */
-    public static final String URL_QUERY_SEPARATOR = "?";
-
-    /**
-     * Spring Security 全量 Ant matcher
-     */
-    public static final String ANT_PATTERN_ALL = "/**";
-
-    // ==================== PEM Format Constants ====================
-
-    /**
-     * PEM public key header
-     */
-    public static final String PEM_PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
-
-    /**
-     * PEM public key footer
-     */
-    public static final String PEM_PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";
-
-    // ==================== Algorithm Constants ====================
-
-    /**
-     * RSA algorithm name
-     */
-    public static final String ALGORITHM_RSA = "RSA";
-
-    // ==================== Error Message Templates ====================
-
-    /**
-     * Error message when public key is not configured
-     */
-    public static final String ERROR_PUBLIC_KEY_NOT_CONFIGURED = "Public key not configured. Please set either 'jwt.public-key' or 'jwt.public-key-location'";
-
-    /**
-     * Error message prefix when public key file is not found
-     */
-    public static final String ERROR_PUBLIC_KEY_FILE_NOT_FOUND = "Public key file not found: ";
-
-    /**
-     * permit-all-paths 包含 /** 时覆盖 protected-paths 的错误消息
-     */
-    public static final String ERROR_PERMIT_ALL_OVERRIDES_PROTECTED =
-            "permit-all-paths contains /** after context-path normalization; " +
-                    "it will override protected-paths because Spring Security uses first-match authorization rules. " +
-                    "Remove /** from permit-all-paths or clear protected-paths.";
-
-    /**
-     * Security path 中不允许包含 query string 的错误消息模板
-     * 参数: path
-     */
-    public static final String ERROR_SECURITY_PATH_CONTAINS_QUERY_STRING =
-            "security path must not contain query string: %s";
+    public static final String CONFIG_PREFIX_INTROSPECT = CONFIG_PREFIX + ".introspect";
 
     // ==================== 本地缓存默认值 ====================
 
     /**
-     * 默认启用 context-path-aware 路径归一化
+     * 本地缓存默认关闭
      */
-    public static final boolean DEFAULT_CONTEXT_PATH_AWARE = true;
-
-    /**
-     * 本地缓存默认开启
-     */
-    public static final boolean DEFAULT_LOCAL_CACHE_ENABLED = true;
+    public static final boolean DEFAULT_LOCAL_CACHE_ENABLED = false;
 
     /**
      * 本地缓存默认 TTL（秒）
@@ -140,6 +70,6 @@ public final class SimpleAkskResourceServerConstant {
     public static final int WARN_STALE_TTL_MULTIPLIER_MAX = 100;
 
     private SimpleAkskResourceServerConstant() {
-        throw new UnsupportedOperationException("Utility class");
+        throw new UnsupportedOperationException("工具类不能实例化");
     }
 }

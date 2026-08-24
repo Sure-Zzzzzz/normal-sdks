@@ -30,63 +30,71 @@ class IntrospectLocalCacheHelperTest {
 
     @BeforeEach
     void setUp() {
-        // 禁用缓存的 helper
+        // 创建禁用缓存的辅助类
         SimpleAkskResourceServerProperties disabledProps = buildProperties(false, 5, 10000);
         disabledHelper = new IntrospectLocalCacheHelper(disabledProps);
         disabledHelper.init();
 
-        // 启用缓存的 helper（TTL=5s，maxSize=10000）
+        // 创建启用缓存的辅助类（TTL=5 秒，maxSize=10000）
         SimpleAkskResourceServerProperties enabledProps = buildProperties(true, 5, 10000);
         enabledHelper = new IntrospectLocalCacheHelper(enabledProps);
         enabledHelper.init();
     }
 
     @Test
-    @DisplayName("disabled: isEnabled 返回 false")
+    @DisplayName("默认配置关闭本地缓存")
+    void testDefaultCacheDisabled() {
+        SimpleAkskResourceServerProperties properties = new SimpleAkskResourceServerProperties();
+
+        assertFalse(properties.getIntrospect().getLocalCache().isEnabled());
+    }
+
+    @Test
+    @DisplayName("缓存禁用时 isEnabled 返回 false")
     void testIsEnabledWhenDisabled() {
         log.info("isEnabled={}", disabledHelper.isEnabled());
         assertFalse(disabledHelper.isEnabled(), "disabled 时 isEnabled 应返回 false");
     }
 
     @Test
-    @DisplayName("enabled: isEnabled 返回 true")
+    @DisplayName("缓存启用时 isEnabled 返回 true")
     void testIsEnabledWhenEnabled() {
         log.info("isEnabled={}", enabledHelper.isEnabled());
         assertTrue(enabledHelper.isEnabled(), "enabled 时 isEnabled 应返回 true");
     }
 
     @Test
-    @DisplayName("disabled: get 返回 null 不抛异常")
+    @DisplayName("缓存禁用时 get 返回 null 且不抛异常")
     void testGetReturnNullWhenDisabled() {
-        IntrospectResult result = disabledHelper.get("any-token");
-        log.info("get result={}", result);
+        IntrospectResult result = disabledHelper.get("entry-disabled");
+        log.info("disabled cache lookup completed: present={}", result != null);
         assertNull(result, "disabled 时 get 应返回 null");
     }
 
     @Test
-    @DisplayName("cache miss: get 返回 null")
+    @DisplayName("缓存未命中时 get 返回 null")
     void testGetReturnNullOnCacheMiss() {
-        IntrospectResult result = enabledHelper.get("non-existent-token");
-        log.info("cache miss result={}", result);
+        IntrospectResult result = enabledHelper.get("entry-missing");
+        log.info("cache miss lookup completed: present={}", result != null);
         assertNull(result, "cache miss 时 get 应返回 null");
     }
 
     @Test
-    @DisplayName("cache hit: get 返回正确的 IntrospectResult")
+    @DisplayName("缓存命中时 get 返回正确的 IntrospectResult")
     void testGetReturnResultOnCacheHit() {
-        String token = "test-token-hit";
+        String cacheKey = "entry-hit";
         IntrospectResult expected = buildResult(true);
-        enabledHelper.put(token, expected);
+        enabledHelper.put(cacheKey, expected);
 
-        IntrospectResult actual = enabledHelper.get(token);
-        log.info("put result={}, get result={}", expected, actual);
+        IntrospectResult actual = enabledHelper.get(cacheKey);
+        log.info("cache hit lookup completed: present={}", actual != null);
 
         assertNotNull(actual, "cache hit 时 get 不应返回 null");
         assertEquals(expected, actual, "get 应返回 put 的同一对象");
     }
 
     @Test
-    @DisplayName("disabled: put 不抛异常，get 仍返回 null")
+    @DisplayName("缓存禁用时 put 不抛异常且 get 仍返回 null")
     void testPutNoOpWhenDisabled() {
         assertDoesNotThrow(() -> disabledHelper.put("token", buildResult(true)));
         assertNull(disabledHelper.get("token"), "disabled 时 put 后 get 仍应返回 null");
@@ -96,17 +104,16 @@ class IntrospectLocalCacheHelperTest {
     @Test
     @DisplayName("put 后 get 字段完整一致")
     void testPutAndGetConsistency() {
-        String token = "test-token-consistency";
+        String cacheKey = "entry-consistency";
         Map<String, Object> attrs = new HashMap<>();
         attrs.put("client_id", "AKP123");
         attrs.put("scope", "read write");
         IntrospectResult expected = new IntrospectResult(true, attrs);
 
-        enabledHelper.put(token, expected);
-        IntrospectResult actual = enabledHelper.get(token);
+        enabledHelper.put(cacheKey, expected);
+        IntrospectResult actual = enabledHelper.get(cacheKey);
 
-        log.info("expected={}", expected);
-        log.info("actual={}", actual);
+        log.info("cache entry fields verified: present={}", actual != null);
 
         assertNotNull(actual);
         assertTrue(actual.isActive());
@@ -117,12 +124,12 @@ class IntrospectLocalCacheHelperTest {
     @Test
     @DisplayName("active=false 的结果也被缓存")
     void testActiveFalseAlsoCached() {
-        String token = "revoked-token";
+        String cacheKey = "entry-inactive";
         IntrospectResult revokedResult = buildResult(false);
-        enabledHelper.put(token, revokedResult);
+        enabledHelper.put(cacheKey, revokedResult);
 
-        IntrospectResult actual = enabledHelper.get(token);
-        log.info("revoked token cached result={}", actual);
+        IntrospectResult actual = enabledHelper.get(cacheKey);
+        log.info("inactive cache entry lookup completed: present={}", actual != null);
 
         assertNotNull(actual, "active=false 的结果也应被缓存，不应返回 null");
         assertFalse(actual.isActive(), "缓存的 active 应为 false");
@@ -131,22 +138,22 @@ class IntrospectLocalCacheHelperTest {
     @Test
     @DisplayName("TTL 过期后 get 返回 null")
     void testCacheExpiry() throws InterruptedException {
-        // 使用极短 TTL（1s）的 helper
+        // 使用极短 TTL（1 秒）的辅助类
         SimpleAkskResourceServerProperties props = buildProperties(true, 1, 10000);
         IntrospectLocalCacheHelper shortTtlHelper = new IntrospectLocalCacheHelper(props);
         shortTtlHelper.init();
 
-        String token = "expiry-token";
-        shortTtlHelper.put(token, buildResult(true));
+        String cacheKey = "entry-expiry";
+        shortTtlHelper.put(cacheKey, buildResult(true));
 
-        IntrospectResult before = shortTtlHelper.get(token);
-        log.info("before expiry: result={}", before);
+        IntrospectResult before = shortTtlHelper.get(cacheKey);
+        log.info("before expiry lookup completed: present={}", before != null);
         assertNotNull(before, "TTL 未到期时应命中缓存");
 
         TimeUnit.SECONDS.sleep(2);
 
-        IntrospectResult after = shortTtlHelper.get(token);
-        log.info("after expiry: result={}", after);
+        IntrospectResult after = shortTtlHelper.get(cacheKey);
+        log.info("after expiry lookup completed: present={}", after != null);
         assertNull(after, "TTL 过期后 get 应返回 null");
     }
 
@@ -159,7 +166,7 @@ class IntrospectLocalCacheHelperTest {
 
         assertDoesNotThrow(() -> {
             for (int i = 0; i < 20; i++) {
-                smallHelper.put("token-" + i, buildResult(true));
+                smallHelper.put("entry-" + i, buildResult(true));
             }
         });
         // Caffeine 淘汰是异步的，需要手动触发同步清理后再断言
@@ -169,7 +176,7 @@ class IntrospectLocalCacheHelperTest {
         int hitCount = 0;
         int missCount = 0;
         for (int i = 0; i < 20; i++) {
-            IntrospectResult result = smallHelper.get("token-" + i);
+            IntrospectResult result = smallHelper.get("entry-" + i);
             if (result == null) {
                 missCount++;
             } else {

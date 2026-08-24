@@ -6,10 +6,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Simple AKSK Resource Server Component Annotation
- * <p>
- * Marker annotation for resource-server components
- * </p>
+ * Simple AKSK Resource Server 组件标记注解。
+ *
+ * <p>用于标记资源服务组件。</p>
  *
  * @author surezzzzzz
  * @since 1.0.0
