@@ -60,41 +60,54 @@ public class TokenRefreshExecutor {
     public String fetchTokenFromServer(String securityContext, BiConsumer<String, Long> cacheCallback) {
         try {
             return retryExecutor.executeWithRetry(() -> {
-                String tokenUrl = coreProperties.getServerUrl() + coreProperties.getTokenEndpoint();
+                        String tokenUrl = coreProperties.getServerUrl() + coreProperties.getTokenEndpoint();
 
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-                headers.setBasicAuth(coreProperties.getClientId(), coreProperties.getClientSecret());
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                        headers.setBasicAuth(coreProperties.getClientId(), coreProperties.getClientSecret());
 
-                MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-                body.add(SimpleAkskClientCoreConstant.PARAM_GRANT_TYPE,
-                        SimpleAkskClientCoreConstant.GRANT_TYPE_CLIENT_CREDENTIALS);
-                if (StringUtils.hasText(securityContext)) {
-                    body.add(JwtClaimConstant.SECURITY_CONTEXT, securityContext);
-                }
+                        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+                        body.add(SimpleAkskClientCoreConstant.PARAM_GRANT_TYPE,
+                                SimpleAkskClientCoreConstant.GRANT_TYPE_CLIENT_CREDENTIALS);
+                        if (StringUtils.hasText(securityContext)) {
+                            body.add(JwtClaimConstant.SECURITY_CONTEXT, securityContext);
+                        }
 
-                HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
+                        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-                ResponseEntity<OAuth2TokenResponse> response = restTemplate.exchange(
-                        tokenUrl, HttpMethod.POST, request, OAuth2TokenResponse.class);
+                        ResponseEntity<OAuth2TokenResponse> response = restTemplate.exchange(
+                                tokenUrl, HttpMethod.POST, request, OAuth2TokenResponse.class);
 
-                OAuth2TokenResponse tokenResponse = response.getBody();
-                if (tokenResponse == null || !StringUtils.hasText(tokenResponse.getAccessToken())) {
-                    throw new TokenFetchException(
-                            ClientErrorCode.HTTP_RESPONSE_INVALID,
-                            String.format(ClientErrorMessage.HTTP_RESPONSE_INVALID, "Token response is empty"));
-                }
+                        OAuth2TokenResponse tokenResponse = response.getBody();
+                        if (tokenResponse == null || !StringUtils.hasText(tokenResponse.getAccessToken())) {
+                            throw new TokenFetchException(
+                                    ClientErrorCode.HTTP_RESPONSE_INVALID,
+                                    String.format(ClientErrorMessage.HTTP_RESPONSE_INVALID,
+                                            SimpleAkskClientCoreConstant.TOKEN_RESPONSE_EMPTY));
+                        }
 
-                String accessToken = tokenResponse.getAccessToken();
-                long expiresIn = tokenResponse.getExpiresIn();
+                        if (tokenResponse.getExpiresIn() == null || tokenResponse.getExpiresIn() <= 0) {
+                            throw new TokenFetchException(
+                                    ClientErrorCode.HTTP_RESPONSE_INVALID,
+                                    String.format(ClientErrorMessage.HTTP_RESPONSE_INVALID,
+                                            SimpleAkskClientCoreConstant.TOKEN_RESPONSE_EXPIRY_INVALID));
+                        }
 
-                if (cacheCallback != null) {
-                    cacheCallback.accept(accessToken, expiresIn);
-                }
+                        String accessToken = tokenResponse.getAccessToken();
+                        long expiresIn = tokenResponse.getExpiresIn();
 
-                log.info("Token fetched from server: expiresIn={}s", expiresIn);
-                return accessToken;
-            }, 3, 1, 1.5, 5L);
+                        if (cacheCallback != null) {
+                            cacheCallback.accept(accessToken, expiresIn);
+                        }
+
+                        log.info("Token fetched from server: expiresIn={}s", expiresIn);
+                        return accessToken;
+                    }, SimpleAkskClientCoreConstant.TOKEN_REFRESH_RETRY_TIMES,
+                    SimpleAkskClientCoreConstant.TOKEN_REFRESH_INITIAL_DELAY_MS,
+                    SimpleAkskClientCoreConstant.TOKEN_REFRESH_BACKOFF_MULTIPLIER,
+                    SimpleAkskClientCoreConstant.TOKEN_REFRESH_MAX_DELAY_MS);
+        } catch (TokenFetchException e) {
+            throw e;
         } catch (Exception e) {
             throw new TokenFetchException(
                     ClientErrorCode.TOKEN_FETCH_FAILED,

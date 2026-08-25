@@ -10,7 +10,7 @@ io:
           aksk:
             client:
               enable: true
-              server-url: http://localhost:8080
+              server-url: http://localhost:8280
               token-endpoint: /oauth2/token
 
 logging:
