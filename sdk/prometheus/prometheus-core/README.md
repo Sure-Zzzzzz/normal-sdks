@@ -12,7 +12,7 @@ dependencies {
 }
 ```
 
-`protobuf-java` 与 `protobuf-java-util` 以传递依赖提供，业务无需重复声明。`2.0.1` 起两者版本升至 `3.25.5`（修复已知 CVE），由仓库根 `build.gradle` 统一约束，不在本模块单独声明版本号。
+`protobuf-java` 与 `protobuf-java-util` 以传递依赖提供，业务无需重复声明。`2.0.1` 起两者版本升至 `3.25.5`（修复已知 CVE），与仓库根 `build.gradle` 的统一约束保持一致。
 
 ## 使用
 

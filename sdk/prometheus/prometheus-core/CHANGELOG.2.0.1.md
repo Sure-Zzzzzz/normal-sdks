@@ -10,7 +10,7 @@
 - 未采用 Protobuf `4.x` 系列：该系列移除了 `makeExtensionsImmutable()` 等 3.x 生成代码依赖的 API，会导致本模块已签入的 `Remote.java`、`Types.java` 编译失败，需重新生成协议代码，风险与改动范围超出本次安全补丁目标。`3.25.5` 同为无 CVE 版本且不改变生成代码。
 - 以上版本均已使用 OSV 数据库按精确版本号核验，确认无已知漏洞。
 
-- 本模块 `build.gradle` 不再显式声明 `protobuf-java`/`protobuf-java-util` 版本号，统一由仓库根 `build.gradle` 的 `artifactConstraints` 管理，避免版本口径分裂。
+- 本模块 `build.gradle` 补齐 `protobuf-java`/`protobuf-java-util` 的显式版本号（Maven 发布要求 publication 依赖携带解析版本，否则 `generateMetadataFileForMavenPublication` 会失败），与仓库根 `build.gradle` 的 `artifactConstraints` 保持一致。
 
 ## 向后兼容性
 
