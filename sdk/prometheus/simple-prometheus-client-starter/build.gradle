@@ -1,0 +1,13 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-prometheus-route-starter:1.0.0'
+    api 'io.github.sure-zzzzzz:prometheus-core:2.0.1'
+    implementation 'org.xerial.snappy:snappy-java:1.1.10.5'
+
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    implementation "com.fasterxml.jackson.core:jackson-databind"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.apache.httpcomponents:httpclient'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
