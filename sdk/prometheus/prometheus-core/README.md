@@ -2,17 +2,17 @@
 
 Prometheus Remote Storage 协议的 Protobuf Java 绑定。它只提供稳定的协议对象，不持有 endpoint、认证、HTTP 客户端、连接池或重试策略。
 
-> **1.x 已封版**：`1.0.0` 是 1.x 最终版本，冻结使用说明见 [README.1.x.md](README.1.x.md)。`2.0.0` 与 Route 原生化的 Client 依赖链同步发布，协议生成代码保持不变。
+> **1.x 已封版**：`1.0.0` 是 1.x 最终版本，冻结使用说明见 [README.1.x.md](README.1.x.md)。`2.0.0` 与 Route 原生化的 Client 依赖链同步发布，协议生成代码保持不变。`2.0.1` 修复 Protobuf CVE 漏洞。
 
 ## 快速接入
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:prometheus-core:2.0.0'
+    implementation 'io.github.sure-zzzzzz:prometheus-core:2.0.1'
 }
 ```
 
-`protobuf-java` 与 `protobuf-java-util` 以传递依赖提供，业务无需重复声明。
+`protobuf-java` 与 `protobuf-java-util` 以传递依赖提供，业务无需重复声明。`2.0.1` 起两者版本升至 `3.25.5`（修复已知 CVE），由仓库根 `build.gradle` 统一约束，不在本模块单独声明版本号。
 
 ## 使用
 
