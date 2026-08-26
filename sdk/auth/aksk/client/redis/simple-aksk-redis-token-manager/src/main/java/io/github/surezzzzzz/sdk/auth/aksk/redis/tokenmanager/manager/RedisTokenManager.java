@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpi
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +60,9 @@ public class RedisTokenManager implements TokenManager {
         String cacheKey = generateCacheKey(securityContext);
         String cacheName = properties.getRedis().getToken().getCacheName();
 
-        // 先查缓存（L1 → L2），命中直接返回 token
-        TokenWithExpiry cached = cacheManager.get(cacheName, cacheKey);
+        // 类型化读取：smart-cache 2.x 对 Object.class 读取做 trusted-packages 白名单校验，
+        // 内部模型必须显式指定类型，否则反序列化被拒、L2 恒 miss
+        TokenWithExpiry cached = cacheManager.get(cacheName, cacheKey, TokenWithExpiry.class);
         if (cached != null) {
             return cached.getToken();
         }
@@ -74,11 +76,17 @@ public class RedisTokenManager implements TokenManager {
             int lockTimeout = smartCacheProperties.getLock() != null
                     ? smartCacheProperties.getLock().getTimeoutSeconds()
                     : SimpleAkskRedisTokenManagerConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
-            locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
+            try {
+                locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
+            } catch (Exception e) {
+                // 对齐 SmartCacheManager.loadWithLock 的降级语义：锁不可用时本地锁兜底，不让 getToken 直接失败
+                log.warn("获取分布式锁失败，本地锁兜底。原因：{}", e.getMessage());
+                return fetchWithLocalLock(securityContext, cacheName, cacheKey);
+            }
 
             if (locked) {
                 // 双重检查 L2
-                TokenWithExpiry fromL2 = cacheManager.get(cacheName, cacheKey);
+                TokenWithExpiry fromL2 = cacheManager.get(cacheName, cacheKey, TokenWithExpiry.class);
                 if (fromL2 != null) {
                     return fromL2.getToken();
                 }
@@ -133,7 +141,7 @@ public class RedisTokenManager implements TokenManager {
                 Thread.currentThread().interrupt();
                 break;
             }
-            TokenWithExpiry cached = cacheManager.get(cacheName, cacheKey);
+            TokenWithExpiry cached = cacheManager.get(cacheName, cacheKey, TokenWithExpiry.class);
             if (cached != null) {
                 return cached.getToken();
             }
@@ -149,7 +157,7 @@ public class RedisTokenManager implements TokenManager {
         Object localLock = localLocks.computeIfAbsent(cacheKey, k -> new Object());
         synchronized (localLock) {
             // 双重检查 L2
-            TokenWithExpiry fromL2 = cacheManager.get(cacheName, cacheKey);
+            TokenWithExpiry fromL2 = cacheManager.get(cacheName, cacheKey, TokenWithExpiry.class);
             if (fromL2 != null) {
                 return fromL2.getToken();
             }
@@ -180,14 +188,16 @@ public class RedisTokenManager implements TokenManager {
     /**
      * 生成分布式锁 Key
      *
-     * <p>格式：{keyPrefix}-lock:{cacheName}:{me}:{cacheKey}
-     * 包含 me（实例标识），避免多实例共用 Redis 时锁冲突。
+     * <p>复用 smart-cache 的 {@link KeyHelper#buildLockKey}，与 SmartCacheManager 的锁键同源，
+     * 格式 {keyPrefix}-lock:{cacheName}:{me}:{cacheKey}（me 为应用组标识：同组互斥、跨组隔离）。
      */
     private String buildLockKey(String cacheName, String cacheKey) {
-        return smartCacheProperties.getKeyPrefix() + "-lock:"
-                + cacheName + ":"
-                + smartCacheProperties.getMe() + ":"
-                + cacheKey;
+        return KeyHelper.buildLockKey(
+                smartCacheProperties.getKeyPrefix(),
+                cacheName,
+                smartCacheProperties.getMe(),
+                cacheKey
+        );
     }
 
 }

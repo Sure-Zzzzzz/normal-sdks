@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Token 及其元数据
@@ -10,11 +11,14 @@ import lombok.NoArgsConstructor;
  * <p>包含 token、expiresAt、securityContext，随 token 一起存 Redis。
  * reload() 时从 Redis 读取 securityContext，保证分布式一致性。
  *
- * <p>需要 @NoArgsConstructor 用于 Jackson 反序列化
+ * <p>需要 @NoArgsConstructor + @Setter 用于 Jackson 反序列化（smart-cache 2.x 的
+ * 类型化读取走 ObjectMapper.convertValue，依赖可变 POJO，与其 SmartCacheSerializerTest
+ * 的 DTO 约定一致）
  *
  * @author surezzzzzz
  */
 @Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class TokenWithExpiry {

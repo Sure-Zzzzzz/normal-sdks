@@ -1,22 +1,36 @@
 spring:
   profiles:
+    # local profile 加载 application-local.yml（凭据）；SB 2.4 前没有 spring.config.import，
+    # 四版本矩阵统一走 profile 机制，带 @ActiveProfiles 的测试类需显式附带 "local"
     active: local
-  config:
-    import: optional:classpath:application-local.yml
-  redis:
-    host: localhost
-    port: 6379
-    database: 4
 
 io:
   github:
     surezzzzzz:
       sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 4
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+
+        lock:
+          redis:
+            route:
+              enable: true
+
         auth:
           aksk:
             client:
               enable: true
-              server-url: http://localhost:8080
+              server-url: http://localhost:8280
               token-endpoint: /oauth2/token
               # client-id 和 client-secret 请在 application-local.yml 中配置
               redis:
@@ -27,6 +41,9 @@ io:
           enabled: true
           key-prefix: sure-auth-aksk-client
           me: redis-token-manager-test
+          route:
+            # 测试隔离依赖 cacheManager.clear 扫删 L2；不开启时 clear 对 L2 是 no-op
+            scan-enabled: true
           l1:
             enabled: true
             expire-seconds: 2

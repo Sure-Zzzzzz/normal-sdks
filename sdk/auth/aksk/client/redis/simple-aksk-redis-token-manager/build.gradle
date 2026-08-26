@@ -1,10 +1,12 @@
 dependencies {
     // 依赖 client-core 模块
-    api 'io.github.sure-zzzzzz:simple-aksk-client-core:2.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core:3.0.0'
 
     // 依赖 smart-cache-starter（提供 L1+L2 两级缓存、分布式锁、Pub/Sub 一致性、L2 预刷新）
     // simple-redis-lock-starter 已由 smart-cache-starter 传递依赖，无需重复声明
-    api 'io.github.sure-zzzzzz:smart-cache-starter:1.1.2'
+    // implementation：smart-cache 是实现细节，运行时仍向使用方传递（自动装配不受影响）；
+    // 使用方直接引用 smart-cache API 时需自行声明该依赖
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

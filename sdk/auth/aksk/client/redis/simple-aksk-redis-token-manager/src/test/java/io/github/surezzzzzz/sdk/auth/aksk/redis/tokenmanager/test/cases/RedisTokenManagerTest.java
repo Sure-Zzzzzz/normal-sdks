@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedi
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Set;
 
@@ -29,7 +29,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SimpleAkskRedisTokenManagerTestApplication.class)
-@ActiveProfiles("nonNullSecurityContext")
+// local profile 激活 application-local.yml（凭据）；SB 2.3/2.2 无 spring.config.import，必须显式带上
+@ActiveProfiles({"local", "nonNullSecurityContext"})
 class RedisTokenManagerTest {
 
     @Autowired
@@ -39,7 +40,7 @@ class RedisTokenManagerTest {
     private SecurityContextProvider securityContextProvider;
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
+    private RedisRouteTemplate redisRouteTemplate;
 
     @Autowired
     private SmartCacheManager cacheManager;
@@ -66,10 +67,14 @@ class RedisTokenManagerTest {
     }
 
     private void cleanupTestKeys() {
-        Set<String> keys = stringRedisTemplate.keys("sure-auth-aksk-client:*");
-        if (keys != null && !keys.isEmpty()) {
-            stringRedisTemplate.delete(keys);
-        }
+        // 走 Route 数据源（与缓存同库）删键；Boot 自动装配的 StringRedisTemplate 连默认 db，删不到缓存键
+        redisRouteTemplate.execute("sure-auth-aksk-client:", template -> {
+            Set<String> keys = template.keys("sure-auth-aksk-client:*");
+            if (keys != null && !keys.isEmpty()) {
+                template.delete(keys);
+            }
+            return null;
+        });
     }
 
     private String generateCacheKey(String securityContext) {

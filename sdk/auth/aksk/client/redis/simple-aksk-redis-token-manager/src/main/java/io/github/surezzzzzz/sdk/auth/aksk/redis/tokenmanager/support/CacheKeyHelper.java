@@ -20,11 +20,11 @@ import static io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.Sim
  */
 public final class CacheKeyHelper {
 
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
     private CacheKeyHelper() {
         throw new UnsupportedOperationException("Utility class");
     }
-
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     /**
      * 根据 securityContext 生成缓存 Key

@@ -1,6 +1,6 @@
 # Simple AKSK Redis Token Manager
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.1**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.0**。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -19,7 +19,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:2.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.0'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -31,34 +31,44 @@ implementation 'org.springframework.boot:spring-boot-starter-aop'
 ### 2. 配置
 
 ```yaml
-spring:
-  redis:
-    host: localhost
-    port: 6379
-
 io:
   github:
     surezzzzzz:
       sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+
+        lock:
+          redis:
+            route:
+              enable: true
+
         auth:
           aksk:
             client:
               enable: true
-              server-url: http://localhost:8080
+              server-url: http://localhost:8280
               client-id: AKP...
               client-secret: SK...
 
         cache:
           enabled: true
           key-prefix: my-app
-          me: instance-1                    # 应用实例标识，多实例保持一致
+          me: my-aksk-app                   # 应用组标识（必配）：同一应用的多个实例必须一致，共享缓存 / 锁互斥 / PubSub
           l1:
             enabled: true
             expire-seconds: 2               # L1 TTL，建议 1-5s
             max-size: 1000
           l2:
             enabled: true
-            expire-seconds: 3600            # TTL 兜底（server 未返回 expiresIn 时使用）
+            expire-seconds: 3600            # SmartCache 默认 L2 TTL
             preload:
               enabled: true                 # 启用 L2 预刷新
               before-expire-seconds: 60      # 预刷新窗口（Redis TTL <= 60s 时触发）
@@ -102,9 +112,9 @@ Token 存储结构包含 `{ token, expiresAt, securityContext }`：
 
 ### TTL 策略
 
-- **Redis TTL**：使用 server 返回的 `expiresIn` 秒数，框架通过 Redis `TTL` 命令检测是否进入 preload 窗口
-- **兜底**：`l2.expireSeconds`（当 server 未返回 expiresIn 时）
-- **preload 触发**：`TTL(key) <= beforeExpireSeconds` 时框架自动触发 reload，新 token 写回后 TTL 重新从 expiresIn 算起
+- **Redis TTL**：使用 server 返回的正数 `expiresIn` 秒数，框架通过 Redis `TTL` 命令检测是否进入 preload 窗口
+- **无效响应**：缺失或非正 `expiresIn` 由 client-core 拒绝，Token 不会写入缓存
+- **preload 触发**：`TTL(key) <= beforeExpireSeconds` 时框架自动触发 reload，新 token 写回后 TTL 重新从 `expiresIn` 算起
 
 ---
 
@@ -134,8 +144,8 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 
 | 场景 | Key 示例 |
 |------|---------|
-| 平台级（无 security_context） | `my-app:aksk-client-token:instance-1::{default}` |
-| 用户级（有 security_context） | `my-app:aksk-client-token:instance-1::{a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6}` |
+| 平台级（无 security_context） | `my-app:aksk-client-token:my-aksk-app::{default}` |
+| 用户级（有 security_context） | `my-app:aksk-client-token:my-aksk-app::{a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6}` |
 
 > 用户级 cacheKey 自 2.0.1 起使用 SHA-256 截断 128-bit hex（32 字符），替换 2.0.0 的 `hashCode()` 32-bit 数字串，消除碰撞风险。Hash Tag 行为由 smart-cache 控制，本模块未做修改。
 
@@ -145,14 +155,26 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 
 | 依赖 | 声明方式 | 说明 |
 |------|----------|------|
-| `simple-aksk-client-core` | `api` | 客户端核心，自动传递 |
-| `smart-cache-starter` | `api` | L1+L2 缓存、分布式锁、Pub/Sub，自动传递 |
+| `simple-aksk-client-core` | `api` | 客户端核心（`TokenManager` 等公开契约），自动传递 |
+| `smart-cache-starter` | `implementation` | L1+L2 缓存、分布式锁、Pub/Sub，运行时自动传递、开箱即用；直接使用 smart-cache API 需自行引入 |
 | `spring-boot-starter-data-redis` | `compileOnly` | Redis 操作，**使用方必须自行引入** |
 | `spring-web` | `compileOnly` | RestTemplate，**使用方必须自行引入** |
 
 ---
 
 ## 版本历史
+
+### 3.0.0
+
+- 适配 `simple-aksk-client-core:3.0.0`，继续支持 AKSK 3.0 的 Client Credentials Token 获取和安全上下文传递；升级 `smart-cache-starter` 1.1.2 → 2.1.0。
+- 适配 smart-cache 2.x 序列化安全边界：缓存值类型化读写，`TokenWithExpiry` 模型与 2.x 反序列化契约兼容。
+- L2 预刷新写回的 TTL 严格等于服务端 `expires_in`，修复预刷新值可能被全局 L2 TTL 覆盖的问题。
+- 分布式锁键与 SmartCacheManager 同源构造，按应用组 `me` 互斥；锁不可用时本地锁兜底。
+- 业务代码无需修改；`me` 为必配项（应用组标识，同一应用多实例保持一致）。
+- 依赖边界收紧：`simple-aksk-client-core` 保持 `api`（公开契约），`smart-cache-starter` 调整为 `implementation`——运行时仍自动传递、开箱即用不变；直接使用 smart-cache API 的使用方需自行引入。
+- 经 Spring Boot 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE 四版本真实 E2E 矩阵验证（含依赖收紧后的全量回归）。
+
+详见 [CHANGELOG.3.0.0.md](CHANGELOG.3.0.0.md)。
 
 ### 2.0.1
 

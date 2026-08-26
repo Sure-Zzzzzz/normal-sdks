@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
@@ -8,18 +9,18 @@ import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationMessage;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Set;
 
@@ -49,11 +50,14 @@ class RedisTokenManagerPubSubTest {
     @Autowired
     private SmartCacheProperties smartCacheProperties;
 
+    // smart-cache 2.1 的 Pub/Sub 走 Redis Route：发布用 RedisRouteTemplate（按 probe channel 选数据源），
+    // 序列化用 smart-cache 专属 ObjectMapper，与 CacheInvalidationListener 的消费端保持一致
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private RedisRouteTemplate redisRouteTemplate;
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
+    @Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
+    private ObjectMapper smartCacheObjectMapper;
 
     @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.redis.token.cache-name:aksk-client-token}")
     private String cacheName;
@@ -69,10 +73,14 @@ class RedisTokenManagerPubSubTest {
     }
 
     private void cleanupTestKeys() {
-        Set<String> keys = stringRedisTemplate.keys("sure-auth-aksk-client:*");
-        if (keys != null && !keys.isEmpty()) {
-            stringRedisTemplate.delete(keys);
-        }
+        // 走 Route 数据源（与缓存同库）删键；Boot 自动装配的 StringRedisTemplate 连默认 db，删不到缓存键
+        redisRouteTemplate.execute("sure-auth-aksk-client:", template -> {
+            Set<String> keys = template.keys("sure-auth-aksk-client:*");
+            if (keys != null && !keys.isEmpty()) {
+                template.delete(keys);
+            }
+            return null;
+        });
     }
 
     /**
@@ -80,7 +88,7 @@ class RedisTokenManagerPubSubTest {
      */
     @Test
     @DisplayName("Pub/Sub 消息接收 -> 本实例 L1 清除")
-    void testPubSubMessageClearsL1() throws InterruptedException {
+    void testPubSubMessageClearsL1() throws Exception {
         log.info("========== 方案B：Pub/Sub 消息接收 -> L1 清除 ==========");
 
         String cacheKey = "default";
@@ -98,12 +106,24 @@ class RedisTokenManagerPubSubTest {
         message.setOperation(SmartCacheConstant.OPERATION_EVICT);
         message.setSender("another-instance-uuid");
 
+        // 发布方式镜像 CacheInvalidationListener.publishInvalidation()：
+        // JSON 序列化 + RedisRouteTemplate 按 probe channel 选择发布数据源，
+        // sender 使用其他实例 ID 以绕过监听端的自身消息忽略逻辑
         String channel = KeyHelper.buildPubSubChannel(
                 smartCacheProperties.getPubsubChannelPrefix(),
                 smartCacheProperties.getMe(),
                 cacheName
         );
-        redisTemplate.convertAndSend(channel, message);
+        String payload = smartCacheObjectMapper.writeValueAsString(message);
+        String routeProbeChannel = KeyHelper.buildPubSubChannel(
+                smartCacheProperties.getPubsubChannelPrefix(),
+                smartCacheProperties.getMe(),
+                SmartCacheConstant.PUBSUB_ROUTE_PROBE_KEY
+        );
+        redisRouteTemplate.execute(routeProbeChannel, template -> {
+            template.convertAndSend(channel, payload);
+            return null;
+        });
         log.info("已发布 invalidation 消息到 channel: {}", channel);
 
         // 等待 Pub/Sub 处理

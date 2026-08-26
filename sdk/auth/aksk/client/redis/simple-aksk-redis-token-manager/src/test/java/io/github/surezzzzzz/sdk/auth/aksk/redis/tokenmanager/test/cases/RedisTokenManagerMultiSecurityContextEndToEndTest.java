@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHel
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +19,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Set;
@@ -48,53 +48,22 @@ import static org.junit.jupiter.api.Assertions.*;
         SimpleAkskRedisTokenManagerTestApplication.class,
         RedisTokenManagerMultiSecurityContextEndToEndTest.TestConfig.class
 })
-@ActiveProfiles("multiSecurityContext")
+// local profile 激活 application-local.yml（凭据）；SB 2.3/2.2 无 spring.config.import，必须显式带上
+@ActiveProfiles({"local", "multiSecurityContext"})
 class RedisTokenManagerMultiSecurityContextEndToEndTest {
-
-    /**
-     * 可变 SecurityContextProvider：通过 {@link AtomicReference} 持有 securityContext，
-     * 测试用例运行时可切换值，模拟多租户在同一进程中并存。
-     */
-    static class MutableSecurityContextProvider implements SecurityContextProvider {
-        private final AtomicReference<String> ref = new AtomicReference<>();
-
-        void set(String securityContext) {
-            ref.set(securityContext);
-        }
-
-        @Override
-        public String getSecurityContext() {
-            return ref.get();
-        }
-    }
-
-    @Configuration
-    @Profile("multiSecurityContext")
-    static class TestConfig {
-        @Bean
-        public SecurityContextProvider securityContextProvider() {
-            return new MutableSecurityContextProvider();
-        }
-    }
 
     @Autowired
     private RedisTokenManager tokenManager;
-
     @Autowired
     private SecurityContextProvider securityContextProvider;
-
     @Autowired
     private SmartCacheManager cacheManager;
-
     @Autowired
     private L2Cache l2Cache;
-
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
-
+    private RedisRouteTemplate redisRouteTemplate;
     @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.redis.token.cache-name:aksk-client-token}")
     private String cacheName;
-
     private MutableSecurityContextProvider mutableProvider;
 
     @BeforeEach
@@ -112,13 +81,15 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
     }
 
     private void cleanupTestKeys() {
-        Set<String> keys = stringRedisTemplate.keys("sure-auth-aksk-client:*");
-        if (keys != null && !keys.isEmpty()) {
-            stringRedisTemplate.delete(keys);
-        }
+        // 走 Route 数据源（与缓存同库）删键；Boot 自动装配的 StringRedisTemplate 连默认 db，删不到缓存键
+        redisRouteTemplate.execute("sure-auth-aksk-client:", template -> {
+            Set<String> keys = template.keys("sure-auth-aksk-client:*");
+            if (keys != null && !keys.isEmpty()) {
+                template.delete(keys);
+            }
+            return null;
+        });
     }
-
-    // ========== 场景 1：两个多租户 securityContext 互相隔离 ==========
 
     @Test
     @DisplayName("场景1: 两个不同 securityContext 应在 L2 产生两条独立缓存条目，互不污染")
@@ -145,8 +116,8 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         assertNotNull(tokenB, "tenant-B token 不应为 null");
 
         // L2 中两个 key 都应有独立条目，且条目内的 securityContext 字段对得上
-        TokenWithExpiry l2A = (TokenWithExpiry) l2Cache.get(cacheName, keyA);
-        TokenWithExpiry l2B = (TokenWithExpiry) l2Cache.get(cacheName, keyB);
+        TokenWithExpiry l2A = l2Cache.get(cacheName, keyA, TokenWithExpiry.class);
+        TokenWithExpiry l2B = l2Cache.get(cacheName, keyB, TokenWithExpiry.class);
 
         assertNotNull(l2A, "L2 应有 tenant-A 的条目");
         assertNotNull(l2B, "L2 应有 tenant-B 的条目");
@@ -163,8 +134,6 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         log.info("✓ 两个 securityContext 各自独立缓存，互不污染");
     }
 
-    // ========== 场景 2：clearToken 仅清除当前 securityContext 对应 key ==========
-
     @Test
     @DisplayName("场景2: clearToken 只清当前 securityContext 的 cacheKey，不影响其他租户")
     void testClearTokenOnlyAffectsCurrentSecurityContext() {
@@ -180,8 +149,8 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         String tokenA = tokenManager.getToken();
         mutableProvider.set(scB);
         String tokenB = tokenManager.getToken();
-        assertNotNull(l2Cache.get(cacheName, keyA), "前置：L2(A) 应有值");
-        assertNotNull(l2Cache.get(cacheName, keyB), "前置：L2(B) 应有值");
+        assertNotNull(l2Cache.get(cacheName, keyA, TokenWithExpiry.class), "前置：L2(A) 应有值");
+        assertNotNull(l2Cache.get(cacheName, keyB, TokenWithExpiry.class), "前置：L2(B) 应有值");
 
         // 在 scA 上下文中调 clearToken
         mutableProvider.set(scA);
@@ -189,8 +158,8 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         log.info("已在 scA 上下文 clearToken");
 
         // L2(A) 应被清除，L2(B) 应原封不动
-        assertNull(l2Cache.get(cacheName, keyA), "clearToken(scA) 后 L2(A) 应为空");
-        TokenWithExpiry l2BAfter = (TokenWithExpiry) l2Cache.get(cacheName, keyB);
+        assertNull(l2Cache.get(cacheName, keyA, TokenWithExpiry.class), "clearToken(scA) 后 L2(A) 应为空");
+        TokenWithExpiry l2BAfter = l2Cache.get(cacheName, keyB, TokenWithExpiry.class);
         assertNotNull(l2BAfter, "clearToken(scA) 不应影响 L2(B)");
         assertEquals(tokenB, l2BAfter.getToken(), "tenant-B 的 token 应仍然存在且不变");
         assertEquals(scB, l2BAfter.getSecurityContext(), "tenant-B 条目的 securityContext 应仍然是 scB");
@@ -198,7 +167,7 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         log.info("✓ clearToken 严格按 cacheKey 隔离，多租户互不打扰");
     }
 
-    // ========== 场景 3：经典 hashCode 碰撞输入在 2.0.1 中被隔离开 ==========
+    // ========== 场景 1：两个多租户 securityContext 互相隔离 ==========
 
     @Test
     @DisplayName("场景3: 经典 hashCode 碰撞输入(Aa/BB)在 2.0.1 中映射到不同 cacheKey，杜绝跨上下文串 Token")
@@ -230,8 +199,8 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
 
         // L2 必须为两者各自存一条；如果还是老 hashCode 算法，BB 会覆盖 Aa（同 cacheKey），
         // 这里 keyA 会读不到独立条目（或读到的 securityContext 字段错乱）
-        TokenWithExpiry l2A = (TokenWithExpiry) l2Cache.get(cacheName, keyA);
-        TokenWithExpiry l2B = (TokenWithExpiry) l2Cache.get(cacheName, keyB);
+        TokenWithExpiry l2A = l2Cache.get(cacheName, keyA, TokenWithExpiry.class);
+        TokenWithExpiry l2B = l2Cache.get(cacheName, keyB, TokenWithExpiry.class);
         assertNotNull(l2A, "L2(Aa) 应有独立条目（老算法下会被 BB 覆盖）");
         assertNotNull(l2B, "L2(BB) 应有独立条目");
 
@@ -248,5 +217,35 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
                 "切回 Aa 必须命中 keyA 自己的缓存（老 hashCode 时代会错命中 BB 的 token）");
 
         log.info("✓ hashCode 碰撞输入在 2.0.1 中被 SHA-256 严格隔离，跨上下文串 Token 问题根除");
+    }
+
+    // ========== 场景 2：clearToken 仅清除当前 securityContext 对应 key ==========
+
+    /**
+     * 可变 SecurityContextProvider：通过 {@link AtomicReference} 持有 securityContext，
+     * 测试用例运行时可切换值，模拟多租户在同一进程中并存。
+     */
+    static class MutableSecurityContextProvider implements SecurityContextProvider {
+        private final AtomicReference<String> ref = new AtomicReference<>();
+
+        void set(String securityContext) {
+            ref.set(securityContext);
+        }
+
+        @Override
+        public String getSecurityContext() {
+            return ref.get();
+        }
+    }
+
+    // ========== 场景 3：经典 hashCode 碰撞输入在 2.0.1 中被隔离开 ==========
+
+    @Configuration
+    @Profile("multiSecurityContext")
+    static class TestConfig {
+        @Bean
+        public SecurityContextProvider securityContextProvider() {
+            return new MutableSecurityContextProvider();
+        }
     }
 }

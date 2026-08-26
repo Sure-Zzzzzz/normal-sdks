@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedi
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,14 +18,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RedisTokenManager 端到端测试（2.0.0）
+ * RedisTokenManager 端到端测试（3.0.0）
  *
  * <p>覆盖所有场景：
  * <ul>
@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>缓存 miss + 没抢到锁 + 轮询 L2 等待</li>
  *   <li>缓存 miss + 轮询超时 + 本地锁兜底</li>
  *   <li>clearToken 后重新从 server 获取</li>
- *   <li>TTL fallback（server 未返回 expiresIn 时用 l2.expireSeconds）</li>
+ *   <li>服务端 expiresIn 驱动的 L2 TTL</li>
  *   <li>TokenWithExpiry 正确序列化/反序列化</li>
  *   <li>securityContext 读写一致性（非 null securityContext 存 L2 后能正确读回）</li>
  * </ul>
@@ -43,7 +43,8 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = SimpleAkskRedisTokenManagerTestApplication.class)
-@ActiveProfiles("nonNullSecurityContext")
+// local profile 激活 application-local.yml（凭据）；SB 2.3/2.2 无 spring.config.import，必须显式带上
+@ActiveProfiles({"local", "nonNullSecurityContext"})
 class RedisTokenManagerEndToEndTest {
 
     @Autowired
@@ -62,7 +63,7 @@ class RedisTokenManagerEndToEndTest {
     private L2Cache l2Cache;
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
+    private RedisRouteTemplate redisRouteTemplate;
 
     @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.redis.token.cache-name:aksk-client-token}")
     private String cacheName;
@@ -85,10 +86,14 @@ class RedisTokenManagerEndToEndTest {
     }
 
     private void cleanupTestKeys() {
-        Set<String> keys = stringRedisTemplate.keys("sure-auth-aksk-client:*");
-        if (keys != null && !keys.isEmpty()) {
-            stringRedisTemplate.delete(keys);
-        }
+        // 走 Route 数据源（与缓存同库）删键；Boot 自动装配的 StringRedisTemplate 连默认 db，删不到缓存键
+        redisRouteTemplate.execute("sure-auth-aksk-client:", template -> {
+            Set<String> keys = template.keys("sure-auth-aksk-client:*");
+            if (keys != null && !keys.isEmpty()) {
+                template.delete(keys);
+            }
+            return null;
+        });
     }
 
     // ========== 场景 1: L1 缓存命中 ==========
@@ -149,7 +154,7 @@ class RedisTokenManagerEndToEndTest {
 
         // 确认缓存为空
         Object l1Before = l1Cache.get(cacheName, cacheKey);
-        Object l2Before = l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry l2Before = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNull(l1Before, "L1 应为空");
         assertNull(l2Before, "L2 应为空");
         log.info("确认缓存为空（L1: {}, L2: {}）", l1Before, l2Before);
@@ -160,7 +165,7 @@ class RedisTokenManagerEndToEndTest {
         log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
 
         // 验证写入 L2
-        TokenWithExpiry l2Value = (TokenWithExpiry) l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry l2Value = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(l2Value, "L2 应有值");
         assertEquals(token, l2Value.getToken(), "L2 存储的 token 应一致");
         assertTrue(l2Value.getExpiresAt() > System.currentTimeMillis() / 1000, "expiresAt 应为未来时间");
@@ -234,16 +239,16 @@ class RedisTokenManagerEndToEndTest {
         log.info("✓ clearToken 后重新获取");
 
         // 验证重新写入 L2
-        TokenWithExpiry l2Value = (TokenWithExpiry) l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry l2Value = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(l2Value, "重新获取后 L2 应有值");
     }
 
-    // ========== 场景 6: TTL fallback ==========
+    // ========== 场景 6: 服务端 TTL ==========
 
     @Test
-    @DisplayName("场景6: TTL fallback - server 未返回 expiresIn 时使用 l2.expireSeconds")
-    void testTtlFallback() {
-        log.info("========== 场景6: TTL fallback ==========");
+    @DisplayName("场景6: 服务端 expiresIn 驱动 L2 TTL")
+    void testServerExpiryDrivesL2Ttl() {
+        log.info("========== 场景6: 服务端 TTL ==========");
 
         // 清除缓存
         cacheManager.clear(cacheName);
@@ -254,18 +259,16 @@ class RedisTokenManagerEndToEndTest {
         log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
 
         // 验证 L2 有值
-        TokenWithExpiry l2Value = (TokenWithExpiry) l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry l2Value = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(l2Value, "L2 应有值");
 
-        // 验证 expiresIn >= 0（如果 server 返回了 expiresIn 则 > 0，否则 = 0）
         assertTrue(l2Value.getExpiresAt() > System.currentTimeMillis() / 1000, "expiresAt 应为未来时间");
 
-        // 验证 Redis TTL > 0（无论是 expiresIn 还是 fallback 值）
         long ttl = l2Cache.getTtl(cacheName, cacheKey);
         assertTrue(ttl > 0, "L2 TTL 应大于 0，实际: " + ttl);
         log.info("L2 TTL: {}s, expiresAt: {}", ttl, l2Value.getExpiresAt());
 
-        log.info("✓ TTL 策略正确（优先 expiresIn，兜底 l2.expireSeconds）");
+        log.info("✓ 服务端 expiresIn 驱动 L2 TTL");
     }
 
     // ========== 场景 7: TokenWithExpiry 序列化/反序列化 ==========
@@ -281,7 +284,7 @@ class RedisTokenManagerEndToEndTest {
         log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
 
         // 从 L2 直接读取（模拟 Redis 反序列化）
-        TokenWithExpiry fromL2 = (TokenWithExpiry) l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry fromL2 = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(fromL2, "L2 应有值");
 
         // 验证字段完整
@@ -315,7 +318,7 @@ class RedisTokenManagerEndToEndTest {
         log.info("获取 Token 成功");
 
         // 从 L2 直接读取 TokenWithExpiry
-        TokenWithExpiry fromL2 = (TokenWithExpiry) l2Cache.get(cacheName, cacheKey);
+        TokenWithExpiry fromL2 = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(fromL2, "L2 应有值");
         log.info("从 L2 读取 TokenWithExpiry 成功");
 
