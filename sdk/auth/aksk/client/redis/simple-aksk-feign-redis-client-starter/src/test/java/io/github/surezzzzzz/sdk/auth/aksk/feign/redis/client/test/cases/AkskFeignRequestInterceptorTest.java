@@ -35,7 +35,8 @@ class AkskFeignRequestInterceptorTest {
     @BeforeEach
     void setUp() {
         log.info("初始化测试环境...");
-        MockitoAnnotations.openMocks(this);
+        // initMocks（非 3.4+ 的 openMocks）：Spring Boot 2.2/2.3 变体自带 Mockito 3.1/3.3 无 openMocks
+        MockitoAnnotations.initMocks(this);
         interceptor = new AkskFeignRequestInterceptor(tokenManager);
         log.info("测试环境初始化完成");
     }

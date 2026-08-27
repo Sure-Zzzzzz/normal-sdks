@@ -32,7 +32,7 @@ import javax.annotation.PostConstruct;
  *
  * <p>使用方式1：通过 @AkskClientFeignClient 注解（推荐）
  * <pre>{@code
- * @AkskClientFeignClient(name = "my-service", url = "http://localhost:8080")
+ * @AkskClientFeignClient(name = "my-service", url = "http://localhost:8280")
  * public interface MyServiceClient {
  *     @GetMapping("/api/resource")
  *     String getResource();
@@ -43,7 +43,7 @@ import javax.annotation.PostConstruct;
  * <pre>{@code
  * @FeignClient(
  *     name = "my-service",
- *     url = "http://localhost:8080",
+ *     url = "http://localhost:8280",
  *     configuration = AkskFeignConfiguration.class
  * )
  * public interface MyServiceClient {

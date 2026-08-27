@@ -15,7 +15,7 @@ import java.lang.annotation.*;
  *
  * <p>使用示例：
  * <pre>{@code
- * @AkskClientFeignClient(name = "my-service", url = "http://localhost:8080")
+ * @AkskClientFeignClient(name = "my-service", url = "http://localhost:8280")
  * public interface MyServiceClient {
  *     @GetMapping("/api/resource")
  *     String getResource();

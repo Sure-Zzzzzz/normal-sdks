@@ -1,23 +1,40 @@
 spring:
   profiles:
     active: local
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
 
+# Redis 连接由下方 Redis Route 数据源自闭环管理，无需 spring.redis.*
 io:
   github:
     surezzzzzz:
       sdk:
+        # smart-cache 2.x 开启 L2 时必须提供 RedisRouteTemplate（Redis Route 数据源）
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+
+        lock:
+          redis:
+            route:
+              enable: true
+
         auth:
           aksk:
             client:
               enable: true
+              # 使用 application-local.yml 覆盖这些配置
+              server-url: http://localhost:8280
+              token-endpoint: /oauth2/token
               client-id: test-client-id
               client-secret: test-client-secret
-              server-url: http://localhost:8080
-              token-endpoint: /oauth2/token
               token:
                 refresh-before-expire: 300
               redis:
@@ -28,6 +45,9 @@ io:
           enabled: true
           key-prefix: sure-auth-aksk-client
           me: feign-test-app
+          route:
+            # 测试隔离依赖 cacheManager.clear 扫删 L2；不开启时 clear 对 L2 是 no-op
+            scan-enabled: true
           l1:
             enabled: true
             expire-seconds: 2

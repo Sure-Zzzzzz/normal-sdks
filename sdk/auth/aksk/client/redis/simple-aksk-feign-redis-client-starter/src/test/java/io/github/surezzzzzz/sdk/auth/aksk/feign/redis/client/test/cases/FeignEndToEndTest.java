@@ -13,27 +13,22 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Feign 端到端测试
  *
  * <p>需要启动 simple-aksk-server-starter 服务。
  *
- * <p>测试前准备：
+ * <p>测试前准备（凭据创建与授权表单值详见 LOCAL_TEST_COMMANDS.md）：
  * <ol>
- *   <li>启动 simple-aksk-server-starter（端口：8080）</li>
+ *   <li>启动 simple-aksk-server-starter（端口：8280）</li>
  *   <li>启动 Redis（端口：6379）</li>
- *   <li>在 Server 中创建测试客户端：
- *     <ul>
- *       <li>Client ID: AKP1234567890abcdefgh</li>
- *       <li>Client Secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234</li>
- *       <li>Scopes: read, write</li>
- *     </ul>
- *   </li>
+ *   <li>在 Server 中创建测试 Client 并保存"E2E 管理接口授权"，凭据写入 application-local.yml</li>
  * </ol>
  *
- * <p>如果没有运行 Server，测试将被跳过（@Disabled）。
+ * <p>Server 或 Redis 未运行时相关用例直接失败，不做跳过。
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -53,28 +48,6 @@ class FeignEndToEndTest {
 
     @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}")
     private String serverBaseUrl;
-
-    /**
-     * 测试用的 FeignClient（使用 @AkskClientFeignClient 注解）
-     */
-    @AkskClientFeignClient(name = "test-service", url = "${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}")
-    interface TestFeignClient {
-        @GetMapping("/api/token/statistics")
-        String getTokenStatistics();
-    }
-
-    /**
-     * 测试用的 FeignClient（使用原始 @FeignClient 注解 + 显式配置）
-     */
-    @FeignClient(
-            name = "explicit-config-service",
-            url = "${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}",
-            configuration = AkskFeignConfiguration.class
-    )
-    interface ExplicitConfigFeignClient {
-        @GetMapping("/api/token/statistics")
-        String getTokenStatistics();
-    }
 
     @BeforeEach
     void setUp() {
@@ -102,7 +75,7 @@ class FeignEndToEndTest {
 
         // When
         String token = tokenManager.getToken();
-        log.info("获取到的 Token: {}", token != null ? token.substring(0, Math.min(20, token.length())) + "..." : "null");
+        log.info("获取到的 Token: {}", token != null ? "长度=" + token.length() : "null");
 
         // Then
         assertNotNull(token, "Token should not be null");
@@ -149,5 +122,27 @@ class FeignEndToEndTest {
         // Then
         assertNotNull(response, "Response should not be null");
         log.info("测试通过：显式配置的 FeignClient 调用成功");
+    }
+
+    /**
+     * 测试用的 FeignClient（使用 @AkskClientFeignClient 注解）
+     */
+    @AkskClientFeignClient(name = "test-service", url = "${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}")
+    interface TestFeignClient {
+        @GetMapping("/api/token/statistics")
+        String getTokenStatistics();
+    }
+
+    /**
+     * 测试用的 FeignClient（使用原始 @FeignClient 注解 + 显式配置）
+     */
+    @FeignClient(
+            name = "explicit-config-service",
+            url = "${io.github.surezzzzzz.sdk.auth.aksk.client.server-url}",
+            configuration = AkskFeignConfiguration.class
+    )
+    interface ExplicitConfigFeignClient {
+        @GetMapping("/api/token/statistics")
+        String getTokenStatistics();
     }
 }
