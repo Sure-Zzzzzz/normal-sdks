@@ -13,6 +13,7 @@
 | `VerifiedResourcePrincipal` | 仅含来源、主体类型和 Provider 内稳定主体标识。 |
 | `ResourceAuthenticationResult` | Provider 返回的认证成功、拒绝或不适用结果。 |
 | `VerifiedResourceContext` | 已绑定主体与应用授权快照的请求级上下文。 |
+| `ResourceAccessEvent` | 认证链完成验证后发布的访问摘要事件：仅含主体、应用与请求摘要，不承载凭据、声明原文或Servlet对象。 |
 
 认证成功后，资源服务可用 `ResourceAuthenticationContextHelper` 创建上下文：
 
@@ -32,7 +33,9 @@ VerifiedResourceContext context = ResourceAuthenticationContextHelper.createVeri
 
 ## 模块边界
 
-这是 Java 8 纯 Core，不依赖 Spring、Servlet、IAM、AKSK、JSON、网络、数据库或加密实现。HTTP credential 采集、唯一 Provider 路由、Spring Security 上下文和 401/403 映射由 `simple-resource-server-starter` 负责。
+这是 Java 8 纯 Core，不依赖 Spring、Servlet、IAM、AKSK、JSON、网络、数据库或加密实现。HTTP credential 采集、唯一 Provider 路由、Spring Security 上下文、401/403 映射和 `ResourceAccessEvent` 的发布由 `simple-resource-server-starter` 负责；审计、指标等事件消费方只依赖本模块即可用 `@EventListener` 监听事件，不引入资源服务自动装配。
+
+`ResourceAccessEvent` 为纯模型对象（不继承 Spring 事件基类），经 `ApplicationEventPublisher#publishEvent(Object)` 发布，Spring 4.2+ 原生支持。
 
 ## 许可证
 
