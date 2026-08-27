@@ -1,0 +1,35 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        s3:
+          route:
+            enable: true
+            shutdown-timeout-ms: 10000
+            targets:
+              minio-2023:
+                endpoint: http://127.0.0.1:19000
+                region: us-east-1
+                authentication:
+                  type: ACCESS_KEY
+                  access-key: e2e-access-a
+                  secret-key: e2e-secret-a
+                client:
+                  connect-timeout-ms: 3000
+                  socket-timeout-ms: 10000
+                  max-connections: 20
+              minio-2025:
+                endpoint: http://127.0.0.1:19001
+                region: us-east-1
+                authentication:
+                  type: ACCESS_KEY
+                  access-key: e2e-access-b
+                  secret-key: e2e-secret-b
+                client:
+                  connect-timeout-ms: 3000
+                  socket-timeout-ms: 10000
+                  max-connections: 20
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.s3.route: DEBUG
