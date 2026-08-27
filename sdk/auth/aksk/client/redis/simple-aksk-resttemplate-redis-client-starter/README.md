@@ -1,8 +1,8 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-> **2.x 已封版**：此文档对应 2.x 最终版本 **2.0.1**。冻结快照见 [README.2.x.md](README.2.x.md)。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.0**。
 
-[![Version](https://img.shields.io/badge/version-2.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
@@ -55,34 +55,50 @@
 
 ## 依赖说明
 
-本模块依赖：
-- simple-aksk-redis-token-manager - Redis Token 管理器
-- simple-aksk-client-core - 客户端核心
-- Spring Boot - 自动配置
-- Spring Web - RestTemplate
-- Spring Data Redis - Redis 操作
-- Lombok - 简化代码
+| 依赖 | 传递方式 | 说明 |
+|------|---------|------|
+| `simple-aksk-redis-token-manager:3.0.0` | `api` 自动传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0` |
+| `smart-cache-starter:2.1.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
+| Spring Boot / Spring Web | `compileOnly`，**使用方必须自行引入** | RestTemplate 与自动配置 |
+| Spring Data Redis | `compileOnly`，**使用方必须自行引入** | Redis 操作 |
+| Apache HttpClient | `compileOnly`，推荐自行引入 | HTTP 连接池 |
 
 ## 配置示例
 
 ```yaml
-spring:
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
-
+# Redis 连接由 Redis Route 数据源自闭环管理（下方 sdk.redis.route），
+# 无需配置 spring.redis.*（spring-boot-starter-data-redis 依赖仍需引入，见"必需依赖"）
 io:
   github:
     surezzzzzz:
       sdk:
+        # smart-cache 2.x：开启 L2 时必须提供 Redis Route 数据源（RedisRouteTemplate）
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+
+        # 分布式锁走 Redis Route 数据源
+        lock:
+          redis:
+            route:
+              enable: true
+
         auth:
           aksk:
             client:
               enable: true
               client-id: AKP1234567890abcdefgh
               client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234
-              server-url: http://localhost:8080
+              server-url: http://localhost:8280
               token-endpoint: /oauth2/token
               redis:
                 token:
@@ -96,14 +112,14 @@ io:
         cache:
           enabled: true
           key-prefix: sure-auth-aksk-client
-          me: my-app  # 应用标识（用于 Redis key 命名空间和 Pub/Sub 隔离）
+          me: my-app  # 应用组标识（必配）：同一应用多实例必须一致，共享缓存 / 锁互斥 / Pub/Sub
           l1:
             enabled: true
             expire-seconds: 2       # L1 本地缓存 TTL（秒），建议 2~5s
             max-size: 1000
           l2:
             enabled: true
-            expire-seconds: 3600    # 与 jwt.expires-in 保持一致
+            expire-seconds: 3600    # SmartCache 默认 L2 TTL（预刷新写回按服务端 expires_in 计算）
             preload:
               enabled: true
               before-expire-seconds: 60   # L2 预刷新窗口，Redis TTL <= 此值时触发 preload
@@ -117,11 +133,11 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:2.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.0'
 }
 ```
 
-**重要说明**：为了避免版本冲突，starter 使用 `compileOnly` 声明依赖，不会传递依赖到您的项目。请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.0`（连带 smart-cache 运行时组件）会自动传递；Spring 相关依赖使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -156,7 +172,7 @@ public class MyService {
 
     public String callApi() {
         // 自动添加 Authorization 头
-        String url = "http://localhost:8080/api/resource";
+        String url = "http://localhost:8280/api/resource";
         ResponseEntity<String> response = akskClientRestTemplate.getForEntity(url, String.class);
         return response.getBody();
     }
@@ -280,6 +296,7 @@ AkskRestTemplateInterceptor 拦截请求
 - **Token 缓存**：Token 由 `RedisTokenManager` 缓存在 Redis 中
 - **Token 刷新**：`RedisTokenManager` 会在 Token 过期前自动刷新
 - **无 Token 处理**：如果 Token 为空，拦截器会记录警告并继续请求（不添加 Authorization 头）
+- **调试日志**：`DEBUG` 级别输出三类埋点——请求入口（方法 + URI）、加头结果（Token 长度、是否覆盖调用方已有 Authorization 头，不记录 Token 值）、请求完成（URI + 响应状态码），便于排查请求是否被拦截器覆盖、定位慢请求与失败请求
 
 ## 测试覆盖
 
@@ -287,6 +304,9 @@ AkskRestTemplateInterceptor 拦截请求
 - 拦截器应该添加 Authorization 请求头
 - 当 token 为 null 时应该不添加 Authorization 头
 - 当 token 为空字符串时应该不添加 Authorization 头
+- 已有 Authorization 头时应该覆盖
+- TokenManager 抛异常时应该向上传播
+- execution 抛 IOException 时应该向上传播
 
 ✅ **集成测试**（RestTemplateIntegrationTest）
 - TokenManager Bean 是否存在
@@ -371,6 +391,15 @@ io:
 ```
 
 ## 版本历史
+
+### 3.0.0
+
+- 升级 `simple-aksk-redis-token-manager` 2.0.1 → 3.0.0，级联 `simple-aksk-client-core` 3.0.0、`smart-cache-starter` 2.1.0；拦截器认证注入逻辑零变更，业务代码无需修改。
+- smart-cache 2.x 适配：Redis 连接改由 `io.github.surezzzzzz.sdk.redis.route` 数据源自闭环管理（开启 L2 时必须提供，RedisRouteTemplate），`spring.redis.*` 不再需要，配置示例已按 3.0.0 更新。
+- 拦截器新增 `DEBUG` 埋点（请求入口 / 加头结果 / 请求完成，不记录 Token 值），提升链路可观测性。
+- 经 Spring Boot 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE 四版本真实 E2E 矩阵验证（每版本 17 个测试全绿）。
+
+详见 [CHANGELOG.3.0.0.md](CHANGELOG.3.0.0.md)。
 
 ### 2.0.1 (2026-06-14)
 

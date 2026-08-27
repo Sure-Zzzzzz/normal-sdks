@@ -16,9 +16,7 @@ import org.springframework.http.client.ClientHttpResponse;
 import java.io.IOException;
 import java.net.URI;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -48,7 +46,7 @@ class AkskRestTemplateInterceptorTest {
         // Mock request headers
         HttpHeaders headers = new HttpHeaders();
         when(request.getHeaders()).thenReturn(headers);
-        when(request.getURI()).thenReturn(URI.create("http://localhost:8080/api/test"));
+        when(request.getURI()).thenReturn(URI.create("http://localhost:8280/api/test"));
     }
 
     @Test

@@ -52,16 +52,25 @@ public class AkskRestTemplateInterceptor implements ClientHttpRequestInterceptor
             byte[] body,
             ClientHttpRequestExecution execution) throws IOException {
 
+        // debug 埋点：入口记录方法与目标地址，用于排查请求是否被本拦截器覆盖
+        log.debug("[AKSK-RestTemplate] 拦截请求: {} {}", request.getMethod(), request.getURI());
+
         String token = tokenManager.getToken();
         if (token == null || token.isEmpty()) {
-            log.warn("No token available, proceeding without Authorization header");
+            log.warn("[AKSK-RestTemplate] TokenManager 未返回可用 Token，本次请求不带 Authorization 头: {}", request.getURI());
         } else {
+            boolean overwritten = request.getHeaders().containsKey(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
             request.getHeaders().set(
                     SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION,
                     String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE, token));
-            log.debug("Added Authorization header to request: {}", request.getURI());
+            // debug 埋点：不记录 Token 值，只记录长度与是否覆盖调用方已有凭证头
+            log.debug("[AKSK-RestTemplate] 已添加 Authorization 头（token 长度={}, 覆盖已有头={}）: {}",
+                    token.length(), overwritten, request.getURI());
         }
 
-        return execution.execute(request, body);
+        ClientHttpResponse response = execution.execute(request, body);
+        // debug 埋点：响应状态与入口日志配对，定位慢请求与失败请求
+        log.debug("[AKSK-RestTemplate] 请求完成: {} -> 状态码 {}", request.getURI(), response.getRawStatusCode());
+        return response;
     }
 }

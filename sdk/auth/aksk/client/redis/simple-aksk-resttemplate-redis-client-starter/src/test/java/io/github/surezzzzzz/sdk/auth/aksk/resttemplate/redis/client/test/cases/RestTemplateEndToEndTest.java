@@ -21,20 +21,14 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>需要启动 simple-aksk-server-starter 服务。
  *
- * <p>测试前准备：
+ * <p>测试前准备（凭据创建与授权表单值详见 LOCAL_TEST_COMMANDS.md）：
  * <ol>
- *   <li>启动 simple-aksk-server-starter（端口：8080）</li>
+ *   <li>启动 simple-aksk-server-starter（端口：8280）</li>
  *   <li>启动 Redis（端口：6379）</li>
- *   <li>在 Server 中创建测试客户端：
- *     <ul>
- *       <li>Client ID: AKP1234567890abcdefgh</li>
- *       <li>Client Secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234</li>
- *       <li>Scopes: read, write</li>
- *     </ul>
- *   </li>
+ *   <li>在 Server 中创建测试 Client 并保存"E2E 管理接口授权"，凭据写入 application-local.yml</li>
  * </ol>
  *
- * <p>如果没有运行 Server，测试将被跳过（@Disabled）。
+ * <p>Server 或 Redis 未运行时相关用例直接失败，不做跳过。
  *
  * @author surezzzzzz
  * @since 1.0.0
@@ -65,7 +59,7 @@ class RestTemplateEndToEndTest {
 
         // When
         String token = tokenManager.getToken();
-        log.info("获取到的 Token: {}", token != null ? token.substring(0, Math.min(20, token.length())) + "..." : "null");
+        log.info("获取到的 Token: {}", token != null ? "长度=" + token.length() : "null");
 
         // Then
         assertNotNull(token, "Token should not be null");
@@ -176,17 +170,17 @@ class RestTemplateEndToEndTest {
         log.info("发起第 1 次请求...");
         ResponseEntity<String> response1 = akskClientRestTemplate.getForEntity(url, String.class);
         String token1 = tokenManager.getToken();
-        log.info("第 1 次请求完成，Token: {}...", token1.substring(0, 20));
+        log.info("第 1 次请求完成，Token 长度: {}", token1.length());
 
         log.info("发起第 2 次请求...");
         ResponseEntity<String> response2 = akskClientRestTemplate.getForEntity(url, String.class);
         String token2 = tokenManager.getToken();
-        log.info("第 2 次请求完成，Token: {}...", token2.substring(0, 20));
+        log.info("第 2 次请求完成，Token 长度: {}", token2.length());
 
         log.info("发起第 3 次请求...");
         ResponseEntity<String> response3 = akskClientRestTemplate.getForEntity(url, String.class);
         String token3 = tokenManager.getToken();
-        log.info("第 3 次请求完成，Token: {}...", token3.substring(0, 20));
+        log.info("第 3 次请求完成，Token 长度: {}", token3.length());
 
         // Then
         assertEquals(HttpStatus.OK, response1.getStatusCode());
