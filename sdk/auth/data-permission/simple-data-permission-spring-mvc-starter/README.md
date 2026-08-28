@@ -1,16 +1,18 @@
 # Simple Data Permission Spring MVC Starter
 
+> **1.0.1**：维护版本；`simple-resource-server-core` 升级到 1.1.1（事件模型迁入 core、传递授权 core 1.0.1 的时钟容差修复），本模块行为不变。
+
 为已接入 `simple-resource-server-starter` 的 Spring MVC 资源服务提供 DATA 访问计划评估与安全传递。它从唯一的 `VerifiedResourceContext` 读取 IAM、AKSK 或其他 Provider 已验证的 `DataGrantDocument`，不解析令牌、不依赖 IAM/AKSK 实现，也不自动生成 SQL、ES、JPA 或 MyBatis 条件。
 
 ## 接入
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
 }
 ```
 
-该 Starter 依赖 `simple-data-permission-core:1.1.0` 与 `simple-resource-server-core:1.0.0`。业务服务还需接入 `simple-resource-server-starter:1.0.1`，完成 Bearer / Provider 认证、应用准入和 API 权限校验。
+该 Starter 依赖 `simple-data-permission-core:1.1.0` 与 `simple-resource-server-core:1.1.1`。业务服务还需接入 `simple-resource-server-starter:1.1.0`，完成 Bearer / Provider 认证、应用准入和 API 权限校验。
 
 Controller 方法显式声明 DATA 资源动作，并注入当前请求已评估的访问计划：
 
@@ -34,7 +36,7 @@ DataAccessPlan plan = dataPermissionFacade.require("order", "export");
 
 ## 兼容性与验证
 
-1.0.0 已在以下 Spring Boot 精确版本完成完整模块测试：
+1.0.1 已在以下 Spring Boot 精确版本完成完整模块测试：
 
 - `2.2.13.RELEASE`
 - `2.3.12.RELEASE`
@@ -73,6 +75,18 @@ API 权限只基于路径和精确 HTTP method（或 `@RequireApiPermission`）�
 - 不扫描实体、方法名或参数名推导资源、动作或维度。
 - 不支持 SpEL、JSON Pointer、自动 SQL、跨 Provider 文档合并或隐式异步安全上下文传播。
 - `@CurrentDataAccessPlan` 只能标注 `DataAccessPlan` 参数，且只从本请求内部评估结果注入，不能通过请求参数或请求体伪造。
+
+## 版本历史
+
+### 1.0.1
+
+- 依赖升级：`simple-resource-server-core` `1.0.0` → `1.1.1`（`api`，事件模型迁入 core 并传递授权 core 1.0.1 的时钟容差修复）；测试组装 `simple-resource-server-starter` `1.0.1` → `1.1.0`。源码零改动，行为不变。
+
+详见 [CHANGELOG.1.0.1.md](CHANGELOG.1.0.1.md)。
+
+### 1.0.0
+
+- 首个版本：MVC 自动配置、`@DataPermissionOperation` + `@CurrentDataAccessPlan`、`DataPermissionFacade` 与失败关闭语义。
 
 ## 许可证
 
