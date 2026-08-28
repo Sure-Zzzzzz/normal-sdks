@@ -1,6 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
-    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
 
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'

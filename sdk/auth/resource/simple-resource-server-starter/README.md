@@ -1,6 +1,6 @@
 # Simple Resource Server Starter
 
-> **1.0.2**：公共 Resource Server Starter 维护版本。
+> **1.1.0**：公共 Resource Server Starter 维护版本；`ResourceAccessEvent` 事件模型迁出到 `simple-resource-server-core`（经 1.1.1 传递 `simple-application-authorization-core` 1.0.1 的时钟容差修复）。
 
 为业务资源服务提供单一 Bearer 认证入口、来源路由与 API 权限拦截。
 
@@ -14,11 +14,11 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.0'
 }
 ```
 
-业务服务应使用与本模块版本一致的公共 Resource Server Starter 版本；当前版本为 `1.0.2`。
+业务服务应使用与本模块版本一致的公共 Resource Server Starter 版本；当前版本为 `1.1.0`。
 
 配置至少一个受保护路径：
 
@@ -41,7 +41,7 @@ io:
 
 ## 兼容性
 
-1.0.2 延续以下 Spring Boot 精确版本兼容范围：
+1.1.0 延续以下 Spring Boot 精确版本兼容范围：
 
 - `2.2.13.RELEASE`
 - `2.3.12.RELEASE`
@@ -50,11 +50,13 @@ io:
 
 本模块仍使用 `javax.servlet` 与 Spring Security 5，不支持 Spring Boot 3、Spring Security 6 或 `jakarta.servlet`。
 
-在 Boot `2.2.13.RELEASE` 和 `2.3.12.RELEASE` 中，Starter 使用旧版 Spring Security 安全配置生命周期；在 Boot `2.4.5` 和 `2.7.9` 中，Starter 使用 `SecurityFilterChain` 配置方式。两种方式对业务方的路径、认证和授权契约一致，升级到 1.0.2 不需要修改业务配置或 Provider 适配器。
+在 Boot `2.2.13.RELEASE` 和 `2.3.12.RELEASE` 中，Starter 使用旧版 Spring Security 安全配置生命周期；在 Boot `2.4.5` 和 `2.7.9` 中，Starter 使用 `SecurityFilterChain` 配置方式。两种方式对业务方的路径、认证和授权契约一致，升级到 1.1.0 不需要修改业务配置或 Provider 适配器；监听 `ResourceAccessEvent` 的事件消费方需同步切换 import 与构造调用（见变更记录）。
 
-## 1.0.2 依赖与 Provider 边界
+## 1.1.0 依赖与 Provider 边界
 
-1.0.2 使用已发布的 `simple-resource-server-core:1.0.1`。公共 Core 提供 `ResourceAuthenticationAdapter` 所需的来源、认证结果、已验证上下文和 `BearerResourceCredential` 契约；本 Starter 负责 HTTP Bearer 采集、`kid` 路由、Provider 编排、Spring Security 链以及统一 401/403。
+1.1.0 使用已发布的 `simple-resource-server-core:1.1.1`。公共 Core 提供 `ResourceAuthenticationAdapter` 所需的来源、认证结果、已验证上下文、`BearerResourceCredential` 契约与 `ResourceAccessEvent` 事件模型，并以 `api` 传递 `simple-application-authorization-core`（1.0.1，含授权时效 2 秒默认时钟容差）；本 Starter 负责 HTTP Bearer 采集、`kid` 路由、Provider 编排、Spring Security 链、统一 401/403 以及认证通过后的访问事件发布。
+
+审计、指标等事件消费挂件只依赖 `simple-resource-server-core` 即可用 `@EventListener` 监听 `ResourceAccessEvent`，不引入本模块的资源服务自动装配。
 
 Provider Starter 应与本 Starter 显式并列引入，不应由 Provider Starter 反向传递本 Starter。公共解析器直接创建 Core `BearerResourceCredential`，Provider 统一依赖公共 Core 的凭据契约。
 

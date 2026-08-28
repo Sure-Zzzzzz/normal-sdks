@@ -4,11 +4,11 @@ import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.App
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.SimpleApplicationAuthorizationConstant;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceSubjectType;
+import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationResult;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
-import io.github.surezzzzzz.sdk.auth.resource.server.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.server.filter.ResourceAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
 import lombok.extern.slf4j.Slf4j;
@@ -233,7 +233,7 @@ class ResourceAuthenticationFilterTest {
 
         @Override
         public void publishEvent(ApplicationEvent event) {
-            this.event = (ResourceAccessEvent) event;
+            // ResourceAccessEvent 为纯模型对象，经 publishEvent(Object) 发布，不会进入本重载
         }
 
         @Override

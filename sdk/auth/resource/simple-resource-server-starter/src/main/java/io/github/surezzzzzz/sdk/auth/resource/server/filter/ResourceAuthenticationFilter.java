@@ -1,11 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.resource.server.filter;
 
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationOutcome;
+import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationResult;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.support.ResourceAuthenticationContextHelper;
 import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServerStarterConstant;
-import io.github.surezzzzzz.sdk.auth.resource.server.event.ResourceAccessEvent;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceSecurityPathHelper;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.VerifiedResourceAuthentication;
@@ -99,7 +99,7 @@ public final class ResourceAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         try {
-            eventPublisher.publishEvent(new ResourceAccessEvent(this, context, request.getRequestURI(), request.getMethod(),
+            eventPublisher.publishEvent(new ResourceAccessEvent(context, request.getRequestURI(), request.getMethod(),
                     request.getRemoteAddr(), request.getHeader(SimpleResourceServerStarterConstant.HEADER_USER_AGENT)));
         } catch (RuntimeException ignored) {
             // 事件观察失败不能改变已建立的认证结果
