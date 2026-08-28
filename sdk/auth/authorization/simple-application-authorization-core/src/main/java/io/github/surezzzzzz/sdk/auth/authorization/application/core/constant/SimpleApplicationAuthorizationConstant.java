@@ -190,6 +190,14 @@ public final class SimpleApplicationAuthorizationConstant {
      */
     public static final String DETAIL_CLOCK_CANNOT_BE_NULL = "clock不能为null";
     /**
+     * 默认时钟容差：覆盖签发端时间戳秒级取整偏差与跨机部署时钟偏差，只放宽时效下界。
+     */
+    public static final java.time.Duration DEFAULT_CLOCK_SKEW = java.time.Duration.ofSeconds(2L);
+    /**
+     * 时钟容差非法详情。
+     */
+    public static final String DETAIL_CLOCK_SKEW_INVALID = "clockSkew必须为非负Duration";
+    /**
      * 常量类实例化提示。
      */
     public static final String MESSAGE_CONSTANT_CLASS_CANNOT_INSTANTIATE = "常量类不能实例化";

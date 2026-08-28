@@ -63,6 +63,8 @@ ApplicationAuthorizationDecision decision = evaluator.evaluateApi(context, "appl
 
 `ALLOW` 只表示应用准入和精确 API 权限已满足。涉及数据范围时，资源服务还必须将 `dataGrantDocument` 交给 `simple-data-permission-core` 计算并实际执行返回的 `DataAccessPlan`。
 
+时效判定自带默认 2 秒时钟容差：判定时刻最多允许早于 `issuedAt` 2 秒（覆盖签发端时间戳秒级取整偏差与跨机时钟偏差），到期上界零容差。需要恢复 1.0.0 零容差严格模式或自定义容差时，使用 `new DefaultApplicationAuthorizationEvaluator(clock, clockSkew)`。
+
 ## 结构化 Claim 接入
 
 在 provider 已完成签名、解密、issuer、audience、主体、应用绑定、时效和授权版本校验后，可将快照转换为结构化 Claim，或从 Claim 还原：
