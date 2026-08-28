@@ -2,11 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.handler;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.ApplicationAuthorizationController;
-import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ApplicationAuthorizationConflictException;
-import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ApplicationAuthorizationNotFoundException;
-import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
-import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
-import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.*;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

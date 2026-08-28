@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ValidationException;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.claim.DataGrantDocumentClaimMapper;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
 
@@ -101,7 +102,7 @@ public final class AkskApplicationAuthorizationJsonCodec {
         }
     }
 
-    private static IllegalArgumentException invalid() {
-        return new IllegalArgumentException("AKSK应用授权数据无效");
+    private static ValidationException invalid() {
+        return new ValidationException("AKSK应用授权数据无效");
     }
 }

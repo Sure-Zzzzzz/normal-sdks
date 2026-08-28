@@ -23,7 +23,8 @@ import org.springframework.util.MultiValueMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Introspect 端点认证强制测试。
@@ -132,7 +133,10 @@ class IntrospectAnonymousTest {
 
             log.info("✓ 无认证 introspect 正确返回 401");
         } finally {
-            try { httpClient.close(); } catch (Exception ignored) {}
+            try {
+                httpClient.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 

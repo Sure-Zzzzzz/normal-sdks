@@ -2,63 +2,57 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:fragment="head(title)">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title th:text="${title} + ' · AKSK Server'">AKSK Server</title>
     <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
-    <link th:href="@{/admin/css/console.css(v='3.0.0-responsive-3')}" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
+    <link rel="stylesheet" th:href="@{/admin/css/console.css(v='3.0.0-responsive-3')}">
+    <link href="/admin/img/aksk-icon.svg" rel="icon" type="image/svg+xml">
     <meta name="admin-csrf-token" th:content="${_csrf.token}">
     <meta name="admin-csrf-header" th:content="${_csrf.headerName}">
 </head>
 <body>
-<nav th:fragment="sidebar(active, client)" class="admin-sidebar" aria-label="管理导航">
+<nav aria-label="管理导航" class="admin-sidebar" th:fragment="sidebar(active)">
     <a class="admin-brand" href="/admin">
-        <img src="/admin/img/aksk-logo.svg" alt="AKSK Server">
+        <img alt="AKSK Server" src="/admin/img/aksk-logo.svg">
         <span>AKSK Server</span>
     </a>
     <div class="admin-nav-label">管理控制台</div>
-    <a href="/admin" class="admin-nav-link" th:classappend="${active == 'clients'} ? ' active'">
-        <span class="admin-nav-icon" aria-hidden="true">⌘</span><span>Client 管理</span>
+    <a class="admin-nav-link" href="/admin" th:classappend="${active == 'clients'} ? ' active'">
+        <span aria-hidden="true" class="admin-nav-icon">⌘</span><span>Client 管理</span>
     </a>
-    <a th:if="${client != null}" th:href="@{/admin/{id}/authorization(id=${client.clientId})}"
-       class="admin-nav-link" th:classappend="${active == 'authorization'} ? ' active'">
-        <span class="admin-nav-icon" aria-hidden="true">✓</span><span>应用授权</span>
+    <a class="admin-nav-link" href="/admin/token" th:classappend="${active == 'tokens'} ? ' active'">
+        <span aria-hidden="true" class="admin-nav-icon">◆</span><span>Token 管理</span>
     </a>
-    <span th:if="${client == null}" class="admin-nav-link disabled" title="请先从 Client 详情进入应用授权">
-        <span class="admin-nav-icon" aria-hidden="true">✓</span><span>应用授权</span>
-    </span>
-    <a href="/admin/token" class="admin-nav-link" th:classappend="${active == 'tokens'} ? ' active'">
-        <span class="admin-nav-icon" aria-hidden="true">◆</span><span>Token 管理</span>
+    <a class="admin-nav-link" href="/admin/token/test" th:classappend="${active == 'token-test'} ? ' active'">
+        <span aria-hidden="true" class="admin-nav-icon">⌕</span><span>Token 测试</span>
     </a>
-    <a href="/admin/token/test" class="admin-nav-link" th:classappend="${active == 'token-test'} ? ' active'">
-        <span class="admin-nav-icon" aria-hidden="true">⌕</span><span>Token 测试</span>
-    </a>
-    <a href="/admin/security-context-demo" class="admin-nav-link" th:classappend="${active == 'security-context'} ? ' active'">
-        <span class="admin-nav-icon" aria-hidden="true">{ }</span><span>安全上下文</span>
+    <a class="admin-nav-link" href="/admin/security-context-demo"
+       th:classappend="${active == 'security-context'} ? ' active'">
+        <span aria-hidden="true" class="admin-nav-icon">{ }</span><span>安全上下文</span>
     </a>
     <div class="admin-sidebar-footer">
         <form action="/admin/logout" method="post">
-            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-            <button type="submit" class="admin-logout">退出登录</button>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
+            <button class="admin-logout" type="submit">退出登录</button>
         </form>
     </div>
 </nav>
 
-<header th:fragment="topbar(title, subtitle)" class="admin-topbar">
+<header class="admin-topbar" th:fragment="topbar(title, subtitle)">
     <div>
         <h1 th:text="${title}">管理页面</h1>
         <p th:if="${subtitle != null}" th:text="${subtitle}"></p>
     </div>
 </header>
 
-<div th:fragment="flash" class="admin-flash">
-    <div th:if="${message}" class="alert alert-success alert-dismissible fade show" role="alert">
+<div class="admin-flash" th:fragment="flash">
+    <div class="alert alert-success alert-dismissible fade show" role="alert" th:if="${message}">
         <span th:text="${message}"></span>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>
+        <button aria-label="关闭" class="btn-close" data-bs-dismiss="alert" type="button"></button>
     </div>
-    <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+    <div class="alert alert-danger alert-dismissible fade show" role="alert" th:if="${error}">
         <span th:text="${error}"></span>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="关闭"></button>
+        <button aria-label="关闭" class="btn-close" data-bs-dismiss="alert" type="button"></button>
     </div>
 </div>
 

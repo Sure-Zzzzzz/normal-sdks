@@ -10,84 +10,73 @@ import io.github.surezzzzzz.sdk.auth.aksk.core.exception.AkskException;
  */
 public final class ErrorCode {
 
-    private ErrorCode() {
-        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
-    }
-
-    // ==================== 参数验证错误 ====================
-
     /**
      * 参数验证失败
      */
     public static final String VALIDATION_FAILED = "VALIDATION_001";
 
-
-    // ==================== 配置错误 ====================
-
+    // ==================== 参数验证错误 ====================
     /**
      * 配置验证失败
      */
     public static final String CONFIG_VALIDATION_FAILED = "CONFIG_001";
 
 
-    // ==================== Client管理错误 ====================
-
+    // ==================== 配置错误 ====================
     /**
      * Client创建失败
      */
     public static final String CLIENT_CREATE_FAILED = "CLIENT_001";
 
+
+    // ==================== Client管理错误 ====================
     /**
      * Client不存在
      */
     public static final String CLIENT_NOT_FOUND = "CLIENT_002";
-
     /**
      * Client删除失败
      */
     public static final String CLIENT_DELETE_FAILED = "CLIENT_003";
-
     /**
      * Client已存在
      */
     public static final String CLIENT_ALREADY_EXISTS = "CLIENT_004";
-
     /**
      * Client更新失败
      */
     public static final String CLIENT_UPDATE_FAILED = "CLIENT_005";
-
-
-    // ==================== JWE Token 错误 ====================
-
     /**
      * JWE Token 生成失败
      */
     public static final String JWE_GENERATE_FAILED = "JWE_001";
 
+
+    // ==================== JWE Token 错误 ====================
     /**
      * JWE Token 解析失败
      */
     public static final String JWE_DECODE_FAILED = "JWE_002";
-
-    // ==================== Cache错误 ====================
-
     /**
      * Cache操作失败
      */
     public static final String CACHE_OPERATION_FAILED = "CACHE_001";
 
-    // ==================== Token管理错误 ====================
-
+    // ==================== Cache错误 ====================
     /**
      * clientId 参数缺失
      */
     public static final String TOKEN_CLIENT_ID_REQUIRED = "TOKEN_001";
 
+    // ==================== Token管理错误 ====================
     /**
      * Token操作失败
      */
     public static final String TOKEN_OPERATION_FAILED = "TOKEN_002";
+
+    private ErrorCode() {
+        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
+    }
 
 
 }

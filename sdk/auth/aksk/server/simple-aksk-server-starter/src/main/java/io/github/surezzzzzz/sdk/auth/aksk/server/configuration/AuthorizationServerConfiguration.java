@@ -21,14 +21,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.jackson2.SecurityJackson2Modules;
+import org.springframework.security.oauth2.core.OAuth2Token;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService;
 import org.springframework.security.oauth2.server.authorization.JdbcOAuth2AuthorizationService.OAuth2AuthorizationRowMapper;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.client.JdbcRegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.jackson2.OAuth2AuthorizationServerJackson2Module;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
 import org.springframework.security.oauth2.server.authorization.token.JwtEncodingContext;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
@@ -110,14 +110,14 @@ public class AuthorizationServerConfiguration {
         return objectMapper;
     }
 
-    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
-    private abstract static class LongMixin {
-    }
-
     @Bean
     public OAuth2TokenGenerator<? extends OAuth2Token> jweOAuth2TokenGenerator(
             JWKSource<SecurityContext> jwkSource,
             OAuth2TokenCustomizer<JwtEncodingContext> tokenCustomizer) {
         return new JweOAuth2TokenGenerator(properties, jwkSource, tokenCustomizer);
+    }
+
+    @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS)
+    private abstract static class LongMixin {
     }
 }

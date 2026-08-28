@@ -16,7 +16,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -28,20 +29,16 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CachedOAuth2RegisteredClientEntityServiceTest {
 
-    @Mock
-    private OAuth2RegisteredClientEntityRepository delegate;
-
-    @Mock
-    private SmartCacheManager smartCacheManager;
-
-    @Mock
-    private RedisKeyHelper redisKeyHelper;
-
-    private CachedOAuth2RegisteredClientEntityService service;
-
     private static final String CLIENT_ID = "AKPtestclient001";
     private static final String CACHE_NAME = "oauth2:client:entity";
     private static final String CACHE_KEY = "{" + CLIENT_ID + "}";
+    @Mock
+    private OAuth2RegisteredClientEntityRepository delegate;
+    @Mock
+    private SmartCacheManager smartCacheManager;
+    @Mock
+    private RedisKeyHelper redisKeyHelper;
+    private CachedOAuth2RegisteredClientEntityService service;
 
     @BeforeEach
     void setUp() {

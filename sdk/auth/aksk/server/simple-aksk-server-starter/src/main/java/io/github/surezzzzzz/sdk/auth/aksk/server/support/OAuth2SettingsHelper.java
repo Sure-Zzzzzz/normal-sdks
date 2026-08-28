@@ -20,15 +20,15 @@ import java.time.Duration;
  */
 public final class OAuth2SettingsHelper {
 
-    private OAuth2SettingsHelper() {
-        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
-    }
-
     /**
      * 配置了类型信息的 ObjectMapper
      * 用于序列化时包含 @class 类型标识符
      */
     private static final ObjectMapper OBJECT_MAPPER = createObjectMapper();
+
+    private OAuth2SettingsHelper() {
+        throw new AkskException(ErrorMessage.UTILITY_CLASS_INSTANTIATION);
+    }
 
     /**
      * 创建配置了类型信息的 ObjectMapper

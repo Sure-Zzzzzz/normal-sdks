@@ -2,12 +2,12 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('Client 凭据交付')"></head>
 <body class="admin-console">
-<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
     <header th:replace="admin/fragments/layout :: topbar('Client 凭据交付', '凭据仅在当前会话中显示一次')"></header>
     <section class="admin-content">
-<div class="admin-form-card">
-    <div class="card border-success">
+        <div class="admin-form-card">
+            <div class="card border-success">
                 <div class="card-header bg-success text-white">
                     <h4 th:text="${message != null ? message.contains('重置') ? '✓ Secret 重置成功' : '✓ AKSK创建成功' : '✓ AKSK创建成功'}">
                         ✓ AKSK创建成功</h4>
@@ -20,9 +20,9 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Client ID</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" th:value="${clientId}" id="clientId" readonly>
-                            <button class="btn btn-outline-secondary" type="button"
-                                    onclick="copyToClipboard('clientId')">
+                            <input class="form-control" id="clientId" readonly th:value="${clientId}" type="text">
+                            <button class="btn btn-outline-secondary" onclick="copyToClipboard('clientId')"
+                                    type="button">
                                 复制
                             </button>
                         </div>
@@ -31,10 +31,10 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold text-danger">Client Secret (仅显示一次)</label>
                         <div class="input-group">
-                            <input type="text" class="form-control" th:value="${clientSecret}" id="clientSecret"
-                                   readonly>
-                            <button class="btn btn-outline-secondary" type="button"
-                                    onclick="copyToClipboard('clientSecret')">
+                            <input class="form-control" id="clientSecret" readonly th:value="${clientSecret}"
+                                   type="text">
+                            <button class="btn btn-outline-secondary" onclick="copyToClipboard('clientSecret')"
+                                    type="button">
                                 复制
                             </button>
                         </div>
@@ -45,11 +45,11 @@
                     </div>
 
                     <div class="d-grid">
-                        <a href="/admin" class="btn btn-primary">返回管理页面</a>
+                        <a class="btn btn-primary" href="/admin">返回管理页面</a>
                     </div>
                 </div>
-    </div>
-</div>
+            </div>
+        </div>
     </section>
 </main>
 <th:block th:replace="admin/fragments/layout :: scripts"></th:block>

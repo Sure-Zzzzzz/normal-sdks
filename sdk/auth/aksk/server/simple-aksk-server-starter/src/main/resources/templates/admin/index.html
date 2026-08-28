@@ -2,65 +2,171 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('Client 管理')"></head>
 <body class="admin-console">
-<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
     <header th:replace="admin/fragments/layout :: topbar('Client 管理', '管理平台级与用户级 AKSK Client')"></header>
     <section class="admin-content">
         <div th:replace="admin/fragments/layout :: flash"></div>
         <div class="admin-actions mb-3">
-            <a href="/admin/create-platform" class="btn btn-primary">创建平台级 Client</a>
-            <a href="/admin/create-user" class="btn btn-outline-primary">创建用户级 Client</a>
-            <a href="/admin/query-user" class="btn btn-outline-secondary">查询用户 Client</a>
+            <a class="btn btn-primary" href="/admin/create-platform">创建平台级 Client</a>
+            <a class="btn btn-outline-primary" href="/admin/create-user">创建用户级 Client</a>
+            <a class="btn btn-outline-secondary" href="/admin/query-user">查询用户 Client</a>
         </div>
         <section class="admin-card">
             <div class="admin-card-body">
-                <form method="get" action="/admin" class="admin-toolbar">
+                <form action="/admin" class="admin-toolbar" method="get">
                     <div>
                         <label class="form-label">Client 类型</label>
                         <div class="btn-group">
-                            <a th:href="@{/admin(search=${currentSearch})}" th:classappend="${currentType == null} ? 'active' : ''" class="btn btn-outline-primary">全部</a>
-                            <a th:href="@{/admin(type='platform',search=${currentSearch})}" th:classappend="${currentType == 'platform'} ? 'active' : ''" class="btn btn-outline-primary">平台级</a>
-                            <a th:href="@{/admin(type='user',search=${currentSearch})}" th:classappend="${currentType == 'user'} ? 'active' : ''" class="btn btn-outline-primary">用户级</a>
+                            <a class="btn btn-outline-primary"
+                               th:classappend="${currentType == null} ? 'active' : ''"
+                               th:href="@{/admin(search=${currentSearch})}">全部</a>
+                            <a class="btn btn-outline-primary"
+                               th:classappend="${currentType == 'platform'} ? 'active' : ''"
+                               th:href="@{/admin(type='platform',search=${currentSearch})}">平台级</a>
+                            <a class="btn btn-outline-primary"
+                               th:classappend="${currentType == 'user'} ? 'active' : ''"
+                               th:href="@{/admin(type='user',search=${currentSearch})}">用户级</a>
                         </div>
                     </div>
                     <div>
                         <label class="form-label">启用状态</label>
                         <div class="btn-group">
-                            <a th:href="@{/admin(type=${currentType},search=${currentSearch})}" th:classappend="${currentEnabled == null} ? 'active' : ''" class="btn btn-outline-success">全部</a>
-                            <a th:href="@{/admin(type=${currentType},enabled=true,search=${currentSearch})}" th:classappend="${currentEnabled == true} ? 'active' : ''" class="btn btn-outline-success">已启用</a>
-                            <a th:href="@{/admin(type=${currentType},enabled=false,search=${currentSearch})}" th:classappend="${currentEnabled == false} ? 'active' : ''" class="btn btn-outline-success">已禁用</a>
+                            <a class="btn btn-outline-success"
+                               th:classappend="${currentEnabled == null} ? 'active' : ''"
+                               th:href="@{/admin(type=${currentType},search=${currentSearch})}">全部</a>
+                            <a class="btn btn-outline-success"
+                               th:classappend="${currentEnabled == true} ? 'active' : ''"
+                               th:href="@{/admin(type=${currentType},enabled=true,search=${currentSearch})}">已启用</a>
+                            <a class="btn btn-outline-success"
+                               th:classappend="${currentEnabled == false} ? 'active' : ''"
+                               th:href="@{/admin(type=${currentType},enabled=false,search=${currentSearch})}">已禁用</a>
                         </div>
                     </div>
                     <div class="ms-auto">
-                        <label for="searchInput" class="form-label">搜索</label>
-                        <div class="input-group"><input type="text" class="form-control" id="searchInput" name="search" th:value="${currentSearch}" placeholder="Client ID / 名称 / 用户"><button type="submit" class="btn btn-primary">搜索</button><a th:href="@{/admin(type=${currentType})}" class="btn btn-outline-secondary">清除</a></div>
+                        <label class="form-label" for="searchInput">搜索</label>
+                        <div class="input-group"><input class="form-control" id="searchInput" name="search"
+                                                        placeholder="Client ID / 名称 / 用户"
+                                                        th:value="${currentSearch}"
+                                                        type="text">
+                            <button class="btn btn-primary" type="submit">搜索</button>
+                            <a class="btn btn-outline-secondary" th:href="@{/admin(type=${currentType})}">清除</a></div>
                     </div>
                 </form>
             </div>
         </section>
         <section class="admin-card">
-            <div class="admin-card-header"><h2>Client 列表</h2><span class="text-muted small">共 <span th:text="${totalClients}"></span> 条</span></div>
-            <div class="admin-table-wrap"><table class="table table-hover admin-table"><thead><tr><th>Client ID</th><th>名称</th><th>类型</th><th>所属用户</th><th>Client 状态</th><th>应用授权</th><th>创建时间</th><th>操作</th></tr></thead><tbody>
-                <tr th:each="client : ${clients}">
-                    <td><code th:text="${client.clientId}"></code></td><td th:text="${client.clientName}"></td>
-                    <td><span th:if="${client.clientType == 1}" class="badge bg-primary">平台级</span><span th:if="${client.clientType == 2}" class="badge bg-info text-dark">用户级</span></td>
-                    <td><span th:if="${client.ownerUsername != null}" th:text="${client.ownerUsername}"></span><span th:if="${client.ownerUsername != null && client.ownerUserId != null}"> / </span><code th:if="${client.ownerUserId != null}" th:text="${client.ownerUserId}"></code><span th:if="${client.ownerUsername == null && client.ownerUserId == null}" class="text-muted">-</span></td>
-                    <td><span th:if="${client.enabled}" class="badge bg-success">已启用</span><span th:if="${!client.enabled}" class="badge bg-secondary">已禁用</span></td>
-                    <td th:with="authorization=${authorizationByClientId.get(client.clientId)}"><span th:if="${authorization == null}" class="badge bg-warning text-dark">未配置</span><span th:if="${authorization != null and authorization.enabled and authorization.admitted}" class="badge bg-success">已准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span><span th:if="${authorization != null and authorization.enabled and !authorization.admitted}" class="badge bg-secondary">未准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span><span th:if="${authorization != null and !authorization.enabled}" class="badge bg-danger">已撤销（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span></td>
-                    <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
-                    <td><div class="admin-actions"><a th:href="@{/admin/{id}(id=${client.clientId})}" class="btn btn-sm btn-outline-primary">详情</a><button th:if="${client.enabled}" type="button" class="btn btn-sm btn-outline-warning" th:data-client-id="${client.clientId}" onclick="disableClient(this.dataset.clientId)">禁用</button><button th:if="${!client.enabled}" type="button" class="btn btn-sm btn-outline-success" th:data-client-id="${client.clientId}" onclick="enableClient(this.dataset.clientId)">启用</button><button type="button" class="btn btn-sm btn-outline-danger" th:data-client-id="${client.clientId}" onclick="deleteClient(this.dataset.clientId)">删除</button></div></td>
-                </tr><tr th:if="${#lists.isEmpty(clients)}"><td colspan="8" class="text-center text-muted">暂无数据</td></tr>
-            </tbody></table></div>
+            <div class="admin-card-header"><h2>Client 列表</h2><span class="text-muted small">共 <span
+                    th:text="${totalClients}"></span> 条</span></div>
+            <div class="admin-table-wrap">
+                <table class="table table-hover admin-table">
+                    <thead>
+                    <tr>
+                        <th>Client ID</th>
+                        <th>名称</th>
+                        <th>类型</th>
+                        <th>所属用户</th>
+                        <th>Client 状态</th>
+                        <th>应用授权</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="client : ${clients}">
+                        <td><code th:text="${client.clientId}"></code></td>
+                        <td th:text="${client.clientName}"></td>
+                        <td><span class="badge bg-primary" th:if="${client.clientType == 1}">平台级</span><span
+                                class="badge bg-info text-dark" th:if="${client.clientType == 2}">用户级</span></td>
+                        <td><span th:if="${client.ownerUsername != null}" th:text="${client.ownerUsername}"></span><span
+                                th:if="${client.ownerUsername != null && client.ownerUserId != null}"> / </span><code
+                                th:if="${client.ownerUserId != null}" th:text="${client.ownerUserId}"></code><span
+                                class="text-muted"
+                                th:if="${client.ownerUsername == null && client.ownerUserId == null}">-</span></td>
+                        <td><span class="badge bg-success" th:if="${client.enabled}">已启用</span><span
+                                class="badge bg-secondary" th:if="${!client.enabled}">已禁用</span></td>
+                        <td th:with="authorization=${authorizationByClientId.get(client.clientId)}"><span
+                                class="badge bg-warning text-dark" th:if="${authorization == null}">未配置</span><span
+                                class="badge bg-success"
+                                th:if="${authorization != null and authorization.enabled and authorization.admitted}">已准入（版本 <span
+                                th:text="${authorization.authorizationVersion}"></span>）</span><span
+                                class="badge bg-secondary"
+                                th:if="${authorization != null and authorization.enabled and !authorization.admitted}">未准入（版本 <span
+                                th:text="${authorization.authorizationVersion}"></span>）</span><span
+                                class="badge bg-danger" th:if="${authorization != null and !authorization.enabled}">已撤销（版本 <span
+                                th:text="${authorization.authorizationVersion}"></span>）</span></td>
+                        <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                        <td>
+                            <div class="admin-actions"><a class="btn btn-sm btn-outline-primary"
+                                                          th:href="@{/admin/{id}(id=${client.clientId})}">详情</a>
+                                <button class="btn btn-sm btn-outline-warning"
+                                        onclick="disableClient(this.dataset.clientId)"
+                                        th:data-client-id="${client.clientId}"
+                                        th:if="${client.enabled}"
+                                        type="button">禁用
+                                </button>
+                                <button class="btn btn-sm btn-outline-success"
+                                        onclick="enableClient(this.dataset.clientId)"
+                                        th:data-client-id="${client.clientId}"
+                                        th:if="${!client.enabled}"
+                                        type="button">启用
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="deleteClient(this.dataset.clientId)"
+                                        th:data-client-id="${client.clientId}"
+                                        type="button">删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(clients)}">
+                        <td class="text-center text-muted" colspan="8">暂无数据</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
         </section>
-        <nav class="admin-pagination" th:if="${totalPages > 1}"><ul class="pagination justify-content-center"><li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''"><a class="page-link" th:href="@{/admin(page=${currentPage - 1},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}">上一页</a></li><li th:each="i : ${#numbers.sequence(1,totalPages)}" class="page-item" th:classappend="${i == currentPage} ? 'active' : ''"><a class="page-link" th:href="@{/admin(page=${i},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}" th:text="${i}"></a></li><li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''"><a class="page-link" th:href="@{/admin(page=${currentPage + 1},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}">下一页</a></li></ul></nav>
+        <nav class="admin-pagination" th:if="${totalPages > 1}">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''"><a class="page-link"
+                                                                                                th:href="@{/admin(page=${currentPage - 1},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}">上一页</a>
+                </li>
+                <li class="page-item" th:classappend="${i == currentPage} ? 'active' : ''"
+                    th:each="i : ${#numbers.sequence(1,totalPages)}"><a class="page-link"
+                                                                        th:href="@{/admin(page=${i},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}"
+                                                                        th:text="${i}"></a></li>
+                <li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''"><a
+                        class="page-link"
+                        th:href="@{/admin(page=${currentPage + 1},size=${pageSize},type=${currentType},enabled=${currentEnabled},search=${currentSearch})}">下一页</a>
+                </li>
+            </ul>
+        </nav>
     </section>
 </main>
 <th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script th:inline="javascript">
-    const csrfToken = /*[[${_csrf.token}]]*/ ''; const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
-    function clientRequest(clientId, body) { return fetch(`/admin/${clientId}`, {method: body ? 'PATCH' : 'DELETE', headers: body ? {'Content-Type':'application/json',[csrfHeader]:csrfToken} : {[csrfHeader]:csrfToken}, body: body ? JSON.stringify(body) : null}).then(adminRequireSuccess); }
-    function deleteClient(clientId) { if (confirm('确认删除此 Client？系统会先撤销该 Client 的全部活跃 Token，此操作不可恢复。')) clientRequest(clientId).then(() => location.reload()).catch(() => alert('删除未完成，请检查状态后重试。')); }
-    function enableClient(clientId) { if (confirm('确认启用此 Client？启用后可再次用于换取 Token。')) clientRequest(clientId,{enabled:true}).then(() => location.reload()).catch(() => alert('启用未完成，请检查状态后重试。')); }
-    function disableClient(clientId) { if (confirm('确认禁用此 Client？禁用后不能再换取 Token。')) clientRequest(clientId,{enabled:false}).then(() => location.reload()).catch(() => alert('禁用未完成，请检查状态后重试。')); }
+    const csrfToken = /*[[${_csrf.token}]]*/ '';
+    const csrfHeader = /*[[${_csrf.headerName}]]*/ '';
+
+    function clientRequest(clientId, body) {
+        return fetch(`/admin/${clientId}`, {
+            method: body ? 'PATCH' : 'DELETE',
+            headers: body ? {'Content-Type': 'application/json', [csrfHeader]: csrfToken} : {[csrfHeader]: csrfToken},
+            body: body ? JSON.stringify(body) : null
+        }).then(adminRequireSuccess);
+    }
+
+    function deleteClient(clientId) {
+        if (confirm('确认删除此 Client？系统会先撤销该 Client 的全部活跃 Token，此操作不可恢复。')) clientRequest(clientId).then(() => location.reload()).catch(() => alert('删除未完成，请检查状态后重试。'));
+    }
+
+    function enableClient(clientId) {
+        if (confirm('确认启用此 Client？启用后可再次用于换取 Token。')) clientRequest(clientId, {enabled: true}).then(() => location.reload()).catch(() => alert('启用未完成，请检查状态后重试。'));
+    }
+
+    function disableClient(clientId) {
+        if (confirm('确认禁用此 Client？禁用后不能再换取 Token。')) clientRequest(clientId, {enabled: false}).then(() => location.reload()).catch(() => alert('禁用未完成，请检查状态后重试。'));
+    }
 </script>
-</body></html>
+</body>
+</html>

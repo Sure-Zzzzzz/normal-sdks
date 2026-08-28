@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ValidationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.AkskApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataConstraintOperator;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.SimpleDataPermissionConstant;
@@ -12,9 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * AKSK应用授权JSON编解码器测试。
@@ -46,7 +45,7 @@ class AkskApplicationAuthorizationJsonCodecTest {
         log.info("AKSK未配置DATA授权时保留空文档语义");
         assertNull(AkskApplicationAuthorizationJsonCodec.readDataGrantDocument(null),
                 "空持久化字段必须表示未授予DATA权限");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(ValidationException.class,
                 () -> AkskApplicationAuthorizationJsonCodec.writeDataGrantDocument(null),
                 "不得把空文档编码为有效DATA授权");
     }
@@ -57,7 +56,7 @@ class AkskApplicationAuthorizationJsonCodecTest {
     @Test
     void shouldRejectInvalidDataGrantDocumentJson() {
         log.info("AKSK必须拒绝非严格数据授权JSON");
-        assertThrows(IllegalArgumentException.class,
+        assertThrows(ValidationException.class,
                 () -> AkskApplicationAuthorizationJsonCodec.readDataGrantDocument("{\"protocol\":\"invalid\"}"),
                 "缺失必要字段或协议错误的文档必须拒绝");
     }

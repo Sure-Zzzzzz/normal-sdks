@@ -5,7 +5,6 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRe
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.ManagementApiAuthorizationHelper;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -131,7 +130,7 @@ public class TokenManagementController {
      */
     @DeleteMapping
     public ResponseEntity<BatchRevokeResponse> revokeByClientId(@RequestParam String clientId,
-                                                                 HttpServletRequest httpRequest) {
+                                                                HttpServletRequest httpRequest) {
         log.info("Batch revoking tokens for client: {}", clientId);
         return ResponseEntity.ok(tokenManagementService.revokeAllByClientId(clientId,
                 ManagementApiAuthorizationHelper.currentPlan(httpRequest)));

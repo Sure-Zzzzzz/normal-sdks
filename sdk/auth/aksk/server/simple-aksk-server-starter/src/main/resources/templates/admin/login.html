@@ -2,16 +2,16 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
     <title>登录 · AKSK Server</title>
     <link href="/admin/css/bootstrap.min.css" rel="stylesheet">
     <link href="/admin/css/console.css?v=3.0.0-responsive-3" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="/admin/img/aksk-icon.svg">
+    <link href="/admin/img/aksk-icon.svg" rel="icon" type="image/svg+xml">
 </head>
 <body>
 <main class="admin-login">
     <section class="admin-login-brand">
-        <img src="/admin/img/aksk-logo.svg" alt="AKSK Server">
+        <img alt="AKSK Server" src="/admin/img/aksk-logo.svg">
         <h1>AKSK Server</h1>
         <p>统一管理 Client、应用授权与 Token 生命周期。此入口仅面向内网管理员。</p>
     </section>
@@ -21,18 +21,18 @@
             <p>使用管理员账号进入 AKSK 管理控制台。</p>
             <div class="alert alert-danger" th:if="${param.error}">用户名或密码错误</div>
             <div class="alert alert-success" th:if="${param.logout}">您已成功登出</div>
-            <form th:action="@{/admin/login}" method="post">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <form method="post" th:action="@{/admin/login}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden">
                 <div class="mb-3">
-                    <label for="username" class="form-label">用户名</label>
-                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                    <label class="form-label" for="username">用户名</label>
+                    <input autofocus class="form-control" id="username" name="username" required type="text">
                 </div>
                 <div class="mb-4">
-                    <label for="password" class="form-label">密码</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
+                    <label class="form-label" for="password">密码</label>
+                    <input class="form-control" id="password" name="password" required type="password">
                 </div>
                 <div class="d-grid">
-                    <button type="submit" class="btn btn-primary">登录</button>
+                    <button class="btn btn-primary" type="submit">登录</button>
                 </div>
             </form>
         </div>

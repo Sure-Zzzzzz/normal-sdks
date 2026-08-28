@@ -8,12 +8,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.ApplicationA
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClientRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ValidationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ApplicationAuthorizationManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.claim.DataGrantDocumentClaimMapper;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataConstraintOperator;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.SimpleDataPermissionConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,12 +37,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Admin Management Controller
@@ -205,7 +201,7 @@ public class AdminController {
     }
 
     private void copyAndRemoveSessionAttribute(HttpSession session, String sessionAttribute,
-                                                String modelAttribute, Model model) {
+                                               String modelAttribute, Model model) {
         if (!model.containsAttribute(modelAttribute)) {
             Object value = session.getAttribute(sessionAttribute);
             if (value != null) {
@@ -395,17 +391,17 @@ public class AdminController {
 
     @PostMapping("/{clientId}/authorization")
     public String saveApplicationAuthorization(@PathVariable String clientId,
-                                                @RequestParam String applicationCode,
-                                                @RequestParam(required = false) Boolean admitted,
-                                                @RequestParam(required = false) String roles,
-                                                @RequestParam(required = false) String pagePermissions,
-                                                @RequestParam(required = false) String apiPermissions,
-                                                @RequestParam(required = false) List<Integer> dataGrantAllIndex,
-                                                @RequestParam(required = false) List<Integer> dataGrantConstraintGrantIndex,
-                                                @RequestParam String manifestVersion,
-                                                @RequestParam String manifestDigest,
-                                                javax.servlet.http.HttpServletRequest httpRequest,
-                                                RedirectAttributes redirectAttributes) {
+                                               @RequestParam String applicationCode,
+                                               @RequestParam(required = false) Boolean admitted,
+                                               @RequestParam(required = false) String roles,
+                                               @RequestParam(required = false) String pagePermissions,
+                                               @RequestParam(required = false) String apiPermissions,
+                                               @RequestParam(required = false) List<Integer> dataGrantAllIndex,
+                                               @RequestParam(required = false) List<Integer> dataGrantConstraintGrantIndex,
+                                               @RequestParam String manifestVersion,
+                                               @RequestParam String manifestDigest,
+                                               javax.servlet.http.HttpServletRequest httpRequest,
+                                               RedirectAttributes redirectAttributes) {
         try {
             ApplicationAuthorizationRequest request = new ApplicationAuthorizationRequest();
             request.setApplicationCode(applicationCode);
@@ -444,13 +440,13 @@ public class AdminController {
     }
 
     private Map<String, Object> dataGrantDocument(String[] resources, String[] actions,
-                                                   List<Integer> allIndexes, List<Integer> constraintGrantIndexes,
-                                                   String[] constraintDimensions, String[] constraintValues) {
+                                                  List<Integer> allIndexes, List<Integer> constraintGrantIndexes,
+                                                  String[] constraintDimensions, String[] constraintValues) {
         if (resources == null || resources.length == 0) {
             return null;
         }
         if (actions == null || actions.length != resources.length) {
-            throw new IllegalArgumentException("DATA授权项不完整");
+            throw new ValidationException("DATA授权项不完整");
         }
         List<Map<String, Object>> grants = new ArrayList<Map<String, Object>>();
         List<List<Map<String, Object>>> constraintGroups = new ArrayList<List<Map<String, Object>>>();
@@ -467,18 +463,18 @@ public class AdminController {
         }
         if (constraintGrantIndexes == null) {
             if (constraintDimensions != null || constraintValues != null) {
-                throw new IllegalArgumentException("DATA约束不完整");
+                throw new ValidationException("DATA约束不完整");
             }
         } else {
             if (constraintDimensions == null || constraintValues == null
                     || constraintGrantIndexes.size() != constraintDimensions.length
                     || constraintGrantIndexes.size() != constraintValues.length) {
-                throw new IllegalArgumentException("DATA约束不完整");
+                throw new ValidationException("DATA约束不完整");
             }
             for (int index = 0; index < constraintGrantIndexes.size(); index++) {
                 Integer grantIndex = constraintGrantIndexes.get(index);
                 if (grantIndex == null || grantIndex.intValue() < 0 || grantIndex.intValue() >= grants.size()) {
-                    throw new IllegalArgumentException("DATA约束授权项不存在");
+                    throw new ValidationException("DATA约束授权项不存在");
                 }
                 Map<String, Object> constraint = new LinkedHashMap<String, Object>();
                 constraint.put(SimpleDataPermissionConstant.FIELD_DIMENSION, constraintDimensions[index]);
@@ -555,23 +551,9 @@ public class AdminController {
                 .collect(java.util.stream.Collectors.toList());
     }
 
-    @Data
-    private static final class DataGrantForm {
-        private String resource;
-        private String actions;
-        private boolean all;
-        private final List<DataConstraintForm> constraints = new ArrayList<DataConstraintForm>();
-    }
-
-    @Data
-    private static final class DataConstraintForm {
-        private String dimension;
-        private String values;
-    }
-
     @PostMapping("/{clientId}/authorization/revoke")
     public String revokeApplicationAuthorization(@PathVariable String clientId,
-                                                  RedirectAttributes redirectAttributes) {
+                                                 RedirectAttributes redirectAttributes) {
         try {
             applicationAuthorizationManagementService.revokeLocal(clientId);
             redirectAttributes.addFlashAttribute("message", ServerErrorMessage.ADMIN_APPLICATION_AUTHORIZATION_REVOKE_SUCCESS);
@@ -598,8 +580,6 @@ public class AdminController {
             return "redirect:/admin";
         }
     }
-
-    // ==================== Token Management Pages ====================
 
     /**
      * Token管理页面 - 显示所有Token列表（支持过滤、搜索、分页）
@@ -686,6 +666,8 @@ public class AdminController {
             return "redirect:/admin/token";
         }
     }
+
+    // ==================== Token Management Pages ====================
 
     /**
      * 换Token测试页面
@@ -855,6 +837,20 @@ public class AdminController {
         session.setAttribute("admin.createSuccess.clientSecret", response.getClientSecret());
         session.setAttribute("admin.createSuccess.message", "Secret 重置成功！请妥善保存新 Client Secret，此信息仅显示一次。");
         return ResponseEntity.ok(Collections.singletonMap("clientId", response.getClientId()));
+    }
+
+    @Data
+    private static final class DataGrantForm {
+        private final List<DataConstraintForm> constraints = new ArrayList<DataConstraintForm>();
+        private String resource;
+        private String actions;
+        private boolean all;
+    }
+
+    @Data
+    private static final class DataConstraintForm {
+        private String dimension;
+        private String values;
     }
 
 }

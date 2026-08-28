@@ -1,8 +1,8 @@
 # Simple AKSK Server Starter
 
-> **3.0.0（待发布）**：本文档对应本地 AKSK Server Starter 3.0.0 候选版本；外部发布状态以 Maven Central / Central Portal 实证为准。2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
+> **3.0.1**：内省时间 claim 组装前整秒截断，修复签发后立即使用令牌的间歇拒绝；Illegal 系异常收敛到模块异常体系；`simple-application-authorization-core` 升级 1.0.1（默认 2 秒时钟容差）；移除旧协作 E2E Server 机制。外部发布状态以 Maven Central / Central Portal 实证为准。2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -36,10 +36,10 @@ OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.0.1'
     implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
     implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
 
     // 必需运行时依赖
     implementation 'org.springframework.boot:spring-boot-starter-web'

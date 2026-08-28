@@ -2,258 +2,280 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('Client 详情')"></head>
 <body class="admin-console">
-<div th:replace="admin/fragments/layout :: sidebar('clients', ${client})"></div>
+<div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
     <header th:replace="admin/fragments/layout :: topbar('Client 详情', '查看与维护 Client 配置及 Token 生命周期')"></header>
     <section class="admin-content">
         <div th:replace="admin/fragments/layout :: flash"></div>
-<div class="admin-detail-grid">
-        <div>
-            <div class="admin-card">
-                <div class="admin-card-header">
-                    <h2>Client 配置</h2>
+        <div class="admin-detail-grid">
+            <div>
+                <div class="admin-card">
+                    <div class="admin-card-header">
+                        <h2>Client 配置</h2>
+                    </div>
+                    <div class="admin-card-body">
+                        <table class="table admin-kv-table">
+                            <tbody>
+                            <tr>
+                                <th width="30%">Client ID</th>
+                                <td><code th:text="${client.clientId}"></code></td>
+                            </tr>
+                            <tr>
+                                <th>名称</th>
+                                <td th:text="${client.clientName}"></td>
+                            </tr>
+                            <tr>
+                                <th>类型</th>
+                                <td>
+                                    <span class="badge bg-primary" th:if="${client.clientType == 1}">平台级</span>
+                                    <span class="badge bg-info" th:if="${client.clientType == 2}">用户级</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${client.ownerUserId != null}">
+                                <th>所属用户ID</th>
+                                <td th:text="${client.ownerUserId}"></td>
+                            </tr>
+                            <tr th:if="${client.ownerUsername != null}">
+                                <th>所属用户名</th>
+                                <td th:text="${client.ownerUsername}"></td>
+                            </tr>
+                            <tr>
+                                <th>状态</th>
+                                <td>
+                                    <span class="badge bg-success" th:if="${client.enabled}">已启用</span>
+                                    <span class="badge bg-secondary" th:if="${!client.enabled}">已禁用</span>
+                                </td>
+                            </tr>
+                            <tr th:if="${client.clientIdIssuedAt != null}">
+                                <th>创建时间</th>
+                                <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                            </tr>
+                            <tr>
+                                <th>OAuth2 Scope</th>
+                                <td>
+                                    <div th:if="${client.scopes != null and !client.scopes.isEmpty()}">
+                                        <ul class="list-unstyled mb-0">
+                                            <li th:each="scope : ${client.scopes}">
+                                                <code th:text="${scope}"></code>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <span class="text-muted"
+                                          th:if="${client.scopes == null or client.scopes.isEmpty()}">未设置（默认：read,write）</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>应用授权</th>
+                                <td>
+                                    <span class="badge bg-warning text-dark"
+                                          th:if="${authorization == null}">未配置</span>
+                                    <span class="badge bg-success"
+                                          th:if="${authorization != null and authorization.enabled and authorization.admitted}">已准入（版本 <span
+                                            th:text="${authorization.authorizationVersion}"></span>）</span>
+                                    <span class="badge bg-secondary"
+                                          th:if="${authorization != null and authorization.enabled and !authorization.admitted}">未准入（版本 <span
+                                            th:text="${authorization.authorizationVersion}"></span>）</span>
+                                    <span class="badge bg-danger"
+                                          th:if="${authorization != null and !authorization.enabled}">已撤销（版本 <span
+                                            th:text="${authorization.authorizationVersion}"></span>）</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Client Secret</th>
+                                <td>
+                                    <span class="text-muted">****** (已加密，无法查看)</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="alert alert-info" role="alert">
+                            <strong>提示：</strong>Client Secret仅在创建时显示一次，后续无法查看。
+                        </div>
+                    </div>
                 </div>
+            </div>
+            <aside class="admin-card">
+                <div class="admin-card-header"><h2>管理操作</h2></div>
                 <div class="admin-card-body">
-                    <table class="table admin-kv-table">
-                        <tbody>
-                        <tr>
-                            <th width="30%">Client ID</th>
-                            <td><code th:text="${client.clientId}"></code></td>
-                        </tr>
-                        <tr>
-                            <th>名称</th>
-                            <td th:text="${client.clientName}"></td>
-                        </tr>
-                        <tr>
-                            <th>类型</th>
-                            <td>
-                                <span th:if="${client.clientType == 1}" class="badge bg-primary">平台级</span>
-                                <span th:if="${client.clientType == 2}" class="badge bg-info">用户级</span>
-                            </td>
-                        </tr>
-                        <tr th:if="${client.ownerUserId != null}">
-                            <th>所属用户ID</th>
-                            <td th:text="${client.ownerUserId}"></td>
-                        </tr>
-                        <tr th:if="${client.ownerUsername != null}">
-                            <th>所属用户名</th>
-                            <td th:text="${client.ownerUsername}"></td>
-                        </tr>
-                        <tr>
-                            <th>状态</th>
-                            <td>
-                                <span th:if="${client.enabled}" class="badge bg-success">已启用</span>
-                                <span th:if="${!client.enabled}" class="badge bg-secondary">已禁用</span>
-                            </td>
-                        </tr>
-                        <tr th:if="${client.clientIdIssuedAt != null}">
-                            <th>创建时间</th>
-                            <td th:text="${#temporals.format(client.clientIdIssuedAt, 'yyyy-MM-dd HH:mm:ss')}"></td>
-                        </tr>
-                        <tr>
-                            <th>OAuth2 Scope</th>
-                            <td>
-                                <div th:if="${client.scopes != null and !client.scopes.isEmpty()}">
-                                    <ul class="list-unstyled mb-0">
-                                        <li th:each="scope : ${client.scopes}">
-                                            <code th:text="${scope}"></code>
-                                        </li>
-                                    </ul>
-                                </div>
-                                <span th:if="${client.scopes == null or client.scopes.isEmpty()}"
-                                      class="text-muted">未设置（默认：read,write）</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>应用授权</th>
-                            <td>
-                                <span th:if="${authorization == null}" class="badge bg-warning text-dark">未配置</span>
-                                <span th:if="${authorization != null and authorization.enabled and authorization.admitted}"
-                                      class="badge bg-success">已准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
-                                <span th:if="${authorization != null and authorization.enabled and !authorization.admitted}"
-                                      class="badge bg-secondary">未准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
-                                <span th:if="${authorization != null and !authorization.enabled}"
-                                      class="badge bg-danger">已撤销（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th>Client Secret</th>
-                            <td>
-                                <span class="text-muted">****** (已加密，无法查看)</span>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
+                    <div class="admin-actions flex-column align-items-stretch">
+                        <button class="btn btn-outline-secondary" data-bs-target="#editNameModal" data-bs-toggle="modal"
+                                type="button">编辑名称
+                        </button>
+                        <button class="btn btn-outline-secondary" data-bs-target="#editScopesModal"
+                                data-bs-toggle="modal"
+                                type="button">编辑 OAuth2 Scope
+                        </button>
+                        <button class="btn btn-outline-secondary" data-bs-target="#editOwnerInfoModal"
+                                data-bs-toggle="modal"
+                                th:if="${client.clientType == 2}" type="button">编辑归属信息
+                        </button>
+                        <a class="btn btn-primary"
+                           th:href="@{/admin/{id}/authorization(id=${client.clientId})}">管理应用授权</a>
+                        <button class="btn btn-outline-danger" data-bs-target="#revokeAllTokensModal"
+                                data-bs-toggle="modal"
+                                type="button">撤销该 Client 的全部活跃 Token
+                        </button>
+                        <button class="btn btn-outline-success" data-bs-target="#resetSecretModal"
+                                data-bs-toggle="modal"
+                                type="button">重置 Secret
+                        </button>
+                        <a class="btn btn-outline-primary" href="/admin">返回 Client 管理</a>
+                    </div>
+                </div>
+            </aside>
+        </div>
 
-                    <div class="alert alert-info" role="alert">
-                        <strong>提示：</strong>Client Secret仅在创建时显示一次，后续无法查看。
+        <!-- 编辑名称 Modal -->
+        <div class="modal fade" id="editNameModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">编辑名称</h5>
+                        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="editName">Client 名称</label>
+                            <input class="form-control" id="editName" maxlength="200"
+                                   th:value="${client.clientName}" type="text">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">取消</button>
+                        <button class="btn btn-primary" onclick="updateName()" type="button">保存</button>
                     </div>
                 </div>
             </div>
         </div>
-        <aside class="admin-card">
-            <div class="admin-card-header"><h2>管理操作</h2></div>
-            <div class="admin-card-body"><div class="admin-actions flex-column align-items-stretch">
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editNameModal">编辑名称</button>
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editScopesModal">编辑 OAuth2 Scope</button>
-                <button th:if="${client.clientType == 2}" type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editOwnerInfoModal">编辑归属信息</button>
-                <a class="btn btn-primary" th:href="@{/admin/{id}/authorization(id=${client.clientId})}">管理应用授权</a>
-                <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#revokeAllTokensModal">撤销该 Client 的全部活跃 Token</button>
-                <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#resetSecretModal">重置 Secret</button>
-                <a href="/admin" class="btn btn-outline-primary">返回 Client 管理</a>
-            </div></div>
-        </aside>
-</div>
 
-<!-- 编辑名称 Modal -->
-<div class="modal fade" id="editNameModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">编辑名称</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="editName" class="form-label">Client 名称</label>
-                    <input type="text" class="form-control" id="editName"
-                           th:value="${client.clientName}" maxlength="200">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="updateName()">保存</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 编辑权限范围 Modal -->
-<div class="modal fade" id="editScopesModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">编辑 OAuth2 Scope</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="editScopes" class="form-label">OAuth2 Scope</label>
-                    <textarea class="form-control" id="editScopes" rows="5"
-                              th:text="${#strings.listJoin(client.scopes, ',')}"></textarea>
-                    <div class="form-text">
-                        多个 Scope 用逗号分隔
+        <!-- 编辑权限范围 Modal -->
+        <div class="modal fade" id="editScopesModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">编辑 OAuth2 Scope</h5>
+                        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
                     </div>
-                    <div class="form-text text-danger" id="scopeError" style="display:none;">
-                        ⚠️ 检测到回车换行，请使用逗号分隔
+
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="editScopes">OAuth2 Scope</label>
+                            <textarea class="form-control" id="editScopes" rows="5"
+                                      th:text="${#strings.listJoin(client.scopes, ',')}"></textarea>
+                            <div class="form-text">
+                                多个 Scope 用逗号分隔
+                            </div>
+                            <div class="form-text text-danger" id="scopeError" style="display:none;">
+                                ⚠️ 检测到回车换行，请使用逗号分隔
+                            </div>
+                            <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
+                                <strong>Scope 格式说明：</strong><br>
+                                OAuth2 Scope 仅表示令牌请求范围，不是 API permission 或 DATA grant。应用授权请使用 Client
+                                详情中的“管理应用授权”入口单独配置。
+                            </div>
+                        </div>
+
+                        <div class="alert alert-warning" role="alert">
+                            <strong>注意：</strong>修改后，新签发 Token 使用新的 Scope；已签发 Token 不会被 Scope 修改自动撤销。
+                        </div>
                     </div>
-                    <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
-                        <strong>Scope 格式说明：</strong><br>
-                        OAuth2 Scope 仅表示令牌请求范围，不是 API permission 或 DATA grant。应用授权请使用 Client 详情中的“管理应用授权”入口单独配置。
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">取消</button>
+                        <button class="btn btn-primary" onclick="updateScopes()" type="button">保存</button>
                     </div>
                 </div>
-
-                <div class="alert alert-warning" role="alert">
-                    <strong>注意：</strong>修改后，新签发 Token 使用新的 Scope；已签发 Token 不会被 Scope 修改自动撤销。
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="updateScopes()">保存</button>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- 撤销所有Token Modal -->
-<div class="modal fade" id="revokeAllTokensModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">撤销所有Token</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+        <!-- 撤销所有Token Modal -->
+        <div class="modal fade" id="revokeAllTokensModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">撤销所有Token</h5>
+                        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                    </div>
 
-            <div class="modal-body">
-                <div class="alert alert-danger" role="alert">
-                    <strong>⚠️ 确定要撤销此Client下所有活跃Token吗？</strong>
-                    <p class="mb-0 mt-2">此操作不可恢复，该Client需要重新换取Token才能继续使用。</p>
-                    <p class="mb-0 mt-1">已过期和已撤销的Token不会被处理。</p>
-                </div>
-            </div>
+                    <div class="modal-body">
+                        <div class="alert alert-danger" role="alert">
+                            <strong>⚠️ 确定要撤销此Client下所有活跃Token吗？</strong>
+                            <p class="mb-0 mt-2">此操作不可恢复，该Client需要重新换取Token才能继续使用。</p>
+                            <p class="mb-0 mt-1">已过期和已撤销的Token不会被处理。</p>
+                        </div>
+                    </div>
 
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-danger" onclick="revokeAllTokens()">确认撤销</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 重置Secret Modal -->
-<div class="modal fade" id="resetSecretModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">重置Secret</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-
-            <div class="modal-body">
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="revokeTokensCheck" checked>
-                        <label class="form-check-label" for="revokeTokensCheck">
-                            同时撤销该Client下所有现存Token
-                        </label>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">取消</button>
+                        <button class="btn btn-danger" onclick="revokeAllTokens()" type="button">确认撤销</button>
                     </div>
                 </div>
-                <div class="alert alert-warning" role="alert">
-                    <strong>⚠️ 注意：</strong>
-                    <p class="mb-0 mt-2">新Secret仅在成功后显示一次，请妥善保管！</p>
-                    <p class="mb-0 mt-1">重置后，使用旧Secret的请求将立即失败。</p>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-success" onclick="resetSecret()">确认重置</button>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- 编辑归属信息 Modal（仅用户级AKSK显示） -->
-<div th:if="${client.clientType == 2}" class="modal fade" id="editOwnerInfoModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">编辑归属信息</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="editOwnerUserId" class="form-label">所属用户ID</label>
-                    <input type="text" class="form-control" id="editOwnerUserId"
-                           th:value="${client.ownerUserId}" maxlength="100">
+        <!-- 重置Secret Modal -->
+        <div class="modal fade" id="resetSecretModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">重置Secret</h5>
+                        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input checked class="form-check-input" id="revokeTokensCheck" type="checkbox">
+                                <label class="form-check-label" for="revokeTokensCheck">
+                                    同时撤销该Client下所有现存Token
+                                </label>
+                            </div>
+                        </div>
+                        <div class="alert alert-warning" role="alert">
+                            <strong>⚠️ 注意：</strong>
+                            <p class="mb-0 mt-2">新Secret仅在成功后显示一次，请妥善保管！</p>
+                            <p class="mb-0 mt-1">重置后，使用旧Secret的请求将立即失败。</p>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">取消</button>
+                        <button class="btn btn-success" onclick="resetSecret()" type="button">确认重置</button>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label for="editOwnerUsername" class="form-label">所属用户名</label>
-                    <input type="text" class="form-control" id="editOwnerUsername"
-                           th:value="${client.ownerUsername}" maxlength="255">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="updateOwnerInfo()">保存</button>
             </div>
         </div>
-    </div>
-</div>
 
-</section>
+        <!-- 编辑归属信息 Modal（仅用户级AKSK显示） -->
+        <div class="modal fade" id="editOwnerInfoModal" tabindex="-1" th:if="${client.clientType == 2}">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">编辑归属信息</h5>
+                        <button class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="editOwnerUserId">所属用户ID</label>
+                            <input class="form-control" id="editOwnerUserId" maxlength="100"
+                                   th:value="${client.ownerUserId}" type="text">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="editOwnerUsername">所属用户名</label>
+                            <input class="form-control" id="editOwnerUsername" maxlength="255"
+                                   th:value="${client.ownerUsername}" type="text">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">取消</button>
+                        <button class="btn btn-primary" onclick="updateOwnerInfo()" type="button">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </section>
 </main>
 <th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 <script th:inline="javascript">
@@ -266,7 +288,7 @@
     const scopesTextarea = document.getElementById('editScopes');
     const scopeError = document.getElementById('scopeError');
 
-    scopesTextarea.addEventListener('keydown', function(e) {
+    scopesTextarea.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             scopeError.style.display = 'block';
@@ -279,15 +301,15 @@
     });
 
     // 监听粘贴事件，自动替换换行符和空格为逗号
-    scopesTextarea.addEventListener('paste', function(e) {
+    scopesTextarea.addEventListener('paste', function (e) {
         e.preventDefault();
         const pastedText = (e.clipboardData || window.clipboardData).getData('text');
 
         // 替换所有换行符和空格为逗号
         const cleanedText = pastedText
-                .replace(/[\r\n\s]+/g, ',')
-                .replace(/,+/g, ',')  // 合并多个连续逗号
-                .replace(/^,|,$/g, '');  // 移除首尾逗号
+            .replace(/[\r\n\s]+/g, ',')
+            .replace(/,+/g, ',')  // 合并多个连续逗号
+            .replace(/^,|,$/g, '');  // 移除首尾逗号
 
         // 插入清理后的文本
         const start = this.selectionStart;
@@ -316,18 +338,18 @@
         }
         fetch(`/admin/${clientId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
-            body: JSON.stringify({ name: name })
+            headers: {'Content-Type': 'application/json', [csrfHeader]: csrfToken},
+            body: JSON.stringify({name: name})
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('操作未完成');
-            }
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
-            if (modal) modal.hide();
-            location.reload();
-        })
-        .catch(() => alert('更新未完成，请检查状态后重试。'));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('操作未完成');
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editNameModal'));
+                if (modal) modal.hide();
+                location.reload();
+            })
+            .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
 
     function updateScopes() {
@@ -357,17 +379,17 @@
                 'Content-Type': 'application/json',
                 [csrfHeader]: csrfToken
             },
-            body: JSON.stringify({ scopes: scopes })
+            body: JSON.stringify({scopes: scopes})
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('操作未完成');
-            }
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
-            if (modal) modal.hide();
-            location.reload();
-        })
-        .catch(() => alert('更新未完成，请检查状态后重试。'));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('操作未完成');
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editScopesModal'));
+                if (modal) modal.hide();
+                location.reload();
+            })
+            .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
 
     function revokeAllTokens() {
@@ -375,19 +397,19 @@
 
         fetch(`/admin/${clientId}/token`, {
             method: 'DELETE',
-            headers: { [csrfHeader]: csrfToken }
+            headers: {[csrfHeader]: csrfToken}
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('操作未完成');
-            }
-            const modal = bootstrap.Modal.getInstance(document.getElementById('revokeAllTokensModal'));
-            if (modal) {
-                modal.hide();
-            }
-            location.reload();
-        })
-        .catch(() => alert('撤销未完成，请检查状态后重试。'));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('操作未完成');
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('revokeAllTokensModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                location.reload();
+            })
+            .catch(() => alert('撤销未完成，请检查状态后重试。'));
     }
 
     function resetSecret() {
@@ -395,17 +417,18 @@
 
         fetch(`/admin/${clientId}/secret?revokeTokens=${revokeTokens}`, {
             method: 'PUT',
-            headers: { [csrfHeader]: csrfToken }
+            headers: {[csrfHeader]: csrfToken}
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('操作未完成');
-            }
-            // Secret 由当前认证会话一次性交付，导航地址不携带敏感值
-            window.location.href = '/admin/create-success';
-        })
-        .catch(() => alert('重置未完成，请检查状态后重试。'));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('操作未完成');
+                }
+                // Secret 由当前认证会话一次性交付，导航地址不携带敏感值
+                window.location.href = '/admin/create-success';
+            })
+            .catch(() => alert('重置未完成，请检查状态后重试。'));
     }
+
     function updateOwnerInfo() {
         const ownerUserId = document.getElementById('editOwnerUserId').value.trim();
         const ownerUsername = document.getElementById('editOwnerUsername').value.trim();
@@ -415,19 +438,20 @@
         }
         fetch(`/admin/${clientId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', [csrfHeader]: csrfToken },
-            body: JSON.stringify({ ownerUserId: ownerUserId, ownerUsername: ownerUsername })
+            headers: {'Content-Type': 'application/json', [csrfHeader]: csrfToken},
+            body: JSON.stringify({ownerUserId: ownerUserId, ownerUsername: ownerUsername})
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('操作未完成');
-            }
-            const modal = bootstrap.Modal.getInstance(document.getElementById('editOwnerInfoModal'));
-            if (modal) modal.hide();
-            location.reload();
-        })
-        .catch(() => alert('更新未完成，请检查状态后重试。'));
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('操作未完成');
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editOwnerInfoModal'));
+                if (modal) modal.hide();
+                location.reload();
+            })
+            .catch(() => alert('更新未完成，请检查状态后重试。'));
     }
+
     /*]]>*/
 </script>
 </body>

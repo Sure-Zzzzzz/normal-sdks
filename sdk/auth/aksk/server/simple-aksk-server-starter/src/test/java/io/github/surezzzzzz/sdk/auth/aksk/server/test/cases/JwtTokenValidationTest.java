@@ -11,12 +11,12 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerP
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
-import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;

@@ -15,11 +15,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplic
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.helper.ApplicationAuthorizationTestHelper;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataConstraintOperator;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.SimpleDataPermissionConstant;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataConstraint;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
-import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataPermissionRequest;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,14 +29,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.*;
 
 /**
  * 应用授权与 Token 撤销的事务原子性集成测试。

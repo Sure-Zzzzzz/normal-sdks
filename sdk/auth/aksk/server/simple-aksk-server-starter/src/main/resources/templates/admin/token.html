@@ -1,11 +1,185 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('Token 管理')"></head>
-<body class="admin-console"><div th:replace="admin/fragments/layout :: sidebar('tokens', ${null})"></div><main class="admin-main"><header th:replace="admin/fragments/layout :: topbar('Token 管理', '安全查看 Token 生命周期与来源状态')"></header><section class="admin-content"><div th:replace="admin/fragments/layout :: flash"></div>
-<div class="admin-actions mb-3"><a href="/admin/token/test" class="btn btn-primary">换 Token 测试</a><button type="button" class="btn btn-outline-warning" onclick="cleanupExpiredTokens()">清理过期 Token</button></div>
-<div class="admin-stat-grid"><div class="admin-stat-card"><span>总 Token 数（MySQL）</span><strong th:text="${statistics.totalCount}">0</strong></div><div class="admin-stat-card"><span>有效 Token（MySQL）</span><strong class="text-success" th:text="${statistics.activeCount}">0</strong></div><div class="admin-stat-card"><span>已撤销 Token（MySQL）</span><strong class="text-warning" th:text="${statistics.revokedCount}">0</strong></div><div class="admin-stat-card"><span>过期 Token（MySQL）</span><strong class="text-secondary" th:text="${statistics.expiredCount}">0</strong></div></div>
-<ul class="nav nav-tabs mb-3"><li class="nav-item"><a class="nav-link" th:classappend="${currentSource == 'mysql' ? 'active' : ''}" th:href="@{/admin/token(source='mysql',page=1,size=${pageSize},status=${currentStatus})}">MySQL Token</a></li><li class="nav-item"><a class="nav-link" th:classappend="${currentSource == 'redis' ? 'active' : ''}" th:href="@{/admin/token(source='redis',page=1,size=${pageSize})}">Redis Token</a></li></ul>
-<section class="admin-card"><div class="admin-card-body"><form method="get" action="/admin/token" class="admin-toolbar"><input type="hidden" name="source" th:value="${currentSource}"><div th:if="${currentSource == 'mysql'}"><label class="form-label">Client 类型</label><div class="btn-group"><a th:href="@{/admin/token(source=${currentSource},status=${currentStatus},search=${currentSearch})}" th:classappend="${currentClientType == null} ? 'active' : ''" class="btn btn-outline-primary">全部</a><a th:href="@{/admin/token(source=${currentSource},clientType=1,status=${currentStatus},search=${currentSearch})}" th:classappend="${currentClientType == 1} ? 'active' : ''" class="btn btn-outline-primary">平台级</a><a th:href="@{/admin/token(source=${currentSource},clientType=2,status=${currentStatus},search=${currentSearch})}" th:classappend="${currentClientType == 2} ? 'active' : ''" class="btn btn-outline-primary">用户级</a></div></div><div><label class="form-label">状态</label><div class="btn-group"><a th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},search=${currentSearch})}" th:classappend="${currentStatus == null} ? 'active' : ''" class="btn btn-outline-success">全部</a><a th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='ACTIVE',search=${currentSearch})}" th:classappend="${currentStatus?.name() == 'ACTIVE'} ? 'active' : ''" class="btn btn-outline-success">有效</a><a th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='EXPIRED',search=${currentSearch})}" th:classappend="${currentStatus?.name() == 'EXPIRED'} ? 'active' : ''" class="btn btn-outline-success">过期</a><a th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='REVOKED',search=${currentSearch})}" th:classappend="${currentStatus?.name() == 'REVOKED'} ? 'active' : ''" class="btn btn-outline-success">已撤销</a></div></div><div class="ms-auto" th:if="${currentSource == 'mysql'}"><label class="form-label" for="searchInput">搜索</label><div class="input-group"><input class="form-control" id="searchInput" name="search" th:value="${currentSearch}" placeholder="Client ID / Client 名称"><button class="btn btn-primary" type="submit">搜索</button><a th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status=${currentStatus})}" class="btn btn-outline-secondary">清除</a></div></div></form></div></section>
-<section class="admin-card"><div class="admin-card-header"><h2>Token 列表</h2><span class="text-muted small">Token 内容始终隐藏</span></div><div class="admin-table-wrap"><table class="table table-hover admin-table"><thead><tr><th>Client ID</th><th>Client 名称</th><th>类型</th><th>Token 内容</th><th>签发时间</th><th>过期时间</th><th>状态</th><th>数据源</th><th>操作</th></tr></thead><tbody><tr th:each="token : ${tokens}"><td><code th:text="${token.clientId}"></code></td><td th:text="${clientInfoMap.containsKey(token.clientId) ? clientInfoMap.get(token.clientId).clientName : '-'}"></td><td><span th:if="${clientInfoMap.containsKey(token.clientId) and clientInfoMap.get(token.clientId).clientType == 1}" class="badge bg-primary">平台级</span><span th:if="${clientInfoMap.containsKey(token.clientId) and clientInfoMap.get(token.clientId).clientType == 2}" class="badge bg-info text-dark">用户级</span><span th:unless="${clientInfoMap.containsKey(token.clientId)}">-</span></td><td class="text-muted">已隐藏</td><td th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td><td th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td><td><span th:if="${token.status.name() == 'ACTIVE'}" class="badge bg-success">有效</span><span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-secondary">过期</span><span th:if="${token.status.name() == 'REVOKED'}" class="badge bg-danger">已撤销</span></td><td><span th:if="${token.dataSource.name() == 'MYSQL'}" class="badge bg-primary">MySQL</span><span th:if="${token.dataSource.name() == 'REDIS'}" class="badge bg-warning text-dark">Redis</span><span th:if="${token.dataSource.name() == 'BOTH'}" class="badge bg-success">Both</span></td><td><div class="admin-actions"><a th:href="@{/admin/token/{id}(id=${token.id})}" class="btn btn-sm btn-outline-primary">详情</a><button type="button" class="btn btn-sm btn-outline-warning" th:data-token-id="${token.id}" th:disabled="${token.status.name() == 'REVOKED' || token.status.name() == 'EXPIRED'}" onclick="revokeToken(this.dataset.tokenId)">撤销</button><button type="button" class="btn btn-sm btn-outline-danger" th:data-token-id="${token.id}" onclick="deleteToken(this.dataset.tokenId)">删除</button></div></td></tr><tr th:if="${#lists.isEmpty(tokens)}"><td colspan="9" class="text-center text-muted">暂无数据</td></tr></tbody></table></div></section>
-<nav class="admin-pagination" th:if="${totalPages > 1}"><ul class="pagination justify-content-center"><li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''"><a class="page-link" th:href="@{/admin/token(source=${currentSource},page=${currentPage - 1},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}">上一页</a></li><li th:each="i : ${#numbers.sequence(1,totalPages)}" class="page-item" th:classappend="${i == currentPage} ? 'active' : ''"><a class="page-link" th:href="@{/admin/token(source=${currentSource},page=${i},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}" th:text="${i}"></a></li><li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''"><a class="page-link" th:href="@{/admin/token(source=${currentSource},page=${currentPage + 1},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}">下一页</a></li></ul></nav>
-</section></main><th:block th:replace="admin/fragments/layout :: scripts"></th:block><script th:inline="javascript">const csrfToken=/*[[${_csrf.token}]]*/'',csrfHeader=/*[[${_csrf.headerName}]]*/'';function revokeToken(id){if(confirm('确定要撤销此 Token 吗？撤销后 Token 立即失效，但记录仍保留。'))fetch(`/admin/token/${id}/revoke`,{method:'POST',headers:{[csrfHeader]:csrfToken}}).then(adminRequireSuccess).then(()=>location.reload()).catch(()=>alert('撤销未完成，请检查状态后重试。'));}function deleteToken(id){if(confirm('确定要删除此 Token 吗？此操作会先撤销 Token，再删除 MySQL 和 Redis 中的记录。'))fetch(`/admin/token/${id}`,{method:'DELETE',headers:{[csrfHeader]:csrfToken}}).then(adminRequireSuccess).then(()=>location.reload()).catch(()=>alert('删除未完成，请检查状态后重试。'));}function cleanupExpiredTokens(){if(confirm('确定要清理所有过期 Token 吗？'))fetch('/admin/token/expired',{method:'DELETE',headers:{[csrfHeader]:csrfToken}}).then(adminRequireSuccess).then(()=>location.reload()).catch(()=>alert('清理未完成，请检查状态后重试。'));}</script></body></html>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('tokens')"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('Token 管理', '安全查看 Token 生命周期与来源状态')"></header>
+    <section class="admin-content">
+        <div th:replace="admin/fragments/layout :: flash"></div>
+        <div class="admin-actions mb-3"><a class="btn btn-primary" href="/admin/token/test">换 Token 测试</a>
+            <button class="btn btn-outline-warning" onclick="cleanupExpiredTokens()" type="button">清理过期 Token
+            </button>
+        </div>
+        <div class="admin-stat-grid">
+            <div class="admin-stat-card"><span>总 Token 数（MySQL）</span><strong
+                    th:text="${statistics.totalCount}">0</strong></div>
+            <div class="admin-stat-card"><span>有效 Token（MySQL）</span><strong class="text-success"
+                                                                               th:text="${statistics.activeCount}">0</strong>
+            </div>
+            <div class="admin-stat-card"><span>已撤销 Token（MySQL）</span><strong class="text-warning"
+                                                                                 th:text="${statistics.revokedCount}">0</strong>
+            </div>
+            <div class="admin-stat-card"><span>过期 Token（MySQL）</span><strong class="text-secondary"
+                                                                               th:text="${statistics.expiredCount}">0</strong>
+            </div>
+        </div>
+        <ul class="nav nav-tabs mb-3">
+            <li class="nav-item"><a class="nav-link" th:classappend="${currentSource == 'mysql' ? 'active' : ''}"
+                                    th:href="@{/admin/token(source='mysql',page=1,size=${pageSize},status=${currentStatus})}">MySQL
+                Token</a></li>
+            <li class="nav-item"><a class="nav-link" th:classappend="${currentSource == 'redis' ? 'active' : ''}"
+                                    th:href="@{/admin/token(source='redis',page=1,size=${pageSize})}">Redis Token</a>
+            </li>
+        </ul>
+        <section class="admin-card">
+            <div class="admin-card-body">
+                <form action="/admin/token" class="admin-toolbar" method="get"><input name="source"
+                                                                                      th:value="${currentSource}"
+                                                                                      type="hidden">
+                    <div th:if="${currentSource == 'mysql'}"><label class="form-label">Client 类型</label>
+                        <div class="btn-group"><a
+                                class="btn btn-outline-primary"
+                                th:classappend="${currentClientType == null} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},status=${currentStatus},search=${currentSearch})}">全部</a><a
+                                class="btn btn-outline-primary"
+                                th:classappend="${currentClientType == 1} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=1,status=${currentStatus},search=${currentSearch})}">平台级</a><a
+                                class="btn btn-outline-primary"
+                                th:classappend="${currentClientType == 2} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=2,status=${currentStatus},search=${currentSearch})}">用户级</a>
+                        </div>
+                    </div>
+                    <div><label class="form-label">状态</label>
+                        <div class="btn-group"><a
+                                class="btn btn-outline-success"
+                                th:classappend="${currentStatus == null} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},search=${currentSearch})}">全部</a><a
+                                class="btn btn-outline-success"
+                                th:classappend="${currentStatus?.name() == 'ACTIVE'} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='ACTIVE',search=${currentSearch})}">有效</a><a
+                                class="btn btn-outline-success"
+                                th:classappend="${currentStatus?.name() == 'EXPIRED'} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='EXPIRED',search=${currentSearch})}">过期</a><a
+                                class="btn btn-outline-success"
+                                th:classappend="${currentStatus?.name() == 'REVOKED'} ? 'active' : ''"
+                                th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status='REVOKED',search=${currentSearch})}">已撤销</a>
+                        </div>
+                    </div>
+                    <div class="ms-auto" th:if="${currentSource == 'mysql'}"><label class="form-label"
+                                                                                    for="searchInput">搜索</label>
+                        <div class="input-group"><input class="form-control" id="searchInput" name="search"
+                                                        placeholder="Client ID / Client 名称"
+                                                        th:value="${currentSearch}">
+                            <button class="btn btn-primary" type="submit">搜索</button>
+                            <a class="btn btn-outline-secondary"
+                               th:href="@{/admin/token(source=${currentSource},clientType=${currentClientType},status=${currentStatus})}">清除</a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </section>
+        <section class="admin-card">
+            <div class="admin-card-header"><h2>Token 列表</h2><span class="text-muted small">Token 内容始终隐藏</span>
+            </div>
+            <div class="admin-table-wrap">
+                <table class="table table-hover admin-table">
+                    <thead>
+                    <tr>
+                        <th>Client ID</th>
+                        <th>Client 名称</th>
+                        <th>类型</th>
+                        <th>Token 内容</th>
+                        <th>签发时间</th>
+                        <th>过期时间</th>
+                        <th>状态</th>
+                        <th>数据源</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="token : ${tokens}">
+                        <td><code th:text="${token.clientId}"></code></td>
+                        <td th:text="${clientInfoMap.containsKey(token.clientId) ? clientInfoMap.get(token.clientId).clientName : '-'}"></td>
+                        <td><span
+                                class="badge bg-primary"
+                                th:if="${clientInfoMap.containsKey(token.clientId) and clientInfoMap.get(token.clientId).clientType == 1}">平台级</span><span
+                                class="badge bg-info text-dark"
+                                th:if="${clientInfoMap.containsKey(token.clientId) and clientInfoMap.get(token.clientId).clientType == 2}">用户级</span><span
+                                th:unless="${clientInfoMap.containsKey(token.clientId)}">-</span></td>
+                        <td class="text-muted">已隐藏</td>
+                        <td th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                        <td th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                        <td><span class="badge bg-success" th:if="${token.status.name() == 'ACTIVE'}">有效</span><span
+                                class="badge bg-secondary" th:if="${token.status.name() == 'EXPIRED'}">过期</span><span
+                                class="badge bg-danger" th:if="${token.status.name() == 'REVOKED'}">已撤销</span></td>
+                        <td><span class="badge bg-primary"
+                                  th:if="${token.dataSource.name() == 'MYSQL'}">MySQL</span><span
+                                class="badge bg-warning text-dark"
+                                th:if="${token.dataSource.name() == 'REDIS'}">Redis</span><span
+                                class="badge bg-success" th:if="${token.dataSource.name() == 'BOTH'}">Both</span></td>
+                        <td>
+                            <div class="admin-actions"><a class="btn btn-sm btn-outline-primary"
+                                                          th:href="@{/admin/token/{id}(id=${token.id})}">详情</a>
+                                <button class="btn btn-sm btn-outline-warning"
+                                        onclick="revokeToken(this.dataset.tokenId)"
+                                        th:data-token-id="${token.id}"
+                                        th:disabled="${token.status.name() == 'REVOKED' || token.status.name() == 'EXPIRED'}"
+                                        type="button">撤销
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        onclick="deleteToken(this.dataset.tokenId)"
+                                        th:data-token-id="${token.id}" type="button">删除
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(tokens)}">
+                        <td class="text-center text-muted" colspan="9">暂无数据</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        <nav class="admin-pagination" th:if="${totalPages > 1}">
+            <ul class="pagination justify-content-center">
+                <li class="page-item" th:classappend="${currentPage == 1} ? 'disabled' : ''"><a class="page-link"
+                                                                                                th:href="@{/admin/token(source=${currentSource},page=${currentPage - 1},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}">上一页</a>
+                </li>
+                <li class="page-item" th:classappend="${i == currentPage} ? 'active' : ''"
+                    th:each="i : ${#numbers.sequence(1,totalPages)}"><a class="page-link"
+                                                                        th:href="@{/admin/token(source=${currentSource},page=${i},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}"
+                                                                        th:text="${i}"></a></li>
+                <li class="page-item" th:classappend="${currentPage == totalPages} ? 'disabled' : ''"><a
+                        class="page-link"
+                        th:href="@{/admin/token(source=${currentSource},page=${currentPage + 1},size=${pageSize},clientType=${currentClientType},status=${currentStatus},search=${currentSearch})}">下一页</a>
+                </li>
+            </ul>
+        </nav>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
+<script th:inline="javascript">const csrfToken =/*[[${_csrf.token}]]*/'', csrfHeader =/*[[${_csrf.headerName}]]*/'';
+
+function revokeToken(id) {
+    if (confirm('确定要撤销此 Token 吗？撤销后 Token 立即失效，但记录仍保留。')) fetch(`/admin/token/${id}/revoke`, {
+        method: 'POST',
+        headers: {[csrfHeader]: csrfToken}
+    }).then(adminRequireSuccess).then(() => location.reload()).catch(() => alert('撤销未完成，请检查状态后重试。'));
+}
+
+function deleteToken(id) {
+    if (confirm('确定要删除此 Token 吗？此操作会先撤销 Token，再删除 MySQL 和 Redis 中的记录。')) fetch(`/admin/token/${id}`, {
+        method: 'DELETE',
+        headers: {[csrfHeader]: csrfToken}
+    }).then(adminRequireSuccess).then(() => location.reload()).catch(() => alert('删除未完成，请检查状态后重试。'));
+}
+
+function cleanupExpiredTokens() {
+    if (confirm('确定要清理所有过期 Token 吗？')) fetch('/admin/token/expired', {
+        method: 'DELETE',
+        headers: {[csrfHeader]: csrfToken}
+    }).then(adminRequireSuccess).then(() => location.reload()).catch(() => alert('清理未完成，请检查状态后重试。'));
+}</script>
+</body>
+</html>

@@ -103,11 +103,6 @@ body.admin-console {
     box-shadow: none;
 }
 
-.admin-nav-link.disabled {
-    color: #8396ba;
-    cursor: not-allowed;
-}
-
 .admin-sidebar-footer {
     margin-top: auto;
     padding: 12px 10px 0;

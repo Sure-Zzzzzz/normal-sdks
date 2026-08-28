@@ -36,10 +36,7 @@ import java.util.Set;
 @SimpleAkskServerComponent
 public class RedisTokenRepository {
 
-    private final RedisTemplate<String, Object> redisTemplate;
-    private final RedisKeyHelper redisKeyHelper;
     private static final ObjectMapper PLAIN_MAPPER = new ObjectMapper();
-
     // Spring OAuth2Authorization JSON field names (internal serialization format)
     private static final String JSON_FIELD_ID = "id";
     private static final String JSON_FIELD_REGISTERED_CLIENT_ID = "registeredClientId";
@@ -52,6 +49,8 @@ public class RedisTokenRepository {
     private static final String JSON_FIELD_METADATA = "metadata";
     private static final String JSON_FIELD_SCOPES = "scopes";
     private static final String JSON_PATH_TOKEN_INVALIDATED = "metadata.token.invalidated";
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final RedisKeyHelper redisKeyHelper;
 
     public RedisTokenRepository(
             @Qualifier("smartCacheRedisTemplate") RedisTemplate<String, Object> redisTemplate,

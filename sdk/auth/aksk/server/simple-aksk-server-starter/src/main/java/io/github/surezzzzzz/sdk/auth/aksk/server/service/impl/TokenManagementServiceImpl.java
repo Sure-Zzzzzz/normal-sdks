@@ -328,7 +328,7 @@ public class TokenManagementServiceImpl implements TokenManagementService {
             // 撤销事件必须具有最小上下文；缺失时让外层事务回滚，不能以不完整事件掩盖真实变更。
             TokenInfo tokenInfo = mysqlRepository.findById(entity.getId());
             if (tokenInfo == null) {
-                throw new IllegalStateException("Token audit data not found");
+                throw new SimpleAkskServerException(ErrorCode.TOKEN_OPERATION_FAILED, "Token audit data not found");
             }
             eventPublisher.publishEvent(new TokenRevokedEvent(
                     this, cause,

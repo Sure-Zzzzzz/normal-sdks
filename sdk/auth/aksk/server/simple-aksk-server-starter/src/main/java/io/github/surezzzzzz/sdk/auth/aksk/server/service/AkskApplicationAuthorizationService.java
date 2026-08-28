@@ -28,7 +28,7 @@ public class AkskApplicationAuthorizationService {
      * 为仍有效的服务主体授权创建权威快照。
      *
      * @param clientId  服务主体标识
-     * @param issuedAt 令牌签发时间
+     * @param issuedAt  令牌签发时间
      * @param expiresAt 令牌到期时间
      * @return 已验证授权快照；未准入或数据无效时返回null
      */

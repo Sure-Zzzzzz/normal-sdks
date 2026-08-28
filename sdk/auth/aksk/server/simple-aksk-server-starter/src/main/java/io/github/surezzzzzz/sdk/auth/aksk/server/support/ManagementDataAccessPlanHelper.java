@@ -27,7 +27,7 @@ public final class ManagementDataAccessPlanHelper {
     /**
      * 判断计划是否允许访问指定 Client。
      *
-     * @param plan 数据访问计划
+     * @param plan   数据访问计划
      * @param client Client 实体
      * @return 是否允许
      */
@@ -38,7 +38,7 @@ public final class ManagementDataAccessPlanHelper {
     /**
      * 判断计划是否允许访问指定应用授权。
      *
-     * @param plan 数据访问计划
+     * @param plan          数据访问计划
      * @param authorization 应用授权投影
      * @return 是否允许
      */
@@ -57,7 +57,7 @@ public final class ManagementDataAccessPlanHelper {
     /**
      * 判断计划是否允许访问指定 Token。
      *
-     * @param plan 数据访问计划
+     * @param plan  数据访问计划
      * @param token Token 信息
      * @return 是否允许
      */
@@ -77,8 +77,8 @@ public final class ManagementDataAccessPlanHelper {
     /**
      * 判断计划是否允许为指定 Client 创建应用授权。
      *
-     * @param plan 数据访问计划
-     * @param client Client 实体
+     * @param plan            数据访问计划
+     * @param client          Client 实体
      * @param applicationCode 应用编码
      * @return 是否允许
      */
@@ -95,8 +95,8 @@ public final class ManagementDataAccessPlanHelper {
     /**
      * 判断计划是否允许创建指定类型的 Client。
      *
-     * @param plan 数据访问计划
-     * @param clientType Client 类型
+     * @param plan        数据访问计划
+     * @param clientType  Client 类型
      * @param ownerUserId 所属用户标识
      * @return 是否允许
      */

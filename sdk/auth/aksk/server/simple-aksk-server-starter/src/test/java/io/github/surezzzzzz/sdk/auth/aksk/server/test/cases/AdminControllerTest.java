@@ -2,11 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ApplicationAuthorizationResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenInfoResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.TokenStatisticsResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -22,6 +18,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
@@ -29,7 +26,6 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.test.context.support.WithMockUser;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.util.LinkedMultiValueMap;
@@ -840,13 +836,11 @@ class AdminControllerTest {
 
     private void assertNavigationOrder(String html) {
         int clientManagement = html.indexOf("Client 管理");
-        int applicationAuthorization = html.indexOf("应用授权");
         int tokenManagement = html.indexOf("Token 管理");
         int tokenTest = html.indexOf("Token 测试");
         int securityContext = html.indexOf("安全上下文");
         assertTrue(clientManagement >= 0, "控制台必须提供 Client 管理导航");
-        assertTrue(applicationAuthorization > clientManagement, "应用授权必须位于 Client 管理之后");
-        assertTrue(tokenManagement > applicationAuthorization, "Token 管理必须位于应用授权之后");
+        assertTrue(tokenManagement > clientManagement, "Token 管理必须位于 Client 管理之后");
         assertTrue(tokenTest > tokenManagement, "Token 测试必须位于 Token 管理之后");
         assertTrue(securityContext > tokenTest, "安全上下文必须位于 Token 测试之后");
     }

@@ -19,6 +19,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -37,8 +38,8 @@ public class AkskIntrospectionResponseHandler implements AuthenticationSuccessHa
     /**
      * 按当前授权投影生成内省响应。
      *
-     * @param request 当前请求
-     * @param response 当前响应
+     * @param request        当前请求
+     * @param response       当前响应
      * @param authentication 已完成内省认证
      * @throws IOException 响应写入失败
      */
@@ -63,15 +64,35 @@ public class AkskIntrospectionResponseHandler implements AuthenticationSuccessHa
         if (!(clientId instanceof String) || !(issuedAt instanceof Instant) || !(expiresAt instanceof Instant)) {
             return inactive();
         }
+        // 存储中的签发时刻携带亚秒，经四舍五入可能得到超前整秒（实测 314.72s → iat=315）；
+        // 组装前截断到整秒，保证 iat 永不晚于真实签发时刻
+        Instant issuedAtSeconds = ((Instant) issuedAt).truncatedTo(ChronoUnit.SECONDS);
+        Instant expiresAtSeconds = ((Instant) expiresAt).truncatedTo(ChronoUnit.SECONDS);
         ApplicationAuthorizationContext authorization = applicationAuthorizationService.loadActiveContext(
-                (String) clientId, (Instant) issuedAt, (Instant) expiresAt);
+                (String) clientId, issuedAtSeconds, expiresAtSeconds);
         if (authorization == null) {
             return inactive();
         }
         Map<String, Object> currentClaims = new LinkedHashMap<String, Object>(claims);
+        currentClaims.put(OAuth2TokenIntrospectionClaimNames.IAT, issuedAtSeconds);
+        currentClaims.put(OAuth2TokenIntrospectionClaimNames.EXP, expiresAtSeconds);
+        truncateNotBeforeClaim(currentClaims);
         currentClaims.put(JwtClaimConstant.APPLICATION_AUTHORIZATION,
                 ApplicationAuthorizationContextClaimMapper.toClaim(authorization));
         return OAuth2TokenIntrospection.withClaims(currentClaims).build();
+    }
+
+    /**
+     * 统一 nbf 的秒表示：仅截断亚秒，不改变其取值逻辑。
+     *
+     * @param currentClaims 当前响应 claims
+     */
+    private void truncateNotBeforeClaim(Map<String, Object> currentClaims) {
+        Object notBefore = currentClaims.get(OAuth2TokenIntrospectionClaimNames.NBF);
+        if (notBefore instanceof Instant) {
+            currentClaims.put(OAuth2TokenIntrospectionClaimNames.NBF,
+                    ((Instant) notBefore).truncatedTo(ChronoUnit.SECONDS));
+        }
     }
 
     private OAuth2TokenIntrospection inactive() {

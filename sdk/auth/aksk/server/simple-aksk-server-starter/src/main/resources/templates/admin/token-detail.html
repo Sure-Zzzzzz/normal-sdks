@@ -1,4 +1,138 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('Token 详情')"></head>
-<body class="admin-console"><div th:replace="admin/fragments/layout :: sidebar('tokens', ${null})"></div><main class="admin-main"><header th:replace="admin/fragments/layout :: topbar('Token 详情', '仅展示安全摘要，Token 内容不可查看或复制')"></header><section class="admin-content"><div class="admin-actions mb-3"><a href="/admin/token" class="btn btn-outline-secondary">返回 Token 列表</a></div><div class="admin-detail-grid"><section class="admin-card"><div class="admin-card-header"><h2>Token 安全摘要</h2></div><div class="admin-card-body"><table class="table admin-kv-table"><tbody><tr><th>授权 ID</th><td><code th:text="${token.id}"></code></td></tr><tr><th>Client ID</th><td><code th:text="${token.clientId}"></code></td></tr><tr><th>Client 名称</th><td th:text="${token.clientName}"></td></tr><tr><th>Client 类型</th><td><span th:if="${token.clientType == 1}" class="badge bg-primary">平台级</span><span th:if="${token.clientType == 2}" class="badge bg-info text-dark">用户级</span></td></tr><tr th:if="${token.ownerUserId != null}"><th>所属用户 ID</th><td><code th:text="${token.ownerUserId}"></code></td></tr><tr th:if="${token.ownerUsername != null}"><th>所属用户名</th><td th:text="${token.ownerUsername}"></td></tr><tr><th>Token 内容</th><td class="text-muted">已隐藏，不能查看或复制。</td></tr><tr><th>Token 类型</th><td><span class="badge bg-primary">Bearer</span></td></tr><tr th:if="${token.scopes != null && !#lists.isEmpty(token.scopes)}"><th>OAuth2 Scope</th><td><span th:each="scope : ${token.scopes}" class="badge bg-secondary me-1" th:text="${scope}"></span></td></tr></tbody></table></div></section><section class="admin-card"><div class="admin-card-header"><h2>状态与时间</h2></div><div class="admin-card-body"><table class="table admin-kv-table"><tbody><tr><th>签发时间</th><td th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td></tr><tr><th>过期时间</th><td th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td></tr><tr th:if="${token.expiresAt != null && token.status.name() != 'REVOKED'}"><th>剩余时间</th><td><span th:if="${token.status.name() == 'ACTIVE'}" class="text-success" th:with="remainingSeconds=${T(java.time.Duration).between(T(java.time.Instant).now(),token.expiresAt).seconds}"><span th:if="${remainingSeconds >= 3600}" th:text="${#numbers.formatInteger(remainingSeconds / 3600, 1) + '小时 ' + #numbers.formatInteger((remainingSeconds % 3600) / 60, 1) + '分钟'}"></span><span th:if="${remainingSeconds < 3600 && remainingSeconds >= 60}" th:text="${#numbers.formatInteger(remainingSeconds / 60,1)} + '分钟'"></span><span th:if="${remainingSeconds < 60}" th:text="${remainingSeconds} + '秒'"></span></span><span th:if="${token.status.name() == 'EXPIRED'}" class="text-secondary">已过期</span></td></tr><tr><th>状态</th><td><span th:if="${token.status.name() == 'ACTIVE'}" class="badge bg-success">有效</span><span th:if="${token.status.name() == 'EXPIRED'}" class="badge bg-secondary">已过期</span><span th:if="${token.status.name() == 'REVOKED'}" class="badge bg-danger">已撤销</span></td></tr><tr><th>数据源</th><td><span th:if="${token.dataSource.name() == 'MYSQL'}" class="badge bg-primary">MySQL</span><span th:if="${token.dataSource.name() == 'REDIS'}" class="badge bg-warning text-dark">Redis</span><span th:if="${token.dataSource.name() == 'BOTH'}" class="badge bg-success">Both</span></td></tr></tbody></table><div class="admin-actions"><button type="button" class="btn btn-outline-warning" th:data-token-id="${token.id}" th:disabled="${token.status.name() == 'REVOKED' || token.status.name() == 'EXPIRED'}" th:title="${token.status.name() == 'EXPIRED' ? '已过期的Token无需撤销' : ''}" onclick="revokeToken(this)">撤销此Token</button><button type="button" class="btn btn-outline-danger" th:data-token-id="${token.id}" onclick="deleteToken(this)">删除此 Token</button></div></div></section></div></section></main><th:block th:replace="admin/fragments/layout :: scripts"></th:block><script th:inline="javascript">const csrfToken=/*[[${_csrf.token}]]*/'',csrfHeader=/*[[${_csrf.headerName}]]*/'';function revokeToken(button){const id=button.dataset.tokenId;if(confirm('确定要撤销此 Token 吗？撤销后 Token 立即失效，但记录仍保留。'))fetch(`/admin/token/${id}/revoke`,{method:'POST',headers:{[csrfHeader]:csrfToken}}).then(adminRequireSuccess).then(()=>location.reload()).catch(()=>alert('撤销未完成，请检查状态后重试。'));}function deleteToken(button){const id=button.dataset.tokenId;if(confirm('确定要删除此 Token 吗？此操作会先撤销 Token，再删除 MySQL 和 Redis 中的记录。'))fetch(`/admin/token/${id}`,{method:'DELETE',headers:{[csrfHeader]:csrfToken}}).then(adminRequireSuccess).then(()=>window.location.assign('/admin/token')).catch(()=>alert('删除未完成，请检查状态后重试。'));}</script></body></html>
+<body class="admin-console">
+<div th:replace="admin/fragments/layout :: sidebar('tokens')"></div>
+<main class="admin-main">
+    <header th:replace="admin/fragments/layout :: topbar('Token 详情', '仅展示安全摘要，Token 内容不可查看或复制')"></header>
+    <section class="admin-content">
+        <div class="admin-actions mb-3"><a class="btn btn-outline-secondary" href="/admin/token">返回 Token 列表</a>
+        </div>
+        <div class="admin-detail-grid">
+            <section class="admin-card">
+                <div class="admin-card-header"><h2>Token 安全摘要</h2></div>
+                <div class="admin-card-body">
+                    <table class="table admin-kv-table">
+                        <tbody>
+                        <tr>
+                            <th>授权 ID</th>
+                            <td><code th:text="${token.id}"></code></td>
+                        </tr>
+                        <tr>
+                            <th>Client ID</th>
+                            <td><code th:text="${token.clientId}"></code></td>
+                        </tr>
+                        <tr>
+                            <th>Client 名称</th>
+                            <td th:text="${token.clientName}"></td>
+                        </tr>
+                        <tr>
+                            <th>Client 类型</th>
+                            <td><span class="badge bg-primary" th:if="${token.clientType == 1}">平台级</span><span
+                                    class="badge bg-info text-dark" th:if="${token.clientType == 2}">用户级</span></td>
+                        </tr>
+                        <tr th:if="${token.ownerUserId != null}">
+                            <th>所属用户 ID</th>
+                            <td><code th:text="${token.ownerUserId}"></code></td>
+                        </tr>
+                        <tr th:if="${token.ownerUsername != null}">
+                            <th>所属用户名</th>
+                            <td th:text="${token.ownerUsername}"></td>
+                        </tr>
+                        <tr>
+                            <th>Token 内容</th>
+                            <td class="text-muted">已隐藏，不能查看或复制。</td>
+                        </tr>
+                        <tr>
+                            <th>Token 类型</th>
+                            <td><span class="badge bg-primary">Bearer</span></td>
+                        </tr>
+                        <tr th:if="${token.scopes != null && !#lists.isEmpty(token.scopes)}">
+                            <th>OAuth2 Scope</th>
+                            <td><span class="badge bg-secondary me-1" th:each="scope : ${token.scopes}"
+                                      th:text="${scope}"></span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            <section class="admin-card">
+                <div class="admin-card-header"><h2>状态与时间</h2></div>
+                <div class="admin-card-body">
+                    <table class="table admin-kv-table">
+                        <tbody>
+                        <tr>
+                            <th>签发时间</th>
+                            <td th:text="${token.issuedAt != null ? #temporals.format(token.issuedAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                        </tr>
+                        <tr>
+                            <th>过期时间</th>
+                            <td th:text="${token.expiresAt != null ? #temporals.format(token.expiresAt,'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                        </tr>
+                        <tr th:if="${token.expiresAt != null && token.status.name() != 'REVOKED'}">
+                            <th>剩余时间</th>
+                            <td><span class="text-success" th:if="${token.status.name() == 'ACTIVE'}"
+                                      th:with="remainingSeconds=${T(java.time.Duration).between(T(java.time.Instant).now(),token.expiresAt).seconds}"><span
+                                    th:if="${remainingSeconds >= 3600}"
+                                    th:text="${#numbers.formatInteger(remainingSeconds / 3600, 1) + '小时 ' + #numbers.formatInteger((remainingSeconds % 3600) / 60, 1) + '分钟'}"></span><span
+                                    th:if="${remainingSeconds < 3600 && remainingSeconds >= 60}"
+                                    th:text="${#numbers.formatInteger(remainingSeconds / 60,1)} + '分钟'"></span><span
+                                    th:if="${remainingSeconds < 60}" th:text="${remainingSeconds} + '秒'"></span></span><span
+                                    class="text-secondary" th:if="${token.status.name() == 'EXPIRED'}">已过期</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>状态</th>
+                            <td><span class="badge bg-success"
+                                      th:if="${token.status.name() == 'ACTIVE'}">有效</span><span
+                                    class="badge bg-secondary" th:if="${token.status.name() == 'EXPIRED'}">已过期</span><span
+                                    class="badge bg-danger" th:if="${token.status.name() == 'REVOKED'}">已撤销</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>数据源</th>
+                            <td><span class="badge bg-primary"
+                                      th:if="${token.dataSource.name() == 'MYSQL'}">MySQL</span><span
+                                    class="badge bg-warning text-dark" th:if="${token.dataSource.name() == 'REDIS'}">Redis</span><span
+                                    class="badge bg-success" th:if="${token.dataSource.name() == 'BOTH'}">Both</span>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <div class="admin-actions">
+                        <button class="btn btn-outline-warning" onclick="revokeToken(this)"
+                                th:data-token-id="${token.id}"
+                                th:disabled="${token.status.name() == 'REVOKED' || token.status.name() == 'EXPIRED'}"
+                                th:title="${token.status.name() == 'EXPIRED' ? '已过期的Token无需撤销' : ''}"
+                                type="button">撤销此Token
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="deleteToken(this)"
+                                th:data-token-id="${token.id}"
+                                type="button">删除此 Token
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
+<script th:inline="javascript">const csrfToken =/*[[${_csrf.token}]]*/'', csrfHeader =/*[[${_csrf.headerName}]]*/'';
+
+function revokeToken(button) {
+    const id = button.dataset.tokenId;
+    if (confirm('确定要撤销此 Token 吗？撤销后 Token 立即失效，但记录仍保留。')) fetch(`/admin/token/${id}/revoke`, {
+        method: 'POST',
+        headers: {[csrfHeader]: csrfToken}
+    }).then(adminRequireSuccess).then(() => location.reload()).catch(() => alert('撤销未完成，请检查状态后重试。'));
+}
+
+function deleteToken(button) {
+    const id = button.dataset.tokenId;
+    if (confirm('确定要删除此 Token 吗？此操作会先撤销 Token，再删除 MySQL 和 Redis 中的记录。')) fetch(`/admin/token/${id}`, {
+        method: 'DELETE',
+        headers: {[csrfHeader]: csrfToken}
+    }).then(adminRequireSuccess).then(() => window.location.assign('/admin/token')).catch(() => alert('删除未完成，请检查状态后重试。'));
+}</script>
+</body>
+</html>

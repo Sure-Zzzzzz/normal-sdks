@@ -3,8 +3,6 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.aksk.server.test.SimpleAkskServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -18,6 +16,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 @Slf4j
 class JweConfigValidationTest {
+
+    private static Throwable getRootCause(Throwable t) {
+        Throwable cause = t;
+        while (cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+        return cause;
+    }
+
+    private static void assertTrue(boolean condition, String message) {
+        if (!condition) throw new AssertionError(message);
+    }
 
     @Test
     void testMissingEncryptionKeyFailsStartup() {
@@ -80,17 +90,5 @@ class JweConfigValidationTest {
                 "应提示密钥长度错误，实际: " + root.getMessage());
 
         log.info("✓ encryption-key 长度不足时启动失败验证通过");
-    }
-
-    private static Throwable getRootCause(Throwable t) {
-        Throwable cause = t;
-        while (cause.getCause() != null) {
-            cause = cause.getCause();
-        }
-        return cause;
-    }
-
-    private static void assertTrue(boolean condition, String message) {
-        if (!condition) throw new AssertionError(message);
     }
 }

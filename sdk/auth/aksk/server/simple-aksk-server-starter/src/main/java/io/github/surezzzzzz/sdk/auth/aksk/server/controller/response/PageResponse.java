@@ -52,11 +52,11 @@ public class PageResponse<T> {
     /**
      * 创建分页响应
      *
-     * @param data 当前页的数据列表
+     * @param data  当前页的数据列表
      * @param total 总记录数
-     * @param page 当前页码
-     * @param size 每页大小
-     * @param <T> 数据类型
+     * @param page  当前页码
+     * @param size  每页大小
+     * @param <T>   数据类型
      * @return 分页响应
      */
     public static <T> PageResponse<T> of(List<T> data, Long total, Integer page, Integer size) {
@@ -67,7 +67,7 @@ public class PageResponse<T> {
      * 从Spring Data Page创建分页响应（页码从0转换为从1开始）
      *
      * @param page Spring Data分页对象
-     * @param <T> 数据类型
+     * @param <T>  数据类型
      * @return 分页响应
      */
     public static <T> PageResponse<T> fromPage(org.springframework.data.domain.Page<T> page) {

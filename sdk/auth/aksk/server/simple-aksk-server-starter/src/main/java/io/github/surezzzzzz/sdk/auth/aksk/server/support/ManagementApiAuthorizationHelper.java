@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.support;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ManagementApiAuthorizationConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.ApplicationAuthorizationDecision;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
@@ -35,7 +36,7 @@ public final class ManagementApiAuthorizationHelper {
     public static DataAccessPlan currentPlan(HttpServletRequest request) {
         Object plan = request.getAttribute(ManagementApiAuthorizationConstant.REQUEST_ATTRIBUTE_DATA_ACCESS_PLAN);
         if (!(plan instanceof DataAccessPlan)) {
-            throw new IllegalStateException("管理 REST 授权计划不存在");
+            throw new ConfigurationException("管理 REST 授权计划不存在");
         }
         return (DataAccessPlan) plan;
     }
@@ -43,9 +44,9 @@ public final class ManagementApiAuthorizationHelper {
     /**
      * 基于当前已验证授权快照生成同一请求的另一资源动作计划。
      *
-     * @param request HTTP 请求
+     * @param request  HTTP 请求
      * @param resource 数据资源
-     * @param action 数据动作
+     * @param action   数据动作
      * @return 数据访问计划
      */
     public static DataAccessPlan requiredPlan(HttpServletRequest request, String resource, String action,

@@ -2,37 +2,38 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('查询用户 Client')"></head>
 <body class="admin-console">
-<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
     <header th:replace="admin/fragments/layout :: topbar('查询用户 Client', '按用户标识查找其全部用户级 Client')"></header>
-    <section class="admin-content"><div th:replace="admin/fragments/layout :: flash"></div>
-<div class="admin-form-card">
-    <div class="card">
+    <section class="admin-content">
+        <div th:replace="admin/fragments/layout :: flash"></div>
+        <div class="admin-form-card">
+            <div class="card">
                 <div class="card-header">
                     <h4>查询用户级AKSK</h4>
                 </div>
                 <div class="card-body">
                     <!-- 错误提示 -->
-                    <div th:if="${error}" class="alert alert-danger" role="alert">
+                    <div class="alert alert-danger" role="alert" th:if="${error}">
                         <span th:text="${error}"></span>
                     </div>
 
-                    <form th:action="@{/admin/query-user/result}" method="get">
+                    <form method="get" th:action="@{/admin/query-user/result}">
                         <div class="mb-3">
-                            <label for="userId" class="form-label">用户ID <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="userId" name="userId"
-                                   placeholder="例如：10086" required>
+                            <label class="form-label" for="userId">用户ID <span class="text-danger">*</span></label>
+                            <input class="form-control" id="userId" name="userId" placeholder="例如：10086"
+                                   required type="text">
                             <div class="form-text">输入用户ID查询该用户的所有用户级AKSK</div>
                         </div>
 
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">查询</button>
-                            <a href="/admin" class="btn btn-secondary">返回</a>
+                            <button class="btn btn-primary" type="submit">查询</button>
+                            <a class="btn btn-secondary" href="/admin">返回</a>
                         </div>
                     </form>
                 </div>
-    </div>
-</div>
+            </div>
+        </div>
     </section>
 </main>
 <th:block th:replace="admin/fragments/layout :: scripts"></th:block>

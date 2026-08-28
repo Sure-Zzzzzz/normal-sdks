@@ -2,14 +2,58 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:replace="admin/fragments/layout :: head('用户 Client 查询结果')"></head>
 <body class="admin-console">
-<div th:replace="admin/fragments/layout :: sidebar('clients', ${null})"></div>
+<div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
     <header th:replace="admin/fragments/layout :: topbar('用户 Client 查询结果', '按用户维度查看 Client 与应用授权状态')"></header>
-    <section class="admin-content"><div th:replace="admin/fragments/layout :: flash"></div>
-<div>
-    <div class="admin-actions mb-3"><a href="/admin/query-user" class="btn btn-outline-secondary">返回查询</a><a href="/admin" class="btn btn-outline-primary">返回 Client 管理</a></div>
-    <div class="admin-client-context mb-3"><span>用户 ID：<code th:text="${userId}"></code></span><span>查询结果：<strong th:text="${#lists.size(clients)}"></strong> 个用户级 Client</span></div>
-    <section class="admin-card"><div class="admin-card-header"><h2>Client 列表</h2></div><div class="admin-table-wrap"><table class="table table-hover admin-table"><thead><tr><th>Client ID</th><th>名称</th><th>类型</th><th>应用授权</th><th>操作</th></tr></thead><tbody><tr th:each="client : ${clients}"><td><code th:text="${client.clientId}"></code></td><td th:text="${client.clientName}"></td><td><span class="badge bg-info text-dark">用户级</span></td><td th:with="authorization=${authorizationByClientId.get(client.clientId)}"><span th:if="${authorization == null}" class="badge bg-warning text-dark">未配置</span><span th:if="${authorization != null and authorization.enabled and authorization.admitted}" class="badge bg-success">已准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span><span th:if="${authorization != null and authorization.enabled and !authorization.admitted}" class="badge bg-secondary">未准入（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span><span th:if="${authorization != null and !authorization.enabled}" class="badge bg-danger">已撤销（版本 <span th:text="${authorization.authorizationVersion}"></span>）</span></td><td><a th:href="@{/admin/{id}(id=${client.clientId})}" class="btn btn-sm btn-outline-primary">详情</a></td></tr><tr th:if="${#lists.isEmpty(clients)}"><td colspan="5" class="text-center text-muted">该用户暂无用户级 Client</td></tr></tbody></table></div></section>
-</div></section></main><th:block th:replace="admin/fragments/layout :: scripts"></th:block>
+    <section class="admin-content">
+        <div th:replace="admin/fragments/layout :: flash"></div>
+        <div>
+            <div class="admin-actions mb-3"><a class="btn btn-outline-secondary" href="/admin/query-user">返回查询</a><a
+                    class="btn btn-outline-primary" href="/admin">返回 Client 管理</a></div>
+            <div class="admin-client-context mb-3"><span>用户 ID：<code th:text="${userId}"></code></span><span>查询结果：<strong
+                    th:text="${#lists.size(clients)}"></strong> 个用户级 Client</span></div>
+            <section class="admin-card">
+                <div class="admin-card-header"><h2>Client 列表</h2></div>
+                <div class="admin-table-wrap">
+                    <table class="table table-hover admin-table">
+                        <thead>
+                        <tr>
+                            <th>Client ID</th>
+                            <th>名称</th>
+                            <th>类型</th>
+                            <th>应用授权</th>
+                            <th>操作</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="client : ${clients}">
+                            <td><code th:text="${client.clientId}"></code></td>
+                            <td th:text="${client.clientName}"></td>
+                            <td><span class="badge bg-info text-dark">用户级</span></td>
+                            <td th:with="authorization=${authorizationByClientId.get(client.clientId)}"><span
+                                    class="badge bg-warning text-dark"
+                                    th:if="${authorization == null}">未配置</span><span
+                                    class="badge bg-success"
+                                    th:if="${authorization != null and authorization.enabled and authorization.admitted}">已准入（版本 <span
+                                    th:text="${authorization.authorizationVersion}"></span>）</span><span
+                                    class="badge bg-secondary"
+                                    th:if="${authorization != null and authorization.enabled and !authorization.admitted}">未准入（版本 <span
+                                    th:text="${authorization.authorizationVersion}"></span>）</span><span
+                                    class="badge bg-danger" th:if="${authorization != null and !authorization.enabled}">已撤销（版本 <span
+                                    th:text="${authorization.authorizationVersion}"></span>）</span></td>
+                            <td><a class="btn btn-sm btn-outline-primary"
+                                   th:href="@{/admin/{id}(id=${client.clientId})}">详情</a></td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(clients)}">
+                            <td class="text-center text-muted" colspan="5">该用户暂无用户级 Client</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </section>
+</main>
+<th:block th:replace="admin/fragments/layout :: scripts"></th:block>
 </body>
 </html>
