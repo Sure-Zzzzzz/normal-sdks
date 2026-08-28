@@ -1,21 +1,22 @@
 dependencies {
-    // 依赖 resource-core（提供 AkskAccessEvent）
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
+    // 公共资源层事件契约（ResourceAccessEvent）与 AKSK 来源常量是本模块实现细节，
+    // 只依赖 core（事件源契约在 core，starter 属于组装侧），用 implementation 收紧；
+    // 公共安全链与身份来源 Provider（aksk-resource-server-starter / iam-resource-server-starter）由使用方按需组装
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework:spring-context'
 
-    // 测试依赖
+    // 测试依赖：按使用方组装形态补公共 Starter 与 AKSK Provider（与 core 一起工作）；
+    // 其 POM 的 Spring 件为 compileOnly 不传递，测试侧自行补齐
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.1'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
-    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
-
-    // 集成测试依赖：测试真实的认证流程
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.0'   // INTROSPECT认证
-    testImplementation 'org.springframework.boot:spring-boot-starter-security'              // Spring Security
-    testImplementation 'org.springframework.security:spring-security-oauth2-jose'           // OAuth2 Jose
-    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server' // OAuth2 Resource Server
-    testImplementation 'org.springframework.security:spring-security-test'                  // Security测试支持
 }

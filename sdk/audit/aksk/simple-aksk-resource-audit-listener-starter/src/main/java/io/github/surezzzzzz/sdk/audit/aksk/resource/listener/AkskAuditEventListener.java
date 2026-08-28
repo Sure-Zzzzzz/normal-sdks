@@ -4,7 +4,8 @@ import io.github.surezzzzzz.sdk.audit.aksk.resource.annotation.SimpleAkskResourc
 import io.github.surezzzzzz.sdk.audit.aksk.resource.handler.AkskAuditHandler;
 import io.github.surezzzzzz.sdk.audit.aksk.resource.model.AkskAuditRecord;
 import io.github.surezzzzzz.sdk.audit.aksk.resource.provider.AkskAuditTraceIdProvider;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskConstant;
+import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -14,12 +15,9 @@ import org.springframework.scheduling.annotation.Async;
 import java.util.List;
 
 /**
- * AKSK 审计事件监听器
- *
- * <p>监听 AkskAccessEvent 事件，转换为 AkskAuditRecord 并调用业务处理器。
+ * AKSK资源访问审计事件监听器。
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
 @Slf4j
 @SimpleAkskResourceAuditListenerComponent
@@ -34,50 +32,41 @@ public class AkskAuditEventListener {
             @Autowired(required = false) AkskAuditTraceIdProvider traceIdProvider) {
         this.auditHandlers = auditHandlers;
         this.traceIdProvider = traceIdProvider;
-        log.info("AkskAuditEventListener initialized with {} handlers", auditHandlers.size());
-        for (AkskAuditHandler handler : auditHandlers) {
-            log.info("  - {}", handler.getClass().getName());
-        }
-        if (traceIdProvider != null) {
-            log.info("AkskAuditTraceIdProvider found: {}", traceIdProvider.getClass().getName());
-        } else {
-            log.debug("AkskAuditTraceIdProvider not found, traceId will be null in audit records");
-        }
     }
 
     @EventListener
     @Async
-    public void onAkskAccessEvent(AkskAccessEvent event) {
+    public void onResourceAccessEvent(ResourceAccessEvent event) {
+        if (!AkskConstant.RESOURCE_AUTHENTICATION_SOURCE_ID.equals(event.getAuthenticationSourceId())) {
+            return;
+        }
         try {
             AkskAuditRecord record = convertToAuditRecord(event);
             for (AkskAuditHandler handler : auditHandlers) {
                 try {
                     handler.handle(record);
-                } catch (Exception e) {
-                    log.error("Handler {} failed to process audit record", handler.getClass().getName(), e);
+                } catch (Exception exception) {
+                    log.error("AKSK审计处理器执行失败: {}", handler.getClass().getName(), exception);
                 }
             }
-        } catch (Exception e) {
-            log.error("Failed to handle AKSK audit event", e);
+        } catch (Exception exception) {
+            log.error("AKSK资源审计事件处理失败", exception);
         }
     }
 
-    private AkskAuditRecord convertToAuditRecord(AkskAccessEvent event) {
+    private AkskAuditRecord convertToAuditRecord(ResourceAccessEvent event) {
         return AkskAuditRecord.builder()
-                .clientId(event.getClientId())
-                .clientType(event.getClientType())
-                .userId(event.getUserId())
-                .username(event.getUsername())
-                .roles(event.getRoles())
-                .scope(event.getScope())
+                .authenticationSourceId(event.getAuthenticationSourceId())
+                .subjectType(event.getSubjectType().name())
+                .subjectId(event.getSubjectId())
+                .applicationCode(event.getApplicationCode())
+                .requestId(event.getRequestId())
                 .requestUri(event.getRequestUri())
                 .httpMethod(event.getHttpMethod())
                 .remoteAddr(event.getRemoteAddr())
                 .userAgent(event.getUserAgent())
                 .timestamp(event.getTimestamp())
-                .source(event.getSource())
                 .traceId(getTraceId())
-                .context(event.getContext())
                 .build();
     }
 
@@ -87,8 +76,8 @@ public class AkskAuditEventListener {
         }
         try {
             return traceIdProvider.getTraceId();
-        } catch (Exception e) {
-            log.debug("Failed to get traceId from provider", e);
+        } catch (Exception exception) {
+            log.debug("获取审计链路标识失败", exception);
             return null;
         }
     }

@@ -4,35 +4,54 @@ import io.github.surezzzzzz.sdk.audit.aksk.resource.model.AkskAuditRecord;
 import io.github.surezzzzzz.sdk.audit.aksk.test.AkskAuditListenerTestApplication;
 import io.github.surezzzzzz.sdk.audit.aksk.test.TestAkskAuditHandler;
 import io.github.surezzzzzz.sdk.audit.aksk.test.TestTraceIdProvider;
-import io.github.surezzzzzz.sdk.auth.aksk.resource.core.event.AkskAccessEvent;
+import io.github.surezzzzzz.sdk.audit.aksk.test.config.StubAkskIntrospectorConfig;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskConstant;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.ApplicationAuthorizationSubjectType;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.SimpleApplicationAuthorizationConstant;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
+import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceSubjectType;
+import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
+import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * AKSK 审计监听器端到端测试
+ * AKSK资源审计监听器端到端测试：MockMvc 走公共安全链 + AKSK Provider + stub 内省，
+ * 验证完整链路下的审计记录生成与来源过滤。
  *
  * @author surezzzzzz
- * @since 1.0.0
  */
 @Slf4j
-@SpringBootTest(
-        classes = AkskAuditListenerTestApplication.class,
+@SpringBootTest(classes = AkskAuditListenerTestApplication.class,
         properties = {
-                "io.github.surezzzzzz.sdk.auth.aksk.resource.security-context.enable=false",  // 禁用Header认证
-                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled=false"  // 禁用JWT认证
-        }
-)
-public class AkskAuditListenerEndToEndTest {
+                "io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[0]=/api/**",
+                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.introspect.endpoint=http://aksk.test/introspect",
+                "io.github.surezzzzzz.sdk.auth.aksk.resource.server.introspect.local-cache.enabled=false"
+        })
+@AutoConfigureMockMvc
+class AkskAuditListenerEndToEndTest {
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
@@ -43,161 +62,75 @@ public class AkskAuditListenerEndToEndTest {
     @Autowired
     private TestTraceIdProvider testTraceIdProvider;
 
+    private static String bearer() {
+        String header = "{\"alg\":\"dir\",\"enc\":\"A256GCM\",\"kid\":\""
+                + AkskConstant.RESOURCE_AUTHENTICATION_SOURCE_ID + "/allowed\"}";
+        return "Bearer " + Base64.getUrlEncoder().withoutPadding().encodeToString(
+                header.getBytes(StandardCharsets.UTF_8)) + ".encrypted";
+    }
+
     @BeforeEach
-    public void setUp() {
-        log.info("========== 开始准备 AKSK 审计测试 ==========");
+    void setUp() {
         testAuditHandler.reset();
         testTraceIdProvider.reset();
-        log.info("========== AKSK 审计测试准备完成 ==========");
     }
 
     @Test
-    public void testAkskAuditEventHandling() throws InterruptedException {
-        log.info("========== 测试：AKSK 审计事件处理 ==========");
+    void shouldRecordAuditForAuthenticatedAkskAccess() throws Exception {
+        testTraceIdProvider.setTraceId("trace-e2e");
+        mockMvc.perform(get("/api/resource")
+                        .header("Authorization", bearer())
+                        .header("User-Agent", "audit-e2e-agent"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("resource"));
 
-        // 准备：设置 traceId
-        testTraceIdProvider.setTraceId("test-trace-123");
-
-        // 构建事件
-        Map<String, String> context = new HashMap<String, String>();
-        context.put("clientId", "test-client");
-        context.put("userId", "user-123");
-
-        AkskAccessEvent event = new AkskAccessEvent(
-                this,
-                "test-client",
-                "platform",
-                "user-123",
-                "testuser",
-                "admin",
-                "read write",
-                "/api/test",
-                "GET",
-                "127.0.0.1",
-                "Mozilla/5.0",
-                "header",
-                "old-trace-id",  // 事件里的 traceId 应该被忽略
-                context
-        );
-
-        // 发布事件
-        log.info("发布 AKSK 审计事件: clientId={}, userId={}", "test-client", "user-123");
-        eventPublisher.publishEvent(event);
-
-        // 等待异步处理
-        boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
-
-        // 验证：事件已处理
-        log.info("验证审计事件是否被处理");
-        assertTrue(received, "Audit handler should receive the event");
-        assertEquals(1, testAuditHandler.records.size(), "Should receive exactly one record");
-
-        // 验证：审计记录内容
+        assertTrue(testAuditHandler.latch.await(5, TimeUnit.SECONDS), "完整链路认证成功后审计处理器必须收到记录");
+        assertEquals(1, testAuditHandler.records.size(), "一次已认证访问必须只写入一条审计记录");
         AkskAuditRecord record = testAuditHandler.records.get(0);
-        log.info("验证审计记录内容: {}", record);
-        assertEquals("test-client", record.getClientId());
-        assertEquals("platform", record.getClientType());
-        assertEquals("user-123", record.getUserId());
-        assertEquals("testuser", record.getUsername());
-        assertEquals("admin", record.getRoles());
-        assertEquals("read write", record.getScope());
-        assertEquals("/api/test", record.getRequestUri());
+        assertEquals(AkskConstant.RESOURCE_AUTHENTICATION_SOURCE_ID, record.getAuthenticationSourceId());
+        assertEquals("SERVICE", record.getSubjectType(), "AKSK服务身份的subjectType恒为SERVICE");
+        assertEquals(StubAkskIntrospectorConfig.AKSK_SUBJECT, record.getSubjectId(), "subjectId必须是内省声明中的Client ID");
+        assertEquals(StubAkskIntrospectorConfig.APPLICATION_CODE, record.getApplicationCode());
+        assertNotNull(record.getRequestId(), "公共链生成的请求标识必须保留");
+        assertEquals("/api/resource", record.getRequestUri());
         assertEquals("GET", record.getHttpMethod());
         assertEquals("127.0.0.1", record.getRemoteAddr());
-        assertEquals("Mozilla/5.0", record.getUserAgent());
-        assertEquals("header", record.getSource());
-        assertNotNull(record.getTimestamp());
-        assertNotNull(record.getContext());
-
-        // 验证：traceId 来自 Provider，不是事件里的
-        assertEquals("test-trace-123", record.getTraceId(), "TraceId should come from provider");
-
-        log.info("AKSK audit test passed: clientId={}, userId={}, traceId={}",
-                record.getClientId(), record.getUserId(), record.getTraceId());
+        assertEquals("audit-e2e-agent", record.getUserAgent());
+        assertNotNull(record.getTimestamp(), "审计记录必须保留公共事件时间");
+        assertEquals("trace-e2e", record.getTraceId());
+        log.info("完整链路审计断言通过: subjectId={}, requestId={}, timestamp={}",
+                record.getSubjectId(), record.getRequestId(), record.getTimestamp());
     }
 
     @Test
-    public void testMultipleEvents() throws InterruptedException {
-        log.info("========== 测试：多个审计事件处理 ==========");
+    void shouldNotRecordAuditForUnauthenticatedAccess() throws Exception {
+        mockMvc.perform(get("/api/resource"))
+                .andExpect(status().isUnauthorized());
 
-        // 准备
-        testTraceIdProvider.setTraceId("trace-multi");
-
-        // 发布多个事件
-        for (int i = 0; i < 3; i++) {
-            Map<String, String> context = new HashMap<String, String>();
-            AkskAccessEvent event = new AkskAccessEvent(
-                    this,
-                    "client-" + i,
-                    "user",
-                    "user-" + i,
-                    "user" + i,
-                    null,
-                    null,
-                    "/api/test/" + i,
-                    "POST",
-                    "127.0.0.1",
-                    null,
-                    "jwt",
-                    null,
-                    context
-            );
-            log.info("发布第 {} 个事件: clientId={}", i + 1, "client-" + i);
-            eventPublisher.publishEvent(event);
-        }
-
-        // 等待处理
-        Thread.sleep(1000);
-
-        // 验证：收到3个记录
-        log.info("验证是否收到3个审计记录");
-        assertEquals(3, testAuditHandler.records.size(), "Should receive 3 records");
-
-        // 验证：所有记录的 traceId 都来自 Provider
-        for (AkskAuditRecord record : testAuditHandler.records) {
-            assertEquals("trace-multi", record.getTraceId());
-        }
-
-        log.info("Multiple events test passed: received {} records", testAuditHandler.records.size());
+        assertFalse(testAuditHandler.latch.await(200, TimeUnit.MILLISECONDS), "未认证请求不得触发审计处理器");
+        assertTrue(testAuditHandler.records.isEmpty(), "未认证请求不得写入AKSK审计记录");
     }
 
     @Test
-    public void testWithoutTraceIdProvider() throws InterruptedException {
-        log.info("========== 测试：无 TraceId Provider 场景 ==========");
+    void shouldIgnoreNonAkskResourceAccess() throws InterruptedException {
+        eventPublisher.publishEvent(event("iam", ResourceSubjectType.HUMAN, "human-a"));
 
-        // 准备：清空 traceId
-        testTraceIdProvider.setTraceId(null);
+        assertFalse(testAuditHandler.latch.await(200, TimeUnit.MILLISECONDS), "非AKSK事件不得触发审计处理器");
+        assertTrue(testAuditHandler.records.isEmpty(), "非AKSK事件不得写入AKSK审计记录");
+    }
 
-        // 发布事件
-        Map<String, String> context = new HashMap<String, String>();
-        AkskAccessEvent event = new AkskAccessEvent(
-                this,
-                "test-client",
-                "platform",
-                null,
-                null,
-                null,
-                null,
-                "/api/test",
-                "GET",
-                "127.0.0.1",
-                null,
-                "header",
-                "should-be-ignored",
-                context
-        );
-        log.info("发布事件（Provider返回null）");
-        eventPublisher.publishEvent(event);
-
-        // 等待处理
-        boolean received = testAuditHandler.latch.await(5, TimeUnit.SECONDS);
-        assertTrue(received);
-
-        // 验证：traceId 为 null
-        AkskAuditRecord record = testAuditHandler.records.get(0);
-        log.info("验证 traceId 为 null");
-        assertNull(record.getTraceId(), "TraceId should be null when provider returns null");
-
-        log.info("No traceId test passed");
+    private ResourceAccessEvent event(String sourceId, ResourceSubjectType subjectType, String subjectId) {
+        Instant now = Instant.now();
+        ApplicationAuthorizationSubjectType authorizationSubjectType = subjectType == ResourceSubjectType.SERVICE
+                ? ApplicationAuthorizationSubjectType.SERVICE : ApplicationAuthorizationSubjectType.HUMAN;
+        ApplicationAuthorizationContext authorization = new ApplicationAuthorizationContext(
+                SimpleApplicationAuthorizationConstant.PROTOCOL, SimpleApplicationAuthorizationConstant.VERSION,
+                authorizationSubjectType, subjectId, "application-a", true, Collections.<String>emptyList(),
+                Collections.<String>emptyList(), Collections.singletonList("api.read"), null, 1L,
+                "manifest-a", "digest-a", now.minusSeconds(1L), now.plusSeconds(60L));
+        VerifiedResourceContext context = new VerifiedResourceContext(
+                new VerifiedResourcePrincipal(new ResourceAuthenticationSourceId(sourceId), subjectType, subjectId),
+                authorization, "request-a");
+        return new ResourceAccessEvent(context, "/api/resource", "GET", "127.0.0.1", "test-agent");
     }
 }

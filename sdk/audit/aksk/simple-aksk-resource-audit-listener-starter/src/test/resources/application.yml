@@ -1,8 +1,6 @@
 spring:
   application:
     name: simple-aksk-audit-listener-test
-  profiles:
-    active: local
 
 io:
   github:
@@ -10,35 +8,13 @@ io:
       sdk:
         audit:
           aksk:
-            listener:
-              handler:
-                log:
-                  enabled: true  # 启用默认日志Handler
-        auth:
-          aksk:
             resource:
-              server:
-                enabled: true
-                introspect:
-                  endpoint: http://localhost:8080/oauth2/introspect
-                  # client-id 和 client-secret 在 application-local.yml 中配置
-                security:
-                  protected-paths:
-                    - /api/**
-                    - /test/**
-                  permit-all-paths:
-                    - /actuator/health
-                    - /public/**
-
-# 测试用的 OAuth2 配置
-test:
-  oauth2:
-    client-id: 11111
-    client-secret: 22222
-    token-uri: http://localhost:8080/oauth2/token
+              listener:
+                handler:
+                  log:
+                    enabled: true  # 启用默认日志Handler
 
 # 日志配置
 logging:
   level:
     io.github.surezzzzzz.sdk.audit.aksk: DEBUG
-    io.github.surezzzzzz.sdk.auth.aksk: DEBUG

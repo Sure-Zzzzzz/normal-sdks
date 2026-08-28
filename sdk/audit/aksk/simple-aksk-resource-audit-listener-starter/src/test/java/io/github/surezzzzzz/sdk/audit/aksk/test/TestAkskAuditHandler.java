@@ -24,8 +24,8 @@ public class TestAkskAuditHandler implements AkskAuditHandler {
 
     @Override
     public void handle(AkskAuditRecord record) {
-        log.info("Received audit record: clientId={}, userId={}, uri={}, traceId={}",
-                record.getClientId(), record.getUserId(), record.getRequestUri(), record.getTraceId());
+        log.info("收到AKSK资源审计记录: subjectId={}, uri={}, requestId={}",
+                record.getSubjectId(), record.getRequestUri(), record.getRequestId());
         records.add(record);
         latch.countDown();
     }
