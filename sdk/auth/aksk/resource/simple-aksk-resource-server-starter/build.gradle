@@ -2,8 +2,8 @@ dependencies {
     // 依赖已发布的 AKSK 3.0 协议模块
     api 'io.github.sure-zzzzzz:simple-aksk-resource-core:3.0.0'
     api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
-    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.0'
-    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
@@ -18,7 +18,7 @@ dependencies {
     implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
 
     // 测试依赖
-    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.2'
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-security'

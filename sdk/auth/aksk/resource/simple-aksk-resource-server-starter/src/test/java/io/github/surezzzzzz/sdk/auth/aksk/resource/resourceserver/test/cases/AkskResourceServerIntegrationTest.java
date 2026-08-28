@@ -8,7 +8,7 @@ import io.github.surezzzzzz.sdk.auth.authorization.application.core.claim.Applic
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.ApplicationAuthorizationSubjectType;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.SimpleApplicationAuthorizationConstant;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
-import io.github.surezzzzzz.sdk.auth.resource.server.event.ResourceAccessEvent;
+import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,8 +17,8 @@ import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
@@ -220,11 +220,11 @@ class AkskResourceServerIntegrationTest {
         }
     }
 
-    static final class EventRecorder implements ApplicationListener<ResourceAccessEvent> {
+    static final class EventRecorder {
         private final AtomicInteger successEvents = new AtomicInteger();
 
-        @Override
-        public void onApplicationEvent(ResourceAccessEvent event) {
+        @EventListener
+        public void onResourceAccess(ResourceAccessEvent event) {
             if (AkskConstant.RESOURCE_AUTHENTICATION_SOURCE_ID.equals(event.getAuthenticationSourceId())) {
                 successEvents.incrementAndGet();
             }

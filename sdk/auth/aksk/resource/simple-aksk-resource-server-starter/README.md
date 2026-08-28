@@ -1,13 +1,13 @@
 # Simple AKSK Resource Server Starter
 
-AKSK Resource Server Provider Starter 3.0.0 为公共 Resource Server Starter 提供 AKSK 服务身份认证适配器。业务资源服务需要显式并列引入公共 Resource Server Starter 和本模块；本模块不会反向传递公共资源安全链。
+AKSK Resource Server Provider Starter 3.0.1 为公共 Resource Server Starter 提供 AKSK 服务身份认证适配器。业务资源服务需要显式并列引入公共 Resource Server Starter 和本模块；本模块不会反向传递公共资源安全链。
 
 ## 接入依赖
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.0.2'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.1'
 }
 ```
 
