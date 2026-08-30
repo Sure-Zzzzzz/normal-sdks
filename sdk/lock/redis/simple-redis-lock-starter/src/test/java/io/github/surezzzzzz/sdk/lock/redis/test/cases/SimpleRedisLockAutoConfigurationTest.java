@@ -46,6 +46,25 @@ public class SimpleRedisLockAutoConfigurationTest {
                     SimpleRedisLockRouteMissingConfiguration.class
             ));
 
+    private static boolean awaitThreadBlocked(Thread thread) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L);
+        while (System.nanoTime() < deadline) {
+            if (thread.getState() == Thread.State.BLOCKED) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return false;
+    }
+
+    private static void executeInBackground(Runnable task, AtomicReference<Throwable> failureRef) {
+        try {
+            task.run();
+        } catch (Throwable t) {
+            failureRef.compareAndSet(null, t);
+        }
+    }
+
     @Test
     public void testRouteDisabledUsesDefaultExecutor() {
         contextRunner.withUserConfiguration(DefaultRedisConfiguration.class)
@@ -292,25 +311,6 @@ public class SimpleRedisLockAutoConfigurationTest {
 
         int getUnlockCallCount() {
             return unlockCallCount.get();
-        }
-    }
-
-    private static boolean awaitThreadBlocked(Thread thread) throws InterruptedException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5L);
-        while (System.nanoTime() < deadline) {
-            if (thread.getState() == Thread.State.BLOCKED) {
-                return true;
-            }
-            Thread.sleep(10L);
-        }
-        return false;
-    }
-
-    private static void executeInBackground(Runnable task, AtomicReference<Throwable> failureRef) {
-        try {
-            task.run();
-        } catch (Throwable t) {
-            failureRef.compareAndSet(null, t);
         }
     }
 }

@@ -1,4 +1,5 @@
-# lock 1.2.2 起测试配置统一使用 redis-route 写法，不再使用 spring.redis
+# redis-route 接管（enable=true）而 lock 自身 route 开关保持缺省 false：
+# 验证 lock 自建模板按类型让位，不自建 simpleRedisLockRedisTemplate
 io:
   github:
     surezzzzzz:

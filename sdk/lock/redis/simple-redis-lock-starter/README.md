@@ -1,10 +1,10 @@
 # Simple Redis Lock Starter
 
-基于 Redis 的分布式锁 Spring Boot Starter，提供默认单 Redis 模式，并支持通过 `simple-redis-route-starter` 按锁 key 路由到不同 Redis datasource。
+基于 Redis 的分布式锁 Spring Boot Starter，数据源由 `simple-redis-route-starter` 统一管理，默认单 source 运行，支持按锁 key 路由到不同 Redis source 实现锁流量隔离。
 
 ## 功能特性
 
-- 开箱即用：基于 Spring Boot 自动配置，默认接入项目已有 `RedisConnectionFactory`。
+- 开箱即用：基于 Spring Boot 自动配置，数据源由 `simple-redis-route-starter` 提供；容器存在标准 `stringRedisTemplate` 时自建模板按类型让位复用。
 - 安全解锁：使用 Lua 脚本按 `lockValue` 原子校验并删除锁。
 - 自动过期：加锁时必须设置过期时间，降低死锁风险。
 - 显式租约：调用方可获取 `RedisLockLease`，按需续租并安全释放，无后台 watchdog。
@@ -18,27 +18,40 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.2.1'
+    implementation 'io.github.surezzzzzz:simple-redis-lock-starter:1.2.2'
 }
 ```
 
-`simple-redis-lock-starter:1.2.1` 会传递引入 `simple-redis-route-starter:1.1.0`。默认不开启 route，仍按单 Redis 模式运行。
+`simple-redis-lock-starter:1.2.2` 会传递引入 `simple-redis-route-starter:1.2.2`。route `enable=true` 时由 route 提供标准 `stringRedisTemplate`，lock 自建模板按类型让位不自建；route 未开启但宿主存在标准 `stringRedisTemplate`（Boot 自动配置）时同样让位；容器无任何 `StringRedisTemplate` 时，lock 基于宿主 `RedisConnectionFactory` 自建模板。
 
 | 版本 | 定位 | 说明 |
 |------|------|------|
 | `1.1.0` | route 接入版本 | 接入 `simple-redis-route-starter:1.1.0`，支持可选 route 模式 |
 | `1.2.0` | 结构规范化版本 | 对齐 SDK 包结构、常量、异常和测试规范，锁 API 与运行行为不变 |
 | `1.2.1` | 显式租约版本 | 新增调用方显式续租的 lease API，保持旧锁 API 兼容 |
+| `1.2.2` | 接管让位修复版本 | 自建模板按类型让位，消除与 route 1.2.x / Boot 标准 Bean 的同类型双候选冲突；配置示例统一 route 写法 |
 
 ### 2. 默认单 Redis 配置
 
+数据源由 `simple-redis-route-starter` 统一管理，单 Redis 即单个 source：
+
 ```yaml
-spring:
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
-    timeout: 2000ms
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
 ```
 
 ### 3. 使用分布式锁
@@ -137,7 +150,7 @@ public void processWithLease(String resourceId) {
 
 ## route 模式
 
-当锁流量需要与默认 Redis 隔离，或不同锁域需要落到不同 Redis 时，可以开启 lock route。
+当锁流量需要与其他业务隔离，或不同锁域需要落到不同 Redis 时，可以为锁配置多 source 路由。
 
 ```yaml
 io:
@@ -151,16 +164,22 @@ io:
         redis:
           route:
             enable: true
-            default-datasource: default
-            datasources:
+            default-source: default
+            sources:
               default:
+                mode: standalone
                 host: localhost
                 port: 6379
                 database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
               lock:
+                mode: standalone
                 host: localhost
                 port: 6379
                 database: 1
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
             rules:
               - pattern: "lock:"
                 type: prefix
@@ -189,7 +208,7 @@ ARGV[1] = lockValue
 
 ## 自动配置边界
 
-- 默认模式：注册 `simpleRedisLockRedisTemplate` 和 `DefaultRedisLockExecutor`。
+- 默认模式：容器不存在任何 `StringRedisTemplate` 时注册 `simpleRedisLockRedisTemplate` 和 `DefaultRedisLockExecutor`；存在标准 Bean（route 接管或 Boot 自动配置）时让位不自建，执行器复用标准 Bean。
 - route 模式：存在 `RedisRouteTemplate` 时注册 `RouteRedisLockExecutor`。
 - 业务自定义 `RedisLockExecutor` 时，SDK 默认 executor、route executor、失败型 executor 都会退让。
 - route 模式不会回退默认 Redis，避免同一个锁 key 在不同 Redis 间漂移导致互斥失效。
@@ -204,7 +223,8 @@ ARGV[1] = lockValue
 
 测试覆盖：
 
-- 默认单 Redis 模式加锁、重复加锁、过期、解锁与并发互斥。
+- 默认单 source 模式加锁、重复加锁、过期、解锁与并发互斥。
+- route 接管 + lock 开关缺省时自建模板让位：容器内 `StringRedisTemplate` 单候选、`simpleRedisLockRedisTemplate` 不存在、执行器复用标准 Bean。
 - 显式租约的续租、自然过期、旧 owner 防护、release/close 幂等、无效租约参数与 renew/release 并发串行化。
 - route 模式下租约获取、续租、释放均落在同一目标 datasource，且不存在默认 Redis 回退。
 - route 矩阵环境下 Redis 3.2.12 / 5.0.14 / 7.2.6 standalone + cluster 的单 key 租约场景。
@@ -218,3 +238,4 @@ ARGV[1] = lockValue
 4. `unlock` 返回 `false` 时表示没有释放任何锁，调用方不应按成功处理。
 5. `renew` 返回 `false` 后，调用方不得继续假定自己持有锁。
 6. route 模式必须保证同一个 `lockKey` 的获取、续租和释放路由规则一致。
+7. 启用 route 连接池（`lettuce.pool.enabled=true`）时，按 `simple-redis-route-starter` README 自行提供 `commons-pool2` 运行时依赖。

@@ -27,6 +27,21 @@ public class SimpleRedisLock {
 
     private final RedisLockExecutor redisLockExecutor;
 
+    private static void validateLeaseTime(long leaseTime, TimeUnit timeUnit) {
+        if (timeUnit == null) {
+            throw new ValidationException(
+                    ErrorCode.VALIDATION_LEASE_TIME_UNIT_REQUIRED,
+                    ErrorMessage.LEASE_TIME_UNIT_REQUIRED
+            );
+        }
+        if (timeUnit.toMillis(leaseTime) < SimpleRedisLockConstant.MIN_LEASE_MILLIS) {
+            throw new ValidationException(
+                    ErrorCode.VALIDATION_LEASE_TIME_MUST_BE_AT_LEAST_ONE_MILLISECOND,
+                    ErrorMessage.LEASE_TIME_MUST_BE_AT_LEAST_ONE_MILLISECOND
+            );
+        }
+    }
+
     /**
      * 尝试加锁。
      *
@@ -85,21 +100,6 @@ public class SimpleRedisLock {
             log.info("解锁未生效，lockKey={} 持有者不匹配或锁已过期", lockKey);
         }
         return released;
-    }
-
-    private static void validateLeaseTime(long leaseTime, TimeUnit timeUnit) {
-        if (timeUnit == null) {
-            throw new ValidationException(
-                    ErrorCode.VALIDATION_LEASE_TIME_UNIT_REQUIRED,
-                    ErrorMessage.LEASE_TIME_UNIT_REQUIRED
-            );
-        }
-        if (timeUnit.toMillis(leaseTime) < SimpleRedisLockConstant.MIN_LEASE_MILLIS) {
-            throw new ValidationException(
-                    ErrorCode.VALIDATION_LEASE_TIME_MUST_BE_AT_LEAST_ONE_MILLISECOND,
-                    ErrorMessage.LEASE_TIME_MUST_BE_AT_LEAST_ONE_MILLISECOND
-            );
-        }
     }
 
     private static final class Lease implements RedisLockLease {
