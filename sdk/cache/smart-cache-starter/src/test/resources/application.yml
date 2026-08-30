@@ -37,14 +37,6 @@ io:
           stats:
             enabled: true
 
-spring:
-  redis:
-    host: localhost
-    port: 6379
-    password:
-    database: 0
-    timeout: 3000
-
 logging:
   level:
     io.github.surezzzzzz.sdk.cache: DEBUG

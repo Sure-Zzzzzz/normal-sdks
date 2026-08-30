@@ -62,10 +62,3 @@ io:
             ttl-random-offset-ratio: 0
             preload:
               enabled: false
-
-spring:
-  redis:
-    host: localhost
-    port: 16379
-    database: 0
-    timeout: 3000

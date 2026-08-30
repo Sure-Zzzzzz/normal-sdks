@@ -94,15 +94,3 @@ io:
           route:
             scan-enabled: true
             scan-count: 100
-
-spring:
-  redis:
-    cluster:
-      nodes:
-        - localhost:17000
-        - localhost:17001
-        - localhost:17002
-        - localhost:17003
-        - localhost:17004
-        - localhost:17005
-    timeout: 3000

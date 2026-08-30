@@ -1,10 +1,10 @@
 # Smart Cache Starter
 
-基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.1.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
+基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.2.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
 
 ## 版本与兼容性
 
-当前版本：`2.1.0`
+当前版本：`2.2.0`
 
 | 项目 | 支持版本 |
 | --- | --- |
@@ -15,7 +15,7 @@
 
 ### 兼容性验证
 
-`2.1.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
+`2.2.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
 
 | Spring Boot | JUnit 结果 | Redis 7 Cluster 锁边界 |
 | --- | --- | --- |
@@ -42,16 +42,16 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.0'
 
     // L1 与注解式 API 由使用方按需提供
     implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
 
-    // L2、路由、锁和续期重试所需依赖
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
-    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
+    // 编译期直接使用 route / lock / task-retry API（RedisRouteTemplate / lock / TaskRetryExecutor）时按需声明；
+    // spring-boot-starter-data-redis 与 jackson-datatype-jsr310 已由本模块 api 传递，无需重复声明
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.2'
     implementation 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
 }
 ```
@@ -63,7 +63,7 @@ dependencies {
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
         <artifactId>smart-cache-starter</artifactId>
-        <version>2.1.0</version>
+        <version>2.2.0</version>
     </dependency>
 
     <!-- L1 与注解式 API 按需提供 -->
@@ -77,20 +77,16 @@ dependencies {
         <artifactId>spring-boot-starter-aop</artifactId>
     </dependency>
 
-    <!-- L2、路由、锁和续期重试所需依赖 -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-data-redis</artifactId>
-    </dependency>
+    <!-- 编译期直接使用 route / lock / task-retry API 时按需声明；spring-boot-starter-data-redis 与 jackson-datatype-jsr310 已由本模块传递，无需重复声明 -->
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
         <artifactId>simple-redis-route-starter</artifactId>
-        <version>1.1.0</version>
+        <version>1.2.2</version>
     </dependency>
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
         <artifactId>simple-redis-lock-starter</artifactId>
-        <version>1.2.1</version>
+        <version>1.2.2</version>
     </dependency>
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
@@ -100,15 +96,9 @@ dependencies {
 </dependencies>
 ```
 
-`smart-cache-starter` 已传递 `spring-boot-starter-data-redis`、`jackson-datatype-jsr310`、Redis Route、Redis Lock 和 task-retry；上方显式列出相关依赖，便于锁定使用版本。Caffeine 与 AOP 在模块中为 `compileOnly`，使用 L1 或注解式 API 时需要由应用自行提供。
+`smart-cache-starter` 已传递 `spring-boot-starter-data-redis` 和 `jackson-datatype-jsr310`；Redis Route、Redis Lock 与 task-retry 以运行时依赖传递（`RedisRouteTemplate` 装配、`io.github.surezzzzzz.sdk.lock.redis.route.enable` 联动开关与续期重试照常生效），公开缓存 API 不暴露这三者的类型。编译期直接使用 `RedisRouteTemplate`、lock API 或 `TaskRetryExecutor` 的使用方需自行声明对应依赖；上方示例即为可直接复制的声明方式。Caffeine 与 AOP 在模块中为 `compileOnly`，使用 L1 或注解式 API 时需要由应用自行提供。
 
-在旧版 Spring Boot 运行时，如 Lettuce 连接工厂需要 Apache Commons Pool 相关类，可按运行环境补充：
-
-```gradle
-runtimeOnly 'org.apache.commons:commons-pool2'
-```
-
-这只解决旧运行环境的类路径需求；是否启用 Redis 连接池仍由 Spring Boot / Lettuce 的连接池配置决定，添加该依赖本身不会开启连接池。
+`smart-cache-starter` 自 `2.0.0` 起以 `runtimeOnly` 传递 `commons-pool2`，旧版 Spring Boot 运行时 Lettuce 连接工厂所需的 Commons Pool 类已在类路径上，使用方无需额外声明。是否启用 Redis 连接池仍由 Spring Boot / Lettuce 的连接池配置决定，依赖在类路径上不会自动开启连接池。
 
 ## 配置
 
@@ -293,7 +283,7 @@ lease 不是 watchdog：组件不会创建后台线程、调度器或自动续�
 
 ## 从 1.x 升级
 
-1. 将依赖升级为 `smart-cache-starter:2.1.0`，并使用 Redis Route `1.1.0`、Redis Lock `1.2.1`、task-retry `2.0.0`。
+1. 将依赖升级为 `smart-cache-starter:2.2.0`；Redis Route `1.2.2`、Redis Lock `1.2.2`、task-retry `2.0.0` 由本模块运行时传递，编译期直接使用其 API 时按依赖章节自行声明。
 2. 配置并启用 `io.github.surezzzzzz.sdk.redis.route.enable=true`，同时启用 `io.github.surezzzzzz.sdk.lock.redis.route.enable=true`；为 L2 key、锁 key、Pub/Sub 探测 key / channel 和预热元数据配置匹配的路由规则。
 3. 移除对 `smartCacheRedisTemplate`、应用主对象型 `RedisTemplate` 以及 1.x L2 直连路径的依赖；生产 L2 统一使用 Route 原生的 JSON 字符串路径。
 4. 将旧的 `l2.key-prefix` 配置迁移为根级 `key-prefix`，将 `consistency.pubsub-channel-prefix` 迁移为 `pubsub.channel-prefix`，并确认同一副本组的 `me` 一致。

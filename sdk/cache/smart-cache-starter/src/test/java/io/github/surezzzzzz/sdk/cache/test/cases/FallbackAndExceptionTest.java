@@ -108,7 +108,7 @@ public class FallbackAndExceptionTest {
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
         assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
         assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
-                TestService.class.getSimpleName() + ":methodThrowsRuntimeException"), exception.getMessage(),
+                        TestService.class.getSimpleName() + ":methodThrowsRuntimeException"), exception.getMessage(),
                 "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof RuntimeException, "原始异常应该是 RuntimeException");
@@ -129,7 +129,7 @@ public class FallbackAndExceptionTest {
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
         assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
         assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
-                TestService.class.getSimpleName() + ":methodThrowsError"), exception.getMessage(),
+                        TestService.class.getSimpleName() + ":methodThrowsError"), exception.getMessage(),
                 "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof Error, "原始异常应该是 Error");
@@ -150,7 +150,7 @@ public class FallbackAndExceptionTest {
         log.info("捕获到异常: {} - {}", exception.getClass().getName(), exception.getMessage());
         assertEquals(ErrorCode.SMART_CACHE_LOAD_FAILED, exception.getErrorCode(), "异常码应符合 v2 约定");
         assertEquals(String.format(ErrorMessage.SMART_CACHE_LOAD_FAILED,
-                TestService.class.getSimpleName() + ":methodThrowsCheckedException"), exception.getMessage(),
+                        TestService.class.getSimpleName() + ":methodThrowsCheckedException"), exception.getMessage(),
                 "异常消息应符合 v2 约定");
         assertNotNull(exception.getCause(), "应该保留原始异常");
         assertTrue(exception.getCause() instanceof IOException, "原始异常应该是 IOException");

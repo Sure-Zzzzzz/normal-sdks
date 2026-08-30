@@ -31,26 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 public class CacheInvalidationListener implements MessageListener, InitializingBean {
 
-    @Autowired(required = false)
-    private L1Cache l1Cache;
-
-    @Autowired
-    private SmartCacheProperties properties;
-
-    @Autowired
-    private RedisRouteTemplate redisRouteTemplate;
-
-    @Autowired
-    @org.springframework.beans.factory.annotation.Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
-    private ObjectMapper smartCacheObjectMapper;
-
     @Getter
     private final String instanceId = UUID.randomUUID().toString();
-
-    private RedisMessageListenerContainer listenerContainer;
-
     private final AtomicInteger threadCounter = new AtomicInteger(0);
-
     private final ExecutorService messageExecutor = new ThreadPoolExecutor(
             SmartCacheConstant.INVALIDATION_EXECUTOR_CORE_THREADS,
             SmartCacheConstant.INVALIDATION_EXECUTOR_MAX_THREADS,
@@ -65,6 +48,16 @@ public class CacheInvalidationListener implements MessageListener, InitializingB
             },
             new ThreadPoolExecutor.CallerRunsPolicy()
     );
+    @Autowired(required = false)
+    private L1Cache l1Cache;
+    @Autowired
+    private SmartCacheProperties properties;
+    @Autowired
+    private RedisRouteTemplate redisRouteTemplate;
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
+    private ObjectMapper smartCacheObjectMapper;
+    private RedisMessageListenerContainer listenerContainer;
 
     @Override
     public void afterPropertiesSet() {

@@ -25,12 +25,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 多路由强一致性写后失效端到端测试
@@ -153,7 +148,7 @@ class StrongConsistencyWriteInvalidationTest {
                 assertEquals("new-first", writer.l1Cache.get(cacheName, "first"), "写入实例应保留第一条新 L1");
                 assertEquals("new-second", writer.l1Cache.get(cacheName, "second"), "写入实例应保留第二条新 L1");
                 assertTrue(waitUntil(() -> reader.l1Cache.get(cacheName, "first") == null
-                        && reader.l1Cache.get(cacheName, "second") == null, 5),
+                                && reader.l1Cache.get(cacheName, "second") == null, 5),
                         "Redis 3（16379）Pub/Sub 应在时限内逐 key 失效 peer 的全部非空目标 L1");
                 assertEquals("old-null-entry", reader.l1Cache.get(cacheName, "null-entry"),
                         "空值条目不得覆盖 L2、删除 peer L1 或发布失效消息");

@@ -49,16 +49,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 )
 class L2PreloadTest extends BaseSmartCacheTest {
 
+    private static final String CACHE_NAME = "preload-test";
     @Autowired
     private SmartCacheManager cacheManager;
-
     @Autowired
     private L2Cache l2Cache;
-
     @Autowired
     private TestCachePreloadHandler testHandler;
-
-    private static final String CACHE_NAME = "preload-test";
 
     @BeforeEach
     void setUp() {

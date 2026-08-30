@@ -12,6 +12,10 @@ import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
  */
 public class KeyHelper {
 
+    private KeyHelper() {
+        throw new UnsupportedOperationException("工具类不能实例化");
+    }
+
     /**
      * 构建缓存数据 Key（使用自定义格式模板）
      * <p>
@@ -130,9 +134,5 @@ public class KeyHelper {
     public static String buildPubSubChannel(String pubsubChannelPrefix, String me, String cacheName) {
         return pubsubChannelPrefix + SmartCacheConstant.KEY_SEPARATOR +
                 me + SmartCacheConstant.KEY_SEPARATOR + cacheName;
-    }
-
-    private KeyHelper() {
-        throw new UnsupportedOperationException("工具类不能实例化");
     }
 }

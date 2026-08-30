@@ -26,16 +26,14 @@ import java.util.concurrent.atomic.LongAdder;
         havingValue = SmartCacheConstant.PROPERTY_VALUE_TRUE, matchIfMissing = true)
 public class CacheStatsCollector {
 
-    @Autowired(required = false)
-    private L1Cache l1Cache;
-
-    @Autowired(required = false)
-    private L2Cache l2Cache;
-
     // 使用 LongAdder 代替 AtomicLong，在高并发场景下性能更好
     private final Map<String, LongAdder> l1HitCountMap = new ConcurrentHashMap<>();
     private final Map<String, LongAdder> l2HitCountMap = new ConcurrentHashMap<>();
     private final Map<String, LongAdder> missCountMap = new ConcurrentHashMap<>();
+    @Autowired(required = false)
+    private L1Cache l1Cache;
+    @Autowired(required = false)
+    private L2Cache l2Cache;
 
     /**
      * 记录 L1 命中

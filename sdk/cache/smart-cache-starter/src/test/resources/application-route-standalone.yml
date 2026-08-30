@@ -67,10 +67,3 @@ io:
           route:
             scan-enabled: true
             scan-count: 100
-
-spring:
-  redis:
-    host: localhost
-    port: 16379
-    database: 0
-    timeout: 3000

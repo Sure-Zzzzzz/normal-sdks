@@ -5,9 +5,12 @@ dependencies {
 
     api 'org.springframework.boot:spring-boot-starter-data-redis'
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
-    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
-    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
-    api 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
+    // route / lock / task-retry 均为实现细节：L2 通道、击穿防护、预热锁与续期重试全部在内部使用，
+    // 运行时随本模块传递（route / lock route 自动配置与联动开关照常生效）；
+    // 使用方编译期直接使用对应 API 时需自行声明相应依赖
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.2'
+    implementation 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

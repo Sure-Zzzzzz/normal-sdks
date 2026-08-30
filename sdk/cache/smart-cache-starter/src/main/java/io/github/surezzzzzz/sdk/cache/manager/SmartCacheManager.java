@@ -36,65 +36,34 @@ import java.util.concurrent.*;
 @SmartCacheComponent
 public class SmartCacheManager {
 
-    @Autowired(required = false)
-    private SmartCacheProperties properties;
-
-    @Autowired(required = false)
-    private L1Cache l1Cache;
-
-    @Autowired(required = false)
-    private L2Cache l2Cache;
-
-    @Autowired(required = false)
-    private CacheStatsCollector statsCollector;
-
-    @Autowired(required = false)
-    private CacheInvalidationListener invalidationListener;
-
-    @Autowired(required = false)
-    private SimpleRedisLock redisLock;
-
-    @Autowired(required = false)
-    private TaskRetryExecutor retryExecutor;
-
-    @Autowired(required = false)
-    private List<CachePreloadHandler> preloadHandlers;
-
-    @Autowired(required = false)
-    @Qualifier(SmartCacheConstant.SMART_CACHE_PRELOAD_EXECUTOR_BEAN_NAME)
-    private Executor preloadExecutor;
-
     /**
      * 使用 ThreadLocal 记录当前线程正在加载的 key，用于循环依赖检测
      */
     private static final ThreadLocal<Set<String>> LOADING_KEYS =
             ThreadLocal.withInitial(LinkedHashSet::new);
-
-    /**
-     * 本地锁持有者，用于引用计数
-     */
-    private static class LockHolder {
-        private final Object lock = new Object();
-        private int refCount = 0;
-
-        public synchronized void acquire() {
-            refCount++;
-        }
-
-        public synchronized boolean release() {
-            refCount--;
-            return refCount == 0;
-        }
-
-        public Object getLock() {
-            return lock;
-        }
-    }
-
     /**
      * 本地锁 Map，用于同一实例内的并发控制（兜底机制）
      */
     private final ConcurrentHashMap<String, LockHolder> localLocks = new ConcurrentHashMap<>();
+    @Autowired(required = false)
+    private SmartCacheProperties properties;
+    @Autowired(required = false)
+    private L1Cache l1Cache;
+    @Autowired(required = false)
+    private L2Cache l2Cache;
+    @Autowired(required = false)
+    private CacheStatsCollector statsCollector;
+    @Autowired(required = false)
+    private CacheInvalidationListener invalidationListener;
+    @Autowired(required = false)
+    private SimpleRedisLock redisLock;
+    @Autowired(required = false)
+    private TaskRetryExecutor retryExecutor;
+    @Autowired(required = false)
+    private List<CachePreloadHandler> preloadHandlers;
+    @Autowired(required = false)
+    @Qualifier(SmartCacheConstant.SMART_CACHE_PRELOAD_EXECUTOR_BEAN_NAME)
+    private Executor preloadExecutor;
 
     /**
      * 获取缓存值
@@ -790,5 +759,26 @@ public class SmartCacheManager {
         }
         long ttl = l2Cache.getTtl(cacheName, key);
         return ttl > 0 && ttl <= preload.getBeforeExpireSeconds();
+    }
+
+    /**
+     * 本地锁持有者，用于引用计数
+     */
+    private static class LockHolder {
+        private final Object lock = new Object();
+        private int refCount = 0;
+
+        public synchronized void acquire() {
+            refCount++;
+        }
+
+        public synchronized boolean release() {
+            refCount--;
+            return refCount == 0;
+        }
+
+        public Object getLock() {
+            return lock;
+        }
     }
 }

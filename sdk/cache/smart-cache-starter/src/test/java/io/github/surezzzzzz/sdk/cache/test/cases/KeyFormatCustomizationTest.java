@@ -1,6 +1,5 @@
 package io.github.surezzzzzz.sdk.cache.test.cases;
 
-import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
@@ -29,16 +28,13 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = SmartCacheTestApplication.class)
 class KeyFormatCustomizationTest extends BaseSmartCacheTest {
 
+    private static final String TEST_CACHE_NAME = "keyFormatTest";
     @Autowired
     private SmartCacheManager cacheManager;
-
     @Autowired
     private SmartCacheProperties properties;
-
     @Autowired
     private RedisRouteTemplate redisRouteTemplate;
-
-    private static final String TEST_CACHE_NAME = "keyFormatTest";
 
     @BeforeEach
     void setUp() {

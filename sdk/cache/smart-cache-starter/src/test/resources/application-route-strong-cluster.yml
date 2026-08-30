@@ -86,15 +86,3 @@ io:
             ttl-random-offset-ratio: 0
             preload:
               enabled: false
-
-spring:
-  redis:
-    cluster:
-      nodes:
-        - localhost:17000
-        - localhost:17001
-        - localhost:17002
-        - localhost:17003
-        - localhost:17004
-        - localhost:17005
-    timeout: 3000

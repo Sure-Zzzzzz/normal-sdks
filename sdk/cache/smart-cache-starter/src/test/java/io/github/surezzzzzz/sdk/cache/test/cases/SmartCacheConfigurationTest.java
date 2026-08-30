@@ -12,10 +12,7 @@ import org.springframework.context.ConfigurableApplicationContext;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Smart Cache 配置与启动校验测试
@@ -35,6 +32,33 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Slf4j
 @SpringBootTest(classes = SmartCacheTestApplication.class)
 public class SmartCacheConfigurationTest {
+
+    private static <T extends Throwable> T findCause(Throwable t, Class<T> type) {
+        Set<Throwable> seen = new HashSet<>();
+        Throwable cur = t;
+        while (cur != null && seen.add(cur)) {
+            if (type.isInstance(cur)) {
+                return type.cast(cur);
+            }
+            cur = cur.getCause();
+        }
+        return null;
+    }
+
+    private static String describeChain(Throwable t) {
+        StringBuilder sb = new StringBuilder();
+        Set<Throwable> seen = new HashSet<>();
+        Throwable cur = t;
+        while (cur != null && seen.add(cur)) {
+            if (sb.length() > 0) {
+                sb.append(" -> ");
+            }
+            sb.append(cur.getClass().getSimpleName())
+                    .append("(").append(cur.getMessage()).append(")");
+            cur = cur.getCause();
+        }
+        return sb.toString();
+    }
 
     @Test
     @DisplayName("强一致性 + pubsub.mode=disabled 时必须启动失败，根因为 CacheConfigurationException")
@@ -141,32 +165,5 @@ public class SmartCacheConfigurationTest {
                 "错误码应为路由缺失 SMART_CACHE_002");
         log.info("验证通过：L2 启用但缺少 RedisRouteTemplate 正确抛出 CacheConfigurationException，错误码：{}",
                 cacheEx.getErrorCode());
-    }
-
-    private static <T extends Throwable> T findCause(Throwable t, Class<T> type) {
-        Set<Throwable> seen = new HashSet<>();
-        Throwable cur = t;
-        while (cur != null && seen.add(cur)) {
-            if (type.isInstance(cur)) {
-                return type.cast(cur);
-            }
-            cur = cur.getCause();
-        }
-        return null;
-    }
-
-    private static String describeChain(Throwable t) {
-        StringBuilder sb = new StringBuilder();
-        Set<Throwable> seen = new HashSet<>();
-        Throwable cur = t;
-        while (cur != null && seen.add(cur)) {
-            if (sb.length() > 0) {
-                sb.append(" -> ");
-            }
-            sb.append(cur.getClass().getSimpleName())
-                    .append("(").append(cur.getMessage()).append(")");
-            cur = cur.getCause();
-        }
-        return sb.toString();
     }
 }
