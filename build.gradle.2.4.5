@@ -34,10 +34,13 @@ gradle.ext {
                     [group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.13'],
                     [group: 'org.apache.skywalking', name: 'apm-toolkit-log4j-2.x', version: '8.16.0'],
                     [group: 'org.apache.skywalking', name: 'apm-toolkit-trace', version: '8.16.0'],
-                    [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.15.2'],
-                    [group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.15.2'],
-                    [group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.15.2'],
-                    [group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: '2.15.2']
+                    [group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.18.6'],
+                    [group: 'com.fasterxml.jackson.core', name: 'jackson-core', version: '2.18.6'],
+                    [group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.18.6'],
+                    [group: 'com.fasterxml.jackson.datatype', name: 'jackson-datatype-jsr310', version: '2.18.6'],
+                    // OpenFeign 版本随 Spring Boot 变体联动（供 feign 模块无版本声明使用）
+                    [group: 'org.springframework.cloud', name: 'spring-cloud-starter-openfeign', version: '3.0.3'],
+                    [group: 'io.github.openfeign', name: 'feign-httpclient', version: '10.12']
             ] as ArrayList<Properties>
     ]
 
