@@ -6,6 +6,7 @@
 
 | starter | core | redis-route | 说明 |
 |---|---|---|---|
+| 2.1.0 | 2.1.0 | 1.2.2 | 依赖对齐版本：redis-route 升 1.2.2；口径收紧——route 收为 implementation（编译期直接使用 route API 需自行声明），aop / web 收为 compileOnly（按功能自备） |
 | 2.0.0 | 2.1.0 | 1.1.0 | Route 原生化、动态策略、fixed used counter、sliding remaining 修复 |
 | 1.x | 1.x | 不强制 | 历史版本，不支持动态策略 |
 
@@ -35,14 +36,16 @@ Spring Boot 2.2.x 自带 Lettuce 5.2.2.RELEASE 无法解析 Redis 7 cluster 的 
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.1.0'
 ```
 
 starter 传递依赖：
 
-- `smart-redis-limiter-core:2.1.0`
-- `simple-redis-route-starter:1.1.0`
-- Spring Data Redis、AOP、Web
+- `smart-redis-limiter-core:2.1.0`（`api`）
+- `spring-boot-starter-data-redis`（`api`，公开编程面暴露 `StringRedisTemplate` 与 `DefaultRedisScript`）
+- `simple-redis-route-starter:1.2.2`（运行时传递；编译期直接使用 route API 的使用方需自行声明）
+
+使用方自备（`compileOnly`，按功能选用）：注解模式需 `spring-boot-starter-aop`；拦截器模式与远程策略（RestTemplate）需 `spring-boot-starter-web`。
 
 运行时不依赖 management、JDBC、MySQL、Security 或 Actuator。Management 仅作为本模块测试依赖，不会传递给业务应用。
 
@@ -68,7 +71,7 @@ io:
                 on-redis-error: deny
 ```
 
-Redis Route 的 datasource、standalone/cluster 配置以 `simple-redis-route-starter` 文档为准。限流器不会回退到应用主 Redis。
+Redis Route 的 datasource、standalone/cluster 配置以 `simple-redis-route-starter` 文档为准。限流器不会回退到应用主 Redis。route 1.2.x 起 `enable=true` 时接管标准 `stringRedisTemplate`、Boot Redis 自动配置让位——`spring.redis.*` 连接配置不再生效，连接契约统一在 route 配置。
 
 ## 注解模式
 
@@ -225,7 +228,7 @@ smart-limiter:test-service:<keyPart>:fw2:60s
 
 ## 1.x 升级到 2.0.0
 
-1. 配置并启用 `simple-redis-route-starter:1.1.0`，确保存在 `RedisRouteTemplate` Bean。
+1. 配置并启用 `simple-redis-route-starter:1.2.2`，确保存在 `RedisRouteTemplate` Bean。
 2. 升级 core 到 2.1.0，调用方重新编译。
 3. 将注解时间单位从 `java.util.concurrent.TimeUnit` 改为 `SmartRedisLimiterTimeUnit`。
 4. 确认 `count/window` 使用 long 范围，但不得超过 Lua 安全整数边界。

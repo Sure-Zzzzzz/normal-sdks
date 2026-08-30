@@ -1,9 +1,16 @@
 dependencies {
     api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
-    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    // route 是实现细节：限流执行通道在内部装配，公开注解与核心接口（core）零暴露 route 类型；
+    // 运行时随本模块传递（RedisRouteTemplate 装配与 route 配置键照常生效），
+    // 编译期直接使用 route API 的使用方需自行声明
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    // data-redis 保持 api：executor 接口签名暴露 StringRedisTemplate、算法扩展点返回 DefaultRedisScript，
+    // 是公开编程面的组成部分；同时 route 对 data-redis 为 compileOnly，本模块必须承担 runtime 传递
     api 'org.springframework.boot:spring-boot-starter-data-redis'
-    api 'org.springframework.boot:spring-boot-starter-aop'
-    api 'org.springframework.boot:spring-boot-starter-web'
+    // aop / web 为按功能自备件：aspectj 仅内部切面、web 类型仅在拦截器与异常 advice 内部装配；
+    // 注解模式使用方自备 AOP，拦截器/远程策略场景自备 Web，非 Web 场景由 ConditionalOnWebApplication 守卫
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
 
     testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:1.0.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
@@ -11,5 +18,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
     testRuntimeOnly 'mysql:mysql-connector-java'
 }
