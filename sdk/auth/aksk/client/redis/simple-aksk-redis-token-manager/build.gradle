@@ -3,10 +3,18 @@ dependencies {
     api 'io.github.sure-zzzzzz:simple-aksk-client-core:3.0.0'
 
     // 依赖 smart-cache-starter（提供 L1+L2 两级缓存、分布式锁、Pub/Sub 一致性、L2 预刷新）
-    // simple-redis-lock-starter 已由 smart-cache-starter 传递依赖，无需重复声明
     // implementation：smart-cache 是实现细节，运行时仍向使用方传递（自动装配不受影响）；
     // 使用方直接引用 smart-cache API 时需自行声明该依赖
-    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.0'
+
+    // main 源码直接 import 的 cache 2.2.0 运行时配套件（cache 2.2.0 起三件均 implementation
+    // 传递不再覆盖编译期）：SimpleRedisLock 供 RedisTokenManager 构造、TaskRetryExecutor 供
+    // AutoConfiguration 的 @Bean 参数注入
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.2'
+    implementation 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
+
+    // test 源码 import RedisRouteTemplate 断言 route 接管形态；main 零 route 类型引用
+    testImplementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

@@ -1,6 +1,6 @@
 # Simple AKSK Redis Token Manager
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.0**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.1**。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -19,7 +19,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.1'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -44,11 +44,6 @@ io:
                 mode: standalone
                 host: localhost
                 port: 6379
-
-        lock:
-          redis:
-            route:
-              enable: true
 
         auth:
           aksk:
@@ -75,6 +70,8 @@ io:
           consistency:
             mode: strong                    # Pub/Sub 多实例 L1 一致
 ```
+
+> **redis-route 接管是硬前提**（smart-cache 2.2.0 起）：`cache.l2.enabled=true` 或 `consistency.mode=strong` 时容器必须存在 `RedisRouteTemplate` bean（即启用 `io.github.surezzzzzz.sdk.redis.route` 接管），否则启动期 fail-fast 拒绝启动；`spring.redis.*` 直连形态不再受支持。lock 无需任何开关——容器存在 route 接管的标准 `stringRedisTemplate` 时 lock 1.2.2 自动让位复用。
 
 ### 3. 使用
 
@@ -157,12 +154,26 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 |------|----------|------|
 | `simple-aksk-client-core` | `api` | 客户端核心（`TokenManager` 等公开契约），自动传递 |
 | `smart-cache-starter` | `implementation` | L1+L2 缓存、分布式锁、Pub/Sub，运行时自动传递、开箱即用；直接使用 smart-cache API 需自行引入 |
+| `simple-redis-lock-starter` | `implementation` | `SimpleRedisLock` 供 `RedisTokenManager` 构造（main 源码直接使用，cache 2.2.0 起不再编译期传递，按自闭环原则显式声明），运行时自动传递 |
+| `task-retry-starter` | `implementation` | `TaskRetryExecutor` 供 `TokenRefreshExecutor` 自动装配注入（同上），运行时自动传递 |
+| `simple-redis-route-starter` | `testImplementation` | 仅测试源码 import `RedisRouteTemplate` 断言 route 接管形态；main 零 route 类型引用 |
 | `spring-boot-starter-data-redis` | `compileOnly` | Redis 操作，**使用方必须自行引入** |
 | `spring-web` | `compileOnly` | RestTemplate，**使用方必须自行引入** |
 
 ---
 
 ## 版本历史
+
+### 3.0.1
+
+- 升级 `smart-cache-starter` 2.1.0 → 2.2.0，对齐 `simple-redis-route-starter` 1.2.2 版本线。
+- 补自闭环依赖声明：cache 2.2.0 起 route/lock/task-retry 三件从 `api` 收为 `implementation` 不再编译期传递，本模块 main 源码直接使用 `SimpleRedisLock` 与 `TaskRetryExecutor`，按直接依赖显式声明（`implementation`）；`simple-redis-route-starter` 仅测试源码引用，声明为 `testImplementation`。
+- lock 开关移除：lock 1.2.2 起容器存在 route 接管的标准 `stringRedisTemplate` 时自动让位，`lock.redis.route.enable` 配置不再需要。
+- 使用方必须启用 redis-route 接管：cache 2.2.0 启动校验要求 `l2.enabled=true` 或 `consistency.mode=strong` 时容器存在 `RedisRouteTemplate`，`spring.redis.*` 直连形态启动失败。
+- 公开 API、配置键（`auth.aksk.client.redis.*` / `cache.*`）零变化，业务代码无需修改。
+- 经 Spring Boot 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE 四版本真实 E2E 矩阵验证（每版本 41 个测试全绿）。
+
+详见 [CHANGELOG.3.0.1.md](CHANGELOG.3.0.1.md)。
 
 ### 3.0.0
 
