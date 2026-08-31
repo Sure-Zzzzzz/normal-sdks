@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngin
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.env.Environment;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
@@ -49,6 +50,10 @@ final class ResourceServerSecurityConfigurer {
         ResourceSecurityPathHelper.validateNoOverlap(permitAllPaths, protectedPaths);
 
         http.requestMatcher(new OrRequestMatcher(createChainMatchers(protectedPaths, permitAllPaths)));
+        // 机器接口链：Bearer 单一凭据语义排斥 Cookie，session 永远不可能被消费；
+        // 若不设 STATELESS，Spring Security 默认会把首次认证存入 HttpSession 并下发
+        // Set-Cookie，客户端回发即触发 resolver 的 CREDENTIAL_AMBIGUOUS 拒绝
+        http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         http.authorizeRequests(authorize -> {
             if (!permitAllPaths.isEmpty()) {
                 authorize.antMatchers(permitAllPaths.toArray(new String[0])).permitAll();
