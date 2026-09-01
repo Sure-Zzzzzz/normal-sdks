@@ -1,8 +1,8 @@
 # Simple AKSK Feign Redis Client Starter
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.0**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.1**。
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter,集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
@@ -56,81 +56,23 @@
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-aksk-redis-token-manager:3.0.0` | `api` 自动传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0` |
-| `smart-cache-starter:2.1.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
+| `simple-aksk-redis-token-manager:3.0.1` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
+| `smart-cache-starter:2.2.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
 | Spring Cloud OpenFeign | `compileOnly`，**使用方必须自行引入** | 声明式 HTTP 客户端 |
 | Spring Boot / Spring Data Redis | `compileOnly`，**使用方必须自行引入** | 自动配置与 Redis 操作 |
 | feign-httpclient | 推荐自行引入 | HTTP 连接池 |
 
-## 配置示例
-
-```yaml
-# Redis 连接由 Redis Route 数据源自闭环管理（下方 sdk.redis.route），
-# 无需配置 spring.redis.*（spring-boot-starter-data-redis 依赖仍需引入，见"必需依赖"）
-io:
-  github:
-    surezzzzzz:
-      sdk:
-        # smart-cache 2.x：开启 L2 时必须提供 Redis Route 数据源（RedisRouteTemplate）
-        redis:
-          route:
-            enable: true
-            default-source: default
-            sources:
-              default:
-                mode: standalone
-                host: localhost
-                port: 6379
-                database: 0
-                timeout-ms: 3000
-                connect-timeout-ms: 3000
-
-        # 分布式锁走 Redis Route 数据源
-        lock:
-          redis:
-            route:
-              enable: true
-
-        auth:
-          aksk:
-            client:
-              enable: true
-              client-id: AKP1234567890abcdefgh
-              client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234
-              server-url: http://localhost:8280
-              token-endpoint: /oauth2/token
-              redis:
-                token:
-                  cache-name: aksk-client-token
-        cache:
-          enabled: true
-          key-prefix: sure-auth-aksk-client
-          me: my-app  # 应用组标识（必配）：同一应用多实例必须一致，共享缓存 / 锁互斥 / Pub/Sub
-          l1:
-            enabled: true
-            expire-seconds: 2       # L1 本地缓存 TTL（秒），建议 2~5s
-            max-size: 1000
-          l2:
-            enabled: true
-            expire-seconds: 3600    # SmartCache 默认 L2 TTL（预刷新写回按服务端 expires_in 计算）
-            preload:
-              enabled: true
-              before-expire-seconds: 60   # L2 预刷新窗口，Redis TTL <= 此值时触发 preload
-          consistency:
-            mode: strong            # 多实例 L1 一致性（Pub/Sub 广播）
-```
-
-## 使用方式
+## 快速开始
 
 ### 1. 添加依赖
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzz:simple-aksk-feign-redis-client-starter:3.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.1'
 }
 ```
 
-**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.0`（连带 smart-cache 运行时组件）会自动传递；Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.1`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -160,7 +102,61 @@ dependencies {
 - 运行时使用您项目中引入的版本
 - Redis 驱动会通过 spring-boot-starter-data-redis 自动引入
 
-### 2. 启用 Feign 客户端
+### 2. 配置应用
+
+完整配置（各键作用见行内注释；未注释即默认值形态的键均可按需调整）：
+
+```yaml
+# Redis 连接由 Redis Route 数据源自闭环管理（下方 sdk.redis.route），
+# 无需配置 spring.redis.*（spring-boot-starter-data-redis 依赖仍需引入，见"必需依赖"）
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true                  # Redis Route 接管总开关；smart-cache 2.x 开启 L2 时必须启用（须提供 RedisRouteTemplate）
+            default-source: default       # 默认数据源名，指向 sources 下同名条目
+            sources:
+              default:
+                mode: standalone          # 部署模式：standalone 单机 / sentinel 哨兵 / cluster 集群
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000          # 命令超时（毫秒）
+                connect-timeout-ms: 3000   # 建连超时（毫秒）
+
+        auth:
+          aksk:
+            client:
+              enable: true                # 本 starter 自动配置开关；false 时不注册认证拦截器
+              client-id: AKP1234567890abcdefgh           # AKSK Client ID（AKSK Server Admin 页面创建）
+              client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234   # Client Secret（创建时一次性展示，妥善保存）
+              server-url: http://localhost:8280           # AKSK Server 地址
+              token-endpoint: /oauth2/token              # token 端点路径（默认值，一般不改）
+              redis:
+                token:
+                  cache-name: aksk-client-token           # token 在 smart-cache 中的缓存名
+
+        cache:                             # smart-cache 配置（token 缓存载体，经 token-manager 生效）
+          enabled: true                    # 缓存开关
+          key-prefix: sure-auth-aksk-client  # Redis key 前缀（区分业务）
+          me: my-app                       # 应用组标识（必配）：同一应用多实例必须一致，共享缓存 / 锁互斥 / Pub/Sub
+          l1:
+            enabled: true                  # L1 本地缓存（进程内，削 Redis 读压力）
+            expire-seconds: 2              # L1 TTL（秒），建议 2~5s（过长会放大服务端撤销延迟）
+            max-size: 1000                 # L1 最大条目数
+          l2:
+            enabled: true                  # L2 Redis 缓存（多实例共享 token）
+            expire-seconds: 3600           # L2 默认 TTL；token 实际写回按服务端 expires_in 计算
+            preload:
+              enabled: true                # 预刷新（提前异步续期，避免请求打到过期 token）
+              before-expire-seconds: 60    # 预刷新窗口：Redis TTL <= 此值时触发
+          consistency:
+            mode: strong                   # 多实例 L1 一致性（Pub/Sub 广播失效），strong / eventual
+```
+
+### 3. 启用 Feign 客户端
 
 在启动类上添加 `@EnableFeignClients` 注解：
 
@@ -174,7 +170,9 @@ public class MyApplication {
 }
 ```
 
-### 3. 使用场景 1：使用 @AkskClientFeignClient 注解（推荐）
+## 使用场景
+
+### 场景 1：使用 @AkskClientFeignClient 注解（推荐）
 
 最简单的使用方式，开箱即用：
 
@@ -213,7 +211,7 @@ public class MyService {
 - ✅ 无需手动管理 Token
 - ✅ 声明式编程，代码简洁
 
-### 4. 使用场景 2：显式配置 Feign 客户端
+### 场景 2：显式配置 Feign 客户端
 
 如果你需要更多控制，可以使用原始 `@FeignClient` 注解并显式配置：
 
@@ -235,7 +233,7 @@ public interface MyServiceClient {
 - ✅ 可以添加其他配置类
 - ✅ 复用 AKSK 认证逻辑
 
-### 5. 使用场景 3：只使用 TokenManager
+### 场景 3：只使用 TokenManager
 
 如果你想自己处理 HTTP 请求，只需要 Token 管理：
 
@@ -265,7 +263,7 @@ public class MyService {
 - ✅ 可以使用任何 HTTP 客户端
 - ✅ Token 自动缓存和刷新
 
-### 6. 多用户场景
+### 多用户场景
 
 需要实现自定义 `SecurityContextProvider`：
 
@@ -452,6 +450,15 @@ feign:
 - 两个版本可以同时使用，互不冲突
 
 ## 版本历史
+
+### 3.0.1
+
+- 升级 `simple-aksk-redis-token-manager` 3.0.0 → 3.0.1，级联 `smart-cache-starter` 2.1.0 → 2.2.0（对齐 `simple-redis-route-starter` 1.2.2 版本线）；拦截器认证注入逻辑零变更。
+- 依赖声明收紧：token-manager 由 `api` 改为 `implementation`——运行时仍自动传递、开箱即用不变；本模块公开 API 不含 token-manager 特有类型（`TokenManager` 接口来自 client-core），直接使用 `TokenManager` / client-core API 的使用方需自行引入。
+- lock 接管开关（`lock.redis.route.enable`）不再需要：lock 1.2.2 起容器存在 route 接管的标准 `stringRedisTemplate` 时自动让位，配置示例已删除该段。
+- 公开 API、配置键零变化，业务代码无需修改。
+
+详见 [CHANGELOG.3.0.1.md](CHANGELOG.3.0.1.md)。
 
 ### 3.0.0
 

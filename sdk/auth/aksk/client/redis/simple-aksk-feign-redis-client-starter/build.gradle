@@ -1,6 +1,8 @@
 dependencies {
-    // 依赖 simple-aksk-redis-token-manager（提供 TokenManager Bean）
-    api 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.0'
+    // simple-aksk-redis-token-manager 提供 TokenManager Bean；本模块 main 源码仅 import
+    // client-core 的 TokenManager 接口（经其 api 传递编译期可见），无 token-manager 特有类型，
+    // 按自闭环原则收 implementation：使用方直接使用 TokenManager API 需自行引入
+    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.1'
 
     // Spring Cloud OpenFeign（compileOnly，用户自行引入）
     // 版本由根 build.gradle 变体的 artifactConstraints 管理（随 Spring Boot 版本联动），此处不带版本号
