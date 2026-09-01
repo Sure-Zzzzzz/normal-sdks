@@ -72,3 +72,5 @@ changelog.md
 *.pfx
 *.jks
 *.keystore
+# AKSK e2e 双身份起服凭据（gitignored）
+**/application-e2e.yml

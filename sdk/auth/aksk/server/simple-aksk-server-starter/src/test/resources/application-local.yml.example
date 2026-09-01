@@ -4,14 +4,15 @@
 # 2. 填入你的真实密码
 # 3. application-local.yml 不会被提交到git（已在.gitignore中配置）
 
-spring:
-  datasource:
-    password: your_mysql_password_here
-
 io:
   github:
     surezzzzzz:
       sdk:
+        mysql:
+          route:
+            datasources:
+              default:
+                password: your_mysql_password_here
         auth:
           aksk:
             server:

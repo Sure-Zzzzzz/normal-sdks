@@ -2,29 +2,26 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.converter.DefaultScopeAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AkskServerOAuth2LimiterFilter;
-import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.AkskIntrospectionResponseHandler;
-import io.github.surezzzzzz.sdk.auth.aksk.server.token.JweJwtDecoder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
-import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.preauth.AbstractPreAuthenticatedProcessingFilter;
 
 /**
  * OAuth2 Security Configuration
+ * <p>
+ * /api/** 由公共资源层链（simple-resource-server-starter，HIGHEST_PRECEDENCE）接管；
+ * 本类只保留授权服务器链与 default 链。
  *
  * @author surezzzzzz
  */
@@ -32,10 +29,8 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
 @RequiredArgsConstructor
 public class OAuth2SecurityConfiguration {
 
-    private final JwtKeyProvider jwtKeyProvider;
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
     private final AkskApplicationAuthorizationService applicationAuthorizationService;
-    private final JweJwtDecoder jweJwtDecoder;
     private final ObjectProvider<AkskServerOAuth2LimiterFilter> akskServerOAuth2LimiterFilter;
 
     @Bean
@@ -63,19 +58,6 @@ public class OAuth2SecurityConfiguration {
     }
 
     @Bean
-    @Order(2)
-    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .antMatcher("/api/**")
-                .authorizeRequests(authorizeRequests ->
-                        authorizeRequests.anyRequest().authenticated()
-                )
-                .oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt)
-                .csrf().disable();
-        return http.build();
-    }
-
-    @Bean
     @Order(4)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -91,26 +73,5 @@ public class OAuth2SecurityConfiguration {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return org.springframework.security.crypto.factory.PasswordEncoderFactories.createDelegatingPasswordEncoder();
-    }
-
-    @Bean
-    public JwtDecoder jwtDecoder() {
-        return token -> {
-            try {
-                com.nimbusds.jwt.JWTClaimsSet claims = jweJwtDecoder.decode(token);
-                java.time.Instant issuedAt = claims.getIssueTime() != null
-                        ? claims.getIssueTime().toInstant() : null;
-                java.time.Instant expiresAt = claims.getExpirationTime() != null
-                        ? claims.getExpirationTime().toInstant() : null;
-                return Jwt.withTokenValue(token)
-                        .headers(h -> h.put("alg", "A256GCMKW"))
-                        .claims(c -> c.putAll(claims.getClaims()))
-                        .issuedAt(issuedAt)
-                        .expiresAt(expiresAt)
-                        .build();
-            } catch (Exception e) {
-                throw new InvalidBearerTokenException("Invalid JWE token: " + e.getMessage(), e);
-            }
-        };
     }
 }

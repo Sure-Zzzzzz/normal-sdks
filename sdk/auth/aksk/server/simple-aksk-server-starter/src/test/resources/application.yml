@@ -1,11 +1,8 @@
 spring:
   profiles:
     active: local
-  datasource:
-    url: jdbc:mysql://localhost:3306/sure_auth_aksk?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: # 请在 application-local.yml 中配置真实密码
+  # MySQL 连接已由 simple-mysql-route-starter 接管（@Primary routing DataSource 先于
+  # DataSourceAutoConfiguration 装配，Boot 数据源自动配置让位）——连接契约在下方 mysql.route 配置
   jpa:
     hibernate:
       ddl-auto: validate
@@ -14,22 +11,43 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.MySQL8Dialect
-  redis:
-    host: localhost
-    port: 6379
-    database: 1
-    timeout: 3000ms
-    lettuce:
-      pool:
-        max-active: 8
-        max-idle: 8
-        min-idle: 2
-        max-wait: -1ms
-
+  # Redis 连接已由 simple-redis-route-starter 接管（smart-cache 2.x L2/PubSub 与
+  # smart-redis-limiter 2.0.0 均走 RedisRouteTemplate），连接契约在下方 redis.route 配置
 io:
   github:
     surezzzzzz:
       sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: default
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/sure_auth_aksk?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: root
+                password: # 请在 application-local.yml 中配置真实密码
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 8
+                  minimum-idle: 2
+                  connection-timeout: 3000
+                  validation-timeout: 3000
+        redis:
+          route:
+            enable: true
+            sources:
+              default:
+                host: localhost
+                port: 6379
+                database: 1
+                timeout-ms: 3000
+                pool:
+                  enabled: true
+                  max-active: 8
+                  max-idle: 8
+                  min-idle: 2
+        # lock 1.2.2 起模板让位：容器存在 route 接管的标准 stringRedisTemplate 时不再自建
+        # simpleRedisLockRedisTemplate，无需显式 lock.redis.route 开关
         auth:
           aksk:
             server:

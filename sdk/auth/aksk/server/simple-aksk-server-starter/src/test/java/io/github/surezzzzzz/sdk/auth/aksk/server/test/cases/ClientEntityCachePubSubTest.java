@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
@@ -18,12 +19,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -74,7 +76,12 @@ class ClientEntityCachePubSubTest {
     private SmartCacheProperties smartCacheProperties;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate redisTemplate;
+
+    // 与 CacheInvalidationListener 发布端同一 mapper，保证模拟消息与真实失效广播字节形态一致
+    @Autowired
+    @Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
+    private ObjectMapper smartCacheObjectMapper;
 
     @Autowired
     private RedisKeyHelper redisKeyHelper;
@@ -181,7 +188,7 @@ class ClientEntityCachePubSubTest {
      * 验证 Pub/Sub 消息直接清除本实例 L1
      */
     @Test
-    void testPubSubMessageClearsLocalL1() throws InterruptedException {
+    void testPubSubMessageClearsLocalL1() throws Exception {
         log.info("========== 测试 Pub/Sub 消息清除本实例 L1 ==========");
 
         String cacheName = RedisKeyHelper.CACHE_OAUTH2_CLIENT_ENTITY;
@@ -204,7 +211,8 @@ class ClientEntityCachePubSubTest {
                 smartCacheProperties.getMe(),
                 cacheName
         );
-        redisTemplate.convertAndSend(channel, message);
+        // smart-cache 2.x 发布端走 JSON 字符串（smartCacheObjectMapper 序列化），不再支持对象直发
+        redisTemplate.convertAndSend(channel, smartCacheObjectMapper.writeValueAsString(message));
         log.info("已发布 invalidation 消息到 channel: {}", channel);
 
         Thread.sleep(300);

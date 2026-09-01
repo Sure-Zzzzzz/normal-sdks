@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.algorithm.SmartRedisLimiterR
 import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimiterProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterTimeUnit;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -56,9 +56,6 @@ class AkskServerOAuth2LimiterFilterTest {
     @Mock
     private ApplicationEventPublisher applicationEventPublisher;
 
-    @Mock
-    private ApplicationContext applicationContext;
-
     private SimpleAkskServerProperties properties;
     private SmartRedisLimiterProperties smartLimiterProperties;
     private AuthorizationServerSettings authorizationServerSettings;
@@ -78,7 +75,6 @@ class AkskServerOAuth2LimiterFilterTest {
                 algorithmFactory,
                 authorizationServerSettings,
                 applicationEventPublisher,
-                applicationContext,
                 clientIdKeyProvider);
     }
 
@@ -122,12 +118,12 @@ class AkskServerOAuth2LimiterFilterTest {
 
         log.info("Token 限流规则转换结果: count={}, window={}, unit={}",
                 rule.getCount(), rule.getWindow(), rule.getUnit());
-        assertEquals(SimpleAkskServerConstant.DEFAULT_LIMITER_TOKEN_COUNT, rule.getCount(),
+        assertEquals((long) SimpleAkskServerConstant.DEFAULT_LIMITER_TOKEN_COUNT, rule.getCount().longValue(),
                 "Token count 应转换为 smart-limiter 规则");
-        assertEquals(SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW, rule.getWindow(),
+        assertEquals((long) SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW, rule.getWindow().longValue(),
                 "Token window 应转换为 smart-limiter 规则");
-        assertEquals(SimpleAkskServerConstant.DEFAULT_LIMITER_WINDOW_UNIT, rule.getUnit(),
-                "Token unit 应转换为 smart-limiter 规则");
+        assertEquals(SmartRedisLimiterTimeUnit.MINUTES, rule.getUnit(),
+                "Token unit 应转换为 smart-limiter 规则（默认 TimeUnit.MINUTES 映射同名枚举）");
         assertEquals(String.valueOf(SimpleAkskServerConstant.DEFAULT_LIMITER_TOKEN_COUNT),
                 response.getHeader(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT),
                 "通过时应写入限流响应头");
@@ -324,7 +320,6 @@ class AkskServerOAuth2LimiterFilterTest {
                 algorithmFactory,
                 customSettings,
                 applicationEventPublisher,
-                applicationContext,
                 clientIdKeyProvider);
         when(algorithmFactory.getAlgorithm(SimpleAkskServerConstant.DEFAULT_LIMITER_ALGORITHM)).thenReturn(algorithm);
         when(algorithm.tryAcquireWithResult(any(), anyList(), anyString(), anyString()))
@@ -376,9 +371,10 @@ class AkskServerOAuth2LimiterFilterTest {
 
         log.info("自定义限流规则转换结果: count={}, window={}, unit={}",
                 rule.getCount(), rule.getWindow(), rule.getUnit());
-        assertEquals(7, rule.getCount(), "自定义 count 应转换为 smart-limiter 规则");
-        assertEquals(2, rule.getWindow(), "自定义 window 应转换为 smart-limiter 规则");
-        assertEquals(TimeUnit.SECONDS, rule.getUnit(), "自定义 unit 应转换为 smart-limiter 规则");
+        assertEquals(7L, rule.getCount().longValue(), "自定义 count 应转换为 smart-limiter 规则");
+        assertEquals(2L, rule.getWindow().longValue(), "自定义 window 应转换为 smart-limiter 规则");
+        assertEquals(SmartRedisLimiterTimeUnit.SECONDS, rule.getUnit(),
+                "自定义 unit 应转换为 smart-limiter 规则（TimeUnit.SECONDS 映射同名枚举）");
     }
 
     private String basicAuth(String clientId, String clientSecret) {

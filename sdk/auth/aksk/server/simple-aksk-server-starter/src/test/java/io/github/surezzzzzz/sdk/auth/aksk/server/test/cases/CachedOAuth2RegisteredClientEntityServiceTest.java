@@ -49,7 +49,7 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
     @Test
     void testFindByClientIdCacheMissReturnsFromJpaAndWritesToCache() {
         OAuth2RegisteredClientEntity entity = newEntity();
-        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
+        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any(java.util.concurrent.Callable.class)))
                 .thenAnswer(inv -> inv.getArgument(2, java.util.concurrent.Callable.class).call());
         when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.of(entity));
 
@@ -58,14 +58,14 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
         assertTrue(result.isPresent());
         assertEquals(CLIENT_ID, result.get().getClientId());
         verify(delegate).findByClientId(CLIENT_ID);
-        verify(smartCacheManager).get(eq(CACHE_NAME), eq(CACHE_KEY), any());
+        verify(smartCacheManager).get(eq(CACHE_NAME), eq(CACHE_KEY), any(java.util.concurrent.Callable.class));
         log.info("✓ cache miss 时正确回源 JPA 并写入缓存");
     }
 
     @Test
     void testFindByClientIdCacheHitReturnsCachedWithoutJpa() {
         OAuth2RegisteredClientEntity cached = newEntity();
-        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
+        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any(java.util.concurrent.Callable.class)))
                 .thenReturn(cached);
 
         Optional<OAuth2RegisteredClientEntity> result = service.findByClientId(CLIENT_ID);
@@ -78,7 +78,7 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
 
     @Test
     void testFindByClientIdCacheReturnsNullReturnsEmptyOptional() {
-        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
+        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any(java.util.concurrent.Callable.class)))
                 .thenAnswer(inv -> inv.getArgument(2, java.util.concurrent.Callable.class).call());
         when(delegate.findByClientId(CLIENT_ID)).thenReturn(Optional.empty());
 
@@ -91,7 +91,7 @@ class CachedOAuth2RegisteredClientEntityServiceTest {
 
     @Test
     void testFindByClientIdSmartCacheExceptionThrowsServerException() {
-        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any()))
+        when(smartCacheManager.get(eq(CACHE_NAME), eq(CACHE_KEY), any(java.util.concurrent.Callable.class)))
                 .thenThrow(new RuntimeException("Redis connection failed"));
 
         log.info("验证 SmartCache 异常时不降级直查 JPA");

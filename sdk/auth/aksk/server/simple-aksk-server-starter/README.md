@@ -1,13 +1,14 @@
 # Simple AKSK Server Starter
 
-> **3.0.1**：内省时间 claim 组装前整秒截断，修复签发后立即使用令牌的间歇拒绝；Illegal 系异常收敛到模块异常体系；`simple-application-authorization-core` 升级 1.0.1（默认 2 秒时钟容差）；移除旧协作 E2E Server 机制。外部发布状态以 Maven Central / Central Portal 实证为准。2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
+> 当前版本 **3.1.0**。版本沿革见各 `CHANGELOG.*.md`。  
+> 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。  
+> 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-> **1.x 封版文档**：如果你使用的是 1.x 版本，请查看 [README.1.x.md](README.1.x.md)。
 
 基于 Spring Authorization Server 的 AKSK（Access Key / Secret Key）认证服务器 Starter，支持平台级和用户级 AKSK 管理，提供完整的
 OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全生命周期管理与审计。
@@ -26,6 +27,7 @@ OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全�
 - ✅ **Admin 管理界面**：AKSK 和 Token 的创建、查询、启用/禁用、撤销、删除
 - ✅ **Client 管理 API**：内网 REST API，支持创建、查询、删除、权限同步
 - ✅ **Token 管理 API**：内网 REST API，支持查询、撤销、删除、统计
+- ✅ **公共资源层鉴权（3.1.0）**：`/api/**` 由 `simple-resource-server-starter` 统一鉴权（kid 路由、API permission、DATA plan），配置错误启动即拦；部署方可选外插 IAM 资源层让同一 `/api/**` 接受 IAM 人员 Token
 - ✅ **安全上下文传递**：Token 中携带自定义安全上下文信息
 
 ---
@@ -36,15 +38,22 @@ OAuth2 Client Credentials 授权流程、JWE Token 签发与验证、Token 全�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    // AKSK Server 本体。simple-aksk-core / simple-aksk-server-core /
+    // simple-application-authorization-core / simple-data-permission-core、
+    // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
+    // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
+    // runtimeOnly 传递运行时，使用方无需重复声明
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.1.0'
 
-    // 必需运行时依赖
+    // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Admin 管理页面模板引擎（admin.enabled 默认开启；显式关闭后可省略）
+    runtimeOnly 'org.springframework.boot:spring-boot-starter-thymeleaf'
+
+    // 数据库驱动（MySQL 必需；无论直连 spring.datasource.* 还是 mysql-route 接管均由使用方提供）
     runtimeOnly 'mysql:mysql-connector-java:8.0.33'
 }
 ```
@@ -63,7 +72,7 @@ mysql -u <database-user> -p <database-name> < docs/02_upgrade_3.0.0.sql
 
 ### 3. 配置应用
 
-**最小配置（3.0.0 起 Redis 必需）**：
+下面是一份**完整配置**（键值即默认值，`<...>` 为必填项）。每行注释解释该配置的作用，按需精简：
 
 ```yaml
 io:
@@ -74,42 +83,75 @@ io:
           aksk:
             server:
               jwt:
-                key-id: sure-auth-aksk-2026
-                expires-in: 3600
-                public-key: classpath:keys/public.pem
-                private-key: classpath:keys/private.pem
-                encryption-key: <Base64 AES-256 密钥>
+                key-id: sure-auth-aksk-2026        # JWT Key ID。签发侧自动包装 aksk/ 路由前缀，配置值不得重复携带前缀或非法字符（启动校验拦截）
+                expires-in: 3600                   # Token 有效期（秒）
+                public-key: classpath:keys/public.pem    # RSA 公钥，支持 classpath 路径 / PEM 内容 / Base64 三种形态
+                private-key: classpath:keys/private.pem  # RSA 私钥，形态同上
+                encryption-key: <Base64 AES-256 密钥>    # JWE 加密密钥（必填），openssl rand -base64 32 生成，32 字节
+                security-context-max-size: 4096    # security_context claim 最大字节数，超出拒绝签发
               redis:
                 token:
-                  me: my-aksk-server  # 应用标识，同一 AKSK Server 集群必须保持一致
+                  me: my-aksk-server               # 应用标识：Token 缓存的 Redis 命名空间。同一集群所有实例必须一致
               limiter:
                 oauth2:
-                  enable: true        # 默认 true，限制 /oauth2/token、/oauth2/introspect、/oauth2/revoke
+                  enable: true                     # OAuth2 端点限流总开关，覆盖 /oauth2/token、/oauth2/introspect、/oauth2/revoke
+                  token:
+                    algorithm: sliding             # token 端点限流算法
+                    fallback: deny                 # token 端点限流执行异常时的策略：deny 拒绝 / allow 放行
+                    key-strategy: ip               # 取不到 clientId 时的回退限流维度（默认按 clientId 限流）
+                  introspect:
+                    fallback: allow                # introspect 端点限流异常策略
+                  revoke:
+                    fallback: allow                # revoke 端点限流异常策略
               admin:
-                enabled: true
-                username: admin
+                enabled: true                      # Admin 管理台开关。false 时 /admin 整链不装配（门户形态），启动日志提示"管理台已停用"
+                username: admin                    # Admin 登录用户名
+                password: <管理员密码>              # Admin 登录密码（必填），走受保护的部署配置
+                session-timeout-minutes: 30        # Admin 会话超时（分钟）
+          resource:
+            server:
+              enabled: true                      # 公共资源层开关。显式 false 会被启动校验拒绝（/api 裸奔守护），保持默认即可
+              # protected-paths: [/api/**]       # 资源层保护路径。缺省自动补全 /api/**，显式配置不得摘除（启动校验拦截）
         limiter:
           redis:
             smart:
-              enable: true            # 开启 smart-redis-limiter 自动配置，AKSK OAuth2 限流会复用其算法和 Redis Bean
-              me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me}
-              mode: annotation         # 最小配置不启用 MVC interceptor；业务方需要 MVC 限流时再改为 interceptor/both 并配置 rules
+              enable: true                         # smart-redis-limiter 自动配置开关，OAuth2 限流复用其算法与 Redis Bean
+              me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me}  # 限流命名空间，必须与 redis.token.me 一致
+              mode: annotation                     # annotation / interceptor / both。AKSK 自身用 annotation；需要 MVC 接口限流时改 interceptor/both
+              interceptor:
+                enabled: false                     # MVC 拦截器开关（mode 含 interceptor 时生效）
+                exclude-patterns: [/actuator/**]   # 拦截器排除路径
+              # rules:                             # MVC 限流规则（可选），每条含 path-pattern / key-strategy / algorithm / fallback / limits
+              #   - path-pattern: /api/**
+              #     key-strategy: ip
+              #     algorithm: sliding
+              #     fallback: allow
+              #     limits:
+              #       - count: 600
+              #         window: 1
+              #         unit: MINUTES
         cache:
-          key-prefix: sure-auth-aksk
-          me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me}
+          key-prefix: sure-auth-aksk               # Redis key 前缀
+          me: ${io.github.surezzzzzz.sdk.auth.aksk.server.redis.token.me}        # 缓存命名空间，必须与 redis.token.me 一致
           l1:
-            enabled: true
-            expire-seconds: 10        # L1 本地缓存 TTL（秒）
-            max-size: 10000
+            enabled: true                          # Caffeine 本地一级缓存（introspect 热路径免 Redis）
+            expire-seconds: 10                     # L1 TTL（秒），越短撤销感知越快、Redis 压力越大
+            max-size: 10000                        # L1 最大条目数
           l2:
-            enabled: true
-            expire-seconds: ${io.github.surezzzzzz.sdk.auth.aksk.server.jwt.expires-in:3600}
-            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+            enabled: true                          # Redis 分布式二级缓存
+            expire-seconds: ${io.github.surezzzzzz.sdk.auth.aksk.server.jwt.expires-in:3600}  # 建议与 Token 有效期一致
+            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"   # Redis key 格式，需与 AKSK key 格式一致
           consistency:
-            mode: strong              # 多实例 Pub/Sub 强一致
+            mode: strong                           # strong（Pub/Sub 广播失效，多实例强一致）/ eventual（不广播）
 ```
 
-> `redis.token.me`、`limiter.redis.smart.me`、`cache.me` 必须使用同一个应用标识。同一 AKSK Server 集群中不要为不同实例配置不同 `me`，否则 Token 缓存、L1 失效广播和 OAuth2 限流都会落到不同 Redis 命名空间。
+> **三个 `me` 必须同值**：`redis.token.me`、`limiter.redis.smart.me`、`cache.me` 是同一个应用标识。同集群不同实例配不同 `me`，Token 缓存、L1 失效广播和 OAuth2 限流会落到不同 Redis 命名空间。
+>
+> **启动期 fail-fast 三项**（配错直接拒绝启动）：`jwt.key-id` 含路由前缀或非法字符；`auth.resource.server.enabled=false`；protected-paths 摘掉 `/api/**`。
+
+### 4. 访问 Admin 管理页面
+
+启动后访问部署地址的 `/admin`，使用部署侧配置的管理员账号登录。
 
 ### 可选：接入 Token 审计 listener
 
@@ -118,10 +160,6 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:
 ```
 
 该扩展不由 Starter 自动引入。应用授权完整替换或撤销会为每个实际失效 Token 产生 `REVOKED` 事件，`cause` 分别为 `APPLICATION_AUTHORIZATION_REPLACED` 或 `APPLICATION_AUTHORIZATION_REVOKED`；详见审计 listener 的 README。Handler 接收的审计 record 不含 Token 原文。
-
-### 4. 访问 Admin 管理页面
-
-启动后访问部署地址的 `/admin`，使用部署侧配置的管理员账号登录。
 
 ---
 
@@ -152,6 +190,36 @@ ClientInfo client = clientManagementService.createUserClient("user123", "张三"
 请求的 `scope` 只能在 Client 注册范围内缩小，且不参与 API permission 或 DATA grant 推导。
 
 > JWE Token 结构为 5 段（`Header.EncryptedKey.IV.Ciphertext.Tag`），payload 已加密，无法在客户端直接解析。
+
+### 撤销 Token
+
+调用标准 OAuth2 `/oauth2/revoke` 可撤销当前 Client 的 Token。撤销后 introspect 返回 `active=false`，并同步清除 L1、L2 缓存。认证材料、Token 值和 introspection 完整响应均不应记录或展示。
+
+### 监听审计事件
+
+```java
+
+@EventListener
+public void onTokenIssued(TokenIssuedEvent event) {
+    log.info("Token issued: clientId={}, scopes={}", event.getClientId(), event.getScopes());
+}
+
+@EventListener
+public void onTokenRevoked(TokenRevokedEvent event) {
+    log.info("Token revoked: clientId={}, eventTime={}", event.getClientId(), event.getEventTime());
+}
+
+@EventListener
+public void onTokenIntrospected(TokenIntrospectedEvent event) {
+    log.info("Token introspected: clientId={}, active={}", event.getClientId(), event.isActive());
+}
+```
+
+所有事件通过 `event.getEventType()` 获取 `TokenEventType` 枚举，无需硬编码字符串。
+
+### introspect 调用边界
+
+`/oauth2/introspect` 必须使用已认证的 Client 调用。资源服务应通过受保护配置保存内省客户端认证材料；不要启用匿名内省，也不要记录认证材料、Token 或完整响应。
 
 ### 3.0 权限模型：OAuth Scope、security_context 与 aksk_authorization
 
@@ -192,64 +260,6 @@ curl -X POST https://<aksk-server>/oauth2/token \
 
 资源侧可通过 `SimpleAkskSecurityContextProvider` 读取它，但必须把它当作不可信输入；租户范围、API permission 和 DATA grant 仍以 `aksk_authorization` 为准。
 
-#### 应用授权管理 REST
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/api/application-authorization` | 为已有 Client 创建首次授权投影，重复创建返回 409 |
-| `GET` | `/api/application-authorization/{clientId}` | 查询指定 Client 授权 |
-| `GET` | `/api/application-authorization` | 按 `DataAccessPlan` 过滤后再统计和分页 |
-| `PUT` | `/api/application-authorization/{clientId}` | 完整替换授权，递增授权版本并撤销该 Client 活跃 Token |
-| `POST` | `/api/application-authorization/{clientId}/revoke` | 撤销授权并撤销该 Client 活跃 Token |
-
-机器 REST 使用精确应用授权 permission 和 `DataAccessPlan`；Admin 页面使用本地 session + form login + CSRF，两者是不同的控制面。IAM 后续可以通过可选 adapter 或受认证 REST contract 调用该 REST 资源，不共享数据库，也不成为 AKSK 签发 Token 的运行时前置依赖。
-
-### 文档导航
-
-- [3.0.0 新装手册](docs/03_install_3.0.0.md)
-- [2.x 升级手册](docs/04_upgrade_2.x_to_3.0.0.md)
-- [运维手册](docs/05_operations_3.0.0.md)
-- [发布验收清单](docs/06_release_acceptance_3.0.0.md)
-- [依赖解析验证](docs/07_dependency_resolution_3.0.0.md)
-
-### 与 IAM 协作资源服务（可选）
-
-AKSK Server 可以独立部署和使用。若同一业务 API 还需要接受 IAM 人员身份，应由业务资源服务组合公共资源层、IAM Provider 与 AKSK Provider；认证源二选一，不共享数据库、不回退认证，也不合并权限。接入方式见 [IAM 与 AKSK 协作接入](../../../README.IAM-AKSK协作.md)。
-
-### 撤销 Token
-
-调用标准 OAuth2 `/oauth2/revoke` 可撤销当前 Client 的 Token。撤销后 introspect 返回 `active=false`，并同步清除 L1、L2 缓存。认证材料、Token 值和 introspection 完整响应均不应记录或展示。
-
-### 监听审计事件
-
-```java
-
-@EventListener
-public void onTokenIssued(TokenIssuedEvent event) {
-    log.info("Token issued: clientId={}, scopes={}", event.getClientId(), event.getScopes());
-}
-
-@EventListener
-public void onTokenRevoked(TokenRevokedEvent event) {
-    log.info("Token revoked: clientId={}, eventTime={}", event.getClientId(), event.getEventTime());
-}
-
-@EventListener
-public void onTokenIntrospected(TokenIntrospectedEvent event) {
-    log.info("Token introspected: clientId={}, active={}", event.getClientId(), event.isActive());
-}
-```
-
-所有事件通过 `event.getEventType()` 获取 `TokenEventType` 枚举，无需硬编码字符串。
-
-### 携带自定义安全上下文
-
-在 token 请求中可选携带 JSON 格式的 `security_context`。它会进入 JWE Token 的同名 claim，供业务读取运行时上下文；它不授予 API permission 或 DATA grant，也不能覆盖 `aksk_authorization`。
-
-### introspect 调用边界
-
-`/oauth2/introspect` 必须使用已认证的 Client 调用。资源服务应通过受保护配置保存内省客户端认证材料；不要启用匿名内省，也不要记录认证材料、Token 或完整响应。
-
 ---
 
 ## Spring Authorization Server 默认端点
@@ -277,7 +287,21 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 
 ---
 
-## Client 管理 API
+## 管理 API
+
+`/api/**` 是机器管理控制面（3.1.0 起走公共资源层鉴权）：调用 Token 必须包含对应端点的精确 API permission；涉及读取、更新、删除或批量操作时，还必须通过目标资源的 `DataAccessPlan` 校验。Scope 与 `security_context` 均不能替代这两项校验。Admin 页面使用本地 session + form login + CSRF，与机器 REST 是不同的控制面。
+
+### 应用授权管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/application-authorization` | 为已有 Client 创建首次授权投影，重复创建返回 409 |
+| `GET` | `/api/application-authorization/{clientId}` | 查询指定 Client 授权 |
+| `GET` | `/api/application-authorization` | 按 `DataAccessPlan` 过滤后再统计和分页 |
+| `PUT` | `/api/application-authorization/{clientId}` | 完整替换授权，递增授权版本并撤销该 Client 活跃 Token |
+| `POST` | `/api/application-authorization/{clientId}/revoke` | 撤销授权并撤销该 Client 活跃 Token |
+
+### Client 管理
 
 | 端点                                   | 方法     | 说明                  |
 |--------------------------------------|--------|---------------------|
@@ -289,9 +313,7 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户 OAuth Scope |
 | `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
 
-以上接口属于机器管理控制面。调用 Token 必须包含对应的精确 API permission；涉及读取、更新、删除或批量操作时，还必须通过目标 Client 的 `DataAccessPlan` 校验。Scope 与 `security_context` 均不能替代这两项校验。
-
-## Token 管理 API
+### Token 管理
 
 | 端点                       | 方法     | 说明                         |
 |--------------------------|--------|----------------------------|
@@ -304,96 +326,47 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/token/expired`     | DELETE | 清理过期 Token                 |
 | `/api/token/statistics`  | GET    | 获取 Token 统计信息              |
 
-以上接口属于机器管理控制面。调用 Token 必须包含对应的精确 API permission；涉及指定 Client 或 Token 的读取、更新、删除时，还必须通过目标资源的 `DataAccessPlan` 校验。Scope 与 `security_context` 均不能替代这两项校验。
-
 ---
 
-## 配置说明
+## 与 IAM 协作（可选）
 
-### JWT 配置
+### 业务资源服务：双身份接入
 
-| 配置项                             | 说明                          | 默认值                 |
-|---------------------------------|-----------------------------|---------------------|
-| `jwt.key-id`                    | JWT Key ID                  | sure-auth-aksk-2026 |
-| `jwt.expires-in`                | Token 过期时间（秒）               | 3600                |
-| `jwt.public-key`                | RSA 公钥（支持文件路径/PEM内容/Base64） | -                   |
-| `jwt.private-key`               | RSA 私钥                      | -                   |
-| `jwt.encryption-key`             | AES-256 密钥（Base64 编码，32 字节）  | - **必填**           |
-| `jwt.security-context-max-size` | Security Context 最大大小（字节）   | 4096                |
+AKSK Server 可以独立部署和使用。若同一业务 API 还需要接受 IAM 人员身份，应由业务资源服务组合公共资源层、IAM Provider 与 AKSK Provider；认证源二选一，不共享数据库、不回退认证，也不合并权限。接入方式见 [IAM 与 AKSK 协作接入](../../../README.IAM-AKSK协作.md)。
 
-### Redis 配置
+### 本 Server：让 /api 接受 IAM 人员 Token
 
-3.0.0 起 Redis 为必需依赖，不再提供无 Redis 模式。
+默认形态下 `/api/**` 只认本 Server 签发的 JWE Token（AKP / AKU 机器调用）。部署方若需要让门户或自建前端以 IAM 人员身份调这些管理 API，只需在**部署工程**（不是给本 starter 加依赖）引入 IAM 资源层并配置回源校验：
 
-| 配置项              | 说明            | 默认值     |
-|------------------|---------------|---------|
-| `redis.token.me` | 应用标识，多实例需保持一致 | default |
-
-### OAuth2 限流配置
-
-AKSK OAuth2 限流复用 `smart-redis-limiter-starter`，开启 `limiter.oauth2.enable=true` 时必须同时配置 `io.github.surezzzzzz.sdk.limiter.redis.smart.enable=true`。
-
-OAuth2 端点默认通过内置 `AkskOAuth2ClientIdKeyProvider` 从 Basic Auth 或 `client_id` 参数提取 clientId，按 `client:{clientId}` 维度限流；取不到 clientId 时才回退到端点配置的 `key-strategy`。
-
-| 配置项                             | 说明                         | 默认值     |
-|---------------------------------|----------------------------|---------|
-| `limiter.oauth2.enable`         | 是否启用 OAuth2 端点限流          | true    |
-| `limiter.oauth2.token.algorithm` | token 端点限流算法               | sliding |
-| `limiter.oauth2.token.fallback`  | token 端点限流执行异常处理策略      | deny    |
-| `limiter.oauth2.token.key-strategy` | token 端点取不到 clientId 时的回退 key 策略 | ip      |
-| `limiter.oauth2.introspect.fallback` | introspect 端点限流执行异常处理策略 | allow   |
-| `limiter.oauth2.revoke.fallback` | revoke 端点限流执行异常处理策略      | allow   |
-
-`fallback` 仅表示单次限流执行异常时放行或拒绝，不表示 AKSK Server 支持无 Redis 模式。
-
-如果业务方需要对 MVC 接口启用 smart-limiter interceptor，可自行配置 rules。AKSK 最小配置不默认接管 `/api/**` 或 `/admin/**`：
+```gradle
+implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+```
 
 ```yaml
 io:
   github:
     surezzzzzz:
       sdk:
-        limiter:
-          redis:
-            smart:
-              mode: interceptor
-              interceptor:
-                enabled: true
-                exclude-patterns:
-                  - /oauth2/**
-                rules:
-                  - path-pattern: /api/**
-                    key-strategy: ip
-                    algorithm: sliding
-                    fallback: allow
-                    limits:
-                      - count: 600
-                        window: 1
-                        unit: MINUTES
+        auth:
+          iam:
+            resource:
+              server:
+                verification-endpoint: http://<iam-host>/iam/resource/tokens/verify
+                client-id: <IAM 侧签发的 verification client id>
+                client-secret: <凭据，走受保护的部署配置，不要写进代码仓库>
 ```
 
-### SmartCache 配置
+配置生效后，同一个 `/api/**` 端点接受两种身份：AKSK Token（client credentials 换取）与 IAM Token（门户登录换取），均按各自授权通过 API permission 与 DATA 过滤。
 
-| 配置项                       | 说明                                  | 默认值                                   |
-|---------------------------|-------------------------------------|---------------------------------------|
-| `cache.key-prefix`        | Redis key 前缀                        | sure-auth-aksk                        |
-| `cache.me`                | 应用标识，必须与 `redis.token.me` 保持一致      | -                                     |
-| `cache.l1.enabled`        | 是否启用 L1 本地缓存                        | true                                  |
-| `cache.l1.expire-seconds` | L1 缓存 TTL（秒）                        | 10                                    |
-| `cache.l1.max-size`       | L1 最大条目数                            | 10000                                 |
-| `cache.l2.enabled`        | 是否启用 L2 Redis 缓存                    | true                                  |
-| `cache.l2.expire-seconds` | L2 缓存 TTL（秒），建议与 JWT 过期时间一致         | 3600                                  |
-| `cache.l2.key-format`     | Redis key 格式，需与 AKSK key 格式一致       | `{keyPrefix}:{me}:{cacheName}::{key}` |
-| `cache.consistency.mode`  | 一致性模式：`strong`（Pub/Sub）或 `eventual` | strong                                |
+#### 原理：两种 Token 各自怎么验
 
-### Admin 配置
+- **AKSK 半边不需要引 aksk-resource**。`/api` 收到的 AKSK Token 是本 Server 自己签发的 JWE：本 Server 持有解密密钥，自身就是权威源，内置的 `JweResourceAuthenticationAdapter` 直接本地解密验真。此时若引入 `simple-aksk-resource-server-starter`，它的校验方式是把每个请求经 HTTP 打回本 Server 的 `/oauth2/introspect`——自己调自己、校验自己刚签的 token，凭据配置、进程内 HTTP 往返、OAuth2 端点限流挤占全是白付。
+- **IAM 半边必须外插 iam-resource**。IAM Token 不是本 Server 签发的，本 Server 没有校验它的任何材料。`simple-iam-resource-server-starter` 的做法是把 Token 回源到 IAM 的 verify 端点，由签发方给结论，本 Server 只消费结果——谁签发，谁校验。
+- **两个来源如何并存**。Token header 里的 `kid` 带来源前缀（`aksk/xxx`、`iam/xxx`），公共资源层按前缀路由到对应 Provider，两套身份互不干扰。
 
-| 配置项                             | 说明               | 默认值   |
-|---------------------------------|------------------|-------|
-| `admin.enabled`                 | 是否启用 Admin 管理页面  | true  |
-| `admin.username`                | Admin 用户名        | admin |
-| `admin.password`                | Admin 密码         | -     |
-| `admin.session-timeout-minutes` | Session 超时时间（分钟） | 30    |
+一句话：验外来身份回源，验自家身份本地解。业务服务两个都外插（都不持有密钥）；本 Server 作为 AKSK 签发者，AKSK 半边天然本地解，只外插 IAM 半边。
+
+授权语义不变：IAM 主体调 `/api/**` 同样要过精确 API permission 与 `DataAccessPlan` 过滤，权限码（`akskClient:*`、`akskToken:*`、`akskApplicationAuthorization:*` 等）与数据范围在 IAM 侧为该人员配置；本 Server 零代码改动，不引入 iam-resource 时行为与默认形态完全一致。
 
 ---
 
@@ -406,6 +379,14 @@ io:
 | Secret Key | `SK`  | 与 AK 配对，BCrypt 加密存储，仅创建时返回明文 |
 
 ---
+
+## 文档导航
+
+- [3.0.0 新装手册](docs/03_install_3.0.0.md)
+- [2.x 升级手册](docs/04_upgrade_2.x_to_3.0.0.md)
+- [运维手册](docs/05_operations_3.0.0.md)
+- [发布验收清单](docs/06_release_acceptance_3.0.0.md)
+- [依赖解析验证](docs/07_dependency_resolution_3.0.0.md)
 
 ## 常见问题
 
@@ -457,11 +438,15 @@ logging:
 
 ---
 
-## 待发布变更与版本历史
+## 版本历史
 
-### 3.0.0（待发布）
+### 3.1.0 (2026-09-01)
 
-应用授权自闭环候选版本。新增 AKSK Server 自主维护的 `aksk_application_authorization` 投影与 Admin / REST 管理入口；Token 签发和内省按已启用、已准入的授权快照 fail-close。管理 REST 从 Scope 模型迁移至精确 API permission + `DataAccessPlan`，并在授权替换或撤销前执行 Token 范围预检。Admin Secret 改为认证会话一次性交付，禁止通过 URL 或通用 Admin JSON 暴露。发布后再以实际版本记录为准。
+Management API 授权重构——`/api/**` 鉴权链移交公共资源层（`simple-resource-server-starter` 1.1.1）；启动期 fail-fast 校验（keyId 路由前缀 / 资源层开关 / protected-paths 守护）；中间件依赖对齐 route 1.2.2 版本线（cache 2.2.0、limiter 2.1.0）与依赖口径收紧；测试配置 MySQL 连接切 mysql-route 接管；README 新增 iam-resource 外插接入教程。详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
+
+### 3.0.0 (2026-08-19)
+
+应用授权自闭环版本。新增 AKSK Server 自主维护的 `aksk_application_authorization` 投影与 Admin / REST 管理入口；Token 签发和内省按已启用、已准入的授权快照 fail-close。管理 REST 从 Scope 模型迁移至精确 API permission + `DataAccessPlan`；Admin Secret 改为认证会话一次性交付。详见 [CHANGELOG.3.0.0.md](CHANGELOG.3.0.0.md)。
 
 ### 2.0.3 (2026-06-22)
 

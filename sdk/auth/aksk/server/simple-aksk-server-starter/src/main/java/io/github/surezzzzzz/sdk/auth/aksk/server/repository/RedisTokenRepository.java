@@ -9,12 +9,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
+import io.github.surezzzzzz.sdk.redis.route.constant.SimpleRedisRouteConstant;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ScanOptions;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 
 import java.io.ByteArrayInputStream;
@@ -49,11 +50,14 @@ public class RedisTokenRepository {
     private static final String JSON_FIELD_METADATA = "metadata";
     private static final String JSON_FIELD_SCOPES = "scopes";
     private static final String JSON_PATH_TOKEN_INVALIDATED = "metadata.token.invalidated";
-    private final RedisTemplate<String, Object> redisTemplate;
+    // smart-cache 2.x 已移除 smartCacheRedisTemplate；此处只用 SCAN/裸字节 GET/DEL（不经值序列化器），
+    // StringRedisTemplate 即可。cache 2.2.0 起 lock 1.2.2 让位语义生效：容器存在 route 接管的标准 stringRedisTemplate
+    // 时 lock 不再自建同名模板，双候选已消失；此处 @Qualifier 显式按名取 route 接管的标准模板，语义不变
+    private final StringRedisTemplate redisTemplate;
     private final RedisKeyHelper redisKeyHelper;
 
     public RedisTokenRepository(
-            @Qualifier("smartCacheRedisTemplate") RedisTemplate<String, Object> redisTemplate,
+            @Qualifier(SimpleRedisRouteConstant.STRING_REDIS_TEMPLATE_BEAN_NAME) StringRedisTemplate redisTemplate,
             RedisKeyHelper redisKeyHelper) {
         this.redisTemplate = redisTemplate;
         this.redisKeyHelper = redisKeyHelper;
@@ -84,9 +88,11 @@ public class RedisTokenRepository {
 
     /**
      * 读取 Redis 中的 token 数据。
-     * 兼容两种格式：
+     * 兼容三种格式：
      * 1. Java 序列化（历史数据，0xAC 0xED 开头）→ 反序列化为 OAuth2Authorization
-     * 2. SmartCache JSON（新数据）→ 直接解析 JsonNode，不反序列化为 OAuth2Authorization
+     * 2. SmartCache 1.x DefaultTyping JSON → ["@class", {...}]，取数组第 2 位
+     * 3. SmartCache 2.x Jackson 序列化器 JSON → {"type":"...","data":{...}} 信封，取 data 字段
+     * 2/3 的内层字段名均由 OAuth2Authorization 的 getter 推导，剥壳后解析逻辑一致
      */
     private TokenInfo readTokenInfoFromRedis(String key) throws Exception {
         byte[] rawBytes = redisTemplate.execute((RedisCallback<byte[]>) connection ->
@@ -106,9 +112,13 @@ public class RedisTokenRepository {
                 return convertFromOAuth2Authorization(auth);
             }
         } else {
-            // SmartCache JSON 格式：DefaultTyping 写入 ["@class", {...}]
             JsonNode root = PLAIN_MAPPER.readTree(rawBytes);
-            JsonNode obj = root.isArray() ? root.get(1) : root;
+            JsonNode obj = root;
+            if (root.isArray()) {
+                obj = root.get(1);
+            } else if (root.isObject() && root.has("data") && root.get("data").isObject()) {
+                obj = root.get("data");
+            }
             return convertFromJsonNode(obj);
         }
     }

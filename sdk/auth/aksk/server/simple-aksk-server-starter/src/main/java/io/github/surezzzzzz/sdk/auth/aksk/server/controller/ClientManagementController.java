@@ -8,15 +8,17 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.UpdateClient
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
-import io.github.surezzzzzz.sdk.auth.aksk.server.support.ManagementApiAuthorizationHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.CrossResourceDataPlanHelper;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.annotation.RequireApiPermission;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
+import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.annotation.CurrentDataAccessPlan;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import javax.servlet.http.HttpServletRequest;
 import javax.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -36,15 +38,18 @@ import java.util.stream.Collectors;
 public class ClientManagementController {
 
     private final ClientManagementService clientManagementService;
+    private final CrossResourceDataPlanHelper crossResourceDataPlanHelper;
 
     /**
      * 创建Client（统一接口，通过type区分平台级/用户级）
      */
     @PostMapping
-    public ResponseEntity<CreateClientResponse> createClient(HttpServletRequest httpRequest,
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_CREATE)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_CREATE)
+    public ResponseEntity<CreateClientResponse> createClient(@CurrentDataAccessPlan DataAccessPlan plan,
                                                              @RequestBody CreateClientRequest request) {
         log.info("Creating client: type={}, name={}", request.getType(), request.getName());
-        DataAccessPlan plan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
 
         ClientInfoResponse clientInfo;
 
@@ -85,13 +90,16 @@ public class ClientManagementController {
      * @return 分页的Client列表或批量查询结果
      */
     @GetMapping
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_READ)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_READ)
     public ResponseEntity<?> listClients(
             @RequestParam(required = false) @Size(max = 100, message = "clientIds不能超过100个") List<String> clientIds,
             @RequestParam(required = false) String ownerUserId,
             @RequestParam(required = false) String type,
             @RequestParam(required = false, defaultValue = "1") Integer page,
             @RequestParam(required = false, defaultValue = "20") Integer size,
-            HttpServletRequest httpRequest) {
+            @CurrentDataAccessPlan DataAccessPlan plan) {
 
         // 优先处理批量查询
         if (clientIds != null && !clientIds.isEmpty()) {
@@ -102,8 +110,7 @@ public class ClientManagementController {
                     .map(String::trim)
                     .collect(Collectors.toList());
 
-            Map<String, ClientInfoResponse> clientMap = clientManagementService.batchGetClientsByIds(trimmedIds,
-                    ManagementApiAuthorizationHelper.currentPlan(httpRequest));
+            Map<String, ClientInfoResponse> clientMap = clientManagementService.batchGetClientsByIds(trimmedIds, plan);
 
             BatchClientResponse response = new BatchClientResponse();
             response.setClients(clientMap);
@@ -116,7 +123,7 @@ public class ClientManagementController {
                 ownerUserId, type, page, size);
 
         PageResponse<ClientInfoResponse> response = clientManagementService.listClients(
-                ownerUserId, type, page, size, ManagementApiAuthorizationHelper.currentPlan(httpRequest));
+                ownerUserId, type, page, size, plan);
 
         return ResponseEntity.ok(response);
     }
@@ -125,11 +132,13 @@ public class ClientManagementController {
      * 查询Client详情
      */
     @GetMapping("/{clientId}")
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_READ)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_READ)
     public ResponseEntity<ClientInfoResponse> getClient(@PathVariable String clientId,
-                                                        HttpServletRequest httpRequest) {
+                                                        @CurrentDataAccessPlan DataAccessPlan plan) {
         try {
-            ClientInfoResponse clientInfo = clientManagementService.getClientById(clientId,
-                    ManagementApiAuthorizationHelper.currentPlan(httpRequest));
+            ClientInfoResponse clientInfo = clientManagementService.getClientById(clientId, plan);
             return ResponseEntity.ok(clientInfo);
         } catch (ManagementAccessDeniedException exception) {
             throw exception;
@@ -143,10 +152,13 @@ public class ClientManagementController {
      * 删除Client
      */
     @DeleteMapping("/{clientId}")
-    public ResponseEntity<Void> deleteClient(@PathVariable String clientId, HttpServletRequest httpRequest) {
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_DELETE)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_DELETE)
+    public ResponseEntity<Void> deleteClient(@PathVariable String clientId,
+                                             @CurrentDataAccessPlan DataAccessPlan clientPlan) {
         log.info("Deleting client: {}", clientId);
-        DataAccessPlan clientPlan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
-        DataAccessPlan tokenPlan = ManagementApiAuthorizationHelper.requiredPlan(httpRequest,
+        DataAccessPlan tokenPlan = crossResourceDataPlanHelper.require(
                 SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
                 SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE,
                 SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE);
@@ -158,15 +170,17 @@ public class ClientManagementController {
      * 批量更新用户的Client权限（权限同步）
      */
     @PatchMapping
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_UPDATE)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE)
     public ResponseEntity<SyncScopesResponse> syncUserScopes(
             @RequestParam(SimpleAkskServerConstant.PARAM_OWNER_USER_ID) String userId,
             @RequestBody UpdateClientRequest request,
-            HttpServletRequest httpRequest) {
+            @CurrentDataAccessPlan DataAccessPlan plan) {
 
         log.info("Syncing scopes for user: {}, new scopes: {}", userId, request.getScopes());
 
-        int updatedCount = clientManagementService.syncUserScopes(userId, request.getScopes(),
-                ManagementApiAuthorizationHelper.currentPlan(httpRequest));
+        int updatedCount = clientManagementService.syncUserScopes(userId, request.getScopes(), plan);
 
         SyncScopesResponse response = new SyncScopesResponse();
         response.setOwnerUserId(userId);
@@ -180,14 +194,16 @@ public class ClientManagementController {
      * 重置 Client Secret
      */
     @PutMapping("/{clientId}/secret")
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_UPDATE)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE)
     public ResponseEntity<ResetSecretResponse> resetSecret(
             @PathVariable String clientId,
             @RequestParam(defaultValue = "true") boolean revokeTokens,
-            HttpServletRequest httpRequest) {
+            @CurrentDataAccessPlan DataAccessPlan clientPlan) {
         log.info("Resetting secret for client: {}, revokeTokens={}", clientId, revokeTokens);
-        DataAccessPlan clientPlan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
         DataAccessPlan tokenPlan = revokeTokens
-                ? ManagementApiAuthorizationHelper.requiredPlan(httpRequest,
+                ? crossResourceDataPlanHelper.require(
                 SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
                 SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE,
                 SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE)
@@ -199,12 +215,14 @@ public class ClientManagementController {
      * 更新Client信息（启用/禁用、权限范围、名称、归属信息）
      */
     @PatchMapping("/{clientId}")
+    @RequireApiPermission(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_UPDATE)
+    @DataPermissionOperation(resource = SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+            action = SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE)
     public ResponseEntity<ApiResponse> updateClient(
             @PathVariable String clientId,
             @RequestBody UpdateClientRequest request,
-            HttpServletRequest httpRequest) {
+            @CurrentDataAccessPlan DataAccessPlan plan) {
         log.info("Updating client: {}", clientId);
-        DataAccessPlan plan = ManagementApiAuthorizationHelper.currentPlan(httpRequest);
 
         if (request.getEnabled() != null) {
             if (request.getEnabled()) {

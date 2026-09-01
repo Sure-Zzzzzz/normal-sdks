@@ -29,7 +29,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -73,7 +73,7 @@ class ManagementDataAccessIntegrationTest {
     private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate redisTemplate;
 
     private ClientInfoResponse managementClient;
 
@@ -202,6 +202,33 @@ class ManagementDataAccessIntegrationTest {
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode(), "受影响 Token 未获 update 授权必须整体拒绝");
         assertTrue(clientRepository.findByClientId(targetClient.getClientId()).isPresent(),
                 "Token 范围预检失败时不得删除 Client");
+    }
+
+    @Test
+    void shouldRejectClientDeletionWhenTokenUpdateApiPermissionMissing() {
+        ClientInfoResponse targetClient = clientManagementService.createPlatformClient("Delete Token Api Permission Target");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, targetClient);
+        JwtTokenTestHelper.getTokenByClientCredentials(restTemplate, port,
+                targetClient.getClientId(), targetClient.getClientSecret());
+
+        // apiPermissions 只给 client:delete（缺 token:update），数据计划 client:delete 与
+        // token:update 均全放行——跨资源连带操作必须补 API 权限层评估（对齐 3.0.x requiredPlan 双层语义）
+        String token = issueManagementToken(Collections.singletonList(
+                        SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_DELETE),
+                document(
+                        new DataGrant(SimpleAkskServerConstant.MANAGEMENT_RESOURCE_CLIENT,
+                                Collections.singletonList(SimpleAkskServerConstant.MANAGEMENT_ACTION_DELETE), true,
+                                Collections.<DataConstraint>emptyList()),
+                        new DataGrant(SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
+                                Collections.singletonList(SimpleAkskServerConstant.MANAGEMENT_ACTION_UPDATE), true,
+                                Collections.<DataConstraint>emptyList())));
+
+        ResponseEntity<Void> response = restTemplate.exchange(clientUrl("/api/client/" + targetClient.getClientId()),
+                HttpMethod.DELETE, JwtTokenTestHelper.createAuthEntity(token), Void.class);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode(), "缺 token:update API 权限时必须整体拒绝");
+        assertTrue(clientRepository.findByClientId(targetClient.getClientId()).isPresent(),
+                "API 权限缺失被拒时不得删除 Client");
     }
 
     private void createAuthorizationWithoutAccessToken(String clientId) {

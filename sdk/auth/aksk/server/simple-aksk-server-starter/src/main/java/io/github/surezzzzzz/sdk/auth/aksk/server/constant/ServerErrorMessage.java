@@ -48,6 +48,23 @@ public final class ServerErrorMessage {
     public static final String JWT_KEY_CONFIG_EMPTY = "密钥配置不能为空";
     public static final String JWT_KEY_FILE_NOT_FOUND = "密钥文件不存在: %s";
     public static final String JWT_KEY_FILE_LOAD_FAILED = "加载密钥文件失败: %s";
+    /**
+     * keyId 含路由前缀或非法字符。
+     * 参数: keyId、允许字符集
+     */
+    public static final String JWT_KEY_ID_INVALID =
+            "JWT keyId 非法（%s）：不得携带 aksk/ 等路由前缀（签发侧自动包装），仅允许 %s";
+    /**
+     * 公共资源层被显式关闭，/api 掉入 default 链匿名暴露。
+     */
+    public static final String RESOURCE_SERVER_DISABLED =
+            "io.github.surezzzzz.sdk.auth.resource.server.enabled 不能为 false：/api 管理端点将失去鉴权保护";
+    /**
+     * protected-paths 覆盖值摘掉了 /api/**，REST 控制器掉入 default 链匿名暴露。
+     * 参数: 实际配置值
+     */
+    public static final String PROTECTED_PATHS_MISSING_API =
+            "io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths 必须包含 /api/**，当前值：%s";
     public static final String DATABASE_ERROR = "数据库操作失败：%s";
 
     // ==================== 数据库/缓存错误 ====================

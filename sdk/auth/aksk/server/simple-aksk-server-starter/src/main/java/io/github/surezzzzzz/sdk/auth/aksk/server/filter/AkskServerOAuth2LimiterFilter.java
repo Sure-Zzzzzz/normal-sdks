@@ -13,13 +13,13 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterContextAttribute;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterFallbackStrategy;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterTimeUnit;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.event.SmartRedisLimiterEvent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterEventHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.support.SmartRedisLimiterWebContextHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -59,7 +59,6 @@ public class AkskServerOAuth2LimiterFilter extends OncePerRequestFilter {
     private final SmartRedisLimiterAlgorithmFactory algorithmFactory;
     private final AuthorizationServerSettings authorizationServerSettings;
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final ApplicationContext applicationContext;
     private final AkskOAuth2ClientIdKeyProvider clientIdKeyProvider;
 
     @Override
@@ -179,9 +178,11 @@ public class AkskServerOAuth2LimiterFilter extends OncePerRequestFilter {
         }
         for (SimpleAkskServerProperties.LimiterConfig.LimitRuleConfig sourceRule : sourceRules) {
             SmartRedisLimiterProperties.SmartLimitRule targetRule = new SmartRedisLimiterProperties.SmartLimitRule();
-            targetRule.setCount(sourceRule.getCount());
-            targetRule.setWindow(sourceRule.getWindow());
-            targetRule.setUnit(sourceRule.getUnit());
+            // limiter 2.0.0：count/window 收紧为 Long，unit 用自有枚举（仅秒及以上粒度，
+            // 配置毫秒/微秒/纳秒会在 valueOf 处 fail-fast）
+            targetRule.setCount(sourceRule.getCount().longValue());
+            targetRule.setWindow(sourceRule.getWindow().longValue());
+            targetRule.setUnit(SmartRedisLimiterTimeUnit.valueOf(sourceRule.getUnit().name()));
             targetRules.add(targetRule);
         }
         return targetRules;
@@ -205,29 +206,17 @@ public class AkskServerOAuth2LimiterFilter extends OncePerRequestFilter {
                                    String algorithm,
                                    SmartRedisLimiterResult result) {
         try {
-            String limitKey = SmartRedisLimiterEventHelper.buildLimitKey(
-                    context, keyStrategy, smartLimiterProperties.getMe(), applicationContext);
-            long durationNanos = context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) != null
-                    ? (long) context.getAttribute(SmartRedisLimiterContextAttribute.DURATION_NANOS) : 0L;
+            // limiter 2.0.0：事件统一走 payload 构造器（buildEventPayload 内含规则序列化与
+            // 耗时提取），limitKey 由算法执行结果携带的 routeKey 提供，不再手工拼装
             SmartRedisLimiterEvent event = new SmartRedisLimiterEvent(
                     this,
-                    limitKey,
-                    keyStrategy,
-                    algorithm,
-                    SmartRedisLimiterEventHelper.serializeLimitRules(limitRules),
-                    result.isPassed(),
-                    SimpleAkskServerConstant.LIMITER_SOURCE_OAUTH2_FILTER,
-                    context.getRequestPath(),
-                    context.getRequestMethod(),
-                    context.getClientIp(),
-                    context.getMatchedPathPattern(),
-                    null,
-                    null,
-                    context.getAttributes(),
-                    result.getLimit(),
-                    result.getRemaining(),
-                    result.getResetAt(),
-                    durationNanos);
+                    SmartRedisLimiterEventHelper.buildEventPayload(
+                            context,
+                            limitRules,
+                            keyStrategy,
+                            algorithm,
+                            result,
+                            SimpleAkskServerConstant.LIMITER_SOURCE_OAUTH2_FILTER));
             applicationEventPublisher.publishEvent(event);
         } catch (Exception e) {
             log.warn("发布 OAuth2 限流事件失败", e);

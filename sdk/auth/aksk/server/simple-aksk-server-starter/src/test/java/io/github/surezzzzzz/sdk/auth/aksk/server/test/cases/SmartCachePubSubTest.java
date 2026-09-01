@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
@@ -19,13 +20,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -75,7 +77,12 @@ class SmartCachePubSubTest {
     private SmartCacheProperties smartCacheProperties;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate redisTemplate;
+
+    // 与 CacheInvalidationListener 发布端同一 mapper，保证模拟消息与真实失效广播字节形态一致
+    @Autowired
+    @Qualifier(SmartCacheConstant.SMART_CACHE_OBJECT_MAPPER_BEAN_NAME)
+    private ObjectMapper smartCacheObjectMapper;
 
     @Autowired
     private RedisKeyHelper redisKeyHelper;
@@ -110,7 +117,7 @@ class SmartCachePubSubTest {
      * 方案B：直接发布 invalidation 消息，验证本实例 L1 被清除
      */
     @Test
-    void testPubSubMessageClearsL1() throws InterruptedException {
+    void testPubSubMessageClearsL1() throws Exception {
         log.info("========== 方案B：Pub/Sub 消息接收 -> L1 清除 ==========");
 
         String cacheName = RedisKeyHelper.CACHE_OAUTH2_AUTHORIZATION_TOKEN;
@@ -135,7 +142,9 @@ class SmartCachePubSubTest {
                 smartCacheProperties.getMe(),
                 cacheName
         );
-        redisTemplate.convertAndSend(channel, message);
+        // smart-cache 2.x 发布端走 route stringTemplate 的 JSON 字符串（smartCacheObjectMapper 序列化），
+        // 接收端 readValue 反序列化，不再支持对象直发
+        redisTemplate.convertAndSend(channel, smartCacheObjectMapper.writeValueAsString(message));
         log.info("已发布 invalidation 消息到 channel: {}", channel);
 
         // 等待 Pub/Sub 处理

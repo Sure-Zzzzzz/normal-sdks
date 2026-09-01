@@ -1,13 +1,17 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
-import com.nimbusds.jose.JWEObject;
+import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.AESDecrypter;
+import com.nimbusds.jose.crypto.AESEncrypter;
+import com.nimbusds.jose.crypto.RSASSASigner;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jose.jwk.OctetSequenceKey;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.core.support.AkskRouteKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.provider.JwtKeyProvider;
@@ -24,7 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.web.server.LocalServerPort;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.*;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -64,7 +68,7 @@ class JwtTokenValidationTest {
     private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
 
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private StringRedisTemplate redisTemplate;
 
     @Autowired
     private SimpleAkskServerProperties properties;
@@ -276,6 +280,48 @@ class JwtTokenValidationTest {
 
         assertThrows(ConfigurationException.class,
                 () -> jweJwtDecoder.decode(unexpectedRouteKeyToken.serialize()));
+    }
+
+    @Test
+    void testSubjectMismatchJweTokenIsRejected() throws Exception {
+        log.info("测试 clientId 与授权主体不一致的 JWE token 被拒绝");
+
+        ClientInfoResponse clientInfo = clientManagementService.createPlatformClient("Subject Mismatch Test Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, clientInfo);
+        String accessToken = getAccessToken(clientInfo);
+
+        // 解密 → 改 client_id claim（application_authorization 的 subjectId 保持原值）→ 重签 → 重加密
+        byte[] aesKeyBytes = Base64.getDecoder().decode(properties.getJwt().getEncryptionKey());
+        JWEObject jweObject = JWEObject.parse(accessToken);
+        jweObject.decrypt(new AESDecrypter(new OctetSequenceKey.Builder(aesKeyBytes).build()));
+
+        SignedJWT signedJWT = SignedJWT.parse(jweObject.getPayload().toString());
+        JWTClaimsSet modifiedClaims = new JWTClaimsSet.Builder(signedJWT.getJWTClaimsSet())
+                .claim(JwtClaimConstant.CLIENT_ID, "impersonated-client-id")
+                .build();
+        SignedJWT reSigned = new SignedJWT(
+                new JWSHeader.Builder(JWSAlgorithm.RS256).build(), modifiedClaims);
+        reSigned.sign(new RSASSASigner(jwtKeyProvider.getPrivateKey()));
+
+        JWEHeader header = new JWEHeader.Builder(
+                JWEAlgorithm.parse(SimpleAkskServerConstant.JWE_KEY_ENCRYPTION_ALGORITHM),
+                EncryptionMethod.parse(SimpleAkskServerConstant.JWE_CONTENT_ENCRYPTION_ALGORITHM))
+                .contentType(SimpleAkskServerConstant.JWE_CONTENT_TYPE_JWT)
+                .keyID(AkskRouteKeyHelper.createRouteKey(properties.getJwt().getKeyId()))
+                .build();
+        JWEObject reEncrypted = new JWEObject(header, new Payload(reSigned));
+        reEncrypted.encrypt(new AESEncrypter(new OctetSequenceKey.Builder(aesKeyBytes).build()));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(reEncrypted.serialize());
+        ResponseEntity<String> response = restTemplate.exchange(
+                "http://localhost:" + port + "/api/client?type=platform",
+                HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode(),
+                "clientId 与授权主体不一致的 token 必须被拒绝");
+
+        log.info("✓ 主体不一致的 JWE token 被正确拒绝");
     }
 
     @Test

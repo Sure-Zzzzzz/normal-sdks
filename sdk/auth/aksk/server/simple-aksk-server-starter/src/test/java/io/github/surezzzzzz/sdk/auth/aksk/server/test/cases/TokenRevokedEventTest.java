@@ -65,7 +65,7 @@ class TokenRevokedEventTest {
     private AkskApplicationAuthorizationRepository applicationAuthorizationRepository;
 
     @Autowired
-    private org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
+    private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
     @Autowired
     private TestTokenRevokedEventListener eventListener;

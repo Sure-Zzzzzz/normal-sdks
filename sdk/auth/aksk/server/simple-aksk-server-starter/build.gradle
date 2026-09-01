@@ -4,17 +4,27 @@ dependencies {
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
 
-    // SmartCache / SmartLimiter
-    api 'io.github.sure-zzzzzz:smart-cache-starter:1.1.2'
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-starter:1.1.4'
-    api 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+    // SmartCache / SmartLimiter 均为实现细节：token/授权缓存与 OAuth2 端点限流全部在内部装配
+    //（SmartCacheManager 与 limiter 算法/KeyProvider 仅由 server 自带组件消费，公开 API 零暴露），
+    // 运行时随本模块传递（自动配置与 cache.* / limiter.* 配置键照常生效），
+    // 编译期直接使用两者 API 的使用方需自行声明相应依赖
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.0'
+    implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.1.0'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
     compileOnly 'org.springframework.boot:spring-boot-starter-security'
     compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
+    // data-redis 保持 api：RedisTokenRepository 公开构造器签名暴露 StringRedisTemplate，
+    // 且 cache/limiter 收紧后其 Redis 通道的运行时传递由本模块承担
     api 'org.springframework.boot:spring-boot-starter-data-redis'
-    api 'org.springframework.boot:spring-boot-starter-aop'
+    // aop 供 cache/limiter 注解模式切面运行时织入，server 自身零 AOP 类型引用；
+    // 编译期使用 AOP 的使用方自备
+    runtimeOnly 'org.springframework.boot:spring-boot-starter-aop'
+    // caffeine 供 smart-cache L1 运行时生效，server 自身零 caffeine 类型引用
+    runtimeOnly 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+    // OAuth2SettingsHelper 直接 import JavaTimeModule 注册 JSON 时间模块
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     compileOnly 'org.springframework.boot:spring-boot-starter-thymeleaf'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly "org.springframework.boot:spring-boot-starter-validation"
@@ -22,8 +32,14 @@ dependencies {
     // Spring Authorization Server
     api 'org.springframework.security:spring-security-oauth2-authorization-server:0.4.1'
 
-    // 指数退避重试
-    api 'io.github.sure-zzzzzz:task-retry-starter:1.0.0'
+    // 公共资源层（/api 鉴权链公共化，1.1.1 起公共链固定 STATELESS、零 Set-Cookie）与 DATA 权限 MVC 集成
+    // （均为实现细节：kid 路由与 plan 注入只在 server 自带 controller 内消费，使用方不感知，不泄漏进编译类路径）
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+
+    // 连接治理（enable 默认关、零装配，仅配置生效；直接使用 route API 的使用方自行引入）
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
 
     // Database
     runtimeOnly 'mysql:mysql-connector-java:8.0.33'

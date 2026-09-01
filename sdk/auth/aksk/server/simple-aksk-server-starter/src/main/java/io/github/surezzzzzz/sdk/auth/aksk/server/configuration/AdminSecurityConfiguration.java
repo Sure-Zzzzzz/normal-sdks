@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ import javax.servlet.http.HttpServletResponse;
  *
  * @author surezzzzzz
  */
+@Slf4j
 @Configuration
 @RequiredArgsConstructor
 @ConditionalOnProperty(
@@ -40,6 +42,7 @@ public class AdminSecurityConfiguration {
     @Bean
     @Order(3)
     public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http) throws Exception {
+        log.info("Admin鉴权链已装配：/admin/**（formLogin + CSRF，session失效时浏览器302回登录页/AJAX 401）");
         http
                 .antMatcher("/admin/**")
                 .authorizeRequests(authorize -> authorize
@@ -92,7 +95,6 @@ public class AdminSecurityConfiguration {
                         })
                 )
                 .httpBasic().disable();
-        // CSRF保护默认启用,不需要显式配置
         return http.build();
     }
 
