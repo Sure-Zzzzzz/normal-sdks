@@ -24,11 +24,8 @@ io:
                 timeout-ms: 3000
                 connect-timeout-ms: 3000
 
-        lock:
-          redis:
-            route:
-              enable: true
-
+        # lock 1.2.2 起模板让位：容器存在 route 接管的标准 stringRedisTemplate 时不再自建
+        # simpleRedisLockRedisTemplate，无需显式 lock.redis.route 开关
         auth:
           aksk:
             client:
