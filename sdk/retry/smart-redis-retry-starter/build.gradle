@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
 
     compileOnly "org.springframework.boot:spring-boot-configuration-processor"
     compileOnly "org.springframework.boot:spring-boot-autoconfigure"
@@ -10,5 +10,6 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "org.springframework.boot:spring-boot-starter-data-redis"
-    testImplementation project(':sdk:route:redis:simple-redis-route-starter')
+    // route 1.2.x 起 pool2 由使用方自备（自动配置类加载需要，与是否启用连接池无关）
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
 }

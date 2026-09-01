@@ -4,9 +4,11 @@
 
 ## 版本信息
 
-当前版本：`1.0.0`
+当前版本：`1.1.0`
 
 `1.0.0` 是 smart 线首发版本，独立于 `redis-retry-starter` 的 simple 维护线。旧模块使用 String JSON，smart-retry 使用 Redis Hash + Lua 原子操作，两者记录格式不兼容；本模块不会读取或自动迁移旧记录，迁移需由调用方显式处理。
+
+`1.1.0` 对齐 `simple-redis-route-starter` 1.2.2 版本线，route 依赖由 `api` 收为 `implementation`（运行时仍传递，直接使用 route API 的使用方需自行引入 route 坐标）；重试公开 API 与配置契约零变化，详见 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)。
 
 ## 兼容性
 
@@ -33,8 +35,10 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:smart-redis-retry-starter:1.0.0"
-    implementation "io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0"
+    implementation "io.github.sure-zzzzzz:smart-redis-retry-starter:1.1.0"
+    // 直接使用 RedisRouteTemplate 等 route API 时才需要显式引入
+    // （1.1.0 起 route 经本模块运行时传递，不再编译期传递）
+    implementation "io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2"
     implementation "org.springframework.boot:spring-boot-starter-data-redis"
     implementation "com.fasterxml.jackson.core:jackson-databind"
 }
@@ -46,12 +50,12 @@ dependencies {
 <dependency>
     <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>smart-redis-retry-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>simple-redis-route-starter</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.2</version>
 </dependency>
 <dependency>
     <groupId>org.springframework.boot</groupId>
