@@ -8,7 +8,7 @@ Gradle：
 
 ```gradle
 dependencies {
-    implementation 'io.github.surezzzzzzz:simple-captcha-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-captcha-starter:1.0.0'
 
     // 挑战存储强依赖 redis-route（implementation 已传递，无需单独引入）。
     // 宿主侧需按自身依赖治理提供 Spring Data Redis 运行时
@@ -21,7 +21,7 @@ Maven：
 
 ```xml
 <dependency>
-    <groupId>io.github.surezzzzz</groupId>
+    <groupId>io.github.sure-zzzzzz</groupId>
     <artifactId>simple-captcha-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
