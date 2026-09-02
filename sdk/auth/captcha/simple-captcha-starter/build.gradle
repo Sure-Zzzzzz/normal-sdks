@@ -1,0 +1,14 @@
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    // 强制 Redis：挑战存储强依赖 redis-route（多实例共享出题/验题），无内存模式
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    // route 对 data-redis 是 compileOnly 不传递，本模块存储实现直接使用其类型，自带编译口径
+    compileOnly 'org.springframework.data:spring-data-redis'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    // 测试宿主真连 Redis（route 从 implementation 传递）；pool2 照 route-starter 自身测试口径
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.apache.commons:commons-pool2'
+}
