@@ -68,7 +68,8 @@ CREATE TABLE oauth2_authorization (
     refresh_token_expires_at TIMESTAMP NULL DEFAULT NULL COMMENT '刷新令牌过期时间',
     refresh_token_metadata BLOB DEFAULT NULL COMMENT '刷新令牌元数据',
     PRIMARY KEY (id),
-    KEY idx_oauth2_authorization_registered_client_id (registered_client_id)
+    KEY idx_oauth2_authorization_registered_client_id (registered_client_id),
+    KEY idx_oauth2_authorization_access_token_expires_at (access_token_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OAuth2授权信息';
 
 -- =====================================================

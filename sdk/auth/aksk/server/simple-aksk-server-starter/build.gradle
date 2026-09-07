@@ -1,6 +1,6 @@
 dependencies {
     api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
 
@@ -40,6 +40,9 @@ dependencies {
     // 连接治理（enable 默认关、零装配，仅配置生效；直接使用 route API 的使用方自行引入）
     implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
     implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+
+    // 过期Token定时清理的分布式锁（多实例互斥：抢到执行、抢不到跳过；与 route 同为 1.2.2 版本线）
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.2'
 
     // Database
     runtimeOnly 'mysql:mysql-connector-java:8.0.33'

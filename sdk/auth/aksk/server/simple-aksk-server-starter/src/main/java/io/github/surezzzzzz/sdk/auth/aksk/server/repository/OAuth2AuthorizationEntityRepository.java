@@ -100,15 +100,21 @@ public interface OAuth2AuthorizationEntityRepository extends JpaRepository<OAuth
     Page<OAuth2AuthorizationEntity> findActiveTokensByClientIds(List<String> registeredClientIds, Instant now, Pageable pageable);
 
     /**
-     * 删除过期的授权记录
+     * 分批删除过期的授权记录（MySQL 原生 DELETE ... LIMIT，避免大事务长锁表）
+     * <p>
+     * 显式声明 countQuery：Spring Data JPA 会为原生 @Query 方法预派生 count 查询，
+     * 其派生器按 SELECT 语句结构解析，遇到 DELETE 语句会在仓库 bean 初始化阶段 NPE，
+     * 显式提供后跳过自动派生（该 count 查询本身对 @Modifying 方法不会被执行）。
      *
-     * @param now 当前时间
-     * @return 删除的记录数
+     * @param now   当前时间
+     * @param limit 单批删除行数上限
+     * @return 本批删除的记录数
      */
     @Modifying
     @Transactional
-    @Query("DELETE FROM OAuth2AuthorizationEntity a WHERE a.accessTokenExpiresAt < :now")
-    int deleteByAccessTokenExpiresAtBefore(Instant now);
+    @Query(value = "DELETE FROM oauth2_authorization WHERE access_token_expires_at < :now LIMIT :limit",
+            countQuery = "SELECT 1", nativeQuery = true)
+    int deleteExpiredBatch(@Param("now") Instant now, @Param("limit") int limit);
 
     /**
      * 更新 access_token_metadata

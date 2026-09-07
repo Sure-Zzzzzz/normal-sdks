@@ -12,6 +12,7 @@
 | `01_schema_3.0.0.sql` | 首次部署或允许重建数据的环境 | 3.0.0 完整初始化脚本，会重建 AKSK 相关表 |
 | `02_upgrade_3.0.0.sql` | 从 2.x 升级 | 保留历史 Client 与 Token 表，新建应用授权投影表与查询索引，仅执行一次 |
 | `03_install_3.0.0.md` | 新装 | 基础设施、精确依赖、初始化和首个 Client 准入闭环 |
+| `03_upgrade_3.1.1.sql` | 从 3.0.0 / 3.0.1 / 3.1.0 升级 | 为 `oauth2_authorization.access_token_expires_at` 补充索引，配合过期 Token 定时清理，仅执行一次 |
 | `04_upgrade_2.x_to_3.0.0.md` | 升级 | 备份、停写、一次迁移、历史 Token 处置与回退边界 |
 | `05_operations_3.0.0.md` | 运维 | Redis/JWE、应用授权、故障处置、日志与 IAM 可选协作边界 |
 | `06_release_acceptance_3.0.0.md` | 发布验收 | 新装、升级、Token、并发、管理安全、IAM 和质量门禁 |

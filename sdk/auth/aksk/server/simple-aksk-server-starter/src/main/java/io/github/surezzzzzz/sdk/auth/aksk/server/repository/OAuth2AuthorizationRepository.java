@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2AuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class OAuth2AuthorizationRepository {
 
     private final OAuth2AuthorizationEntityRepository authorizationEntityRepository;
     private final OAuth2RegisteredClientEntityRepository clientEntityRepository;
+    private final SimpleAkskServerProperties properties;
 
     /**
      * 通用的Token查询方法（支持所有过滤条件，纯数据库分页）
@@ -161,14 +163,21 @@ public class OAuth2AuthorizationRepository {
     }
 
     /**
-     * 删除过期的授权记录
+     * 删除过期的授权记录（分批执行，每批独立事务，避免大事务长锁表）
      *
-     * @return 删除的记录数
+     * @return 删除的记录总数
      */
     public int deleteExpired() {
-        int count = authorizationEntityRepository.deleteByAccessTokenExpiresAtBefore(Instant.now());
-        log.info("Deleted {} expired authorizations from MySQL", count);
-        return count;
+        int batchSize = properties.getCleanup().getBatchSize();
+        Instant now = Instant.now();
+        int total = 0;
+        int deleted;
+        do {
+            deleted = authorizationEntityRepository.deleteExpiredBatch(now, batchSize);
+            total += deleted;
+        } while (deleted == batchSize);
+        log.info("Deleted {} expired authorizations from MySQL", total);
+        return total;
     }
 
     /**

@@ -1,10 +1,10 @@
 # Simple AKSK Server Starter
 
-> 当前版本 **3.1.0**。版本沿革见各 `CHANGELOG.*.md`。  
+> 当前版本 **3.1.1**。版本沿革见各 `CHANGELOG.*.md`。  
 > 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。  
 > 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ dependencies {
     // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
     // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
     // runtimeOnly 传递运行时，使用方无需重复声明
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.1.1'
 
     // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -108,6 +108,11 @@ io:
                 username: admin                    # Admin 登录用户名
                 password: <管理员密码>              # Admin 登录密码（必填），走受保护的部署配置
                 session-timeout-minutes: 30        # Admin 会话超时（分钟）
+              cleanup:
+                enable: true                       # 过期 Token 定时清理开关。false 时清理任务不装配
+                cron: "0 0 2 * * ?"                # 清理调度 cron（默认每天凌晨 2 点），可按部署环境覆盖
+                batch-size: 2000                   # 分批删除单批行数，避免大事务长锁表
+                lock-lease-seconds: 600            # 清理任务分布式锁租约（秒）。多实例互斥：抢到锁的实例执行，抢不到直接跳过本次调度
           resource:
             server:
               enabled: true                      # 公共资源层开关。显式 false 会被启动校验拒绝（/api 裸奔守护），保持默认即可
@@ -326,6 +331,15 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/token/expired`     | DELETE | 清理过期 Token                 |
 | `/api/token/statistics`  | GET    | 获取 Token 统计信息              |
 
+### 过期 Token 自动清理（3.1.1）
+
+`oauth2_authorization` 表的过期记录默认由定时任务自动清理，无需人工触发：
+
+- **调度**：默认 cron `0 0 2 * * ?`（每天凌晨 2 点），经 `io.github.surezzzzzz.sdk.auth.aksk.server.cleanup.cron` 覆盖；`cleanup.enable: false` 可整体关闭（清理任务不装配）。
+- **多实例互斥**：清理前先抢 Redis 分布式锁（`simple-redis-lock-starter`），抢到锁的实例执行，抢不到的直接跳过本次调度；某次清理失败不影响下次调度重试。
+- **分批删除**：按 `cleanup.batch-size`（默认 2000 行）分批删除，每批独立事务，避免大事务长锁表。Admin 页面手动清理按钮走同一分批实现。
+- **索引**：清理语句依赖 `oauth2_authorization.access_token_expires_at` 索引（新装环境由 `01_schema_3.0.0.sql` 直接建好；存量环境执行 `03_upgrade_3.1.1.sql` 补齐）。
+
 ---
 
 ## 与 IAM 协作（可选）
@@ -439,6 +453,10 @@ logging:
 ---
 
 ## 版本历史
+
+### 3.1.1 (2026-09-07)
+
+过期 Token 自动清理——新增定时清理任务（默认每天凌晨 2 点，cron 可覆盖），`simple-redis-lock-starter` 分布式锁多实例互斥，分批删除避免大事务；`oauth2_authorization.access_token_expires_at` 补索引；Admin 手动清理同享分批实现；core 同步升级 3.0.2。详见 [CHANGELOG.3.1.1.md](CHANGELOG.3.1.1.md)。
 
 ### 3.1.0 (2026-09-01)
 
