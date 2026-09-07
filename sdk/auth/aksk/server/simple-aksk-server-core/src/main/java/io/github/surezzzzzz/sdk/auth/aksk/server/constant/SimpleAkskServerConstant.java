@@ -389,6 +389,28 @@ public final class SimpleAkskServerConstant {
      */
     public static final String TOKEN_SOURCE_REDIS = "redis";
 
+    // ==================== 过期Token清理相关常量 ====================
+    /**
+     * 过期Token定时清理默认开关
+     */
+    public static final boolean DEFAULT_CLEANUP_ENABLE = true;
+    /**
+     * 过期Token定时清理默认cron表达式（每天凌晨2点）
+     */
+    public static final String DEFAULT_CLEANUP_CRON = "0 0 2 * * ?";
+    /**
+     * 过期Token分批删除默认批大小（行）
+     */
+    public static final int DEFAULT_CLEANUP_BATCH_SIZE = 2000;
+    /**
+     * 清理任务分布式锁默认租约时长（秒）
+     */
+    public static final int DEFAULT_CLEANUP_LOCK_LEASE_SECONDS = 600;
+    /**
+     * 过期Token定时清理分布式锁Key
+     */
+    public static final String CLEANUP_LOCK_KEY = "aksk:server:cleanup:expired-token-lock";
+
     // ==================== Spring属性常量 ====================
     /**
      * Spring属性: server.port

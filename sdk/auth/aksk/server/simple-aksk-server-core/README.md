@@ -1,6 +1,6 @@
 # simple-aksk-server-core
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key 规则和 Token 生命周期事件。业务通常通过 `simple-aksk-server-starter` 使用这些契约；只有需要直接订阅、转换或持久化 Token 生命周期事件的扩展模块，才需要直接依赖本模块。
@@ -12,7 +12,7 @@ AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key �
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
 ```
 
 `simple-aksk-server-starter` 通过 `api` 传递引入本模块。仅使用 Server Starter 的应用通常不需要重复声明；独立审计、指标或集成模块可直接声明该坐标。
@@ -29,6 +29,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
 - Redis：Token 命名空间配置。
 - Admin：本地管理页面开关、管理员账户及会话时长。
 - 限流：OAuth2 Token、Introspect、Revoke 端点的开关、算法、降级策略、Key 策略和规则。
+- 过期 Token 清理：定时清理开关、cron 调度表达式、分批删除批大小、分布式锁租约时长。
 
 ### 服务端常量
 
@@ -37,6 +38,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
 - JWT Claim、OAuth2 参数与响应字段、JWE 算法及默认配置。
 - 管理 API 的应用编码、资源、动作、权限和数据权限维度。
 - `JWT_CLAIM_APPLICATION_AUTHORIZATION` 复用 `simple-aksk-core` 的应用授权 Claim，保证签发、管理鉴权和内省消费同一契约。
+- 过期 Token 清理的默认开关、cron、批大小、锁租约时长与分布式锁 Key。
 
 ### Redis Key 工具
 
@@ -131,6 +133,10 @@ Token 生命周期事件属于内部服务端事件契约，不是认证材料�
 ---
 
 ## 版本历史
+
+### 3.0.2
+
+新增过期 Token 定时清理的配置常量与配置类（`SimpleAkskServerProperties.CleanupConfig`），供 `simple-aksk-server-starter` 3.1.1 的定时清理任务消费；仅新增字段，不改变既有公开 API。详见 [CHANGELOG.3.0.2.md](CHANGELOG.3.0.2.md)。
 
 ### 3.0.1
 

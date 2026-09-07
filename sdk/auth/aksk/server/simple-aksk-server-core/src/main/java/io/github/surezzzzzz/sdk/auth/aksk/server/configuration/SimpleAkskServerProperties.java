@@ -42,6 +42,11 @@ public class SimpleAkskServerProperties {
      */
     private LimiterConfig limiter = new LimiterConfig();
 
+    /**
+     * 过期Token定时清理配置
+     */
+    private CleanupConfig cleanup = new CleanupConfig();
+
     @Data
     public static class JwtConfig {
 
@@ -168,5 +173,32 @@ public class SimpleAkskServerProperties {
                 return config;
             }
         }
+    }
+
+    /**
+     * 过期Token定时清理配置
+     */
+    @Data
+    public static class CleanupConfig {
+
+        /**
+         * 定时清理开关，false 时清理任务不装配
+         */
+        private Boolean enable = SimpleAkskServerConstant.DEFAULT_CLEANUP_ENABLE;
+
+        /**
+         * 清理调度 cron 表达式（默认每天凌晨2点）
+         */
+        private String cron = SimpleAkskServerConstant.DEFAULT_CLEANUP_CRON;
+
+        /**
+         * 分批删除单批行数上限
+         */
+        private Integer batchSize = SimpleAkskServerConstant.DEFAULT_CLEANUP_BATCH_SIZE;
+
+        /**
+         * 清理任务分布式锁租约时长（秒）
+         */
+        private Integer lockLeaseSeconds = SimpleAkskServerConstant.DEFAULT_CLEANUP_LOCK_LEASE_SECONDS;
     }
 }
