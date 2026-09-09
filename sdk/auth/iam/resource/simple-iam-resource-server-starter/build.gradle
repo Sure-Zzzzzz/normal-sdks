@@ -1,0 +1,13 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-iam-resource-core:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-test'
+}
