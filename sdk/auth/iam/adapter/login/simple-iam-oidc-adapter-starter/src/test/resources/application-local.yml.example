@@ -1,0 +1,30 @@
+# 本地配置文件示例
+# 使用方法：
+# 1. 复制此文件并重命名为 application-local.yml
+# 2. 填入你的真实密码（MySQL、Keycloak fixture 用户密码）
+# 3. application-local.yml 不会被提交到 git（已在 .gitIgnore 中配置）
+#
+# 运行测试前请确保：
+# - 本地 MySQL 已创建数据库 sure_auth_iam（与 iam-server-starter 测试共用）
+# - Redis 在 localhost:6379 可达（database=2）
+# - iam-local-keycloak 容器运行中并已导入 realm sure-iam-test
+#   （见本模块 LOCAL_TEST_COMMANDS.md，端口 8380）
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              default:
+                password: your_mysql_password_here
+        auth:
+          iam:
+            adapter:
+              login:
+                oidc:
+                  test:
+                    oidc:
+                      # fixture 用户 e2e-user 的密码（与 keycloak/realm-export.json 一致）
+                      user-password: local-oidc-user-password

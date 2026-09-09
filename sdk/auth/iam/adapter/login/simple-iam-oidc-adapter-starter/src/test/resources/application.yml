@@ -1,0 +1,127 @@
+spring:
+  profiles:
+    active: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: default
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/sure_auth_iam?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: root
+                password: # 请在 application-local.yml 中配置真实密码
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 8
+                  minimum-idle: 2
+                  connection-timeout: 3000
+                  validation-timeout: 3000
+        auth:
+          iam:
+            server:
+              enable: true
+              issuer: http://localhost:8180
+              me: "test-app"
+              external-identity:
+                # 回调地址基础 URL；测试中由 MockMvc 承接回调，该地址无需真实监听，
+                # 只需与 Keycloak realm 中登记的 redirect URI 一致。
+                callback-base-url: http://localhost:18080
+              token:
+                key-id: test-key-iam-2026
+                public-key: classpath:keys/public.pem
+                private-key: classpath:keys/private.pem
+                access-expires-in: 3600
+                refresh-expires-in: 604800
+              session:
+                expires-in: 1800
+              login:
+                max-attempts: 5
+                lock-minutes: 15
+              captcha:
+                enabled: false
+              mfa:
+                enabled: false
+              registration:
+                open: false
+              password-reset:
+                self-service: false
+              bootstrap:
+                enabled: true
+                username: admin
+            # OIDC 登录适配器：对接本地固定 Keycloak 容器（iam-local-keycloak，端口 8380，
+            # realm sure-iam-test；启动与导入命令见 LOCAL_TEST_COMMANDS.md）。
+            # client-secret 与 realm-export.json 中的 fixture 常量一致。
+            # 注：Keycloak 17+（Quarkus）端点无 /auth 前缀。
+            adapter:
+              login:
+                oidc:
+                  issuer: http://localhost:8380/realms/sure-iam-test
+                  authorization-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/auth
+                  token-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/token
+                  jwk-set-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/certs
+                  client-id: iam-oidc-test
+                  client-secret: local-oidc-client-secret
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 2
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        lock:
+          redis:
+            route:
+              enable: true
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: ${io.github.surezzzzzz.sdk.auth.iam.server.me:test-app}
+              mode: annotation
+        cache:
+          key-prefix: sure-auth-iam
+          me: ${io.github.surezzzzzz.sdk.auth.iam.server.me:test-app}
+          l1:
+            enabled: true
+            expire-seconds: 10
+            max-size: 10000
+          l2:
+            enabled: true
+            expire-seconds: ${io.github.surezzzzzz.sdk.auth.iam.server.token.access-expires-in:3600}
+            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+          consistency:
+            mode: strong
+          pubsub:
+            mode: routed
+          route:
+            scan-enabled: false
+          serializer:
+            trusted-packages:
+              - java.lang
+              - java.time
+              - java.util
+              - io.github.surezzzzzz.sdk.auth.iam.server
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.iam.server: DEBUG
+    org.springframework.security: DEBUG
+    io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationListener: TRACE

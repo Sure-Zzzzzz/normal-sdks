@@ -1,0 +1,25 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-iam-core:1.0.0'
+
+    implementation 'org.springframework.security:spring-security-oauth2-jose'
+    implementation 'org.springframework:spring-web'
+
+    // 分布式部署时 pending state 走 Redis（宿主必带 route；纯 core 宿主退回内存实现）
+    compileOnly 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    // Redis store 的数据类型与 JSON 序列化（宿主必带：Boot data-redis + web 的 jackson）
+    compileOnly 'org.springframework.data:spring-data-redis'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'mysql:mysql-connector-java'
+}
