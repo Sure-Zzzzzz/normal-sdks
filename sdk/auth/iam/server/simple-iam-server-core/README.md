@@ -39,5 +39,5 @@ dependencies {
 
 ## 典型使用方
 
-- `simple-iam-audit-listener-starter`：订阅四族事件并落地审计存储；
+- `simple-iam-server-audit-listener-starter`：订阅四族事件并落地审计存储；
 - `simple-iam-server-starter`：事件的发布方与错误码/异常的定义使用方。
