@@ -1,0 +1,310 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM Login API
+  version: 1.0.0
+  description: Login 与其他 Web 前端共用的浏览器会话、品牌与 OAuth2 Consent 辅助接口。
+servers:
+  - url: /
+paths:
+  /iam/web/auth/providers:
+    get:
+      summary: 获取 Web 可用登录方式
+      operationId: listLoginProviders
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginProvidersResponse' }
+  /iam/web/auth/csrf:
+    get:
+      summary: 获取当前浏览器会话的 CSRF Token
+      operationId: getCsrfToken
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsrfTokenResponse' }
+  /iam/web/auth/login:
+    post:
+      summary: 凭证类登录（本地密码或外部凭证校验型登录方式）
+      description: |
+        provider 缺省为 local-password（本地账号密码）。
+        provider 为外部凭证校验型登录方式（如 ldap-password）时，凭证交由对应适配器
+        到外部身份源校验，成功后按账号关联机制映射到本地用户并建立 IAM 会话。
+
+        渐进人机验证：同一维度（本地按 username、外部按 providerCode+username）连续失败
+        达到阈值后，请求必须携带 captchaId 与 captchaAnswer（取自 /iam/web/auth/captcha），
+        否则返回 401 且 captchaRequired=true；验证码失败不计入密码失败计数。
+      operationId: loginWithPassword
+      security:
+        - iamSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: 登录成功并建立浏览器会话
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401':
+          description: 凭证错误、账号禁用/锁定、外部身份未绑定或需要/未通过人机验证（captchaRequired=true）；message 在凭据错误未达锁定上限时携带剩余尝试次数，达上限后为账号锁定文案
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '503':
+          description: 外部身份源不可用或人机验证组件未装配
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+  /iam/web/auth/captcha:
+    get:
+      summary: 获取人机验证挑战
+      description: |
+        返回一次性验证挑战（挑战过期与重取均由前端重新调用本端点解决）；
+        不绑定账号——挑战只证明请求方是真人，不泄露该账号是否已触发验证码。
+        人机验证开关关闭或组件未装配时返回 503。
+      operationId: getCaptchaChallenge
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaptchaChallengeResponse' }
+        '429':
+          description: 同 IP 请求超出限流配额（携带 Retry-After 头），稍后重试
+        '503':
+          description: 人机验证组件未装配
+  /iam/web/auth/authorize/{providerCode}:
+    get:
+      summary: 发起跳转型登录（企业 SSO）
+      description: |
+        生成防重放 state 并绑定当前浏览器会话，返回外部 IdP 跳转地址；
+        前端拿到 authorizeUrl 后进行浏览器跳转。
+        可选 redirect 参数（站内路径）随 state 暂存，回调成功后 302 到该地址，
+        未携带或非法时缺省统一应用门户首页 /app/。
+      operationId: beginExternalLogin
+      security: []
+      parameters:
+        - name: providerCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: redirect
+          in: query
+          required: false
+          description: 登录完成后的站内回跳目标（以 / 开头且非 // 开头，防开放重定向）
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthorizeResponse' }
+        '404': { description: 登录方式不存在或未启用 }
+  /iam/web/auth/callback/{providerCode}:
+    get:
+      summary: 跳转型登录回调（外部 IdP 重定向回 IAM）
+      description: |
+        校验 state 与当前浏览器会话匹配后，由适配器用回调参数向外换取并校验身份，
+        按账号关联机制映射到本地用户并建立 IAM 会话。
+        成功 302 至登录完成目标页；失败 302 回登录页并附 error 查询参数。
+      operationId: externalLoginCallback
+      security: []
+      parameters:
+        - name: providerCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '302': { description: 登录完成重定向（成功或登录页错误重定向） }
+  /iam/web/auth/me:
+    get:
+      summary: 获取当前 IAM 会话用户
+      operationId: getCurrentUser
+      security:
+        - iamSession: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthUser' }
+        '401': { description: 未登录或 IAM 会话失效 }
+  /iam/web/auth/logout:
+    post:
+      summary: 退出当前 IAM 会话
+      operationId: logout
+      security:
+        - iamSession: []
+          csrfToken: []
+      responses:
+        '204': { description: 已退出 }
+  /iam/web/auth/password:
+    put:
+      summary: 自助修改密码
+      description: |
+        首登强制改密与门户主动改密共用入口，仅本地密码用户可用（外部身份用户 400）。
+        旧密码错误计入凭据失败计数（与登录同锁定策略）；新密码按当前密码策略校验。
+        成功后清须改密标记，吊销其余端会话与全部 OAuth2 授权——旧密码签发的 token 一律失效，
+        当前浏览器会话保留。
+      operationId: changePassword
+      security:
+        - iamSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: 已修改 }
+        '400': { description: 旧密码错误（计入失败计数，携带剩余尝试次数文案，达上限锁定）、新密码不符策略、请求字段缺失或外部身份用户 }
+        '401': { description: 未登录 }
+  /iam/web/branding:
+    get:
+      summary: 获取登录前可读的品牌信息
+      operationId: getWebBranding
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebBrandingResponse' }
+  /iam/web/oauth2/consent-info:
+    get:
+      summary: 获取 OAuth2 Consent 页面信息
+      description: 仅查询 Consent 页面数据；实际授权提交仍由 Spring Authorization Server 的 OAuth2 协议端点处理。state 必须绑定当前已认证用户及其 IAM 会话。
+      operationId: getOAuth2ConsentInfo
+      security:
+        - iamSession: []
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuth2ConsentInfoResponse' }
+        '400': { description: state 无效、当前会话不匹配或 OAuth Client 不存在 }
+components:
+  securitySchemes:
+    iamSession:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: 由 IAM Server 建立的浏览器会话 Cookie。
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: 先调用 /iam/web/auth/csrf 获取实际 headerName 与 token。
+  schemas:
+    LoginProvidersResponse:
+      type: object
+      required: [defaultProvider, providers]
+      properties:
+        defaultProvider: { type: string, example: local-password }
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/LoginProvider' }
+    LoginProvider:
+      type: object
+      required: [code, name, type, enabled]
+      description: |
+        列表由本地密码登录方式与已装配的外部身份源适配器动态生成；
+        未引入对应适配器或适配器开关关闭时，外部登录方式不出现（或以 enabled=false 占位展示）。
+      properties:
+        code: { type: string, example: ldap-password }
+        name: { type: string }
+        type: { type: string, enum: [password, ldap, sso] }
+        enabled: { type: boolean }
+        authorizeUrl: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+    CsrfTokenResponse:
+      type: object
+      required: [headerName, parameterName, token]
+      properties:
+        headerName: { type: string, example: X-CSRF-TOKEN }
+        parameterName: { type: string, example: _csrf }
+        token: { type: string }
+    LoginRequest:
+      type: object
+      properties:
+        provider:
+          type: string
+          default: local-password
+          description: 登录方式编码；local-password 为本地账号密码，其余取值来自 /providers 返回的凭证校验型登录方式（如 ldap-password）。
+        username: { type: string }
+        password: { type: string, format: password }
+        captchaId: { type: string, description: 人机验证挑战 id（要求验证码时必填，取自 /iam/web/auth/captcha 返回） }
+        captchaAnswer: { type: string, description: 人机验证答案（要求验证码时必填） }
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string, format: password }
+        newPassword: { type: string, format: password, description: 按当前密码策略校验（长度/字符类别） }
+    AuthorizeResponse:
+      type: object
+      required: [authorizeUrl]
+      properties:
+        authorizeUrl: { type: string, description: 外部 IdP 跳转地址（已携带 state） }
+    LoginResponse:
+      type: object
+      required: [message]
+      description: 登录成功与否由 HTTP 状态码表达（200 即成功），响应体不携带 success 字段。
+      properties:
+        message: { type: string, description: 成功为提示文案；失败为原因文案，凭据错误未达锁定上限时携带剩余尝试次数（如“用户名或密码错误，剩余 3 次尝试后将锁定账号”），达上限后为“账号已锁定，请稍后重试或联系管理员”。 }
+        user: { $ref: '#/components/schemas/AuthUser', nullable: true }
+        captchaRequired: { type: boolean, description: 本次登录是否要求人机验证（true 时前端需取挑战并要求用户输入验证码后重试） }
+        mustChangePassword: { type: boolean, description: 首登或管理员重置密码后的须改密标记（true 时前端应跳转改密页，未改密期间非白名单端点 403） }
+    CaptchaChallengeResponse:
+      type: object
+      required: [captchaId, type, content]
+      properties:
+        captchaId: { type: string, description: 挑战唯一标识（登录提交时原样带回） }
+        type: { type: string, example: image }
+        content: { type: string, description: 前端展示内容（type=image 时为 data URI，img 标签直接使用） }
+    AuthUser:
+      type: object
+      properties:
+        userId: { type: integer, format: int64, nullable: true }
+        username: { type: string }
+        displayName: { type: string, nullable: true }
+        admin: { type: boolean }
+        authorities:
+          type: array
+          items: { type: string }
+    WebBrandingResponse:
+      type: object
+      properties:
+        name: { type: string }
+        logoUrl: { type: string, nullable: true }
+        customCssUrl: { type: string, nullable: true }
+        customJsUrl: { type: string, nullable: true }
+    OAuth2ConsentInfoResponse:
+      type: object
+      properties:
+        registeredClientId: { type: string }
+        clientId: { type: string }
+        clientName: { type: string }
+        state: { type: string }
+        requestedScopes:
+          type: array
+          items: { type: string }
+        previouslyApprovedScopes:
+          type: array
+          items: { type: string }

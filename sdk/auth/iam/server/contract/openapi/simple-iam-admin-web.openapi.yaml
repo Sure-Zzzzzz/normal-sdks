@@ -1,0 +1,830 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM Admin API
+  version: 1.0.0
+  description: IAM 管理端 API。所有接口要求已认证用户具备 ROLE_iam_admin；写操作还要求当前浏览器会话的 CSRF Token。
+servers:
+  - url: /
+security:
+  - iamSession: []
+paths:
+  /iam/admin/organizations/tree:
+    get:
+      summary: 获取组织树
+      operationId: getOrganizationTree
+      responses: { '200': { $ref: '#/components/responses/OrganizationTree' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/organizations/departments/{departmentId}/workspace:
+    parameters: [ { $ref: '#/components/parameters/DepartmentId' }, { $ref: '#/components/parameters/Status' }, { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+    get:
+      summary: 获取部门工作台
+      operationId: getOrganizationDepartmentWorkspace
+      responses: { '200': { $ref: '#/components/responses/OrganizationDepartmentWorkspace' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/organizations/users/{userId}/profile:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      summary: 获取用户组织关系详情
+      operationId: getOrganizationUserProfile
+      responses: { '200': { $ref: '#/components/responses/OrganizationUserProfile' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users:
+    get:
+      summary: 分页查询用户
+      operationId: listAdminUsers
+      parameters: [ { $ref: '#/components/parameters/Status' }, { $ref: '#/components/parameters/DepartmentIdQuery' }, { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/LastLoginAfter' }, { $ref: '#/components/parameters/LockedUntilAfter' }, { $ref: '#/components/parameters/NoDepartment' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/AdminUserPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建用户
+      operationId: createAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateUserRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/AdminUser' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/users/{userId}:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      summary: 获取用户
+      operationId: getAdminUser
+      responses: { '200': { $ref: '#/components/responses/AdminUser' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新用户
+      operationId: updateAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateUserRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/AdminUser' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除用户
+      operationId: deleteAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/enable:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      summary: 启用用户
+      operationId: enableAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已启用 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/disable:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      summary: 停用用户
+      operationId: disableAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已停用 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/unlock:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      summary: 手动解锁用户
+      description: 清除登录失败锁定与失败计数（DB 锁定与 Redis 失败计数双清），不等自动过期。
+      operationId: unlockAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已解锁 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/reset-password:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      summary: 重置用户密码
+      operationId: resetAdminUserPassword
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResetPasswordRequest' } } } }
+      responses: { '200': { description: 密码已重置 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/application-authorizations:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      summary: 列出用户全部应用授权摘要
+      operationId: listUserApplicationAuthorizations
+      responses: { '200': { $ref: '#/components/responses/ApplicationAuthorizationList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/application-authorizations/{applicationId}:
+    parameters: [ { $ref: '#/components/parameters/UserId' }, { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 获取用户应用授权详情
+      operationId: getUserApplicationAuthorization
+      responses: { '200': { $ref: '#/components/responses/ApplicationAuthorizationDetail' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 全量替换用户应用授权
+      description: 无则创建（201）、有则全量替换（200）；已撤销记录再次 PUT 即重激活。授权内容变更立即生效：token 发放与资源令牌验证均实时读取授权投影，旧令牌下一次验证即体现。authorizationVersion 由服务端单调递增，请求不携带。
+      operationId: putUserApplicationAuthorization
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PutApplicationAuthorizationRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/ApplicationAuthorizationDetail' }, '201': { $ref: '#/components/responses/ApplicationAuthorizationDetail' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+    delete:
+      summary: 撤销用户应用授权
+      description: 语义撤销留痕，token 发放与资源令牌验证立即失效；重复撤销幂等返回 204。
+      operationId: revokeUserApplicationAuthorization
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已撤销 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/external-identity:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    post:
+      summary: 绑定外部身份
+      description: 将本地用户与外部身份源身份（LDAP DN/uid、OIDC sub）关联；绑定后该用户可经对应外部登录方式登入。该外部身份已被其他用户绑定时返回 400。
+      operationId: bindAdminUserExternalIdentity
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BindExternalIdentityRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/AdminUser' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 解绑外部身份
+      description: 解除用户的外部身份关联；解绑后该外部身份不再映射到本地用户，重复解绑幂等返回 204。
+      operationId: unbindAdminUserExternalIdentity
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已解绑 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/roles:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    get:
+      summary: 获取用户直接角色
+      operationId: listAdminUserRoles
+      responses: { '200': { $ref: '#/components/responses/RoleList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/users/{userId}/roles/{roleId}:
+    parameters: [ { $ref: '#/components/parameters/UserId' }, { $ref: '#/components/parameters/RoleId' } ]
+    post:
+      summary: 为用户授予角色
+      operationId: assignRoleToAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已授予 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+    delete:
+      summary: 移除用户角色
+      operationId: revokeRoleFromAdminUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已移除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/departments:
+    get:
+      summary: 获取全部部门
+      operationId: listDepartments
+      deprecated: true
+      responses: { '200': { $ref: '#/components/responses/DepartmentList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建部门
+      operationId: createDepartment
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateDepartmentRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/Department' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/departments/page:
+    get:
+      summary: 分页查询部门
+      operationId: listDepartmentPage
+      parameters: [ { $ref: '#/components/parameters/Status' }, { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/DepartmentPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/departments/{departmentId}:
+    parameters: [ { $ref: '#/components/parameters/DepartmentId' } ]
+    get:
+      summary: 获取部门
+      operationId: getDepartment
+      responses: { '200': { $ref: '#/components/responses/Department' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新部门
+      operationId: updateDepartment
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateDepartmentRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/Department' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除部门
+      operationId: deleteDepartment
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/departments/{departmentId}/roles:
+    parameters: [ { $ref: '#/components/parameters/DepartmentId' } ]
+    get:
+      summary: 查询部门当前挂载的角色
+      operationId: listDepartmentRoles
+      responses: { '200': { $ref: '#/components/responses/RoleList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/departments/{departmentId}/roles/{roleId}:
+    parameters: [ { $ref: '#/components/parameters/DepartmentId' }, { $ref: '#/components/parameters/RoleId' } ]
+    post:
+      summary: 给部门挂载角色
+      description: 部门下全体成员（个人直接角色之外）自动获得该角色；重复挂载幂等。departmentId 不存在返回 404；roleId 不存在返回 400（与其余角色类接口的 404 语义不一致，属已知历史遗留）。
+      operationId: assignDepartmentRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已挂载 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 撤销部门挂载的角色
+      description: 撤销 iam_admin 角色受部门级最后管理员保护：撤销后若系统再无任何 active 状态的有效管理员（个人直接绑定 ∪ 其余部门挂载），返回 409。
+      operationId: revokeDepartmentRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已撤销 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/user-groups:
+    get:
+      summary: 获取全部协作组
+      operationId: listUserGroups
+      deprecated: true
+      responses: { '200': { $ref: '#/components/responses/UserGroupList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建协作组
+      operationId: createUserGroup
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateUserGroupRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/UserGroup' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/user-groups/page:
+    get:
+      summary: 分页查询协作组
+      operationId: listUserGroupPage
+      parameters: [ { $ref: '#/components/parameters/Status' }, { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/UserGroupPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/user-groups/{groupId}:
+    parameters: [ { $ref: '#/components/parameters/GroupId' } ]
+    get:
+      summary: 获取协作组
+      operationId: getUserGroup
+      responses: { '200': { $ref: '#/components/responses/UserGroup' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新协作组
+      operationId: updateUserGroup
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateUserGroupRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/UserGroup' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除协作组
+      operationId: deleteUserGroup
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/user-groups/{groupId}/users:
+    parameters: [ { $ref: '#/components/parameters/GroupId' } ]
+    get:
+      summary: 获取协作组成员
+      operationId: listUserGroupUsers
+      responses: { '200': { $ref: '#/components/responses/AdminUserList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/user-groups/{groupId}/users/{userId}:
+    parameters: [ { $ref: '#/components/parameters/GroupId' }, { $ref: '#/components/parameters/UserId' } ]
+    post:
+      summary: 添加协作组成员
+      operationId: assignUserGroupUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已添加 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+    delete:
+      summary: 移除协作组成员
+      operationId: revokeUserGroupUser
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已移除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/messages:
+    post:
+      summary: 发送站内信
+      operationId: createAdminMessage
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateMessageRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/MessageSend' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/messages/page:
+    get:
+      summary: 分页查询已发送批次（按 send_batch_id 聚合，时间倒序）
+      operationId: listMessageBatches
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/MessageBatchPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/messages/{sendBatchId}:
+    parameters: [ { $ref: '#/components/parameters/SendBatchId' } ]
+    get:
+      summary: 查询批次详情
+      operationId: getMessageBatch
+      responses: { '200': { $ref: '#/components/responses/MessageBatchDetail' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/messages/{sendBatchId}/recipients:
+    parameters: [ { $ref: '#/components/parameters/SendBatchId' } ]
+    get:
+      summary: 分页查询批次收件人（含已读状态）
+      operationId: listMessageBatchRecipients
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/MessageBatchRecipientPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/roles:
+    get:
+      summary: 获取全部角色
+      operationId: listRoles
+      deprecated: true
+      responses: { '200': { $ref: '#/components/responses/RoleList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建角色
+      operationId: createRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateRoleRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/Role' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/roles/page:
+    get:
+      summary: 分页查询角色
+      operationId: listRolePage
+      parameters: [ { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/RolePage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/roles/{roleId}:
+    parameters: [ { $ref: '#/components/parameters/RoleId' } ]
+    get:
+      summary: 获取角色
+      operationId: getRole
+      responses: { '200': { $ref: '#/components/responses/Role' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新角色
+      operationId: updateRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateRoleRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/Role' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除角色
+      operationId: deleteRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/roles/{roleId}/permissions:
+    parameters: [ { $ref: '#/components/parameters/RoleId' } ]
+    get:
+      summary: 获取角色权限
+      operationId: listRolePermissions
+      responses: { '200': { $ref: '#/components/responses/PermissionList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/roles/{roleId}/permissions/{permissionId}:
+    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/PermissionId' } ]
+    post:
+      summary: 为角色授予权限
+      operationId: assignPermissionToRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { description: 已授予 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+    delete:
+      summary: 移除角色权限
+      operationId: revokePermissionFromRole
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已移除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/roles/{roleId}/users/page:
+    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+    get:
+      summary: 角色成员分页
+      description: 个人直接绑定该角色的用户分页（含部门继承成员的完整视图走用户维度角色来源；此处为直接绑定列表）。
+      operationId: listRoleMemberPage
+      responses: { '200': { $ref: '#/components/responses/AdminUserPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/roles/{roleId}/departments:
+    parameters: [ { $ref: '#/components/parameters/RoleId' } ]
+    get:
+      summary: 反查挂载了该角色的部门
+      description: 该角色的成员继承来源，只读展示，不含子部门递归。roleId 不存在返回 400（与部门挂载角色接口的已知历史遗留一致，非 404）。
+      operationId: listRoleDepartments
+      responses: { '200': { $ref: '#/components/responses/DepartmentList' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/roles/{roleId}/authorization-rules/{applicationId}:
+    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 获取角色对应用的应用授权规则
+      description: 尚未配置规则返回 404，属合法空态，调用方按空规则呈现编辑器。
+      operationId: getRoleAuthorizationRule
+      responses: { '200': { $ref: '#/components/responses/RoleAuthorizationRule' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 保存角色对应用的应用授权规则
+      description: 两个数组必传（可为空数组，缺字段 400）；权限码须在应用权限清单范围内（越界 400）；保存后触发持有该角色全部用户的授权投影重算。
+      operationId: putRoleAuthorizationRule
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PutRoleAuthorizationRuleRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/RoleAuthorizationRule' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除角色对应用的应用授权规则
+      description: 幂等，规则不存在也返回 204；删除后触发持有该角色全部用户的授权投影重算。
+      operationId: deleteRoleAuthorizationRule
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/permissions:
+    get:
+      summary: 获取全部权限
+      operationId: listPermissions
+      deprecated: true
+      responses: { '200': { $ref: '#/components/responses/PermissionList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/permissions/page:
+    get:
+      summary: 分页查询权限
+      operationId: listPermissionPage
+      parameters: [ { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/PermissionPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/permissions/{permissionId}:
+    parameters: [ { $ref: '#/components/parameters/PermissionId' } ]
+    get:
+      summary: 获取权限
+      operationId: getPermission
+      responses: { '200': { $ref: '#/components/responses/Permission' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-applications:
+    get:
+      summary: 列出可信应用摘要
+      operationId: listTrustedApplications
+      deprecated: true
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummaryList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建可信应用及必需的初始 OAuth Client
+      operationId: createTrustedApplication
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTrustedApplicationRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/TrustedApplicationSummary' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-applications/page:
+    get:
+      summary: 分页查询可信应用
+      operationId: listTrustedApplicationPage
+      parameters: [ { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummaryPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/trusted-applications/{applicationId}:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 获取可信应用详情及其全部 Client
+      operationId: getTrustedApplication
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationDetail' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新可信应用元数据与 Portal 集成
+      operationId: updateTrustedApplication
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTrustedApplicationRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummary' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除可信应用及其 Portal 配置、Client、授权记录（内置应用返回 409）
+      operationId: deleteTrustedApplication
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: 内置应用禁止删除 } }
+  /iam/admin/trusted-applications/{applicationId}/clients:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 列出应用下的 OAuth Client
+      operationId: listTrustedApplicationClients
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationClientList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    post:
+      summary: 创建 OAuth Client
+      operationId: createTrustedApplicationClient
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateTrustedApplicationClientRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/TrustedApplicationClientSecret' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-applications/{applicationId}/clients/{clientId}:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' }, { $ref: '#/components/parameters/ClientId' } ]
+    get:
+      summary: 获取 OAuth Client
+      operationId: getTrustedApplicationClient
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationClient' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新 OAuth Client
+      operationId: updateTrustedApplicationClient
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTrustedApplicationClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationClient' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 删除 OAuth Client
+      operationId: deleteTrustedApplicationClient
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-applications/{applicationId}/permission-manifest:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 获取应用权限清单
+      operationId: getApplicationPermissionManifest
+      responses: { '200': { $ref: '#/components/responses/ApplicationPermissionManifest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 登记或全量替换应用权限清单
+      operationId: putApplicationPermissionManifest
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PutApplicationPermissionManifestRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/ApplicationPermissionManifest' }, '201': { $ref: '#/components/responses/ApplicationPermissionManifest' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-applications/{applicationId}/resource-verification-clients:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 列出应用下的资源验证客户端
+      operationId: listResourceVerificationClients
+      responses: { '200': { $ref: '#/components/responses/ResourceVerificationClientList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    post:
+      summary: 创建资源验证客户端
+      description: secret 由服务端生成，仅在创建响应中返回一次。
+      operationId: createResourceVerificationClient
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateResourceVerificationClientRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/ResourceVerificationClientSecret' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-applications/{applicationId}/resource-verification-clients/{clientId}:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' }, { $ref: '#/components/parameters/ClientId' } ]
+    get:
+      summary: 获取资源验证客户端
+      operationId: getResourceVerificationClient
+      responses: { '200': { $ref: '#/components/responses/ResourceVerificationClient' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    delete:
+      summary: 撤销资源验证客户端
+      description: 语义撤销，认证立即失效，记录保留供审计；重复撤销幂等返回 204。
+      operationId: revokeResourceVerificationClient
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '204': { description: 已撤销 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-applications/{applicationId}/resource-verification-clients/{clientId}/secret:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' }, { $ref: '#/components/parameters/ClientId' } ]
+    post:
+      summary: 轮换资源验证客户端密钥
+      description: 服务端生成新 secret 整体替换旧值，旧 secret 立即失效；新明文仅本次响应返回。
+      operationId: rotateResourceVerificationClientSecret
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { $ref: '#/components/responses/ResourceVerificationClientSecret' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/dashboard:
+    get:
+      summary: 获取管理台仪表盘聚合数据
+      description: 治理规模计数与运行状态统计；最近登录列表拆分为独立分页接口 /iam/admin/dashboard/recent-logins。
+      operationId: getAdminDashboard
+      responses: { '200': { $ref: '#/components/responses/AdminDashboard' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/dashboard/recent-logins:
+    get:
+      summary: 分页查询最近登录用户
+      description: 按 lastLoginAt 倒序，仅含有登录记录的用户。
+      operationId: listAdminDashboardRecentLogins
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/AdminRecentLoginPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/sessions:
+    get:
+      summary: 分页查询活跃会话
+      description: 仅含未过期且未撤销的会话，按最近活跃倒序；双实例共享会话存储时为全局视图。
+      operationId: listActiveSessions
+      parameters: [ { $ref: '#/components/parameters/UserIdQuery' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { $ref: '#/components/responses/ActiveSessionPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /iam/admin/sessions/users/{userId}/revoke:
+    parameters: [ { $ref: '#/components/parameters/UserId' } ]
+    put:
+      summary: 强制下线用户
+      description: 撤销该用户全部活跃会话（全部端一并踢出），返回本次撤销数量；用户不存在返回 400。
+      operationId: revokeUserSessions
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { $ref: '#/components/responses/SessionRevokeResult' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+components:
+  securitySchemes:
+    iamSession:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: 由 IAM Server 建立的浏览器会话 Cookie。
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: 先调用 /iam/web/auth/csrf 获取实际 headerName 与 token。
+  parameters:
+    UserId: { name: userId, in: path, required: true, schema: { type: integer, format: int64 } }
+    DepartmentId: { name: departmentId, in: path, required: true, schema: { type: integer, format: int64 } }
+    DepartmentIdQuery: { name: departmentId, in: query, required: false, schema: { type: integer, format: int64 } }
+    GroupId: { name: groupId, in: path, required: true, schema: { type: integer, format: int64 } }
+    RoleId: { name: roleId, in: path, required: true, schema: { type: integer, format: int64 } }
+    PermissionId: { name: permissionId, in: path, required: true, schema: { type: integer, format: int64 } }
+    ApplicationId: { name: applicationId, in: path, required: true, schema: { type: integer, format: int64 } }
+    ClientId: { name: clientId, in: path, required: true, schema: { type: string } }
+    Status: { name: status, in: query, required: false, schema: { type: integer } }
+    Keyword: { name: keyword, in: query, required: false, schema: { type: string } }
+    Page: { name: page, in: query, required: false, description: 从 1 开始的页码, schema: { type: integer, minimum: 1, default: 1 } }
+    Size: { name: size, in: query, required: false, description: 每页大小，最大 100, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    SendBatchId: { name: sendBatchId, in: path, required: true, schema: { type: string } }
+    UserIdQuery: { name: userId, in: query, required: false, schema: { type: integer, format: int64 } }
+    LastLoginAfter: { name: lastLoginAfter, in: query, required: false, description: ISO-8601 时刻，筛选最近登录不早于该时刻的用户, schema: { type: string, format: date-time } }
+    LockedUntilAfter: { name: lockedUntilAfter, in: query, required: false, description: ISO-8601 时刻，筛选锁定截止晚于该时刻的用户（锁定中）, schema: { type: string, format: date-time } }
+    NoDepartment: { name: noDepartment, in: query, required: false, description: 为 true 时筛选未挂部门的用户（仪表盘未挂部门下钻）, schema: { type: boolean, default: false } }
+  responses:
+    Unauthorized: { description: 未登录或 IAM 会话失效 }
+    Forbidden: { description: 无管理员权限 }
+    BadRequest: { description: 请求无效 }
+    NotFound: { description: 资源不存在 }
+    Conflict: { description: 资源状态或唯一约束冲突 }
+    AdminUser: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminUserResponse' } } } }
+    AdminUserList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AdminUserResponse' } } } } }
+    AdminUserPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminUserPage' } } } }
+    Department: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DepartmentResponse' } } } }
+    DepartmentList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DepartmentResponse' } } } } }
+    DepartmentPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/DepartmentPage' } } } }
+    UserGroup: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserGroupResponse' } } } }
+    UserGroupList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/UserGroupResponse' } } } } }
+    UserGroupPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/UserGroupPage' } } } }
+    Role: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RoleResponse' } } } }
+    RoleList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RoleResponse' } } } } }
+    RolePage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RolePage' } } } }
+    Permission: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PermissionResponse' } } } }
+    PermissionList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PermissionResponse' } } } } }
+    PermissionPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PermissionPage' } } } }
+    ApplicationPermissionManifest: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationPermissionManifest' } } } }
+    RoleAuthorizationRule: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/RoleAuthorizationRule' } } } }
+    MessageSend: { description: 已发送, content: { application/json: { schema: { $ref: '#/components/schemas/MessageSendResponse' } } } }
+    MessageBatchPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MessageBatchPage' } } } }
+    MessageBatchDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MessageBatchDetail' } } } }
+    MessageBatchRecipientPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/MessageBatchRecipientPage' } } } }
+    OrganizationTree: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/OrganizationTreeNodeResponse' } } } } }
+    OrganizationDepartmentWorkspace: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationDepartmentWorkspaceResponse' } } } }
+    OrganizationUserProfile: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationUserProfileResponse' } } } }
+    TrustedApplicationSummary: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationSummary' } } } }
+    TrustedApplicationSummaryList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } } } } }
+    TrustedApplicationSummaryPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationSummaryPage' } } } }
+    TrustedApplicationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationDetail' } } } }
+    TrustedApplicationClient: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationClient' } } } }
+    TrustedApplicationClientList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } } } }
+    TrustedApplicationClientSecret: { description: 创建成功，密钥仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationClientSecret' } } } }
+    ResourceVerificationClient: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceVerificationClient' } } } }
+    ResourceVerificationClientList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ResourceVerificationClient' } } } } }
+    ResourceVerificationClientSecret: { description: 创建 / 轮换成功，明文密钥仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceVerificationClientSecret' } } } }
+    ApplicationAuthorizationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationAuthorizationDetail' } } } }
+    ApplicationAuthorizationList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ApplicationAuthorization' } } } } }
+    AdminDashboard: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminDashboardResponse' } } } }
+    AdminRecentLoginPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminRecentLoginPage' } } } }
+    ActiveSessionPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ActiveSessionPage' } } } }
+    SessionRevokeResult: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/SessionRevokeResult' } } } }
+  schemas:
+    CreateUserRequest:
+      type: object
+      properties: { username: { type: string }, password: { type: string, format: password }, displayName: { type: string }, email: { type: string }, phone: { type: string }, departmentId: { type: integer, format: int64, nullable: true } }
+    UpdateUserRequest:
+      type: object
+      properties: { displayName: { type: string }, email: { type: string }, phone: { type: string }, departmentId: { type: integer, format: int64, nullable: true }, clearDepartment: { type: boolean, nullable: true } }
+    ResetPasswordRequest:
+      type: object
+      properties: { newPassword: { type: string, format: password } }
+    BindExternalIdentityRequest:
+      type: object
+      required: [providerCode, externalId]
+      properties: { providerCode: { type: string, example: ldap-password, description: 登录方式编码（须为已装配的外部登录方式） }, externalId: { type: string, description: 外部体系稳定唯一标识（LDAP DN/uid、OIDC sub） } }
+    AdminUserResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, username: { type: string }, displayName: { type: string, nullable: true }, email: { type: string, nullable: true }, phone: { type: string, nullable: true }, departmentId: { type: integer, format: int64, nullable: true }, departmentName: { type: string, nullable: true }, status: { type: integer }, lockedUntil: { type: string, format: date-time, nullable: true }, lastLoginAt: { type: string, format: date-time, nullable: true }, identitySource: { type: string, nullable: true, description: 绑定的外部登录方式编码（本地账号为 null） }, externalId: { type: string, nullable: true, description: 外部体系稳定唯一标识（本地账号为 null） }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    CreateDepartmentRequest:
+      type: object
+      properties: { code: { type: string }, name: { type: string }, parentId: { type: integer, format: int64, nullable: true }, sortOrder: { type: integer }, status: { type: integer } }
+    UpdateDepartmentRequest:
+      type: object
+      properties: { name: { type: string }, parentId: { type: integer, format: int64, nullable: true }, sortOrder: { type: integer }, status: { type: integer } }
+    DepartmentResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, parentId: { type: integer, format: int64, nullable: true }, parentName: { type: string, nullable: true }, sortOrder: { type: integer }, status: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    CreateUserGroupRequest:
+      type: object
+      properties: { code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, status: { type: integer } }
+    UpdateUserGroupRequest:
+      type: object
+      properties: { name: { type: string }, description: { type: string, nullable: true }, status: { type: integer } }
+    UserGroupResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, status: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    CreateRoleRequest:
+      type: object
+      properties: { code: { type: string }, name: { type: string }, description: { type: string, nullable: true } }
+    UpdateRoleRequest:
+      type: object
+      properties: { name: { type: string }, description: { type: string, nullable: true } }
+    RoleResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, builtIn: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    RoleSummaryResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, builtIn: { type: integer }, source: { type: string, enum: [direct, department_inherited], description: '角色来源：direct 个人直接 / department_inherited 部门继承' } }
+    PermissionResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, type: { type: string }, builtIn: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    PermissionSummaryResponse:
+      type: object
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, type: { type: string }, source: { type: string, enum: [direct, department_inherited], description: '权限来源：direct 个人直接角色授予 / department_inherited 部门继承角色授予' } }
+    CreateMessageRequest:
+      type: object
+      properties:
+        recipientUserId: { type: integer, format: int64, nullable: true }
+        recipientUserIds: { type: array, items: { type: integer, format: int64 } }
+        departmentIds: { type: array, items: { type: integer, format: int64 } }
+        userGroupIds: { type: array, items: { type: integer, format: int64 } }
+        includeChildDepartments: { type: boolean, nullable: true }
+        title: { type: string }
+        content: { type: string }
+    MessageSendResponse:
+      type: object
+      properties: { sendBatchId: { type: string }, recipientCount: { type: integer, format: int64 } }
+    MessageBatchSummary:
+      type: object
+      properties: { sendBatchId: { type: string }, title: { type: string }, senderUsername: { type: string }, targetUserCount: { type: integer, description: 请求指定的用户目标数（active 过滤前，非实际收件人数） }, targetDepartmentCount: { type: integer }, targetUserGroupCount: { type: integer }, targetIncludeChildDepartments: { type: boolean }, recipientCount: { type: integer, format: int64, description: 实际收件人数（展开并过滤后） }, readCount: { type: integer, format: int64 }, createdAt: { type: string, format: date-time } }
+    MessageBatchDetail:
+      type: object
+      properties: { sendBatchId: { type: string }, title: { type: string }, content: { type: string }, senderUsername: { type: string }, targetUserCount: { type: integer }, targetDepartmentCount: { type: integer }, targetUserGroupCount: { type: integer }, targetIncludeChildDepartments: { type: boolean }, recipientCount: { type: integer, format: int64 }, readCount: { type: integer, format: int64 }, createdAt: { type: string, format: date-time } }
+    MessageBatchRecipient:
+      type: object
+      properties: { userId: { type: integer, format: int64 }, username: { type: string }, displayName: { type: string, description: 用户已注销时为兜底文案 }, readAt: { type: string, format: date-time, nullable: true } }
+    MessageBatchPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/MessageBatchSummary' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    MessageBatchRecipientPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/MessageBatchRecipient' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    OrganizationTreeNodeResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        code: { type: string }
+        name: { type: string }
+        parentId: { type: integer, format: int64, nullable: true }
+        status: { type: integer }
+        sortOrder: { type: integer }
+        directMemberCount: { type: integer, format: int64 }
+        children: { type: array, items: { $ref: '#/components/schemas/OrganizationTreeNodeResponse' } }
+    OrganizationDepartmentWorkspaceResponse:
+      type: object
+      properties:
+        department: { $ref: '#/components/schemas/DepartmentResponse' }
+        directChildren: { type: array, items: { $ref: '#/components/schemas/DepartmentResponse' } }
+        members: { $ref: '#/components/schemas/AdminUserPage' }
+    OrganizationUserProfileResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/AdminUserResponse' }
+        department: { $ref: '#/components/schemas/DepartmentResponse', nullable: true }
+        userGroups: { type: array, items: { $ref: '#/components/schemas/UserGroupResponse' } }
+        roles: { type: array, items: { $ref: '#/components/schemas/RoleSummaryResponse' } }
+        effectivePermissions: { type: array, items: { $ref: '#/components/schemas/PermissionSummaryResponse' } }
+    AdminUserPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/AdminUserResponse' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    DepartmentPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/DepartmentResponse' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    UserGroupPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/UserGroupResponse' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    RolePage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/RoleResponse' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    PermissionPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/PermissionResponse' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    PortalMenuItem:
+      type: object
+      properties: { code: { type: string }, name: { type: string }, route: { type: string }, sortOrder: { type: integer } }
+    PortalIntegrationRequest:
+      type: object
+      properties: { enabled: { type: boolean }, entry: { type: string, nullable: true }, apiBase: { type: string, nullable: true }, menus: { type: array, items: { $ref: '#/components/schemas/PortalMenuItem' } } }
+    PortalIntegration:
+      type: object
+      properties: { enabled: { type: boolean }, entry: { type: string, nullable: true }, apiBase: { type: string, nullable: true }, routePrefix: { type: string }, menus: { type: array, items: { $ref: '#/components/schemas/PortalMenuItem' } } }
+    TrustedApplicationSummary:
+      type: object
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, clientCount: { type: integer }, portalEnabled: { type: boolean }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 } }
+    TrustedApplicationDetail:
+      type: object
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 }, portal: { $ref: '#/components/schemas/PortalIntegration', nullable: true }, clients: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } }
+    TrustedApplicationSummaryPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    TrustedApplicationClient:
+      type: object
+      properties: { id: { type: string }, clientId: { type: string }, clientName: { type: string }, clientType: { type: string, enum: [PUBLIC, CONFIDENTIAL] }, requireConsent: { type: boolean }, requireProofKey: { type: boolean }, redirectUris: { type: array, items: { type: string, format: uri } }, scopes: { type: array, items: { type: string } }, grantTypes: { type: array, items: { type: string } }, authenticationMethods: { type: array, items: { type: string } }, clientIdIssuedAt: { type: string, format: date-time, nullable: true }, secretPresent: { type: boolean } }
+    CreateTrustedApplicationClientRequest:
+      type: object
+      properties: { clientId: { type: string }, clientName: { type: string }, clientType: { type: string, enum: [PUBLIC, CONFIDENTIAL] }, clientSecret: { type: string, format: password, nullable: true }, requireConsent: { type: boolean }, redirectUris: { type: array, items: { type: string, format: uri } }, scopes: { type: array, items: { type: string } }, grantTypes: { type: array, items: { type: string } }, authenticationMethods: { type: array, items: { type: string } } }
+    UpdateTrustedApplicationClientRequest:
+      type: object
+      properties: { clientName: { type: string }, requireConsent: { type: boolean }, redirectUris: { type: array, items: { type: string, format: uri } }, scopes: { type: array, items: { type: string } } }
+    CreateTrustedApplicationRequest:
+      type: object
+      properties: { applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true }, initialClient: { $ref: '#/components/schemas/CreateTrustedApplicationClientRequest' }, roles: { type: array, items: { type: string }, nullable: true, description: 应用角色编码列表（权限清单），创建时同步登记 }, pagePermissions: { type: array, items: { type: string }, nullable: true, description: 页面权限编码列表 }, apiPermissions: { type: array, items: { type: string }, nullable: true, description: API权限编码列表 } }
+    UpdateTrustedApplicationRequest:
+      type: object
+      properties: { applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true } }
+    TrustedApplicationClientSecret:
+      type: object
+      properties: { id: { type: string }, clientId: { type: string }, clientSecret: { type: string, description: 仅本次响应返回 } }
+    ResourceVerificationClient:
+      type: object
+      properties: { clientId: { type: string }, applicationId: { type: integer, format: int64 }, status: { type: integer, description: 1=活跃，0=已撤销 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time, description: 最近一次轮换 / 撤销 }, revokedAt: { type: string, format: date-time, nullable: true } }
+    CreateResourceVerificationClientRequest:
+      type: object
+      required: [ clientId ]
+      properties: { clientId: { type: string, maxLength: 100, description: 不能包含冒号（Basic 凭据按冒号分隔） } }
+    ResourceVerificationClientSecret:
+      type: object
+      properties: { clientId: { type: string }, clientSecret: { type: string, description: 仅本次响应返回 } }
+    ApplicationAuthorization:
+      type: object
+      properties: { applicationId: { type: integer, format: int64 }, admitted: { type: boolean, description: 是否通过应用准入 }, authorizationVersion: { type: integer, format: int64, description: 服务端单调递增 }, manifestVersion: { type: string }, status: { type: integer, description: 1=有效，0=已撤销 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time, description: 最近一次替换 / 撤销 / 重激活 }, revokedAt: { type: string, format: date-time, nullable: true } }
+    ApplicationAuthorizationDetail:
+      type: object
+      properties: { applicationId: { type: integer, format: int64 }, admitted: { type: boolean }, authorizationVersion: { type: integer, format: int64 }, manifestVersion: { type: string }, status: { type: integer, description: 1=有效，0=已撤销 }, roles: { type: array, items: { type: string } }, pagePermissions: { type: array, items: { type: string } }, apiPermissions: { type: array, items: { type: string } }, dataGrantDocument: { type: object, nullable: true, description: 数据授权文档，null 表示无数据授权 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, revokedAt: { type: string, format: date-time, nullable: true } }
+    PutApplicationAuthorizationRequest:
+      type: object
+      required: [ admitted, roles, pagePermissions, apiPermissions ]
+      properties: { admitted: { type: boolean }, roles: { type: array, items: { type: string }, description: 可为空数组，须在应用权限清单内 }, pagePermissions: { type: array, items: { type: string }, description: 可为空数组，须在应用权限清单内 }, apiPermissions: { type: array, items: { type: string }, description: 可为空数组，须在应用权限清单内 }, dataGrantDocument: { allOf: [ { $ref: '#/components/schemas/DataGrantDocument' } ], nullable: true, description: null 表示清除数据授权；会被下一次投影重算覆盖（DATA 权威通道为角色规则并集） } }
+    ApplicationPermissionManifest:
+      type: object
+      properties: { applicationId: { type: integer, format: int64 }, roles: { type: array, items: { type: string } }, pagePermissions: { type: array, items: { type: string } }, apiPermissions: { type: array, items: { type: string } }, dataResources: { type: array, items: { $ref: '#/components/schemas/DataResourceDeclaration' } }, manifestVersion: { type: integer, format: int64, description: 服务端单调递增 }, manifestDigest: { type: string, description: SHA-256 内容摘要 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    PutApplicationPermissionManifestRequest:
+      type: object
+      required: [ roles, pagePermissions, apiPermissions, dataResources ]
+      properties: { roles: { type: array, items: { type: string, maxLength: 256 }, description: 可为空数组，重复编码折叠 }, pagePermissions: { type: array, items: { type: string, maxLength: 256 }, description: 可为空数组 }, apiPermissions: { type: array, items: { type: string, maxLength: 256 }, description: 可为空数组 }, dataResources: { type: array, items: { $ref: '#/components/schemas/DataResourceDeclaration' }, description: 必传可为空数组；申报的 DATA 资源是角色规则模板的码空间事实源 } }
+    RoleAuthorizationRule:
+      type: object
+      properties: { roleId: { type: integer, format: int64 }, applicationId: { type: integer, format: int64 }, pagePermissions: { type: array, items: { type: string } }, apiPermissions: { type: array, items: { type: string } }, dataGrantTemplate: { type: object, nullable: true, description: DATA 授权模板（grants 并集进投影），null 表示该角色无数据授权 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    PutRoleAuthorizationRuleRequest:
+      type: object
+      required: [ pagePermissions, apiPermissions ]
+      properties: { pagePermissions: { type: array, items: { type: string }, description: 可为空数组，须在应用权限清单内 }, apiPermissions: { type: array, items: { type: string }, description: 可为空数组，须在应用权限清单内 }, dataGrantTemplate: { allOf: [ { $ref: '#/components/schemas/DataGrantDocument' } ], nullable: true, description: null 表示清除数据授权；每条 grant 的 resource / action / dimension 须落在清单 DATA 资源申报内（越界 400） } }
+    DataResourceDeclaration:
+      type: object
+      required: [ resource, actions, dimensions ]
+      properties: { resource: { type: string, description: 资源标识（应用内唯一，如 iam:user） }, actions: { type: array, items: { type: string }, description: 该资源可授权的动作集（如 read / write） }, dimensions: { type: array, items: { type: string }, description: 该资源约束可用的维度集（如 departmentId） } }
+    DataGrantDocument:
+      type: object
+      required: [ protocol, version, grants ]
+      properties: { protocol: { type: string, description: 固定 simple-data-permission }, version: { type: string, description: 固定 1.0 }, grants: { type: array, items: { $ref: '#/components/schemas/DataGrant' } } }
+      description: 字段精确校验（不多不少）；grants 间 OR、grant 内约束 AND。
+    DataGrant:
+      type: object
+      required: [ resource, actions, all, constraints ]
+      properties: { resource: { type: string }, actions: { type: array, items: { type: string } }, all: { type: boolean, description: true=全量（constraints 须为空数组） }, constraints: { type: array, items: { $ref: '#/components/schemas/DataConstraint' } } }
+    DataConstraint:
+      type: object
+      required: [ dimension, operator, values ]
+      properties: { dimension: { type: string, description: 须在资源申报维度集内 }, operator: { type: string, description: 仅支持 IN（大写） }, values: { type: array, items: { type: string } } }
+    AdminDashboardResponse:
+      type: object
+      properties:
+        counts: { $ref: '#/components/schemas/DashboardGovernanceCounts' }
+        stats: { $ref: '#/components/schemas/DashboardRuntimeStats' }
+    DashboardGovernanceCounts:
+      type: object
+      properties: { user: { type: integer, format: int64 }, department: { type: integer, format: int64 }, userGroup: { type: integer, format: int64 }, role: { type: integer, format: int64 }, permission: { type: integer, format: int64 }, trustedApplication: { type: integer, format: int64 } }
+    DashboardRuntimeStats:
+      type: object
+      properties: { activeSessions: { type: integer, format: int64, description: 在线会话数（未过期且未撤销） }, todayLoggedInUsers: { type: integer, format: int64, description: 今日登录用户数（按部署时区当日零点起算） }, lockedUsers: { type: integer, format: int64, description: 锁定中账号数 }, disabledUsers: { type: integer, format: int64, description: 禁用账号数 }, usersWithoutDepartment: { type: integer, format: int64, description: 未归属部门的用户数 } }
+    AdminRecentLogin:
+      type: object
+      properties: { userId: { type: integer, format: int64 }, username: { type: string }, displayName: { type: string, nullable: true }, departmentName: { type: string, nullable: true }, lastLoginAt: { type: string, format: date-time } }
+    AdminRecentLoginPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/AdminRecentLogin' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    AdminSession:
+      type: object
+      properties: { sessionId: { type: string }, userId: { type: integer, format: int64 }, username: { type: string }, clientId: { type: string, nullable: true, description: 关联客户端编号（Web 会话为 null） }, remoteIp: { type: string, nullable: true }, userAgent: { type: string, nullable: true }, authTime: { type: string, format: date-time }, lastActiveAt: { type: string, format: date-time, nullable: true }, expiresAt: { type: string, format: date-time } }
+    ActiveSessionPage:
+      type: object
+      properties: { content: { type: array, items: { $ref: '#/components/schemas/AdminSession' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
+    SessionRevokeResult:
+      type: object
+      properties: { revoked: { type: integer, description: 本次撤销的活跃会话数量 } }

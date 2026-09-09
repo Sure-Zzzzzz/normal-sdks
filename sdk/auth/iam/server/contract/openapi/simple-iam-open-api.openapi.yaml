@@ -1,0 +1,371 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM Open API
+  version: 1.0.0
+  description: >-
+    IAM 对外开放 API（`/iam/api/**`），供外部系统持 AKSK 凭证（平台级 AKP
+    或用户级 AKU）调用，做组织与人员同步。浏览器、Portal、Admin 和普通
+    OAuth Client 不得调用。
+
+    ## 鉴权与权限
+
+    每个请求携带 `Authorization: Bearer <AKSK token>`（client_credentials 换发）。
+    IAM 侧由公共资源层链验证（introspect 回源 AKSK Server 取授权快照），端点执行
+    码 + DATA 双闸：先精确 API 码，再数据范围评估；任一不过返回 403。
+
+    ## 接入检查清单（六步，两侧各管一半）
+
+    配置点分布在 AKSK Server 管理侧（准入与三权）和 IAM 宿主侧（接管与回源），
+    逐项核对后再开始联调：
+
+    | # | 配置点 | 归属侧 | 做什么 | 漏配症状 |
+    |---|---|---|---|---|
+    | 1 | 创建 AKSK 客户端 | AKSK | 平台级 AKP 或用户级 AKU，凭据为 AccessKey / Secret | 换不出 token |
+    | 2 | 应用授权 admitted | AKSK | applicationCode=iam 的授权 admitted=true | 换不出 token |
+    | 3 | API 码 | AKSK | 同一授权勾 `iam:user:api`、`iam:department:api`（按需） | 403（未勾的族整族拒绝） |
+    | 4 | DATA grants | AKSK | 同一授权勾 `iam:user` 资源：`all=true` 全量或 `departmentId IN [...]` 受限 | 403（有码无范围，失败关闭） |
+    | 5 | protected-paths | IAM 宿主 | 资源层安全配置（protected-paths）覆盖 `/iam/api/**` | 403（请求落会话链被拒） |
+    | 6 | introspect 回源 | IAM 宿主 | 资源层 introspect 指向 AKSK Server 验证端点并配客户端凭据 | 401 |
+
+    凭据换 token：AccessKey / Secret 在 AKSK Server 的 token 端点以
+    client_credentials 换发，后续请求携带 `Authorization: Bearer <token>`。
+
+    注意：勾选 `iam:user:api` 即信任该凭证全量用户管理能力（含角色绑定）；
+    只需同步无需绑角色的场景，用 DATA 写动作收窄。
+
+    ## DATA 执行语义（用户族，resource=iam:user）
+
+    - 读列表：授权部门范围与请求过滤条件求交，越权数据不出库；
+    - 读详情 / 全部写操作：目标用户（或建用户的目标部门）须完整落在授权范围内，
+      越界 403；
+    - 有 API 码但无 DATA 授权（或计划不可执行）一律 403（失败关闭）；
+    - 部门族第一版纯码控，不评估 DATA。
+servers:
+  - url: /
+security:
+  - akskBearer: []
+paths:
+  /iam/api/users:
+    get:
+      summary: 分页查询用户
+      operationId: listUsers
+      description: DATA 部门范围与请求条件求交；授权范围内无可见部门时返回空页。
+      parameters:
+        - {name: status, in: query, schema: {type: integer}, description: "状态过滤（1=启用）"}
+        - {name: departmentId, in: query, schema: {type: integer, format: int64}, description: 部门过滤（与 DATA 范围求交）}
+        - {name: keyword, in: query, schema: {type: string}, description: "用户名 / 显示名 / 邮箱模糊匹配"}
+        - {name: page, in: query, schema: {type: integer, default: 1}, description: 页码（从 1 起）}
+        - {name: size, in: query, schema: {type: integer, default: 20}, description: 每页大小}
+      responses:
+        '200':
+          description: 用户分页。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      summary: 创建用户
+      operationId: createUser
+      description: 目标部门须在 DATA 授权范围内（未配部门=越界 403）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateUserRequest'}
+      responses:
+        '201':
+          description: 已创建。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserRestResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /iam/api/users/{userId}:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      summary: 用户详情
+      operationId: getUser
+      responses:
+        '200':
+          description: 用户详情（含角色编码列表）。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserRestResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      summary: 更新用户
+      operationId: updateUser
+      description: 现有部门与变更后部门均须在 DATA 授权范围内。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateUserRequest'}
+      responses:
+        '200':
+          description: 已更新。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserRestResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      summary: 删除用户
+      operationId: deleteUser
+      description: 物理删除，级联清理角色绑定、组成员与应用授权投影；最后管理员保护 409。
+      responses:
+        '204': {description: 已删除。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /iam/api/users/{userId}/roles:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      summary: 用户角色列表
+      operationId: getUserRoles
+      responses:
+        '200':
+          description: 角色编码列表。
+          content:
+            application/json:
+              schema: {type: array, items: {type: string}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/users/{userId}/enable:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      summary: 启用用户
+      operationId: enableUser
+      responses:
+        '200': {description: 已启用。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/users/{userId}/disable:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      summary: 禁用用户
+      operationId: disableUser
+      description: 禁用即全端吊销会话。
+      responses:
+        '200': {description: 已禁用。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/users/{userId}/reset-password:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+    put:
+      summary: 重置用户密码
+      operationId: resetUserPassword
+      description: 重置即全端吊销；审计 operator 记AKSK 主体标识。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ResetPasswordRequest'}
+      responses:
+        '200': {description: 已重置。}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/users/{userId}/roles/{roleId}:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: roleId, in: path, required: true, schema: {type: integer, format: int64}}
+    post:
+      summary: 绑定角色
+      operationId: assignUserRole
+      responses:
+        '200': {description: 已绑定。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      summary: 解绑角色
+      operationId: revokeUserRole
+      responses:
+        '204': {description: 已解绑。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/departments:
+    get:
+      summary: 全量部门平铺列表
+      operationId: listDepartments
+      description: 含 fullPath（如 /root/研发/后端），外部按 parentId / fullPath 自行重建树；纯码控不评估 DATA。
+      responses:
+        '200':
+          description: 部门平铺列表。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/DepartmentRestResponse'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    post:
+      summary: 创建部门
+      operationId: createDepartment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateDepartmentRequest'}
+      responses:
+        '201':
+          description: 已创建。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DepartmentRestResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /iam/api/departments/{departmentId}:
+    parameters:
+      - {name: departmentId, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      summary: 部门详情
+      operationId: getDepartment
+      responses:
+        '200':
+          description: 部门详情。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DepartmentRestResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      summary: 更新部门
+      operationId: updateDepartment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateDepartmentRequest'}
+      responses:
+        '200':
+          description: 已更新。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DepartmentRestResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      summary: 删除部门
+      operationId: deleteDepartment
+      description: 走既有级联规则（存在子部门 / 成员时按管理面同一约束拒绝）。
+      responses:
+        '204': {description: 已删除。}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    akskBearer:
+      type: http
+      scheme: bearer
+      description: >-
+        AKSK 客户端凭据（AccessKey / Secret）换发的 Access Token
+        （client_credentials）。凭据不得写入日志、代码仓库或响应缓存。
+  responses:
+    BadRequest:
+      description: 请求体非法（参数校验失败）。
+    Unauthorized:
+      description: >-
+        未携带或无效 Bearer 凭据、携带会话 Cookie（开放 API 链排斥）、introspect 拒绝。
+        响应不区分拒绝原因。
+    Forbidden:
+      description: >-
+        已认证但未勾 API 码，或 DATA 范围不足 / 计划不可执行（失败关闭）。
+    NotFound:
+      description: 目标资源不存在。
+    Conflict:
+      description: 唯一性冲突或受保护约束（如最后管理员保护、部门删除阻断）。
+  schemas:
+    UserRestResponse:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        username: {type: string}
+        displayName: {type: string, nullable: true}
+        departmentId: {type: integer, format: int64, nullable: true}
+        departmentName: {type: string, nullable: true}
+        status: {type: integer, description: "1=启用"}
+        email: {type: string, nullable: true}
+        phone: {type: string, nullable: true}
+        roles: {type: array, items: {type: string}}
+    UserPage:
+      type: object
+      properties:
+        content: {type: array, items: {$ref: '#/components/schemas/UserRestResponse'}}
+        totalElements: {type: integer}
+        totalPages: {type: integer}
+        number: {type: integer, description: 当前页码（从 0 起）}
+        size: {type: integer}
+    CreateUserRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: {type: string}
+        password: {type: string}
+        displayName: {type: string}
+        email: {type: string}
+        phone: {type: string}
+        departmentId: {type: integer, format: int64, description: 目标部门（DATA 校验对象）}
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName: {type: string}
+        email: {type: string}
+        phone: {type: string}
+        departmentId: {type: integer, format: int64, description: 变更后部门（变更时 DATA 校验新部门）}
+        clearDepartment: {type: boolean, description: 置 true 清空部门归属}
+    ResetPasswordRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword: {type: string}
+    DepartmentRestResponse:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        code: {type: string}
+        name: {type: string}
+        parentId: {type: integer, format: int64, nullable: true}
+        fullPath: {type: string, description: 自根起全路径（如 /root/研发/后端）}
+        sortOrder: {type: integer, nullable: true}
+        status: {type: integer}
+    CreateDepartmentRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: {type: string}
+        name: {type: string}
+        parentId: {type: integer, format: int64, nullable: true}
+        sortOrder: {type: integer}
+        status: {type: integer}
+    UpdateDepartmentRequest:
+      type: object
+      properties:
+        name: {type: string}
+        parentId: {type: integer, format: int64, nullable: true}
+        sortOrder: {type: integer}
+        status: {type: integer}

@@ -1,0 +1,135 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM Resource Token Verification API
+  version: 1.0.0
+  description: >-
+    仅供受控资源服务验证 IAM Access Token 的服务间接口。浏览器、Portal、Admin
+    和普通 OAuth Client 不得调用此接口。
+servers:
+  - url: /
+paths:
+  /iam/resource/tokens/verify:
+    post:
+      summary: 验证 IAM Access Token
+      description: >-
+        调用方必须携带唯一的资源验证客户端 Basic 凭据。IAM 仅在令牌、OAuth Client、
+        IAM 会话、用户与应用授权快照均仍有效且属于同一应用时返回最小授权信息；
+        不返回拒绝原因，也不进行其他 Provider 回退。
+      operationId: verifyIamResourceToken
+      security:
+        - resourceVerificationClient: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceTokenVerificationRequest'
+      responses:
+        '200':
+          description: 令牌和当前授权上下文均有效。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResourceTokenVerificationResponse'
+        '401':
+          description: >-
+            Basic 凭据缺失、重复、畸形或无效，或令牌、会话、用户、OAuth Client、应用绑定
+            或授权快照无效。响应不区分拒绝原因。
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+              description: 固定为 Basic realm="iam-resource-verification"。
+components:
+  securitySchemes:
+    resourceVerificationClient:
+      type: http
+      scheme: basic
+      description: >-
+        仅 IAM Server 为同一受控应用签发的资源验证客户端可使用。客户端密钥不得写入
+        浏览器、日志、代码仓库或响应缓存。
+  schemas:
+    ResourceTokenVerificationRequest:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: 待验证的 IAM Access Token。
+    ResourceTokenVerificationResponse:
+      type: object
+      required: [sub, iam_authorization]
+      additionalProperties: false
+      properties:
+        sub:
+          type: string
+          description: IAM 稳定用户标识。
+        iam_authorization:
+          $ref: '#/components/schemas/ApplicationAuthorizationContextClaim'
+    ApplicationAuthorizationContextClaim:
+      type: object
+      description: >-
+        `simple-application-authorization` 1.0 结构化授权快照。字段集合固定；资源服务必须
+        使用 ApplicationAuthorizationContextClaimMapper 严格还原，而不是自行放宽解析。
+      required:
+        - protocol
+        - version
+        - subjectType
+        - subjectId
+        - applicationCode
+        - admitted
+        - roles
+        - pagePermissions
+        - apiPermissions
+        - dataGrantDocument
+        - authorizationVersion
+        - manifestVersion
+        - manifestDigest
+        - issuedAt
+        - expiresAt
+      additionalProperties: false
+      properties:
+        protocol:
+          type: string
+          enum: [simple-application-authorization]
+        version:
+          type: string
+          enum: ['1.0']
+        subjectType:
+          type: string
+          enum: [HUMAN]
+        subjectId:
+          type: string
+        applicationCode:
+          type: string
+        admitted:
+          type: boolean
+          enum: [true]
+        roles:
+          type: array
+          items: { type: string }
+        pagePermissions:
+          type: array
+          items: { type: string }
+        apiPermissions:
+          type: array
+          items: { type: string }
+        dataGrantDocument:
+          nullable: true
+          description: 由 simple-data-permission-core 定义的结构化 DATA 授权文档。
+        authorizationVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        manifestVersion:
+          type: string
+        manifestDigest:
+          type: string
+        issuedAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。
+        expiresAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。

@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM Portal API
+  version: 1.0.0
+  description: 统一应用门户的应用导航、站内信与未读数事件接口。
+servers:
+  - url: /
+security:
+  - iamSession: []
+paths:
+  /iam/web/portal/accessible-applications:
+    get:
+      summary: 获取当前用户可访问的 Portal 应用和菜单
+      operationId: listAccessibleApplications
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PortalAccessibleApplication' }
+        '401': { description: 未登录 }
+  /iam/web/theme-preference:
+    get:
+      summary: 获取当前用户 Portal 主题偏好
+      operationId: getPortalThemePreference
+      responses:
+        '200':
+          description: 未保存偏好时返回浅色默认快照，不创建持久化记录
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PortalThemePreference' }
+        '401': { description: 未登录 }
+    put:
+      summary: 保存当前用户 Portal 主题偏好
+      operationId: savePortalThemePreference
+      security:
+        - iamSession: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PortalThemePreferenceInput' }
+      responses:
+        '200':
+          description: 服务端规范化后的主题快照
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PortalThemePreference' }
+        '400': { description: 契约版本、模式、颜色令牌或对比度不合法 }
+        '401': { description: 未登录 }
+  /iam/web/messages:
+    get:
+      summary: 获取当前用户站内信兼容列表
+      operationId: listPortalMessages
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200':
+          description: 未传分页参数时返回兼容数组；传分页参数时返回当前页数组
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WebMessageResponse' }
+        '401': { description: 未登录 }
+  /iam/web/messages/page:
+    get:
+      summary: 分页获取当前用户站内信
+      operationId: listPortalMessagePage
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebMessagePageResponse' }
+        '401': { description: 未登录 }
+  /iam/web/messages/unread-count:
+    get:
+      summary: 获取当前用户未读站内信数
+      operationId: countUnreadPortalMessages
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: integer, format: int64 }
+        '401': { description: 未登录 }
+  /iam/web/messages/read-all:
+    put:
+      summary: 将当前用户全部未读站内信标记为已读
+      operationId: markAllPortalMessagesRead
+      security:
+        - iamSession: []
+          csrfToken: []
+      responses:
+        '204': { description: 已完成 }
+        '401': { description: 未登录 }
+  /iam/web/messages/{messageId}/read:
+    parameters:
+      - $ref: '#/components/parameters/MessageId'
+    put:
+      summary: 标记当前用户的一封站内信为已读
+      operationId: markPortalMessageRead
+      security:
+        - iamSession: []
+          csrfToken: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebMessageResponse' }
+        '401': { description: 未登录 }
+        '404': { description: 消息不存在或不属于当前用户 }
+  /iam/web/messages/events:
+    get:
+      summary: 订阅当前用户未读站内信数事件
+      description: 建立连接后发送 ready 握手帧和当前未读数；后续创建站内信或标记已读时继续推送 unread-count。SSE 断线不提供事件补偿，客户端应通过未读数接口校正。
+      operationId: subscribeUnreadMessageEvents
+      responses:
+        '200':
+          description: 未读数 SSE 流
+          content:
+            text/event-stream:
+              schema:
+                type: integer
+                format: int64
+              examples:
+                unreadCount:
+                  summary: unread-count 事件数据
+                  value: 3
+        '401': { description: 未登录 }
+components:
+  securitySchemes:
+    iamSession:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: 由 IAM Server 建立的浏览器会话 Cookie。
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: 先调用 /iam/web/auth/csrf 获取实际 headerName 与 token。
+  parameters:
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Page:
+      name: page
+      in: query
+      required: false
+      description: 从 1 开始的页码
+      schema: { type: integer, minimum: 1, default: 1 }
+    Size:
+      name: size
+      in: query
+      required: false
+      description: 每页大小，最大 100
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  schemas:
+    PortalThemePreferenceInput:
+      type: object
+      required: [contractVersion, mode]
+      properties:
+        contractVersion: { type: integer, enum: [1] }
+        mode: { type: string, enum: [light, dark, custom] }
+        customTokens:
+          type: object
+          description: custom 模式必须提供全部白名单颜色令牌；light/dark 不得提供令牌。
+          additionalProperties: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+    PortalThemePreference:
+      allOf:
+        - $ref: '#/components/schemas/PortalThemePreferenceInput'
+        - type: object
+          required: [customTokens]
+          properties:
+            customTokens:
+              type: object
+              additionalProperties: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+            updatedAt: { type: string, format: date-time, nullable: true }
+    PortalAccessibleApplication:
+      type: object
+      properties:
+        applicationCode: { type: string }
+        applicationName: { type: string }
+        description: { type: string, nullable: true }
+        icon: { type: string, nullable: true, description: 内置图标编码，未知或历史空值以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }
+        routePrefix: { type: string }
+        entry: { type: string }
+        apiBase: { type: string, nullable: true }
+        menus:
+          type: array
+          items: { $ref: '#/components/schemas/PortalMenuItem' }
+    PortalMenuItem:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        route: { type: string, description: 服务端拼接后的完整路由 }
+        sortOrder: { type: integer }
+    WebMessagePageResponse:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/WebMessageResponse' } }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+        page: { type: integer }
+        size: { type: integer }
+        numberOfElements: { type: integer }
+        first: { type: boolean }
+        last: { type: boolean }
+        empty: { type: boolean }
+    WebMessageResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        recipientUserId: { type: integer, format: int64 }
+        senderUserId: { type: integer, format: int64 }
+        senderUsername: { type: string }
+        title: { type: string }
+        content: { type: string }
+        sendBatchId: { type: string }
+        targetSummary: { type: string }
+        read: { type: boolean }
+        readAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
