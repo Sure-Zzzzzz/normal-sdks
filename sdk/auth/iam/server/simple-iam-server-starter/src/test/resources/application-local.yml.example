@@ -1,0 +1,23 @@
+# 本地配置文件示例
+# 使用方法：
+# 1. 复制此文件并重命名为 application-local.yml
+# 2. 填入你的真实密码
+# 3. application-local.yml 不会被提交到git（已在.gitignore中配置）
+#
+# 运行测试前请确保本地 MySQL 已创建数据库：
+#   CREATE DATABASE sure_auth_iam DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+# 且 Redis 在 localhost:6379 可达（测试使用 database=2，与 aksk 的 database=1 隔离）。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              default:
+                password: your_mysql_password_here
+
+logging:
+  level:
+    org.springframework.security.jackson2: ERROR

@@ -1,0 +1,37 @@
+# 手工双实例三模式验收专用叠加 profile（--spring.profiles.active=local,manual）。
+# 登录适配器（真实 Keycloak OIDC + openldap LDAP）引依赖即装配（无 enable 开关），
+# 依赖经本地 init 脚本（LOCAL_SERVER_ACCEPTANCE.init.gradle，故意不入库）的 iamManualAcceptance
+# configuration 仅加入 runIamServerLocal 的 classpath——
+# 单测上下文 classpath 无 adapter（server 逻辑由 fake SPI 替身覆盖，真协议 e2e 在两 adapter 模块各自回归），
+# 本文件仅提供适配器连接配置。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          iam:
+            server:
+              external-identity:
+                # 登录方式展示文案（部署方配置，未配置时回退登录方式编码）
+                providers:
+                  ldap-password:
+                    name: 域用户登录
+                    description: 使用企业目录（LDAP）域账号密码登录
+                  oidc:
+                    name: 单点登录
+                    description: 跳转统一认证中心完成单点登录
+            adapter:
+              login:
+                oidc:
+                  issuer: http://localhost:8380/realms/sure-iam-test
+                  authorization-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/auth
+                  token-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/token
+                  jwk-set-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/certs
+                  client-id: iam-oidc-test
+                  client-secret: local-oidc-client-secret
+                ldap:
+                  url: ldap://127.0.0.1:1389/dc=middleware-ops,dc=test
+                  user-search-base: ou=people
+                  user-search-filter: (uid={0})
+                  # manager-dn / manager-password 放已忽略的 application-local.yml（不进版本库），
+                  # 口径与 ldap-adapter-starter 测试配置一致

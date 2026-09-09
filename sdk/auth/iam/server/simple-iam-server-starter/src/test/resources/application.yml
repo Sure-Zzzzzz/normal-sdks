@@ -1,0 +1,144 @@
+spring:
+  profiles:
+    active: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: default
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/sure_auth_iam?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: root
+                password: # 请在 application-local.yml 中配置真实密码
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 30
+                  minimum-idle: 5
+                  connection-timeout: 3000
+                  validation-timeout: 3000
+        auth:
+          iam:
+            server:
+              enable: true
+              issuer: http://localhost:8180
+              me: "test-app"
+              token:
+                key-id: test-key-iam-2026
+                public-key: classpath:keys/public.pem
+                private-key: classpath:keys/private.pem
+                access-expires-in: 3600
+                refresh-expires-in: 604800
+              session:
+                expires-in: 1800
+              login:
+                max-attempts: 5
+                lock-minutes: 15
+              captcha:
+                enabled: true
+                threshold: 2
+              mfa:
+                enabled: false
+              registration:
+                open: false
+              password:
+                # 测试批量建号场景关闭须改密强制拦截（防线专项测试显式重开）；生产不得关闭
+                must-change-enforcement: false
+              password-reset:
+                self-service: false
+              bootstrap:
+                enabled: true
+                username: admin
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 2
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        lock:
+          redis:
+            route:
+              enable: true
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: ${io.github.surezzzzzz.sdk.auth.iam.server.me:test-app}
+              mode: interceptor
+              # 429 出口统一归 IamExceptionHandler（组件默认 advice 与本 server 兜底平序不可控）
+              management:
+                enable-default-exception-handler: false
+              interceptor:
+                rules:
+                  # CSRF 取 token 端点匿名可达且每请求建 Redis session，IP 级限流消除 session 膨胀放大；
+                  # 阈值 60 次/分钟（每次登录尝试取 1 次），NAT 出口多人共享时部署方按需放宽
+                  - path-pattern: /iam/web/auth/csrf
+                    method: GET
+                    resource-code: iam-web-csrf
+                    key-strategy: ip
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 60
+                        window: 1
+                        unit: MINUTES
+                  # 验证码挑战端点匿名可达且每次生成图片并写 Redis 挑战 key，IP 级限流防挑战刷取；
+                  # 阈值 30 次/分钟（一次登录取 1 次挑战，含用户主动换图），NAT 出口多人共享时部署方按需放宽
+                  - path-pattern: /iam/web/auth/captcha
+                    method: GET
+                    resource-code: iam-web-captcha
+                    key-strategy: ip
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 30
+                        window: 1
+                        unit: MINUTES
+        cache:
+          key-prefix: sure-auth-iam
+          me: ${io.github.surezzzzzz.sdk.auth.iam.server.me:test-app}
+          l1:
+            enabled: true
+            expire-seconds: 10
+            max-size: 10000
+          l2:
+            enabled: true
+            expire-seconds: ${io.github.surezzzzzz.sdk.auth.iam.server.token.access-expires-in:3600}
+            key-format: "{keyPrefix}:{me}:{cacheName}::{key}"
+          consistency:
+            mode: strong
+          pubsub:
+            mode: routed
+          route:
+            scan-enabled: false
+          serializer:
+            trusted-packages:
+              - java.lang
+              - java.time
+              - java.util
+              - io.github.surezzzzzz.sdk.auth.iam.server
+              - org.springframework.security.oauth2.server.authorization
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.iam.server: DEBUG
+    org.springframework.security: DEBUG
+    io.github.surezzzzzz.sdk.cache.pubsub.CacheInvalidationListener: TRACE

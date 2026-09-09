@@ -1,0 +1,58 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-iam-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    // 验证码适配器运行时装配生效即可，桥接类型不出现在公开 API
+    implementation 'io.github.sure-zzzzzz:simple-iam-captcha-adapter-starter:1.0.0'
+
+    // 复用自有 SDK：二级缓存 / 拦截器限流 / Redis 锁 / Redis 与 MySQL 路由
+    // （cache/limiter/lock/route 的类型进公开签名或 README 教使用方直接消费，保持 api；
+    //   mysql-route 纯 yaml 配置驱动装配、caffeine 是 smart-cache L1 运行时补品，不进使用方编译类路径）
+    api 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.1.0'
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
+    api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+    api 'org.springframework.session:spring-session-data-redis'
+    api 'org.springframework.boot:spring-boot-starter-aop'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Authorization Server (javax 时代 0.4.x)
+    api 'org.springframework.security:spring-security-oauth2-authorization-server:0.4.1'
+    api 'org.springframework.security:spring-security-oauth2-core'
+    api 'org.springframework.security:spring-security-oauth2-jose'
+
+    // 指数退避重试（内部实现细节，类型不进公开签名）
+    implementation 'io.github.sure-zzzzzz:task-retry-starter:2.0.0'
+
+    // 公共资源层（/iam/api/** 开放 API鉴权链，公共链 STATELESS、零 Set-Cookie）与 DATA 权限 MVC 集成
+    // （均为实现细节：AKSK token 验证与 DATA 消费只在 server 自带开放 API controller 内发生，
+    // 公共层类型不出现在本模块公开 API，不泄漏进使用方编译类路径）
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+
+    // Database
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+}
+
+// 外部身份源登录适配器（引依赖即装配、无 enable 开关）不进 testImplementation：
+// server 单测用 fake SPI 替身覆盖，真协议 e2e 在两 adapter 模块各自回归。
+// 手工验收入口（runIamServerLocal 与 adapter 依赖叠加）由本地 init 脚本提供，故意不入库
