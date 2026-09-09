@@ -161,8 +161,8 @@ dependencies {
 |---|---|
 | `GET /iam/admin/organizations/tree` | 组织树（部门 + 协作组） |
 | `GET /iam/admin/organizations/departments/{id}/workspace` | 部门工作台视图 |
-| `GET /iam/admin/organizations/users/{id}/profile` | 用户组织画像 |
-| `GET / POST /iam/admin/users`、`GET / PUT / DELETE /iam/admin/users/{userId}` | 用户 CRUD 与分页（删除级联清理角色绑定、组成员与应用授权投影） |
+| `GET /iam/admin/organizations/users/{id}/profile` | 用户组织画像（有效角色与权限各带 `source` 来源标记：`direct` 个人直接 / `department_inherited` 部门继承） |
+| `GET / POST /iam/admin/users`、`GET / PUT / DELETE /iam/admin/users/{userId}` | 用户 CRUD 与分页（分页过滤：status / departmentId / keyword / lastLoginAfter / lockedUntilAfter / noDepartment——未挂部门筛选，仪表盘下钻用；删除级联清理角色绑定、组成员与应用授权投影） |
 | `PUT /iam/admin/users/{userId}/enable` / `disable` | 启用 / 禁用（禁用即全端吊销） |
 | `PUT /iam/admin/users/{userId}/unlock` | 手动解锁（清除登录失败锁定与失败计数，不等 15 分钟自动过期） |
 | `PUT /iam/admin/users/{userId}/reset-password` | 管理员重置密码（即全端吊销） |
