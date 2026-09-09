@@ -1,0 +1,18 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-iam-core:1.0.0'
+
+    implementation 'org.springframework.security:spring-security-ldap'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'mysql:mysql-connector-java'
+}

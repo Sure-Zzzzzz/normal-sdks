@@ -1,0 +1,32 @@
+# 本地配置文件示例
+# 使用方法：
+# 1. 复制此文件并重命名为 application-local.yml
+# 2. 填入你的真实密码（MySQL、LDAP fixture 用户密码）
+# 3. application-local.yml 不会被提交到 git（已在 .gitignore 中配置）
+#
+# 运行测试前请确保：
+# - 本地 MySQL 已创建数据库 sure_auth_iam（与 iam-server-starter 测试共用）
+# - Redis 在 localhost:6379 可达（database=2）
+# - middleware-ops-local-ldap 容器运行中（复用 smart-middleware-ops-server-starter
+#   的固定 openldap，见其 LOCAL_TEST_COMMANDS.md，端口 1389）
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              default:
+                password: your_mysql_password_here
+        auth:
+          iam:
+            adapter:
+              login:
+                ldap:
+                  manager-dn: cn=admin,dc=middleware-ops,dc=test
+                  manager-password: your_ldap_manager_password_here
+                  test:
+                    ldap:
+                      # fixture 用户 ops-user 的密码（与 middleware-ops 本地 LDAP 容器一致）
+                      user-password: local-ops-password
