@@ -146,6 +146,15 @@ dependencies {
 
 ### 管理端点（`/iam/admin/**`，进门为 `ROLE_iam_admin` 或任一页面权限码）
 
+仪表盘与会话：
+
+| 端点 | 说明 |
+|---|---|
+| `GET /iam/admin/dashboard` | 仪表盘聚合（用户 / 部门 / 协作组 / 角色 / 权限 / 可信应用计数 + 在期会话 / 今日登录人数 / 锁定 / 禁用 / 无部门用户运行态，`iam:dashboard:api`） |
+| `GET /iam/admin/dashboard/recent-logins` | 最近登录记录分页（用户 + 部门 + 时间） |
+| `GET /iam/admin/sessions` | 在期会话分页（可按 `userId` 过滤；会话 / 用户 / 客户端 / IP / UA / 认证与最后活跃时间，`iam:session:api`） |
+| `PUT /iam/admin/sessions/users/{userId}/revoke` | 强制下线：吊销该用户全部会话（等价用户级全端吊销，返回吊销数，发 `REVOKED` 审计） |
+
 组织与用户：
 
 | 端点 | 说明 |
@@ -176,6 +185,7 @@ dependencies {
 | `GET / POST /iam/admin/roles`、`GET / PUT / DELETE /iam/admin/roles/{roleId}`、`GET /iam/admin/roles/page` | 角色 CRUD 与分页（删除级联清理角色-权限关系、成员绑定与授权规则） |
 | `GET / POST / DELETE /iam/admin/roles/{roleId}/permissions/{permissionId}`、`GET /iam/admin/roles/{roleId}/permissions` | 角色-权限关系 |
 | `GET /iam/admin/roles/{roleId}/departments` | 反查挂载了该角色的部门（成员继承来源，只读展示，不含子部门递归） |
+| `GET /iam/admin/roles/{roleId}/users/page` | 角色成员分页（个人直挂成员，不含部门继承） |
 | `GET / PUT / DELETE /iam/admin/roles/{roleId}/authorization-rules/{applicationId}` | 角色应用授权规则（PUT 固定地址 upsert 返 200，无规则 GET 返 404，变更触发投影重算） |
 | `GET /iam/admin/permissions`、`GET /iam/admin/permissions/{permissionId}`、`GET /iam/admin/permissions/page` | 权限列表 / 详情 / 分页（只读——权限码为系统内置 seed，由安全链与 `@PreAuthorize` 在代码中消费，运行期不提供增删改） |
 
@@ -198,6 +208,9 @@ dependencies {
 | 端点 | 说明 |
 |---|---|
 | `POST /iam/admin/messages` | 管理端发送站内信 |
+| `GET /iam/admin/messages/page` | 发送批次分页（标题 / 发送人 / 目标构成 / 收件与已读计数） |
+| `GET /iam/admin/messages/{sendBatchId}` | 批次详情（含正文） |
+| `GET /iam/admin/messages/{sendBatchId}/recipients` | 批次收件人分页（含已读时间） |
 
 管理面通用约定：创建主资源返回 `201 Created`，删除返回 `204 No Content`；认证、授权和业务错误均以标准 HTTP 状态表达，不依赖自定义业务状态码字段。
 
@@ -226,7 +239,7 @@ dependencies {
 
 | 端点 | 说明 |
 |---|---|
-| `POST /iam/resource/tokens/verify` | 远程 token 验证：请求体携带 token，校验通过返回 `sub` 与 `iamAuthorization` 投影 |
+| `POST /iam/resource/tokens/verify` | 远程 token 验证：请求体携带 token，校验通过返回 `sub` 与 `iam_authorization` 投影 |
 
 ## 安全过滤链
 
@@ -316,11 +329,11 @@ io:
 | 3 | 配角色应用授权规则 | `PUT /iam/admin/roles/{roleId}/authorization-rules/{applicationId}` | 角色 × 应用的码集合，投影的计算源；变更即触发投影重算 |
 | 4 | 给用户准入 | 用户应用授权 admitted（已申报清单的应用走准入 + 角色规则自动投影；特殊需要可手工授权行微调） | 决定用户 Token 中的投影内容与门户可见性 |
 
-验证：用户登录门户核对应用可见与菜单，解出的 Access Token 中核对 `iamAuthorization` 投影内容。
+验证：用户登录门户核对应用可见与菜单，解出的 Access Token 中核对 `iam_authorization` 投影内容（投影的端到端操作序见 [权限与授权投影](docs/领域文档/权限与授权投影.md) 的「业务方上报指引」）。
 
 ## 当前交付边界
 
-后端能力已完成实现与真实 MySQL/Redis 模块测试验证。正式发布前仍需完成 Vue 登录页、Consent 页、代理路由、浏览器回调、Token 换取和 `/userinfo` 的端到端联调验证。
+后端能力已完成实现与真实 MySQL/Redis 模块测试验证；Vue 登录页、Consent 页、代理路由、浏览器回调、Token 换取和 `/userinfo` 已完成双实例真链路端到端验收（登录、首登强制改密、授权码 + PKCE、refresh 轮换与重放族吊销全链走通）。
 
 **预留骨架（开关或表结构在、实现未完全接线）**：
 

@@ -67,7 +67,7 @@ sequenceDiagram
         alt 客户端不归属可信应用 / 无有效授权
             CZ-->>G: ValidationException（拒签）
         end
-        CZ->>CZ: roles(ROLE_前缀) / permissions /<br/>applicationAuthorization 投影 claim
+        CZ->>CZ: roles(ROLE_前缀) / permissions /<br/>iam_authorization 投影 claim
     else ID Token / userinfo
         CZ->>CZ: 仅 profile/email/phone scope 内身份字段<br/>（不返回 RBAC 数据）
     end
@@ -79,6 +79,7 @@ sequenceDiagram
 - `sub` 是稳定的 IAM 用户 ID（不是 username），资源端据此关联用户
 - `sid` 把 Access Token 与 IAM 会话绑定：会话吊销后资源端验证即失效（即使 token 未到期）
 - `roles` / `permissions` 只写入交互用户的 Access Token；ID Token 和 userinfo 不返回 RBAC 数据
+- Access Token 里有两个角色来源、语义不同：`roles`（`ROLE_` + IAM 全局角色 code，兼容 claim，Spring Security `hasAuthority` 直接可用）与 `iam_authorization`（应用授权投影，其内 `roles` 是应用清单申报的应用局部角色）——前者答"这在 IAM 是什么人"，后者答"这人在我这个应用被准了什么"（应用侧解读见 [权限与授权投影](权限与授权投影.md) 的「业务方上报指引」）
 - 应用授权投影 claim 要求 OAuth 客户端必须归属可信应用，未归属直接拒签（投影是业务准入依据，不容无主客户端）
 
 ## Refresh Token 主动防线（轮换 / 重放族吊销 / 过期清理）
@@ -143,7 +144,7 @@ sequenceDiagram
     VS->>TA: ⑤ 授权投影有效
     alt 五重校验全过
         VS->>VS: 发 TokenVerifiedEvent（审计）
-        VS-->>Res: sub + iamAuthorization 投影
+        VS-->>Res: sub + iam_authorization 投影
     else 任一不过
         VS-->>Res: 401/403 带错误码
     end
