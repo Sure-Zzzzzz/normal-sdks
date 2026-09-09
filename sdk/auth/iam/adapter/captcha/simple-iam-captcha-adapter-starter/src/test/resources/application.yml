@@ -1,0 +1,25 @@
+# 测试配置：本机 Redis fixture（真实实例，非 mock；连接由 redis-route 接管）
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: 127.0.0.1
+                port: 6379
+                database: 3
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        auth:
+          captcha:
+            challenge-ttl-seconds: 60
+            image-char-length: 6
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk: DEBUG
