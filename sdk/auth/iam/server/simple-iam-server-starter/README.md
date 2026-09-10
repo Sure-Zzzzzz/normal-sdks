@@ -83,7 +83,7 @@ dependencies {
 
 数据库初始化：在**全新环境**执行 [schema.sql](docs/schema.sql)。该脚本包含建表前置清理，不能直接用于已有数据环境。
 
-### 数据表清单（25 张 = 3 张 SAS 标准表 + 22 张 `iam_*` 业务表）
+### 数据表清单（26 张 = 3 张 SAS 标准表 + 23 张 `iam_*` 业务表）
 
 | 表 | 用途 |
 |---|---|
@@ -93,7 +93,7 @@ dependencies {
 | `iam_user` | 用户（含 `identity_source` / `external_id` 外部身份绑定、`must_change_password` 须改密标记） |
 | `iam_role` / `iam_permission` | 角色 / 权限（内置项受保护） |
 | `iam_user_role` / `iam_role_permission` | 用户-角色、角色-权限关系 |
-| `iam_department` / `iam_user_group` / `iam_user_group_member` | 部门、协作组及成员 |
+| `iam_department` / `iam_department_role` / `iam_user_group` / `iam_user_group_member` | 部门、部门-角色、协作组及成员 |
 | `iam_session` | IAM 会话（双时钟、状态） |
 | `iam_refresh_token_family` | Refresh Token 族（轮换链条、重放检测、族吊销、过期清理） |
 | `iam_password_reset` | 密码重置凭证（配套预留） |
