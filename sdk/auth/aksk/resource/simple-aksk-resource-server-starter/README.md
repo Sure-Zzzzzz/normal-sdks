@@ -6,7 +6,7 @@ AKSK Resource Server Provider Starter 3.0.1 为公共 Resource Server Starter �
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
     implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.1'
 }
 ```
