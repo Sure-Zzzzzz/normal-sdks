@@ -1,0 +1,35 @@
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    implementation 'org.springframework.security:spring-security-oauth2-jose'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.apache.httpcomponents:httpclient'
+}
+
+tasks.test {
+    useJUnitPlatform {
+        excludeTags 'collaboration'
+    }
+}
+
+tasks.register('collaborationAcceptance', Test) {
+    group = 'verification'
+    description = '外部协作 HTTP 验收：三终端必须已独立启动，环境变量缺失或服务不可达即失败'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'collaboration'
+    }
+}
