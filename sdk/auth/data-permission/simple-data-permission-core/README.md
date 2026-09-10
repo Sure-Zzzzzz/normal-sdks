@@ -85,6 +85,8 @@ return queryOrdersByOrganization(plan.getGrants());
 
 多个 grant 之间表示“或”；同一个 grant 中的多个约束表示“且”。资源服务必须完整使用每个 grant，不能把不同 grant 的条件拆开重组。
 
+`DataPermissionRequest` 只描述显式的 `resource + action`，不包含 HTTP query、path variable、request body 或其他客户端输入。`tenantId`、`departmentId` 等可以作为 `DataConstraint.dimension`，但请求中的同名参数只是业务筛选或目标标识，不能生成授权范围、替换 grant 或改变 API 权限。业务适配器必须将请求输入与每个完整 grant 求交；超出授权范围时拒绝，不得自动裁剪或在缺少范围参数时退化为全量。
+
 ## 结构化 Claim 接入
 
 1.1.0 新增 `DataGrantDocumentClaimMapper`，用于在已经完成认证和授权绑定的适配器中，将 `DataGrantDocument` 转换为来源中立的结构化 Claim，或从 Claim 还原文档：
@@ -118,7 +120,7 @@ DataAccessPlan plan = evaluator.evaluate(documentSource,
 - 从 JWT、AKSK、RPC 等上下文读取授权信息。
 - 将授权信息编解码为 `DataGrantDocument`。
 - 将受限范围翻译为 SQL、ES 或其他查询条件。
-- 对列表、详情、导出、创建、更新、删除和批量操作实际执行范围校验。
+- 对列表、详情、导出、创建、更新、删除和批量操作实际执行范围校验。详情、更新和删除对外统一隐藏目标存在性差异时，应由业务接口返回 404；混合授权/未授权的批量操作默认整体拒绝。
 
 本模块只提供稳定的数据权限模型、评估器和结构化 Claim 映射能力；认证载体校验和业务查询范围执行由接入方负责。
 
