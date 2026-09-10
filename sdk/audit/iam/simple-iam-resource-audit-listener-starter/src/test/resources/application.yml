@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: simple-iam-resource-audit-listener-test
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        audit:
+          iam:
+            resource:
+              listener:
+                handler:
+                  log:
+                    enabled: true  # 启用默认日志Handler
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.iam: DEBUG
