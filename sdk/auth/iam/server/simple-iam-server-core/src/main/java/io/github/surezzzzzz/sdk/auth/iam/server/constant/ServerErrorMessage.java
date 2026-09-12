@@ -136,6 +136,11 @@ public final class ServerErrorMessage {
     public static final String TRUSTED_APPLICATION_NAME_EMPTY = "应用名称不能为空";
     public static final String TRUSTED_APPLICATION_ICON_INVALID = "应用图标必须使用内置图标编码：%s";
     public static final String TRUSTED_APPLICATION_DELETE_BLOCKED = "内置可信应用不可删除（平台引导注册，如需下线请关闭门户集成）：%s";
+    public static final String TRUSTED_APPLICATION_MENU_TREE_INVALID = "Portal 菜单树无效：%s";
+    public static final String TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT =
+            "当前应用已使用层级菜单，旧 menus 不能覆盖；请使用 menuTree 更新菜单";
+    public static final String TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED =
+            "页面权限仍被 Portal 菜单引用，不能从权限清单移除：%s";
 
     // ==================== 资源验证客户端消息 ====================
     public static final String RESOURCE_VERIFICATION_CLIENT_NOT_FOUND = "资源验证客户端不存在：%s";

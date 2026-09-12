@@ -15,7 +15,7 @@ public final class TrustedApplicationIcon {
     private static final Set<String> CODES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "access-control", "users", "key", "settings", "lock", "dashboard", "project", "message",
             "calendar", "workflow", "data-service", "database", "analytics", "document", "search", "cloud",
-            "network", "developer", "application", "default"
+            "network", "developer", "application", "default", "folder"
     )));
 
     private TrustedApplicationIcon() {

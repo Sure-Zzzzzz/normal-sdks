@@ -76,6 +76,9 @@ public final class ErrorCode {
     public static final String TRUSTED_APPLICATION_DELETE_BLOCKED = "TRUSTED_APPLICATION_011";
     public static final String APPLICATION_MANIFEST_NOT_FOUND = "TRUSTED_APPLICATION_012";
     public static final String APPLICATION_MANIFEST_CONFLICT = "TRUSTED_APPLICATION_013";
+    public static final String TRUSTED_APPLICATION_MENU_TREE_INVALID = "TRUSTED_APPLICATION_014";
+    public static final String TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT = "TRUSTED_APPLICATION_015";
+    public static final String TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED = "TRUSTED_APPLICATION_016";
     public static final String TOKEN_OPERATION_FAILED = "TOKEN_001";
 
     // ==================== Token / Cache 错误 ====================

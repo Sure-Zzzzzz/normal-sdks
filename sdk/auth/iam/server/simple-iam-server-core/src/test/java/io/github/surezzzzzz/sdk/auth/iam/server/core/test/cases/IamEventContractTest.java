@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.core.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.TrustedApplicationIcon;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.*;
 import org.junit.jupiter.api.Test;
 
@@ -8,7 +11,7 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * IAM 事件族契约测试（构造字段保持 + 安全边界）。
+ * IAM Server Core 契约测试（事件字段、安全边界、Portal 菜单常量）。
  *
  * @author surezzzzzz
  */
@@ -51,5 +54,16 @@ class IamEventContractTest {
         assertEquals("family-1", event.getFamilyId());
         assertNull(event.getTokenValue(), "复用检测事件不得携带攻击者输入的 token 原文");
         assertEquals("reuse-user", event.getUsername());
+    }
+
+    @Test
+    void shouldExposePortalMenuTreeContractAndFolderIcon() {
+        assertTrue(TrustedApplicationIcon.isSupported("folder"));
+        assertFalse(TrustedApplicationIcon.isSupported("folder-unknown"));
+        assertEquals("TRUSTED_APPLICATION_014", ErrorCode.TRUSTED_APPLICATION_MENU_TREE_INVALID);
+        assertEquals("TRUSTED_APPLICATION_015", ErrorCode.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT);
+        assertEquals("TRUSTED_APPLICATION_016", ErrorCode.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED);
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT.contains("menuTree"));
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED.contains("页面权限"));
     }
 }
