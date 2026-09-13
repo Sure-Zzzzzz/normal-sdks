@@ -45,7 +45,7 @@
 
 - 用户 / 部门 / 协作组 / 角色 / 权限 CRUD 与关系分配（含外部身份预绑定）
 - 最后管理员保护（最后一个可用管理员不可删除 / 禁用 / 撤销角色）、内置角色与权限保护
-- 可信应用管理：OAuth 客户端（原始 secret 仅创建时返回一次，后续查询仅 `secretPresent`）、Portal 集成、应用菜单
+- 可信应用管理：OAuth 客户端（原始 secret 仅创建时返回一次，后续查询仅 `secretPresent`）、Portal 集成、应用菜单树与默认入口；PAGE 可选择标准布局或隐藏 Portal 顶栏和侧栏的沉浸展示，平台管理员可指定无深链登录首页
 - 用户应用授权管理（决定 Access Token 中的应用授权投影内容）
 - 角色应用授权规则：角色 × 应用的权限集合定义，配合应用权限清单与授权投影联动（见 [权限与授权投影](docs/领域文档/权限与授权投影.md)）
 - 资源验证客户端管理（独立于 OAuth 客户端的验证凭证，支持密钥轮换）
@@ -68,7 +68,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.1.0"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -83,7 +83,7 @@ dependencies {
 
 数据库初始化：在**全新环境**执行 [schema.sql](docs/schema.sql)。该脚本包含建表前置清理，不能直接用于已有数据环境。
 
-### 数据表清单（26 张 = 3 张 SAS 标准表 + 23 张 `iam_*` 业务表）
+### 数据表清单（27 张 = 3 张 SAS 标准表 + 24 张 `iam_*` 业务表）
 
 | 表 | 用途 |
 |---|---|
@@ -104,7 +104,7 @@ dependencies {
 | `iam_role_authorization_rule` | 角色-应用授权规则（投影的计算源） |
 | `iam_application_authorization` | 用户-应用授权投影 |
 | `iam_resource_verification_client` | 资源验证客户端 |
-| `iam_trusted_application_portal` / `iam_trusted_application_menu` | Portal 集成与应用菜单 |
+| `iam_trusted_application_portal` / `iam_trusted_application_menu` / `iam_portal_setting` | Portal 集成、应用菜单与全局登录首页单例 |
 | `iam_message` | 站内信 |
 | `iam_user_theme_preference` | 用户主题偏好 |
 
@@ -135,6 +135,7 @@ dependencies {
 | `/iam/web/auth/password` | PUT | 已认证 | 自助修改密码（body `oldPassword` / `newPassword`；成功 204，踢其他终端保留当前会话；须改密拦截期在白名单内放行） |
 | `/iam/web/oauth2/consent-info` | GET | 已认证 | Consent 页供数（state 换授权请求详情；授权码流程中用户已登录） |
 | `/iam/web/portal/accessible-applications` | GET | 已认证 | 当前用户可访问且已启用 Portal 集成的应用及菜单；平台管理员直通全部已启用应用 |
+| `/iam/web/portal/navigation-context` | GET | 已认证 | 当前用户的可访问应用、应用默认入口与无深链登录首页候选；Portal 仅在根路由时使用 |
 | `/iam/web/branding` | GET | 匿名 | 品牌配置 |
 | `/iam/web/messages` | GET | 已认证 | 站内信列表 |
 | `/iam/web/messages/page` | GET | 已认证 | 站内信分页 |
@@ -195,6 +196,8 @@ dependencies {
 |---|---|
 | `GET / POST /iam/admin/trusted-applications`、`GET / PUT / DELETE /iam/admin/trusted-applications/{id}`、`GET /iam/admin/trusted-applications/page` | 可信应用 CRUD 与分页（创建必须带初始客户端） |
 | `GET / POST /iam/admin/trusted-applications/{id}/clients`、`GET / PUT / DELETE …/clients/{clientId}` | OAuth 客户端管理（原始 secret 仅创建时返回一次） |
+| `PUT /iam/admin/trusted-applications/{id}/portal/configuration` | 原子更新 Portal 集成、菜单树与默认入口（`configVersion` 乐观锁） |
+| `GET / PUT /iam/admin/portal/login-landing` | 查询或更新无深链登录首页单例（仅 `iam_admin`） |
 
 用户应用授权与验证客户端：
 

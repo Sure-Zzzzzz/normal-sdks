@@ -23,10 +23,10 @@ io:
             adapter:
               login:
                 oidc:
-                  issuer: http://localhost:8380/realms/sure-iam-test
-                  authorization-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/auth
-                  token-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/token
-                  jwk-set-uri: http://localhost:8380/realms/sure-iam-test/protocol/openid-connect/certs
+                  issuer: http://localhost:8380/kc/realms/sure-iam-test
+                  authorization-uri: http://localhost:8380/kc/realms/sure-iam-test/protocol/openid-connect/auth
+                  token-uri: http://localhost:8380/kc/realms/sure-iam-test/protocol/openid-connect/token
+                  jwk-set-uri: http://localhost:8380/kc/realms/sure-iam-test/protocol/openid-connect/certs
                   client-id: iam-oidc-test
                   client-secret: local-oidc-client-secret
                 ldap:

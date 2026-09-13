@@ -6,18 +6,21 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.TrustedApplicationIcon;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.MenuItemRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalConfigurationRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalDefaultEntryRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalIntegrationRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.MenuItemResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalLoginLandingRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalDefaultEntryResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalIntegrationResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalLoginLandingResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationClientSecretResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCreatedResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationDetailResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamPortalSettingEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationMenuEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationPortalEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
@@ -31,14 +34,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 可信应用管理服务（应用维度）
@@ -77,7 +81,9 @@ public class TrustedApplicationService {
 
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamTrustedApplicationPortalRepository trustedApplicationPortalRepository;
+    private final IamPortalSettingRepository portalSettingRepository;
     private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
+    private final PortalMenuTreeService portalMenuTreeService;
     private final IamApplicationPermissionManifestRepository manifestRepository;
     private final IamApplicationPermissionManifestService manifestService;
     private final IamRoleAuthorizationRuleRepository ruleRepository;
@@ -117,12 +123,13 @@ public class TrustedApplicationService {
         app.setUpdatedAt(now);
         IamTrustedApplicationEntity saved = trustedApplicationRepository.save(app);
 
-        boolean portalEnabled = savePortalConfig(saved.getId(), applicationCode, request.getPortal(), now);
+        saveManifestIfPresent(saved.getId(), request);
+        IamTrustedApplicationPortalEntity portal = savePortalConfig(saved.getId(), applicationCode,
+                request.getPortal(), now, true);
+        boolean portalEnabled = isEnabled(portal);
 
         TrustedApplicationClientSecretResponse initialClientSecret =
                 trustedApplicationClientService.addClient(saved.getId(), request.getInitialClient());
-
-        saveManifestIfPresent(saved.getId(), request);
 
         log.info("可信应用创建成功：id={}, code={}", saved.getId(), applicationCode);
         auditEventPublisher.publishAdminAction(AdminActionType.CREATED, AdminSubjectType.APPLICATION,
@@ -185,7 +192,7 @@ public class TrustedApplicationService {
     /**
      * 更新应用基本信息 + Portal 配置 + 菜单
      *
-     * <p>{@code portal} 非空时整体覆盖（先清旧 portal + 菜单再写新）；为空时保持现状不动。
+     * <p>{@code portal} 非空时更新 Portal 标量字段和指定的菜单来源；为空时保持现状不动。
      */
     @Transactional
     public TrustedApplicationResponse updateApplication(Long applicationId, UpdateTrustedApplicationRequest request) {
@@ -204,12 +211,8 @@ public class TrustedApplicationService {
 
         boolean portalEnabled;
         if (request.getPortal() != null) {
-            trustedApplicationMenuRepository.deleteByApplicationId(applicationId);
-            if (trustedApplicationPortalRepository.existsById(applicationId)) {
-                trustedApplicationPortalRepository.deleteById(applicationId);
-            }
-            portalEnabled = savePortalConfig(applicationId, app.getApplicationCode(),
-                    request.getPortal(), Instant.now());
+            portalEnabled = isEnabled(savePortalConfig(applicationId, app.getApplicationCode(),
+                    request.getPortal(), Instant.now(), true));
         } else {
             portalEnabled = isPortalEnabled(applicationId);
         }
@@ -242,6 +245,7 @@ public class TrustedApplicationService {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED, app.getApplicationCode()));
         }
+        clearLoginLandingWhenDeleting(applicationId);
         trustedApplicationMenuRepository.deleteByApplicationId(applicationId);
         if (trustedApplicationPortalRepository.existsById(applicationId)) {
             trustedApplicationPortalRepository.deleteById(applicationId);
@@ -276,12 +280,12 @@ public class TrustedApplicationService {
     }
 
     /**
-     * 保存 Portal 集成配置 + 菜单项。{@code portal} 为空时跳过，返回 false。
+     * 保存 Portal 集成配置和指定菜单快照。旧写模型不修改默认入口，但必须保持其有效。
      */
-    private boolean savePortalConfig(Long applicationId, String applicationCode,
-                                     PortalIntegrationRequest portal, Instant now) {
+    private IamTrustedApplicationPortalEntity savePortalConfig(Long applicationId, String applicationCode,
+                                                               PortalIntegrationRequest portal, Instant now, boolean validateExistingDefault) {
         if (portal == null) {
-            return false;
+            return null;
         }
         boolean enabled = Boolean.TRUE.equals(portal.getEnabled());
         if (enabled && !StringUtils.hasText(portal.getEntry())) {
@@ -289,7 +293,8 @@ public class TrustedApplicationService {
                     ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
         }
         String routePrefix = String.format(SimpleIamServerConstant.PORTAL_ROUTE_PREFIX_TEMPLATE, applicationCode);
-        IamTrustedApplicationPortalEntity portalEntity = new IamTrustedApplicationPortalEntity();
+        IamTrustedApplicationPortalEntity portalEntity = trustedApplicationPortalRepository
+                .findById(applicationId).orElseGet(IamTrustedApplicationPortalEntity::new);
         portalEntity.setApplicationId(applicationId);
         portalEntity.setEnabled(enabled
                 ? SimpleIamServerConstant.STATUS_ACTIVE : SimpleIamServerConstant.STATUS_INACTIVE);
@@ -297,46 +302,226 @@ public class TrustedApplicationService {
         portalEntity.setEntry(StringUtils.hasText(portal.getEntry()) ? portal.getEntry().trim() : null);
         portalEntity.setApiBase(StringUtils.hasText(portal.getApiBase()) ? portal.getApiBase().trim() : null);
         portalEntity.setUpdatedAt(now);
-        trustedApplicationPortalRepository.save(portalEntity);
-        saveMenus(applicationId, portal.getMenus());
-        return enabled;
-    }
-
-    private void saveMenus(Long applicationId, List<MenuItemRequest> menus) {
-        if (menus == null || menus.isEmpty()) {
-            return;
+        portalMenuTreeService.updateMenus(applicationId, portal.getMenus(), portal.getMenuTree());
+        if (validateExistingDefault) {
+            validateConfiguredDefaultEntry(applicationId, portalEntity);
+            validateGlobalLandingReference(applicationId, portalEntity);
         }
-        int autoOrder = SimpleIamServerConstant.DEFAULT_SORT_ORDER;
-        for (MenuItemRequest menu : menus) {
-            IamTrustedApplicationMenuEntity menuEntity = new IamTrustedApplicationMenuEntity();
-            menuEntity.setApplicationId(applicationId);
-            menuEntity.setCode(normalizeRequired(menu.getCode(), "菜单编码不能为空"));
-            menuEntity.setName(normalizeRequired(menu.getName(), "菜单名称不能为空"));
-            menuEntity.setRoute(normalizeRequired(menu.getRoute(), "菜单路由不能为空"));
-            menuEntity.setSortOrder(menu.getSortOrder() != null ? menu.getSortOrder() : autoOrder);
-            trustedApplicationMenuRepository.save(menuEntity);
-            autoOrder++;
-        }
+        return trustedApplicationPortalRepository.save(portalEntity);
     }
 
     private PortalIntegrationResponse toPortalResponse(IamTrustedApplicationPortalEntity portal) {
-        List<IamTrustedApplicationMenuEntity> menuEntities = trustedApplicationMenuRepository
-                .findByApplicationIdOrderBySortOrderAsc(portal.getApplicationId());
-        List<MenuItemResponse> menus = menuEntities.stream()
-                .map(m -> MenuItemResponse.builder()
-                        .code(m.getCode())
-                        .name(m.getName())
-                        .route(m.getRoute())
-                        .sortOrder(m.getSortOrder())
-                        .build())
-                .collect(Collectors.toList());
+        java.util.List<io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalMenuTreeNodeResponse> menuTree =
+                portalMenuTreeService.getManagementTree(portal.getApplicationId());
         return PortalIntegrationResponse.builder()
                 .enabled(portal.getEnabled() == SimpleIamServerConstant.STATUS_ACTIVE)
                 .routePrefix(portal.getRoutePrefix())
                 .entry(portal.getEntry())
                 .apiBase(portal.getApiBase())
-                .menus(menus)
+                .menus(portalMenuTreeService.flattenManagement(menuTree))
+                .menuTree(menuTree)
+                .defaultEntry(toDefaultEntry(portal))
+                .configVersion(portal.getConfigVersion())
                 .build();
+    }
+
+    /**
+     * 新管理台的完整 Portal 配置写入口。
+     *
+     * <p>菜单树和默认入口在同一事务内提交，避免快照重建后留下默认 PAGE 悬挂引用。
+     */
+    @Transactional
+    public PortalIntegrationResponse updatePortalConfiguration(Long applicationId, PortalConfigurationRequest request) {
+        IamTrustedApplicationEntity app = requireApplication(applicationId);
+        IamTrustedApplicationPortalEntity current = trustedApplicationPortalRepository.findById(applicationId)
+                .orElseGet(() -> newPortal(applicationId, app.getApplicationCode()));
+        if (request == null || request.getConfigVersion() == null
+                || !Objects.equals(request.getConfigVersion(), versionOf(current.getConfigVersion()))) {
+            throw portalConfigurationConflict(applicationId);
+        }
+
+        PortalIntegrationRequest legacyShape = new PortalIntegrationRequest();
+        legacyShape.setEnabled(request.getEnabled());
+        legacyShape.setEntry(request.getEntry());
+        legacyShape.setApiBase(request.getApiBase());
+        legacyShape.setMenuTree(request.getMenuTree());
+        IamTrustedApplicationPortalEntity saved = savePortalConfig(applicationId, app.getApplicationCode(),
+                legacyShape, Instant.now(), false);
+        applyDefaultEntry(applicationId, saved, request.getDefaultEntry());
+        validateConfiguredDefaultEntry(applicationId, saved);
+        validateGlobalLandingReference(applicationId, saved);
+        try {
+            IamTrustedApplicationPortalEntity persisted = trustedApplicationPortalRepository.saveAndFlush(saved);
+            int rootMenuCount = request.getMenuTree() == null ? 0 : request.getMenuTree().size();
+            boolean defaultEntryConfigured = toDefaultEntry(persisted) != null;
+            log.info("可信应用 Portal 配置更新成功：applicationId={}, code={}, enabled={}, configVersion={}, rootMenuCount={}, defaultEntryConfigured={}",
+                    applicationId, app.getApplicationCode(), isEnabled(persisted), persisted.getConfigVersion(),
+                    rootMenuCount, defaultEntryConfigured);
+            auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
+                    String.valueOf(applicationId), app.getApplicationCode(),
+                    "portalEnabled=" + isEnabled(persisted) + ", configVersion=" + persisted.getConfigVersion()
+                            + ", rootMenuCount=" + rootMenuCount + ", defaultEntryConfigured=" + defaultEntryConfigured);
+            return toPortalResponse(persisted);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw portalConfigurationConflict(applicationId);
+        }
+    }
+
+    /**
+     * 平台管理员读取当前全局登录首页配置。
+     */
+    public PortalLoginLandingResponse getPortalLoginLanding() {
+        IamPortalSettingEntity setting = portalSettingRepository.findById(IamPortalSettingEntity.SINGLETON_ID)
+                .orElseGet(this::newPortalSetting);
+        String applicationCode = setting.getLoginLandingApplicationId() == null ? null
+                : trustedApplicationRepository.findById(setting.getLoginLandingApplicationId())
+                .map(IamTrustedApplicationEntity::getApplicationCode).orElse(null);
+        return PortalLoginLandingResponse.builder()
+                .applicationCode(applicationCode)
+                .version(versionOf(setting.getVersion()))
+                .build();
+    }
+
+    /**
+     * 平台管理员更新或关闭无深链登录首页。
+     */
+    @Transactional
+    public PortalLoginLandingResponse updatePortalLoginLanding(PortalLoginLandingRequest request) {
+        IamPortalSettingEntity setting = portalSettingRepository.findById(IamPortalSettingEntity.SINGLETON_ID)
+                .orElseGet(this::newPortalSetting);
+        if (request == null || request.getVersion() == null
+                || !Objects.equals(request.getVersion(), versionOf(setting.getVersion()))) {
+            throw portalLoginLandingInvalid("配置版本已变化，请刷新后重试");
+        }
+        String applicationCode = StringUtils.hasText(request.getApplicationCode())
+                ? request.getApplicationCode().trim() : null;
+        Long auditApplicationId = setting.getLoginLandingApplicationId();
+        String auditApplicationCode = auditApplicationId == null ? null : trustedApplicationRepository
+                .findById(auditApplicationId).map(IamTrustedApplicationEntity::getApplicationCode).orElse(null);
+        if (applicationCode == null) {
+            setting.setLoginLandingApplicationId(null);
+        } else {
+            IamTrustedApplicationEntity app = trustedApplicationRepository.findByApplicationCode(applicationCode)
+                    .orElseThrow(() -> portalLoginLandingInvalid("应用不存在：" + applicationCode));
+            IamTrustedApplicationPortalEntity portal = trustedApplicationPortalRepository.findById(app.getId())
+                    .orElseThrow(() -> portalLoginLandingInvalid("应用未启用 Portal：" + applicationCode));
+            if (!isEnabled(portal) || toDefaultEntry(portal) == null) {
+                throw portalLoginLandingInvalid("应用没有可用默认入口：" + applicationCode);
+            }
+            validateConfiguredDefaultEntry(app.getId(), portal);
+            setting.setLoginLandingApplicationId(app.getId());
+            auditApplicationId = app.getId();
+            auditApplicationCode = app.getApplicationCode();
+        }
+        setting.setUpdatedAt(Instant.now());
+        try {
+            setting = portalSettingRepository.saveAndFlush(setting);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw portalLoginLandingInvalid("配置版本已变化，请刷新后重试");
+        }
+        boolean loginLandingEnabled = applicationCode != null;
+        log.info("Portal 全局登录首页更新成功：applicationId={}, code={}, enabled={}, version={}",
+                auditApplicationId, auditApplicationCode, loginLandingEnabled, setting.getVersion());
+        auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
+                auditApplicationId == null ? null : String.valueOf(auditApplicationId), auditApplicationCode,
+                "loginLandingEnabled=" + loginLandingEnabled + ", version=" + setting.getVersion());
+        return PortalLoginLandingResponse.builder()
+                .applicationCode(applicationCode)
+                .version(versionOf(setting.getVersion()))
+                .build();
+    }
+
+    private IamTrustedApplicationPortalEntity newPortal(Long applicationId, String applicationCode) {
+        IamTrustedApplicationPortalEntity portal = new IamTrustedApplicationPortalEntity();
+        portal.setApplicationId(applicationId);
+        portal.setRoutePrefix(String.format(SimpleIamServerConstant.PORTAL_ROUTE_PREFIX_TEMPLATE, applicationCode));
+        return portal;
+    }
+
+    private IamPortalSettingEntity newPortalSetting() {
+        IamPortalSettingEntity setting = new IamPortalSettingEntity();
+        setting.setId(IamPortalSettingEntity.SINGLETON_ID);
+        setting.setUpdatedAt(Instant.now());
+        return setting;
+    }
+
+    private void applyDefaultEntry(Long applicationId, IamTrustedApplicationPortalEntity portal,
+                                   PortalDefaultEntryRequest defaultEntry) {
+        if (defaultEntry == null) {
+            portal.setDefaultPageMenuCode(null);
+            portal.setDefaultEntryPath(null);
+            return;
+        }
+        String pageCode = StringUtils.hasText(defaultEntry.getPageMenuCode())
+                ? defaultEntry.getPageMenuCode().trim() : null;
+        String path = portalMenuTreeService.resolveDefaultEntryPath(applicationId, pageCode,
+                defaultEntry.getEntryPath());
+        portal.setDefaultPageMenuCode(pageCode);
+        portal.setDefaultEntryPath(path);
+    }
+
+    private void validateConfiguredDefaultEntry(Long applicationId, IamTrustedApplicationPortalEntity portal) {
+        if (portal.getDefaultPageMenuCode() == null) {
+            if (portal.getDefaultEntryPath() != null) {
+                throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID,
+                        String.format(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID,
+                                "未选择默认 PAGE 时不能填写入口路径"));
+            }
+            return;
+        }
+        String path = portalMenuTreeService.resolveDefaultEntryPath(applicationId,
+                portal.getDefaultPageMenuCode(), portal.getDefaultEntryPath());
+        portal.setDefaultEntryPath(path);
+    }
+
+    private void validateGlobalLandingReference(Long applicationId, IamTrustedApplicationPortalEntity portal) {
+        IamPortalSettingEntity setting = portalSettingRepository.findById(IamPortalSettingEntity.SINGLETON_ID)
+                .orElse(null);
+        if (setting == null || !Objects.equals(setting.getLoginLandingApplicationId(), applicationId)) {
+            return;
+        }
+        if (!isEnabled(portal) || toDefaultEntry(portal) == null) {
+            throw portalLoginLandingInvalid("全局首页应用必须保持启用且有默认入口");
+        }
+    }
+
+    private void clearLoginLandingWhenDeleting(Long applicationId) {
+        IamPortalSettingEntity setting = portalSettingRepository.findById(IamPortalSettingEntity.SINGLETON_ID)
+                .orElse(null);
+        if (setting != null && Objects.equals(setting.getLoginLandingApplicationId(), applicationId)) {
+            setting.setLoginLandingApplicationId(null);
+            setting.setUpdatedAt(Instant.now());
+            portalSettingRepository.save(setting);
+        }
+    }
+
+    private PortalDefaultEntryResponse toDefaultEntry(IamTrustedApplicationPortalEntity portal) {
+        if (portal == null || !StringUtils.hasText(portal.getDefaultPageMenuCode())) {
+            return null;
+        }
+        return PortalDefaultEntryResponse.builder()
+                .pageMenuCode(portal.getDefaultPageMenuCode())
+                .path(portal.getDefaultEntryPath())
+                .build();
+    }
+
+    private long versionOf(Long version) {
+        return version == null ? 0L : version;
+    }
+
+    private boolean isEnabled(IamTrustedApplicationPortalEntity portal) {
+        return portal != null && portal.getEnabled() != null
+                && portal.getEnabled() == SimpleIamServerConstant.STATUS_ACTIVE;
+    }
+
+    private SimpleIamServerException portalConfigurationConflict(Long applicationId) {
+        return new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT,
+                String.format(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT, applicationId));
+    }
+
+    private SimpleIamServerException portalLoginLandingInvalid(String detail) {
+        return new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID,
+                String.format(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID, detail));
     }
 
     private boolean isPortalEnabled(Long applicationId) {
@@ -355,12 +540,12 @@ public class TrustedApplicationService {
                         && config.getApplicationCode().equals(applicationCode));
     }
 
-    private int countClients(Long applicationId) {
-        Integer count = jdbcTemplate.queryForObject(SQL_COUNT_CLIENTS_BY_APP, Integer.class, applicationId);
-        return count != null ? count : 0;
+    private long countClients(Long applicationId) {
+        Long count = jdbcTemplate.queryForObject(SQL_COUNT_CLIENTS_BY_APP, Long.class, applicationId);
+        return count != null ? count : 0L;
     }
 
-    private TrustedApplicationResponse toSummary(IamTrustedApplicationEntity app, int clientCount,
+    private TrustedApplicationResponse toSummary(IamTrustedApplicationEntity app, long clientCount,
                                                  boolean portalEnabled) {
         return TrustedApplicationResponse.builder()
                 .id(app.getId())

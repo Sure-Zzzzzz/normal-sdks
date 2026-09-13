@@ -108,6 +108,24 @@ class IamAdminConsoleAccessChainTest {
     }
 
     @Test
+    @DisplayName("委派可信应用管理员持入口页面码和应用 API 码仍不能修改全局登录首页")
+    void delegatedTrustedApplicationManagerCannotManagePortalLoginLanding() throws Exception {
+        Long roleId = createRole("portal-landing-delegate-" + suffix);
+        roleService.assignPermission(roleId, permissionId(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_PAGE));
+        roleService.assignPermission(roleId,
+                permissionId(SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_API));
+
+        String username = "portal-landing-delegate-user-" + suffix;
+        Long userId = createUser(username);
+        roleService.assignRole(userId, roleId);
+        Cookie session = loginSession(username);
+
+        mockMvc.perform(get("/iam/admin/portal/login-landing").cookie(session))
+                .andExpect(status().isForbidden());
+        log.info("全局登录首页角色边界断言完成：roleId={}", roleId);
+    }
+
+    @Test
     @DisplayName("无任何 iam 权限码的普通用户被门拦 403；未认证请求 401")
     void plainUserWithoutPermissionsIsRejected() throws Exception {
         String username = "console-plain-" + suffix;

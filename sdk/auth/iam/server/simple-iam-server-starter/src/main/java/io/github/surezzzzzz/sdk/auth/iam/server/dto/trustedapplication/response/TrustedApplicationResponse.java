@@ -42,7 +42,10 @@ public class TrustedApplicationResponse {
     /**
      * 关联客户端数量
      */
-    private int clientCount;
+    /**
+     * 关联客户端数量，数据库 COUNT(*) 结果使用 long，避免累计数量溢出。
+     */
+    private long clientCount;
 
     /**
      * 是否启用 Portal 集成

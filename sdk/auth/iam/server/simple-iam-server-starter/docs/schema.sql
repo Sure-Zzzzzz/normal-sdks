@@ -345,6 +345,7 @@ DROP TABLE IF EXISTS iam_application_authorization;
 DROP TABLE IF EXISTS iam_role_authorization_rule;
 DROP TABLE IF EXISTS iam_application_permission_manifest;
 DROP TABLE IF EXISTS iam_trusted_application_menu;
+DROP TABLE IF EXISTS iam_portal_setting;
 DROP TABLE IF EXISTS iam_trusted_application_portal;
 DROP TABLE IF EXISTS iam_trusted_application;
 CREATE TABLE iam_trusted_application (
@@ -430,21 +431,40 @@ CREATE TABLE iam_trusted_application_portal (
     route_prefix VARCHAR(64) NOT NULL COMMENT 'Portal路由前缀',
     entry VARCHAR(512) DEFAULT NULL COMMENT '微前端entry URL',
     api_base VARCHAR(512) DEFAULT NULL COMMENT '后端API基地址',
+    default_page_menu_code VARCHAR(64) DEFAULT NULL COMMENT '应用默认入口PAGE菜单编码',
+    default_entry_path VARCHAR(255) DEFAULT NULL COMMENT '应用默认入口相对路径',
+    config_version BIGINT NOT NULL DEFAULT 0 COMMENT 'Portal配置乐观锁版本',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (application_id),
     KEY idx_enabled (enabled)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用Portal集成配置表';
 
+CREATE TABLE iam_portal_setting (
+    id INT NOT NULL COMMENT '单例主键，固定为1',
+    login_landing_application_id BIGINT DEFAULT NULL COMMENT '无深链登录首页应用ID',
+    version BIGINT NOT NULL DEFAULT 0 COMMENT '全局设置乐观锁版本',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM Portal全局设置表';
+
+INSERT INTO iam_portal_setting (id, login_landing_application_id, version) VALUES (1, NULL, 0);
+
 CREATE TABLE iam_trusted_application_menu (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     application_id BIGINT NOT NULL COMMENT '所属应用ID',
+    parent_id BIGINT DEFAULT NULL COMMENT '父菜单ID，根菜单为空',
     code VARCHAR(64) NOT NULL COMMENT '菜单项编码',
     name VARCHAR(128) NOT NULL COMMENT '菜单项名称',
-    route VARCHAR(255) NOT NULL COMMENT '相对路由',
+    node_type VARCHAR(16) NOT NULL DEFAULT 'PAGE' COMMENT '节点类型：GROUP/PAGE',
+    icon VARCHAR(64) DEFAULT NULL COMMENT '菜单节点图标编码，空时按节点类型回退',
+    route VARCHAR(255) DEFAULT NULL COMMENT 'PAGE 相对路由，GROUP 为空',
+    required_page_permission VARCHAR(256) DEFAULT NULL COMMENT 'PAGE 页面权限码，空表示继承应用准入',
+    presentation_mode VARCHAR(16) NOT NULL DEFAULT 'STANDARD' COMMENT 'PAGE Portal展示模式：STANDARD/IMMERSIVE，GROUP固定STANDARD',
     sort_order INT NOT NULL DEFAULT 0 COMMENT '排序值',
     PRIMARY KEY (id),
     UNIQUE KEY uk_app_menu_code (application_id, code),
-    KEY idx_application_id_sort (application_id, sort_order)
+    KEY idx_application_id_sort (application_id, sort_order),
+    KEY idx_application_id_parent_sort (application_id, parent_id, sort_order, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用Portal菜单项表';
 
 -- =====================================================
@@ -522,4 +542,4 @@ WHERE r.code = 'iam_admin'
   );
 
 SET FOREIGN_KEY_CHECKS = 1;
-SELECT 'Simple IAM Server 1.0.0 schema initialization completed!' AS status;
+SELECT 'Simple IAM Server 1.1.0 schema initialization completed!' AS status;

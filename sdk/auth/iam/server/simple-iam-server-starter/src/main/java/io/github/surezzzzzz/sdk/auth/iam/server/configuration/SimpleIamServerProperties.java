@@ -1,10 +1,14 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalMenuNodeType;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalPresentationMode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -318,7 +322,7 @@ public class SimpleIamServerProperties {
          * 列表整体可被配置覆盖/追加（如 AKSK 管理台）；单项 entry 置空则跳过该项。
          */
         private List<BuiltInApplicationConfig> builtInApplications = new ArrayList<>(
-                List.of(defaultIamAdminApplication()));
+                Collections.singletonList(defaultIamAdminApplication()));
 
         /**
          * IAM 管理台默认引导项（本机联调形态，部署方按环境覆盖 entry/apiBase）
@@ -331,7 +335,8 @@ public class SimpleIamServerProperties {
             application.setRoutePrefix(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM_PORTAL_ROUTE_PREFIX);
             application.setEntry(SimpleIamServerConstant.DEFAULT_BOOTSTRAP_BUILT_IN_APPLICATION_ENTRY);
             application.setApiBase(null);
-            application.setMenus(new ArrayList<>(List.of(
+            // menus 保留为 1.0 配置兼容字段；新安装实际按 menuTree 落库。
+            application.setMenus(new ArrayList<>(Arrays.asList(
                     menu("dashboard", "仪表盘", "/"),
                     menu("users", "用户管理", "/users"),
                     menu("organizations", "组织与成员", "/organizations"),
@@ -339,6 +344,25 @@ public class SimpleIamServerProperties {
                     menu("roles", "角色管理", "/roles"),
                     menu("trusted-applications", "可信应用", "/trusted-applications"),
                     menu("messages", "站内信", "/messages"))));
+            BuiltInApplicationMenuConfig dashboard = page("dashboard", "仪表盘", "dashboard", "/", null);
+            // 仪表盘承载全局概览与下钻入口；跳到其他标准 PAGE 时由 Portal 自动恢复导航壳。
+            dashboard.setPresentationMode(PortalPresentationMode.IMMERSIVE);
+            application.setMenuTree(new ArrayList<>(Arrays.asList(
+                    dashboard,
+                    group("identity-directory", "身份目录", null, Arrays.asList(
+                            page("users", "用户管理", "users", "/users",
+                                    SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_PAGE),
+                            page("organizations", "组织与成员", "folder", "/organizations",
+                                    SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_PAGE),
+                            page("user-groups", "协作组管理", "workflow", "/user-groups",
+                                    SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_GROUP_PAGE))),
+                    group("access-control", "访问控制", null, Arrays.asList(
+                            page("roles", "角色管理", "access-control", "/roles",
+                                    SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_PAGE),
+                            page("trusted-applications", "可信应用", "network", "/trusted-applications",
+                                    SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_PAGE))),
+                    page("messages", "站内信", null, "/messages",
+                            SimpleIamServerConstant.BUILT_IN_PERMISSION_MESSAGE_PAGE))));
             return application;
         }
 
@@ -348,6 +372,26 @@ public class SimpleIamServerProperties {
             menu.setName(name);
             menu.setRoute(route);
             return menu;
+        }
+
+        private static BuiltInApplicationMenuConfig group(String code, String name, String icon,
+                                                          List<BuiltInApplicationMenuConfig> children) {
+            BuiltInApplicationMenuConfig group = new BuiltInApplicationMenuConfig();
+            group.setCode(code);
+            group.setName(name);
+            group.setNodeType(PortalMenuNodeType.GROUP);
+            group.setIcon(icon);
+            group.setChildren(new ArrayList<>(children));
+            return group;
+        }
+
+        private static BuiltInApplicationMenuConfig page(String code, String name, String icon, String route,
+                                                         String requiredPagePermission) {
+            BuiltInApplicationMenuConfig page = menu(code, name, route);
+            page.setNodeType(PortalMenuNodeType.PAGE);
+            page.setIcon(icon);
+            page.setRequiredPagePermission(requiredPagePermission);
+            return page;
         }
 
         @Data
@@ -387,6 +431,11 @@ public class SimpleIamServerProperties {
              * 门户菜单（按列表顺序排序）
              */
             private List<BuiltInApplicationMenuConfig> menus = new ArrayList<>();
+
+            /**
+             * 1.1 菜单树；为空时兼容使用 menus 作为根级 PAGE。
+             */
+            private List<BuiltInApplicationMenuConfig> menuTree = new ArrayList<>();
         }
 
         @Data
@@ -406,6 +455,31 @@ public class SimpleIamServerProperties {
              * 子应用内相对路由
              */
             private String route;
+
+            /**
+             * 节点类型，缺省为 PAGE 以兼容 1.0 配置。
+             */
+            private PortalMenuNodeType nodeType = PortalMenuNodeType.PAGE;
+
+            /**
+             * 菜单节点图标编码；为空时客户端按节点类型回退。
+             */
+            private String icon;
+
+            /**
+             * PAGE 所需页面权限码；为空表示仅要求应用准入。
+             */
+            private String requiredPagePermission;
+
+            /**
+             * PAGE 的 Portal 宿主展示模式；缺省 STANDARD 以保持历史菜单布局。
+             */
+            private PortalPresentationMode presentationMode = PortalPresentationMode.STANDARD;
+
+            /**
+             * GROUP 子节点；PAGE 必须为空。
+             */
+            private List<BuiltInApplicationMenuConfig> children = new ArrayList<>();
         }
     }
 

@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamApplicationPermissionM
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -17,6 +18,11 @@ public interface IamApplicationPermissionManifestRepository
         extends JpaRepository<IamApplicationPermissionManifestEntity, Long> {
 
     Optional<IamApplicationPermissionManifestEntity> findByApplicationId(Long applicationId);
+
+    /**
+     * Portal 批量读取应用权限清单，避免管理员菜单投影退化为逐应用查询。
+     */
+    List<IamApplicationPermissionManifestEntity> findByApplicationIdIn(List<Long> applicationIds);
 
     void deleteByApplicationId(Long applicationId);
 }

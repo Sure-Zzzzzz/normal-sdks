@@ -17,6 +17,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationPermissionManifestRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationMenuRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class IamApplicationPermissionManifestService {
 
     private final IamApplicationPermissionManifestRepository manifestRepository;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
+    private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
     private final IamAuditEventPublisher auditEventPublisher;
     // ObjectProvider 惰性解析：投影服务反向依赖本服务，构造器直连会成环
     private final ObjectProvider<IamAuthorizationProjectionService> projectionServiceProvider;
@@ -81,6 +83,7 @@ public class IamApplicationPermissionManifestService {
         List<String> pagePermissions = normalizeCodes(request.getPagePermissions(), "pagePermissions");
         List<String> apiPermissions = normalizeCodes(request.getApiPermissions(), "apiPermissions");
         List<DataResourceDeclaration> dataResources = normalizeDataResources(request.getDataResources());
+        validateMenuPagePermissionReferences(applicationId, pagePermissions);
 
         IamApplicationPermissionManifestEntity entity = manifestRepository
                 .findByApplicationId(applicationId).orElse(null);
@@ -179,6 +182,21 @@ public class IamApplicationPermissionManifestService {
         if (!trustedApplicationRepository.existsById(applicationId)) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_NOT_FOUND,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_NOT_FOUND_BY_ID, applicationId));
+        }
+    }
+
+    /**
+     * 菜单树绑定页面权限后，清单替换不能移除该码；否则 Portal 配置会变成悬挂引用。
+     */
+    private void validateMenuPagePermissionReferences(Long applicationId, List<String> pagePermissions) {
+        Set<String> declared = new HashSet<>(pagePermissions);
+        for (io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationMenuEntity menu
+                : trustedApplicationMenuRepository.findByApplicationIdOrderBySortOrderAsc(applicationId)) {
+            if (menu.getRequiredPagePermission() != null && !declared.contains(menu.getRequiredPagePermission())) {
+                throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED,
+                        String.format(ServerErrorMessage.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED,
+                                menu.getRequiredPagePermission()));
+            }
         }
     }
 

@@ -3,6 +3,8 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.CreateRoleRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutApplicationAuthorizationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalIntegrationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.resource.request.CreateResourceVerificationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
@@ -270,6 +272,69 @@ class IamAdminActionEventPublishTest {
                 userId, applicationId);
     }
 
+    @Test
+    @DisplayName("更新 Portal 配置和全局登录首页均发布 UPDATED / APPLICATION 且不记录路由内容")
+    void updatePortalConfigurationAndLoginLandingPublishEvents() throws Exception {
+        applicationId = createTrustedApplication();
+        PortalIntegrationResponse current = trustedApplicationService.getApplication(applicationId).getPortal();
+        PortalMenuTreeNodeRequest home = new PortalMenuTreeNodeRequest();
+        home.setCode("home");
+        home.setName("首页");
+        home.setNodeType("PAGE");
+        home.setRoute("/home");
+        home.setSortOrder(1);
+        home.setChildren(Collections.emptyList());
+        PortalDefaultEntryRequest defaultEntry = new PortalDefaultEntryRequest();
+        defaultEntry.setPageMenuCode("home");
+        PortalConfigurationRequest configuration = new PortalConfigurationRequest();
+        configuration.setEnabled(Boolean.TRUE);
+        configuration.setEntry(current.getEntry());
+        configuration.setApiBase(current.getApiBase());
+        configuration.setMenuTree(Collections.singletonList(home));
+        configuration.setDefaultEntry(defaultEntry);
+        configuration.setConfigVersion(current.getConfigVersion());
+
+        PortalIntegrationResponse configured = trustedApplicationService
+                .updatePortalConfiguration(applicationId, configuration);
+
+        AdminActionEvent configurationEvent = awaitEvent(AdminActionEvent.class,
+                item -> item.getAction() == AdminActionType.UPDATED
+                        && item.getSubjectType() == AdminSubjectType.APPLICATION
+                        && String.valueOf(applicationId).equals(item.getSubjectId())
+                        && item.getDetail() != null && item.getDetail().contains("portalEnabled=true"));
+        assertNotNull(configurationEvent);
+        assertEquals(applicationCode, configurationEvent.getSubjectName());
+        assertTrue(configurationEvent.getDetail().contains("configVersion=" + configured.getConfigVersion()));
+        assertTrue(configurationEvent.getDetail().contains("rootMenuCount=1"));
+        assertFalse(configurationEvent.getDetail().contains("/home"), "审计事件不得记录菜单路由");
+
+        PortalLoginLandingRequest landing = new PortalLoginLandingRequest();
+        landing.setApplicationCode(applicationCode);
+        landing.setVersion(trustedApplicationService.getPortalLoginLanding().getVersion());
+        long landingVersion = trustedApplicationService.updatePortalLoginLanding(landing).getVersion();
+
+        AdminActionEvent landingEvent = awaitEvent(AdminActionEvent.class,
+                item -> item.getAction() == AdminActionType.UPDATED
+                        && item.getSubjectType() == AdminSubjectType.APPLICATION
+                        && String.valueOf(applicationId).equals(item.getSubjectId())
+                        && item.getDetail() != null && item.getDetail().contains("loginLandingEnabled=true"));
+        assertNotNull(landingEvent);
+        assertEquals(applicationCode, landingEvent.getSubjectName());
+        assertTrue(landingEvent.getDetail().contains("version=" + landingVersion));
+
+        PortalLoginLandingRequest clearLanding = new PortalLoginLandingRequest();
+        clearLanding.setVersion(landingVersion);
+        trustedApplicationService.updatePortalLoginLanding(clearLanding);
+        AdminActionEvent clearedEvent = awaitEvent(AdminActionEvent.class,
+                item -> item.getAction() == AdminActionType.UPDATED
+                        && item.getSubjectType() == AdminSubjectType.APPLICATION
+                        && String.valueOf(applicationId).equals(item.getSubjectId())
+                        && item.getDetail() != null && item.getDetail().contains("loginLandingEnabled=false"));
+        assertNotNull(clearedEvent, "关闭全局登录首页也必须留下审计事件");
+        assertFalse(clearedEvent.getDetail().contains("/home"), "审计事件不得记录菜单路由");
+        log.info("PORTAL CONFIGURATION / LOGIN LANDING 审计事件断言完成：applicationId={}", applicationId);
+    }
+
     // ==================== helpers ====================
 
     private Long createTrustedApplication() {
@@ -286,6 +351,10 @@ class IamAdminActionEventPublishTest {
         CreateTrustedApplicationRequest application = new CreateTrustedApplicationRequest();
         application.setApplicationCode(applicationCode);
         application.setApplicationName("Admin Event Application");
+        PortalIntegrationRequest portal = new PortalIntegrationRequest();
+        portal.setEnabled(Boolean.TRUE);
+        portal.setEntry("https://admin-event.example.test/app/");
+        application.setPortal(portal);
         application.setInitialClient(client);
         Long createdId = trustedApplicationService.createApplication(application).getApplication().getId();
         PutApplicationPermissionManifestRequest manifest = new PutApplicationPermissionManifestRequest();

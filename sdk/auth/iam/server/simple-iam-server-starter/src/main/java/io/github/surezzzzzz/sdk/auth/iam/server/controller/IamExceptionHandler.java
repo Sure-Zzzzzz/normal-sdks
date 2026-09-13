@@ -62,7 +62,11 @@ public class IamExceptionHandler {
                 || ErrorCode.RESOURCE_VERIFICATION_CLIENT_REVOKED.equals(errorCode)
                 || ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED.equals(errorCode)
                 || ErrorCode.APPLICATION_AUTHORIZATION_CONFLICT.equals(errorCode)
-                || ErrorCode.APPLICATION_MANIFEST_CONFLICT.equals(errorCode)) {
+                || ErrorCode.APPLICATION_MANIFEST_CONFLICT.equals(errorCode)
+                || ErrorCode.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT.equals(errorCode)
+                || ErrorCode.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED.equals(errorCode)
+                || ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT.equals(errorCode)
+                || ErrorCode.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID.equals(errorCode)) {
             return HttpStatus.CONFLICT;
         }
         if (ErrorCode.MESSAGE_FORBIDDEN.equals(errorCode)

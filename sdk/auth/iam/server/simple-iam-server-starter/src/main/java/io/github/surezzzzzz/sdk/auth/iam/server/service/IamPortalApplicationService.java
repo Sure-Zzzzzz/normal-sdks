@@ -1,23 +1,18 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
+import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalMenuItem;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamApplicationAuthorizationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationMenuEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationPortalEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationAuthorizationRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationMenuRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationPortalRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleMenuTreeNode;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalDefaultEntryResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalNavigationContextResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -35,9 +30,12 @@ public class IamPortalApplicationService {
 
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamTrustedApplicationPortalRepository trustedApplicationPortalRepository;
+    private final IamPortalSettingRepository portalSettingRepository;
     private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
     private final IamApplicationAuthorizationRepository applicationAuthorizationRepository;
+    private final IamApplicationPermissionManifestRepository manifestRepository;
     private final IamPlatformAdminPrivilegeSupport platformAdminPrivilegeSupport;
+    private final PortalMenuTreeService portalMenuTreeService;
 
     /**
      * 侧边栏：当前用户被授权（admitted=1 且状态有效）、启用 Portal 集成的应用 + 菜单；
@@ -51,25 +49,71 @@ public class IamPortalApplicationService {
             return new ArrayList<>();
         }
         boolean platformAdmin = platformAdminPrivilegeSupport.isPlatformAdmin(userId);
-        Set<Long> admittedApplicationIds = applicationAuthorizationRepository.findByUserId(userId).stream()
-                .filter(authorization -> isActiveAndAdmitted(authorization))
-                .map(IamApplicationAuthorizationEntity::getApplicationId)
-                .collect(Collectors.toSet());
+        Map<Long, IamApplicationAuthorizationEntity> authorizations = applicationAuthorizationRepository
+                .findByUserId(userId).stream().filter(this::isActiveAndAdmitted)
+                .collect(Collectors.toMap(IamApplicationAuthorizationEntity::getApplicationId, item -> item));
         List<IamTrustedApplicationPortalEntity> portals = trustedApplicationPortalRepository
                 .findByEnabled(SimpleIamServerConstant.STATUS_ACTIVE);
+        List<Long> applicationIds = portals.stream().map(IamTrustedApplicationPortalEntity::getApplicationId)
+                .collect(Collectors.toList());
+        Map<Long, IamTrustedApplicationEntity> applications = new HashMap<>();
+        for (IamTrustedApplicationEntity application : trustedApplicationRepository.findAllById(applicationIds))
+            applications.put(application.getId(), application);
+        Map<Long, List<IamTrustedApplicationMenuEntity>> menus = trustedApplicationMenuRepository.findByApplicationIdIn(applicationIds)
+                .stream().collect(Collectors.groupingBy(IamTrustedApplicationMenuEntity::getApplicationId));
+        Map<Long, IamApplicationPermissionManifestEntity> manifests = platformAdmin
+                ? manifestRepository.findByApplicationIdIn(applicationIds).stream().collect(Collectors.toMap(
+                IamApplicationPermissionManifestEntity::getApplicationId, item -> item))
+                : Collections.<Long, IamApplicationPermissionManifestEntity>emptyMap();
         List<PortalAccessibleApplication> result = new ArrayList<>();
         for (IamTrustedApplicationPortalEntity portal : portals) {
-            if (!platformAdmin && !admittedApplicationIds.contains(portal.getApplicationId())) {
+            IamApplicationAuthorizationEntity authorization = authorizations.get(portal.getApplicationId());
+            if (!platformAdmin && authorization == null) {
                 continue;
             }
-            IamTrustedApplicationEntity app = trustedApplicationRepository
-                    .findById(portal.getApplicationId()).orElse(null);
+            IamTrustedApplicationEntity app = applications.get(portal.getApplicationId());
             if (app == null) {
                 continue;
             }
-            result.add(toAccessible(app, portal));
+            Set<String> pagePermissions = resolvePagePermissions(portal.getApplicationId(), authorization,
+                    manifests.get(portal.getApplicationId()), platformAdmin);
+            List<IamTrustedApplicationMenuEntity> applicationMenus = menus.getOrDefault(portal.getApplicationId(), Collections.emptyList());
+            List<PortalAccessibleMenuTreeNode> tree = portalMenuTreeService.buildAccessibleTree(applicationMenus,
+                    portal.getRoutePrefix(), pagePermissions);
+            if (!applicationMenus.isEmpty() && tree.isEmpty()) continue;
+            result.add(toAccessible(app, portal, tree));
         }
+        result.sort(Comparator.comparing(PortalAccessibleApplication::getApplicationCode));
         return result;
+    }
+
+    /**
+     * Portal 根路由和登录回跳使用的导航上下文。
+     *
+     * <p>全局首页和应用默认入口都只从已按当前用户权限裁剪的应用集合中选择。
+     */
+    public PortalNavigationContextResponse getNavigationContext(Long userId) {
+        List<PortalAccessibleApplication> applications = listPortalAccessibleApplications(userId);
+        IamPortalSettingEntity setting = portalSettingRepository.findById(IamPortalSettingEntity.SINGLETON_ID)
+                .orElse(null);
+        String loginLandingApplicationCode = null;
+        if (setting != null && setting.getLoginLandingApplicationId() != null) {
+            String configuredCode = trustedApplicationRepository.findById(setting.getLoginLandingApplicationId())
+                    .map(IamTrustedApplicationEntity::getApplicationCode).orElse(null);
+            if (configuredCode != null) {
+                for (PortalAccessibleApplication application : applications) {
+                    if (configuredCode.equals(application.getApplicationCode())
+                            && application.getDefaultEntry() != null) {
+                        loginLandingApplicationCode = configuredCode;
+                        break;
+                    }
+                }
+            }
+        }
+        return PortalNavigationContextResponse.builder()
+                .applications(applications)
+                .loginLandingApplicationCode(loginLandingApplicationCode)
+                .build();
     }
 
     private boolean isActiveAndAdmitted(IamApplicationAuthorizationEntity authorization) {
@@ -79,18 +123,23 @@ public class IamPortalApplicationService {
                 && SimpleIamServerConstant.STATUS_ACTIVE == authorization.getAdmitted().intValue();
     }
 
+    private Set<String> resolvePagePermissions(Long applicationId, IamApplicationAuthorizationEntity authorization,
+                                               IamApplicationPermissionManifestEntity manifest, boolean platformAdmin) {
+        try {
+            if (!platformAdmin) return authorization == null ? Collections.emptySet() : new HashSet<>(
+                    IamApplicationAuthorizationJsonCodec.readStringList(authorization.getPagePermissionsJson(), "pagePermissions"));
+            return manifest == null ? Collections.emptySet() : new HashSet<>(
+                    IamApplicationAuthorizationJsonCodec.readStringList(manifest.getPagePermissionsJson(), "pagePermissions"));
+        } catch (RuntimeException exception) {
+            log.debug("Portal 菜单页面权限解析失败：applicationId={}, exceptionType={}", applicationId,
+                    exception.getClass().getSimpleName());
+            return Collections.emptySet();
+        }
+    }
+
     private PortalAccessibleApplication toAccessible(IamTrustedApplicationEntity app,
-                                                     IamTrustedApplicationPortalEntity portal) {
-        List<IamTrustedApplicationMenuEntity> menuEntities = trustedApplicationMenuRepository
-                .findByApplicationIdOrderBySortOrderAsc(portal.getApplicationId());
-        List<PortalMenuItem> menus = menuEntities.stream()
-                .map(m -> PortalMenuItem.builder()
-                        .code(m.getCode())
-                        .name(m.getName())
-                        .route(buildFullRoute(portal.getRoutePrefix(), m.getRoute()))
-                        .sortOrder(m.getSortOrder())
-                        .build())
-                .collect(Collectors.toList());
+                                                     IamTrustedApplicationPortalEntity portal,
+                                                     List<PortalAccessibleMenuTreeNode> tree) {
         return PortalAccessibleApplication.builder()
                 .applicationCode(app.getApplicationCode())
                 .applicationName(app.getApplicationName())
@@ -99,18 +148,22 @@ public class IamPortalApplicationService {
                 .routePrefix(portal.getRoutePrefix())
                 .entry(portal.getEntry())
                 .apiBase(portal.getApiBase())
-                .menus(menus)
+                .menus(portalMenuTreeService.flattenAccessible(tree))
+                .menuTree(tree)
+                .defaultEntry(visibleDefaultEntry(portal, tree))
                 .build();
     }
 
-    /**
-     * 菜单完整路径 = routePrefix + 相对路径；保证相对路径以 / 开头，避免拼接错位。
-     */
-    private String buildFullRoute(String routePrefix, String relativeRoute) {
-        if (relativeRoute == null || relativeRoute.isEmpty()) {
-            return routePrefix;
+    private PortalDefaultEntryResponse visibleDefaultEntry(IamTrustedApplicationPortalEntity portal,
+                                                           List<PortalAccessibleMenuTreeNode> tree) {
+        if (portal.getDefaultPageMenuCode() == null || portal.getDefaultEntryPath() == null) {
+            return null;
         }
-        String normalized = relativeRoute.startsWith("/") ? relativeRoute : "/" + relativeRoute;
-        return routePrefix + normalized;
+        boolean visible = portalMenuTreeService.flattenAccessible(tree).stream()
+                .anyMatch(item -> portal.getDefaultPageMenuCode().equals(item.getCode()));
+        return visible ? PortalDefaultEntryResponse.builder()
+                .pageMenuCode(portal.getDefaultPageMenuCode())
+                .path(portal.getDefaultEntryPath())
+                .build() : null;
     }
 }

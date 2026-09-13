@@ -7,6 +7,7 @@
 | IAM Server | Contract | Login Web | Portal Web | Admin Web |
 |------------|----------|-----------|------------|-----------|
 | `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` |
+| `1.1.x` | `1.1.x` | `1.0.x` | `1.1.x` | `1.1.x` |
 
 首次独立发布时，以 Server `1.0.0` 对应 Login、Portal、Admin 各自仓库的 `v1.0.0` tag。后续前端 patch 可独立发布，但 release notes 必须声明其兼容的 Server 与 Contract 范围。
 

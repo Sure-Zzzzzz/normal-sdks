@@ -40,4 +40,19 @@ public class PortalIntegrationResponse {
      * Portal 菜单项列表
      */
     private List<MenuItemResponse> menus;
+
+    /**
+     * 1.1 管理面递归菜单树
+     */
+    private List<PortalMenuTreeNodeResponse> menuTree;
+
+    /**
+     * 应用根路由默认入口；null 表示按历史行为处理。
+     */
+    private PortalDefaultEntryResponse defaultEntry;
+
+    /**
+     * 完整 Portal 配置乐观锁版本。
+     */
+    private Long configVersion;
 }

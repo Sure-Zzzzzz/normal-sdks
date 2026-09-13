@@ -58,7 +58,9 @@ class IamAdminApiPermissionEnforcementTest {
     private Long adminUserId;
     private IamRoleEntity adminRole;
     private IamPermissionEntity roleApiPermission;
+    private IamPermissionEntity trustedApplicationApiPermission;
     private boolean roleApiRevoked;
+    private boolean trustedApplicationApiRevoked;
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -84,6 +86,9 @@ class IamAdminApiPermissionEnforcementTest {
         roleApiPermission = permissionRepository
                 .findByCode(SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API)
                 .orElseThrow(() -> new AssertionError("内置权限码未 seed：iam:role:api"));
+        trustedApplicationApiPermission = permissionRepository
+                .findByCode(SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_API)
+                .orElseThrow(() -> new AssertionError("内置权限码未 seed：iam:trusted-application:api"));
         adminSession = loginSession();
     }
 
@@ -92,6 +97,10 @@ class IamAdminApiPermissionEnforcementTest {
         if (roleApiRevoked) {
             roleService.assignPermission(adminRole.getId(), roleApiPermission.getId());
             roleApiRevoked = false;
+        }
+        if (trustedApplicationApiRevoked) {
+            roleService.assignPermission(adminRole.getId(), trustedApplicationApiPermission.getId());
+            trustedApplicationApiRevoked = false;
         }
         userRepository.findByUsername(adminUsername)
                 .ifPresent(user -> userService.deleteUser(user.getId()));
@@ -140,6 +149,26 @@ class IamAdminApiPermissionEnforcementTest {
         mockMvc.perform(get("/iam/admin/roles").cookie(adminSession))
                 .andExpect(status().isOk());
         log.info("权限码按域拒绝断言完成：roleId={}", adminRole.getId());
+    }
+
+    @Test
+    @DisplayName("解绑 iam:trusted-application:api 后 Portal 配置必须 403，恢复绑定后可访问")
+    void trustedApplicationPermissionGuardsPortalConfiguration() throws Exception {
+        roleService.revokePermission(adminRole.getId(), trustedApplicationApiPermission.getId());
+        trustedApplicationApiRevoked = true;
+
+        Cookie refreshedSession = loginSession();
+        mockMvc.perform(get("/iam/admin/portal/login-landing").cookie(refreshedSession))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/iam/admin/users").cookie(refreshedSession))
+                .andExpect(status().isOk());
+
+        roleService.assignPermission(adminRole.getId(), trustedApplicationApiPermission.getId());
+        trustedApplicationApiRevoked = false;
+
+        mockMvc.perform(get("/iam/admin/portal/login-landing").cookie(adminSession))
+                .andExpect(status().isOk());
+        log.info("Portal 配置权限码拒绝与恢复断言完成：roleId={}", adminRole.getId());
     }
 
     @Test

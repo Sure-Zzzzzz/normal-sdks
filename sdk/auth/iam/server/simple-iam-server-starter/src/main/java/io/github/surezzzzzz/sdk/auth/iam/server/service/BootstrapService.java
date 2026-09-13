@@ -6,10 +6,12 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocumen
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalMenuNodeType;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.DataResourceDeclaration;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalMenuTreeNodeRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
@@ -52,6 +54,7 @@ public class BootstrapService implements ApplicationRunner {
     private final IamRoleAuthorizationRuleRepository roleAuthorizationRuleRepository;
     private final IamApplicationPermissionManifestRepository manifestRepository;
     private final IamApplicationPermissionManifestService manifestService;
+    private final PortalMenuTreeService portalMenuTreeService;
     private final IamAuthorizationProjectionService projectionService;
     private final UserService userService;
     private final RoleService roleService;
@@ -105,6 +108,7 @@ public class BootstrapService implements ApplicationRunner {
                 ensureRootDepartment();
                 ensureBuiltInApplications();
                 ensureBuiltInApplicationManifests();
+                ensureBuiltInApplicationMenus();
                 ensureAdminRoleAuthorizationRules();
                 String bootstrapInitialPassword = ensureAdminUser();
                 ensureAdminApplicationAuthorizations();
@@ -181,8 +185,9 @@ public class BootstrapService implements ApplicationRunner {
     }
 
     /**
-     * 幂等注册内置可信应用列表（平台自身子应用，含门户集成与菜单；
+     * 幂等注册内置可信应用列表（平台自身子应用，含门户集成；
      * 应用编码已存在即跳过，不更新自定义改动——管理员改过的 entry/菜单不被引导覆盖）。
+     * 仅 IAM 的 1.0 官方默认扁平菜单会被精确识别并升级为 1.1 分组树。
      * 单项 entry 置空则跳过该项。
      */
     private void ensureBuiltInApplications() {
@@ -193,7 +198,9 @@ public class BootstrapService implements ApplicationRunner {
                 log.info("内置可信应用引导跳过（entry 为空）：{}", config.getApplicationCode());
                 continue;
             }
-            if (trustedApplicationRepository.existsByApplicationCode(config.getApplicationCode())) {
+            IamTrustedApplicationEntity existing = trustedApplicationRepository
+                    .findByApplicationCode(config.getApplicationCode()).orElse(null);
+            if (existing != null) {
                 continue;
             }
 
@@ -216,20 +223,120 @@ public class BootstrapService implements ApplicationRunner {
             portal.setUpdatedAt(Instant.now());
             trustedApplicationPortalRepository.save(portal);
 
-            List<SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig> menus =
-                    config.getMenus() == null ? Collections.emptyList() : config.getMenus();
-            for (int index = 0; index < menus.size(); index++) {
-                SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig item = menus.get(index);
-                IamTrustedApplicationMenuEntity menu = new IamTrustedApplicationMenuEntity();
-                menu.setApplicationId(saved.getId());
-                menu.setCode(item.getCode());
-                menu.setName(item.getName());
-                menu.setRoute(item.getRoute());
-                menu.setSortOrder(index);
-                trustedApplicationMenuRepository.save(menu);
-            }
             log.info("内置可信应用创建成功：{}（entry={}）", config.getApplicationCode(), entry);
         }
+    }
+
+    /**
+     * 在应用及 IAM 权限清单均就绪后写入默认菜单。配置与管理面共用树校验，非法配置会使本次引导事务回滚。
+     */
+    private void ensureBuiltInApplicationMenus() {
+        for (SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig config
+                : properties.getBootstrap().getBuiltInApplications()) {
+            String entry = config.getEntry() == null ? "" : config.getEntry().trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            IamTrustedApplicationEntity application = trustedApplicationRepository
+                    .findByApplicationCode(config.getApplicationCode()).orElse(null);
+            if (application == null) {
+                continue;
+            }
+            List<IamTrustedApplicationMenuEntity> current = trustedApplicationMenuRepository
+                    .findByApplicationIdOrderBySortOrderAsc(application.getId());
+            if (current.isEmpty()) {
+                saveBuiltInMenuTree(application.getId(), builtInMenuTree(config));
+                continue;
+            }
+            upgradeLegacyDefaultIamMenuIfNeeded(config, application);
+        }
+    }
+
+    /**
+     * 仅升级精确等于 1.0 官方 IAM 默认菜单的实例。任意手工调整均保留，避免启动引导覆盖管理配置。
+     */
+    private void upgradeLegacyDefaultIamMenuIfNeeded(
+            SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig config,
+            IamTrustedApplicationEntity application) {
+        if (!SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM.equals(config.getApplicationCode())) {
+            return;
+        }
+        if (!isLegacyDefaultIamMenu(application.getId())) {
+            log.info("IAM 内置菜单已定制，保留现有配置：applicationId={}", application.getId());
+            return;
+        }
+        saveBuiltInMenuTree(application.getId(), builtInMenuTree(config));
+        log.info("IAM 内置默认菜单已从 1.0 扁平形态升级为 1.1 分组树");
+    }
+
+    private List<SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig> builtInMenuTree(
+            SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig config) {
+        if (config.getMenuTree() != null && !config.getMenuTree().isEmpty()) {
+            return config.getMenuTree();
+        }
+        return config.getMenus() == null ? Collections.emptyList() : config.getMenus();
+    }
+
+    private boolean isLegacyDefaultIamMenu(Long applicationId) {
+        List<IamTrustedApplicationMenuEntity> current = trustedApplicationMenuRepository
+                .findByApplicationIdOrderBySortOrderAsc(applicationId);
+        List<LegacyMenu> expected = legacyDefaultIamMenus();
+        if (current.size() != expected.size()) {
+            return false;
+        }
+        for (int index = 0; index < expected.size(); index++) {
+            IamTrustedApplicationMenuEntity menu = current.get(index);
+            LegacyMenu legacy = expected.get(index);
+            if (menu.getParentId() != null || menu.getNodeType() != PortalMenuNodeType.PAGE || menu.getIcon() != null
+                    || menu.getRequiredPagePermission() != null || !Integer.valueOf(index).equals(menu.getSortOrder())
+                    || !legacy.code.equals(menu.getCode()) || !legacy.name.equals(menu.getName())
+                    || !legacy.route.equals(menu.getRoute())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<LegacyMenu> legacyDefaultIamMenus() {
+        return Arrays.asList(
+                new LegacyMenu("dashboard", "仪表盘", "/"),
+                new LegacyMenu("users", "用户管理", "/users"),
+                new LegacyMenu("organizations", "组织与成员", "/organizations"),
+                new LegacyMenu("user-groups", "协作组管理", "/user-groups"),
+                new LegacyMenu("roles", "角色管理", "/roles"),
+                new LegacyMenu("trusted-applications", "可信应用", "/trusted-applications"),
+                new LegacyMenu("messages", "站内信", "/messages"));
+    }
+
+    private void saveBuiltInMenuTree(Long applicationId,
+                                     List<SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig> menus) {
+        portalMenuTreeService.updateMenus(applicationId, null, toMenuTreeRequests(menus));
+    }
+
+    private List<PortalMenuTreeNodeRequest> toMenuTreeRequests(
+            List<SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig> menus) {
+        List<PortalMenuTreeNodeRequest> result = new ArrayList<>();
+        if (menus == null) {
+            return result;
+        }
+        for (int index = 0; index < menus.size(); index++) {
+            SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationMenuConfig source = menus.get(index);
+            PortalMenuTreeNodeRequest target = new PortalMenuTreeNodeRequest();
+            target.setCode(source == null ? null : source.getCode());
+            target.setName(source == null ? null : source.getName());
+            PortalMenuNodeType nodeType = source == null ? null : source.getNodeType();
+            target.setNodeType((nodeType == null ? PortalMenuNodeType.PAGE : nodeType).name());
+            target.setIcon(source == null ? null : source.getIcon());
+            target.setRoute(source == null ? null : source.getRoute());
+            target.setRequiredPagePermission(source == null ? null : source.getRequiredPagePermission());
+            // GROUP 的展示模式由树校验器固定为 STANDARD，不能作为请求字段传入。
+            target.setPresentationMode(source == null || source.getNodeType() != PortalMenuNodeType.PAGE
+                    || source.getPresentationMode() == null ? null : source.getPresentationMode().name());
+            target.setSortOrder(index);
+            target.setChildren(toMenuTreeRequests(source == null ? null : source.getChildren()));
+            result.add(target);
+        }
+        return result;
     }
 
     /**
@@ -510,5 +617,20 @@ public class BootstrapService implements ApplicationRunner {
             this.type = type;
         }
     }
-}
 
+    /**
+     * 1.0 官方 IAM 默认菜单的不可变指纹项。
+     */
+    private static final class LegacyMenu {
+
+        private final String code;
+        private final String name;
+        private final String route;
+
+        private LegacyMenu(String code, String name, String route) {
+            this.code = code;
+            this.name = name;
+            this.route = route;
+        }
+    }
+}

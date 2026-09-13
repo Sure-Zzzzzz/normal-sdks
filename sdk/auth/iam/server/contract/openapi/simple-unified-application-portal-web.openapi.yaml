@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Portal API
-  version: 1.0.0
+  version: 1.1.0
   description: 统一应用门户的应用导航、站内信与未读数事件接口。
 servers:
   - url: /
@@ -20,6 +20,18 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/PortalAccessibleApplication' }
+        '401': { description: 未登录 }
+  /iam/web/portal/navigation-context:
+    get:
+      summary: 获取当前用户的 Portal 导航上下文
+      description: 默认入口和全局首页均已按当前用户菜单权限裁剪；仅用于 Portal 根路由和登录回跳决议，不替代子应用后端鉴权。
+      operationId: getPortalNavigationContext
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PortalNavigationContext' }
         '401': { description: 未登录 }
   /iam/web/theme-preference:
     get:
@@ -194,13 +206,30 @@ components:
         applicationCode: { type: string }
         applicationName: { type: string }
         description: { type: string, nullable: true }
-        icon: { type: string, nullable: true, description: 内置图标编码，未知或历史空值以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }
+        icon: { type: string, nullable: true, description: 内置图标编码，未知或历史空值以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }
         routePrefix: { type: string }
         entry: { type: string }
         apiBase: { type: string, nullable: true }
         menus:
           type: array
+          deprecated: true
+          description: 兼容 1.0 Portal 的已裁剪页面叶子平铺列表；1.1 Portal 优先使用 menuTree。
           items: { $ref: '#/components/schemas/PortalMenuItem' }
+        menuTree:
+          type: array
+          description: 已按当前用户页面权限裁剪的递归菜单树；GROUP 仅作分组，PAGE 才可导航。
+          items: { $ref: '#/components/schemas/PortalAccessibleMenuTreeNode' }
+        defaultEntry: { $ref: '#/components/schemas/PortalDefaultEntry', nullable: true, description: 当前用户可访问的应用根路由默认入口；失效或无权限时为 null }
+    PortalDefaultEntry:
+      type: object
+      properties:
+        pageMenuCode: { type: string }
+        path: { type: string, description: 相对应用 routePrefix 的静态路径 }
+    PortalNavigationContext:
+      type: object
+      properties:
+        applications: { type: array, items: { $ref: '#/components/schemas/PortalAccessibleApplication' } }
+        loginLandingApplicationCode: { type: string, nullable: true, description: 当前用户可用的无深链登录首页应用；不可用时为 null }
     PortalMenuItem:
       type: object
       properties:
@@ -208,6 +237,21 @@ components:
         name: { type: string }
         route: { type: string, description: 服务端拼接后的完整路由 }
         sortOrder: { type: integer }
+    PortalAccessibleMenuTreeNode:
+      type: object
+      required: [code, name, nodeType, sortOrder, children]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nodeType: { type: string, enum: [GROUP, PAGE] }
+        icon: { type: string, nullable: true, description: 菜单节点图标编码；为空时客户端按节点类型回退, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }
+        route: { type: string, nullable: true, description: PAGE 的服务端拼接完整路由；GROUP 为 null }
+        requiredPagePermission: { type: string, nullable: true, description: PAGE 绑定的页面权限码；null 表示继承应用准入 }
+        presentationMode: { type: string, nullable: true, default: STANDARD, description: PAGE 的 Portal 宿主展示模式；IMMERSIVE 隐去 Portal 顶栏和侧栏。响应 GROUP 固定为 STANDARD。, enum: [STANDARD, IMMERSIVE] }
+        sortOrder: { type: integer }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/PortalAccessibleMenuTreeNode' }
     WebMessagePageResponse:
       type: object
       properties:

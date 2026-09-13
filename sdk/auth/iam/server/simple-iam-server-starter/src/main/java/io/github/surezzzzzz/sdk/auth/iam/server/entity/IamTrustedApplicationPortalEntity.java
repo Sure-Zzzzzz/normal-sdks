@@ -3,10 +3,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.entity;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import lombok.Data;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import javax.persistence.*;
 import java.time.Instant;
 
 /**
@@ -40,6 +37,25 @@ public class IamTrustedApplicationPortalEntity {
 
     @Column(name = "api_base", length = 512)
     private String apiBase;
+
+    /**
+     * 默认入口引用同应用菜单 code；菜单快照重建后行 ID 不稳定，不能引用菜单 ID。
+     */
+    @Column(name = "default_page_menu_code", length = 64)
+    private String defaultPageMenuCode;
+
+    /**
+     * 相对 routePrefix 的静态入口路径，为空时使用默认 PAGE 路由。
+     */
+    @Column(name = "default_entry_path", length = 255)
+    private String defaultEntryPath;
+
+    /**
+     * Portal 配置乐观锁版本，菜单与默认入口变更不能静默互相覆盖。
+     */
+    @Version
+    @Column(name = "config_version", nullable = false)
+    private Long configVersion;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;

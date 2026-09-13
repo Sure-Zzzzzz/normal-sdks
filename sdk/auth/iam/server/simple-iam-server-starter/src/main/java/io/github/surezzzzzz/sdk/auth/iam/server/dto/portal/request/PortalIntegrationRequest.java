@@ -35,4 +35,9 @@ public class PortalIntegrationRequest {
      * Portal 菜单项列表
      */
     private List<MenuItemRequest> menus;
+
+    /**
+     * 1.1 菜单树完整快照；与 {@link #menus} 不能同时提交。
+     */
+    private List<PortalMenuTreeNodeRequest> menuTree;
 }

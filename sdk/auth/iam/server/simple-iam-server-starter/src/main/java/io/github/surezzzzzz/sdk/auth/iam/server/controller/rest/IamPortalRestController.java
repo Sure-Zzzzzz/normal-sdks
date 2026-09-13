@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalNavigationContextResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.IamPortalApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
 import lombok.RequiredArgsConstructor;
@@ -39,5 +40,17 @@ public class IamPortalRestController {
             return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(iamPortalApplicationService.listPortalAccessibleApplications(principal.getUserId()));
+    }
+
+    /**
+     * 当前用户的默认入口与全局登录首页候选。
+     */
+    @GetMapping("/navigation-context")
+    public ResponseEntity<PortalNavigationContextResponse> getNavigationContext(
+            @AuthenticationPrincipal IamUserDetailsSupport principal) {
+        if (principal == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(iamPortalApplicationService.getNavigationContext(principal.getUserId()));
     }
 }

@@ -56,4 +56,14 @@ public class PortalAccessibleApplication {
      * Portal 菜单项（完整路径）
      */
     private List<PortalMenuItem> menus;
+
+    /**
+     * 1.1 Portal 侧边栏递归菜单树
+     */
+    private List<PortalAccessibleMenuTreeNode> menuTree;
+
+    /**
+     * 当前用户可用的应用默认入口；引用 PAGE 不在裁剪树中时必须为 null。
+     */
+    private PortalDefaultEntryResponse defaultEntry;
 }

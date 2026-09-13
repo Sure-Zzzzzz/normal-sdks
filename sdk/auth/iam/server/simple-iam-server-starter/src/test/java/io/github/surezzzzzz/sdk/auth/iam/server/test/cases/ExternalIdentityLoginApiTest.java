@@ -86,7 +86,9 @@ class ExternalIdentityLoginApiTest {
     void cleanup() {
         for (String username : new String[]{ldapUsername, ssoUsername, preBoundUsername,
                 conflictingUsername, adminUsername}) {
-            userRepository.findByUsername(username).ifPresent(userRepository::delete);
+            userRepository.findByUsername(username).ifPresent(user -> userService.deleteUser(user.getId()));
+            assertFalse(userRepository.findByUsername(username).isPresent(),
+                    "测试清理后不应残留外部身份账号：" + username);
         }
         // 跳转型失败计数按 provider 维度固定，不清会跨用例/跨次运行锁死登录方式
         redisTokenRepository.deleteExternalLoginFailure(

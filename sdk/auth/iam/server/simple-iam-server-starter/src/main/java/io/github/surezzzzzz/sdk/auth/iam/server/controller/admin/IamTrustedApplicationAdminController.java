@@ -4,6 +4,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.response.ApplicationPermissionManifestResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalConfigurationRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalIntegrationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
@@ -87,6 +89,17 @@ public class IamTrustedApplicationAdminController {
     public ResponseEntity<TrustedApplicationResponse> updateApplication(
             @PathVariable Long applicationId, @RequestBody UpdateTrustedApplicationRequest request) {
         return ResponseEntity.ok(trustedApplicationService.updateApplication(applicationId, request));
+    }
+
+    /**
+     * 新管理台使用的完整 Portal 配置快照。
+     *
+     * <p>独立端点保留旧整体更新接口的兼容语义，并通过 configVersion 防止菜单与默认入口覆盖。
+     */
+    @PutMapping("/{applicationId}/portal/configuration")
+    public ResponseEntity<PortalIntegrationResponse> updatePortalConfiguration(
+            @PathVariable Long applicationId, @RequestBody PortalConfigurationRequest request) {
+        return ResponseEntity.ok(trustedApplicationService.updatePortalConfiguration(applicationId, request));
     }
 
     /**

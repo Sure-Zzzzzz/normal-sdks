@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Admin API
-  version: 1.0.0
+  version: 1.1.0
   description: IAM 管理端 API。所有接口要求已认证用户具备 ROLE_iam_admin；写操作还要求当前浏览器会话的 CSRF Token。
 servers:
   - url: /
@@ -445,6 +445,25 @@ paths:
       operationId: deleteTrustedApplicationClient
       security: [ { iamSession: [], csrfToken: [] } ]
       responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-applications/{applicationId}/portal/configuration:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    put:
+      summary: 原子更新 Portal 集成、菜单树与应用默认入口
+      operationId: updateTrustedApplicationPortalConfiguration
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PortalConfigurationRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/PortalIntegration' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/portal/login-landing:
+    get:
+      summary: 获取 Portal 无深链登录首页
+      operationId: getPortalLoginLanding
+      responses: { '200': { $ref: '#/components/responses/PortalLoginLanding' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    put:
+      summary: 更新或关闭 Portal 无深链登录首页（仅平台管理员）
+      operationId: updatePortalLoginLanding
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PortalLoginLandingRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/PortalLoginLanding' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
   /iam/admin/trusted-applications/{applicationId}/permission-manifest:
     parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
     get:
@@ -582,6 +601,8 @@ components:
     TrustedApplicationSummaryList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } } } } }
     TrustedApplicationSummaryPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationSummaryPage' } } } }
     TrustedApplicationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationDetail' } } } }
+    PortalIntegration: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalIntegration' } } } }
+    PortalLoginLanding: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalLoginLanding' } } } }
     TrustedApplicationClient: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationClient' } } } }
     TrustedApplicationClientList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } } } }
     TrustedApplicationClientSecret: { description: 创建成功，密钥仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationClientSecret' } } } }
@@ -718,18 +739,79 @@ components:
     PortalMenuItem:
       type: object
       properties: { code: { type: string }, name: { type: string }, route: { type: string }, sortOrder: { type: integer } }
+    PortalMenuTreeNode:
+      type: object
+      required: [code, name, nodeType, sortOrder, children]
+      properties:
+        code: { type: string }
+        name: { type: string }
+        nodeType: { type: string, enum: [GROUP, PAGE] }
+        icon: { type: string, nullable: true, description: 菜单节点图标编码；为空时客户端按节点类型回退, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }
+        route: { type: string, nullable: true, description: PAGE 的相对 routePrefix 路由；GROUP 为 null }
+        requiredPagePermission: { type: string, nullable: true, description: PAGE 绑定的本应用页面权限码；null 表示继承应用准入 }
+        presentationMode: { type: string, nullable: true, default: STANDARD, description: PAGE 的 Portal 宿主展示模式；IMMERSIVE 隐去 Portal 顶栏和侧栏。请求 GROUP 时必须省略，响应 GROUP 固定为 STANDARD。, enum: [STANDARD, IMMERSIVE] }
+        sortOrder: { type: integer }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/PortalMenuTreeNode' }
     PortalIntegrationRequest:
       type: object
-      properties: { enabled: { type: boolean }, entry: { type: string, nullable: true }, apiBase: { type: string, nullable: true }, menus: { type: array, items: { $ref: '#/components/schemas/PortalMenuItem' } } }
+      properties:
+        enabled: { type: boolean }
+        entry: { type: string, nullable: true }
+        apiBase: { type: string, nullable: true }
+        menus: { type: array, deprecated: true, description: 1.0 根级 PAGE 完整快照；不能与 menuTree 同时提交。, items: { $ref: '#/components/schemas/PortalMenuItem' } }
+        menuTree: { type: array, description: 1.1 递归菜单完整快照；空数组明确清空，items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
     PortalIntegration:
       type: object
-      properties: { enabled: { type: boolean }, entry: { type: string, nullable: true }, apiBase: { type: string, nullable: true }, routePrefix: { type: string }, menus: { type: array, items: { $ref: '#/components/schemas/PortalMenuItem' } } }
+      properties:
+        enabled: { type: boolean }
+        entry: { type: string, nullable: true }
+        apiBase: { type: string, nullable: true }
+        routePrefix: { type: string }
+        menus: { type: array, deprecated: true, description: 兼容 1.0 管理端的 PAGE 平铺列表，items: { $ref: '#/components/schemas/PortalMenuItem' } }
+        menuTree: { type: array, items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
+        defaultEntry: { $ref: '#/components/schemas/PortalDefaultEntry', nullable: true }
+        configVersion: { type: integer, format: int64, description: 完整 Portal 配置乐观锁版本 }
+    PortalDefaultEntry:
+      type: object
+      required: [pageMenuCode, path]
+      properties:
+        pageMenuCode: { type: string, description: 本应用 PAGE 菜单编码 }
+        path: { type: string, description: 相对 routePrefix 的静态 history 路径；必须属于该 PAGE 路由 }
+    PortalConfigurationRequest:
+      type: object
+      required: [enabled, menuTree, configVersion]
+      properties:
+        enabled: { type: boolean }
+        entry: { type: string, nullable: true }
+        apiBase: { type: string, nullable: true }
+        menuTree: { type: array, description: 完整递归菜单快照；空数组明确清空, items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
+        defaultEntry: { $ref: '#/components/schemas/PortalDefaultEntryRequest', nullable: true, description: null 明确清空应用默认入口 }
+        configVersion: { type: integer, format: int64 }
+    PortalDefaultEntryRequest:
+      type: object
+      required: [pageMenuCode]
+      properties:
+        pageMenuCode: { type: string, description: 本应用 PAGE 菜单编码 }
+        entryPath: { type: string, nullable: true, description: 相对 routePrefix 的静态 history 路径；为空时使用 PAGE route，非空时必须属于该 PAGE 路由 }
+    PortalLoginLandingRequest:
+      type: object
+      required: [version]
+      properties:
+        applicationCode: { type: string, nullable: true, description: null 明确关闭全局登录首页 }
+        version: { type: integer, format: int64 }
+    PortalLoginLanding:
+      type: object
+      properties:
+        applicationCode: { type: string, nullable: true }
+        version: { type: integer, format: int64 }
     TrustedApplicationSummary:
       type: object
-      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, clientCount: { type: integer }, portalEnabled: { type: boolean }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 } }
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, clientCount: { type: integer, format: int64 }, portalEnabled: { type: boolean }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 } }
     TrustedApplicationDetail:
       type: object
-      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 }, portal: { $ref: '#/components/schemas/PortalIntegration', nullable: true }, clients: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } }
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 }, portal: { $ref: '#/components/schemas/PortalIntegration', nullable: true }, clients: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } }
     TrustedApplicationSummaryPage:
       type: object
       properties: { content: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
@@ -744,10 +826,10 @@ components:
       properties: { clientName: { type: string }, requireConsent: { type: boolean }, redirectUris: { type: array, items: { type: string, format: uri } }, scopes: { type: array, items: { type: string } } }
     CreateTrustedApplicationRequest:
       type: object
-      properties: { applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true }, initialClient: { $ref: '#/components/schemas/CreateTrustedApplicationClientRequest' }, roles: { type: array, items: { type: string }, nullable: true, description: 应用角色编码列表（权限清单），创建时同步登记 }, pagePermissions: { type: array, items: { type: string }, nullable: true, description: 页面权限编码列表 }, apiPermissions: { type: array, items: { type: string }, nullable: true, description: API权限编码列表 } }
+      properties: { applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true }, initialClient: { $ref: '#/components/schemas/CreateTrustedApplicationClientRequest' }, roles: { type: array, items: { type: string }, nullable: true, description: 应用角色编码列表（权限清单），创建时同步登记 }, pagePermissions: { type: array, items: { type: string }, nullable: true, description: 页面权限编码列表 }, apiPermissions: { type: array, items: { type: string }, nullable: true, description: API权限编码列表 } }
     UpdateTrustedApplicationRequest:
       type: object
-      properties: { applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true } }
+      properties: { applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, portal: { $ref: '#/components/schemas/PortalIntegrationRequest', nullable: true } }
     TrustedApplicationClientSecret:
       type: object
       properties: { id: { type: string }, clientId: { type: string }, clientSecret: { type: string, description: 仅本次响应返回 } }
