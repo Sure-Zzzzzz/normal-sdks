@@ -66,4 +66,14 @@ class IamEventContractTest {
         assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT.contains("menuTree"));
         assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED.contains("页面权限"));
     }
+
+    @Test
+    void shouldExposePortalDefaultEntryErrorContract() {
+        assertEquals("TRUSTED_APPLICATION_017", ErrorCode.TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID);
+        assertEquals("TRUSTED_APPLICATION_018", ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT);
+        assertEquals("TRUSTED_APPLICATION_019", ErrorCode.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID);
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID.contains("默认入口"));
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT.contains("刷新后重试"));
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID.contains("登录首页"));
+    }
 }

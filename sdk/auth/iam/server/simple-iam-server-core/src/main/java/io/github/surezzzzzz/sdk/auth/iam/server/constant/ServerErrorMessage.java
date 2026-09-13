@@ -141,6 +141,10 @@ public final class ServerErrorMessage {
             "当前应用已使用层级菜单，旧 menus 不能覆盖；请使用 menuTree 更新菜单";
     public static final String TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED =
             "页面权限仍被 Portal 菜单引用，不能从权限清单移除：%s";
+    public static final String TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID = "Portal 默认入口无效：%s";
+    public static final String TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT =
+            "Portal 配置已被其他管理员更新，请刷新后重试：applicationId=%s";
+    public static final String TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID = "Portal 登录首页无效：%s";
 
     // ==================== 资源验证客户端消息 ====================
     public static final String RESOURCE_VERIFICATION_CLIENT_NOT_FOUND = "资源验证客户端不存在：%s";
