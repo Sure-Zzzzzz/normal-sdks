@@ -145,6 +145,9 @@ public final class ServerErrorMessage {
     public static final String TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT =
             "Portal 配置已被其他管理员更新，请刷新后重试：applicationId=%s";
     public static final String TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID = "Portal 登录首页无效：%s";
+    public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID = "Portal 应用顺序无效：%s";
+    public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT =
+            "Portal 应用顺序已被其他管理员更新，请刷新后重试";
 
     // ==================== 资源验证客户端消息 ====================
     public static final String RESOURCE_VERIFICATION_CLIENT_NOT_FOUND = "资源验证客户端不存在：%s";

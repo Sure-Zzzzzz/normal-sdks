@@ -1,8 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.core.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.TrustedApplicationIcon;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.*;
 import org.junit.jupiter.api.Test;
 
@@ -75,5 +73,21 @@ class IamEventContractTest {
         assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_DEFAULT_ENTRY_INVALID.contains("默认入口"));
         assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT.contains("刷新后重试"));
         assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID.contains("登录首页"));
+    }
+
+    @Test
+    void shouldExposePortalApplicationOrderErrorContract() {
+        assertEquals("TRUSTED_APPLICATION_020", ErrorCode.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID);
+        assertEquals("TRUSTED_APPLICATION_021", ErrorCode.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT);
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID.contains("应用顺序"));
+        assertTrue(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT.contains("刷新后重试"));
+    }
+
+    @Test
+    void shouldExposePortalMenuPresentationEnums() {
+        assertArrayEquals(new PortalMenuNodeType[]{PortalMenuNodeType.GROUP, PortalMenuNodeType.PAGE},
+                PortalMenuNodeType.values());
+        assertArrayEquals(new PortalPresentationMode[]{PortalPresentationMode.STANDARD, PortalPresentationMode.IMMERSIVE},
+                PortalPresentationMode.values());
     }
 }
