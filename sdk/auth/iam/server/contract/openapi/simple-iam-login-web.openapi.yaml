@@ -301,6 +301,8 @@ components:
         registeredClientId: { type: string }
         clientId: { type: string }
         clientName: { type: string }
+        applicationName: { type: string, description: 请求授权的可信应用名称；历史未归属客户端回退为客户端名称 }
+        applicationIcon: { type: string, nullable: true, description: 请求授权的可信应用内置图标编码；为空时前端显示默认应用图标 }
         state: { type: string }
         requestedScopes:
           type: array

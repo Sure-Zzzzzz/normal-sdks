@@ -453,6 +453,19 @@ paths:
       security: [ { iamSession: [], csrfToken: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PortalConfigurationRequest' } } } }
       responses: { '200': { $ref: '#/components/responses/PortalIntegration' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/portal/application-order:
+    get:
+      summary: 获取 Portal 应用根节点全局顺序
+      description: 返回全部 Portal 集成的完整有序快照，已隐藏应用仍保留位置；排序值是服务端内部实现，不向浏览器暴露。
+      operationId: getPortalApplicationOrder
+      responses: { '200': { $ref: '#/components/responses/PortalApplicationOrder' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    put:
+      summary: 全量替换 Portal 应用根节点全局顺序
+      description: 请求必须携带读取时获得的 version 与全部 applicationIds。集合成员、重复项或版本不一致时不会局部更新；版本冲突返回 409，调用方应重读后重新编辑。
+      operationId: updatePortalApplicationOrder
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PortalApplicationOrderRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/PortalApplicationOrder' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' } }
   /iam/admin/portal/login-landing:
     get:
       summary: 获取 Portal 无深链登录首页
@@ -602,6 +615,7 @@ components:
     TrustedApplicationSummaryPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationSummaryPage' } } } }
     TrustedApplicationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationDetail' } } } }
     PortalIntegration: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalIntegration' } } } }
+    PortalApplicationOrder: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalApplicationOrder' } } } }
     PortalLoginLanding: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalLoginLanding' } } } }
     TrustedApplicationClient: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationClient' } } } }
     TrustedApplicationClientList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } } } }
@@ -801,6 +815,33 @@ components:
       properties:
         applicationCode: { type: string, nullable: true, description: null 明确关闭全局登录首页 }
         version: { type: integer, format: int64 }
+    PortalApplicationOrderRequest:
+      type: object
+      required: [version, applicationIds]
+      properties:
+        version: { type: integer, format: int64, description: 读取快照时获得的 Portal 全局设置版本 }
+        applicationIds:
+          type: array
+          description: 全部 Portal 集成的 applicationId，按目标根节点顺序排列，不能省略、重复或混入未集成应用。
+          items: { type: integer, format: int64 }
+    PortalApplicationOrderItem:
+      type: object
+      required: [applicationId, applicationCode, applicationName, enabled]
+      properties:
+        applicationId: { type: integer, format: int64 }
+        applicationCode: { type: string }
+        applicationName: { type: string }
+        icon: { type: string, nullable: true, description: 可信应用内置图标编码；为空时前端显示默认图标 }
+        enabled: { type: boolean, description: false 表示当前在 Portal 侧边栏隐藏，但仍保留排序位置 }
+    PortalApplicationOrder:
+      type: object
+      required: [version, applications]
+      properties:
+        version: { type: integer, format: int64, description: Portal 全局设置版本 }
+        applications:
+          type: array
+          description: 服务端已按全局根节点顺序排序的完整快照。
+          items: { $ref: '#/components/schemas/PortalApplicationOrderItem' }
     PortalLoginLanding:
       type: object
       properties:

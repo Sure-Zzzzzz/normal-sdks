@@ -24,7 +24,7 @@ paths:
   /iam/web/portal/navigation-context:
     get:
       summary: 获取当前用户的 Portal 导航上下文
-      description: 默认入口和全局首页均已按当前用户菜单权限裁剪；仅用于 Portal 根路由和登录回跳决议，不替代子应用后端鉴权。
+      description: applications 已按平台管理员维护的 Portal 应用根节点全局顺序排列，且默认入口和全局首页均已按当前用户菜单权限裁剪；仅用于 Portal 根路由和登录回跳决议，不替代子应用后端鉴权。
       operationId: getPortalNavigationContext
       responses:
         '200':
@@ -202,6 +202,7 @@ components:
             updatedAt: { type: string, format: date-time, nullable: true }
     PortalAccessibleApplication:
       type: object
+      description: 数组相对顺序由服务端全局 Portal 应用排序决定；客户端不得按应用编码或名称重新排序。
       properties:
         applicationCode: { type: string }
         applicationName: { type: string }
@@ -228,7 +229,7 @@ components:
     PortalNavigationContext:
       type: object
       properties:
-        applications: { type: array, items: { $ref: '#/components/schemas/PortalAccessibleApplication' } }
+        applications: { type: array, description: 已按服务端全局 Portal 应用排序且按当前用户权限裁剪的应用列表, items: { $ref: '#/components/schemas/PortalAccessibleApplication' } }
         loginLandingApplicationCode: { type: string, nullable: true, description: 当前用户可用的无深链登录首页应用；不可用时为 null }
     PortalMenuItem:
       type: object
