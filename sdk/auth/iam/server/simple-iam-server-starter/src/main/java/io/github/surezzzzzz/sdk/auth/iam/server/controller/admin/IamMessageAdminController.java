@@ -9,8 +9,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.response.MessageBatc
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.response.MessageBatchSummaryResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.response.MessageSendResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class IamMessageAdminController {
 
-    private final MessageService messageService;
+    private final IamMessageService messageService;
 
     /**
      * 站内信发送批次分页
@@ -74,14 +74,14 @@ public class IamMessageAdminController {
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_MESSAGE_API + "')")
     public ResponseEntity<MessageSendResponse> createMessage(@RequestBody CreateMessageRequest request,
                                                              @AuthenticationPrincipal UserDetails userDetails) {
-        IamUserDetailsSupport iamUserDetails = requireIamUserDetails(userDetails);
+        IamUserDetails iamUserDetails = requireIamUserDetails(userDetails);
         return ResponseEntity.status(HttpStatus.CREATED).body(messageService.sendMessage(
                 request, iamUserDetails.getUserId(), iamUserDetails.getUsername()));
     }
 
-    private IamUserDetailsSupport requireIamUserDetails(UserDetails userDetails) {
-        if (userDetails instanceof IamUserDetailsSupport) {
-            return (IamUserDetailsSupport) userDetails;
+    private IamUserDetails requireIamUserDetails(UserDetails userDetails) {
+        if (userDetails instanceof IamUserDetails) {
+            return (IamUserDetails) userDetails;
         }
         throw new AccessDeniedException(ServerErrorMessage.PERMISSION_DENIED);
     }

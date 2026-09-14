@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.scheduler;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamExpiredTokenCleanupService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamExpiredTokenCleanupService;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import io.github.surezzzzzz.sdk.lock.redis.model.RedisLockLease;
 import lombok.RequiredArgsConstructor;

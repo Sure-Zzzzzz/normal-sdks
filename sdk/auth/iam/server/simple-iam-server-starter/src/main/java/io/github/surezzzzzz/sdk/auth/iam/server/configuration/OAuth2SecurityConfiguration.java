@@ -2,12 +2,12 @@ package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamMustChangePasswordFilter;
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamResourceVerificationClientAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamSessionValidationFilter;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;

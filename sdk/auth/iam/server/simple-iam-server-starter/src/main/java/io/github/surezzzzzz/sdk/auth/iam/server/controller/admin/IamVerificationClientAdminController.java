@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.resource.request.CreateResourceVerificationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.resource.response.ResourceVerificationClientResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.resource.response.ResourceVerificationClientSecretResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamResourceVerificationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.resource.IamResourceVerificationClientService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

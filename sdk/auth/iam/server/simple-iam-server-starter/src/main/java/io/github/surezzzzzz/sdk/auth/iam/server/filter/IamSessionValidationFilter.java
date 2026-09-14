@@ -2,12 +2,12 @@ package io.github.surezzzzzz.sdk.auth.iam.server.filter;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetailsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -42,7 +42,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class IamSessionValidationFilter extends OncePerRequestFilter {
 
-    private final SessionService sessionService;
+    private final IamSessionService sessionService;
     private final IamUserRepository userRepository;
     private final IamUserDetailsService userDetailsService;
 
@@ -130,6 +130,6 @@ public class IamSessionValidationFilter extends OncePerRequestFilter {
         return authentication != null && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken)
                 && (authentication.getPrincipal() instanceof IamUserEntity
-                || authentication.getPrincipal() instanceof IamUserDetailsSupport);
+                || authentication.getPrincipal() instanceof IamUserDetails);
     }
 }

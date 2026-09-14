@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalBrowserLoginProvider;
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalCredentialAuthenticator;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.ExternalProviderRegistry;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamExternalProviderRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,10 +29,10 @@ public class ExternalIdentityProviderConfiguration {
      * @return 外部登录方式注册表
      */
     @Bean
-    public ExternalProviderRegistry externalProviderRegistry(
+    public IamExternalProviderRegistry externalProviderRegistry(
             ObjectProvider<ExternalCredentialAuthenticator> credentialAuthenticators,
             ObjectProvider<ExternalBrowserLoginProvider> browserLoginProviders) {
-        return ExternalProviderRegistry.create(
+        return IamExternalProviderRegistry.create(
                 credentialAuthenticators.orderedStream()
                         .collect(java.util.stream.Collectors.toList()),
                 browserLoginProviders.orderedStream()

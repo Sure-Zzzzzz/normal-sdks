@@ -2,11 +2,11 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.IamAuthorizeContextStatus;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamAuthorizeContextEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.oauth2.IamAuthorizeContextEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamAuthorizeContextRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamAuthorizeContextService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamAuthorizeContextRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamOAuth2AuthorizeContextService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -32,13 +32,13 @@ class IamAuthorizeContextServiceTest {
     private static final Long USER_ID = 101L;
 
     @Autowired
-    private IamAuthorizeContextService authorizeContextService;
+    private IamOAuth2AuthorizeContextService authorizeContextService;
 
     @Autowired
     private IamAuthorizeContextRepository authorizeContextRepository;
 
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
 
     @Autowired
     private RedisKeyHelper redisKeyHelper;

@@ -3,8 +3,8 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalThemePreferenceRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalThemePreferenceResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamThemePreferenceService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamThemePreferenceService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,7 +29,7 @@ public class IamThemePreferenceRestController {
      */
     @GetMapping
     public ResponseEntity<PortalThemePreferenceResponse> getThemePreference(
-            @AuthenticationPrincipal IamUserDetailsSupport principal) {
+            @AuthenticationPrincipal IamUserDetails principal) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -41,7 +41,7 @@ public class IamThemePreferenceRestController {
      */
     @PutMapping
     public ResponseEntity<PortalThemePreferenceResponse> saveThemePreference(
-            @AuthenticationPrincipal IamUserDetailsSupport principal,
+            @AuthenticationPrincipal IamUserDetails principal,
             @RequestBody PortalThemePreferenceRequest request) {
         if (principal == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

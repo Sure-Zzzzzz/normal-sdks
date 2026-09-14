@@ -2,9 +2,12 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller.admin;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalApplicationOrderRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalLoginLandingRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalApplicationOrderResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalLoginLandingResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,7 +24,25 @@ import org.springframework.web.bind.annotation.*;
         + "') and hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_API + "')")
 public class IamPortalAdminController {
 
-    private final TrustedApplicationService trustedApplicationService;
+    private final IamTrustedApplicationService trustedApplicationService;
+    private final IamPortalApplicationOrderService portalApplicationOrderService;
+
+    /**
+     * 获取全部 Portal 集成的全局根节点顺序。
+     */
+    @GetMapping("/application-order")
+    public ResponseEntity<PortalApplicationOrderResponse> getApplicationOrder() {
+        return ResponseEntity.ok(portalApplicationOrderService.getApplicationOrder());
+    }
+
+    /**
+     * 以完整快照替换 Portal 应用根节点顺序。
+     */
+    @PutMapping("/application-order")
+    public ResponseEntity<PortalApplicationOrderResponse> updateApplicationOrder(
+            @RequestBody PortalApplicationOrderRequest request) {
+        return ResponseEntity.ok(portalApplicationOrderService.updateApplicationOrder(request));
+    }
 
     /**
      * 获取无深链登录首页单例。

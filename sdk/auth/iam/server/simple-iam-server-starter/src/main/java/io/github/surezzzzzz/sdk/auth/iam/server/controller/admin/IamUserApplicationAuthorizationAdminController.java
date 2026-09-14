@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutApplicationAuthorizationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.ApplicationAuthorizationDetailResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.ApplicationAuthorizationResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamApplicationAuthorizationAdminService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationAdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

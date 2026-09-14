@@ -2,10 +2,23 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamPermissionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.usergroup.IamUserGroupEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamPermissionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRolePermissionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamUserRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.message.IamMessageRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupMemberRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -56,10 +69,10 @@ class IamAdminOrganizationApiTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Autowired
     private IamUserRepository userRepository;

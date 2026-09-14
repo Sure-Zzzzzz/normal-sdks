@@ -2,8 +2,8 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
@@ -55,7 +55,7 @@ class IamWebAuthCaptchaApiTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
     private IamUserRepository userRepository;

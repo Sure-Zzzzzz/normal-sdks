@@ -11,11 +11,11 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserReque
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.ResetPasswordRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.UserRestResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserDataAccessPlanConverter;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.support.IamUserDataAccessPlanHelper;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
 import lombok.RequiredArgsConstructor;
@@ -51,9 +51,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamUserRestController {
 
-    private final UserService userService;
-    private final RoleService roleService;
-    private final DepartmentService departmentService;
+    private final IamUserService userService;
+    private final IamRoleService roleService;
+    private final IamDepartmentService departmentService;
 
     /**
      * 分页查询用户（status / departmentId / keyword 过滤，DATA 部门范围求交）。
@@ -69,7 +69,7 @@ public class IamUserRestController {
             @RequestParam(defaultValue = SimpleIamServerConstant.DEFAULT_ADMIN_PAGE_VALUE) int page,
             @RequestParam(defaultValue = SimpleIamServerConstant.DEFAULT_ADMIN_PAGE_SIZE_VALUE) int size,
             @CurrentDataAccessPlan DataAccessPlan plan) {
-        Set<Long> departmentScope = UserDataAccessPlanConverter.toDepartmentScope(plan);
+        Set<Long> departmentScope = IamUserDataAccessPlanHelper.toDepartmentScope(plan);
         Page<UserRestResponse> response = userService
                 .listUsers(status, departmentId, keyword, departmentScope, page, size)
                 .map(this::toUserRestResponse);

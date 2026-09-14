@@ -1,14 +1,20 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamPermissionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRolePermissionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamUserRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamAuthorizationProjectionService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamEffectiveRoleResolver;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamEffectiveRoleResolver;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,7 +69,7 @@ class RoleServicePermissionVersionBumpTest {
     private IamEffectiveRoleResolver effectiveRoleResolver;
 
     @Mock
-    private DepartmentService departmentService;
+    private IamDepartmentService departmentService;
 
     @Mock
     private IamPermissionRepository permissionRepository;
@@ -84,7 +90,7 @@ class RoleServicePermissionVersionBumpTest {
     private IamAuthorizationProjectionService projectionService;
 
     @InjectMocks
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Test
     void shouldBumpUserOnActualRoleAssignment() {

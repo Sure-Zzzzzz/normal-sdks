@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageSseService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,8 +46,8 @@ class IamMessageSseMultiClientTest {
      * 回调，onCompletion 链路不通（javap 字节码实核），必须装 handler 才可观察。
      */
     private static final Field HANDLER_FIELD = handlerField();
-    private SessionService sessionService;
-    private MessageSseService sseService;
+    private IamSessionService sessionService;
+    private IamMessageSseService sseService;
     private StringRedisTemplate redisTemplate;
 
     private static Field handlerField() {
@@ -77,12 +77,12 @@ class IamMessageSseMultiClientTest {
 
     @BeforeEach
     void setUp() {
-        sessionService = mock(SessionService.class);
+        sessionService = mock(IamSessionService.class);
         RedisKeyHelper redisKeyHelper = mock(RedisKeyHelper.class);
         RedisRouteTemplate redisRouteTemplate = mock(RedisRouteTemplate.class);
         redisTemplate = mock(StringRedisTemplate.class);
         when(redisRouteTemplate.stringTemplateByKey(any())).thenReturn(redisTemplate);
-        sseService = new MessageSseService(redisKeyHelper, redisRouteTemplate, sessionService);
+        sseService = new IamMessageSseService(redisKeyHelper, redisRouteTemplate, sessionService);
     }
 
     @Test
@@ -109,7 +109,7 @@ class IamMessageSseMultiClientTest {
         // 纯单测不驱动 afterPropertiesSet，broadcastChannel 为 null；
         // 生产环境由 afterPropertiesSet 从 redisKeyHelper.buildPubSubChannel 初始化
         verify(redisTemplate).convertAndSend(isNull(), argThat(json ->
-                String.valueOf(json).contains(MessageSseService.BROADCAST_TYPE_EVICT_HASH)
+                String.valueOf(json).contains(IamMessageSseService.BROADCAST_TYPE_EVICT_HASH)
                         && String.valueOf(json).contains(HASH_A)));
     }
 

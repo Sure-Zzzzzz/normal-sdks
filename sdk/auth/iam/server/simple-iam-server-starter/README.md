@@ -68,7 +68,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.1.0"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.1.1"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -327,12 +327,14 @@ io:
 
 | # | 步骤 | 操作 | 说明 |
 |---|---|---|---|
-| 1 | 建可信应用 | `POST /iam/admin/trusted-applications`（必须带初始 OAuth 客户端） | entry 与 routePrefix 决定门户挂载位置 |
+| 1 | 建可信应用 | `POST /iam/admin/trusted-applications`（必须带初始 OAuth 客户端） | entry 与 routePrefix 决定门户挂载位置；首次配置 Portal 集成自动追加到全局根节点顺序末尾 |
 | 2 | 申报权限清单 | manifest：`roles` / `pagePermissions` / `apiPermissions` / `dataResources` | 该应用权限码空间的事实源；未申报的应用无法投影 |
 | 3 | 配角色应用授权规则 | `PUT /iam/admin/roles/{roleId}/authorization-rules/{applicationId}` | 角色 × 应用的码集合，投影的计算源；变更即触发投影重算 |
 | 4 | 给用户准入 | 用户应用授权 admitted（已申报清单的应用走准入 + 角色规则自动投影；特殊需要可手工授权行微调） | 决定用户 Token 中的投影内容与门户可见性 |
 
 验证：用户登录门户核对应用可见与菜单，解出的 Access Token 中核对 `iam_authorization` 投影内容（投影的端到端操作序见 [权限与授权投影](docs/领域文档/权限与授权投影.md) 的「业务方上报指引」）。
+
+Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/application-order` 维护。更新必须提交读取时的 `version` 和全部 Portal 集成 ID；冲突返回 `409` 后重读再调整。服务端按该顺序返回当前用户可访问的应用，前端不得按编码或名称二次排序。OAuth2 Consent 页面会同时展示可信应用名称与内置图标；没有归属的历史客户端回退为客户端名称和默认图标。
 
 ## 当前交付边界
 

@@ -431,12 +431,14 @@ CREATE TABLE iam_trusted_application_portal (
     route_prefix VARCHAR(64) NOT NULL COMMENT 'Portal路由前缀',
     entry VARCHAR(512) DEFAULT NULL COMMENT '微前端entry URL',
     api_base VARCHAR(512) DEFAULT NULL COMMENT '后端API基地址',
+    sort_order BIGINT NOT NULL COMMENT 'Portal应用根节点全局排序值',
     default_page_menu_code VARCHAR(64) DEFAULT NULL COMMENT '应用默认入口PAGE菜单编码',
     default_entry_path VARCHAR(255) DEFAULT NULL COMMENT '应用默认入口相对路径',
     config_version BIGINT NOT NULL DEFAULT 0 COMMENT 'Portal配置乐观锁版本',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (application_id),
-    KEY idx_enabled (enabled)
+    UNIQUE KEY uk_sort_order (sort_order),
+    KEY idx_enabled_sort_order (enabled, sort_order, application_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用Portal集成配置表';
 
 CREATE TABLE iam_portal_setting (
@@ -542,4 +544,4 @@ WHERE r.code = 'iam_admin'
   );
 
 SET FOREIGN_KEY_CHECKS = 1;
-SELECT 'Simple IAM Server 1.1.0 schema initialization completed!' AS status;
+SELECT 'Simple IAM Server 1.1.1 schema initialization completed!' AS status;

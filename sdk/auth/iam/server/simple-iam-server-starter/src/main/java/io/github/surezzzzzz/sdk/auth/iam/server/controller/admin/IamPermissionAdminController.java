@@ -4,7 +4,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.PermissionResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamPermissionAdminController {
 
-    private final RoleService roleService;
+    private final IamRoleService roleService;
 
     /**
      * 权限列表

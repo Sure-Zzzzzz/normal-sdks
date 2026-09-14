@@ -10,8 +10,12 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserReque
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.ResetPasswordRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.AdminUserResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamExternalIdentityBindingService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,10 +41,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamUserAdminController {
 
-    private final UserService userService;
-    private final RoleService roleService;
-    private final DepartmentService departmentService;
-    private final ExternalIdentityBindingService externalIdentityBindingService;
+    private final IamUserService userService;
+    private final IamRoleService roleService;
+    private final IamDepartmentService departmentService;
+    private final IamExternalIdentityBindingService externalIdentityBindingService;
 
     /**
      * 用户分页查询
@@ -138,7 +142,7 @@ public class IamUserAdminController {
     public ResponseEntity<Void> resetPassword(@PathVariable Long userId,
                                               @RequestBody ResetPasswordRequest request,
                                               @AuthenticationPrincipal UserDetails userDetails) {
-        IamUserDetailsSupport iamUserDetails = requireIamUserDetails(userDetails);
+        IamUserDetails iamUserDetails = requireIamUserDetails(userDetails);
         userService.resetPassword(userId, request.getNewPassword(), iamUserDetails.getUsername());
         return ResponseEntity.ok().build();
     }
@@ -197,9 +201,9 @@ public class IamUserAdminController {
         return ResponseEntity.noContent().build();
     }
 
-    private IamUserDetailsSupport requireIamUserDetails(UserDetails userDetails) {
-        if (userDetails instanceof IamUserDetailsSupport) {
-            return (IamUserDetailsSupport) userDetails;
+    private IamUserDetails requireIamUserDetails(UserDetails userDetails) {
+        if (userDetails instanceof IamUserDetails) {
+            return (IamUserDetails) userDetails;
         }
         throw new AccessDeniedException(ServerErrorMessage.PERMISSION_DENIED);
     }

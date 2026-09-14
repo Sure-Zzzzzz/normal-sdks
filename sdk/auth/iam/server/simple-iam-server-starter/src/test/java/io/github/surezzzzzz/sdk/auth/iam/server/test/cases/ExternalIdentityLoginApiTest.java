@@ -7,12 +7,12 @@ import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalCredentialAuthenticato
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.support.FakeExternalIdentitySupport;
 import lombok.extern.slf4j.Slf4j;
@@ -67,16 +67,16 @@ class ExternalIdentityLoginApiTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Autowired
     private IamUserRepository userRepository;
 
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
 
     @Autowired
     private SimpleIamServerProperties properties;

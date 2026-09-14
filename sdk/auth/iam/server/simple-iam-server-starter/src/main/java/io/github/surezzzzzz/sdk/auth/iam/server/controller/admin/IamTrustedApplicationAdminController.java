@@ -12,9 +12,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamApplicationPermissionManifestService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationClientService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -41,8 +41,8 @@ import java.util.List;
 @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_API + "')")
 public class IamTrustedApplicationAdminController {
 
-    private final TrustedApplicationService trustedApplicationService;
-    private final TrustedApplicationClientService trustedApplicationClientService;
+    private final IamTrustedApplicationService trustedApplicationService;
+    private final IamTrustedApplicationClientService trustedApplicationClientService;
     private final IamApplicationPermissionManifestService applicationPermissionManifestService;
 
     // ==================== 应用维度 ====================

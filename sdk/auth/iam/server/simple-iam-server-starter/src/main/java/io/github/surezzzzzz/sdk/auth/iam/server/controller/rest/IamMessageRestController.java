@@ -3,9 +3,9 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.message.response.WebMessagePageResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.message.response.WebMessageResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,8 +32,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamMessageRestController {
 
-    private final MessageService messageService;
-    private final MessageSseService sseService;
+    private final IamMessageService messageService;
+    private final IamMessageSseService sseService;
 
     /**
      * 站内信列表
@@ -133,8 +133,8 @@ public class IamMessageRestController {
     }
 
     private Long getUserId(UserDetails userDetails) {
-        return userDetails instanceof IamUserDetailsSupport
-                ? ((IamUserDetailsSupport) userDetails).getUserId()
+        return userDetails instanceof IamUserDetails
+                ? ((IamUserDetails) userDetails).getUserId()
                 : null;
     }
 }

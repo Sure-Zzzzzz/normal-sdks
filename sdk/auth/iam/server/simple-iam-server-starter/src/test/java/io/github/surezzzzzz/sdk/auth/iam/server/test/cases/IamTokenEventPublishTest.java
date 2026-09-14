@@ -6,16 +6,16 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.resource.response.ResourceVe
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamApplicationAuthorizationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationAuthorizationRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamResourceVerificationClientService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RefreshTokenFamilyService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamRefreshTokenFamilyService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.resource.IamResourceVerificationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.impl.client.HttpClients;
@@ -82,17 +82,17 @@ class IamTokenEventPublishTest {
     @LocalServerPort
     private int port;
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
     @Autowired
     private IamUserRepository userRepository;
     @Autowired
     private IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     @Autowired
-    private TrustedApplicationService trustedApplicationService;
+    private IamTrustedApplicationService trustedApplicationService;
     @Autowired
     private IamResourceVerificationClientService verificationClientService;
     @Autowired
-    private RefreshTokenFamilyService refreshTokenFamilyService;
+    private IamRefreshTokenFamilyService refreshTokenFamilyService;
     @Autowired
     private RegisteredClientRepository registeredClientRepository;
     @Autowired

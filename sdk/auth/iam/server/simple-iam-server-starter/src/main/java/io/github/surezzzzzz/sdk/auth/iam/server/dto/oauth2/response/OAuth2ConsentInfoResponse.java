@@ -30,6 +30,16 @@ public class OAuth2ConsentInfoResponse {
     private String clientName;
 
     /**
+     * 可信应用展示名称；未归属可信应用的历史客户端回退为客户端名称
+     */
+    private String applicationName;
+
+    /**
+     * 可信应用图标编码；由登录端按内置图标表渲染，空值回退默认应用图标
+     */
+    private String applicationIcon;
+
+    /**
      * SAS 内部 state（表单回传用）
      */
     private String state;

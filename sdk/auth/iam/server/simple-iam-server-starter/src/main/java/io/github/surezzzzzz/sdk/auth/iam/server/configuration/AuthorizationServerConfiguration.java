@@ -11,11 +11,13 @@ import io.github.surezzzzzz.sdk.auth.iam.core.support.IamRouteKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ConfigurationException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamConsentRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamRefreshTokenFamilyRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.support.JwtKeyProvider;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamConsentRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamRefreshTokenFamilyRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
+import io.github.surezzzzzz.sdk.auth.iam.server.token.IamJwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.iam.server.token.JweJwtDecoder;
 import io.github.surezzzzzz.sdk.auth.iam.server.token.JweOAuth2TokenGenerator;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -57,7 +59,7 @@ import java.util.Collection;
 @RequiredArgsConstructor
 public class AuthorizationServerConfiguration {
 
-    private final JwtKeyProvider jwtKeyProvider;
+    private final IamJwtKeyProvider jwtKeyProvider;
     private final JdbcTemplate jdbcTemplate;
     private final SimpleIamServerProperties properties;
     private final SmartCacheManager smartCacheManager;
@@ -109,10 +111,10 @@ public class AuthorizationServerConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public OAuth2AuthorizationService authorizationService(SessionService sessionService,
-                                                           IamAuthorizeContextService authorizeContextService,
+    public OAuth2AuthorizationService authorizationService(IamSessionService sessionService,
+                                                           IamOAuth2AuthorizeContextService authorizeContextService,
                                                            ApplicationEventPublisher eventPublisher,
-                                                           RefreshTokenFamilyService refreshTokenFamilyService,
+                                                           IamRefreshTokenFamilyService refreshTokenFamilyService,
                                                            IamRefreshTokenFamilyRepository refreshTokenFamilyRepository,
                                                            IamUserRepository userRepository) {
         JdbcOAuth2AuthorizationService jdbcService = new JdbcOAuth2AuthorizationService(
@@ -120,7 +122,7 @@ public class AuthorizationServerConfiguration {
         OAuth2AuthorizationRowMapper rowMapper = new OAuth2AuthorizationRowMapper(registeredClientRepository());
         rowMapper.setObjectMapper(authorizationObjectMapper());
         jdbcService.setAuthorizationRowMapper(rowMapper);
-        CachedOAuth2AuthorizationService cachedService = new CachedOAuth2AuthorizationService(
+        IamCachedOAuth2AuthorizationService cachedService = new IamCachedOAuth2AuthorizationService(
                 jdbcService,
                 smartCacheManager,
                 properties.getToken().getAccessExpiresIn(),
@@ -138,7 +140,7 @@ public class AuthorizationServerConfiguration {
         objectMapper.registerModules(SecurityJackson2Modules.getModules(
                 JdbcOAuth2AuthorizationService.class.getClassLoader()));
         objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
-        objectMapper.addMixIn(IamUserDetailsSupport.class, IamUserDetailsSupportMixin.class);
+        objectMapper.addMixIn(IamUserDetails.class, IamUserDetailsMixin.class);
         objectMapper.setDefaultTyping(new TrustedSourceTypeResolverBuilder());
         return objectMapper;
     }
@@ -152,7 +154,7 @@ public class AuthorizationServerConfiguration {
     public OAuth2AuthorizationConsentService authorizationConsentService() {
         OAuth2AuthorizationConsentService jdbc =
                 new JdbcOAuth2AuthorizationConsentService(jdbcTemplate, registeredClientRepository());
-        return new IamDecoratingConsentService(jdbc, iamConsentRepository, iamUserRepository,
+        return new IamOAuth2ConsentService(jdbc, iamConsentRepository, iamUserRepository,
                 registeredClientRepository());
     }
 
@@ -226,17 +228,17 @@ public class AuthorizationServerConfiguration {
             getterVisibility = JsonAutoDetect.Visibility.NONE,
             isGetterVisibility = JsonAutoDetect.Visibility.NONE)
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private abstract static class IamUserDetailsSupportMixin {
+    private abstract static class IamUserDetailsMixin {
 
         @JsonCreator
-        IamUserDetailsSupportMixin(@JsonProperty("userId") Long userId,
-                                   @JsonProperty("username") String username,
-                                   @JsonProperty("password") String password,
-                                   @JsonProperty("enabled") boolean enabled,
-                                   @JsonProperty("accountNonExpired") boolean accountNonExpired,
-                                   @JsonProperty("credentialsNonExpired") boolean credentialsNonExpired,
-                                   @JsonProperty("accountNonLocked") boolean accountNonLocked,
-                                   @JsonProperty("authorities") Collection<?> authorities) {
+        IamUserDetailsMixin(@JsonProperty("userId") Long userId,
+                            @JsonProperty("username") String username,
+                            @JsonProperty("password") String password,
+                            @JsonProperty("enabled") boolean enabled,
+                            @JsonProperty("accountNonExpired") boolean accountNonExpired,
+                            @JsonProperty("credentialsNonExpired") boolean credentialsNonExpired,
+                            @JsonProperty("accountNonLocked") boolean accountNonLocked,
+                            @JsonProperty("authorities") Collection<?> authorities) {
         }
     }
 }

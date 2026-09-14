@@ -3,13 +3,21 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamPasswordResetEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRefreshTokenFamilyEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.oauth2.IamRefreshTokenFamilyEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamPasswordResetEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamRefreshTokenFamilyRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamPasswordResetRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamSessionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamDeploymentPasswordRecoveryService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamRefreshTokenFamilyService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamPasswordResetService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -39,19 +47,19 @@ class RuntimeServiceTest {
     private IamUserEntity user;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private SessionService sessionService;
+    private IamSessionService sessionService;
 
     @Autowired
-    private RefreshTokenFamilyService refreshTokenFamilyService;
+    private IamRefreshTokenFamilyService refreshTokenFamilyService;
 
     @Autowired
-    private PasswordResetService passwordResetService;
+    private IamPasswordResetService passwordResetService;
 
     @Autowired
-    private DeploymentPasswordRecoveryService deploymentPasswordRecoveryService;
+    private IamDeploymentPasswordRecoveryService deploymentPasswordRecoveryService;
 
     @Autowired
     private SimpleIamServerProperties properties;
@@ -69,7 +77,7 @@ class RuntimeServiceTest {
     private IamPasswordResetRepository passwordResetRepository;
 
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -101,7 +109,7 @@ class RuntimeServiceTest {
     }
 
     @Test
-    @DisplayName("SessionService 应支持创建、读取、撤销会话")
+    @DisplayName("IamSessionService 应支持创建、读取、撤销会话")
     void testSessionLifecycle() {
         IamSessionEntity session = sessionService.createSession(
                 user.getId(), username, "test-client", "127.0.0.1", "JUnit");
@@ -115,7 +123,7 @@ class RuntimeServiceTest {
     }
 
     @Test
-    @DisplayName("RefreshTokenFamilyService 应支持创建、验证、轮换、复用检测")
+    @DisplayName("IamRefreshTokenFamilyService 应支持创建、验证、轮换、复用检测")
     void testRefreshTokenFamilyLifecycle() {
         IamRefreshTokenFamilyEntity family = refreshTokenFamilyService.createFamily(
                 user.getId(), username, null, "refresh-token-1");
@@ -131,7 +139,7 @@ class RuntimeServiceTest {
     }
 
     @Test
-    @DisplayName("PasswordResetService 应生成一次性凭证并重置密码")
+    @DisplayName("IamPasswordResetService 应生成一次性凭证并重置密码")
     void testPasswordResetLifecycle() {
         String token = passwordResetService.createResetToken(user.getId(), "admin");
 

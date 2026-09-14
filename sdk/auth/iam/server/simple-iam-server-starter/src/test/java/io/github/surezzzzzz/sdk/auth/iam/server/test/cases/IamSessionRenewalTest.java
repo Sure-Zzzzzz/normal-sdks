@@ -2,13 +2,13 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamSessionRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamAuthorizationRevocationSupport;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamSessionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamOAuth2AuthorizationRevocationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,7 +39,7 @@ class IamSessionRenewalTest {
 
     private final String sessionIdHolder = UUID.randomUUID().toString();
     @Autowired
-    private SessionService sessionService;
+    private IamSessionService sessionService;
     @Autowired
     private IamSessionRepository sessionRepository;
 
@@ -135,10 +135,10 @@ class IamSessionRenewalTest {
         properties.getSession().setAbsoluteExpiresIn(absoluteExpiresIn);
         properties.getSession().setExpiresIn(expiresIn);
         properties.getSession().setRenewThreshold(renewThreshold);
-        SessionService service = new SessionService(
+        IamSessionService service = new IamSessionService(
                 Mockito.mock(IamSessionRepository.class),
-                Mockito.mock(RedisTokenRepository.class),
-                Mockito.mock(IamAuthorizationRevocationSupport.class),
+                Mockito.mock(IamRedisTokenRepository.class),
+                Mockito.mock(IamOAuth2AuthorizationRevocationService.class),
                 properties,
                 Mockito.mock(IamAuditEventPublisher.class),
                 Mockito.mock(ObjectProvider.class));

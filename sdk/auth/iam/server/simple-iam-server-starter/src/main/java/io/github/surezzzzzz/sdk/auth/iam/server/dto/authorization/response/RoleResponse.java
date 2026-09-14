@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 

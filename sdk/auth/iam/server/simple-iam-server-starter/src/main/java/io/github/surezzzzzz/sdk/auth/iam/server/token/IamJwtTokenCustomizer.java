@@ -5,13 +5,13 @@ import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.Applic
 import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ValidationException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamApplicationAuthorizationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
@@ -33,9 +33,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamJwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
-    private final RoleService roleService;
+    private final IamRoleService roleService;
     private final IamUserRepository userRepository;
-    private final SessionService sessionService;
+    private final IamSessionService sessionService;
     private final IamApplicationAuthorizationService applicationAuthorizationService;
 
     /**

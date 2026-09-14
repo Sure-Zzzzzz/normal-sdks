@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -44,7 +44,7 @@ class MessageSseBroadcastTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Autowired
-    private MessageSseService sseService;
+    private IamMessageSseService sseService;
     @Autowired
     private RedisKeyHelper redisKeyHelper;
     @Autowired
@@ -72,7 +72,7 @@ class MessageSseBroadcastTest {
         sseService.pushUnreadCount(userId, 5L);
 
         JsonNode payload = collector.awaitNext(1).get(0);
-        assertEquals(MessageSseService.BROADCAST_TYPE_UNREAD_COUNT, payload.get("type").asText());
+        assertEquals(IamMessageSseService.BROADCAST_TYPE_UNREAD_COUNT, payload.get("type").asText());
         assertEquals(userId, payload.get("userId").asLong());
         assertEquals(5L, payload.get("unreadCount").asLong());
         assertNotNull(payload.get("instanceId"), "广播必须携带发送方 instanceId（自弃防重复帧）");
@@ -88,7 +88,7 @@ class MessageSseBroadcastTest {
         sseService.evictUserEmitters(userId);
 
         JsonNode payload = collector.awaitNext(1).get(0);
-        assertEquals(MessageSseService.BROADCAST_TYPE_EVICT, payload.get("type").asText());
+        assertEquals(IamMessageSseService.BROADCAST_TYPE_EVICT, payload.get("type").asText());
         assertEquals(userId, payload.get("userId").asLong());
         assertNotNull(payload.get("instanceId"));
         log.info("EVICT 广播协议验证通过：userId={}", userId);

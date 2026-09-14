@@ -6,12 +6,12 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamApplicationAuthorizationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationAuthorizationRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.impl.client.HttpClients;
@@ -66,13 +66,13 @@ class OAuth2AuthorizationCodeEndToEndTest {
     private RegisteredClientRepository registeredClientRepository;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
     private IamUserRepository userRepository;
 
     @Autowired
-    private TrustedApplicationService trustedApplicationService;
+    private IamTrustedApplicationService trustedApplicationService;
 
     @Autowired
     private IamApplicationAuthorizationRepository applicationAuthorizationRepository;
@@ -156,6 +156,8 @@ class OAuth2AuthorizationCodeEndToEndTest {
                 new HttpEntity<>(headers(sessionCookie)), null, Map.class);
         assertEquals(HttpStatus.OK, consentInfoResponse.getStatusCode());
         assertEquals(clientId, consentInfoResponse.getBody().get("clientId"));
+        assertEquals("Public PKCE E2E Application", consentInfoResponse.getBody().get("applicationName"));
+        assertEquals("key", consentInfoResponse.getBody().get("applicationIcon"));
 
         HttpHeaders consentHeaders = headers(sessionCookie);
         consentHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -240,6 +242,7 @@ class OAuth2AuthorizationCodeEndToEndTest {
         CreateTrustedApplicationRequest request = new CreateTrustedApplicationRequest();
         request.setApplicationCode(applicationCode);
         request.setApplicationName("Public PKCE E2E Application");
+        request.setIcon("key");
         request.setInitialClient(client);
         TrustedApplicationResponse application = trustedApplicationService.createApplication(request).getApplication();
         applicationId = application.getId();

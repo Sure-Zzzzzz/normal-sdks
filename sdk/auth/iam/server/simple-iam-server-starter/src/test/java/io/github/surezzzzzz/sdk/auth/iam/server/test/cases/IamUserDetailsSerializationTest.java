@@ -2,8 +2,8 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.AuthorizationServerConfiguration;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,7 +19,7 @@ import java.util.Arrays;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * IamUserDetailsSupport 序列化契约守护
+ * IamUserDetails 序列化契约守护
  *
  * <p>分布式部署下 SPRING_SECURITY_CONTEXT 随 HttpSession 经 JDK 序列化落 Redis，
  * OAuth2 授权 attributes 经 AuthorizationServerConfiguration 的 Jackson mixin 落 MySQL。
@@ -32,7 +32,7 @@ class IamUserDetailsSerializationTest {
 
     @Test
     void jdkSerializationRoundTripKeepsAllFields() throws Exception {
-        IamUserDetailsSupport original = sample();
+        IamUserDetails original = sample();
 
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ObjectOutputStream out = new ObjectOutputStream(bytes)) {
@@ -42,7 +42,7 @@ class IamUserDetailsSerializationTest {
 
         try (ObjectInputStream in = new ObjectInputStream(
                 new ByteArrayInputStream(bytes.toByteArray()))) {
-            IamUserDetailsSupport restored = (IamUserDetailsSupport) in.readObject();
+            IamUserDetails restored = (IamUserDetails) in.readObject();
             assertThat(restored.getUserId()).isEqualTo(42L);
             assertThat(restored.getUsername()).isEqualTo("ops-user");
             assertThat(restored.getPassword()).isEqualTo("bcrypt-hash");
@@ -58,7 +58,7 @@ class IamUserDetailsSerializationTest {
 
     @Test
     void eraseCredentialsClearsPasswordAfterSerialization() throws Exception {
-        IamUserDetailsSupport details = sample();
+        IamUserDetails details = sample();
         details.eraseCredentials();
         assertThat(details.getPassword()).isNull();
 
@@ -68,14 +68,14 @@ class IamUserDetailsSerializationTest {
         }
         try (ObjectInputStream in = new ObjectInputStream(
                 new ByteArrayInputStream(bytes.toByteArray()))) {
-            assertThat(((IamUserDetailsSupport) in.readObject()).getPassword()).isNull();
+            assertThat(((IamUserDetails) in.readObject()).getPassword()).isNull();
         }
     }
 
     @Test
     void jacksonMixinRoundTripKeepsAuthorizationAttributesShape() throws Exception {
         ObjectMapper mapper = authorizationObjectMapper();
-        IamUserDetailsSupport original = sample();
+        IamUserDetails original = sample();
 
         String json = mapper.writeValueAsString(original);
         assertThat(json)
@@ -84,8 +84,8 @@ class IamUserDetailsSerializationTest {
                 .contains("\"credentialsNonExpired\"").contains("\"accountNonLocked\"")
                 .contains("\"authorities\"");
 
-        IamUserDetailsSupport back = mapper.readValue(mapper.writeValueAsBytes(original),
-                IamUserDetailsSupport.class);
+        IamUserDetails back = mapper.readValue(mapper.writeValueAsBytes(original),
+                IamUserDetails.class);
         assertThat(back.getUserId()).isEqualTo(original.getUserId());
         assertThat(back.getUsername()).isEqualTo(original.getUsername());
         assertThat(back.getPassword()).isEqualTo(original.getPassword());
@@ -126,7 +126,7 @@ class IamUserDetailsSerializationTest {
         assertThat(back.get("auth_time")).isEqualTo(1700000000L);
         UsernamePasswordAuthenticationToken restoredPrincipal = (UsernamePasswordAuthenticationToken)
                 back.get(java.security.Principal.class.getName());
-        assertThat(((IamUserDetailsSupport) restoredPrincipal.getPrincipal()).getUserId()).isEqualTo(42L);
+        assertThat(((IamUserDetails) restoredPrincipal.getPrincipal()).getUserId()).isEqualTo(42L);
     }
 
     /**
@@ -136,11 +136,11 @@ class IamUserDetailsSerializationTest {
     private ObjectMapper authorizationObjectMapper() throws Exception {
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModules(SecurityJackson2Modules.getModules(
-                io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport.class
+                io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails.class
                         .getClassLoader()));
         objectMapper.registerModule(new OAuth2AuthorizationServerJackson2Module());
-        Class<?> mixin = nestedClass("IamUserDetailsSupportMixin");
-        objectMapper.addMixIn(IamUserDetailsSupport.class, mixin);
+        Class<?> mixin = nestedClass("IamUserDetailsMixin");
+        objectMapper.addMixIn(IamUserDetails.class, mixin);
         java.lang.reflect.Constructor<?> builderCtor =
                 nestedClass("TrustedSourceTypeResolverBuilder").getDeclaredConstructor();
         builderCtor.setAccessible(true);
@@ -156,13 +156,13 @@ class IamUserDetailsSerializationTest {
                 .orElseThrow(() -> new AssertionError(simpleName + " 不存在"));
     }
 
-    private IamUserDetailsSupport sample() {
+    private IamUserDetails sample() {
         IamUserEntity user = new IamUserEntity();
         user.setId(42L);
         user.setUsername("ops-user");
         user.setPasswordHash("bcrypt-hash");
         user.setStatus(1);
-        return IamUserDetailsSupport.of(user, Arrays.asList(
+        return IamUserDetails.of(user, Arrays.asList(
                 new SimpleGrantedAuthority("ROLE_USER"),
                 new SimpleGrantedAuthority("ROLE_IAM_ADMIN")));
     }

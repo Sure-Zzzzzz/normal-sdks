@@ -7,9 +7,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.CreateDep
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.UpdateDepartmentRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.response.DepartmentResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamDepartmentEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,8 +32,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamDepartmentAdminController {
 
-    private final DepartmentService departmentService;
-    private final RoleService roleService;
+    private final IamDepartmentService departmentService;
+    private final IamRoleService roleService;
 
     /**
      * 部门列表

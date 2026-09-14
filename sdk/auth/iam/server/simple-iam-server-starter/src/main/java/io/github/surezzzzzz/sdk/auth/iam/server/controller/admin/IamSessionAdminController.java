@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.dashboard.response.AdminSessionResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.dashboard.response.AdminSessionRevokeResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamAdminSessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.dashboard.IamAdminSessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

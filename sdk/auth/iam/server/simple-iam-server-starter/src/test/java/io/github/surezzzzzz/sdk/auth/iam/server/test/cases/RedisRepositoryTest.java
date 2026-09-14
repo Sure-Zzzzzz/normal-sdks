@@ -1,9 +1,9 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamPasswordResetEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRefreshTokenFamilyEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.oauth2.IamRefreshTokenFamilyEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamPasswordResetEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -39,7 +39,7 @@ class RedisRepositoryTest {
     private RedisKeyHelper redisKeyHelper;
 
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
 
     @Autowired
     private RedisRouteTemplate redisRouteTemplate;

@@ -1,6 +1,6 @@
 dependencies {
     api 'io.github.sure-zzzzzz:simple-iam-core:1.0.0'
-    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.1.1'
+    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.1.2'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     // 验证码适配器运行时装配生效即可，桥接类型不出现在公开 API
     implementation 'io.github.sure-zzzzzz:simple-iam-captcha-adapter-starter:1.0.0'

@@ -6,8 +6,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.CreateDepartmentRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.UpdateDepartmentRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.response.DepartmentRestResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamDepartmentEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +36,7 @@ public class IamDepartmentRestController {
      */
     private static final int MAX_FULL_PATH_DEPTH = 32;
 
-    private final DepartmentService departmentService;
+    private final IamDepartmentService departmentService;
 
     /**
      * 全量部门平铺列表（含 fullPath，外部按 parentId / fullPath 重建树）。

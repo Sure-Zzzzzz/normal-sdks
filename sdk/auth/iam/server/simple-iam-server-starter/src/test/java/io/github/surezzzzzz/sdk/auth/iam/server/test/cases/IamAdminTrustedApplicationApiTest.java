@@ -3,12 +3,12 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamApplicationPermissionManifestService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -24,7 +24,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import javax.servlet.http.Cookie;
-
 import java.util.Collections;
 import java.util.UUID;
 
@@ -59,16 +58,16 @@ class IamAdminTrustedApplicationApiTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private TrustedApplicationService trustedApplicationService;
+    private IamTrustedApplicationService trustedApplicationService;
 
     @Autowired
     private IamApplicationPermissionManifestService manifestService;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Autowired
     private IamUserRepository userRepository;
@@ -248,6 +247,24 @@ class IamAdminTrustedApplicationApiTest {
     void testPortalAccessibleApplicationsRequiresAuthentication() throws Exception {
         mockMvc.perform(get(SimpleIamServerConstant.PATH_WEB_PORTAL_ACCESSIBLE))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Portal 应用根节点排序 API 应区分未登录、普通用户和缺失 CSRF 写请求")
+    void portalApplicationOrderApiEnforcesAuthenticationAndCsrf() throws Exception {
+        mockMvc.perform(get("/iam/admin/portal/application-order"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/iam/admin/portal/application-order").cookie(userSession))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/iam/admin/portal/application-order").cookie(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").isNumber())
+                .andExpect(jsonPath("$.applications").isArray());
+        mockMvc.perform(put("/iam/admin/portal/application-order")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":0,\"applicationIds\":[]}")
+                        .cookie(adminSession))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -9,8 +9,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleR
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.response.DepartmentResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.AdminUserResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,8 +33,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamRoleAdminController {
 
-    private final RoleService roleService;
-    private final DepartmentService departmentService;
+    private final IamRoleService roleService;
+    private final IamDepartmentService departmentService;
 
     /**
      * 角色列表

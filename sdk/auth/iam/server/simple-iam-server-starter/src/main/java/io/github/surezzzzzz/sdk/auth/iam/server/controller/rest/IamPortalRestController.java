@@ -3,8 +3,8 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalNavigationContextResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamPortalApplicationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,7 +35,7 @@ public class IamPortalRestController {
      */
     @GetMapping("/accessible-applications")
     public ResponseEntity<List<PortalAccessibleApplication>> listAccessibleApplications(
-            @AuthenticationPrincipal IamUserDetailsSupport principal) {
+            @AuthenticationPrincipal IamUserDetails principal) {
         if (principal == null) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }
@@ -47,7 +47,7 @@ public class IamPortalRestController {
      */
     @GetMapping("/navigation-context")
     public ResponseEntity<PortalNavigationContextResponse> getNavigationContext(
-            @AuthenticationPrincipal IamUserDetailsSupport principal) {
+            @AuthenticationPrincipal IamUserDetails principal) {
         if (principal == null) {
             return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
         }

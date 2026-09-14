@@ -66,6 +66,7 @@ public class IamExceptionHandler {
                 || ErrorCode.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT.equals(errorCode)
                 || ErrorCode.TRUSTED_APPLICATION_MENU_PERMISSION_REFERENCED.equals(errorCode)
                 || ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT.equals(errorCode)
+                || ErrorCode.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT.equals(errorCode)
                 || ErrorCode.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID.equals(errorCode)) {
             return HttpStatus.CONFLICT;
         }

@@ -6,17 +6,23 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalApplicationOrderResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalIntegrationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationAuthorizationRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamApplicationPermissionManifestRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -58,13 +64,16 @@ class IamPortalApplicationServiceTest {
     private IamPortalApplicationService portalApplicationService;
 
     @Autowired
-    private TrustedApplicationService trustedApplicationService;
+    private IamPortalApplicationOrderService portalApplicationOrderService;
 
     @Autowired
-    private UserService userService;
+    private IamTrustedApplicationService trustedApplicationService;
 
     @Autowired
-    private RoleService roleService;
+    private IamUserService userService;
+
+    @Autowired
+    private IamRoleService roleService;
 
     @Autowired
     private IamUserRepository userRepository;
@@ -132,6 +141,47 @@ class IamPortalApplicationServiceTest {
         assertFalse(userCodes.contains(applicationCodeB), "普通用户不得看到未授权应用 B（特权不外溢）");
 
         log.info("门户可达列表断言完成：adminCodes={}, userCodes={}", adminCodes, userCodes);
+    }
+
+    @Test
+    @DisplayName("Portal 根节点排序应以完整快照原子重排，并保留普通用户授权子集的相对顺序")
+    void portalApplicationOrderUsesCompleteSnapshotAndPreservesAuthorizedSubsetOrder() {
+        PortalApplicationOrderResponse initial = portalApplicationOrderService.getApplicationOrder();
+        List<Long> initialIds = initial.getApplications().stream()
+                .map(item -> item.getApplicationId()).collect(Collectors.toList());
+        assertTrue(initialIds.indexOf(applicationIdA) < initialIds.indexOf(applicationIdB),
+                "同一测试创建的 Portal 集成应按创建顺序进入全局根节点列表");
+
+        List<Long> expectedIds = new java.util.ArrayList<>(initialIds);
+        expectedIds.remove(applicationIdB);
+        expectedIds.remove(applicationIdA);
+        expectedIds.add(0, applicationIdA);
+        expectedIds.add(0, applicationIdB);
+        PortalApplicationOrderRequest reorder = new PortalApplicationOrderRequest();
+        reorder.setVersion(initial.getVersion());
+        reorder.setApplicationIds(expectedIds);
+        PortalApplicationOrderResponse updated = portalApplicationOrderService.updateApplicationOrder(reorder);
+        assertEquals(java.util.Arrays.asList(applicationIdB, applicationIdA), updated.getApplications().stream()
+                        .limit(2).map(item -> item.getApplicationId()).collect(Collectors.toList()),
+                "服务端返回的前两项必须就是保存后的全局顺序，不能按应用编码二次排序");
+        assertTrue(updated.getVersion() > initial.getVersion(), "排序集合变更必须推进 Portal 全局版本");
+
+        grantAdmitted(targetUserId, applicationIdB);
+        assertEquals(java.util.Arrays.asList(applicationCodeB, applicationCodeA), accessibleCodes(targetUserId),
+                "普通用户只保留获准应用，但顺序必须继承全局排序的相对关系");
+
+        PortalApplicationOrderRequest duplicate = new PortalApplicationOrderRequest();
+        duplicate.setVersion(updated.getVersion());
+        List<Long> duplicateIds = new java.util.ArrayList<>(expectedIds);
+        duplicateIds.set(1, applicationIdB);
+        duplicate.setApplicationIds(duplicateIds);
+        SimpleIamServerException invalid = assertThrows(SimpleIamServerException.class,
+                () -> portalApplicationOrderService.updateApplicationOrder(duplicate));
+        assertEquals(ErrorCode.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID, invalid.getErrorCode());
+
+        SimpleIamServerException stale = assertThrows(SimpleIamServerException.class,
+                () -> portalApplicationOrderService.updateApplicationOrder(reorder));
+        assertEquals(ErrorCode.TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT, stale.getErrorCode());
     }
 
     @Test

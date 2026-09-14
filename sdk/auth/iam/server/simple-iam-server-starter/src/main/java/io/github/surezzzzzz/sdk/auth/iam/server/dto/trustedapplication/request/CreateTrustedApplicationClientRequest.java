@@ -8,7 +8,7 @@ import java.util.List;
  * 创建可信应用客户端请求
  *
  * <p>在指定应用下创建 OAuth2 客户端。客户端类型、PKCE、secret、grantType、redirectUri 等策略
- * 由 {@code TrustedApplicationClientService} 统一校验。
+ * 由 {@code IamTrustedApplicationClientService} 统一校验。
  *
  * @author surezzzzzz
  */

@@ -1,13 +1,13 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamSessionValidationFilter;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamUserDetailsSupport;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetailsService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +51,7 @@ class IamSessionValidationFilterHotRefreshTest {
     private static final String SESSION_ID = "session-1";
 
     @Mock
-    private SessionService sessionService;
+    private IamSessionService sessionService;
 
     @Mock
     private IamUserRepository userRepository;
@@ -93,7 +93,7 @@ class IamSessionValidationFilterHotRefreshTest {
         loginWithAuthorities("iam:user:api");
         stubActiveSession(servletSession);
         stubUserVersion(4L);
-        UserDetails fresh = IamUserDetailsSupport.of(user(USERNAME),
+        UserDetails fresh = IamUserDetails.of(user(USERNAME),
                 Collections.singletonList(new SimpleGrantedAuthority("iam:role:api")));
         when(userDetailsService.loadUserByUsername(USERNAME)).thenReturn(fresh);
 
@@ -112,7 +112,7 @@ class IamSessionValidationFilterHotRefreshTest {
         loginWithAuthorities("iam:user:api");
         stubActiveSession(servletSession);
         stubUserVersion(1L);
-        UserDetails fresh = IamUserDetailsSupport.of(user(USERNAME), Collections.emptyList());
+        UserDetails fresh = IamUserDetails.of(user(USERNAME), Collections.emptyList());
         when(userDetailsService.loadUserByUsername(USERNAME)).thenReturn(fresh);
 
         filter.doFilter(requestWith(servletSession), new MockHttpServletResponse(), new MockFilterChain());
@@ -138,7 +138,7 @@ class IamSessionValidationFilterHotRefreshTest {
     }
 
     private void loginWithAuthorities(String... authorityNames) {
-        IamUserDetailsSupport details = IamUserDetailsSupport.of(user(USERNAME),
+        IamUserDetails details = IamUserDetails.of(user(USERNAME),
                 java.util.Arrays.stream(authorityNames)
                         .map(SimpleGrantedAuthority::new)
                         .collect(Collectors.toList()));

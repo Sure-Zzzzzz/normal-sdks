@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.filter;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamResourceVerificationClientEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamResourceVerificationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.resource.IamResourceVerificationClientEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.resource.IamResourceVerificationClientService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;

@@ -4,8 +4,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.MenuItemReque
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalIntegrationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamTrustedApplicationRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
@@ -36,7 +36,7 @@ public class SimpleIamServerTestApplication {
     @Profile("local")
     @ConditionalOnProperty(name = "simple-iam.local-fixture.enabled", havingValue = "true")
     ApplicationRunner localIamAdminApplicationFixture(IamTrustedApplicationRepository trustedApplicationRepository,
-                                                      TrustedApplicationService trustedApplicationService) {
+                                                      IamTrustedApplicationService trustedApplicationService) {
         return args -> {
             if (trustedApplicationRepository.existsByApplicationCode(LOCAL_APPLICATION_CODE)) {
                 log.info("本地统一身份与访问管理应用已存在，跳过创建：code={}", LOCAL_APPLICATION_CODE);

@@ -7,13 +7,17 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalPresentationMode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.response.MessageSendResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamPermissionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamTrustedApplicationMenuEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamPermissionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.portal.IamTrustedApplicationMenuEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.BootstrapService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamPermissionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRolePermissionRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationMenuRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamBootstrapService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +49,7 @@ class IamBusinessSchemaBaselineTest {
     private IamRolePermissionRepository rolePermissionRepository;
 
     @Autowired
-    private BootstrapService bootstrapService;
+    private IamBootstrapService bootstrapService;
 
     @Autowired
     private SimpleIamServerProperties properties;

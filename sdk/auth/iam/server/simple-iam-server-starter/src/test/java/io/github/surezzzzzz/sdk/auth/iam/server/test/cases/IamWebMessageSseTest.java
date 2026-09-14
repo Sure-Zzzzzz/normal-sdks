@@ -3,13 +3,13 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.request.CreateMessageRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamMessageEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamMessageRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageSseService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.message.IamMessageRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -56,10 +56,10 @@ class IamWebMessageSseTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private MessageService messageService;
+    private IamMessageService messageService;
 
     @Autowired
     private IamUserRepository userRepository;
@@ -68,7 +68,7 @@ class IamWebMessageSseTest {
     private IamMessageRepository messageRepository;
 
     @MockBean
-    private MessageSseService sseService;
+    private IamMessageSseService sseService;
 
     @BeforeEach
     void loginUser() throws Exception {

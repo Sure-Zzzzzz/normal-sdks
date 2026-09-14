@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.OrganizationDepartmentWorkspaceResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.OrganizationTreeNodeResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.OrganizationUserProfileResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.OrganizationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.organization.IamOrganizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -26,7 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class IamOrganizationAdminController {
 
-    private final OrganizationService organizationService;
+    private final IamOrganizationService organizationService;
 
     /**
      * 组织树（部门 + 协作组）

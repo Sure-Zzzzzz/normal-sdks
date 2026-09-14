@@ -8,13 +8,21 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.message.response.MessageSend
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.request.CreateUserGroupRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamDepartmentEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamMessageEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserGroupEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.usergroup.IamUserGroupEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.message.IamMessageRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupMemberRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.usergroup.IamUserGroupService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -44,16 +52,16 @@ class IamOrganizationBroadcastServiceTest {
     private final List<Long> groupIds = new ArrayList<Long>();
 
     @Autowired
-    private DepartmentService departmentService;
+    private IamDepartmentService departmentService;
 
     @Autowired
-    private UserGroupService userGroupService;
+    private IamUserGroupService userGroupService;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private MessageService messageService;
+    private IamMessageService messageService;
 
     @Autowired
     private IamMessageRepository messageRepository;
@@ -71,7 +79,7 @@ class IamOrganizationBroadcastServiceTest {
     private IamUserGroupMemberRepository memberRepository;
 
     @MockBean
-    private MessageSseService messageSseService;
+    private IamMessageSseService messageSseService;
 
     @AfterEach
     void cleanup() {

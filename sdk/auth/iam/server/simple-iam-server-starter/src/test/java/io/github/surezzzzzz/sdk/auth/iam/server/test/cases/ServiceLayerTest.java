@@ -2,14 +2,14 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamRoleRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.AuthenticationService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamAuthenticationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -25,7 +25,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 服务层集成测试：UserService / RoleService / AuthenticationService / Bootstrap
+ * 服务层集成测试：IamUserService / IamRoleService / IamAuthenticationService / Bootstrap
  *
  * @author surezzzzzz
  */
@@ -37,13 +37,13 @@ class ServiceLayerTest {
     private final String testUsername = "svc-test-" + suffix;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Autowired
-    private AuthenticationService authenticationService;
+    private IamAuthenticationService authenticationService;
 
     @Autowired
     private IamUserRepository userRepository;
@@ -60,7 +60,7 @@ class ServiceLayerTest {
                 .ifPresent(user -> userRepository.delete(user));
     }
 
-    // ==================== UserService ====================
+    // ==================== IamUserService ====================
 
     @Test
     @DisplayName("createUser 应成功创建用户并 BCrypt 加密密码")
@@ -120,7 +120,7 @@ class ServiceLayerTest {
         assertEquals(0, updated.getFailedLoginCount());
     }
 
-    // ==================== RoleService ====================
+    // ==================== IamRoleService ====================
 
     @Test
     @DisplayName("assignRole / getUserRoles 应正确关联角色")
@@ -158,7 +158,7 @@ class ServiceLayerTest {
         assertTrue(roleService.getUserRoles(user.getId()).isEmpty());
     }
 
-    // ==================== AuthenticationService ====================
+    // ==================== IamAuthenticationService ====================
 
     @Test
     @DisplayName("authenticate 正确密码应返回用户实体")

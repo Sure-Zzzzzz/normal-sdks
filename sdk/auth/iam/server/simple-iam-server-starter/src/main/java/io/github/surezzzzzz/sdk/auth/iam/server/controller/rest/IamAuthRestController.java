@@ -11,12 +11,14 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.ChangePasswordRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.WebLoginRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.response.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AuthenticationEventType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.ProviderDisplayHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import lombok.RequiredArgsConstructor;
@@ -63,15 +65,15 @@ public class IamAuthRestController {
      * 跳转型登录成功且未携带回跳目标时的默认落点（统一应用门户首页）
      */
     private static final String PORTAL_DEFAULT_TARGET = "/app/";
-    private final AuthenticationService authenticationService;
-    private final ExternalLoginService externalLoginService;
-    private final ExternalProviderRegistry providerRegistry;
+    private final IamAuthenticationService authenticationService;
+    private final IamExternalLoginService externalLoginService;
+    private final IamExternalProviderRegistry providerRegistry;
     private final ProviderDisplayHelper providerDisplayHelper;
     private final IamUserDetailsService userDetailsService;
-    private final UserService userService;
-    private final MessageSseService messageSseService;
-    private final SessionService sessionService;
-    private final CaptchaVerificationSupport captchaVerificationSupport;
+    private final IamUserService userService;
+    private final IamMessageSseService messageSseService;
+    private final IamSessionService sessionService;
+    private final IamCaptchaVerificationService captchaVerificationSupport;
     private final ObjectProvider<CaptchaProvider> captchaProviderProvider;
     private final SimpleIamServerProperties properties;
     private final CsrfTokenRepository csrfTokenRepository;
@@ -262,8 +264,8 @@ public class IamAuthRestController {
         if (userDetails != null) {
             auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGOUT,
                     null, userDetails.getUsername(),
-                    userDetails instanceof IamUserDetailsSupport
-                            ? ((IamUserDetailsSupport) userDetails).getUserId() : null,
+                    userDetails instanceof IamUserDetails
+                            ? ((IamUserDetails) userDetails).getUserId() : null,
                     servletRequest.getRemoteAddr(), servletRequest.getHeader("User-Agent"),
                     null, null);
         }
@@ -280,10 +282,10 @@ public class IamAuthRestController {
     public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest request,
                                                HttpServletRequest servletRequest,
                                                @AuthenticationPrincipal UserDetails userDetails) {
-        if (!(userDetails instanceof IamUserDetailsSupport)) {
+        if (!(userDetails instanceof IamUserDetails)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        Long userId = ((IamUserDetailsSupport) userDetails).getUserId();
+        Long userId = ((IamUserDetails) userDetails).getUserId();
         HttpSession session = servletRequest.getSession(false);
         String currentSessionId = session == null ? null
                 : (String) session.getAttribute(SimpleIamServerConstant.SESSION_ATTRIBUTE_IAM_SESSION_ID);
@@ -435,8 +437,8 @@ public class IamAuthRestController {
     }
 
     private WebAuthUserResponse toResponse(UserDetails userDetails) {
-        Long userId = userDetails instanceof IamUserDetailsSupport
-                ? ((IamUserDetailsSupport) userDetails).getUserId()
+        Long userId = userDetails instanceof IamUserDetails
+                ? ((IamUserDetails) userDetails).getUserId()
                 : null;
         IamUserEntity user = userId == null ? null : userService.getById(userId);
         List<String> authorities = userDetails.getAuthorities().stream()

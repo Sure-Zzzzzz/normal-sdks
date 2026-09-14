@@ -3,8 +3,10 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.oauth2.response.OAuth2ConsentInfoResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamSessionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.SessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +46,8 @@ public class IamOAuth2ProtocolEndpoint {
     private final OAuth2AuthorizationService authorizationService;
     private final OAuth2AuthorizationConsentService authorizationConsentService;
     private final RegisteredClientRepository registeredClientRepository;
-    private final SessionService sessionService;
+    private final IamSessionService sessionService;
+    private final IamTrustedApplicationClientService trustedApplicationClientService;
 
     /**
      * 获取 Consent 页面所需数据
@@ -100,11 +103,15 @@ public class IamOAuth2ProtocolEndpoint {
         List<String> requested = requestedScopeSet != null
                 ? requestedScopeSet.stream().sorted().collect(Collectors.toList())
                 : Collections.emptyList();
+        IamTrustedApplicationEntity application = trustedApplicationClientService
+                .findApplicationByRegisteredClientId(registeredClient.getId()).orElse(null);
 
         return ResponseEntity.ok(new OAuth2ConsentInfoResponse(
                 registeredClient.getId(),
                 registeredClient.getClientId(),
                 registeredClient.getClientName(),
+                application == null ? registeredClient.getClientName() : application.getApplicationName(),
+                application == null ? null : application.getIcon(),
                 state,
                 requested,
                 previouslyApproved

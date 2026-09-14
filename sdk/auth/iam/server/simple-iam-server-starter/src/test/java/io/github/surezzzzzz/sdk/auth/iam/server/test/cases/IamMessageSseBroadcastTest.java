@@ -2,11 +2,11 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamMessageRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.MessageSseService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.message.IamMessageRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -65,13 +65,13 @@ class IamMessageSseBroadcastTest {
     @LocalServerPort
     private int port;
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
     @Autowired
     private IamUserRepository userRepository;
     @Autowired
     private IamMessageRepository messageRepository;
     @Autowired
-    private MessageSseService messageSseService;
+    private IamMessageSseService messageSseService;
     @Autowired
     private RedisRouteTemplate redisRouteTemplate;
     @Autowired
@@ -105,11 +105,11 @@ class IamMessageSseBroadcastTest {
     @DisplayName("远端实例广播 UNREAD_COUNT 后，本实例 SSE 流收到该未读数帧")
     void remoteUnreadCountBroadcastPushesToLocalSubscriber() throws Exception {
         openSseStream();
-        assertTrue(awaitLine(line -> line.equals("event:" + MessageSseService.EVENT_READY)), "SSE 流必须先就绪");
+        assertTrue(awaitLine(line -> line.equals("event:" + IamMessageSseService.EVENT_READY)), "SSE 流必须先就绪");
 
         publishRemote(String.format(
                 "{\"type\":\"%s\",\"userId\":%d,\"unreadCount\":3,\"instanceId\":\"%s\"}",
-                MessageSseService.BROADCAST_TYPE_UNREAD_COUNT, user.getId(), remoteInstanceId));
+                IamMessageSseService.BROADCAST_TYPE_UNREAD_COUNT, user.getId(), remoteInstanceId));
 
         assertTrue(awaitLine(line -> line.equals("data:3")), "远端广播的未读数必须投递到本实例 emitter");
         log.info("远端 UNREAD_COUNT 广播投递断言完成：userId={}", user.getId());
@@ -119,11 +119,11 @@ class IamMessageSseBroadcastTest {
     @DisplayName("远端实例广播 EVICT 后，本实例 SSE 流被关闭")
     void remoteEvictBroadcastClosesLocalSubscriber() throws Exception {
         openSseStream();
-        assertTrue(awaitLine(line -> line.equals("event:" + MessageSseService.EVENT_READY)), "SSE 流必须先就绪");
+        assertTrue(awaitLine(line -> line.equals("event:" + IamMessageSseService.EVENT_READY)), "SSE 流必须先就绪");
 
         publishRemote(String.format(
                 "{\"type\":\"%s\",\"userId\":%d,\"instanceId\":\"%s\"}",
-                MessageSseService.BROADCAST_TYPE_EVICT, user.getId(), remoteInstanceId));
+                IamMessageSseService.BROADCAST_TYPE_EVICT, user.getId(), remoteInstanceId));
 
         assertTrue(awaitClosed(), "远端 EVICT 广播必须关闭本实例连接");
         log.info("远端 EVICT 广播关闭断言完成：userId={}", user.getId());
@@ -133,7 +133,7 @@ class IamMessageSseBroadcastTest {
     @DisplayName("本实例推送只出一帧：广播回环跳过自身，不产生重复帧")
     void localPushBroadcastsExactlyOneFrameWithoutSelfEcho() throws Exception {
         openSseStream();
-        assertTrue(awaitLine(line -> line.equals("event:" + MessageSseService.EVENT_READY)), "SSE 流必须先就绪");
+        assertTrue(awaitLine(line -> line.equals("event:" + IamMessageSseService.EVENT_READY)), "SSE 流必须先就绪");
 
         messageSseService.pushUnreadCount(user.getId(), 7L);
 

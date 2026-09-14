@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.support.JwtKeyProvider;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.token.IamJwtKeyProvider;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +45,7 @@ class BeanPresenceTest {
     private AuthorizationServerSettings authorizationServerSettings;
 
     @Autowired(required = false)
-    private JwtKeyProvider jwtKeyProvider;
+    private IamJwtKeyProvider jwtKeyProvider;
 
     @Test
     @DisplayName("SecurityFilterChain 应注册 7 条（Order 0-6）")
@@ -81,9 +81,9 @@ class BeanPresenceTest {
     }
 
     @Test
-    @DisplayName("JwtKeyProvider 应已注册且密钥非空")
+    @DisplayName("IamJwtKeyProvider 应已注册且密钥非空")
     void jwtKeyProvider_shouldBePresentAndKeysLoaded() {
-        assertNotNull(jwtKeyProvider, "JwtKeyProvider 未注册");
+        assertNotNull(jwtKeyProvider, "IamJwtKeyProvider 未注册");
         assertNotNull(jwtKeyProvider.getPublicKey(), "RSA 公钥未加载");
         assertNotNull(jwtKeyProvider.getPrivateKey(), "RSA 私钥未加载");
     }

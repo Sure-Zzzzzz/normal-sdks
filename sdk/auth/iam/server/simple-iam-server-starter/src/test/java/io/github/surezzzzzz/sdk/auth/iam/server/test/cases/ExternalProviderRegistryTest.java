@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalBrowserLoginProvider;
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalCredentialAuthenticator;
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalIdentity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ConfigurationException;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.ExternalProviderRegistry;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamExternalProviderRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ class ExternalProviderRegistryTest {
     @Test
     @DisplayName("空注册表不报错且查询返回空")
     void testEmptyRegistry() {
-        ExternalProviderRegistry registry = ExternalProviderRegistry.create(null, null);
+        IamExternalProviderRegistry registry = IamExternalProviderRegistry.create(null, null);
         assertTrue(registry.getCredentialAuthenticators().isEmpty());
         assertTrue(registry.getBrowserLoginProviders().isEmpty());
         assertNull(registry.getCredentialAuthenticator("ldap-password"));
@@ -36,7 +36,7 @@ class ExternalProviderRegistryTest {
     @Test
     @DisplayName("两个凭证型认证器注册同一编码应启动失败")
     void testDuplicateCredentialCodeFailsFast() {
-        assertThrows(ConfigurationException.class, () -> ExternalProviderRegistry.create(
+        assertThrows(ConfigurationException.class, () -> IamExternalProviderRegistry.create(
                 Arrays.asList(authenticator("ldap-password"), authenticator("ldap-password")),
                 Collections.emptyList()));
     }
@@ -44,7 +44,7 @@ class ExternalProviderRegistryTest {
     @Test
     @DisplayName("同一编码同时注册为凭证型与跳转型应启动失败")
     void testCrossKindCodeConflictFailsFast() {
-        assertThrows(ConfigurationException.class, () -> ExternalProviderRegistry.create(
+        assertThrows(ConfigurationException.class, () -> IamExternalProviderRegistry.create(
                 Collections.singletonList(authenticator("shared-code")),
                 Collections.singletonList(browserProvider("shared-code"))));
     }
@@ -52,14 +52,14 @@ class ExternalProviderRegistryTest {
     @Test
     @DisplayName("空编码应启动失败")
     void testBlankCodeFailsFast() {
-        assertThrows(ConfigurationException.class, () -> ExternalProviderRegistry.create(
+        assertThrows(ConfigurationException.class, () -> IamExternalProviderRegistry.create(
                 Collections.singletonList(authenticator(" ")), Collections.emptyList()));
     }
 
     @Test
     @DisplayName("正常注册应可按编码查询且互不干扰")
     void testLookupByCode() {
-        ExternalProviderRegistry registry = ExternalProviderRegistry.create(
+        IamExternalProviderRegistry registry = IamExternalProviderRegistry.create(
                 Collections.singletonList(authenticator("ldap-password")),
                 Collections.singletonList(browserProvider("enterprise-sso")));
         assertNotNull(registry.getCredentialAuthenticator("ldap-password"));

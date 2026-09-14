@@ -8,8 +8,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationClientSecretResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCreatedResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationClientService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.TrustedApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -44,10 +44,10 @@ class TrustedApplicationServiceTest {
     private Long applicationId;
 
     @Autowired
-    private TrustedApplicationService trustedApplicationService;
+    private IamTrustedApplicationService trustedApplicationService;
 
     @Autowired
-    private TrustedApplicationClientService trustedApplicationClientService;
+    private IamTrustedApplicationClientService trustedApplicationClientService;
 
     @Autowired
     private RegisteredClientRepository registeredClientRepository;

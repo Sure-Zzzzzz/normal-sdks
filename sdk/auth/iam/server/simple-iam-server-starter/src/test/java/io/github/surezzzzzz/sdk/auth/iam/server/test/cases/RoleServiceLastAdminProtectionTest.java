@@ -1,16 +1,18 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamUserRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.*;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamAuthorizationProjectionService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamEffectiveRoleResolver;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.RoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamEffectiveRoleResolver;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,9 +31,9 @@ import static org.mockito.Mockito.*;
 /**
  * IAM 最后管理员保护测试（纯 mock，不起 Spring 上下文）。
  *
- * <p>覆盖 RoleService 的 iam_admin 角色最后可用管理员判定：撤销唯一 active
+ * <p>覆盖 IamRoleService 的 iam_admin 角色最后可用管理员判定：撤销唯一 active
  * 管理员的 iam_admin 角色被拒；存在其他 active 管理员或撤销的是普通角色时放行。
- * UserService 删除 / 禁用用户走同一判定入口（assertNotLastActiveAdmin），不重复测。
+ * IamUserService 删除 / 禁用用户走同一判定入口（assertNotLastActiveAdmin），不重复测。
  *
  * @author surezzzzzz
  */
@@ -57,7 +59,7 @@ class RoleServiceLastAdminProtectionTest {
     private IamEffectiveRoleResolver effectiveRoleResolver;
 
     @Mock
-    private DepartmentService departmentService;
+    private IamDepartmentService departmentService;
 
     @Mock
     private IamPermissionRepository permissionRepository;
@@ -78,7 +80,7 @@ class RoleServiceLastAdminProtectionTest {
     private IamAuthorizationProjectionService projectionService;
 
     @InjectMocks
-    private RoleService roleService;
+    private IamRoleService roleService;
 
     @Test
     void shouldRejectRevokingAdminRoleFromLastActiveAdmin() {

@@ -7,8 +7,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.AdminUserRespo
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.request.CreateUserGroupRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.request.UpdateUserGroupRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.response.UserGroupResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.DepartmentService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserGroupService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.usergroup.IamUserGroupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,8 +31,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IamUserGroupAdminController {
 
-    private final UserGroupService userGroupService;
-    private final DepartmentService departmentService;
+    private final IamUserGroupService userGroupService;
+    private final IamDepartmentService departmentService;
 
     /**
      * 协作组列表

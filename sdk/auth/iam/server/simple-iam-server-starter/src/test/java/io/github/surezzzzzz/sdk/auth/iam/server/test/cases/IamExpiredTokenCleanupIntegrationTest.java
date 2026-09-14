@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamRefreshTokenFamilyEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamRefreshTokenFamilyRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.IamExpiredTokenCleanupService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.oauth2.IamRefreshTokenFamilyEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamRefreshTokenFamilyRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.IamExpiredTokenCleanupService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;

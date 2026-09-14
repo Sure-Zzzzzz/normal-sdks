@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.response;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserGroupEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.usergroup.IamUserGroupEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
