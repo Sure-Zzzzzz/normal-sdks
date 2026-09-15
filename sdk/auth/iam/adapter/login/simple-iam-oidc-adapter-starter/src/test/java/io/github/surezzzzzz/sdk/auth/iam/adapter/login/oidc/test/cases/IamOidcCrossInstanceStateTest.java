@@ -5,9 +5,9 @@ import io.github.surezzzzzz.sdk.auth.iam.adapter.login.oidc.constant.SimpleIamOi
 import io.github.surezzzzzz.sdk.auth.iam.adapter.login.oidc.test.SimpleIamOidcAdapterTestApplication;
 import io.github.surezzzzzz.sdk.auth.iam.adapter.login.oidc.test.support.KeycloakLoginFormSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.*;
@@ -67,7 +67,7 @@ class IamOidcCrossInstanceStateTest {
     @Autowired
     private IamUserRepository userRepository;
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
     @Autowired
     private RedisRouteTemplate redisRouteTemplate;
 

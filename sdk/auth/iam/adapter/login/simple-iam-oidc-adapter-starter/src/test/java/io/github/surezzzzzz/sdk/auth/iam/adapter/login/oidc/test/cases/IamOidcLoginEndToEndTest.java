@@ -5,10 +5,10 @@ import io.github.surezzzzzz.sdk.auth.iam.adapter.login.oidc.test.SimpleIamOidcAd
 import io.github.surezzzzzz.sdk.auth.iam.adapter.login.oidc.test.support.KeycloakLoginFormSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.IamUserEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.RedisTokenRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.UserService;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,10 +59,10 @@ class IamOidcLoginEndToEndTest {
     private IamUserRepository userRepository;
 
     @Autowired
-    private UserService userService;
+    private IamUserService userService;
 
     @Autowired
-    private RedisTokenRepository redisTokenRepository;
+    private IamRedisTokenRepository redisTokenRepository;
 
     /**
      * 取响应上的会话 cookie（spring-session 模式下跨请求以 JSESSIONID cookie 传会话，与浏览器一致）
