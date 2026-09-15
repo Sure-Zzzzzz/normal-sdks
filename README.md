@@ -261,8 +261,8 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-iam-core](sdk/auth/iam/simple-iam-core) | 1.0.0 | 协议契约基座（登录 SPI / 人机验证 SPI / 路由键常量） | [README](sdk/auth/iam/simple-iam-core/README.md) |
-| [simple-iam-server-core](sdk/auth/iam/server/simple-iam-server-core) | 1.0.0 | Server 域契约（审计事件 / 错误码 / 常量） | [README](sdk/auth/iam/server/simple-iam-server-core/README.md) |
-| [simple-iam-server-starter](sdk/auth/iam/server/simple-iam-server-starter) | 1.0.0 | IAM Server 应用模块（OAuth 2.1 + PKCE / 会话 / RBAC 投影 / 门户供数 / 站内信 / 开放 API） | [README](sdk/auth/iam/server/simple-iam-server-starter/README.md) |
+| [simple-iam-server-core](sdk/auth/iam/server/simple-iam-server-core) | 1.1.2 | Server 域契约（审计事件 / 错误码 / 常量） | [README](sdk/auth/iam/server/simple-iam-server-core/README.md) |
+| [simple-iam-server-starter](sdk/auth/iam/server/simple-iam-server-starter) | 1.1.1 | IAM Server 应用模块（OAuth 2.1 + PKCE / 会话 / RBAC 投影 / 门户供数 / 站内信 / 开放 API） | [README](sdk/auth/iam/server/simple-iam-server-starter/README.md) |
 | [simple-iam-ldap-adapter-starter](sdk/auth/iam/adapter/login/simple-iam-ldap-adapter-starter) | 1.0.0 | LDAP 凭证型登录适配器（引依赖即装配） | [README](sdk/auth/iam/adapter/login/simple-iam-ldap-adapter-starter/README.md) |
 | [simple-iam-oidc-adapter-starter](sdk/auth/iam/adapter/login/simple-iam-oidc-adapter-starter) | 1.0.0 | OIDC 跳转型登录适配器（企业 IdP 单点登录） | [README](sdk/auth/iam/adapter/login/simple-iam-oidc-adapter-starter/README.md) |
 | [simple-iam-captcha-adapter-starter](sdk/auth/iam/adapter/captcha/simple-iam-captcha-adapter-starter) | 1.0.0 | 图片验证码适配器（server-starter 已传递引入） | [README](sdk/auth/iam/adapter/captcha/simple-iam-captcha-adapter-starter/README.md) |

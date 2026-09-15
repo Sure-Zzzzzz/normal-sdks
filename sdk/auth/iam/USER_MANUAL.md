@@ -108,12 +108,12 @@ IAM Server 的 HTTP 面按安全链分七区（Order 精确分工，先匹配先
 
 ## 3. 模块总览
 
-IAM 1.0.0 发布矩阵（均已在 Maven Central）：
+IAM 1.1.1 发布矩阵（Server 及 Core 均已在 Maven Central；前端为独立源码仓本地发布版本）：
 
 ```text
 simple-iam-core                                   1.0.0   协议契约基座（SPI / 路由键 / 错误契约）
-simple-iam-server-core                            1.0.0   Server 域契约（事件 / 错误码 / 常量）
-simple-iam-server-starter                         1.0.0   IAM Server 应用模块（本手册主角）
+simple-iam-server-core                            1.1.2   Server 域契约（事件 / 错误码 / 常量）
+simple-iam-server-starter                         1.1.1   IAM Server 应用模块（本手册主角）
 simple-iam-ldap-adapter-starter                   1.0.0   LDAP 凭证型登录适配器
 simple-iam-oidc-adapter-starter                   1.0.0   OIDC 跳转型登录适配器
 simple-iam-captcha-adapter-starter                1.0.0   图片验证码适配器（server-starter 已传递引入）
@@ -338,7 +338,7 @@ curl -s https://iam.example.com/.well-known/openid-configuration
 
 ## 5. 前端部署（门户形态）
 
-> **发布现状**：三个前端仓（login-web / admin-web / portal-web）与 IAM Server 1.0.0 对齐，**以门户仓为发布锚点**（首次发布同版本 Git tag `v1.0.0`）；npm 包形态的接入方式当前不适用，本章按源码仓构建部署。
+> **发布现状**：三个前端仓独立发布并与 IAM Server 1.1.1 对齐：login-web `v1.0.1`、portal-web `v1.1.1`、admin-web `v1.1.1`；npm 包形态的接入方式当前不适用，本章按源码仓构建部署。
 
 ### 5.1 三个前端仓
 
