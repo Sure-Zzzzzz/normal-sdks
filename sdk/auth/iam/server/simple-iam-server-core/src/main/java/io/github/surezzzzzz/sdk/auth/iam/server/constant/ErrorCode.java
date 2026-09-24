@@ -84,6 +84,9 @@ public final class ErrorCode {
     public static final String TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID = "TRUSTED_APPLICATION_019";
     public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID = "TRUSTED_APPLICATION_020";
     public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT = "TRUSTED_APPLICATION_021";
+    public static final String TRUSTED_APPLICATION_MUTATION_BLOCKED = "TRUSTED_APPLICATION_023";
+    public static final String TRUSTED_APPLICATION_CLEANUP_OPERATION_NOT_FOUND = "TRUSTED_APPLICATION_024";
+    public static final String TRUSTED_APPLICATION_CLEANUP_RETRY_NOT_ALLOWED = "TRUSTED_APPLICATION_025";
     public static final String TOKEN_OPERATION_FAILED = "TOKEN_001";
 
     // ==================== Token / Cache 错误 ====================
@@ -99,6 +102,7 @@ public final class ErrorCode {
     public static final String APPLICATION_AUTHORIZATION_NOT_FOUND = "APPLICATION_AUTHORIZATION_001";
     public static final String APPLICATION_AUTHORIZATION_CONTENT_INVALID = "APPLICATION_AUTHORIZATION_002";
     public static final String APPLICATION_AUTHORIZATION_CONFLICT = "APPLICATION_AUTHORIZATION_003";
+    public static final String APPLICATION_AUTHORIZATION_CHANGE_PAYLOAD_INVALID = "APPLICATION_AUTHORIZATION_004";
 
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class cannot be instantiated");

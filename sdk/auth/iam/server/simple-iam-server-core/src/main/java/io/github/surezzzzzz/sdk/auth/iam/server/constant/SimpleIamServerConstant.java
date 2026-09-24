@@ -62,6 +62,26 @@ public final class SimpleIamServerConstant {
      */
     public static final int DEFAULT_CLEANUP_LOCK_LEASE_SECONDS = 600;
     /**
+     * 可信应用删除授权清理的单批数量；该任务按短事务运行，避免挤占常规 OAuth 流程。
+     */
+    public static final int TRUSTED_APPLICATION_CLEANUP_BATCH_SIZE = 100;
+    /**
+     * 可信应用删除操作的数据库租约时长（秒）；租约到期后其他实例可安全接管。
+     */
+    public static final int TRUSTED_APPLICATION_CLEANUP_LEASE_SECONDS = 300;
+    /**
+     * 可信应用删除调度的轮询间隔（毫秒）。
+     */
+    public static final long TRUSTED_APPLICATION_CLEANUP_SCHEDULE_DELAY_MILLIS = 1000L;
+    /**
+     * 可信应用删除调度 Redis 锁租约（秒）。数据库租约才是崩溃接管真相，Redis 锁只减少并发领取。
+     */
+    public static final long TRUSTED_APPLICATION_CLEANUP_LOCK_LEASE_SECONDS = 30L;
+    /**
+     * 可信应用删除调度 Redis 锁业务标识。
+     */
+    public static final String TRUSTED_APPLICATION_CLEANUP_LOCK_KEY = "trusted-application-cleanup";
+    /**
      * 过期 Token 清理任务分布式锁 key（多实例互斥）
      */
     public static final String CLEANUP_LOCK_KEY = "iam:server:cleanup:expired-token-lock";
@@ -456,6 +476,11 @@ public final class SimpleIamServerConstant {
      * Web 统一 API 路径
      */
     public static final String PATH_RESOURCE_API = "/iam/resource/**";
+    /**
+     * AKSK 所属人授权内部 reader API 路径。该路径只接受固定 SERVICE 的短时 Bearer，
+     * 不复用资源验证 Basic 或浏览器会话链。
+     */
+    public static final String PATH_INTERNAL_AKSK_API = "/iam/internal/aksk/**";
     /**
      * Web 统一 API 路径
      */

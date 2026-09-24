@@ -2,7 +2,7 @@
 
 IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件、错误码、常量和异常，不含任何技术设施实现。
 
-当前版本为 `1.1.2`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.1.3`。版本沿革见各 `CHANGELOG.*.md`。
 
 本模块是 IAM 契约链路的中间层：`simple-iam-core`（身份协议契约基座）→ **`simple-iam-server-core`（本模块，IAM Server 域契约）** → `simple-iam-server-starter`（应用层：Web API、服务、装配、实体与仓储）。
 
@@ -31,7 +31,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.1.2"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.1.3"
 }
 ```
 
@@ -46,6 +46,7 @@ dependencies {
 
 ## 版本记录
 
+- [CHANGELOG.1.1.3.md](CHANGELOG.1.1.3.md)：可信应用安全生命周期与 AKSK 所属人授权读取的错误、常量契约。
 - [CHANGELOG.1.1.2.md](CHANGELOG.1.1.2.md)：Portal 应用根节点排序错误契约，以及菜单节点和展示模式枚举。
 - [CHANGELOG.1.1.1.md](CHANGELOG.1.1.1.md)：Portal 默认入口、全局登录首页与配置并发错误契约。
 - [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)：可信应用 Portal 菜单树错误契约与 `folder` 内置图标编码。

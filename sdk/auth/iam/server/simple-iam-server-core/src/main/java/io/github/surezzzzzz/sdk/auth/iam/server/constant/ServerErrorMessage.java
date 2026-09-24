@@ -148,6 +148,12 @@ public final class ServerErrorMessage {
     public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_INVALID = "Portal 应用顺序无效：%s";
     public static final String TRUSTED_APPLICATION_PORTAL_APPLICATION_ORDER_CONFLICT =
             "Portal 应用顺序已被其他管理员更新，请刷新后重试";
+    public static final String TRUSTED_APPLICATION_MUTATION_BLOCKED =
+            "可信应用正在删除或删除失败待处理，不能修改：%s";
+    public static final String TRUSTED_APPLICATION_CLEANUP_OPERATION_NOT_FOUND = "可信应用删除操作不存在：%s";
+    public static final String TRUSTED_APPLICATION_CLEANUP_RETRY_NOT_ALLOWED =
+            "可信应用删除操作当前不能重试：%s";
+    public static final String TRUSTED_APPLICATION_TOKEN_INVALID = "可信应用已停用或访问令牌已失效";
 
     // ==================== 资源验证客户端消息 ====================
     public static final String RESOURCE_VERIFICATION_CLIENT_NOT_FOUND = "资源验证客户端不存在：%s";
@@ -162,6 +168,7 @@ public final class ServerErrorMessage {
     public static final String APPLICATION_MANIFEST_CONFLICT = "权限清单并发冲突，请重试：applicationId=%s";
     public static final String APPLICATION_AUTHORIZATION_CONTENT_INVALID = "应用授权内容非法：%s";
     public static final String APPLICATION_AUTHORIZATION_CONFLICT = "应用授权并发冲突，请重试：userId=%s, applicationId=%s";
+    public static final String APPLICATION_AUTHORIZATION_CHANGE_PAYLOAD_INVALID = "应用授权变更日志载荷无效";
 
     private ServerErrorMessage() {
         throw new UnsupportedOperationException("Utility class cannot be instantiated");
