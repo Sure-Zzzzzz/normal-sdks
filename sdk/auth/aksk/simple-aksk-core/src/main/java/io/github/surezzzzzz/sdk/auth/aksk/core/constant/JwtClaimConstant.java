@@ -60,6 +60,34 @@ public final class JwtClaimConstant {
      * AKSK服务主体应用授权快照。
      */
     public static final String APPLICATION_AUTHORIZATION = "aksk_authorization";
+    /**
+     * AKSK 授权来源模式。
+     */
+    public static final String AUTHORIZATION_MODE = "authorization_mode";
+    /**
+     * OWNER_INHERITED AKU 的目标可信应用标识。
+     */
+    public static final String TARGET_APPLICATION_ID = "target_application_id";
+    /**
+     * OWNER_INHERITED AKU 所属人安全纪元。
+     */
+    public static final String OWNER_SECURITY_EPOCH = "owner_security_epoch";
+    /**
+     * OWNER_INHERITED AKU 可信应用授权纪元。
+     */
+    public static final String APPLICATION_AUTHORIZATION_EPOCH = "application_authorization_epoch";
+    /**
+     * OWNER_INHERITED AKU 的 IAM 稳定所属人来源。
+     */
+    public static final String OWNER_SOURCE_ID = "owner_source_id";
+    /**
+     * OWNER_INHERITED AKU 的目标应用访问纪元。
+     */
+    public static final String OWNER_INHERITED_ACCESS_EPOCH = "owner_inherited_access_epoch";
+    /**
+     * OWNER_INHERITED AKU 的人员-应用投影访问纪元。
+     */
+    public static final String PROJECTION_ACCESS_EPOCH = "projection_access_epoch";
 
     private JwtClaimConstant() {
     }
