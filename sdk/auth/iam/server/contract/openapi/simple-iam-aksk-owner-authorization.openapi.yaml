@@ -1,0 +1,343 @@
+openapi: 3.0.3
+info:
+  title: Simple IAM AKSK Owner Authorization Internal API
+  version: 1.2.0
+  description: >-
+    仅供 AKSK Server 以固定 IAM 内部 reader SERVICE 读取人员当前应用授权。
+    浏览器、Portal、Admin、普通 OAuth Client 和资源验证 Basic Client 不得调用。
+servers:
+  - url: /
+paths:
+  /iam/internal/aksk/owner-authorizations/resolve:
+    post:
+      summary: 读取人员在目标应用的当前授权投影
+      operationId: resolveAkskOwnerAuthorization
+      security:
+        - akskOwnerAuthorizationReader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAuthorizationResolveRequest'
+      responses:
+        '200':
+          description: 当前投影已完成且可用于 inherited AKU 授权判定。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerAuthorizationResolveResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /iam/internal/aksk/owner-authorizations/candidate-applications:
+    post:
+      summary: 列出人员当前可创建 AKU 的目标应用
+      description: >-
+        仅返回可信应用有效、显式开启 AKU 授权继承且该人员当前投影 active 的最小展示字段。
+        结果只用于 AKSK 服务端校验浏览器选择值，不能替代 resolve 授权判定。
+      operationId: listAkskOwnerCandidateApplications
+      security:
+        - akskOwnerAuthorizationReader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAuthorizationCandidateRequest'
+      responses:
+        '200':
+          description: 当前人员可选择的目标应用列表。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerAuthorizationCandidateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /iam/internal/aksk/owner-authorizations/changes/pull:
+    post:
+      summary: 拉取 IAM 到 AKSK 的授权控制面最终态日志
+      description: >-
+        只允许固定 reader SERVICE 的 stream scope 调用。返回按 sourceSequence 递增的最终态快照；
+        resyncRequired=true 时调用方不得继续消费增量，必须先全量 resolve 自己持有的有效 binding。
+      operationId: pullAkskOwnerAuthorizationChanges
+      security:
+        - akskOwnerAuthorizationStream: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerAuthorizationChangePullRequest'
+      responses:
+        '200':
+          description: 连续变更页或明确的全量修复信号。
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerAuthorizationChangePullResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+components:
+  securitySchemes:
+    akskOwnerAuthorizationReader:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        IAM bootstrap 创建的固定内部 reader SERVICE 短时 JWE Bearer。
+        它只拥有 iam:internal:aksk-owner-authorization:read，不能由浏览器或普通可信应用创建、编辑或获取。
+    akskOwnerAuthorizationStream:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        与 reader SERVICE 相同的固定内部主体，但仅在请求 stream scope 时可调用日志拉取接口。
+  headers:
+    NoStore:
+      schema:
+        type: string
+        enum: ['no-store']
+      description: 响应不得被浏览器、代理或调用方缓存。
+  responses:
+    Unauthorized:
+      description: >-
+        Bearer 缺失、畸形、失效，或不是固定 reader SERVICE。响应不区分认证失败原因。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+    NotFound:
+      description: >-
+        owner、目标应用、来源绑定或继承开关不可用。响应不区分具体原因，避免枚举目标应用。
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+  schemas:
+    OwnerAuthorizationResolveRequest:
+      type: object
+      additionalProperties: false
+      required: [ownerSourceId, ownerSubjectId, targetApplicationId]
+      properties:
+        ownerSourceId:
+          type: string
+          maxLength: 64
+          description: IAM 安装期固定、启用后不可变的部署命名空间；只能由 AKSK 已验证的 HUMAN 上下文提供。
+        ownerSubjectId:
+          type: string
+          maxLength: 128
+          description: IAM iam_user.id 的十进制字符串；不得传 username、LDAP DN 或 OIDC subject。
+        targetApplicationId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 仅由 AKSK 持久 owner binding 提供的可信应用 ID。
+    OwnerAuthorizationCandidateRequest:
+      type: object
+      additionalProperties: false
+      required: [ownerSourceId, ownerSubjectId]
+      properties:
+        ownerSourceId:
+          type: string
+          maxLength: 64
+        ownerSubjectId:
+          type: string
+          maxLength: 128
+    OwnerAuthorizationResolveResponse:
+      type: object
+      additionalProperties: false
+      required: [active]
+      properties:
+        active:
+          type: boolean
+          description: false 时不返回任何可使用的授权快照或纪元。
+        ownerSecurityEpoch:
+          type: integer
+          format: int64
+          minimum: 1
+          description: active=true 时必填，人员安全纪元。
+        applicationAuthorizationEpoch:
+          type: integer
+          format: int64
+          minimum: 1
+          description: active=true 时必填，目标应用授权纪元。
+        ownerInheritedAccessEpoch:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 目标应用 OWNER_INHERITED 访问纪元；停用、恢复和继承开关变更均递增。
+        projectionAccessEpoch:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 人员-目标应用投影访问纪元；撤权、再授予和内容变更均递增。
+        resumeAfterSequence:
+          type: integer
+          format: int64
+          minimum: 0
+          description: resolve 开始前捕获的日志 high-water；只用于新 binding 的安全引导，不能推进已有 cursor。
+        iamAuthorization:
+          $ref: '#/components/schemas/ApplicationAuthorizationContextClaim'
+    OwnerAuthorizationChangePullRequest:
+      type: object
+      additionalProperties: false
+      required: [afterSequence, pageSize]
+      properties:
+        afterSequence:
+          type: integer
+          format: int64
+          minimum: 0
+        pageSize:
+          type: integer
+          minimum: 1
+          maximum: 200
+    OwnerAuthorizationChangePullResponse:
+      type: object
+      additionalProperties: false
+      required: [resyncRequired, oldestAvailableSequence, highWaterSequence, changes]
+      properties:
+        resyncRequired:
+          type: boolean
+        oldestAvailableSequence:
+          type: integer
+          format: int64
+          minimum: 0
+        highWaterSequence:
+          type: integer
+          format: int64
+          minimum: 0
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerAuthorizationChange'
+    OwnerAuthorizationChange:
+      type: object
+      additionalProperties: false
+      required: [sourceSequence, eventId, changeType, aggregateKey, reasonCode, schemaVersion, payload, occurredAt]
+      properties:
+        sourceSequence:
+          type: integer
+          format: int64
+          minimum: 1
+        eventId:
+          type: string
+          format: uuid
+        changeType:
+          type: string
+          enum: [OWNER_STATE, TARGET_APPLICATION_STATE, OWNER_APPLICATION_PROJECTION]
+        aggregateKey:
+          type: string
+        reasonCode:
+          type: string
+        schemaVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        payload:
+          type: object
+          additionalProperties: true
+          description: 由 changeType 决定的最终态载荷；调用方按 schemaVersion 严格解析，未知字段忽略，缺失必填字段失败关闭。
+        occurredAt:
+          type: integer
+          format: int64
+          description: Unix epoch 毫秒。
+    OwnerAuthorizationCandidateResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnerAuthorizationCandidateApplication'
+    OwnerAuthorizationCandidateApplication:
+      type: object
+      additionalProperties: false
+      required: [applicationId, applicationName, applicationCodeSnapshot]
+      properties:
+        applicationId:
+          type: integer
+          format: int64
+          minimum: 1
+        applicationName:
+          type: string
+          maxLength: 128
+        applicationCodeSnapshot:
+          type: string
+          maxLength: 64
+    ApplicationAuthorizationContextClaim:
+      type: object
+      description: >-
+        simple-application-authorization 1.0 结构化 HUMAN 授权快照。调用方必须使用
+        ApplicationAuthorizationContextClaimMapper 严格还原，不得自行放宽解析。
+      required:
+        - protocol
+        - version
+        - subjectType
+        - subjectId
+        - applicationCode
+        - admitted
+        - roles
+        - pagePermissions
+        - apiPermissions
+        - dataGrantDocument
+        - authorizationVersion
+        - manifestVersion
+        - manifestDigest
+        - issuedAt
+        - expiresAt
+      additionalProperties: false
+      properties:
+        protocol:
+          type: string
+          enum: [simple-application-authorization]
+        version:
+          type: string
+          enum: ['1.0']
+        subjectType:
+          type: string
+          enum: [HUMAN]
+        subjectId:
+          type: string
+        applicationCode:
+          type: string
+        admitted:
+          type: boolean
+          enum: [true]
+        roles:
+          type: array
+          items: { type: string }
+        pagePermissions:
+          type: array
+          items: { type: string }
+        apiPermissions:
+          type: array
+          items: { type: string }
+        dataGrantDocument:
+          nullable: true
+          description: 由 simple-data-permission-core 定义的结构化 DATA 授权文档。
+        authorizationVersion:
+          type: integer
+          format: int64
+          minimum: 1
+        manifestVersion:
+          type: string
+        manifestDigest:
+          type: string
+        issuedAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。
+        expiresAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。

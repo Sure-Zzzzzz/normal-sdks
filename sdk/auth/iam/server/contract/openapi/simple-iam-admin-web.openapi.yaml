@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Admin API
-  version: 1.1.0
+  version: 1.2.0
   description: IAM 管理端 API。所有接口要求已认证用户具备 ROLE_iam_admin；写操作还要求当前浏览器会话的 CSRF Token。
 servers:
   - url: /
@@ -412,10 +412,47 @@ paths:
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateTrustedApplicationRequest' } } } }
       responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummary' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
     delete:
-      summary: 删除可信应用及其 Portal 配置、Client、授权记录（内置应用返回 409）
+      summary: 异步删除可信应用及其 Portal 配置、Client 与授权记录（内置应用返回 409）
+      description: >-
+        接收后立即安全停用应用并推进安全纪元，再异步清理授权、consent 与主数据。
+        重复请求返回同一未完成或失败的删除操作；应用物理删除后返回 404。
       operationId: deleteTrustedApplication
       security: [ { iamSession: [], csrfToken: [] } ]
-      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: 内置应用禁止删除 } }
+      responses: { '202': { $ref: '#/components/responses/TrustedApplicationCleanupOperation' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { description: 内置应用禁止删除 } }
+  /iam/admin/trusted-applications/{applicationId}/suspend:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    post:
+      summary: 安全停用可信应用
+      description: >-
+        停用后 Portal、OAuth、资源验证与 AKSK reader 立即拒绝；重复停用不重复推进安全纪元。
+        内置 IAM 管理台应用与删除中的应用均不能停用。
+      operationId: suspendTrustedApplication
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummary' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-applications/{applicationId}/resume:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    post:
+      summary: 恢复可信应用
+      description: >-
+        恢复会再次推进安全纪元，停用前的授权与 consent 不会复活。
+        内置 IAM 管理台应用、任何未完成或失败删除操作的应用均不能恢复。
+      operationId: resumeTrustedApplication
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationSummary' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-application-cleanup-operations/{operationId}:
+    parameters: [ { $ref: '#/components/parameters/TrustedApplicationCleanupOperationId' } ]
+    get:
+      summary: 查询可信应用删除操作
+      operationId: getTrustedApplicationCleanupOperation
+      responses: { '200': { $ref: '#/components/responses/TrustedApplicationCleanupOperation' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /iam/admin/trusted-application-cleanup-operations/{operationId}/retry:
+    parameters: [ { $ref: '#/components/parameters/TrustedApplicationCleanupOperationId' } ]
+    post:
+      summary: 重试失败的可信应用删除操作
+      description: 仅 FAILED（此时 retryable=true）的删除操作可重试；该命令不可取消删除或恢复应用。
+      operationId: retryTrustedApplicationCleanupOperation
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '202': { $ref: '#/components/responses/TrustedApplicationCleanupOperation' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
   /iam/admin/trusted-applications/{applicationId}/clients:
     parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
     get:
@@ -502,6 +539,24 @@ paths:
       security: [ { iamSession: [], csrfToken: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateResourceVerificationClientRequest' } } } }
       responses: { '201': { $ref: '#/components/responses/ResourceVerificationClientSecret' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /iam/admin/trusted-applications/{applicationId}/owner-inheritance:
+    parameters: [ { $ref: '#/components/parameters/ApplicationId' } ]
+    get:
+      summary: 获取 AKU 所属人授权继承设置
+      description: 返回可信应用是否允许 AKSK 按 IAM 当前人员授权投影管理所属人的 AKU，以及当前应用授权纪元。
+      operationId: getTrustedApplicationOwnerInheritance
+      responses: { '200': { $ref: '#/components/responses/OwnerInheritance' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    put:
+      summary: 更新 AKU 所属人授权继承设置
+      description: enabled=true 会推进应用授权纪元并发布授权变更；关闭或投影未收敛时，AKSK 对继承凭证失败关闭。该设置不等同于 Portal 可见或应用全局启停。
+      operationId: updateTrustedApplicationOwnerInheritance
+      parameters:
+        - name: enabled
+          in: query
+          required: true
+          schema: { type: boolean }
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses: { '200': { $ref: '#/components/responses/OwnerInheritance' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
   /iam/admin/trusted-applications/{applicationId}/resource-verification-clients/{clientId}:
     parameters: [ { $ref: '#/components/parameters/ApplicationId' }, { $ref: '#/components/parameters/ClientId' } ]
     get:
@@ -570,6 +625,7 @@ components:
     RoleId: { name: roleId, in: path, required: true, schema: { type: integer, format: int64 } }
     PermissionId: { name: permissionId, in: path, required: true, schema: { type: integer, format: int64 } }
     ApplicationId: { name: applicationId, in: path, required: true, schema: { type: integer, format: int64 } }
+    TrustedApplicationCleanupOperationId: { name: operationId, in: path, required: true, schema: { type: integer, format: int64 } }
     ClientId: { name: clientId, in: path, required: true, schema: { type: string } }
     Status: { name: status, in: query, required: false, schema: { type: integer } }
     Keyword: { name: keyword, in: query, required: false, schema: { type: string } }
@@ -614,6 +670,7 @@ components:
     TrustedApplicationSummaryList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } } } } }
     TrustedApplicationSummaryPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationSummaryPage' } } } }
     TrustedApplicationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationDetail' } } } }
+    TrustedApplicationCleanupOperation: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TrustedApplicationCleanupOperationResponse' } } } }
     PortalIntegration: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalIntegration' } } } }
     PortalApplicationOrder: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalApplicationOrder' } } } }
     PortalLoginLanding: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/PortalLoginLanding' } } } }
@@ -623,6 +680,7 @@ components:
     ResourceVerificationClient: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceVerificationClient' } } } }
     ResourceVerificationClientList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ResourceVerificationClient' } } } } }
     ResourceVerificationClientSecret: { description: 创建 / 轮换成功，明文密钥仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/ResourceVerificationClientSecret' } } } }
+    OwnerInheritance: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/OwnerInheritanceResponse' } } } }
     ApplicationAuthorizationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationAuthorizationDetail' } } } }
     ApplicationAuthorizationList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ApplicationAuthorization' } } } } }
     AdminDashboard: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminDashboardResponse' } } } }
@@ -849,10 +907,17 @@ components:
         version: { type: integer, format: int64 }
     TrustedApplicationSummary:
       type: object
-      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, clientCount: { type: integer, format: int64 }, portalEnabled: { type: boolean }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 } }
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, clientCount: { type: integer, format: int64 }, portalEnabled: { type: boolean }, status: { type: string, enum: [ACTIVE, SUSPENDED], description: 应用全局安全状态；与 Portal 启用及 AKU 继承开关独立 }, applicationSecurityEpoch: { type: integer, format: int64, minimum: 1 }, cleanupOperation: { $ref: '#/components/schemas/TrustedApplicationCleanupOperationSummary', nullable: true }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止停用、恢复和删除 } }
     TrustedApplicationDetail:
       type: object
-      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止删除 }, portal: { $ref: '#/components/schemas/PortalIntegration', nullable: true }, clients: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } }
+      properties: { id: { type: integer, format: int64 }, applicationCode: { type: string }, applicationName: { type: string }, description: { type: string, nullable: true }, icon: { type: string, nullable: true, description: 内置图标编码，未知编码将被拒绝或以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }, status: { type: string, enum: [ACTIVE, SUSPENDED] }, applicationSecurityEpoch: { type: integer, format: int64, minimum: 1 }, cleanupOperation: { $ref: '#/components/schemas/TrustedApplicationCleanupOperationSummary', nullable: true }, builtIn: { type: boolean, description: 内置应用（引导注册，如 IAM 管理台），禁止停用、恢复和删除 }, portal: { $ref: '#/components/schemas/PortalIntegration', nullable: true }, clients: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationClient' } } }
+    TrustedApplicationCleanupOperationSummary:
+      type: object
+      properties: { operationId: { type: integer, format: int64 }, action: { type: string, enum: [DELETE] }, state: { type: string, enum: [PENDING, RUNNING, RETRYING, COMPLETED, FAILED] }, updatedAt: { type: string, format: date-time }, retryable: { type: boolean } }
+    TrustedApplicationCleanupOperationResponse:
+      type: object
+      required: [operationId, applicationId, action, state, acceptedAt, updatedAt, retryable]
+      properties: { operationId: { type: integer, format: int64 }, applicationId: { type: integer, format: int64 }, action: { type: string, enum: [DELETE] }, state: { type: string, enum: [PENDING, RUNNING, RETRYING, COMPLETED, FAILED] }, acceptedAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, retryable: { type: boolean } }
     TrustedApplicationSummaryPage:
       type: object
       properties: { content: { type: array, items: { $ref: '#/components/schemas/TrustedApplicationSummary' } }, totalElements: { type: integer, format: int64 }, totalPages: { type: integer }, page: { type: integer, minimum: 1 }, size: { type: integer }, numberOfElements: { type: integer }, first: { type: boolean }, last: { type: boolean }, empty: { type: boolean } }
@@ -884,6 +949,10 @@ components:
     ResourceVerificationClientSecret:
       type: object
       properties: { clientId: { type: string }, clientSecret: { type: string, description: 仅本次响应返回 } }
+    OwnerInheritanceResponse:
+      type: object
+      required: [ applicationId, enabled, applicationAuthorizationEpoch ]
+      properties: { applicationId: { type: integer, format: int64 }, enabled: { type: boolean }, applicationAuthorizationEpoch: { type: integer, format: int64, minimum: 1, description: 应用授权纪元，单调递增 } }
     ApplicationAuthorization:
       type: object
       properties: { applicationId: { type: integer, format: int64 }, admitted: { type: boolean, description: 是否通过应用准入 }, authorizationVersion: { type: integer, format: int64, description: 服务端单调递增 }, manifestVersion: { type: string }, status: { type: integer, description: 1=有效，0=已撤销 }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time, description: 最近一次替换 / 撤销 / 重激活 }, revokedAt: { type: string, format: date-time, nullable: true } }

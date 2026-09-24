@@ -8,6 +8,7 @@
 |------------|----------|-----------|------------|-----------|
 | `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` |
 | `1.1.x` | `1.1.x` | `1.0.x` | `1.1.x` | `1.1.x` |
+| `1.2.x` | `1.2.x` | `1.0.x` | `1.2.x` | `1.2.x` |
 
 首次独立发布时，以 Server `1.0.0` 对应 Login、Portal、Admin 各自仓库的 `v1.0.0` tag。后续前端 patch 可独立发布，但 release notes 必须声明其兼容的 Server 与 Contract 范围。
 
@@ -18,6 +19,7 @@
 | `openapi/simple-iam-login-web.openapi.yaml` | `simple-iam-login-web` 调用的浏览器会话、品牌和 OAuth2 Consent 辅助 API 契约；含外部身份源登录（login 携带 `provider`、`providers` 动态列表、authorize/callback 跳转回调） |
 | `openapi/simple-unified-application-portal-web.openapi.yaml` | `simple-unified-application-portal-web` 调用的应用导航、站内信和 SSE API 契约 |
 | `openapi/simple-iam-admin-web.openapi.yaml` | `simple-iam-admin-web` 调用的 `/iam/admin/**` 管理 API 契约 |
+| `openapi/simple-iam-aksk-owner-authorization.openapi.yaml` | 仅 AKSK Server 固定内部 reader SERVICE 调用的所属人授权投影读取契约；不向浏览器、Portal 或普通 OAuth Client 暴露 |
 | `openapi/simple-iam-resource-token-verification.openapi.yaml` | `simple-iam-resource-server-starter` 调用的受控 IAM Access Token 验证 API 契约 |
 | `openapi/simple-iam-open-api.openapi.yaml` | 外部业务系统持 AKSK 凭证调用的开放 API 契约（`/iam/api/**`，用户与部门两族；含 AKSK 侧接入准备） |
 
