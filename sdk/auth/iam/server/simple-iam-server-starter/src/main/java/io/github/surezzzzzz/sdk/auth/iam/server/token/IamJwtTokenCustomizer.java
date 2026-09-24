@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.exception.ValidationException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamInternalReaderBootstrap;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,10 @@ public class IamJwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingC
      */
     @Override
     public void customize(JwtEncodingContext context) {
+        if (IamInternalReaderBootstrap.READER_CLIENT_ID.equals(context.getRegisteredClient().getClientId())) {
+            customizeInternalReader(context);
+            return;
+        }
         IamSessionEntity session = currentActiveSession(context);
         if (session == null) {
             return;
@@ -76,6 +81,17 @@ public class IamJwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingC
         } catch (Exception e) {
             log.warn("兼容身份 claim 注入失败：userId={}, error={}", userId, e.getMessage());
         }
+    }
+
+    /**
+     * 内部 reader 绝不复用 HUMAN 会话、角色或应用三权 claim。
+     */
+    private void customizeInternalReader(JwtEncodingContext context) {
+        context.getClaims().subject(IamInternalReaderBootstrap.READER_SUBJECT);
+        context.getClaims().claim("token_use", IamInternalReaderBootstrap.READER_TOKEN_USE);
+        context.getClaims().claim("client_id", IamInternalReaderBootstrap.READER_CLIENT_ID);
+        context.getClaims().claim("scope", context.getAuthorizedScopes().contains(IamInternalReaderBootstrap.STREAM_SCOPE)
+                ? IamInternalReaderBootstrap.STREAM_SCOPE : IamInternalReaderBootstrap.READER_SCOPE);
     }
 
     private void addApplicationAuthorization(JwtEncodingContext context, Long userId) {

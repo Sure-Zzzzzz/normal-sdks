@@ -20,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.function.LongSupplier;
 
 /**
  * 站内信 SSE 推送服务（多实例分布式 + 多端语义）
@@ -210,6 +211,22 @@ public class IamMessageSseService implements InitializingBean, DisposableBean, M
     public void pushUnreadCount(Long userId, SseEmitter emitter, long unreadCount) {
         EmitterBinding binding = new EmitterBinding(emitter, null);
         sendSafely(userId, binding, SseEmitter.event().name(EVENT_UNREAD_COUNT).data(unreadCount));
+    }
+
+    /**
+     * 新连接首帧的未读数查询与推送。SSE 请求永不结束：若在请求线程触碰 JPA，
+     * OSIV 会话绑定的连接将随 emitter 终身占用（连接池泄漏），必须挪到后台线程。
+     *
+     * @param unreadCountSupplier 未读数查询（在后台线程执行，注意不得依赖调用方线程上下文）
+     */
+    public void pushInitialUnreadCount(Long userId, SseEmitter emitter, LongSupplier unreadCountSupplier) {
+        heartbeatExecutor.execute(() -> {
+            try {
+                pushUnreadCount(userId, emitter, unreadCountSupplier.getAsLong());
+            } catch (Exception exception) {
+                log.warn("站内信 SSE 首帧未读数推送失败，已忽略：userId={}", userId, exception);
+            }
+        });
     }
 
     /**

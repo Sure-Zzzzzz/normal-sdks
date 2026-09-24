@@ -1,13 +1,17 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutApplicationAuthorizationRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationAdminService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -35,7 +39,6 @@ import org.springframework.web.util.UriUtils;
 
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -75,6 +78,12 @@ class IamUserLifecycleSessionRevocationTest {
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
     @Autowired
+    private IamTrustedApplicationCleanupWorker cleanupWorker;
+    @Autowired
+    private IamApplicationPermissionManifestService manifestService;
+    @Autowired
+    private IamApplicationAuthorizationAdminService authorizationAdminService;
+    @Autowired
     private IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     @Autowired
     private RegisteredClientRepository registeredClientRepository;
@@ -101,7 +110,7 @@ class IamUserLifecycleSessionRevocationTest {
             userService.deleteUser(user.getId());
         }
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            deleteAndAwaitCompletion(applicationId);
             applicationId = null;
         }
     }
@@ -225,26 +234,41 @@ class IamUserLifecycleSessionRevocationTest {
         application.setApplicationName("Lifecycle Application");
         application.setInitialClient(client);
         applicationId = trustedApplicationService.createApplication(application).getApplication().getId();
-        applicationAuthorizationRepository.save(createApplicationAuthorization(user.getId(), applicationId));
+        putEmptyManifest();
+        grantApplicationAuthorization(user.getId());
         return user;
     }
 
-    private IamApplicationAuthorizationEntity createApplicationAuthorization(Long userId, Long trustedApplicationId) {
-        Instant now = Instant.now();
-        IamApplicationAuthorizationEntity authorization = new IamApplicationAuthorizationEntity();
-        authorization.setUserId(userId);
-        authorization.setApplicationId(trustedApplicationId);
-        authorization.setAdmitted(SimpleIamServerConstant.STATUS_ACTIVE);
-        authorization.setRolesJson("[]");
-        authorization.setPagePermissionsJson("[]");
-        authorization.setApiPermissionsJson("[]");
-        authorization.setAuthorizationVersion(1L);
-        authorization.setManifestVersion("test-v1");
-        authorization.setManifestDigest("test-digest");
-        authorization.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
-        authorization.setCreatedAt(now);
-        authorization.setUpdatedAt(now);
-        return authorization;
+    private void putEmptyManifest() {
+        PutApplicationPermissionManifestRequest manifest = new PutApplicationPermissionManifestRequest();
+        manifest.setRoles(Collections.emptyList());
+        manifest.setPagePermissions(Collections.emptyList());
+        manifest.setApiPermissions(Collections.emptyList());
+        manifest.setDataResources(Collections.emptyList());
+        manifestService.putManifest(applicationId, manifest);
+    }
+
+    private void grantApplicationAuthorization(Long userId) {
+        PutApplicationAuthorizationRequest authorization = new PutApplicationAuthorizationRequest();
+        authorization.setAdmitted(Boolean.TRUE);
+        authorization.setRoles(Collections.emptyList());
+        authorization.setPagePermissions(Collections.emptyList());
+        authorization.setApiPermissions(Collections.emptyList());
+        authorization.setDataGrantDocument(null);
+        authorizationAdminService.putAuthorization(userId, applicationId, authorization);
+    }
+
+    private void deleteAndAwaitCompletion(Long targetApplicationId) {
+        trustedApplicationService.deleteApplication(targetApplicationId);
+        for (int attempt = 0; attempt < 5; attempt++) {
+            cleanupWorker.processNextOperation();
+            try {
+                trustedApplicationService.getApplication(targetApplicationId);
+            } catch (SimpleIamServerException exception) {
+                return;
+            }
+        }
+        fail("可信应用删除任务未在测试 worker 推进后完成：" + targetApplicationId);
     }
 
     private String loginSessionCookie(String password) {

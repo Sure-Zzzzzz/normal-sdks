@@ -11,6 +11,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,9 +29,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -78,7 +79,10 @@ class IamMessageSseBroadcastTest {
     private RedisKeyHelper redisKeyHelper;
     private IamUserEntity user;
     private String sessionCookie;
-    private HttpURLConnection streamConnection;
+    private CloseableHttpClient streamHttpClient;
+    private CloseableHttpResponse streamResponse;
+    private HttpGet streamRequest;
+    private Thread streamReader;
     private volatile boolean streamClosed;
 
     @BeforeEach
@@ -156,16 +160,17 @@ class IamMessageSseBroadcastTest {
      * 建立真实 SSE 流，后台线程逐行读入队列。
      */
     private void openSseStream() throws Exception {
-        URL url = URI.create("http://localhost:" + port + "/iam/web/messages/events").toURL();
-        streamConnection = (HttpURLConnection) url.openConnection();
-        streamConnection.setRequestProperty("Cookie", sessionCookie);
-        streamConnection.setRequestProperty("Accept", MediaType.TEXT_EVENT_STREAM_VALUE);
-        streamConnection.setReadTimeout(20_000);
-        assertEquals(HttpStatus.OK.value(), streamConnection.getResponseCode(), "SSE 端点必须可建立");
+        streamHttpClient = HttpClients.custom().disableRedirectHandling().disableCookieManagement().build();
+        streamRequest = new HttpGet(URI.create("http://localhost:" + port + "/iam/web/messages/events"));
+        streamRequest.setHeader(HttpHeaders.COOKIE, sessionCookie);
+        streamRequest.setHeader(HttpHeaders.ACCEPT, MediaType.TEXT_EVENT_STREAM_VALUE);
+        streamResponse = streamHttpClient.execute(streamRequest);
+        assertEquals(HttpStatus.OK.value(), streamResponse.getStatusLine().getStatusCode(), "SSE 端点必须可建立");
 
-        Thread reader = new Thread(() -> {
+        CloseableHttpResponse response = streamResponse;
+        streamReader = new Thread(() -> {
             try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(
-                    streamConnection.getInputStream(), StandardCharsets.UTF_8))) {
+                    response.getEntity().getContent(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
                     streamLines.add(line);
@@ -176,14 +181,50 @@ class IamMessageSseBroadcastTest {
                 streamClosed = true;
             }
         }, "sse-stream-reader-" + suffix);
-        reader.setDaemon(true);
-        reader.start();
+        streamReader.setDaemon(true);
+        streamReader.start();
     }
 
     private void closeStream() {
-        if (streamConnection != null) {
-            streamConnection.disconnect();
-            streamConnection = null;
+        if (streamRequest != null) {
+            streamRequest.abort();
+            streamRequest = null;
+        }
+        closeResponse();
+        closeHttpClient();
+        if (streamReader != null) {
+            try {
+                streamReader.join(2_000);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            streamReader = null;
+        }
+    }
+
+    private void closeResponse() {
+        if (streamResponse == null) {
+            return;
+        }
+        try {
+            streamResponse.close();
+        } catch (Exception exception) {
+            log.debug("关闭 SSE HTTP response 失败：{}", exception.getMessage());
+        } finally {
+            streamResponse = null;
+        }
+    }
+
+    private void closeHttpClient() {
+        if (streamHttpClient == null) {
+            return;
+        }
+        try {
+            streamHttpClient.close();
+        } catch (Exception exception) {
+            log.debug("关闭 SSE HTTP client 失败：{}", exception.getMessage());
+        } finally {
+            streamHttpClient = null;
         }
     }
 

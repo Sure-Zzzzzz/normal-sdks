@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepositor
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.impl.client.HttpClients;
 import org.junit.jupiter.api.AfterEach;
@@ -74,6 +75,8 @@ class JweAuthorizationCodeUserInfoEndToEndTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private IamApplicationAuthorizationRepository applicationAuthorizationRepository;
@@ -101,7 +104,7 @@ class JweAuthorizationCodeUserInfoEndToEndTest {
             userService.deleteUser(user.getId());
         }
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
             applicationId = null;
         }
     }

@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.portal.IamTrustedApplicat
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationMenuRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.StringUtils;
@@ -41,6 +42,7 @@ public class IamPortalMenuTreeService {
 
     private final IamTrustedApplicationMenuRepository menuRepository;
     private final IamApplicationPermissionManifestRepository manifestRepository;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
 
     /**
      * 应用 Portal 配置中的菜单更新入口。
@@ -50,6 +52,7 @@ public class IamPortalMenuTreeService {
      */
     public void updateMenus(Long applicationId, List<MenuItemRequest> menus,
                             List<PortalMenuTreeNodeRequest> menuTree) {
+        mutationGuard.requireMutable(applicationId);
         if (menus != null && menuTree != null) {
             throw invalid("menus 与 menuTree 不能同时提交");
         }

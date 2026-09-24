@@ -48,6 +48,24 @@ public class IamApplicationAuthorizationEntity {
     @Column(name = "authorization_version", nullable = false)
     private Long authorizationVersion;
 
+    /**
+     * 所属人权限版本映射出的安全纪元，供 AKU 签发与审计追溯。
+     */
+    @Column(name = "owner_security_epoch", nullable = false)
+    private Long ownerSecurityEpoch = 1L;
+
+    /**
+     * 可信应用级授权纪元，和 OAuth 安全纪元独立。
+     */
+    @Column(name = "application_authorization_epoch", nullable = false)
+    private Long applicationAuthorizationEpoch = 1L;
+
+    /**
+     * 所属人-应用投影访问纪元：任何可见授权或准入状态变化都递增，防止撤权后旧 AKU 复活。
+     */
+    @Column(name = "projection_access_epoch", nullable = false)
+    private Long projectionAccessEpoch = 1L;
+
     @Column(name = "manifest_version", length = 128, nullable = false)
     private String manifestVersion;
 

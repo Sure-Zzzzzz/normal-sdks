@@ -4,8 +4,13 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.oauth2.IamConsentEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamConsentRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationAccessGuard;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsent;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
@@ -31,6 +36,8 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
     private final IamConsentRepository consentRepository;
     private final IamUserRepository userRepository;
     private final RegisteredClientRepository registeredClientRepository;
+    private final IamTrustedApplicationClientService trustedApplicationClientService;
+    private final IamTrustedApplicationAccessGuard trustedApplicationAccessGuard;
 
     /**
      * 标准落库之上同步投影到 iam_consent 表
@@ -38,6 +45,11 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
     @Override
     @Transactional
     public void save(OAuth2AuthorizationConsent authorizationConsent) {
+        if (!trustedApplicationAccessGuard.isNewAuthorizationAllowed(
+                authorizationConsent.getRegisteredClientId())) {
+            // SAS provider 会将 OAuth2AuthenticationException 转为协议错误，避免“假保存”后继续签码。
+            throw new OAuth2AuthenticationException(new OAuth2Error(OAuth2ErrorCodes.UNAUTHORIZED_CLIENT));
+        }
         delegate.save(authorizationConsent);
         syncProjection(authorizationConsent);
     }
@@ -57,7 +69,15 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
      */
     @Override
     public OAuth2AuthorizationConsent findById(String registeredClientId, String principalName) {
-        return delegate.findById(registeredClientId, principalName);
+        OAuth2AuthorizationConsent consent = delegate.findById(registeredClientId, principalName);
+        if (consent == null) {
+            return null;
+        }
+        return trustedApplicationClientService.findApplicationByRegisteredClientId(registeredClientId)
+                .map(application -> isCurrentApplicationConsent(application, registeredClientId, principalName)
+                        ? consent : null)
+                // application_id 为空的历史 SAS client 不纳入可信应用生命周期门禁。
+                .orElse(consent);
     }
 
     private void syncProjection(OAuth2AuthorizationConsent consent) {
@@ -81,6 +101,8 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
             if (existing != null) {
                 existing.setAuthorizedScopes(scopes);
                 existing.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
+                existing.setApplicationSecurityEpoch(resolveApplicationSecurityEpoch(
+                        consent.getRegisteredClientId()));
                 existing.setGrantedAt(Instant.now());
                 existing.setRevokedAt(null);
                 consentRepository.save(existing);
@@ -92,6 +114,8 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
                 entity.setClientId(registeredClient.getClientId());
                 entity.setAuthorizedScopes(scopes);
                 entity.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
+                entity.setApplicationSecurityEpoch(resolveApplicationSecurityEpoch(
+                        consent.getRegisteredClientId()));
                 entity.setGrantedAt(Instant.now());
                 consentRepository.save(entity);
             }
@@ -117,5 +141,37 @@ public class IamOAuth2ConsentService implements OAuth2AuthorizationConsentServic
         } catch (Exception e) {
             log.warn("IAM consent 撤销投影同步失败（不影响协议主流程）：{}", e.getMessage());
         }
+    }
+
+    /**
+     * 非可信应用 client 保持历史兼容语义，固定使用 epoch 1；可信应用读取当前纪元。
+     */
+    private Long resolveApplicationSecurityEpoch(String registeredClientId) {
+        return trustedApplicationClientService.findApplicationByRegisteredClientId(registeredClientId)
+                .map(application -> application.getApplicationSecurityEpoch())
+                .orElse(1L);
+    }
+
+    /**
+     * 可信应用只接受与当前安全纪元一致的 consent，恢复应用也不能复用停用前确认。
+     */
+    private boolean isCurrentApplicationConsent(
+            io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity application,
+            String registeredClientId, String principalName) {
+        if (application.getStatus() == null
+                || SimpleIamServerConstant.STATUS_ACTIVE != application.getStatus().intValue()
+                || application.getApplicationSecurityEpoch() == null) {
+            return false;
+        }
+        Long userId = userRepository.findByUsername(principalName).map(u -> u.getId()).orElse(null);
+        if (userId == null) {
+            return false;
+        }
+        return consentRepository.findByUserIdAndRegisteredClientId(userId, registeredClientId)
+                .map(projection -> projection.getStatus() != null
+                        && SimpleIamServerConstant.STATUS_ACTIVE == projection.getStatus().intValue()
+                        && application.getApplicationSecurityEpoch().equals(
+                        projection.getApplicationSecurityEpoch()))
+                .orElse(false);
     }
 }

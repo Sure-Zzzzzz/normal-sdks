@@ -39,6 +39,12 @@ public class IamConsentEntity {
     @Column(name = "status", nullable = false)
     private Integer status;
 
+    /**
+     * 授予 consent 时的应用安全纪元；应用停用再恢复后，旧 consent 不可复用。
+     */
+    @Column(name = "application_security_epoch", nullable = false)
+    private Long applicationSecurityEpoch;
+
     @Column(name = "granted_at", nullable = false)
     private Instant grantedAt;
 

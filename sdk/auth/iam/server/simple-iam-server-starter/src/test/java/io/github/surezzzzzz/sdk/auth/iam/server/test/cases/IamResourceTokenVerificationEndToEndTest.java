@@ -19,6 +19,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationP
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.impl.client.HttpClients;
 import org.junit.jupiter.api.AfterEach;
@@ -81,6 +82,8 @@ class IamResourceTokenVerificationEndToEndTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private RegisteredClientRepository registeredClientRepository;
@@ -128,10 +131,10 @@ class IamResourceTokenVerificationEndToEndTest {
             userRepository.deleteById(user.getId());
         }
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         }
         if (crossApplicationId != null) {
-            trustedApplicationService.deleteApplication(crossApplicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(crossApplicationId);
         }
     }
 

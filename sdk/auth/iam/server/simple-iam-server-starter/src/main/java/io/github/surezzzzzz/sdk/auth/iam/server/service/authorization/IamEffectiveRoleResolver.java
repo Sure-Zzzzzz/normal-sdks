@@ -40,6 +40,16 @@ public class IamEffectiveRoleResolver {
     }
 
     /**
+     * AKU 所属人安全纪元直接映射 IAM 用户的 permission_version，避免第二份可漂移版本列。
+     */
+    public Long resolveUserPermissionVersion(Long userId) {
+        return userRepository.findById(userId)
+                .map(IamUserEntity::getPermissionVersion)
+                .filter(version -> version >= 0L)
+                .orElse(0L);
+    }
+
+    /**
      * 解析用户有效角色及其来源：个人直接授予标记 DIRECT；直属部门挂载的角色标记 DEPARTMENT_INHERITED，
      * 若同一角色个人也直接持有，以个人直接为准
      */

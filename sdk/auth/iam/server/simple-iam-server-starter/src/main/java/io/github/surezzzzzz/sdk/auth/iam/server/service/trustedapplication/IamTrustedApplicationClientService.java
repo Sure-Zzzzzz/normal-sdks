@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.TrustedApplicationClientType;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationClientRequest;
@@ -67,12 +68,6 @@ public class IamTrustedApplicationClientService {
             "UPDATE oauth2_registered_client SET application_id = ? WHERE id = ?";
     private static final String SQL_COUNT_CLIENT_BY_CLIENT_ID =
             "SELECT COUNT(*) FROM oauth2_registered_client WHERE client_id = ?";
-    private static final String SQL_DELETE_AUTHORIZATION =
-            "DELETE FROM oauth2_authorization WHERE registered_client_id = ?";
-    private static final String SQL_DELETE_AUTHORIZATION_CONSENT =
-            "DELETE FROM oauth2_authorization_consent WHERE registered_client_id = ?";
-    private static final String SQL_DELETE_IAM_CONSENT_BY_CLIENT =
-            "DELETE FROM iam_consent WHERE client_id = ?";
     private static final String SQL_DELETE_REGISTERED_CLIENT =
             "DELETE FROM oauth2_registered_client WHERE id = ?";
     private static final int SECRET_BYTES = 32;
@@ -83,6 +78,8 @@ public class IamTrustedApplicationClientService {
     private final PasswordEncoder passwordEncoder;
     private final RedirectUriHelper redirectUriHelper;
     private final IamAuditEventPublisher auditEventPublisher;
+    private final IamTrustedApplicationLifecycleService lifecycleService;
+    private final IamTrustedApplicationAuthorizationCleanupService authorizationCleanupService;
     private final SimpleIamServerProperties properties;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -97,6 +94,7 @@ public class IamTrustedApplicationClientService {
     public TrustedApplicationClientSecretResponse addClient(Long applicationId,
                                                             CreateTrustedApplicationClientRequest request) {
         requireApplication(applicationId);
+        lifecycleService.requireMutable(applicationId);
         String clientId = normalizeRequired(request.getClientId(), "客户端ID不能为空");
         if (jdbcTemplate.queryForObject(SQL_COUNT_CLIENT_BY_CLIENT_ID, Integer.class, clientId) > 0) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_ID_EXISTS,
@@ -183,6 +181,7 @@ public class IamTrustedApplicationClientService {
     @Transactional
     public TrustedApplicationClientResponse updateClient(Long applicationId, String clientId,
                                                          UpdateTrustedApplicationClientRequest request) {
+        lifecycleService.requireMutable(applicationId);
         RegisteredClient existing = requireClientBelongingToApp(applicationId, clientId);
         List<String> redirectUris = redirectUriHelper.normalizeAndValidate(request.getRedirectUris());
         List<AuthorizationGrantType> grantTypes = Collections.singletonList(AuthorizationGrantType.AUTHORIZATION_CODE);
@@ -216,10 +215,14 @@ public class IamTrustedApplicationClientService {
      */
     @Transactional
     public void deleteClient(Long applicationId, String clientId) {
+        lifecycleService.requireMutable(applicationId);
         RegisteredClient client = requireClientBelongingToApp(applicationId, clientId);
-        jdbcTemplate.update(SQL_DELETE_AUTHORIZATION, client.getId());
-        jdbcTemplate.update(SQL_DELETE_AUTHORIZATION_CONSENT, client.getId());
-        jdbcTemplate.update(SQL_DELETE_IAM_CONSENT_BY_CLIENT, clientId);
+        while (authorizationCleanupService.removeAuthorizationBatch(
+                Collections.singletonList(client.getId()), SimpleIamServerConstant.DEFAULT_CLEANUP_BATCH_SIZE) > 0L) {
+            // 单独删除 client 仍保持同步语义，逐批清理避免一次加载全部授权。
+        }
+        authorizationCleanupService.removeConsentRows(Collections.singletonList(client.getId()),
+                Collections.singletonList(clientId));
         jdbcTemplate.update(SQL_DELETE_REGISTERED_CLIENT, client.getId());
         log.info("可信应用客户端删除成功：applicationId={}, clientId={}", applicationId, clientId);
         auditEventPublisher.publishAdminAction(AdminActionType.DELETED, AdminSubjectType.OAUTH_CLIENT,

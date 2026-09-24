@@ -7,9 +7,11 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEnti
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,7 +43,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = SimpleIamServerTestApplication.class)
+@SpringBootTest(classes = SimpleIamServerTestApplication.class, properties = {
+        "io.github.surezzzzzz.sdk.auth.iam.server.internal-reader.enabled=true",
+        "io.github.surezzzzzz.sdk.auth.iam.server.internal-reader.client-secret=Reader-Test-Only@2026"
+})
 @AutoConfigureMockMvc
 class IamAdminTrustedApplicationApiTest {
 
@@ -59,6 +64,11 @@ class IamAdminTrustedApplicationApiTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
+
+    @Autowired
+    private IamTrustedApplicationCleanupWorker cleanupWorker;
 
     @Autowired
     private IamApplicationPermissionManifestService manifestService;
@@ -119,7 +129,7 @@ class IamAdminTrustedApplicationApiTest {
         Long applicationId = findApplicationId();
         if (applicationId != null) {
             jdbcTemplate.update("DELETE FROM iam_application_authorization WHERE application_id = ?", applicationId);
-            trustedApplicationService.deleteApplication(applicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         }
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
@@ -180,6 +190,30 @@ class IamAdminTrustedApplicationApiTest {
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.number").doesNotExist())
                 .andExpect(jsonPath("$.content[0].applicationCode").value(applicationCode));
+    }
+
+    @Test
+    @DisplayName("AKU 所属人授权继承应由管理员经 CSRF 独立开关并推进应用授权纪元")
+    void ownerInheritanceMustUseDedicatedAdminEndpoint() throws Exception {
+        Long applicationId = createApplication("https://example.com/callback");
+        String path = "/iam/admin/trusted-applications/" + applicationId + "/owner-inheritance";
+
+        mockMvc.perform(get(path).cookie(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationId").value(applicationId))
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(jsonPath("$.applicationAuthorizationEpoch").value(1));
+        mockMvc.perform(get(path).cookie(userSession))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put(path + "?enabled=true").cookie(adminSession))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put(path + "?enabled=true").cookie(adminSession).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationId").value(applicationId))
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.applicationAuthorizationEpoch").value(2));
+
+        log.info("管理 API 所属人授权继承独立开关生效：applicationId={}", applicationId);
     }
 
     @Test
@@ -285,12 +319,17 @@ class IamAdminTrustedApplicationApiTest {
     }
 
     @Test
-    @DisplayName("删除应用应级联删除客户端并无法再读取")
+    @DisplayName("删除应用应返回 202，完成后无法再读取")
     void testDeleteApplicationContract() throws Exception {
         Long applicationId = createApplication("https://example.com/callback");
 
         mockMvc.perform(delete("/iam/admin/trusted-applications/" + applicationId).cookie(adminSession).with(csrf()))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.action").value("DELETE"))
+                .andExpect(jsonPath("$.state").value("PENDING"))
+                .andExpect(jsonPath("$.retryable").value(false));
+
+        cleanupWorker.processNextOperation();
 
         mockMvc.perform(get("/iam/admin/trusted-applications/" + applicationId).cookie(adminSession))
                 .andExpect(status().isNotFound())

@@ -30,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = SimpleIamServerTestApplication.class)
+@SpringBootTest(classes = SimpleIamServerTestApplication.class, properties =
+        "io.github.surezzzzzz.sdk.auth.iam.server.internal-reader.enabled=false")
 class ServiceLayerTest {
 
     private final String suffix = UUID.randomUUID().toString().substring(0, 8);
@@ -97,15 +98,20 @@ class ServiceLayerTest {
     }
 
     @Test
-    @DisplayName("enableUser / disableUser 应切换状态")
+    @DisplayName("enableUser / disableUser 应切换状态并推进安全纪元")
     void testEnableDisableUser() {
         IamUserEntity user = userService.createUser(createReq(testUsername, "Test@1234"));
+        Long initialPermissionVersion = user.getPermissionVersion();
 
         userService.disableUser(user.getId());
         assertEquals(0, userRepository.findById(user.getId()).get().getStatus());
+        assertEquals(Long.valueOf(initialPermissionVersion.longValue() + 1L),
+                userRepository.findById(user.getId()).get().getPermissionVersion());
 
         userService.enableUser(user.getId());
         assertEquals(1, userRepository.findById(user.getId()).get().getStatus());
+        assertEquals(Long.valueOf(initialPermissionVersion.longValue() + 2L),
+                userRepository.findById(user.getId()).get().getPermissionVersion());
     }
 
     @Test

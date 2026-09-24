@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationAccessGuard;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -38,6 +39,7 @@ public class IamCachedOAuth2AuthorizationService implements OAuth2AuthorizationS
     private final int ttlSeconds;
     private final IamSessionService sessionService;
     private final IamOAuth2AuthorizeContextService authorizeContextService;
+    private final IamTrustedApplicationAccessGuard trustedApplicationAccessGuard;
 
     /**
      * 保存授权并刷新缓存
@@ -46,7 +48,13 @@ public class IamCachedOAuth2AuthorizationService implements OAuth2AuthorizationS
      */
     @Override
     public void save(OAuth2Authorization authorization) {
-        OAuth2Authorization authorizationToSave = bindCurrentIamSession(authorization);
+        OAuth2Authorization authorizationToSave = trustedApplicationAccessGuard.bindSecurityEpoch(
+                bindCurrentIamSession(authorization));
+        if (!trustedApplicationAccessGuard.isAuthorizationAllowed(authorizationToSave)) {
+            log.debug("拒绝保存已停用可信应用的 OAuth2 授权：registeredClientId={}",
+                    authorization.getRegisteredClientId());
+            return;
+        }
         delegate.save(authorizationToSave);
         synchronizeAuthorizeContext(authorizationToSave);
         putAuthorization(authorizationToSave);
@@ -127,13 +135,13 @@ public class IamCachedOAuth2AuthorizationService implements OAuth2AuthorizationS
         OAuth2Authorization cached = cacheManager.get(SimpleIamServerConstant.CACHE_OAUTH2_AUTHORIZATION,
                 buildIdKey(id));
         if (cached != null) {
-            return cached;
+            return trustedApplicationAccessGuard.isAuthorizationAllowed(cached) ? cached : null;
         }
         OAuth2Authorization loaded = delegate.findById(id);
         if (loaded != null) {
             putAuthorization(loaded);
         }
-        return loaded;
+        return trustedApplicationAccessGuard.isAuthorizationAllowed(loaded) ? loaded : null;
     }
 
     /**
@@ -149,13 +157,15 @@ public class IamCachedOAuth2AuthorizationService implements OAuth2AuthorizationS
         String tokenKey = buildTokenKey(token, tokenType);
         OAuth2Authorization cached = cacheManager.get(SimpleIamServerConstant.CACHE_OAUTH2_AUTHORIZATION, tokenKey);
         if (cached != null) {
-            return isBoundSessionActive(cached, tokenType) ? cached : null;
+            return isBoundSessionActive(cached, tokenType)
+                    && trustedApplicationAccessGuard.isAuthorizationAllowed(cached) ? cached : null;
         }
         OAuth2Authorization loaded = delegate.findByToken(token, tokenType);
         if (loaded != null) {
             putAuthorization(loaded);
         }
-        return isBoundSessionActive(loaded, tokenType) ? loaded : null;
+        return isBoundSessionActive(loaded, tokenType)
+                && trustedApplicationAccessGuard.isAuthorizationAllowed(loaded) ? loaded : null;
     }
 
     private boolean isBoundSessionActive(OAuth2Authorization authorization, @Nullable OAuth2TokenType tokenType) {

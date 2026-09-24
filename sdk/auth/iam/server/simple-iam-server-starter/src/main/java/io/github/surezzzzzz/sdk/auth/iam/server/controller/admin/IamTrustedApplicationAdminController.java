@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationClientRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
@@ -44,6 +45,7 @@ public class IamTrustedApplicationAdminController {
     private final IamTrustedApplicationService trustedApplicationService;
     private final IamTrustedApplicationClientService trustedApplicationClientService;
     private final IamApplicationPermissionManifestService applicationPermissionManifestService;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
 
     // ==================== 应用维度 ====================
 
@@ -103,12 +105,37 @@ public class IamTrustedApplicationAdminController {
     }
 
     /**
-     * 删除可信应用（按菜单 → Portal → 权限清单 → 授权规则 → 应用授权投影 → Consent 投影 → 客户端 → 应用 级联）
+     * 异步删除可信应用。
      */
     @DeleteMapping("/{applicationId}")
-    public ResponseEntity<Void> deleteApplication(@PathVariable Long applicationId) {
-        trustedApplicationService.deleteApplication(applicationId);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<TrustedApplicationCleanupOperationResponse> deleteApplication(@PathVariable Long applicationId) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(trustedApplicationService.deleteApplication(applicationId));
+    }
+
+    @PostMapping("/{applicationId}/suspend")
+    public ResponseEntity<TrustedApplicationResponse> suspendApplication(@PathVariable Long applicationId) {
+        return ResponseEntity.ok(trustedApplicationService.suspendApplication(applicationId));
+    }
+
+    @PostMapping("/{applicationId}/resume")
+    public ResponseEntity<TrustedApplicationResponse> resumeApplication(@PathVariable Long applicationId) {
+        return ResponseEntity.ok(trustedApplicationService.resumeApplication(applicationId));
+    }
+
+    /**
+     * AKU 继承是 IAM 对人员当前三权的显式授权，不是 Portal 展示或应用全局启停的别名。
+     */
+    @GetMapping("/{applicationId}/owner-inheritance")
+    public ResponseEntity<OwnerInheritanceResponse> getOwnerInheritance(@PathVariable Long applicationId) {
+        return ResponseEntity.ok(toOwnerInheritanceResponse(authorizationStateService.getState(applicationId)));
+    }
+
+    @PutMapping("/{applicationId}/owner-inheritance")
+    public ResponseEntity<OwnerInheritanceResponse> updateOwnerInheritance(@PathVariable Long applicationId,
+                                                                           @RequestParam boolean enabled) {
+        trustedApplicationService.getApplication(applicationId);
+        return ResponseEntity.ok(toOwnerInheritanceResponse(
+                authorizationStateService.updateOwnerInheritance(applicationId, enabled)));
     }
 
     // ==================== 客户端维度（挂在应用下） ====================
@@ -179,5 +206,14 @@ public class IamTrustedApplicationAdminController {
         HttpStatus status = response.getManifestVersion() == 1L
                 ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(response);
+    }
+
+    private OwnerInheritanceResponse toOwnerInheritanceResponse(
+            io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationStateEntity state) {
+        return OwnerInheritanceResponse.builder()
+                .applicationId(state.getApplicationId())
+                .enabled(SimpleIamServerConstant.STATUS_ACTIVE == state.getOwnerInheritanceEnabled().intValue())
+                .applicationAuthorizationEpoch(state.getAuthorizationEpoch())
+                .build();
     }
 }

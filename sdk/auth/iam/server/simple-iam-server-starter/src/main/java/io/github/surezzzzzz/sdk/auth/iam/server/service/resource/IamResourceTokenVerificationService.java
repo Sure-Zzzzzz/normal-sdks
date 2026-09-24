@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity
 import io.github.surezzzzzz.sdk.auth.iam.server.event.TokenVerifiedEvent;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationAccessGuard;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class IamResourceTokenVerificationService {
     private final IamUserRepository userRepository;
     private final IamSessionService sessionService;
     private final IamApplicationAuthorizationService applicationAuthorizationService;
+    private final IamTrustedApplicationAccessGuard trustedApplicationAccessGuard;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -60,10 +62,16 @@ public class IamResourceTokenVerificationService {
         if (verificationClient == null || token == null || token.trim().isEmpty()) {
             return null;
         }
+        if (!trustedApplicationAccessGuard.isApplicationActive(verificationClient.getApplicationId())) {
+            return null;
+        }
         OAuth2Authorization authorization = authorizationService.findByToken(
                 token, OAuth2TokenType.ACCESS_TOKEN);
         if (authorization == null || authorization.getAccessToken() == null
                 || authorization.getAccessToken().isInvalidated()) {
+            return null;
+        }
+        if (!trustedApplicationAccessGuard.isAuthorizationAllowed(authorization)) {
             return null;
         }
         OAuth2AccessToken accessToken = authorization.getAccessToken().getToken();

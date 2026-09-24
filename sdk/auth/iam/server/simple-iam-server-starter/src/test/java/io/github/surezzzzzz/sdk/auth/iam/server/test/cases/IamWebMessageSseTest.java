@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,6 +32,7 @@ import javax.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -151,8 +153,12 @@ class IamWebMessageSseTest {
                 .andExpect(request().asyncStarted());
 
         verify(sseService).register(eq(recipient.getId()), any());
-        verify(sseService).pushUnreadCount(org.mockito.ArgumentMatchers.eq(recipient.getId()),
-                org.mockito.ArgumentMatchers.any(SseEmitter.class), org.mockito.ArgumentMatchers.eq(1L));
+        // 首帧未读数经 pushInitialUnreadCount 后台线程推送（防 SSE+OSIV 连接泄漏），
+        // 此处捕获 supplier 并执行，确认查询语义仍是当前未读数
+        ArgumentCaptor<LongSupplier> initialCountCaptor = ArgumentCaptor.forClass(LongSupplier.class);
+        verify(sseService).pushInitialUnreadCount(eq(recipient.getId()), any(SseEmitter.class),
+                initialCountCaptor.capture());
+        assertEquals(1L, initialCountCaptor.getValue().getAsLong(), "首帧未读数查询应返回当前未读数");
     }
 
     @Test
@@ -200,8 +206,8 @@ class IamWebMessageSseTest {
                 .andExpect(status().isOk());
 
         verify(sseService, never()).pushUnreadCount(anyLong(), anyLong());
-        verify(sseService).pushUnreadCount(eq(recipient.getId()), eq(firstEmitter), anyLong());
-        verify(sseService).pushUnreadCount(eq(recipient.getId()), eq(secondEmitter), anyLong());
+        verify(sseService).pushInitialUnreadCount(eq(recipient.getId()), eq(firstEmitter), any());
+        verify(sseService).pushInitialUnreadCount(eq(recipient.getId()), eq(secondEmitter), any());
     }
 
     @Test

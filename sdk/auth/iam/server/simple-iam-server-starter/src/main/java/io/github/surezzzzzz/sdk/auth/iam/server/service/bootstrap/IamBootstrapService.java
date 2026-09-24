@@ -27,6 +27,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedAppl
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
@@ -75,6 +76,7 @@ public class IamBootstrapService implements ApplicationRunner {
     private final IamPortalMenuTreeService portalMenuTreeService;
     private final IamPortalApplicationOrderService portalApplicationOrderService;
     private final IamAuthorizationProjectionService projectionService;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
     private final IamUserService userService;
     private final IamRoleService roleService;
     private final PasswordPolicyValidator passwordPolicyValidator;
@@ -227,9 +229,12 @@ public class IamBootstrapService implements ApplicationRunner {
             application.setApplicationCode(config.getApplicationCode());
             application.setApplicationName(config.getApplicationName());
             application.setDescription(config.getDescription());
+            application.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
+            application.setApplicationSecurityEpoch(1L);
             application.setCreatedAt(Instant.now());
             application.setUpdatedAt(Instant.now());
             IamTrustedApplicationEntity saved = trustedApplicationRepository.save(application);
+            authorizationStateService.ensureInitialState(saved.getId());
 
             IamTrustedApplicationPortalEntity portal = new IamTrustedApplicationPortalEntity();
             portal.setApplicationId(saved.getId());
@@ -444,6 +449,7 @@ public class IamBootstrapService implements ApplicationRunner {
         IamUserEntity admin = userService.createUser(request);
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         roleService.assignRole(admin.getId(), adminRole.getId());
+        // 首次引导密码只输出一次；账号已存在时不会再次生成或输出。
         log.info("管理员账号引导完成：username={}, id={}, initialPassword={}",
                 admin.getUsername(), admin.getId(), initialPassword);
         return initialPassword;

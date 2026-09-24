@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationStateEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleAuthorizationRuleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
@@ -59,6 +60,8 @@ public class IamAuthorizationProjectionService {
     private final IamRoleAuthorizationRuleRepository ruleRepository;
     private final IamApplicationPermissionManifestService manifestService;
     private final IamEffectiveRoleResolver effectiveRoleResolver;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
+    private final IamAkskAuthorizationChangeService changeService;
 
     /**
      * 场景1：管理员为用户授予某应用的准入权限。
@@ -105,6 +108,7 @@ public class IamAuthorizationProjectionService {
     @Transactional
     public void onRoleAuthorizationRuleChanged(Long roleId, Long applicationId) {
         log.info("授权投影更新：角色规则变更触发 - roleId={}, applicationId={}", roleId, applicationId);
+        authorizationStateService.advanceAuthorizationEpoch(applicationId);
         List<Long> userIds = new ArrayList<>(effectiveRoleResolver.resolveUserIdsByRoleId(roleId));
         for (Long userId : userIds) {
             recomputeProjection(userId, applicationId, false);
@@ -121,6 +125,7 @@ public class IamAuthorizationProjectionService {
     @Transactional
     public void onManifestUpdated(Long applicationId) {
         log.info("授权投影更新：清单更新触发 - applicationId={}", applicationId);
+        authorizationStateService.advanceAuthorizationEpoch(applicationId);
         IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
         Set<Long> ruleRoleIds = ruleRepository.findByApplicationId(applicationId).stream()
                 .map(IamRoleAuthorizationRuleEntity::getRoleId)
@@ -142,6 +147,7 @@ public class IamAuthorizationProjectionService {
             authorization.setManifestDigest(manifest.getManifestDigest());
             authorization.setUpdatedAt(Instant.now());
             authorizationRepository.save(authorization);
+            changeService.recordProjection(authorization, IamAkskAuthorizationChangeService.REASON_APPLICATION_ADMISSION_REVOKED);
             syncedOnly++;
         }
         log.info("授权投影清单同步完成：applicationId={}, 重算用户数={}, 仅同步版本数={}",
@@ -161,10 +167,33 @@ public class IamAuthorizationProjectionService {
                 .orElse(null);
         if (authorization != null) {
             authorization.setAdmitted(SimpleIamServerConstant.STATUS_INACTIVE);
+            authorization.setProjectionAccessEpoch(authorization.getProjectionAccessEpoch() + 1L);
             authorization.setRevokedAt(Instant.now());
             authorization.setUpdatedAt(Instant.now());
             authorizationRepository.save(authorization);
+            changeService.recordProjection(authorization, IamAkskAuthorizationChangeService.REASON_OWNER_SECURITY_EPOCH_SYNCHRONIZED);
         }
+    }
+
+    /**
+     * 仅同步用户既有投影的 owner 安全纪元。
+     *
+     * <p>用户启禁用等生命周期事件需要让旧 AKU Token 失效，但并不等同于角色变更。
+     * 因此这里不能重算角色规则并覆盖管理面直接维护的三权内容；只刷新用于
+     * reader 时效校验的安全纪元，且不修改 authorizationVersion。
+     */
+    @Transactional
+    public void synchronizeOwnerSecurityEpoch(Long userId) {
+        Long ownerSecurityEpoch = resolveOwnerSecurityEpoch(userId);
+        int synchronizedCount = 0;
+        for (IamApplicationAuthorizationEntity authorization : authorizationRepository.findByUserId(userId)) {
+            authorization.setOwnerSecurityEpoch(ownerSecurityEpoch);
+            authorization.setUpdatedAt(Instant.now());
+            authorizationRepository.save(authorization);
+            synchronizedCount++;
+        }
+        log.info("授权投影 owner 安全纪元同步完成：userId={}, ownerSecurityEpoch={}, count={}",
+                userId, ownerSecurityEpoch, synchronizedCount);
     }
 
     /**
@@ -257,17 +286,23 @@ public class IamAuthorizationProjectionService {
             authorization.setUserId(userId);
             authorization.setApplicationId(applicationId);
             authorization.setAuthorizationVersion(1L);
+            authorization.setProjectionAccessEpoch(1L);
             authorization.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
             authorization.setAdmitted(SimpleIamServerConstant.STATUS_ACTIVE);
             authorization.setCreatedAt(Instant.now());
         } else {
             authorization.setAuthorizationVersion(authorization.getAuthorizationVersion() + 1L);
+            authorization.setProjectionAccessEpoch(authorization.getProjectionAccessEpoch() + 1L);
             if (admittedActive) {
                 authorization.setAdmitted(SimpleIamServerConstant.STATUS_ACTIVE);
                 authorization.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
                 authorization.setRevokedAt(null);
             }
         }
+
+        IamApplicationAuthorizationStateEntity state = authorizationStateService.ensureInitialState(applicationId);
+        authorization.setOwnerSecurityEpoch(resolveOwnerSecurityEpoch(userId));
+        authorization.setApplicationAuthorizationEpoch(state.getAuthorizationEpoch());
 
         authorization.setRolesJson(IamApplicationAuthorizationJsonCodec.writeStringList(roleCodes));
         authorization.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(pagePermissions));
@@ -278,6 +313,8 @@ public class IamAuthorizationProjectionService {
         authorization.setUpdatedAt(Instant.now());
 
         authorizationRepository.save(authorization);
+        changeService.recordProjection(authorization, created ? IamAkskAuthorizationChangeService.REASON_APPLICATION_PROJECTION_CREATED
+                : IamAkskAuthorizationChangeService.REASON_APPLICATION_PROJECTION_RECOMPUTED);
 
         log.info("授权投影{}成功：userId={}, applicationId={}, roles={}, pages={}, apis={}, version={}",
                 created ? "创建" : "更新", userId, applicationId, roleCodes.size(),
@@ -290,5 +327,9 @@ public class IamAuthorizationProjectionService {
             applicationIds.add(rule.getApplicationId());
         }
         return applicationIds;
+    }
+
+    private Long resolveOwnerSecurityEpoch(Long userId) {
+        return effectiveRoleResolver.resolveUserPermissionVersion(userId) + 1L;
     }
 }

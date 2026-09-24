@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.resource.IamResourceVeri
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,6 +65,8 @@ class IamAdminResourceVerificationClientApiTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private IamResourceVerificationClientService verificationClientService;
@@ -120,8 +123,8 @@ class IamAdminResourceVerificationClientApiTest {
                 .forEach(client -> verificationClientRepository.delete(client));
         verificationClientRepository.findByApplicationId(otherApplicationId)
                 .forEach(client -> verificationClientRepository.delete(client));
-        trustedApplicationService.deleteApplication(applicationId);
-        trustedApplicationService.deleteApplication(otherApplicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(otherApplicationId);
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
     }

@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRole
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,7 @@ public class IamRoleAuthorizationRuleService {
     private final IamTrustedApplicationRepository applicationRepository;
     private final IamApplicationPermissionManifestService manifestService;
     private final IamAuthorizationProjectionService projectionService;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
 
     /**
      * 为角色设置在指定应用下的授权规则（upsert，幂等重放安全）。
@@ -66,6 +68,7 @@ public class IamRoleAuthorizationRuleService {
 
         requireRole(roleId);
         requireApplication(applicationId);
+        mutationGuard.requireMutable(applicationId);
         normalize(pagePermissions, apiPermissions);
 
         IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
@@ -108,6 +111,7 @@ public class IamRoleAuthorizationRuleService {
      */
     @Transactional
     public void deleteRoleAuthorizationRule(Long roleId, Long applicationId) {
+        mutationGuard.requireMutable(applicationId);
         IamRoleAuthorizationRuleEntity rule = ruleRepository
                 .findByRoleIdAndApplicationId(roleId, applicationId)
                 .orElse(null);

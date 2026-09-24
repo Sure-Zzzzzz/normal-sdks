@@ -2,6 +2,8 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
+当前版本为 `1.2.0`。版本沿革见各 `CHANGELOG.*.md`。
+
 本模块**不提供浏览器页面**：登录页、授权确认页、Portal 和管理界面统一由 Vue Web 承载，IAM Server 只提供 OAuth2/OIDC 协议端点和 JSON API。
 
 ## 契约链路
@@ -68,7 +70,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.1.1"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.2.0"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -243,6 +245,17 @@ dependencies {
 | 端点 | 说明 |
 |---|---|
 | `POST /iam/resource/tokens/verify` | 远程 token 验证：请求体携带 token，校验通过返回 `sub` 与 `iam_authorization` 投影 |
+
+### 与 AKSK 的接入口径
+
+AKSK 管理台作为统一应用门户中的业务应用时，IAM 侧登记一个可信应用，并分别维护两类客户端：
+
+- **应用登录客户端（PKCE）**：只负责浏览器登录和授权码交换；
+- **资源校验客户端**：只负责 AKSK Server 回源调用 `/iam/resource/tokens/verify`，验证 IAM 人员 Token。
+
+资源校验客户端不是 AKU，也不能创建或替代 AK/SK。AKU、AKSK Token、应用授权和业务数据权限仍由 AKSK Server 管理。AKU 所属人授权继承还使用 IAM 与 AKSK 之间固定的内部 reader SERVICE，不能通过浏览器、普通 OAuth2 客户端或资源校验 Basic 客户端代替。
+
+因此，PKCE 解决“用户如何登录”，资源校验客户端解决“资源服务如何验证用户 Token”，授权投影解决“AKSK 如何得到人员当前三权结论”。三者职责不同，不能互相替代。
 
 ## 安全过滤链
 

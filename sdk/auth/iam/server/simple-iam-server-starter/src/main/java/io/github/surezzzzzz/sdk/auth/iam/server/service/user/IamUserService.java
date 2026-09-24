@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamUser
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupMemberRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAkskAuthorizationChangeService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
@@ -58,6 +59,7 @@ public class IamUserService {
     private final IamAuditEventPublisher auditEventPublisher;
     private final IamRoleService roleService;
     private final IamAuthorizationProjectionService projectionService;
+    private final IamAkskAuthorizationChangeService changeService;
     private final IamRedisTokenRepository redisTokenRepository;
     private final IamLoginFailurePolicyService loginFailurePolicySupport;
 
@@ -180,6 +182,11 @@ public class IamUserService {
     public void deleteUser(Long userId) {
         roleService.assertNotLastActiveAdmin(userId);
         IamUserEntity user = getById(userId);
+        user.setStatus(SimpleIamServerConstant.STATUS_INACTIVE);
+        user.setPermissionVersion((user.getPermissionVersion() == null ? 0L : user.getPermissionVersion()) + 1L);
+        user.setUpdatedAt(Instant.now());
+        userRepository.save(user);
+        changeService.recordOwnerState(user, IamAkskAuthorizationChangeService.REASON_OWNER_DELETED);
         sessionService.revokeAllByUserId(userId);
         userRoleRepository.deleteByUserId(userId);
         userGroupMemberRepository.deleteByUserId(userId);
@@ -199,6 +206,8 @@ public class IamUserService {
         user.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
+        advanceAuthorizationForUserLifecycle(userId);
+        changeService.recordOwnerState(getById(userId), IamAkskAuthorizationChangeService.REASON_OWNER_ENABLED);
         log.info("用户启用成功：username={}, id={}", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.ENABLED, AdminSubjectType.USER,
                 String.valueOf(userId), user.getUsername(), null);
@@ -215,6 +224,8 @@ public class IamUserService {
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         sessionService.revokeAllByUserId(userId);
+        advanceAuthorizationForUserLifecycle(userId);
+        changeService.recordOwnerState(getById(userId), IamAkskAuthorizationChangeService.REASON_OWNER_DISABLED);
         log.info("用户禁用成功：username={}, id={}, 已吊销会话", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.DISABLED, AdminSubjectType.USER,
                 String.valueOf(userId), user.getUsername(), null);
@@ -234,6 +245,16 @@ public class IamUserService {
         log.info("用户手动解锁成功：username={}, id={}, 已清除失败计数", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.UNLOCKED, AdminSubjectType.USER,
                 String.valueOf(userId), user.getUsername(), null);
+    }
+
+    /**
+     * 用户启禁用会改变 AKU 所属人的可用性。仅推进安全纪元，
+     * 使恢复后的新授权与禁用前已签发的 AKU Token 不再共享同一 owner epoch。
+     * 用户生命周期不是角色变更，不能重算并覆盖管理员直接维护的应用授权。
+     */
+    private void advanceAuthorizationForUserLifecycle(Long userId) {
+        userRepository.bumpPermissionVersion(Collections.singletonList(userId));
+        projectionService.synchronizeOwnerSecurityEpoch(userId);
     }
 
     /**

@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationP
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,8 @@ class IamAdminRoleAuthorizationRuleApiTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private IamApplicationPermissionManifestService manifestService;
@@ -109,8 +112,8 @@ class IamAdminRoleAuthorizationRuleApiTest {
 
     @AfterEach
     void cleanup() {
-        trustedApplicationService.deleteApplication(applicationId);
-        trustedApplicationService.deleteApplication(bareApplicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(bareApplicationId);
         roleService.deleteRole(roleId);
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));

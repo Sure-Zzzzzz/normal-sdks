@@ -19,11 +19,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRole
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationAdminService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleAuthorizationRuleService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -50,7 +48,10 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = SimpleIamServerTestApplication.class)
+@SpringBootTest(classes = SimpleIamServerTestApplication.class, properties = {
+        "io.github.surezzzzzz.sdk.auth.iam.server.internal-reader.enabled=true",
+        "io.github.surezzzzzz.sdk.auth.iam.server.internal-reader.client-secret=Reader-Test-Only@2026"
+})
 class IamAuthorizationProjectionScenarioTest {
 
     private final String suffix = UUID.randomUUID().toString().substring(0, 8);
@@ -72,6 +73,9 @@ class IamAuthorizationProjectionScenarioTest {
     private IamTrustedApplicationService trustedApplicationService;
 
     @Autowired
+    private IamTrustedApplicationCleanupWorker cleanupWorker;
+
+    @Autowired
     private IamApplicationPermissionManifestService manifestService;
 
     @Autowired
@@ -79,6 +83,12 @@ class IamAuthorizationProjectionScenarioTest {
 
     @Autowired
     private IamAuthorizationProjectionService projectionService;
+
+    @Autowired
+    private IamApplicationAuthorizationStateService authorizationStateService;
+
+    @Autowired
+    private IamOwnerAuthorizationReaderService ownerAuthorizationReaderService;
 
     @Autowired
     private IamApplicationAuthorizationAdminService authorizationAdminService;
@@ -130,7 +140,7 @@ class IamAuthorizationProjectionScenarioTest {
         ruleRepository.findByRoleIdIn(Arrays.asList(roleAId, roleBId, roleCId))
                 .forEach(ruleRepository::delete);
         if (trustedApplicationRepository.existsById(applicationId)) {
-            trustedApplicationService.deleteApplication(applicationId);
+            deleteAndAwaitCompletion(applicationId);
         }
         for (Long roleId : Arrays.asList(roleAId, roleBId, roleCId)) {
             if (roleRepository.existsById(roleId)) {
@@ -303,7 +313,7 @@ class IamAuthorizationProjectionScenarioTest {
         assertTrue(authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isPresent(),
                 "前置：投影行应已创建");
 
-        trustedApplicationService.deleteApplication(applicationId);
+        deleteAndAwaitCompletion(applicationId);
 
         assertTrue(ruleRepository.findByRoleIdIn(Collections.singletonList(roleAId)).isEmpty(),
                 "应用删除必须级联删除其授权规则");
@@ -346,6 +356,7 @@ class IamAuthorizationProjectionScenarioTest {
         IamApplicationAuthorizationEntity projection = requireProjection(userId);
         assertEquals(set("proj:p2"), pages(projection), "手工 PUT 应先落库生效");
         assertEquals(Long.valueOf(2L), projection.getAuthorizationVersion());
+        assertCurrentAuthorizationEpoch(projection);
 
         roleService.assignRole(userId, roleBId);
         projection = requireProjection(userId);
@@ -354,6 +365,73 @@ class IamAuthorizationProjectionScenarioTest {
         assertEquals(Long.valueOf(3L), projection.getAuthorizationVersion());
 
         log.info("手工 PUT 与重算覆盖共存断言完成：userId={}", userId);
+    }
+
+    @Test
+    @DisplayName("应用授权纪元推进必须同步所有存量投影，reader 不得因内部标签滞后误拒绝")
+    void applicationAuthorizationEpochSynchronizesExistingProjections() {
+        projectionService.grantApplicationAdmission(noRoleId, applicationId);
+        IamApplicationAuthorizationEntity projection = requireProjection(noRoleId);
+        Long previousEpoch = projection.getApplicationAuthorizationEpoch();
+
+        authorizationStateService.advanceAuthorizationEpoch(applicationId);
+
+        projection = requireProjection(noRoleId);
+        assertCurrentAuthorizationEpoch(projection);
+        assertTrue(projection.getApplicationAuthorizationEpoch() > previousEpoch,
+                "推进后投影必须携带新的应用授权纪元");
+        assertEquals(Long.valueOf(1L), projection.getAuthorizationVersion(),
+                "仅同步内部纪元不得伪造业务授权内容变更");
+        log.info("应用授权纪元同步断言完成：applicationId={}, authorizationEpoch={}", applicationId,
+                projection.getApplicationAuthorizationEpoch());
+    }
+
+    @Test
+    @DisplayName("用户禁用立即使 owner reader 失效，恢复后 epoch 推进且保留手工三权")
+    void userLifecycleInvalidatesOwnerReaderAndAdvancesEpoch() {
+        PutApplicationAuthorizationRequest manualRequest = new PutApplicationAuthorizationRequest();
+        manualRequest.setAdmitted(Boolean.TRUE);
+        manualRequest.setRoles(Collections.singletonList("proj-admin"));
+        manualRequest.setPagePermissions(Collections.singletonList("proj:p2"));
+        manualRequest.setApiPermissions(Collections.singletonList("proj:a2"));
+        manualRequest.setDataGrantDocument(dataGrantTemplate("proj:user", Collections.singletonList("read"),
+                false, Collections.singletonMap("departmentId", Collections.singletonList("1"))));
+        authorizationAdminService.putAuthorization(userId, applicationId, manualRequest);
+        authorizationStateService.updateOwnerInheritance(applicationId, true);
+
+        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse before =
+                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        assertNotNull(before);
+        assertTrue(before.isActive(), "前置：启用用户的 current projection 应可用");
+        assertEquals(set("proj:a2"), authorizationApiPermissions(before),
+                "前置：reader 必须返回管理面直接维护的 API 权限");
+        assertNotNull(authorizationDataGrant(before), "前置：reader 必须返回管理面直接维护的 DATA 授权");
+
+        userService.disableUser(userId);
+        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse disabled =
+                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        assertNotNull(disabled);
+        assertFalse(disabled.isActive(), "禁用用户后 reader 必须立即失败关闭");
+        assertNull(disabled.getOwnerSecurityEpoch(), "inactive 响应不得泄露可用授权快照");
+
+        userService.enableUser(userId);
+        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse restored =
+                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        assertNotNull(restored);
+        assertTrue(restored.isActive(), "恢复后的投影重算完成后才可重新使用");
+        assertTrue(restored.getOwnerSecurityEpoch().longValue() > before.getOwnerSecurityEpoch().longValue(),
+                "恢复后 owner epoch 必须推进，禁用前 Token 不得复活");
+        assertEquals(set("proj:a2"), authorizationApiPermissions(restored),
+                "用户生命周期不得覆盖管理面直接维护的 API 权限");
+        assertNotNull(authorizationDataGrant(restored),
+                "用户生命周期不得清空管理面直接维护的 DATA 授权");
+        IamApplicationAuthorizationEntity projection = requireProjection(userId);
+        assertEquals(set("proj:a2"), apis(projection),
+                "启用后的授权投影必须保留管理面直接维护的 API 权限");
+        assertNotNull(dataGrantDocument(projection),
+                "启用后的授权投影必须保留管理面直接维护的 DATA 授权");
+        assertEquals(Long.valueOf(1L), projection.getAuthorizationVersion(),
+                "生命周期同步安全纪元不得伪造业务授权内容变更");
     }
 
     @Test
@@ -507,9 +585,37 @@ class IamAuthorizationProjectionScenarioTest {
                         "投影行应存在：userId=" + targetUserId + ", applicationId=" + applicationId));
     }
 
+    private void assertCurrentAuthorizationEpoch(IamApplicationAuthorizationEntity projection) {
+        assertEquals(authorizationStateService.getState(applicationId).getAuthorizationEpoch(),
+                projection.getApplicationAuthorizationEpoch(),
+                "投影的应用授权纪元必须与应用状态一致");
+    }
+
+    private void deleteAndAwaitCompletion(Long targetApplicationId) {
+        trustedApplicationService.deleteApplication(targetApplicationId);
+        for (int attempt = 0; attempt < 5; attempt++) {
+            cleanupWorker.processNextOperation();
+            if (!trustedApplicationRepository.existsById(targetApplicationId)) {
+                return;
+            }
+        }
+        fail("可信应用删除任务未在测试 worker 推进后完成：" + targetApplicationId);
+    }
+
     private Set<String> pages(IamApplicationAuthorizationEntity projection) {
         return new HashSet<>(IamApplicationAuthorizationJsonCodec.readStringList(
                 projection.getPagePermissionsJson(), "pagePermissions"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Set<String> authorizationApiPermissions(
+            io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse response) {
+        return new HashSet<>((List<String>) response.getIamAuthorization().get("apiPermissions"));
+    }
+
+    private Object authorizationDataGrant(
+            io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse response) {
+        return response.getIamAuthorization().get("dataGrantDocument");
     }
 
     private Set<String> apis(IamApplicationAuthorizationEntity projection) {

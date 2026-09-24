@@ -20,6 +20,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.resource.IamResourceVeri
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +81,8 @@ class IamAdminActionEventPublishTest {
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
     @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
+    @Autowired
     private IamResourceVerificationClientService verificationClientService;
     @Autowired
     private IamApplicationAuthorizationAdminService authorizationAdminService;
@@ -123,7 +126,7 @@ class IamAdminActionEventPublishTest {
         jdbcTemplate.update("DELETE FROM iam_role_permission WHERE role_id IN (SELECT id FROM iam_role WHERE code = ?)", roleCode);
         jdbcTemplate.update("DELETE FROM iam_role WHERE code = ?", roleCode);
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         }
     }
 

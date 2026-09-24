@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepositor
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.impl.client.HttpClients;
 import org.junit.jupiter.api.AfterEach;
@@ -85,6 +86,8 @@ class RefreshTokenRotationEndToEndTest {
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
     @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
+    @Autowired
     private IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -112,7 +115,7 @@ class RefreshTokenRotationEndToEndTest {
             userService.deleteUser(user.getId());
         }
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
             applicationId = null;
         }
     }
@@ -124,8 +127,9 @@ class RefreshTokenRotationEndToEndTest {
         Map<String, Object> tokens = authorizationCodeTokens(loginSessionCookie());
 
         assertNotNull(tokens.get("refresh_token"), "授权码流程必须签发 refresh token");
-        assertEquals(3600, ((Number) tokens.get("expires_in")).intValue(),
-                "access token TTL 应取 iam.server.token.access-expires-in 配置值（测试 yml=3600）");
+        int responseTtl = ((Number) tokens.get("expires_in")).intValue();
+        assertTrue(responseTtl >= 3599 && responseTtl <= 3600,
+                "OAuth 响应按秒级倒计时，TTL 应不超过配置值且最多损失一个已流逝秒（测试 yml=3600）");
 
         RegisteredClient persisted = registeredClientRepository.findByClientId(clientId);
         assertNotNull(persisted);

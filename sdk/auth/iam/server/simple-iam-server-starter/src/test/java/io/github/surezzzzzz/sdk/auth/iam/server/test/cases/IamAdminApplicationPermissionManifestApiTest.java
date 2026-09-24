@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleSer
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +58,8 @@ class IamAdminApplicationPermissionManifestApiTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private IamUserService userService;
@@ -90,7 +93,7 @@ class IamAdminApplicationPermissionManifestApiTest {
 
     @AfterEach
     void cleanup() {
-        trustedApplicationService.deleteApplication(applicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
     }

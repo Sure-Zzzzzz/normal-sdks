@@ -13,14 +13,17 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.UpdateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.TrustedApplicationCleanupOperationState;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationCleanupOperationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -54,6 +57,8 @@ import static org.mockito.Mockito.*;
 @SpringBootTest(classes = SimpleIamServerTestApplication.class)
 class IamPortalApplicationServiceTest {
 
+    private static final long CLEANUP_TIMEOUT_MILLIS = 10_000L;
+
     private final String suffix = UUID.randomUUID().toString().substring(0, 8);
     private final String adminUsername = "portal-admin-" + suffix;
     private final String userUsername = "portal-user-" + suffix;
@@ -68,6 +73,12 @@ class IamPortalApplicationServiceTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+
+    @Autowired
+    private IamTrustedApplicationCleanupWorker cleanupWorker;
+
+    @Autowired
+    private IamTrustedApplicationCleanupOperationRepository cleanupOperationRepository;
 
     @Autowired
     private IamUserService userService;
@@ -93,7 +104,8 @@ class IamPortalApplicationServiceTest {
     private Long applicationIdB;
 
     @BeforeEach
-    void prepare() {
+    void prepare() throws InterruptedException {
+        drainPriorCleanupOperations();
         CreateUserRequest adminRequest = new CreateUserRequest();
         adminRequest.setUsername(adminUsername);
         adminRequest.setPassword("Admin@1234");
@@ -114,16 +126,16 @@ class IamPortalApplicationServiceTest {
     }
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws InterruptedException {
         authorizationRepository.findByUserId(adminUserId)
                 .forEach(authorization -> authorizationRepository.delete(authorization));
         authorizationRepository.findByUserId(targetUserId)
                 .forEach(authorization -> authorizationRepository.delete(authorization));
         if (applicationIdA != null) {
-            trustedApplicationService.deleteApplication(applicationIdA);
+            deleteAndAwaitCompletion(applicationIdA);
         }
         if (applicationIdB != null) {
-            trustedApplicationService.deleteApplication(applicationIdB);
+            deleteAndAwaitCompletion(applicationIdB);
         }
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
@@ -412,7 +424,7 @@ class IamPortalApplicationServiceTest {
 
     @Test
     @DisplayName("全局登录首页需要可用默认入口，配置更新和删除均不能留下悬挂引用")
-    void globalLoginLandingRequiresUsableApplicationAndIsClearedOnDelete() {
+    void globalLoginLandingRequiresUsableApplicationAndIsClearedOnDelete() throws InterruptedException {
         List<PortalMenuTreeNodeRequest> tree = Collections.singletonList(
                 page("home", "首页", "/home", null));
         updatePortalConfiguration(applicationIdA, tree, "home", null);
@@ -431,12 +443,72 @@ class IamPortalApplicationServiceTest {
         assertEquals(ErrorCode.TRUSTED_APPLICATION_PORTAL_LOGIN_LANDING_INVALID, exception.getErrorCode(),
                 "全局首页应用不得被直接停用");
 
-        trustedApplicationService.deleteApplication(applicationIdA);
+        assertEquals("PENDING", trustedApplicationService.deleteApplication(applicationIdA).getState(),
+                "删除请求应先受理异步清理操作");
+        assertNull(portalApplicationService.getNavigationContext(targetUserId).getLoginLandingApplicationCode(),
+                "删除受理后停用应用不得继续作为用户可达登录首页");
+        deleteAndAwaitCompletion(applicationIdA);
         applicationIdA = null;
         assertNull(trustedApplicationService.getPortalLoginLanding().getApplicationCode(),
                 "删除全局首页应用必须同步清理单例引用");
 
         log.info("全局登录首页引用完整性断言完成");
+    }
+
+    private void deleteAndAwaitCompletion(Long applicationId) throws InterruptedException {
+        Long operationId = trustedApplicationService.deleteApplication(applicationId).getOperationId();
+        long deadline = System.currentTimeMillis() + CLEANUP_TIMEOUT_MILLIS;
+        while (System.currentTimeMillis() < deadline) {
+            cleanupWorker.processNextOperation();
+            TrustedApplicationCleanupOperationState state = cleanupOperationRepository.findById(operationId)
+                    .map(operation -> operation.getState()).orElse(null);
+            if (TrustedApplicationCleanupOperationState.COMPLETED == state) {
+                assertFalse(portalApplicationExists(applicationId), "删除完成后应用不得保留");
+                return;
+            }
+            if (TrustedApplicationCleanupOperationState.FAILED == state) {
+                fail("可信应用删除任务进入 FAILED：" + applicationId);
+            }
+            Thread.sleep(20L);
+        }
+        fail("可信应用删除任务未在测试 worker 推进后完成：" + applicationId);
+    }
+
+    /**
+     * IAM 全量测试共用测试库。前序用例若只受理异步删除，Portal 全局排序会看见其未完成的根节点；
+     * 此处以操作状态为条件推进队列，避免测试执行顺序改变当前用例的夹具快照。
+     */
+    private void drainPriorCleanupOperations() throws InterruptedException {
+        long deadline = System.currentTimeMillis() + CLEANUP_TIMEOUT_MILLIS;
+        while (hasInFlightCleanupOperation() && System.currentTimeMillis() < deadline) {
+            cleanupWorker.processNextOperation();
+            Thread.sleep(20L);
+        }
+        assertFalse(hasInFlightCleanupOperation(), "前序可信应用删除任务必须在 Portal 夹具创建前收敛");
+        assertFalse(hasFailedCleanupOperation(), "前序可信应用删除任务不得以 FAILED 状态污染 Portal 夹具");
+    }
+
+    private boolean hasInFlightCleanupOperation() {
+        return cleanupOperationRepository.findAll().stream().anyMatch(operation -> {
+            TrustedApplicationCleanupOperationState state = operation.getState();
+            return TrustedApplicationCleanupOperationState.PENDING == state
+                    || TrustedApplicationCleanupOperationState.RETRYING == state
+                    || TrustedApplicationCleanupOperationState.RUNNING == state;
+        });
+    }
+
+    private boolean hasFailedCleanupOperation() {
+        return cleanupOperationRepository.findAll().stream().anyMatch(operation ->
+                TrustedApplicationCleanupOperationState.FAILED == operation.getState());
+    }
+
+    private boolean portalApplicationExists(Long applicationId) {
+        try {
+            trustedApplicationService.getApplication(applicationId);
+            return true;
+        } catch (SimpleIamServerException exception) {
+            return false;
+        }
     }
 
     @Test

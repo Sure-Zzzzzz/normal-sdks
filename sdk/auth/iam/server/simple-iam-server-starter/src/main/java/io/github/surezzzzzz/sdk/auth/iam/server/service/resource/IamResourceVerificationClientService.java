@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerExcepti
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.resource.IamResourceVerificationClientRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -55,6 +56,7 @@ public class IamResourceVerificationClientService {
     private final IamAuditEventPublisher auditEventPublisher;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
     private final SecureRandom secureRandom = new SecureRandom();
 
     /**
@@ -84,6 +86,7 @@ public class IamResourceVerificationClientService {
     public ResourceVerificationClientSecretResponse createClient(Long applicationId,
                                                                  CreateResourceVerificationClientRequest request) {
         requireApplication(applicationId);
+        mutationGuard.requireMutable(applicationId);
         String clientId = normalizeClientId(request.getClientId());
         if (clientRepository.findByClientId(clientId).isPresent()) {
             throw clientExists(clientId);
@@ -145,6 +148,7 @@ public class IamResourceVerificationClientService {
      */
     @Transactional
     public ResourceVerificationClientSecretResponse rotateSecret(Long applicationId, String clientId) {
+        mutationGuard.requireMutable(applicationId);
         IamResourceVerificationClientEntity client = requireClientBelongingToApplication(applicationId, clientId);
         if (client.getStatus() == null
                 || SimpleIamServerConstant.STATUS_ACTIVE != client.getStatus().intValue()) {
@@ -172,6 +176,7 @@ public class IamResourceVerificationClientService {
      */
     @Transactional
     public void revokeClient(Long applicationId, String clientId) {
+        mutationGuard.requireMutable(applicationId);
         IamResourceVerificationClientEntity client = requireClientBelongingToApplication(applicationId, clientId);
         if (client.getStatus() != null
                 && SimpleIamServerConstant.STATUS_ACTIVE == client.getStatus().intValue()) {

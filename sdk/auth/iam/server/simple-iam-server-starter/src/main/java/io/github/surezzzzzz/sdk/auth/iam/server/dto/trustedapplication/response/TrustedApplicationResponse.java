@@ -40,8 +40,15 @@ public class TrustedApplicationResponse {
     private String icon;
 
     /**
-     * 关联客户端数量
+     * 应用全局安全状态：1=可用，0=停用。
      */
+    private Integer status;
+
+    /**
+     * 应用 OAuth 生命周期安全纪元。
+     */
+    private Long applicationSecurityEpoch;
+
     /**
      * 关联客户端数量，数据库 COUNT(*) 结果使用 long，避免累计数量溢出。
      */

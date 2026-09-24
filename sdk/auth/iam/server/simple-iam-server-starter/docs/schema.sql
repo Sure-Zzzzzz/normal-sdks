@@ -328,6 +328,7 @@ CREATE TABLE iam_consent (
     client_id VARCHAR(100) NOT NULL COMMENT '客户端ID',
     authorized_scopes VARCHAR(1000) NOT NULL COMMENT '规范化已授权范围',
     status INT NOT NULL DEFAULT 1 COMMENT '状态：1=有效，0=已撤销',
+    application_security_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '授予时应用安全纪元',
     granted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '授权时间',
     revoked_at TIMESTAMP NULL DEFAULT NULL COMMENT '撤销时间',
     PRIMARY KEY (id),
@@ -341,6 +342,9 @@ CREATE TABLE iam_consent (
 -- =====================================================
 
 DROP TABLE IF EXISTS iam_resource_verification_client;
+DROP TABLE IF EXISTS iam_aksk_authorization_change;
+DROP TABLE IF EXISTS iam_trusted_application_cleanup_operation;
+DROP TABLE IF EXISTS iam_application_authorization_state;
 DROP TABLE IF EXISTS iam_application_authorization;
 DROP TABLE IF EXISTS iam_role_authorization_rule;
 DROP TABLE IF EXISTS iam_application_permission_manifest;
@@ -354,11 +358,32 @@ CREATE TABLE iam_trusted_application (
     application_name VARCHAR(128) NOT NULL COMMENT '应用展示名',
     description VARCHAR(255) DEFAULT NULL COMMENT '应用描述',
     icon VARCHAR(64) DEFAULT NULL COMMENT '应用图标标识',
+    status INT NOT NULL DEFAULT 1 COMMENT '应用全局安全状态：1=可用，0=停用',
+    application_security_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '应用OAuth安全纪元，停用/恢复单调递增',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_application_code (application_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用主表';
+
+CREATE TABLE iam_trusted_application_cleanup_operation (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '操作ID',
+    application_id BIGINT NOT NULL COMMENT '应用ID审计快照，不设外键',
+    action VARCHAR(32) NOT NULL COMMENT '操作类型，当前固定DELETE',
+    state VARCHAR(32) NOT NULL COMMENT 'PENDING/RUNNING/RETRYING/COMPLETED/FAILED',
+    registered_client_ids_json LONGTEXT NOT NULL COMMENT '删除接收时冻结的SAS registered client ID快照',
+    cursor_value BIGINT NOT NULL DEFAULT 0 COMMENT '清理游标',
+    attempt_count BIGINT NOT NULL DEFAULT 0 COMMENT '尝试次数',
+    lease_until TIMESTAMP NULL DEFAULT NULL COMMENT 'worker租约截止时间',
+    lease_owner VARCHAR(64) DEFAULT NULL COMMENT 'worker租约随机持有标识，不对管理端暴露',
+    failure_category VARCHAR(64) DEFAULT NULL COMMENT '对管理端可见的失败类别',
+    accepted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    version BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
+    PRIMARY KEY (id),
+    KEY idx_cleanup_application_state (application_id, state, id),
+    KEY idx_cleanup_state_lease (state, lease_until, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用异步删除操作表';
 
 CREATE TABLE iam_application_authorization (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -370,6 +395,9 @@ CREATE TABLE iam_application_authorization (
     api_permissions_json LONGTEXT NOT NULL COMMENT '应用精确API权限JSON数组',
     data_grant_document_json LONGTEXT DEFAULT NULL COMMENT '数据授权文档JSON',
     authorization_version BIGINT NOT NULL COMMENT '单调递增的应用授权版本',
+    owner_security_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人安全纪元：iam_user.permission_version + 1',
+    application_authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '可信应用 AKU 授权纪元',
+    projection_access_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人应用访问纪元，撤权或替换后旧AKU不可复活',
     manifest_version VARCHAR(128) NOT NULL COMMENT '权限清单版本',
     manifest_digest VARCHAR(256) NOT NULL COMMENT '权限清单摘要',
     status INT NOT NULL DEFAULT 1 COMMENT '状态：1=有效，0=撤销',
@@ -381,6 +409,33 @@ CREATE TABLE iam_application_authorization (
     KEY idx_application_user_status (application_id, user_id, status),
     KEY idx_user_status (user_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM用户应用授权投影表';
+
+CREATE TABLE iam_application_authorization_state (
+    application_id BIGINT NOT NULL COMMENT '可信应用ID',
+    authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT 'AKU应用授权纪元，只增不减',
+    owner_inherited_access_epoch BIGINT NOT NULL DEFAULT 1 COMMENT 'OWNER_INHERITED目标应用访问纪元，只增不减',
+    owner_inheritance_enabled INT NOT NULL DEFAULT 0 COMMENT '是否允许创建和使用OWNER_INHERITED AKU',
+    recompute_barrier INT NOT NULL DEFAULT 0 COMMENT '批量投影重算屏障，1时reader失败关闭',
+    barrier_version BIGINT NOT NULL DEFAULT 0 COMMENT '屏障版本',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (application_id),
+    KEY idx_inheritance_barrier (owner_inheritance_enabled, recompute_barrier, application_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用AKU授权状态表';
+
+CREATE TABLE iam_aksk_authorization_change (
+    source_sequence BIGINT NOT NULL AUTO_INCREMENT COMMENT '全局授权变更顺序',
+    event_id VARCHAR(36) NOT NULL COMMENT '事件幂等标识',
+    change_type VARCHAR(32) NOT NULL COMMENT 'OWNER_STATE/TARGET_APPLICATION_STATE/OWNER_APPLICATION_PROJECTION',
+    aggregate_key VARCHAR(320) NOT NULL COMMENT '稳定聚合键',
+    reason_code VARCHAR(64) NOT NULL COMMENT '脱敏变更原因',
+    schema_version BIGINT NOT NULL DEFAULT 1 COMMENT '载荷结构版本',
+    payload_json LONGTEXT NOT NULL COMMENT '最终授权状态快照，不保存密钥或Token',
+    occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交前记录时间',
+    PRIMARY KEY (source_sequence),
+    UNIQUE KEY uk_iam_aksk_authorization_change_event (event_id),
+    KEY idx_iam_aksk_authorization_change_occurred (occurred_at, source_sequence)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM到AKSK授权控制面变更日志';
 
 CREATE TABLE iam_application_permission_manifest (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -544,4 +599,4 @@ WHERE r.code = 'iam_admin'
   );
 
 SET FOREIGN_KEY_CHECKS = 1;
-SELECT 'Simple IAM Server 1.1.1 schema initialization completed!' AS status;
+SELECT 'Simple IAM Server 1.2.0 schema initialization completed!' AS status;

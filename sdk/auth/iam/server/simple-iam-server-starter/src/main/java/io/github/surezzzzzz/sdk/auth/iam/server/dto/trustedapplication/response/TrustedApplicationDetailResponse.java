@@ -43,6 +43,16 @@ public class TrustedApplicationDetailResponse {
     private String icon;
 
     /**
+     * 应用全局安全状态：1=可用，0=停用。
+     */
+    private Integer status;
+
+    /**
+     * 应用 OAuth 生命周期安全纪元。
+     */
+    private Long applicationSecurityEpoch;
+
+    /**
      * 是否内置应用（平台引导注册，禁止删除）
      */
     private boolean builtIn;

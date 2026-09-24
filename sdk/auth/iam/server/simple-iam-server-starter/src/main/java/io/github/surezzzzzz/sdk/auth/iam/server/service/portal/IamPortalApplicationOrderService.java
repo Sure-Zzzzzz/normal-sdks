@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamPortalSettingRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,6 +50,7 @@ public class IamPortalApplicationOrderService {
     private final JdbcTemplate jdbcTemplate;
     private final IamAuditEventPublisher auditEventPublisher;
     private final EntityManager entityManager;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
 
     /**
      * 读取供管理端编辑的全部 Portal 集成快照，停用项仍保留在列表中。
@@ -70,6 +72,9 @@ public class IamPortalApplicationOrderService {
         }
         List<IamTrustedApplicationPortalEntity> portals = orderedPortals();
         validateFullSnapshot(request.getApplicationIds(), portals);
+        for (Long applicationId : request.getApplicationIds()) {
+            mutationGuard.requireMutable(applicationId);
+        }
         setting = lockGlobalSetting(setting);
         rewriteNormalizedOrder(portals, request.getApplicationIds());
 

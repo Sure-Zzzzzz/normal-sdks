@@ -15,6 +15,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamConsentRepo
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.oauth2.IamRefreshTokenFamilyRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.oauth2.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationAccessGuard;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamUserDetails;
 import io.github.surezzzzzz.sdk.auth.iam.server.token.IamJwtKeyProvider;
@@ -116,7 +118,8 @@ public class AuthorizationServerConfiguration {
                                                            ApplicationEventPublisher eventPublisher,
                                                            IamRefreshTokenFamilyService refreshTokenFamilyService,
                                                            IamRefreshTokenFamilyRepository refreshTokenFamilyRepository,
-                                                           IamUserRepository userRepository) {
+                                                           IamUserRepository userRepository,
+                                                           IamTrustedApplicationAccessGuard trustedApplicationAccessGuard) {
         JdbcOAuth2AuthorizationService jdbcService = new JdbcOAuth2AuthorizationService(
                 jdbcTemplate, registeredClientRepository());
         OAuth2AuthorizationRowMapper rowMapper = new OAuth2AuthorizationRowMapper(registeredClientRepository());
@@ -127,7 +130,8 @@ public class AuthorizationServerConfiguration {
                 smartCacheManager,
                 properties.getToken().getAccessExpiresIn(),
                 sessionService,
-                authorizeContextService
+                authorizeContextService,
+                trustedApplicationAccessGuard
         );
         IamAuditableOAuth2AuthorizationService auditableService = new IamAuditableOAuth2AuthorizationService(
                 cachedService, eventPublisher, registeredClientRepository());
@@ -151,11 +155,13 @@ public class AuthorizationServerConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
-    public OAuth2AuthorizationConsentService authorizationConsentService() {
+    public OAuth2AuthorizationConsentService authorizationConsentService(
+            IamTrustedApplicationAccessGuard trustedApplicationAccessGuard,
+            IamTrustedApplicationClientService iamTrustedApplicationClientService) {
         OAuth2AuthorizationConsentService jdbc =
                 new JdbcOAuth2AuthorizationConsentService(jdbcTemplate, registeredClientRepository());
         return new IamOAuth2ConsentService(jdbc, iamConsentRepository, iamUserRepository,
-                registeredClientRepository());
+                registeredClientRepository(), iamTrustedApplicationClientService, trustedApplicationAccessGuard);
     }
 
     /**

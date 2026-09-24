@@ -131,7 +131,11 @@ public interface IamUserRepository extends JpaRepository<IamUserEntity, Long> {
     /**
      * 递增指定用户的权限版本（角色/权限/绑定变更时调用，触发在线会话热刷新）
      */
-    @Modifying
+    /**
+     * 权限纪元递增后，同一事务通常会立刻重算授权投影；必须刷新并清空一级缓存，
+     * 否则重算可能读到递增前的 permissionVersion，生成会被 reader 判定为过期的投影。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE IamUserEntity u SET u.permissionVersion = u.permissionVersion + 1 WHERE u.id IN :userIds")
     void bumpPermissionVersion(@Param("userIds") Collection<Long> userIds);
 }

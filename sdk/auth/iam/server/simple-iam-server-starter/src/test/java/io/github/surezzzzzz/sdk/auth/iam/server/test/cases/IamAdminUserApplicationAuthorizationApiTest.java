@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationP
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.test.helper.IamTrustedApplicationTestCleanupHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -74,6 +75,8 @@ class IamAdminUserApplicationAuthorizationApiTest {
 
     @Autowired
     private IamTrustedApplicationService trustedApplicationService;
+    @Autowired
+    private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
 
     @Autowired
     private IamApplicationPermissionManifestService manifestService;
@@ -135,7 +138,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
                 .forEach(authorization -> authorizationRepository.delete(authorization));
         authorizationRepository.findByUserId(targetUserId)
                 .forEach(authorization -> authorizationRepository.delete(authorization));
-        trustedApplicationService.deleteApplication(applicationId);
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(otherUserUsername).ifPresent(user -> userService.deleteUser(user.getId()));
@@ -253,7 +256,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
                             .content(validBody()).cookie(adminSession).with(csrf()))
                     .andExpect(status().isNotFound());
         } finally {
-            trustedApplicationService.deleteApplication(bareApplicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(bareApplicationId);
         }
 
         mockMvc.perform(put(basePath(targetUserId) + "/" + applicationId).contentType(MediaType.APPLICATION_JSON)
@@ -302,7 +305,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
             assertNull(bareContext.getDataGrantDocument(), "无清单应用无数据授权");
             assertEquals("0", bareContext.getManifestVersion(), "无清单应用清单版本应标记为 0");
         } finally {
-            trustedApplicationService.deleteApplication(bareApplicationId);
+            trustedApplicationCleanupHelper.deleteAndAwaitCompletion(bareApplicationId);
         }
 
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);

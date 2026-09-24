@@ -83,7 +83,8 @@ public class IamPortalApplicationService {
                 continue;
             }
             IamTrustedApplicationEntity app = applications.get(portal.getApplicationId());
-            if (app == null) {
+            if (app == null || app.getStatus() == null
+                    || SimpleIamServerConstant.STATUS_ACTIVE != app.getStatus().intValue()) {
                 continue;
             }
             Set<String> pagePermissions = resolvePagePermissions(portal.getApplicationId(), authorization,

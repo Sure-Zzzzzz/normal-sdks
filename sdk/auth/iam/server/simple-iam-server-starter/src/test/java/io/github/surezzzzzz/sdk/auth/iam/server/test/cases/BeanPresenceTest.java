@@ -48,11 +48,11 @@ class BeanPresenceTest {
     private IamJwtKeyProvider jwtKeyProvider;
 
     @Test
-    @DisplayName("SecurityFilterChain 应注册 7 条（Order 0-6）")
-    void securityFilterChains_shouldBeSeven() {
+    @DisplayName("SecurityFilterChain 应注册 8 条（Order 0-7）")
+    void securityFilterChains_shouldBeEight() {
         assertNotNull(securityFilterChains, "SecurityFilterChain 列表不应为空");
-        assertEquals(7, securityFilterChains.size(),
-                "应有 7 条 SecurityFilterChain（Error Dispatch + AuthorizationServer + Resource Verification + WebAPI + AdminAPI + IAM App + Fallback）");
+        assertEquals(8, securityFilterChains.size(),
+                "应有 8 条 SecurityFilterChain（Error Dispatch + AuthorizationServer + Internal Reader + Resource Verification + WebAPI + AdminAPI + IAM App + Fallback）");
     }
 
     @Test

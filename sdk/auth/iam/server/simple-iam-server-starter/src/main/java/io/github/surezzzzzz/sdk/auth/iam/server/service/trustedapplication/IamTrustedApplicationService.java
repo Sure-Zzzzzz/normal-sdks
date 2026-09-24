@@ -33,6 +33,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamPortalSetti
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationMenuRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalMenuTreeService;
@@ -99,6 +100,8 @@ public class IamTrustedApplicationService {
     private final IamRoleAuthorizationRuleRepository ruleRepository;
     private final IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     private final IamTrustedApplicationClientService trustedApplicationClientService;
+    private final IamTrustedApplicationLifecycleService lifecycleService;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
     private final JdbcTemplate jdbcTemplate;
     private final IamAuditEventPublisher auditEventPublisher;
     private final SimpleIamServerProperties properties;
@@ -129,9 +132,12 @@ public class IamTrustedApplicationService {
         app.setApplicationName(applicationName);
         app.setDescription(request.getDescription());
         app.setIcon(normalizeIcon(request.getIcon()));
+        app.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
+        app.setApplicationSecurityEpoch(1L);
         app.setCreatedAt(now);
         app.setUpdatedAt(now);
         IamTrustedApplicationEntity saved = trustedApplicationRepository.save(app);
+        authorizationStateService.ensureInitialState(saved.getId());
 
         saveManifestIfPresent(saved.getId(), request);
         IamTrustedApplicationPortalEntity portal = savePortalConfig(saved.getId(), applicationCode,
@@ -207,6 +213,7 @@ public class IamTrustedApplicationService {
     @Transactional
     public TrustedApplicationResponse updateApplication(Long applicationId, UpdateTrustedApplicationRequest request) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
+        lifecycleService.requireMutable(applicationId);
         if (StringUtils.hasText(request.getApplicationName())) {
             app.setApplicationName(request.getApplicationName().trim());
         }
@@ -233,57 +240,43 @@ public class IamTrustedApplicationService {
     }
 
     /**
-     * 删除应用（级联清理，顺序固定）；内置应用（引导注册，如 IAM 管理台）禁止删除
-     *
-     * <ol>
-     *   <li>iam_trusted_application_menu 按 application_id 删</li>
-     *   <li>iam_trusted_application_portal 按 application_id 删</li>
-     *   <li>iam_application_permission_manifest 按 application_id 删</li>
-     *   <li>iam_role_authorization_rule 按 application_id 删</li>
-     *   <li>iam_application_authorization（授权投影）按 application_id 删</li>
-     *   <li>oauth2_authorization 按每个 client 的 registered_client_id 删</li>
-     *   <li>oauth2_authorization_consent 按每个 client 的 registered_client_id 删</li>
-     *   <li>iam_consent 按 client_id 删（投影表）</li>
-     *   <li>oauth2_registered_client 按 application_id 删其下全部 client</li>
-     *   <li>iam_trusted_application 按 id 删</li>
-     * </ol>
+     * 异步删除应用。受理时先安全停用，后台再经 OAuth 授权服务完成可恢复的物理清理。
      */
     @Transactional
-    public void deleteApplication(Long applicationId) {
+    public io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCleanupOperationResponse
+    deleteApplication(Long applicationId) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
         if (isBuiltInApplication(app.getApplicationCode())) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED, app.getApplicationCode()));
         }
-        boolean portalConfigured = trustedApplicationPortalRepository.existsById(applicationId);
-        if (portalConfigured) {
-            portalApplicationOrderService.preparePortalRemoval(applicationId);
-        }
-        trustedApplicationMenuRepository.deleteByApplicationId(applicationId);
-        if (portalConfigured) {
-            trustedApplicationPortalRepository.deleteById(applicationId);
-        }
-        manifestRepository.deleteByApplicationId(applicationId);
-        ruleRepository.deleteByApplicationId(applicationId);
-        applicationAuthorizationRepository.deleteByApplicationId(applicationId);
+        return lifecycleService.acceptDelete(app);
+    }
 
-        List<ClientRow> rows = jdbcTemplate.query(SQL_LIST_REGISTERED_CLIENT_IDS_BY_APP, (rs, n) -> {
-            ClientRow row = new ClientRow();
-            row.registeredClientId = rs.getString("id");
-            row.clientId = rs.getString("client_id");
-            return row;
-        }, applicationId);
-        for (ClientRow row : rows) {
-            jdbcTemplate.update(SQL_DELETE_AUTHORIZATION, row.registeredClientId);
-            jdbcTemplate.update(SQL_DELETE_AUTHORIZATION_CONSENT, row.registeredClientId);
-            jdbcTemplate.update(SQL_DELETE_IAM_CONSENT_BY_CLIENT, row.clientId);
-        }
-        jdbcTemplate.update(SQL_DELETE_REGISTERED_CLIENT_BY_APP, applicationId);
+    /**
+     * 安全停用可信应用。
+     */
+    @Transactional
+    public TrustedApplicationResponse suspendApplication(Long applicationId) {
+        IamTrustedApplicationEntity app = requireApplication(applicationId);
+        assertNotBuiltIn(app);
+        lifecycleService.suspend(app);
+        auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
+                String.valueOf(applicationId), app.getApplicationCode(), "status=SUSPENDED");
+        return toSummary(app, countClients(applicationId), isPortalEnabled(applicationId));
+    }
 
-        trustedApplicationRepository.deleteById(applicationId);
-        log.info("可信应用删除成功（级联）：id={}", applicationId);
-        auditEventPublisher.publishAdminAction(AdminActionType.DELETED, AdminSubjectType.APPLICATION,
-                String.valueOf(applicationId), app.getApplicationCode(), "portalMembershipDeleted=" + portalConfigured);
+    /**
+     * 恢复可信应用；旧 OAuth 授权不会因恢复而复活。
+     */
+    @Transactional
+    public TrustedApplicationResponse resumeApplication(Long applicationId) {
+        IamTrustedApplicationEntity app = requireApplication(applicationId);
+        assertNotBuiltIn(app);
+        lifecycleService.resume(app);
+        auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
+                String.valueOf(applicationId), app.getApplicationCode(), "status=ACTIVE");
+        return toSummary(app, countClients(applicationId), isPortalEnabled(applicationId));
     }
 
     private IamTrustedApplicationEntity requireApplication(Long applicationId) {
@@ -349,6 +342,7 @@ public class IamTrustedApplicationService {
     @Transactional
     public PortalIntegrationResponse updatePortalConfiguration(Long applicationId, PortalConfigurationRequest request) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
+        lifecycleService.requireMutable(applicationId);
         IamTrustedApplicationPortalEntity current = trustedApplicationPortalRepository.findById(applicationId)
                 .orElseGet(() -> newPortal(applicationId, app.getApplicationCode()));
         if (request == null || request.getConfigVersion() == null
@@ -544,6 +538,14 @@ public class IamTrustedApplicationService {
         return properties.getBootstrap().getBuiltInApplications().stream()
                 .anyMatch(config -> config.getApplicationCode() != null
                         && config.getApplicationCode().equals(applicationCode));
+    }
+
+    private void assertNotBuiltIn(IamTrustedApplicationEntity application) {
+        if (isBuiltInApplication(application.getApplicationCode())) {
+            throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
+                    String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED,
+                            application.getApplicationCode()));
+        }
     }
 
     private long countClients(Long applicationId) {

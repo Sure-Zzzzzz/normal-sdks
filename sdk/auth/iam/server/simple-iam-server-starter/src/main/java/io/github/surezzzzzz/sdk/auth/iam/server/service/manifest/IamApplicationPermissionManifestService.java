@@ -20,6 +20,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicati
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationMenuRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,6 +52,7 @@ public class IamApplicationPermissionManifestService {
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
     private final IamAuditEventPublisher auditEventPublisher;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
     // ObjectProvider 惰性解析：投影服务反向依赖本服务，构造器直连会成环
     private final ObjectProvider<IamAuthorizationProjectionService> projectionServiceProvider;
 
@@ -80,6 +82,7 @@ public class IamApplicationPermissionManifestService {
     public ApplicationPermissionManifestResponse putManifest(
             Long applicationId, PutApplicationPermissionManifestRequest request) {
         requireApplication(applicationId);
+        mutationGuard.requireMutable(applicationId);
         List<String> roles = normalizeCodes(request.getRoles(), "roles");
         List<String> pagePermissions = normalizeCodes(request.getPagePermissions(), "pagePermissions");
         List<String> apiPermissions = normalizeCodes(request.getApiPermissions(), "apiPermissions");

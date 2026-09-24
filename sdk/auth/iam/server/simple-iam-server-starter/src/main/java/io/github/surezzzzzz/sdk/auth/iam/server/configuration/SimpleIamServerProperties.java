@@ -100,6 +100,36 @@ public class SimpleIamServerProperties {
      */
     private CleanupConfig cleanup = new CleanupConfig();
 
+    /**
+     * IAM 安装期固定的人员来源命名空间，AKU binding 不得使用可变 username。
+     */
+    private String ownerSourceId = "local-iam";
+
+    /**
+     * IAM 自管的 AKSK 所属人授权 reader SERVICE 配置。
+     */
+    private InternalReaderConfig internalReader = new InternalReaderConfig();
+
+    @Data
+    public static class InternalReaderConfig {
+
+        /**
+         * 是否启用 AKSK 所属人授权 reader。关闭时内部 API 仍由独立链拒绝，
+         * 已存在的 reader client 不能借由关闭配置继续读取。
+         */
+        private boolean enabled = false;
+
+        /**
+         * 部署注入的密钥明文，仅用于 bootstrap 写入标准哈希，禁止日志输出。
+         */
+        private String clientSecret;
+
+        /**
+         * 内部服务 access token 的短期有效秒数。
+         */
+        private Integer accessExpiresIn = 300;
+    }
+
     @Data
     public static class ExternalIdentityConfig {
 

@@ -128,7 +128,9 @@ public class IamMessageRestController {
         String servletSessionIdHash = servletSession == null
                 ? null : TokenHashHelper.sha256Hex(servletSession.getId());
         SseEmitter emitter = sseService.register(userId, servletSessionIdHash);
-        sseService.pushUnreadCount(userId, emitter, messageService.countUnreadMessages(userId));
+        // SSE 请求永不结束：未读数查询若在请求线程触碰 JPA，OSIV 会话绑定的连接
+        // 会随 emitter 终身占用（连接池泄漏），首帧必须由后台线程查询并推送
+        sseService.pushInitialUnreadCount(userId, emitter, () -> messageService.countUnreadMessages(userId));
         return ResponseEntity.ok(emitter);
     }
 

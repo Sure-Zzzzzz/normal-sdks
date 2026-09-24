@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationClientSecretResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCreatedResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationClientService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -50,12 +51,15 @@ class TrustedApplicationServiceTest {
     private IamTrustedApplicationClientService trustedApplicationClientService;
 
     @Autowired
+    private IamTrustedApplicationCleanupWorker cleanupWorker;
+
+    @Autowired
     private RegisteredClientRepository registeredClientRepository;
 
     @AfterEach
     void cleanup() {
         if (applicationId != null) {
-            trustedApplicationService.deleteApplication(applicationId);
+            deleteAndAwaitCompletion(applicationId);
             applicationId = null;
         }
     }
@@ -215,7 +219,7 @@ class TrustedApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("删除应用应级联删除其下全部客户端")
+    @DisplayName("删除应用应先受理异步操作，再级联删除其下全部客户端")
     void testDeleteApplicationCascadesClients() {
         createApplication(createPublicClientRequest());
         String secondClientId = applicationCode + "-service";
@@ -224,7 +228,9 @@ class TrustedApplicationServiceTest {
         trustedApplicationClientService.addClient(applicationId, secondClient);
         Long deletedApplicationId = applicationId;
 
-        trustedApplicationService.deleteApplication(deletedApplicationId);
+        assertEquals("PENDING", trustedApplicationService.deleteApplication(deletedApplicationId).getState(),
+                "删除请求应仅受理异步操作");
+        cleanupWorker.processNextOperation();
         applicationId = null;
 
         log.info("删除可信应用：applicationId={}, clientIds=[{}, {}]", deletedApplicationId, clientId, secondClientId);
@@ -232,6 +238,19 @@ class TrustedApplicationServiceTest {
         assertNull(registeredClientRepository.findByClientId(secondClientId), "新增客户端应被级联删除");
         assertThrows(SimpleIamServerException.class,
                 () -> trustedApplicationService.getApplication(deletedApplicationId), "应用应无法再读取");
+    }
+
+    private void deleteAndAwaitCompletion(Long targetApplicationId) {
+        trustedApplicationService.deleteApplication(targetApplicationId);
+        for (int attempt = 0; attempt < 5; attempt++) {
+            cleanupWorker.processNextOperation();
+            try {
+                trustedApplicationService.getApplication(targetApplicationId);
+            } catch (SimpleIamServerException exception) {
+                return;
+            }
+        }
+        fail("可信应用删除任务未在测试 worker 推进后完成：" + targetApplicationId);
     }
 
     private TrustedApplicationCreatedResponse createApplication(CreateTrustedApplicationClientRequest initialClient) {

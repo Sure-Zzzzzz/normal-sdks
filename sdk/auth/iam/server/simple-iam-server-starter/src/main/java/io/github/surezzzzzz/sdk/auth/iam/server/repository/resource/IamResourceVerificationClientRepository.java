@@ -25,4 +25,9 @@ public interface IamResourceVerificationClientRepository
      * 按应用ID查询其全部资源验证客户端。
      */
     List<IamResourceVerificationClientEntity> findByApplicationId(Long applicationId);
+
+    /**
+     * 可信应用物理删除时一并删除其资源验证客户端，避免留下无法归属的 Basic 凭据记录。
+     */
+    void deleteByApplicationId(Long applicationId);
 }

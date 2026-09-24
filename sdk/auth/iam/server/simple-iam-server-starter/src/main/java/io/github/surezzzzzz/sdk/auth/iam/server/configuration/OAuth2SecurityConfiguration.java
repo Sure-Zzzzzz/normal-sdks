@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
@@ -8,6 +9,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamMustChangePasswordFilt
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamResourceVerificationClientAuthenticationFilter;
 import io.github.surezzzzzz.sdk.auth.iam.server.filter.IamSessionValidationFilter;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamInternalReaderBootstrap;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationAccessGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -22,11 +25,19 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2ErrorCodes;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidationException;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.server.authorization.authentication.*;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.NullSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
@@ -36,19 +47,21 @@ import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import javax.servlet.http.HttpServletResponse;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 
 /**
  * OAuth2 / IAM Security Configuration
  *
- * <p>七条 SecurityFilterChain：
+ * <p>八条 SecurityFilterChain：
  * <ol>
  *   <li>Order(0) Error Dispatch {@code /error}：permitAll，保住 sendError 的原始状态码不被兜底链覆盖。</li>
  *   <li>Order(1) Authorization Server：SAS 标准端点，CSRF 关闭。</li>
- *   <li>Order(2) Resource verification {@code /iam/resource/**}：独立客户端 Basic 认证。</li>
- *   <li>Order(3) Web API {@code /iam/web/**}：登录态和普通用户 JSON API。</li>
- *   <li>Order(4) Admin API {@code /iam/admin/**}：需 ROLE_iam_admin 或任一页面权限码（入口门），方法级 @PreAuthorize 逐端点强制 + CSRF 开启。</li>
- *   <li>Order(5) IAM Application {@code /iam/**}：认证 + CSRF 开启。</li>
- *   <li>Order(6) Fallback {@code /**}：denyAll。</li>
+ *   <li>Order(2) Internal reader {@code /iam/internal/aksk/**}：固定 SERVICE 短时 Bearer。</li>
+ *   <li>Order(3) Resource verification {@code /iam/resource/**}：独立客户端 Basic 认证。</li>
+ *   <li>Order(4) Web API {@code /iam/web/**}：登录态和普通用户 JSON API。</li>
+ *   <li>Order(5) Admin API {@code /iam/admin/**}：需 ROLE_iam_admin 或任一页面权限码（入口门），方法级 @PreAuthorize 逐端点强制 + CSRF 开启。</li>
+ *   <li>Order(6) IAM Application {@code /iam/**}：认证 + CSRF 开启。</li>
+ *   <li>Order(7) Fallback {@code /**}：denyAll。</li>
  * </ol>
  *
  * <p>开放 API {@code /iam/api/**}（AKSK 凭证主体）不在本类七链内：宿主配置
@@ -66,6 +79,7 @@ public class OAuth2SecurityConfiguration {
 
     private final SimpleIamServerProperties properties;
     private final IamUserRepository userRepository;
+    private final IamTrustedApplicationAccessGuard trustedApplicationAccessGuard;
     private final IamSessionValidationFilter iamSessionValidationFilter;
     /**
      * 须改密拦截器条件装配（password.must-change-enforcement=false 时缺位），
@@ -105,8 +119,14 @@ public class OAuth2SecurityConfiguration {
                 OAuth2AuthorizationServerConfigurer.class);
         authorizationServerConfigurer
                 .oidc(oidc -> oidc.userInfoEndpoint(userInfo -> userInfo
-                        .userInfoMapper(context -> toUserInfo(context.getAuthorization().getPrincipalName(),
-                                context.getAuthorization().getAuthorizedScopes()))))
+                        .userInfoMapper(context -> {
+                            if (!trustedApplicationAccessGuard.isAuthorizationAllowed(context.getAuthorization())) {
+                                throw new SimpleIamServerException(ErrorCode.TOKEN_INVALID,
+                                        ServerErrorMessage.TRUSTED_APPLICATION_TOKEN_INVALID);
+                            }
+                            return toUserInfo(context.getAuthorization().getPrincipalName(),
+                                    context.getAuthorization().getAuthorizedScopes());
+                        })))
                 .authorizationEndpoint(endpoint -> endpoint
                         .consentPage(SimpleIamServerConstant.PATH_OAUTH2_CONSENT)
                         .authenticationProviders(providers -> providers.stream()
@@ -114,7 +134,8 @@ public class OAuth2SecurityConfiguration {
                                 .map(OAuth2AuthorizationCodeRequestAuthenticationProvider.class::cast)
                                 .forEach(provider -> provider.setAuthenticationValidator(
                                         new OAuth2AuthorizationCodeRequestAuthenticationValidator()
-                                                .andThen(this::validatePkceMethod)))));
+                                                .andThen(this::validatePkceMethod)
+                                                .andThen(this::validateTrustedApplicationStatus)))));
         // 未认证的浏览器授权请求跳 Vue 登录页，带上原始 URL 作为 redirect 参数
         http.exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) -> {
@@ -159,6 +180,20 @@ public class OAuth2SecurityConfiguration {
         }
     }
 
+    /**
+     * 停用应用必须在授权码发放前失败，避免只依赖后续 token 端点的被动拒绝。
+     */
+    private void validateTrustedApplicationStatus(OAuth2AuthorizationCodeRequestAuthenticationContext context) {
+        RegisteredClient registeredClient = context.getRegisteredClient();
+        if (registeredClient == null
+                || trustedApplicationAccessGuard.isNewAuthorizationAllowed(registeredClient.getId())) {
+            return;
+        }
+        OAuth2Error error = new OAuth2Error(OAuth2ErrorCodes.ACCESS_DENIED,
+                ServerErrorMessage.TRUSTED_APPLICATION_TOKEN_INVALID, null);
+        throw new OAuth2AuthorizationCodeRequestAuthenticationException(error, context.getAuthentication());
+    }
+
     private OidcUserInfo toUserInfo(String username, java.util.Set<String> scopes) {
         IamUserEntity user = userRepository.findByUsername(username).orElseThrow(
                 () -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND, "OIDC主体不存在：" + username));
@@ -176,7 +211,69 @@ public class OAuth2SecurityConfiguration {
     }
 
     /**
-     * Order(2) Resource verification：独立客户端 Basic 认证。
+     * Order(2) 固定 AKSK reader SERVICE：无状态 Bearer 认证。
+     *
+     * <p>必须同时校验 issuer、client_id、sub、token_use 和 scope。只校验 scope 会让普通
+     * 可信应用借同名 scope 越权；只校验 client 仍可能把错误类型 token 带入内部链。</p>
+     */
+    @Bean
+    @Order(2)
+    public SecurityFilterChain internalAkskReaderSecurityFilterChain(HttpSecurity http,
+                                                                     JwtDecoder jwtDecoder) throws Exception {
+        http.antMatcher(SimpleIamServerConstant.PATH_INTERNAL_AKSK_API)
+                .securityContext(context -> context.securityContextRepository(new NullSecurityContextRepository()))
+                .csrf().disable()
+                .formLogin().disable()
+                .httpBasic().disable();
+        if (!properties.getInternalReader().isEnabled()) {
+            http.authorizeRequests(authorize -> authorize.anyRequest().denyAll());
+            return http.build();
+        }
+        http.authorizeRequests(authorize -> authorize
+                        .antMatchers("/iam/internal/aksk/owner-authorizations/changes/pull")
+                        .hasAuthority("SCOPE_" + IamInternalReaderBootstrap.STREAM_SCOPE)
+                        .anyRequest().hasAuthority("SCOPE_" + IamInternalReaderBootstrap.READER_SCOPE))
+                .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt
+                        .decoder(internalReaderJwtDecoder(jwtDecoder))
+                        .jwtAuthenticationConverter(internalReaderJwtAuthenticationConverter())));
+        return http.build();
+    }
+
+    private JwtDecoder internalReaderJwtDecoder(JwtDecoder delegate) {
+        OAuth2TokenValidator<Jwt> issuerValidator = JwtValidators.createDefaultWithIssuer(properties.getIssuer());
+        return token -> {
+            Jwt jwt = delegate.decode(token);
+            OAuth2TokenValidatorResult issuerResult = issuerValidator.validate(jwt);
+            if (issuerResult.hasErrors()) {
+                throw new JwtValidationException("IAM 内部 reader token 无效", issuerResult.getErrors());
+            }
+            if (!IamInternalReaderBootstrap.READER_CLIENT_ID.equals(jwt.getClaimAsString("client_id"))
+                    || !IamInternalReaderBootstrap.READER_SUBJECT.equals(jwt.getSubject())
+                    || !IamInternalReaderBootstrap.READER_TOKEN_USE.equals(jwt.getClaimAsString("token_use"))
+                    || !isInternalReaderScope(jwt.getClaimAsString("scope"))) {
+                throw new JwtValidationException("IAM 内部 reader token 无效", Collections.singletonList(
+                        new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN)));
+            }
+            return jwt;
+        };
+    }
+
+    private boolean isInternalReaderScope(String scope) {
+        return IamInternalReaderBootstrap.READER_SCOPE.equals(scope)
+                || IamInternalReaderBootstrap.STREAM_SCOPE.equals(scope);
+    }
+
+    private JwtAuthenticationConverter internalReaderJwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthorityPrefix("SCOPE_");
+        authoritiesConverter.setAuthoritiesClaimName("scope");
+        JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+        return authenticationConverter;
+    }
+
+    /**
+     * Order(3) Resource verification：独立客户端 Basic 认证。
      *
      * <p>无状态机器端点：SecurityContext 仅存活于单请求（principal 为验证客户端实体，
      * 不入会话）。必须显式挂 {@link NullSecurityContextRepository}，否则
@@ -184,7 +281,7 @@ public class OAuth2SecurityConfiguration {
      * spring-session 下 JDK 序列化 JPA 实体即 500。</p>
      */
     @Bean
-    @Order(2)
+    @Order(3)
     public SecurityFilterChain resourceVerificationSecurityFilterChain(HttpSecurity http,
                                                                        IamResourceVerificationClientAuthenticationFilter resourceVerificationClientAuthenticationFilter) throws Exception {
         http
@@ -200,10 +297,10 @@ public class OAuth2SecurityConfiguration {
     }
 
     /**
-     * Order(3) Web API：/iam/web/**
+     * Order(4) Web API：/iam/web/**
      */
     @Bean
-    @Order(3)
+    @Order(4)
     public SecurityFilterChain webAuthApiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .antMatcher(SimpleIamServerConstant.PATH_WEB_API)
@@ -229,7 +326,7 @@ public class OAuth2SecurityConfiguration {
     }
 
     /**
-     * Order(4) Admin API：/iam/admin/**
+     * Order(5) Admin API：/iam/admin/**
      *
      * <p>入口门放宽为 {@link SimpleIamServerConstant#ADMIN_CONSOLE_ENTRANCE_AUTHORITIES}
      * （iam_admin 角色或任一页面权限码），使持部分权限码的委派用户可进入管理台；
@@ -238,7 +335,7 @@ public class OAuth2SecurityConfiguration {
      * （与 Order(3) 对齐，前端 401 分支统一跳登录），已认证但无权限仍默认 403。
      */
     @Bean
-    @Order(4)
+    @Order(5)
     public SecurityFilterChain adminApiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .antMatcher(SimpleIamServerConstant.PATH_ADMIN_API)
@@ -255,10 +352,10 @@ public class OAuth2SecurityConfiguration {
     }
 
     /**
-     * Order(5) IAM Application：/iam/**
+     * Order(6) IAM Application：/iam/**
      */
     @Bean
-    @Order(5)
+    @Order(6)
     public SecurityFilterChain iamAppSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .antMatcher(SimpleIamServerConstant.PATH_IAM)
@@ -272,10 +369,10 @@ public class OAuth2SecurityConfiguration {
     }
 
     /**
-     * Order(6) Fallback：denyAll
+     * Order(7) Fallback：denyAll
      */
     @Bean
-    @Order(6)
+    @Order(7)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
         http
                 .antMatcher(SimpleIamServerConstant.PATH_FALLBACK)
