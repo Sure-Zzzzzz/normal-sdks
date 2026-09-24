@@ -93,6 +93,14 @@ public final class SimpleAkskServerConstant {
      * Redis SCAN命令每次扫描的key数量
      */
     public static final int REDIS_SCAN_COUNT = 100;
+    /**
+     * token 缓存 key 摘要算法。
+     */
+    public static final String TOKEN_CACHE_KEY_HASH_ALGORITHM = "SHA-256";
+    /**
+     * JDK 未提供 token 缓存 key 摘要算法时的错误信息。
+     */
+    public static final String TOKEN_CACHE_KEY_HASH_ALGORITHM_UNAVAILABLE = "Token缓存Key摘要算法不可用";
     // ==================== Client相关常量 ====================
     /**
      * 平台级ClientId前缀: AKP (AccessKey Platform)
@@ -126,6 +134,10 @@ public final class SimpleAkskServerConstant {
      * 默认Scope（逗号分隔）
      */
     public static final String DEFAULT_SCOPES = "read,write";
+    /**
+     * OWNER_INHERITED AKU 的固定技术 scope，不承载人员三权。
+     */
+    public static final String OWNER_INHERITED_TECHNICAL_SCOPE = "aksk:owner-inherited";
     /**
      * Scope分隔符
      */
@@ -211,6 +223,36 @@ public final class SimpleAkskServerConstant {
      */
     public static final String JWT_CLAIM_APPLICATION_AUTHORIZATION =
             JwtClaimConstant.APPLICATION_AUTHORIZATION;
+    /**
+     * JWT Claim名称: 授权来源模式。
+     */
+    public static final String JWT_CLAIM_AUTHORIZATION_MODE = JwtClaimConstant.AUTHORIZATION_MODE;
+    /**
+     * JWT Claim名称: inherited AKU 目标可信应用ID。
+     */
+    public static final String JWT_CLAIM_TARGET_APPLICATION_ID = JwtClaimConstant.TARGET_APPLICATION_ID;
+    /**
+     * JWT Claim名称: 所属人安全纪元。
+     */
+    public static final String JWT_CLAIM_OWNER_SECURITY_EPOCH = JwtClaimConstant.OWNER_SECURITY_EPOCH;
+    /**
+     * JWT Claim名称: 可信应用授权纪元。
+     */
+    public static final String JWT_CLAIM_APPLICATION_AUTHORIZATION_EPOCH =
+            JwtClaimConstant.APPLICATION_AUTHORIZATION_EPOCH;
+    /**
+     * JWT Claim名称: IAM 稳定所属人来源。
+     */
+    public static final String JWT_CLAIM_OWNER_SOURCE_ID = JwtClaimConstant.OWNER_SOURCE_ID;
+    /**
+     * JWT Claim名称: OWNER_INHERITED 目标应用访问纪元。
+     */
+    public static final String JWT_CLAIM_OWNER_INHERITED_ACCESS_EPOCH =
+            JwtClaimConstant.OWNER_INHERITED_ACCESS_EPOCH;
+    /**
+     * JWT Claim名称: OWNER_INHERITED 人员-应用投影访问纪元。
+     */
+    public static final String JWT_CLAIM_PROJECTION_ACCESS_EPOCH = JwtClaimConstant.PROJECTION_ACCESS_EPOCH;
 
     // ==================== 管理 REST API 授权常量 ====================
     /**
@@ -292,6 +334,14 @@ public final class SimpleAkskServerConstant {
      * Client 删除 API 权限。
      */
     public static final String MANAGEMENT_PERMISSION_CLIENT_DELETE = "akskClient:delete";
+
+    /**
+     * 当前登录人员自助管理本人 AKU 的权限。与管理端 Client 权限严格分离，避免普通用户获得全量管理能力。
+     */
+    public static final String SELF_PERMISSION_CREDENTIAL_READ = "akskSelfCredential:read";
+    public static final String SELF_PERMISSION_CREDENTIAL_CREATE = "akskSelfCredential:create";
+    public static final String SELF_PERMISSION_CREDENTIAL_UPDATE = "akskSelfCredential:update";
+    public static final String SELF_PERMISSION_CREDENTIAL_DELETE = "akskSelfCredential:delete";
     /**
      * Token 查询 API 权限。
      */

@@ -76,6 +76,10 @@ class SimpleAkskServerPropertiesTest {
         assertEquals("akskClient:read", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_READ);
         assertEquals("akskClient:update", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_UPDATE);
         assertEquals("akskClient:delete", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_CLIENT_DELETE);
+        assertEquals("akskSelfCredential:read", SimpleAkskServerConstant.SELF_PERMISSION_CREDENTIAL_READ);
+        assertEquals("akskSelfCredential:create", SimpleAkskServerConstant.SELF_PERMISSION_CREDENTIAL_CREATE);
+        assertEquals("akskSelfCredential:update", SimpleAkskServerConstant.SELF_PERMISSION_CREDENTIAL_UPDATE);
+        assertEquals("akskSelfCredential:delete", SimpleAkskServerConstant.SELF_PERMISSION_CREDENTIAL_DELETE);
         assertEquals("akskToken:read", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_READ);
         assertEquals("akskToken:update", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_UPDATE);
         assertEquals("akskToken:delete", SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_DELETE);

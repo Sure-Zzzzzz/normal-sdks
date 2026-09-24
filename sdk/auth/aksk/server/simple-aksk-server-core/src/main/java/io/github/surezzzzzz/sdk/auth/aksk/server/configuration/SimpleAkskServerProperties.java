@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.AkskOwnerAuthorizationSynchronizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -46,6 +47,15 @@ public class SimpleAkskServerProperties {
      * 过期Token定时清理配置
      */
     private CleanupConfig cleanup = new CleanupConfig();
+
+    /**
+     * IAM 所属人授权 reader 配置。
+     *
+     * <p>仅 OWNER_INHERITED AKU 使用这条通道。密钥必须由部署环境注入，
+     * 不得放入 binding、数据库或浏览器请求。</p>
+     */
+    private IamOwnerAuthorizationReaderConfig iamOwnerAuthorizationReader =
+            new IamOwnerAuthorizationReaderConfig();
 
     @Data
     public static class JwtConfig {
@@ -200,5 +210,80 @@ public class SimpleAkskServerProperties {
          * 清理任务分布式锁租约时长（秒）
          */
         private Integer lockLeaseSeconds = SimpleAkskServerConstant.DEFAULT_CLEANUP_LOCK_LEASE_SECONDS;
+    }
+
+    @Data
+    public static class IamOwnerAuthorizationReaderConfig {
+
+        /**
+         * 默认关闭，完成 IAM reader 与目标资源端严格在线验收后才允许开启。
+         */
+        private Boolean enabled = Boolean.FALSE;
+
+        /**
+         * IAM OAuth2 token endpoint，必须是 HTTPS 地址。
+         */
+        private String tokenUri;
+
+        /**
+         * IAM owner projection reader 的 HTTPS 基地址。
+         */
+        private String baseUri;
+
+        /**
+         * IAM 部署固定 owner source。
+         */
+        private String ownerSourceId;
+
+        /**
+         * 公共资源认证层中 IAM HUMAN 的认证来源标识。
+         */
+        private String humanResourceSourceId = "iam";
+
+        /**
+         * IAM 固定内部 SERVICE clientId。
+         */
+        private String clientId;
+
+        /**
+         * IAM 固定内部 SERVICE secret，仅允许环境变量或密钥系统注入。
+         */
+        private String clientSecret;
+
+        /**
+         * 单次网络连接超时毫秒。
+         */
+        private Integer connectTimeoutMillis = 1000;
+
+        /**
+         * 单次网络读取超时毫秒。
+         */
+        private Integer readTimeoutMillis = 2000;
+
+        /**
+         * 同一次授权解析的最大请求次数，必须为有限正数。
+         */
+        private Integer maxAttempts = 2;
+
+        /**
+         * 默认用本地投影；STRICT_ONLINE 仅用于受控诊断或显式收紧场景。
+         */
+        private AkskOwnerAuthorizationSynchronizationMode synchronizationMode =
+                AkskOwnerAuthorizationSynchronizationMode.EVENTUAL_WITH_LEASE;
+
+        /**
+         * 正常拉取轮询间隔毫秒。
+         */
+        private Integer pullIntervalMillis = 1000;
+
+        /**
+         * IAM 暂不可用时，本地 inherited 授权最多继续服务的秒数。
+         */
+        private Integer leaseSeconds = 30;
+
+        /**
+         * 单次拉取的最大连续事件数。
+         */
+        private Integer pullPageSize = 100;
     }
 }

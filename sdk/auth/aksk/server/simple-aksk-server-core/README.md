@@ -1,6 +1,6 @@
 # simple-aksk-server-core
 
-[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key 规则和 Token 生命周期事件。业务通常通过 `simple-aksk-server-starter` 使用这些契约；只有需要直接订阅、转换或持久化 Token 生命周期事件的扩展模块，才需要直接依赖本模块。
@@ -12,7 +12,7 @@ AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key �
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.3'
 ```
 
 `simple-aksk-server-starter` 通过 `api` 传递引入本模块。仅使用 Server Starter 的应用通常不需要重复声明；独立审计、指标或集成模块可直接声明该坐标。
@@ -30,6 +30,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
 - Admin：本地管理页面开关、管理员账户及会话时长。
 - 限流：OAuth2 Token、Introspect、Revoke 端点的开关、算法、降级策略、Key 策略和规则。
 - 过期 Token 清理：定时清理开关、cron 调度表达式、分批删除批大小、分布式锁租约时长。
+- 所属人授权 reader：默认关闭的 IAM HTTPS reader、同步模式、拉取间隔与本地授权租约配置。
 
 ### 服务端常量
 
@@ -39,6 +40,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
 - 管理 API 的应用编码、资源、动作、权限和数据权限维度。
 - `JWT_CLAIM_APPLICATION_AUTHORIZATION` 复用 `simple-aksk-core` 的应用授权 Claim，保证签发、管理鉴权和内省消费同一契约。
 - 过期 Token 清理的默认开关、cron、批大小、锁租约时长与分布式锁 Key。
+- `OWNER_INHERITED` 技术 scope、用户自助凭证权限、所属人和授权纪元 Claim，以及 AKSK 生命周期事件。
 
 ### Redis Key 工具
 
@@ -133,6 +135,10 @@ Token 生命周期事件属于内部服务端事件契约，不是认证材料�
 ---
 
 ## 版本历史
+
+### 3.0.3
+
+新增 OWNER_INHERITED AKU 的 reader 配置、授权模式、令牌 Claim、用户自助凭证权限和生命周期事件；Token 缓存键改为 SHA-256 摘要，避免原始 bearer 出现在缓存基础设施键中。详见 [CHANGELOG.3.0.3.md](CHANGELOG.3.0.3.md)。
 
 ### 3.0.2
 
