@@ -1,0 +1,18 @@
+# 受管测试配置：spring.profiles.active=local 激活同目录 gitignored 的 application-local.yml
+# （仓库既有机制）；纯单测不起 Spring 上下文，手跑联调用例凭据走 local 文件。
+spring:
+  profiles:
+    active: local
+logging:
+  level:
+    io.github.surezzzzzz.sdk.b2m.sms: debug
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        b2m:
+          sms:
+            enable: false
+            app-id:        # 真实值见 application-local.yml（gitignored）
+            # secret-key:  # 敏感，只在 application-local.yml 配置

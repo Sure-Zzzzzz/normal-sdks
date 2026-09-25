@@ -1,13 +1,16 @@
 package io.github.surezzzzzz.sdk.b2m.sms.test;
 
-import io.github.surezzzzzz.sdk.b2m.sms.configuration.SmsComponent;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
 
+/**
+ * 测试启动类（手跑联调用例宿主，自动配置由 spring.factories 装配）。
+ *
+ * @author surezzzzzz
+ */
 @SpringBootApplication
-@ComponentScan(includeFilters = @ComponentScan.Filter(SmsComponent.class))
 public class SmsTestApplication {
+
     public static void main(String[] args) {
         SpringApplication.run(SmsTestApplication.class, args);
     }

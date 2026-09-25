@@ -5,9 +5,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @author: Sure.
- * @description
- * @Date: 2024/3/12 8:16
+ * B2M 平台回执条目（smsId/mobile/customSmsId；含手机号明文，禁整体入日志）。
+ *
+ * @author surezzzzzz
  */
 @Data
 @AllArgsConstructor

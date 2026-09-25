@@ -1,11 +1,12 @@
 dependencies {
-    compileOnly "org.springframework:spring-web"
-    implementation "org.apache.httpcomponents:httpclient:4.5.13"
-    // 必须implementation，因为SmsConfiguration直接使用了HttpComponentsClientHttpRequestFactory
-    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
-    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
-    compileOnly "org.springframework:spring-context"
-    compileOnly "org.apache.commons:commons-lang3"
-    compileOnly "com.fasterxml.jackson.core:jackson-databind"
-    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework:spring-context'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    // PKCS7 算法为可选能力：默认 PKCS5 无需额外依赖；换 PKCS7 的使用方按 README 自行引入
+    // BouncyCastle（Cipher.getInstance(algorithm, "BC") 仅用字符串引用，编译期不依赖 BC 类），缺失时启动显式失败
+    // HttpComponentsClientHttpRequestFactory 的运行期实现件（编译期零 httpclient 引用，收 runtimeOnly）
+    runtimeOnly 'org.apache.httpcomponents:httpclient:4.5.13'
+    // SDK 自维护 ObjectMapper 需要 jackson 运行期在场（非 web 宿主可能没有，故 implementation）
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.18.6'
 }

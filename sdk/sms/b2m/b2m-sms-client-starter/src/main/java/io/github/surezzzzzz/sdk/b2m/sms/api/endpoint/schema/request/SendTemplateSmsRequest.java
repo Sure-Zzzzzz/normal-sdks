@@ -5,6 +5,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
+/**
+ * B2M 模板变量短信请求报文（平台协议映射）。
+ *
+ * @author surezzzzzz
+ */
 @Data
 @SuperBuilder
 @NoArgsConstructor

@@ -1,9 +1,9 @@
 package io.github.surezzzzzz.sdk.b2m.sms;
 
 /**
- * @author: Sure.
- * @description
- * @Date: 2024/1/19 10:49
+ * B2M 短信 Package Marker（ComponentScan 锚点）。
+ *
+ * @author surezzzzzz
  */
 public interface SmsPackage {
 }

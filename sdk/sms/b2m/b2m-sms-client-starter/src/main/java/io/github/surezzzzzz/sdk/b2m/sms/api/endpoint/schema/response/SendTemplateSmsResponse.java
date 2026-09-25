@@ -10,9 +10,9 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 
 /**
- * @author: Sure.
- * @description
- * @Date: 2024/3/12 8:11
+ * B2M 发送响应内部载体（平台原始响应，不进公共 API）。
+ *
+ * @author surezzzzzz
  */
 @Data
 @SuperBuilder

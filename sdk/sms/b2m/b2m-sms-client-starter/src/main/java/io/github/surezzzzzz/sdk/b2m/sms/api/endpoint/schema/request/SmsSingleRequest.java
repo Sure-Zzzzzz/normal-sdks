@@ -5,9 +5,9 @@ import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 /**
- * @author: Sure.
- * @description
- * @Date: 2024/3/21 15:49
+ * B2M 单条短信请求报文（平台协议映射）。
+ *
+ * @author surezzzzzz
  */
 
 @Data

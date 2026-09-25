@@ -1,0 +1,15 @@
+# 手跑联调模板：复制为 application-local.yml（gitignored）并填入真实值
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        b2m:
+          sms:
+            enable: true
+            app-id: your-app-id
+            secret-key: your-16-or-24-or-32-bytes-key
+
+# 手跑端到端目标手机号（B2mManualSendTest 用）
+b2m:
+  e2e:
+    phone: your-phone-number
