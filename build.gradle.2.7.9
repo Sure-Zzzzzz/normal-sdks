@@ -61,8 +61,21 @@ subprojects {
         return
     }
 
+    // jakarta 线（SB 3.4.2）条件分支：不 apply 2.7.9 boot 插件（classpath 无法同载 3.x 插件），
+    // SB 依赖版本改由下方本地 3.4.2 BOM 解析；toolchain 由 -PjakartaJavaVersion 控制（默认 17，验证轮 21）。
+    // JDK 17/21 经 ~/.jdks junction 被 Gradle 自动探测（见 toolchain.md），命令无需额外参数。
+    def isJakartaModule = project.path.contains(':jakarta:')
+    if (isJakartaModule) {
+        // 基线解析与日志放在项目作用域：dependencyManagement DSL 块内裸写 rootProject/logger 会被 DSL 委托劫持
+        def jakartaBootVersion = rootProject.findProperty('jakartaBootVersion') ?: '3.4.2'
+        project.ext.jakartaBootVersion = jakartaBootVersion
+        logger.lifecycle("⚡ jakarta 线基线 Spring Boot: ${jakartaBootVersion}（矩阵轮以本行为准，防属性名typo静默回落）")
+    }
+
     apply plugin: 'java-library'
-    apply plugin: 'org.springframework.boot'
+    if (!isJakartaModule) {
+        apply plugin: 'org.springframework.boot'
+    }
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'com.vanniktech.maven.publish'
 
@@ -88,11 +101,19 @@ subprojects {
     // ========== 版本读取结束 ==========
 
     java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        if (isJakartaModule) {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+            toolchain {
+                languageVersion = JavaLanguageVersion.of("${rootProject.findProperty('jakartaJavaVersion') ?: '17'}")
+            }
+        } else {
+            sourceCompatibility = JavaVersion.VERSION_1_8
+            targetCompatibility = JavaVersion.VERSION_1_8
 
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(11)
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(11)
+            }
         }
     }
 
@@ -136,6 +157,16 @@ subprojects {
                 dependency "${constraint.group}:${constraint.name}:${constraint.version}"
             }
         }
+        if (isJakartaModule) {
+            // jakarta 线依赖版本唯一来源：本地 BOM（旧线依赖 boot 插件隐式 BOM，两不相扰）。
+            // 版本经 -PjakartaBootVersion 参数化（默认 3.4.2，解析与日志见上方项目作用域）：
+            // jakarta 模块不 apply boot 插件，SB 版本输入仅此一行，与旧线"build.gradle.<版本>整文件互换"
+            // 机制的不同是刻意的——旧线互换因 buildscript classpath 无法参数化而存在，且互换无法表达
+            // "旧线钉死 2.7.9、仅 jakarta 换基线"的矩阵形态；矩阵轮结束不加参数即回默认基线。
+            imports {
+                mavenBom "org.springframework.boot:spring-boot-dependencies:${project.ext.jakartaBootVersion}"
+            }
+        }
     }
 
     dependencies {
@@ -151,8 +182,17 @@ subprojects {
         testAnnotationProcessor group: 'org.projectlombok', name: 'lombok'
     }
 
-    tasks.bootJar {
-        enabled = false
+    if (!isJakartaModule) {
+        // jakarta 模块不 apply boot 插件，无 bootJar 任务，不得进入此配置
+        tasks.bootJar {
+            enabled = false
+        }
+    } else {
+        // boot 插件会给编译自动加 -parameters；jakarta 分支不 apply 插件，须自行补齐，
+        // 否则 Spring 6.1 起参数名反射回退移除，@RequestParam 等未显式命名的参数直接失败
+        tasks.withType(JavaCompile).configureEach {
+            options.compilerArgs << '-parameters'
+        }
     }
 
     tasks.jar {
