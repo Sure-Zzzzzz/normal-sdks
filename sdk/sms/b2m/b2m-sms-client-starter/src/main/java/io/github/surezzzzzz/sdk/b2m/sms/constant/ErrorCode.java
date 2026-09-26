@@ -18,6 +18,11 @@ public final class ErrorCode {
      */
     public static final String CONFIG_KEY_LENGTH_INVALID = "SMS_CONFIG_002";
     /**
+     * 配置内容非法（话术/形态校验拒绝）。
+     */
+    public static final String CONFIG_CONTENT_INVALID = "SMS_CONFIG_003";
+
+    /**
      * 请求体加密失败。
      */
     public static final String CRYPTO_ENCRYPT_FAILED = "SMS_CRYPTO_001";
