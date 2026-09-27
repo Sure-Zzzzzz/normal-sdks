@@ -28,6 +28,17 @@ public final class SimpleIamCoreConstant {
      */
     public static final String ROUTE_KEY_PREFIX = RESOURCE_AUTHENTICATION_SOURCE_ID + ROUTE_KEY_SEPARATOR;
     /**
+     * 对外用户主体 ID 长度上限（SubjectIdGenerator SPI 契约；定长/前缀/字符集等形态约束见接入文档）。
+     */
+    public static final int SUBJECT_ID_MAX_LENGTH = 64;
+
+    /**
+     * 短信投递用途契约（SmsDeliveryProvider SPI 与 Server 共用,单一事实源）
+     */
+    public static final String SMS_PURPOSE_LOGIN = "login";
+    public static final String SMS_PURPOSE_BIND = "bind";
+    public static final String SMS_PURPOSE_FORGOT_PASSWORD = "forgot-password";
+    /**
      * 路由键模板。
      */
     public static final String ROUTE_KEY_TEMPLATE = "%s%s%s";

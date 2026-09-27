@@ -1,6 +1,6 @@
 # Simple IAM Core
 
-IAM 协议核心：定义外部身份源接入 SPI、人机验证 SPI、IAM 命名空间路由键与协议错误契约，供 IAM Server 与各类适配器共用。
+IAM 协议核心：定义外部身份源接入 SPI、人机验证 SPI、短信验证码投递 SPI、对外主体 ID 生成 SPI、IAM 命名空间路由键与协议错误契约，供 IAM Server 与各类适配器共用。
 
 ## 这个模块解决什么问题
 
@@ -15,6 +15,8 @@ IAM 登录链路要接两类外部能力——外部身份源（LDAP、OIDC 等�
 | `ExternalCredentialAuthenticator` | 凭证校验型登录 SPI（LDAP bind、远程密码源）：前端提交用户名与凭证，适配器到外部源校验。 |
 | `ExternalBrowserLoginProvider` | 跳转型登录 SPI（OIDC、CAS 等）：浏览器跳外部 IdP 再回调 IAM；授权发起与回调均为 front-channel GET。 |
 | `CaptchaProvider` | 人机验证 SPI：`generate` 出题、`verify` 一次性消费验题；何时要求验证码（失败计数、阈值判定）归 IAM 登录策略。 |
+| `SmsDeliveryProvider` | 短信验证码投递 SPI：实现方自带话术与签名策略，IAM 只交付手机号 / 验证码 / 用途 / 有效期；能力由 adaptor 装配带来，装配自动开启、未装配自动取消（登录 / 绑定 / 忘记密码话术按 `SMS_PURPOSE_*` 常量区分）。 |
+| `SubjectIdGenerator` | 对外用户主体 ID 生成 SPI：契约仅非空且长度 ≤ `SUBJECT_ID_MAX_LENGTH`；定长、前缀、字符集等形态约束由接入文档约定，与用户名 / 手机号 / 自增 ID 无推导关系。 |
 | `ExternalIdentity` | 认证成功返回的身份对象；`externalId` 必须是外部体系内稳定唯一标识（DN、uid、sub），不得使用显示名、邮箱等可变值。 |
 | `CaptchaChallenge` | 一次验证挑战：`captchaId` + `type` + 前端可直接渲染的 `content`（image 时为 PNG data URI）。 |
 | `IamRouteKeyHelper` | IAM 命名空间路由键的构造、提取与归属判定。 |
