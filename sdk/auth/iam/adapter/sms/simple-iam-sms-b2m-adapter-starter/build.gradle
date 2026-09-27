@@ -1,0 +1,8 @@
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    // core 1.1.0 已发版（SMS_PURPOSE_* 契约单一事实源），切正式坐标
+    api 'io.github.sure-zzzzzz:simple-iam-core:1.1.0'
+    api 'io.github.sure-zzzzzz:b2m-sms-client-starter:2.0.1'
+}

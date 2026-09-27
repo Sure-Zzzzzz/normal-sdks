@@ -1,0 +1,15 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          iam:
+            adapter:
+              sms:
+                b2m:
+                  enable: true
+                  # signature 可选:单条通道正文=签名+话术({code} 占位),凭据与目标号见 application-local.yml

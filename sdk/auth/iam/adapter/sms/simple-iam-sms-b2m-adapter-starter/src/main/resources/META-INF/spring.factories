@@ -1,0 +1,1 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\nio.github.surezzzzzz.sdk.auth.iam.adapter.sms.b2m.configuration.B2mSmsDeliveryConfiguration

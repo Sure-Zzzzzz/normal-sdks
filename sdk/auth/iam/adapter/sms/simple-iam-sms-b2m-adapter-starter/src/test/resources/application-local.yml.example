@@ -1,0 +1,13 @@
+# 复制为 application-local.yml 并填真实值(gitignored,切勿提交)
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        b2m:
+          sms:
+            enable: true
+            app-id: 在此填入 B2M 平台 appId
+            secret-key: 在此填入 B2M 平台 secretKey
+
+iam-sms-e2e:
+  phone: "+8613xxxxxxxxx"
