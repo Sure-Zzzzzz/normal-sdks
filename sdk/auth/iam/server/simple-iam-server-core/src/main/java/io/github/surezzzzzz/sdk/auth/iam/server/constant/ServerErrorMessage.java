@@ -9,6 +9,20 @@ public final class ServerErrorMessage {
 
     public static final String JWT_CONFIG_ERROR = "JWT配置错误：%s";
 
+    /**
+     * 主体ID生成器输出非法（空或超过长度上限）
+     */
+    public static final String SUBJECT_ID_GENERATE_INVALID = "主体ID生成器输出非法：长度须在1-%d之间";
+    /**
+     * 主体ID分配重试耗尽
+     */
+    public static final String SUBJECT_ID_ASSIGN_EXHAUSTED = "主体ID分配重试耗尽（生成器疑似劣质）：重试%d次";
+
+    /**
+     * 手机号挑战 HMAC 密钥未配置或长度不足
+     */
+    public static final String PHONE_CHALLENGE_HMAC_KEY_INVALID = "手机号挑战 HMAC 密钥缺失或不足 32 字节（装配投递实现后必须配置）";
+
     // ==================== 配置错误 ====================
     public static final String JWT_PUBLIC_KEY_NOT_CONFIGURED = "JWT公钥未配置";
     public static final String JWT_PRIVATE_KEY_NOT_CONFIGURED = "JWT私钥未配置";
@@ -121,7 +135,7 @@ public final class ServerErrorMessage {
     public static final String TRUSTED_APPLICATION_REDIRECT_URI_INVALID = "重定向 URI 非法：必须是绝对 URI 且不允许通配符：%s";
     public static final String TRUSTED_APPLICATION_ID_EXISTS = "可信应用 ID 已存在：%s";
     public static final String TRUSTED_APPLICATION_REDIRECT_URI_EMPTY = "授权码模式可信应用至少配置一个 redirect_uri";
-    public static final String TRUSTED_APPLICATION_GRANT_TYPE_NOT_ALLOWED = "可信应用仅支持 authorization_code / refresh_token 授权类型，机器凭证请通过 aksk-server 签发 AK/SK";
+    public static final String TRUSTED_APPLICATION_GRANT_TYPE_NOT_ALLOWED = "可信应用仅支持 authorization_code / refresh_token 授权类型，机器凭证请通过对应的凭证签发服务创建";
     public static final String TRUSTED_APPLICATION_CLIENT_TYPE_INVALID = "可信应用客户端类型非法";
     public static final String TRUSTED_APPLICATION_PUBLIC_CLIENT_SECRET_FORBIDDEN = "公共客户端不能配置客户端密钥";
     public static final String TRUSTED_APPLICATION_PUBLIC_CLIENT_AUTH_METHOD_INVALID = "公共客户端只能使用 none 客户端认证方式";

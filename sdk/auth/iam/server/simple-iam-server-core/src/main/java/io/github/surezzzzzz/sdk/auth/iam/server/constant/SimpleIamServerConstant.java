@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.constant;
 
+import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
+
 /**
  * Simple IAM Server Constants
  *
@@ -192,6 +194,10 @@ public final class SimpleIamServerConstant {
      */
     public static final String LOGIN_PROVIDER_LOCAL_PASSWORD = "local-password";
     /**
+     * 手机号短信登录 provider 标识
+     */
+    public static final String LOGIN_PROVIDER_PHONE_SMS = "phone-sms";
+    /**
      * 外部身份开号模式：首次登录自动创建本地账号
      */
     public static final String PROVISIONING_MODE_JIT = "jit";
@@ -240,6 +246,26 @@ public final class SimpleIamServerConstant {
      * 业务类型：限流
      */
     public static final String BUSINESS_RATE_LIMIT = "rate-limit";
+    /**
+     * 手机号挑战业务前缀：号→活跃挑战映射
+     */
+    public static final String BUSINESS_PHONE_CHALLENGE_ACTIVE = "phone-challenge:active";
+    /**
+     * 手机号挑战业务前缀：挑战详情
+     */
+    public static final String BUSINESS_PHONE_CHALLENGE_DETAIL = "phone-challenge:detail";
+    /**
+     * 手机号挑战业务前缀：号维度频控计数
+     */
+    public static final String BUSINESS_PHONE_RATE_PHONE = "phone-rate:phone";
+    /**
+     * 手机号挑战业务前缀：IP 维度频控计数
+     */
+    public static final String BUSINESS_PHONE_RATE_IP = "phone-rate:ip";
+    /**
+     * 手机号挑战业务前缀：全局维度频控计数
+     */
+    public static final String BUSINESS_PHONE_RATE_GLOBAL = "phone-rate:global";
     /**
      * 业务类型：分布式锁
      */
@@ -315,6 +341,88 @@ public final class SimpleIamServerConstant {
      * 默认失败登录次数
      */
     public static final int DEFAULT_FAILED_LOGIN_COUNT = 0;
+
+    // ==================== 主体 ID ====================
+    /**
+     * 默认主体 ID 长度（16 位全随机数字；首位可为 0，纯字符串无数值语义）
+     */
+    public static final int DEFAULT_SUBJECT_ID_LENGTH = 16;
+    /**
+     * 主体 ID 唯一冲突重试上限（超过即抛异常，不静默吞——说明生成器实现劣质）
+     */
+    public static final int SUBJECT_ID_RETRY_LIMIT = 5;
+
+    // ==================== 手机号挑战 ====================
+
+    /**
+     * 验证码默认长度（6 位；4 位空间 10^4，5 次上限内单挑战命中 0.05% 过高）
+     */
+    public static final int DEFAULT_PHONE_CODE_LENGTH = 6;
+
+    /**
+     * 挑战有效期（秒）
+     */
+    public static final int DEFAULT_PHONE_CHALLENGE_TTL_SECONDS = 300;
+
+    /**
+     * 单挑战验证次数上限
+     */
+    public static final int DEFAULT_PHONE_CHALLENGE_MAX_ATTEMPTS = 5;
+
+    /**
+     * 同号发送冷却（秒）
+     */
+    public static final int DEFAULT_PHONE_SEND_COOLDOWN_SECONDS = 60;
+
+    /**
+     * 号维度频控窗口（秒）
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_PHONE_WINDOW_SECONDS = 3600;
+
+    /**
+     * 号维度频控阈值
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_PHONE_LIMIT = 10;
+
+    /**
+     * IP 维度频控窗口（秒）
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_IP_WINDOW_SECONDS = 3600;
+
+    /**
+     * IP 维度频控阈值
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_IP_LIMIT = 20;
+
+    /**
+     * 全局维度频控窗口（秒）
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_GLOBAL_WINDOW_SECONDS = 60;
+
+    /**
+     * 全局维度频控阈值
+     */
+    public static final int DEFAULT_PHONE_RATE_LIMIT_GLOBAL_LIMIT = 100;
+
+    /**
+     * 挑战 HMAC 密钥最小字节数（启动校验）
+     */
+    public static final int PHONE_CHALLENGE_HMAC_KEY_MIN_BYTES = 32;
+
+    /**
+     * 挑战用途：登录
+     */
+    public static final String PHONE_CHALLENGE_PURPOSE_LOGIN = SimpleIamCoreConstant.SMS_PURPOSE_LOGIN;
+
+    /**
+     * 挑战用途：绑定/换绑
+     */
+    public static final String PHONE_CHALLENGE_PURPOSE_BIND = SimpleIamCoreConstant.SMS_PURPOSE_BIND;
+
+    /**
+     * 挑战用途：忘记密码
+     */
+    public static final String PHONE_CHALLENGE_PURPOSE_FORGOT_PASSWORD = SimpleIamCoreConstant.SMS_PURPOSE_FORGOT_PASSWORD;
     /**
      * 默认 MFA 等级
      */
@@ -477,7 +585,7 @@ public final class SimpleIamServerConstant {
      */
     public static final String PATH_RESOURCE_API = "/iam/resource/**";
     /**
-     * AKSK 所属人授权内部 reader API 路径。该路径只接受固定 SERVICE 的短时 Bearer，
+     * 凭证服务所属人授权内部 reader API 路径（协作契约约定路径）。该路径只接受固定 SERVICE 的短时 Bearer，
      * 不复用资源验证 Basic 或浏览器会话链。
      */
     public static final String PATH_INTERNAL_AKSK_API = "/iam/internal/aksk/**";
@@ -503,6 +611,18 @@ public final class SimpleIamServerConstant {
      * Web 人机验证挑战 API 路径（公开，登录前可取题）
      */
     public static final String PATH_WEB_AUTH_CAPTCHA = "/iam/web/auth/captcha";
+    /**
+     * Web 手机号挑战创建 API 路径（匿名+频控，登录/绑定/忘记密码发码入口；绑定发码走登录态 account 链）
+     */
+    public static final String PATH_WEB_AUTH_PHONE_CHALLENGES = "/iam/web/auth/phone-challenges";
+    /**
+     * Web 手机号验证码登录 API 路径（匿名，验证码即凭据）
+     */
+    public static final String PATH_WEB_AUTH_PHONE_LOGIN = "/iam/web/auth/phone-login";
+    /**
+     * Web 忘记密码重置 API 路径（匿名，手机验证码即凭据，不建会话）
+     */
+    public static final String PATH_WEB_AUTH_PASSWORD_RESET = "/iam/web/auth/password-reset";
     /**
      * Web 外部身份源授权跳转 API 路径（公开，登录发起入口）
      */
@@ -540,7 +660,7 @@ public final class SimpleIamServerConstant {
      */
     public static final String PATH_ADMIN_API = "/iam/admin/**";
     /**
-     * 开放 API 路径（AKSK 凭证主体，公共资源层鉴权链接管）
+     * 开放 API 路径（外部凭证主体，公共资源层鉴权链接管）
      */
     public static final String PATH_OPEN_API = "/iam/api/**";
     /**

@@ -62,6 +62,8 @@ public enum AdminActionType {
      * 用户自助修改密码
      */
     PASSWORD_CHANGED("password-changed", "修改密码"),
+    PHONE_BOUND("phone-bound", "手机号绑定/换绑"),
+    PHONE_UNBOUND("phone-unbound", "手机号解绑"),
     /**
      * 部署级恢复（bootstrap 管理员密码恢复等高危操作）
      */

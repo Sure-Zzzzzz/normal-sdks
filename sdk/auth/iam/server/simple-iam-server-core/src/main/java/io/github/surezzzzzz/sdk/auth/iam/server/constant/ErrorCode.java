@@ -9,6 +9,16 @@ public final class ErrorCode {
 
     public static final String VALIDATION_FAILED = "VALIDATION_001";
 
+    // ==================== 主体 ID 错误 ====================
+    /**
+     * 生成器输出非法（空或超长）
+     */
+    public static final String SUBJECT_ID_GENERATE_INVALID = "SUBJECT_ID_001";
+    /**
+     * 唯一冲突重试耗尽
+     */
+    public static final String SUBJECT_ID_ASSIGN_EXHAUSTED = "SUBJECT_ID_002";
+
     // ==================== 参数验证错误 ====================
     public static final String CONFIG_VALIDATION_FAILED = "CONFIG_001";
 

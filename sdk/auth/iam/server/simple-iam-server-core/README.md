@@ -21,7 +21,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ### 错误码与常量（constant 包）
 
-`ErrorCode`（对外 API 错误码）、`ServerErrorMessage`（脱敏错误文案）、`SimpleIamServerConstant`（配置前缀与域常量）、`IamAuthorizeContextStatus`、`PermissionType`、`RoleSource`（角色来源：内置 / 应用申报）、`TrustedApplicationClientType`、`TrustedApplicationIcon`、`PortalMenuNodeType`、`PortalPresentationMode`。
+`ErrorCode`（对外 API 错误码，含主体 ID 生成/分配契约 `SUBJECT_ID_001/002`）、`ServerErrorMessage`（脱敏错误文案，含主体 ID 与手机号挑战 HMAC 配置文案）、`SimpleIamServerConstant`（配置前缀与域常量，含主体 ID 默认策略、手机号挑战 / 冷却 / 三维频控默认值与 `PHONE_CHALLENGE_PURPOSE_*`——取值单一来源于 `simple-iam-core` 的 `SMS_PURPOSE_*`）、`IamAuthorizeContextStatus`、`PermissionType`、`RoleSource`（角色来源：内置 / 应用申报）、`TrustedApplicationClientType`、`TrustedApplicationIcon`、`PortalMenuNodeType`、`PortalPresentationMode`。
 
 ### 异常（exception 包）
 
@@ -31,7 +31,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.1.3"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.2.0"
 }
 ```
 
