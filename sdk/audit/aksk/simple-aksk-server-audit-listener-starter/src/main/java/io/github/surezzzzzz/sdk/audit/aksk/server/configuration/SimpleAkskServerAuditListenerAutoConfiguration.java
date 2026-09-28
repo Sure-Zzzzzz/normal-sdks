@@ -2,7 +2,9 @@ package io.github.surezzzzzz.sdk.audit.aksk.server.configuration;
 
 import io.github.surezzzzzz.sdk.audit.aksk.server.SimpleAkskServerAuditListenerPackage;
 import io.github.surezzzzzz.sdk.audit.aksk.server.annotation.SimpleAkskServerAuditListenerComponent;
+import io.github.surezzzzzz.sdk.audit.aksk.server.handler.ServerClientLifecycleAuditHandler;
 import io.github.surezzzzzz.sdk.audit.aksk.server.handler.ServerTokenAuditHandler;
+import io.github.surezzzzzz.sdk.audit.aksk.server.listener.ServerClientLifecycleAuditEventListener;
 import io.github.surezzzzzz.sdk.audit.aksk.server.listener.ServerTokenAuditEventListener;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -43,5 +45,15 @@ public class SimpleAkskServerAuditListenerAutoConfiguration {
     public ServerTokenAuditEventListener serverTokenAuditEventListener(
             List<ServerTokenAuditHandler> auditHandlers) {
         return new ServerTokenAuditEventListener(auditHandlers);
+    }
+
+    /**
+     * 注册提交后的 AKU 生命周期审计监听器。
+     */
+    @Bean
+    @ConditionalOnBean(ServerClientLifecycleAuditHandler.class)
+    public ServerClientLifecycleAuditEventListener serverClientLifecycleAuditEventListener(
+            List<ServerClientLifecycleAuditHandler> auditHandlers) {
+        return new ServerClientLifecycleAuditEventListener(auditHandlers);
     }
 }

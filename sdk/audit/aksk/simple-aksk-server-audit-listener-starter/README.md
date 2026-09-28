@@ -1,6 +1,6 @@
 # simple-aksk-server-audit-listener-starter
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK Server 的可选 Token 生命周期审计扩展。它监听已提交的 Server 事件，转换为不含 Token 原文的审计记录并分发给业务处理器。
@@ -12,10 +12,10 @@ AKSK Server 的可选 Token 生命周期审计扩展。它监听已提交的 Ser
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:3.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-audit-listener-starter:3.1.0'
 ```
 
-前提是项目已经引入 `simple-aksk-server-starter:3.0.0`，它负责发布 Token 生命周期事件。
+前提是项目已经引入 `simple-aksk-server-starter`：Token 生命周期事件 3.0.0 起可用；AKU 生命周期事件（3.1.0 新增消费）要求 Server 3.2.0 及以上。
 
 ## 快速接入
 
@@ -53,6 +53,35 @@ io:
                     enabled: false
 ```
 
+## AKU 生命周期审计（3.1.0 起）
+
+OWNER_INHERITED AKU 的创建、改名、密钥轮换与终止会发布已脱敏的 `AkskClientLifecycleEvent`；实现 `ServerClientLifecycleAuditHandler` 即可消费：
+
+```java
+@Slf4j
+@Component
+public class MyAkskLifecycleAuditHandler implements ServerClientLifecycleAuditHandler {
+
+    @Override
+    public void handle(ServerClientLifecycleAuditRecord record) {
+        log.info("AKU audit: type={}, client={}, ownerSource={}, subject={}, targetApp={}, version={}",
+                record.getEventType(), record.getClientId(), record.getOwnerSourceId(),
+                record.getOwnerSubjectId(), record.getTargetApplicationId(), record.getLifecycleVersion());
+    }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `eventType` | CREATED / RENAMED / SECRET_ROTATED / TERMINATED |
+| `eventTime` | 事件发生时间 |
+| `clientId` | AKU 客户端标识 |
+| `ownerSourceId` / `ownerSubjectId` | 身份源标识与稳定所属人主体（不使用可变 username） |
+| `targetApplicationId` | 目标可信应用 ID |
+| `lifecycleVersion` | 绑定生命周期版本（乐观锁） |
+
+与 Token 审计一致的提交后语义（AFTER_COMMIT、单 Handler 异常隔离）；事件本身不携带 Secret、Token、权限集合或 DATA。默认日志 Handler 与 Token 审计共用开关（`...listener.handler.log.enabled`，默认开）。
+
 ## 事件与原因
 
 | eventType | 触发场景 | cause |
@@ -68,7 +97,7 @@ io:
 | `REMOVED` | Spring Authorization Server 内部删除 | `UNSPECIFIED` |
 | `INTROSPECTED` | Token 自省 | `UNSPECIFIED` |
 
-完整替换或撤销应用授权时，Server 会为该 Client 每个实际失效的活跃 Token 产生一条 `REVOKED` 事件；原因仅说明该次失效的业务来源，不携带授权内容、权限清单、操作者、IAM 主体、Secret 或 Token 原文。
+完整替换或撤销应用授权时，Server 会为该 Client 每个实际失效的活跃 Token 产生一条 `REVOKED` 事件；原因仅说明该次失效的业务来源，不携带授权内容、权限清单、操作者、身份源主体、Secret 或 Token 原文。
 
 ## 提交后语义与可靠性边界
 
@@ -96,6 +125,10 @@ io:
 日志和 Handler 不得记录 Token、Token 前缀、Authorization/Basic 认证头、Client Secret、Cookie、完整 OAuth 响应或完整 introspection 响应。
 
 ## 版本历史
+
+### 3.1.0
+
+新增 AKU 生命周期审计：监听 `AkskClientLifecycleEvent`（CREATED/RENAMED/SECRET_ROTATED/TERMINATED，AFTER_COMMIT 提交后消费），新增 `ServerClientLifecycleAuditHandler` SPI、`ServerClientLifecycleAuditRecord` 记录模型与默认日志 Handler；事件为身份源协议的脱敏契约，携带 ownerSourceId/ownerSubjectId/targetApplicationId/lifecycleVersion，不含 Secret 与权限集合。依赖升至 `simple-aksk-server-core` 3.0.4。详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.0
 

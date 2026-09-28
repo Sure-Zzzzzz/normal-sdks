@@ -1,11 +1,8 @@
 spring:
+  # 模块测试默认叠加 local-test（开发测试库，物理隔离联调库）；与本仓 Server Starter 测试配置同范式
   profiles:
-    active: local
-  datasource:
-    url: jdbc:mysql://localhost:3306/sure_auth_aksk?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: # 请在 application-local.yml 中配置真实密码
+    active: local-test,local
+  # MySQL 连接由 simple-mysql-route-starter 接管；连接契约在下方 mysql.route 配置
   jpa:
     hibernate:
       ddl-auto: validate
@@ -13,22 +10,36 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-  redis:
-    host: localhost
-    port: 6379
-    database: 1
-    timeout: 3000ms
-    lettuce:
-      pool:
-        max-active: 8
-        max-idle: 8
-        min-idle: 2
-        max-wait: -1ms
-
+  # Redis 连接由 simple-redis-route-starter 接管（limiter/cache 走 RedisRouteTemplate）
 io:
   github:
     surezzzzzz:
       sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: default
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/sure_auth_aksk?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: root
+                password: # 请在 application-local.yml 中配置真实密码
+                driver-class-name: com.mysql.cj.jdbc.Driver
+        redis:
+          route:
+            enable: true
+            sources:
+              default:
+                host: localhost
+                port: 6379
+                database: 1
+                timeout-ms: 3000
+                pool:
+                  enabled: true
+                  max-active: 8
+                  max-idle: 8
+                  min-idle: 2
+
         auth:
           aksk:
             server:

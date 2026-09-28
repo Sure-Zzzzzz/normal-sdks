@@ -1,6 +1,6 @@
 dependencies {
-    // 依赖 server-core（提供 AbstractTokenEvent 等）
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.1'
+    // 依赖 server-core（提供 AbstractTokenEvent 与 AkskClientLifecycleEvent 等事件契约）
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.4'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
@@ -8,7 +8,7 @@ dependencies {
     compileOnly 'org.springframework:spring-tx'
 
     // 测试依赖：使用已发布的 Server Starter，验证真实的 Token 生命周期事件
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.boot:spring-boot-starter-security'
