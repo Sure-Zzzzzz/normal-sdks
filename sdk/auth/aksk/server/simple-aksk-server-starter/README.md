@@ -1,10 +1,10 @@
 # Simple AKSK Server Starter
 
-> 当前版本 **3.1.1**。版本沿革见各 `CHANGELOG.*.md`。  
-> 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。  
+> 当前版本 **3.2.0**。版本沿革见各 `CHANGELOG.*.md`。
+> 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 > 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ dependencies {
     // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
     // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
     // runtimeOnly 传递运行时，使用方无需重复声明
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.0'
 
     // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -313,7 +313,7 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/client`                        | POST   | 创建 Client           |
 | `/api/client`                        | GET    | 查询 Client 列表（分页/批量） |
 | `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
-| `/api/client/{clientId}`             | DELETE | 删除 Client           |
+| `/api/client/{clientId}`             | DELETE | 删除 Client（连带撤销其名下全部 Token：除 `akskClient:delete` 与 akskClient 数据计划外，还要求 `akskToken:update` API 权限与 akskToken 数据计划——服务主体（applicationCode=aksk-server）与 IAM 人员令牌投影（applicationCode=可信应用编码）均按各自授权上下文评估）           |
 | `/api/client/{clientId}`             | PATCH  | 更新 Client（enabled、OAuth Scope、名称或归属） |
 | `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户 OAuth Scope |
 | `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
@@ -343,6 +343,22 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 ---
 
 ## 与 IAM 协作（可选）
+
+### 接入前置与职责边界
+
+需要在统一应用门户中登录并按 IAM 人员权限使用 AKSK 管理台的业务，必须先在 IAM 登记为可信应用。该可信应用至少包含：
+
+- **应用登录客户端（PKCE）**：供浏览器完成 IAM/OIDC 登录；
+- **资源校验客户端**：供 AKSK Server 回源 IAM 校验 IAM 人员 Token；
+- **AKU 所属人授权继承**：由管理员显式开启后，AKSK 才能同步并使用当前人员的授权投影。
+
+AKSK Server 自己仍是 AKU/AKSK 客户端、AK/SK、Token 生命周期和最终访问执行的权威服务；IAM 是人员身份、应用准入及继承授权投影的权威来源，AKSK 只保存受控本地投影并失败关闭。AKSK 不把 AKU 交给 IAM 管理。
+
+内部 owner authorization provider 只在内存中按 scope 缓存短时 service token，并在到期前 30 秒刷新；它不缓存、持久化或回退人员三权。授权日志拉取周期由 `owner-authorization.pull-interval-millis` 配置；远端授权源暂不可用时不续授权租约，超过 `lease-seconds` 后 inherited AKU 失败关闭。
+
+纯机器调用 AKSK 的业务不需要 PKCE，可以直接使用 AKU（AK/SK）换取 AKSK Token；但资源服务若接收 IAM 人员 Token，仍必须配置 IAM 资源校验客户端，除非明确改用本地 JWKS 验签并接受无法实时感知会话吊销、用户禁用和 JWE 状态的取舍。
+
+AKSK 与 IAM 的协作采用单向依赖：AKSK 读取 IAM 的认证结论和授权投影，IAM 不回调 AKSK。正常资源请求只访问 AKSK 本地状态；IAM 不可用时，已同步且租约有效的继承 AKU 仍可按 AKSK 本地投影执行，租约过期则失败关闭。
 
 ### 业务资源服务：双身份接入
 
@@ -453,6 +469,10 @@ logging:
 ---
 
 ## 版本历史
+
+### 3.2.0 (2026-09-23)
+
+IAM 所属人授权协作：用户级 AKU 可绑定身份源人员和可信应用，三权从身份源的本地投影读取并以授权纪元校验；正常请求不依赖身份源在线，短时不可用时投影在租约内继续服务，租约过期后发放、续期和内省失败关闭。AKU 创建入口收敛为门户自助唯一路径（管理 REST `type=user` 返回 409）；个人凭证天花板按方案 A 执行（OWNER_INHERITED 令牌路径收敛到所属人，管理台 HUMAN 令牌按身份源投影原样执行）；修复跨资源权限评估的应用编码裂缝。详见 [CHANGELOG.3.2.0.md](CHANGELOG.3.2.0.md)。
 
 ### 3.1.1 (2026-09-07)
 

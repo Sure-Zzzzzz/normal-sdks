@@ -139,8 +139,8 @@ class ClientManagementIntegrationTest {
     }
 
     @Test
-    void testCreateUserClientAPI() {
-        log.info("测试通过REST API创建用户级Client");
+    void shouldRejectUserClientCreationThroughManagementApi() {
+        log.info("测试管理API拒绝创建用户级Client");
 
         // Given
         CreateClientRequest request = new CreateClientRequest();
@@ -159,14 +159,10 @@ class ClientManagementIntegrationTest {
         );
 
         // Then
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertNotNull(response.getBody().getClientId());
-        assertNotNull(response.getBody().getClientSecret());
-        assertTrue(response.getBody().getClientId().startsWith("AKU"));
-        assertTrue(response.getBody().getClientSecret().startsWith("SK"));
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNull(response.getBody());
 
-        log.info("通过REST API创建用户级Client成功: {}", response.getBody().getClientId());
+        log.info("管理API已拒绝创建用户级Client，必须由本人自助接口建立IAM所属人绑定");
     }
 
     @Test
@@ -210,18 +206,18 @@ class ClientManagementIntegrationTest {
         // When
         String url = String.format("http://localhost:%d/api/client/%s", port, clientId);
         HttpEntity<Void> entity = JwtTokenTestHelper.createAuthEntity(jwtToken);
-        ResponseEntity<ClientInfoResponse> response = restTemplate.exchange(
+        ResponseEntity<String> response = restTemplate.exchange(
                 url,
                 HttpMethod.GET,
                 entity,
-                ClientInfoResponse.class
+                String.class
         );
 
         // Then
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(clientId, response.getBody().getClientId());
-        assertEquals("Test Client for Get", response.getBody().getClientName());
+        assertTrue(response.getBody().contains(clientId));
+        assertTrue(response.getBody().contains("Test Client for Get"));
 
         log.info("通过REST API根据ID查询Client成功: {}", clientId);
     }

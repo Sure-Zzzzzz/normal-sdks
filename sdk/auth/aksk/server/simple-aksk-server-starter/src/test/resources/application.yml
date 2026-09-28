@@ -1,6 +1,8 @@
 spring:
+  # 模块测试默认叠加 local-test（开发测试库，物理隔离联调库）；联调起服命令行显式传
+  # --spring.profiles.active=local,e2e[,owner-e2e] 覆盖本值，不受影响
   profiles:
-    active: local
+    active: local-test,local
   # MySQL 连接已由 simple-mysql-route-starter 接管（@Primary routing DataSource 先于
   # DataSourceAutoConfiguration 装配，Boot 数据源自动配置让位）——连接契约在下方 mysql.route 配置
   jpa:

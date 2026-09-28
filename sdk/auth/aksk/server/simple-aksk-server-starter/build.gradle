@@ -1,6 +1,9 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.2'
+
+    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.4'
+    // 仅引入中性协作 SPI；不引入任何 IAM 适配器或 IAM resource starter。
+    api 'io.github.sure-zzzzzz:simple-owner-authorization-collaboration-core:1.0.0'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
 

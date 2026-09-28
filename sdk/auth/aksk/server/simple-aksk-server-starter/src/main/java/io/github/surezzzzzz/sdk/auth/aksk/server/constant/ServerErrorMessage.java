@@ -83,6 +83,11 @@ public final class ServerErrorMessage {
     public static final String ADMIN_OWNER_INFO_UPDATE_SUCCESS = "归属信息更新成功";
     public static final String ADMIN_UPDATE_FIELD_REQUIRED = "请提供要更新的字段（enabled、scopes、name 或 ownerUserId）";
     /**
+     * 用户级 AKU 创建已收敛为统一应用门户内本人自助，管理面（页面/REST）一律拒绝
+     */
+    public static final String ADMIN_USER_CLIENT_CREATION_DISABLED =
+            "用户级 AKU 须由本人在统一应用门户「我的 AKSK 访问凭证」自助创建，管理面不再提供创建入口";
+    /**
      * clientId 参数缺失
      */
     public static final String CLIENT_ID_REQUIRED = "clientId 不能为空";

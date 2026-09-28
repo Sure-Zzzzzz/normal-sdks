@@ -2,7 +2,9 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskOwnerAuthorizationMode;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationResult;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.AkskIntrospectionResponseHandler;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.ApplicationAuthorizationSubjectType;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.SimpleApplicationAuthorizationConstant;
@@ -42,7 +44,7 @@ class AkskIntrospectionResponseHandlerTest {
      */
     @Test
     void shouldTruncateSubSecondTimestampsBeforeAssemblingIntrospectionClaims() throws Exception {
-        CapturingAuthorizationService service = new CapturingAuthorizationService();
+        CapturingEffectiveAuthorizationService service = new CapturingEffectiveAuthorizationService();
         AkskIntrospectionResponseHandler handler = new AkskIntrospectionResponseHandler(service);
 
         MockHttpServletResponse response = writeIntrospection(handler, activeClaims());
@@ -69,7 +71,7 @@ class AkskIntrospectionResponseHandlerTest {
      */
     @Test
     void shouldReturnInactiveIntrospectionForInactiveToken() throws Exception {
-        CapturingAuthorizationService service = new CapturingAuthorizationService();
+        CapturingEffectiveAuthorizationService service = new CapturingEffectiveAuthorizationService();
         AkskIntrospectionResponseHandler handler = new AkskIntrospectionResponseHandler(service);
 
         Map<String, Object> claims = new HashMap<String, Object>();
@@ -106,20 +108,20 @@ class AkskIntrospectionResponseHandlerTest {
     }
 
     /**
-     * 捕获快照组装入参的授权服务。
+     * 捕获统一授权出口入参，避免内省链路绕过 inherited AKU 的 IAM reader。
      */
-    private static final class CapturingAuthorizationService extends AkskApplicationAuthorizationService {
+    private static final class CapturingEffectiveAuthorizationService extends AkskEffectiveAuthorizationService {
 
         private Instant capturedIssuedAt;
 
-        private CapturingAuthorizationService() {
-            super(null, null);
+        private CapturingEffectiveAuthorizationService() {
+            super(null, null, null, null, null, null);
         }
 
         @Override
-        public ApplicationAuthorizationContext loadActiveContext(String clientId, Instant issuedAt, Instant expiresAt) {
+        public AkskEffectiveAuthorizationResult resolve(String clientId, Instant issuedAt, Instant expiresAt) {
             this.capturedIssuedAt = issuedAt;
-            return new ApplicationAuthorizationContext(
+            ApplicationAuthorizationContext authorization = new ApplicationAuthorizationContext(
                     SimpleApplicationAuthorizationConstant.PROTOCOL,
                     SimpleApplicationAuthorizationConstant.VERSION,
                     ApplicationAuthorizationSubjectType.SERVICE,
@@ -135,6 +137,8 @@ class AkskIntrospectionResponseHandlerTest {
                     "digest-a",
                     issuedAt,
                     expiresAt);
+            return new AkskEffectiveAuthorizationResult(authorization, AkskOwnerAuthorizationMode.STATIC_LEGACY,
+                    null, null, null, null, null);
         }
     }
 }

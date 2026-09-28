@@ -7,10 +7,12 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.ApplicationA
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ApplicationAuthorizationResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskOwnerAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskClientOwnerBindingRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ApplicationAuthorizationManagementService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.TokenManagementService;
@@ -43,12 +45,14 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
 
     private final AkskApplicationAuthorizationRepository authorizationRepository;
     private final OAuth2RegisteredClientEntityRepository clientRepository;
+    private final AkskClientOwnerBindingRepository bindingRepository;
     private final TokenManagementService tokenManagementService;
 
     @Override
     @Transactional
     public ApplicationAuthorizationResponse createLocal(String clientId, ApplicationAuthorizationRequest request) {
         OAuth2RegisteredClientEntity client = requireClient(clientId);
+        requireStaticAuthorization(clientId);
         if (authorizationRepository.findByClientId(clientId).isPresent()) {
             throw new ApplicationAuthorizationConflictException();
         }
@@ -87,6 +91,7 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
     @Override
     @Transactional
     public ApplicationAuthorizationResponse replaceLocal(String clientId, ApplicationAuthorizationRequest request) {
+        requireStaticAuthorization(clientId);
         AkskApplicationAuthorizationEntity authorization = requireAuthorization(clientId);
         RequestValue value = normalize(request);
         if (!authorization.getApplicationCode().equals(value.applicationCode)) {
@@ -103,6 +108,7 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
     @Override
     @Transactional
     public void revokeLocal(String clientId) {
+        requireStaticAuthorization(clientId);
         AkskApplicationAuthorizationEntity authorization = requireAuthorization(clientId);
         Instant now = Instant.now();
         authorization.setEnabled(Boolean.FALSE);
@@ -121,6 +127,7 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
     public ApplicationAuthorizationResponse create(String clientId, ApplicationAuthorizationRequest request,
                                                    DataAccessPlan plan) {
         OAuth2RegisteredClientEntity client = requireClient(clientId);
+        requireStaticAuthorization(clientId);
         RequestValue value = normalize(request);
         if (!ManagementDataAccessPlanHelper.isApplicationAuthorizationCreateAllowed(plan, client,
                 value.applicationCode)) {
@@ -179,6 +186,7 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
     @Transactional
     public ApplicationAuthorizationResponse replace(String clientId, ApplicationAuthorizationRequest request,
                                                     DataAccessPlan plan, DataAccessPlan tokenPlan) {
+        requireStaticAuthorization(clientId);
         AkskApplicationAuthorizationEntity authorization = requireAuthorization(clientId);
         OAuth2RegisteredClientEntity client = requireClient(clientId);
         requireAllowed(plan, authorization, client);
@@ -198,6 +206,7 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
     @Override
     @Transactional
     public void revoke(String clientId, DataAccessPlan plan, DataAccessPlan tokenPlan) {
+        requireStaticAuthorization(clientId);
         AkskApplicationAuthorizationEntity authorization = requireAuthorization(clientId);
         OAuth2RegisteredClientEntity client = requireClient(clientId);
         requireAllowed(plan, authorization, client);
@@ -251,6 +260,18 @@ public class ApplicationAuthorizationManagementServiceImpl implements Applicatio
         return clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new ClientException(ErrorCode.CLIENT_NOT_FOUND,
                         String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)));
+    }
+
+    /**
+     * OWNER_INHERITED AKU 的三权只可由身份源当前投影给出；本地授权表即使存在残留记录也不能作为写入目标。
+     */
+    private void requireStaticAuthorization(String clientId) {
+        if (bindingRepository.findByClientId(clientId)
+                .map(binding -> AkskOwnerAuthorizationMode.OWNER_INHERITED.equals(binding.getAuthorizationMode()))
+                .orElse(Boolean.FALSE)) {
+            throw new SimpleAkskServerException(ErrorCode.VALIDATION_FAILED,
+                    "OWNER_INHERITED AKU 不允许本地维护应用授权");
+        }
     }
 
     private RequestValue normalize(ApplicationAuthorizationRequest request) {

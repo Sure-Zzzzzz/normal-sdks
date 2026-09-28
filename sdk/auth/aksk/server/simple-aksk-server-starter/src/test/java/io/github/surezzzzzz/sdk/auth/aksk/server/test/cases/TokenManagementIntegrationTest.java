@@ -376,12 +376,17 @@ class TokenManagementIntegrationTest {
 
         // Verify it's deleted
         String getUrl = String.format("http://localhost:%d/api/token/%s", port, tokenId);
-        HttpEntity<Void> getEntity = JwtTokenTestHelper.createAuthEntity(jwtToken);
-        ResponseEntity<TokenInfoResponse> getResponse = restTemplate.exchange(
+        // 列表首项可能正是当前管理令牌，删除后必须使用新签发的令牌验证资源状态。
+        String verificationToken = JwtTokenTestHelper.getTokenByClientCredentials(
+                restTemplate, port, bootstrapClientId, bootstrapClientSecret, "/api/token"
+        );
+        HttpEntity<Void> getEntity = JwtTokenTestHelper.createAuthEntity(verificationToken);
+        // 404 由 Spring 的错误端点返回标准错误体，不应按成功 DTO 反序列化。
+        ResponseEntity<String> getResponse = restTemplate.exchange(
                 getUrl,
                 HttpMethod.GET,
                 getEntity,
-                TokenInfoResponse.class
+                String.class
         );
         assertEquals(HttpStatus.NOT_FOUND, getResponse.getStatusCode());
 

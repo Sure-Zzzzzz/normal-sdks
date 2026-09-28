@@ -6,7 +6,8 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerP
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
-import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationResult;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.claim.ApplicationAuthorizationContextClaimMapper;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
@@ -29,7 +30,7 @@ import java.util.Map;
  *   <li>client_id: 客户端ID（AKSK）</li>
  *   <li>auth_server_id: 认证服务器标识（用于多认证服务器场景区分token来源）</li>
  *   <li>client_type: 客户端类型（platform/user）</li>
- *   <li>user_id: 用户ID（仅用户级AKSK）</li>
+ *   <li>user_id: 用户稳定主体 subjectId（仅用户级AKSK，保留旧 claim 名兼容）</li>
  *   <li>username: 用户名（仅用户级AKSK）</li>
  *   <li>security_context: 自定义安全上下文（可选）</li>
  * </ul>
@@ -42,7 +43,7 @@ import java.util.Map;
 public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingContext> {
 
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
-    private final AkskApplicationAuthorizationService applicationAuthorizationService;
+    private final AkskEffectiveAuthorizationService effectiveAuthorizationService;
     private final SimpleAkskServerProperties properties;
 
     @Override
@@ -76,7 +77,7 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
 
         // 4. 如果是用户级AKSK，添加用户相关信息
         if (ClientType.USER.equals(clientType) && entity.getOwnerUserId() != null) {
-            // user_id: 用户唯一标识
+            // user_id: 兼容字段名，值为身份源稳定 subjectId，不是身份源数据自增主键
             context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_USER_ID, entity.getOwnerUserId());
             log.debug("添加user_id claim: clientId={}, userId={}", clientId, entity.getOwnerUserId());
 
@@ -131,15 +132,31 @@ public class JwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingCont
         }
         java.time.Instant issuedAt = context.getClaims().build().getIssuedAt();
         java.time.Instant expiresAt = context.getClaims().build().getExpiresAt();
-        ApplicationAuthorizationContext authorization = applicationAuthorizationService.loadActiveContext(
-                clientId, issuedAt, expiresAt);
-        if (authorization == null) {
+        AkskEffectiveAuthorizationResult result = effectiveAuthorizationService.resolve(clientId, issuedAt, expiresAt);
+        if (result == null || result.getAuthorization() == null) {
             throw new OAuth2AuthenticationException(new OAuth2Error(
                     OAuth2ErrorCodes.INVALID_CLIENT,
                     "AKSK客户端未获应用资源授权",
                     null));
         }
+        ApplicationAuthorizationContext authorization = result.getAuthorization();
         context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_APPLICATION_AUTHORIZATION,
                 ApplicationAuthorizationContextClaimMapper.toClaim(authorization));
+        context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_AUTHORIZATION_MODE,
+                result.getAuthorizationMode().name());
+        if (result.getTargetApplicationId() != null) {
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_TARGET_APPLICATION_ID,
+                    result.getTargetApplicationId());
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_OWNER_SECURITY_EPOCH,
+                    result.getOwnerSecurityEpoch());
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_APPLICATION_AUTHORIZATION_EPOCH,
+                    result.getApplicationAuthorizationEpoch());
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_OWNER_SOURCE_ID,
+                    result.getOwnerSourceId());
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_OWNER_INHERITED_ACCESS_EPOCH,
+                    result.getOwnerInheritedAccessEpoch());
+            context.getClaims().claim(SimpleAkskServerConstant.JWT_CLAIM_PROJECTION_ACCESS_EPOCH,
+                    result.getProjectionAccessEpoch());
+        }
     }
 }

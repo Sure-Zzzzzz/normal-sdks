@@ -212,7 +212,7 @@ public class AdminController {
     }
 
     /**
-     * 创建用户级AKSK页面
+     * 创建用户级AKSK页面（已停用创建，仅展示自助指引）
      */
     @GetMapping("/create-user")
     public String createUserPage() {
@@ -220,7 +220,7 @@ public class AdminController {
     }
 
     /**
-     * 创建用户级AKSK
+     * 创建用户级AKSK（已收敛为本人自助，管理面一律拒绝）
      */
     @PostMapping("/create-user")
     public String createUser(@RequestParam String ownerUserId,
@@ -228,40 +228,9 @@ public class AdminController {
                              @RequestParam String name,
                              @RequestParam(required = false) String scopes,
                              RedirectAttributes redirectAttributes) {
-        try {
-            // 后端验证：检查scopes是否包含换行符
-            if (scopes != null && scopes.matches(".*[\\r\\n]+.*")) {
-                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_NEWLINE_NOT_ALLOWED);
-                return "redirect:/admin/create-user";
-            }
-            // 后端验证：检查scopes是否包含空格（仅允许逗号分隔）
-            if (scopes != null && scopes.matches(".*\\s+.*")) {
-                redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_SCOPE_SPACE_NOT_ALLOWED);
-                return "redirect:/admin/create-user";
-            }
-
-            // 解析 scopes
-            List<String> scopeList = null;
-            if (scopes != null && !scopes.trim().isEmpty()) {
-                scopeList = java.util.Arrays.stream(scopes.split(SimpleAkskServerConstant.SCOPE_DELIMITER))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .collect(java.util.stream.Collectors.toList());
-            }
-
-            ClientInfoResponse clientInfo = clientManagementService.createUserClient(ownerUserId, ownerUsername, name, scopeList);
-
-            redirectAttributes.addFlashAttribute("success", true);
-            redirectAttributes.addFlashAttribute("clientId", clientInfo.getClientId());
-            redirectAttributes.addFlashAttribute("clientSecret", clientInfo.getClientSecret());
-            redirectAttributes.addFlashAttribute("message", ServerErrorMessage.ADMIN_CREATE_SUCCESS);
-
-            return "redirect:/admin/create-success";
-        } catch (Exception e) {
-            log.error("Failed to create user client", e);
-            redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_CREATE_FAILED);
-            return "redirect:/admin/create-user";
-        }
+        log.info("Rejected admin user client creation: ownerUserId={}, name={}", ownerUserId, name);
+        redirectAttributes.addFlashAttribute("error", ServerErrorMessage.ADMIN_USER_CLIENT_CREATION_DISABLED);
+        return "redirect:/admin/create-user";
     }
 
     /**

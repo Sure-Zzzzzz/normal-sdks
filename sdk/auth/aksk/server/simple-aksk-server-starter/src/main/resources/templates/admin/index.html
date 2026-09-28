@@ -9,7 +9,8 @@
         <div th:replace="admin/fragments/layout :: flash"></div>
         <div class="admin-actions mb-3">
             <a class="btn btn-primary" href="/admin/create-platform">创建平台级 Client</a>
-            <a class="btn btn-outline-primary" href="/admin/create-user">创建用户级 Client</a>
+            <!-- 用户级 AKU 已收敛为统一应用门户内本人自助创建，入口见 /admin/create-user 指引页 -->
+            <a class="btn btn-outline-secondary" href="/admin/create-user">用户级 Client 创建指引</a>
             <a class="btn btn-outline-secondary" href="/admin/query-user">查询用户 Client</a>
         </div>
         <section class="admin-card">

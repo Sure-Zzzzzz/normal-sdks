@@ -4,8 +4,12 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConsta
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.ApplicationAuthorizationRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskApplicationAuthorizationEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskClientOwnerBindingEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskOwnerAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
+import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskClientOwnerBindingRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2AuthorizationEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ApplicationAuthorizationManagementService;
@@ -63,6 +67,9 @@ class ApplicationAuthorizationTransactionIntegrationTest {
     private OAuth2RegisteredClientEntityRepository clientRepository;
 
     @Autowired
+    private AkskClientOwnerBindingRepository bindingRepository;
+
+    @Autowired
     private StringRedisTemplate redisTemplate;
 
     @MockBean
@@ -86,6 +93,7 @@ class ApplicationAuthorizationTransactionIntegrationTest {
         reset(tokenManagementService);
         authorizationEntityRepository.deleteAll();
         applicationAuthorizationRepository.deleteAll();
+        bindingRepository.deleteAll();
         clientRepository.deleteAll();
         Set<String> keys = redisTemplate.keys("sure-auth-aksk:*");
         if (keys != null && !keys.isEmpty()) {
@@ -205,6 +213,28 @@ class ApplicationAuthorizationTransactionIntegrationTest {
         assertNull(after.getRevokedAt());
         verify(tokenManagementService).revokeAllByClientId(clientId,
                 TokenEventCause.APPLICATION_AUTHORIZATION_REVOKED);
+    }
+
+    @Test
+    void shouldRejectLocalAuthorizationWriteForOwnerInheritedAksk() {
+        ClientInfoResponse inherited = clientManagementService.createUserClient(
+                "human-1001", null, "Inherited AKU");
+        AkskClientOwnerBindingEntity binding = new AkskClientOwnerBindingEntity();
+        binding.setClientId(inherited.getClientId());
+        binding.setOwnerSourceId("iam");
+        binding.setOwnerSubjectId("human-1001");
+        binding.setTargetApplicationId(100L);
+        binding.setAuthorizationMode(AkskOwnerAuthorizationMode.OWNER_INHERITED);
+        binding.setOwnerState(Integer.valueOf(1));
+        binding.setLifecycleVersion(1L);
+        binding.setBindingOrigin("TEST");
+        binding.setBoundAt(Instant.now());
+        binding.setUpdatedAt(Instant.now());
+        bindingRepository.save(binding);
+
+        assertThrows(SimpleAkskServerException.class, () -> applicationAuthorizationManagementService.createLocal(
+                inherited.getClientId(), request(REPLACED_API_PERMISSION)));
+        assertFalse(applicationAuthorizationRepository.findByClientId(inherited.getClientId()).isPresent());
     }
 
     private void assertUnchanged(AkskApplicationAuthorizationEntity before) {

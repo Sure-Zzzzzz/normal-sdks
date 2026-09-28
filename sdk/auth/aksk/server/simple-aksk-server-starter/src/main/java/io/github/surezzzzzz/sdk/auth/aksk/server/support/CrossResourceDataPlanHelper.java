@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.support;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
-import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.constant.ApplicationAuthorizationDecision;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
@@ -33,6 +32,11 @@ public class CrossResourceDataPlanHelper {
     /**
      * 要求当前调用方对指定资源动作同时具备 API 权限与数据计划。
      *
+     * <p>API 评估按授权上下文自身声明的应用编码进行（SERVICE 本地授权为 aksk-server，
+     * HUMAN console 令牌的 IAM 投影为可信应用编码如 aksk）：上下文能到达此处必经
+     * 本服务资源链验证，应用编码比对在此只会在双形态间制造误拒；admitted、时效与
+     * 权限清单校验仍然完整。</p>
+     *
      * @param resource   数据资源
      * @param action     数据动作
      * @param permission 跨资源操作对应的精确 API 权限
@@ -41,7 +45,7 @@ public class CrossResourceDataPlanHelper {
     public DataAccessPlan require(String resource, String action, String permission) {
         ApplicationAuthorizationContext authorization = currentAuthorization();
         if (authorization == null || evaluator.evaluateApi(authorization,
-                SimpleAkskServerConstant.MANAGEMENT_APPLICATION_CODE, permission)
+                authorization.getApplicationCode(), permission)
                 != ApplicationAuthorizationDecision.ALLOW) {
             throw new ManagementAccessDeniedException();
         }

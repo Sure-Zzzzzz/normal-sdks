@@ -72,7 +72,69 @@ CREATE TABLE oauth2_authorization (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OAuth2授权信息表';
 
 -- =====================================================
--- 2. 完成
+-- 2. IAM owner 授权本地投影（AKSK 3.2.0）
+-- =====================================================
+
+CREATE TABLE aksk_owner_authorization_cursor (
+    stream_key VARCHAR(64) NOT NULL COMMENT '固定IAM授权日志流标识',
+    last_source_sequence BIGINT NOT NULL COMMENT '已原子应用的最后IAM日志序号',
+    worker_lease_until TIMESTAMP NULL DEFAULT NULL COMMENT '多实例worker领取租约',
+    worker_lease_owner VARCHAR(64) DEFAULT NULL COMMENT 'worker随机持有标识',
+    synchronization_lease_until TIMESTAMP NULL DEFAULT NULL COMMENT '最近成功拉取授予的本地授权租约',
+    last_successful_pull_at TIMESTAMP NULL DEFAULT NULL COMMENT '最近成功拉取时间',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    version BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
+    PRIMARY KEY (stream_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM授权日志游标与租约';
+
+CREATE TABLE aksk_owner_authorization_inbox (
+    event_id VARCHAR(36) NOT NULL COMMENT 'IAM事件幂等标识',
+    source_sequence BIGINT NOT NULL COMMENT 'IAM全局授权日志序号',
+    change_type VARCHAR(32) NOT NULL COMMENT '最终态类型',
+    payload_json LONGTEXT NOT NULL COMMENT 'IAM契约最终态载荷',
+    received_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '应用时间',
+    PRIMARY KEY (event_id),
+    UNIQUE KEY uk_owner_authorization_inbox_sequence (source_sequence)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM授权事件Inbox';
+
+CREATE TABLE aksk_owner_authorization_owner_state (
+    owner_key VARCHAR(193) NOT NULL COMMENT 'ownerSourceId与ownerSubjectId稳定组合键',
+    owner_source_id VARCHAR(64) NOT NULL COMMENT 'IAM所属人来源',
+    owner_subject_id VARCHAR(128) NOT NULL COMMENT 'IAM所属人主体',
+    active INT NOT NULL COMMENT '最终可用状态：1=有效，0=无效',
+    owner_security_epoch BIGINT NOT NULL COMMENT '所属人安全纪元',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (owner_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM所属人授权最终态';
+
+CREATE TABLE aksk_owner_authorization_target_application_state (
+    target_application_id BIGINT NOT NULL COMMENT 'IAM可信应用ID',
+    active INT NOT NULL COMMENT 'OWNER_INHERITED可用状态：1=有效，0=无效',
+    application_authorization_epoch BIGINT NOT NULL COMMENT '目标应用授权纪元',
+    owner_inherited_access_epoch BIGINT NOT NULL COMMENT 'OWNER_INHERITED访问纪元',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (target_application_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM目标应用授权最终态';
+
+CREATE TABLE aksk_owner_authorization_projection (
+    projection_key VARCHAR(320) NOT NULL COMMENT '人员-目标应用稳定组合键',
+    owner_source_id VARCHAR(64) NOT NULL COMMENT 'IAM所属人来源',
+    owner_subject_id VARCHAR(128) NOT NULL COMMENT 'IAM所属人主体',
+    target_application_id BIGINT NOT NULL COMMENT 'IAM可信应用ID',
+    active INT NOT NULL COMMENT '投影可用状态：1=有效，0=无效',
+    owner_security_epoch BIGINT NOT NULL COMMENT '所属人安全纪元',
+    application_authorization_epoch BIGINT NOT NULL COMMENT '目标应用授权纪元',
+    owner_inherited_access_epoch BIGINT NOT NULL COMMENT 'OWNER_INHERITED访问纪元',
+    projection_access_epoch BIGINT NOT NULL COMMENT '人员-应用投影访问纪元',
+    iam_authorization_json LONGTEXT DEFAULT NULL COMMENT '结构化三权快照，inactive时为空',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (projection_key),
+    KEY idx_owner_authorization_projection_owner (owner_source_id, owner_subject_id, target_application_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM人员应用授权最终态';
+
+-- =====================================================
+-- 3. 完成
 -- =====================================================
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -85,4 +147,3 @@ SELECT 'Schema initialization completed!' AS status;
 -- FROM information_schema.TABLES
 -- WHERE TABLE_SCHEMA = DATABASE()
 --   AND TABLE_NAME LIKE 'oauth2_%';
-

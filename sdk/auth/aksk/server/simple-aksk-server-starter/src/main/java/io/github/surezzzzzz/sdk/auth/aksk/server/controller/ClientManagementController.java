@@ -56,16 +56,9 @@ public class ClientManagementController {
         if (ClientType.PLATFORM.getValue().equalsIgnoreCase(request.getType())) {
             clientInfo = clientManagementService.createPlatformClient(request.getName(), request.getScopes(), plan);
         } else if (ClientType.USER.getValue().equalsIgnoreCase(request.getType())) {
-            if (request.getOwnerUserId() == null || request.getOwnerUsername() == null) {
-                return ResponseEntity.badRequest().build();
-            }
-            clientInfo = clientManagementService.createUserClient(
-                    request.getOwnerUserId(),
-                    request.getOwnerUsername(),
-                    request.getName(),
-                    request.getScopes(),
-                    plan
-            );
+            // 新 AKU 必须由 /api/me/aksk-clients 以已验证身份源 HUMAN 建立 immutable binding，
+            // 管理面不能从请求体接收 owner 后创建静态用户凭证。
+            return ResponseEntity.status(409).build();
         } else {
             return ResponseEntity.badRequest().build();
         }

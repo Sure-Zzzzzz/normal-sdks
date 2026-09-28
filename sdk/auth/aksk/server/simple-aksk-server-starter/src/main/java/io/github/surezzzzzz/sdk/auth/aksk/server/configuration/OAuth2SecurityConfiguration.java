@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.server.converter.DefaultScopeAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.server.filter.AkskServerOAuth2LimiterFilter;
-import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.AkskIntrospectionResponseHandler;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +22,11 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
  * <p>
  * /api/** 由公共资源层链（simple-resource-server-starter，HIGHEST_PRECEDENCE）接管；
  * 本类只保留授权服务器链与 default 链。
+ * <p>
+ * HUMAN 管理令牌的数据范围不再在本边界改写：身份源投影是唯一事实源，
+ * 全量授予（如平台管理员）按投影宽度执行；个人凭证天花板只保留在
+ * OWNER_INHERITED AKU 令牌路径（AkskEffectiveAuthorizationService），
+ * 判据是"凭证代办本人须压到本人"，而非主体类型。
  *
  * @author surezzzzzz
  */
@@ -30,7 +35,7 @@ import org.springframework.security.web.authentication.preauth.AbstractPreAuthen
 public class OAuth2SecurityConfiguration {
 
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
-    private final AkskApplicationAuthorizationService applicationAuthorizationService;
+    private final AkskEffectiveAuthorizationService effectiveAuthorizationService;
     private final ObjectProvider<AkskServerOAuth2LimiterFilter> akskServerOAuth2LimiterFilter;
 
     @Bean
@@ -46,7 +51,7 @@ public class OAuth2SecurityConfiguration {
                 )
                 .tokenIntrospectionEndpoint(tokenIntrospectionEndpoint ->
                         tokenIntrospectionEndpoint.introspectionResponseHandler(
-                                new AkskIntrospectionResponseHandler(applicationAuthorizationService)
+                                new AkskIntrospectionResponseHandler(effectiveAuthorizationService)
                         )
                 );
 

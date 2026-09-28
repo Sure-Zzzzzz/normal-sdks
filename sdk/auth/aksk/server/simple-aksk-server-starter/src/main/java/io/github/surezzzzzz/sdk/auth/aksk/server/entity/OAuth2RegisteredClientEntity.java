@@ -57,7 +57,7 @@ public class OAuth2RegisteredClientEntity {
     private String tokenSettings;
 
     /**
-     * 扩展字段：所属用户ID（用户级AKSK）
+     * 扩展字段：所属用户 subjectId（列名与旧 API 保持 owner_user_id 兼容）
      */
     @Column(name = "owner_user_id", length = 100)
     private String ownerUserId;

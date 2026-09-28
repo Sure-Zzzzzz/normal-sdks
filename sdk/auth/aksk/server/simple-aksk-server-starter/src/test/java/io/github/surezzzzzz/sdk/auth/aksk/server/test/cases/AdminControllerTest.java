@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.model.TokenInfo;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.request.TokenQueryRequest;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.*;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskApplicationAuthorizationRepository;
@@ -197,6 +198,39 @@ class AdminControllerTest {
                 .andExpect(flash().attributeExists("clientSecret"));
 
         log.info("创建平台级AKSK表单提交测试通过");
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testCreateUserFormIsRejectedAndPointsToSelfService() throws Exception {
+        log.info("测试管理面创建用户级AKSK被拒绝并指向自助入口");
+
+        long before = clientRepository.count();
+
+        mockMvc.perform(post("/admin/create-user")
+                        .param("ownerUserId", "rejected-owner")
+                        .param("ownerUsername", "rejected-owner")
+                        .param("name", "Rejected Admin AKU")
+                        .param("scopes", "demo.read")
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/admin/create-user"))
+                .andExpect(flash().attribute("error", ServerErrorMessage.ADMIN_USER_CLIENT_CREATION_DISABLED));
+
+        long after = clientRepository.count();
+        log.info("拒绝创建后 Client 数量：before={}, after={}", before, after);
+        assertEquals(before, after, "管理面拒绝后不得创建任何用户级 Client");
+
+        String noticeHtml = mockMvc.perform(get("/admin/create-user"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("admin/create-user"))
+                .andReturn().getResponse().getContentAsString();
+        log.info("指引页渲染：包含自助入口说明={}", noticeHtml.contains("我的 AKSK 访问凭证"));
+        assertTrue(noticeHtml.contains("我的 AKSK 访问凭证"), "指引页必须指向统一应用门户自助入口");
+        assertTrue(noticeHtml.contains("自助创建"), "指引页必须说明本人自助创建口径");
+        assertFalse(noticeHtml.contains("name=\"ownerUserId\""), "指引页不得再保留创建表单字段");
+
+        log.info("管理面创建用户级AKSK拒绝测试通过");
     }
 
     @Test

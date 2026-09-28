@@ -1,32 +1,35 @@
-# Simple AKSK Server 3.0.0 数据库初始化指南
+# Simple AKSK Server 3.2.0 数据库初始化指南
 
 ## 概述
 
-本目录包含 Simple AKSK Server 3.0.0 的数据库脚本。表结构基于 **Spring Authorization Server 0.4.1**，并增加 AKSK Client 元数据与应用授权投影。
+本目录包含 Simple AKSK Server 3.2.0 的数据库脚本。表结构基于 **Spring Authorization Server 0.4.1**，并增加 AKSK Client 元数据、应用授权投影和 IAM 所属人授权本地投影。
 
 ## SQL 文件说明
 
 | 文件名 | 使用场景 | 说明 |
 |--------|----------|------|
 | `00_database.sql` | 首次部署 | 创建默认数据库，可按部署需要自行调整数据库名 |
-| `01_schema_3.0.0.sql` | 首次部署或允许重建数据的环境 | 3.0.0 完整初始化脚本，会重建 AKSK 相关表 |
+| `01_schema_3.2.0.sql` | 首次部署或允许重建数据的环境 | 3.2.0 完整初始化脚本，会重建 AKSK 相关表 |
 | `02_upgrade_3.0.0.sql` | 从 2.x 升级 | 保留历史 Client 与 Token 表，新建应用授权投影表与查询索引，仅执行一次 |
 | `03_install_3.0.0.md` | 新装 | 基础设施、精确依赖、初始化和首个 Client 准入闭环 |
 | `03_upgrade_3.1.1.sql` | 从 3.0.0 / 3.0.1 / 3.1.0 升级 | 为 `oauth2_authorization.access_token_expires_at` 补充索引，配合过期 Token 定时清理，仅执行一次 |
+| `04_upgrade_3.1.1_to_3.2.0.sql` | 从 3.1.1 升级 | 新建 IAM 所属人绑定、授权投影、同步游标和命令幂等表，仅执行一次 |
 | `04_upgrade_2.x_to_3.0.0.md` | 升级 | 备份、停写、一次迁移、历史 Token 处置与回退边界 |
 | `05_operations_3.0.0.md` | 运维 | Redis/JWE、应用授权、故障处置、日志与 IAM 可选协作边界 |
 | `06_release_acceptance_3.0.0.md` | 发布验收 | 新装、升级、Token、并发、管理安全、IAM 和质量门禁 |
 | `07_dependency_resolution_3.0.0.md` | 依赖收口 | Central 解析、同步切换上游依赖与干净消费者验证 |
 
-> 历史 `01_schema.sql` 仅保留给已冻结的旧版本参考，不用于 3.0.0 新部署。
+> 历史 `01_schema.sql`、`01_schema_3.0.0.sql` 仅保留给已冻结版本参考，不用于 3.2.0 新部署。
 
-## 3.0.0 表结构
+## 3.2.0 表结构
 
 | 表 | 用途 |
 |----|------|
 | `oauth2_registered_client` | Spring Authorization Server 注册 Client，包含 AKSK 所属用户、类型与启用状态等扩展字段 |
 | `oauth2_authorization` | Spring Authorization Server 授权与 Token 持久化信息 |
 | `aksk_application_authorization` | AKSK Server 自主维护的应用授权投影，保存角色、页面权限、精确 API permission、`DataGrantDocument`、准入与撤销状态 |
+| `aksk_client_owner_binding` | 用户级 AKU 与 IAM 所属人的不可变绑定 |
+| `aksk_owner_authorization_*` | IAM 所属人授权的本地最终态、Inbox 和同步游标 |
 
 `aksk_application_authorization` 中的 `authorization_version` 是对外可见的授权快照版本；`lock_version` 是 JPA 持久化乐观锁版本。两者职责不同，不能混用。
 
@@ -41,10 +44,20 @@
 ### 首次部署
 
 ```bash
-mysql -u <database-user> -p <database-name> < 01_schema_3.0.0.sql
+mysql -u <database-user> -p <database-name> < 01_schema_3.2.0.sql
 ```
 
-`01_schema_3.0.0.sql` 含有 `DROP TABLE IF EXISTS`，仅能用于首次初始化或确认允许清空 AKSK 数据的环境。
+`01_schema_3.2.0.sql` 含有 `DROP TABLE IF EXISTS`，仅能用于首次初始化或确认允许清空 AKSK 数据的环境。
+
+### 从 3.1.1 升级
+
+先完成数据库备份并停止写入，确认目标库已完成 3.1.1 结构后执行一次：
+
+```bash
+mysql -u <database-user> -p <database-name> < 04_upgrade_3.1.1_to_3.2.0.sql
+```
+
+该脚本只创建 3.2.0 的绑定、授权投影、同步游标和命令幂等表，不从历史 `owner_username` 推导 IAM 人员，不写入内部读取凭据，也不会自动启用所属人继承。升级服务后完成 IAM 可信应用登记和配置，再由授权同步建立投影。
 
 ### 从 2.x 升级
 

@@ -10,10 +10,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConsta
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ClientInfoResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.PageResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.server.controller.response.ResetSecretResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskClientOwnerBindingEntity;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskOwnerAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.entity.OAuth2RegisteredClientEntity;
 import io.github.surezzzzzz.sdk.auth.aksk.server.event.TokenEventCause;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ClientException;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ManagementAccessDeniedException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.repository.AkskClientOwnerBindingRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.repository.OAuth2RegisteredClientEntityRepository;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.CachedOAuth2RegisteredClientEntityService;
 import io.github.surezzzzzz.sdk.auth.aksk.server.service.ClientManagementService;
@@ -50,6 +53,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
     private final SimpleAkskServerProperties properties;
     private final TokenManagementService tokenManagementService;
     private final CachedOAuth2RegisteredClientEntityService cachedClientEntityService;
+    private final AkskClientOwnerBindingRepository bindingRepository;
 
     @Override
     public ClientInfoResponse createPlatformClient(String clientName) {
@@ -189,6 +193,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             tokenManagementService.revokeAllByClientId(clientId, TokenEventCause.CLIENT_DELETED);
             // 再删除 Client
             clientRepository.delete(entity);
+            retainInheritedBindingTombstone(clientId);
             cachedClientEntityService.evict(clientId);
             log.info("Deleted client: {}", clientId);
         } catch (Exception e) {
@@ -315,6 +320,8 @@ public class ClientManagementServiceImpl implements ClientManagementService {
             return 0;
         }
 
+        requireNoInheritedBinding(userClients);
+
         String scopesStr = String.join(SimpleAkskServerConstant.SCOPE_DELIMITER, scopes);
         int updatedCount = 0;
 
@@ -388,6 +395,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
                         ErrorCode.CLIENT_NOT_FOUND,
                         String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)
                 ));
+        requireStaticAuthorization(clientId);
 
         String scopesStr = String.join(SimpleAkskServerConstant.SCOPE_DELIMITER, scopes);
         entity.setScopes(scopesStr);
@@ -491,6 +499,7 @@ public class ClientManagementServiceImpl implements ClientManagementService {
                     String.format(ErrorMessage.VALIDATION_FAILED, "平台级AKSK不支持修改归属信息")
             );
         }
+        requireStaticAuthorization(clientId);
 
         entity.setOwnerUserId(ownerUserId);
         entity.setOwnerUsername(ownerUsername);
@@ -621,6 +630,39 @@ public class ClientManagementServiceImpl implements ClientManagementService {
         return clientRepository.findByClientId(clientId)
                 .orElseThrow(() -> new ClientException(ErrorCode.CLIENT_NOT_FOUND,
                         String.format(ErrorMessage.CLIENT_NOT_FOUND, clientId)));
+    }
+
+    /**
+     * inherited AKU 的三权和 owner 均来自不可变 binding + 身份源，不能被本地管理面改写。
+     */
+    private void requireStaticAuthorization(String clientId) {
+        if (bindingRepository.findByClientId(clientId)
+                .map(binding -> AkskOwnerAuthorizationMode.OWNER_INHERITED.equals(binding.getAuthorizationMode()))
+                .orElse(Boolean.FALSE)) {
+            throw new ClientException(ErrorCode.VALIDATION_FAILED,
+                    "OWNER_INHERITED AKU 不允许本地修改所属人或 scope");
+        }
+    }
+
+    /**
+     * inherited AKU 终止后保留不可复用 tombstone；历史 clientId 不得被重新解释为新的 owner binding。
+     */
+    private void retainInheritedBindingTombstone(String clientId) {
+        AkskClientOwnerBindingEntity binding = bindingRepository.findByClientId(clientId).orElse(null);
+        if (binding == null || !AkskOwnerAuthorizationMode.OWNER_INHERITED.equals(binding.getAuthorizationMode())) {
+            return;
+        }
+        if (Integer.valueOf(1).equals(binding.getOwnerState())) {
+            binding.setOwnerState(Integer.valueOf(0));
+            binding.setUpdatedAt(Instant.now());
+            bindingRepository.save(binding);
+        }
+    }
+
+    private void requireNoInheritedBinding(List<OAuth2RegisteredClientEntity> clients) {
+        for (OAuth2RegisteredClientEntity client : clients) {
+            requireStaticAuthorization(client.getClientId());
+        }
     }
 
     private void requireCreateAllowed(DataAccessPlan plan, ClientType clientType, String ownerUserId) {

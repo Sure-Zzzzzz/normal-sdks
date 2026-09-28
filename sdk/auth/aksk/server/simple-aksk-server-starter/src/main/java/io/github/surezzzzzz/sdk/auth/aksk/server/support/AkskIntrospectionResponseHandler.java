@@ -1,8 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.server.support;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
-import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskApplicationAuthorizationService;
+import io.github.surezzzzzz.sdk.auth.aksk.server.entity.AkskOwnerAuthorizationMode;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationResult;
+import io.github.surezzzzzz.sdk.auth.aksk.server.service.AkskEffectiveAuthorizationService;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.claim.ApplicationAuthorizationContextClaimMapper;
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +34,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AkskIntrospectionResponseHandler implements AuthenticationSuccessHandler {
 
-    private final AkskApplicationAuthorizationService applicationAuthorizationService;
+    private final AkskEffectiveAuthorizationService effectiveAuthorizationService;
     private final HttpMessageConverter<OAuth2TokenIntrospection> responseConverter =
             new OAuth2TokenIntrospectionHttpMessageConverter();
 
@@ -68,11 +71,12 @@ public class AkskIntrospectionResponseHandler implements AuthenticationSuccessHa
         // 组装前截断到整秒，保证 iat 永不晚于真实签发时刻
         Instant issuedAtSeconds = ((Instant) issuedAt).truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAtSeconds = ((Instant) expiresAt).truncatedTo(ChronoUnit.SECONDS);
-        ApplicationAuthorizationContext authorization = applicationAuthorizationService.loadActiveContext(
+        AkskEffectiveAuthorizationResult result = effectiveAuthorizationService.resolve(
                 (String) clientId, issuedAtSeconds, expiresAtSeconds);
-        if (authorization == null) {
+        if (result == null || !matchesIssuedAuthorization(claims, result)) {
             return inactive();
         }
+        ApplicationAuthorizationContext authorization = result.getAuthorization();
         Map<String, Object> currentClaims = new LinkedHashMap<String, Object>(claims);
         currentClaims.put(OAuth2TokenIntrospectionClaimNames.IAT, issuedAtSeconds);
         currentClaims.put(OAuth2TokenIntrospectionClaimNames.EXP, expiresAtSeconds);
@@ -80,6 +84,45 @@ public class AkskIntrospectionResponseHandler implements AuthenticationSuccessHa
         currentClaims.put(JwtClaimConstant.APPLICATION_AUTHORIZATION,
                 ApplicationAuthorizationContextClaimMapper.toClaim(authorization));
         return OAuth2TokenIntrospection.withClaims(currentClaims).build();
+    }
+
+    /**
+     * inherited AKU 必须同时匹配签发时模式、不可变目标和两套当前纪元，避免旧 token 被重新授权复活。
+     */
+    private boolean matchesIssuedAuthorization(Map<String, Object> claims, AkskEffectiveAuthorizationResult result) {
+        Object mode = claims.get(SimpleAkskServerConstant.JWT_CLAIM_AUTHORIZATION_MODE);
+        if (!matchesMode(mode, result)) {
+            return false;
+        }
+        if (!AkskOwnerAuthorizationMode.OWNER_INHERITED.equals(result.getAuthorizationMode())) {
+            return true;
+        }
+        return sameLong(claims.get(SimpleAkskServerConstant.JWT_CLAIM_TARGET_APPLICATION_ID),
+                result.getTargetApplicationId())
+                && sameLong(claims.get(SimpleAkskServerConstant.JWT_CLAIM_OWNER_SECURITY_EPOCH),
+                result.getOwnerSecurityEpoch())
+                && sameLong(claims.get(SimpleAkskServerConstant.JWT_CLAIM_APPLICATION_AUTHORIZATION_EPOCH),
+                result.getApplicationAuthorizationEpoch())
+                && sameLong(claims.get(SimpleAkskServerConstant.JWT_CLAIM_OWNER_INHERITED_ACCESS_EPOCH),
+                result.getOwnerInheritedAccessEpoch())
+                && sameLong(claims.get(SimpleAkskServerConstant.JWT_CLAIM_PROJECTION_ACCESS_EPOCH),
+                result.getProjectionAccessEpoch())
+                && result.getOwnerSourceId().equals(claims.get(SimpleAkskServerConstant.JWT_CLAIM_OWNER_SOURCE_ID));
+    }
+
+    /**
+     * 静态历史 token 未携带 mode 时仍按 STATIC_LEGACY 处理；继承 token 则必须显式携带。
+     */
+    private boolean matchesMode(Object mode, AkskEffectiveAuthorizationResult result) {
+        if (AkskOwnerAuthorizationMode.OWNER_INHERITED.equals(result.getAuthorizationMode())) {
+            return AkskAuthorizationMode.OWNER_INHERITED.name().equals(mode);
+        }
+        return mode == null || AkskAuthorizationMode.STATIC_LEGACY.name().equals(mode);
+    }
+
+    private boolean sameLong(Object actual, Long expected) {
+        return actual instanceof Number && expected != null
+                && ((Number) actual).longValue() == expected.longValue();
     }
 
     /**

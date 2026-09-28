@@ -2,13 +2,16 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.annotation.SimpleAkskServerComponent;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.AkskOwnerAuthorizationSynchronizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.spi.OwnerAuthorizationProvider;
 import io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerProperties;
 import io.github.surezzzzzz.sdk.auth.resource.server.constant.SimpleResourceServerStarterConstant;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceSecurityPathHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
 
 import javax.annotation.PostConstruct;
@@ -36,6 +39,7 @@ public class SimpleAkskServerStartupValidator {
 
     private final SimpleAkskServerProperties properties;
     private final Environment environment;
+    private final ObjectProvider<OwnerAuthorizationProvider> ownerAuthorizationProvider;
 
     /**
      * 启动校验与软提示。
@@ -44,6 +48,7 @@ public class SimpleAkskServerStartupValidator {
     public void validate() {
         validateKeyId();
         validateProtectedPaths();
+        validateOwnerAuthorization();
         log.info("启动校验通过：keyId 形态合法，/api/** 已由公共资源层鉴权链保护");
         if (environment.getProperty(ADMIN_ENABLED_PROPERTY, Boolean.class, Boolean.TRUE)) {
             return;
@@ -80,4 +85,43 @@ public class SimpleAkskServerStartupValidator {
                     resourceServerProperties.getSecurity().getProtectedPaths()));
         }
     }
+
+    /**
+     * OWNER_INHERITED 开启后必须具备完整 HTTPS reader 配置，缺项直接阻止启动而不是运行时降级。
+     */
+    private void validateOwnerAuthorization() {
+        SimpleAkskServerProperties.OwnerAuthorizationProjectionConfig reader =
+                properties.getOwnerAuthorization();
+        if (!Boolean.TRUE.equals(reader.getEnabled())) {
+            return;
+        }
+        if (!hasText(reader.getOwnerSourceId()) || !hasText(reader.getHumanResourceSourceId())
+                || !positive(reader.getPullIntervalMillis())
+                || !positive(reader.getLeaseSeconds()) || !inRange(reader.getPullPageSize(), 1, 200)
+                || reader.getSynchronizationMode() == null) {
+            throw new ConfigurationException("AKSK owner authorization 已启用，但身份或租约配置不完整");
+        }
+        if (ownerAuthorizationProvider.getIfAvailable() == null
+                || !ownerAuthorizationProvider.getIfAvailable().isAvailable()) {
+            throw new ConfigurationException("AKSK owner authorization 已启用，但未提供 owner authorization provider");
+        }
+        if (AkskOwnerAuthorizationSynchronizationMode.EVENTUAL_WITH_LEASE
+                .equals(reader.getSynchronizationMode())
+                && reader.getPullIntervalMillis().longValue() >= reader.getLeaseSeconds().longValue() * 1000L) {
+            throw new ConfigurationException("AKSK owner authorization 的同步间隔必须小于本地授权租约");
+        }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    private boolean positive(Integer value) {
+        return value != null && value.intValue() > 0;
+    }
+
+    private boolean inRange(Integer value, int minimum, int maximum) {
+        return value != null && value.intValue() >= minimum && value.intValue() <= maximum;
+    }
+
 }

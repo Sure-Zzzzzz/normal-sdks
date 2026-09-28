@@ -4,7 +4,7 @@
 <body class="admin-console">
 <div th:replace="admin/fragments/layout :: sidebar('clients')"></div>
 <main class="admin-main">
-    <header th:replace="admin/fragments/layout :: topbar('创建用户级 Client', '绑定用户身份但不自动授予应用授权')"></header>
+    <header th:replace="admin/fragments/layout :: topbar('创建用户级 Client', '用户级 AKU 由本人在统一应用门户自助创建')"></header>
     <section class="admin-content">
         <div th:replace="admin/fragments/layout :: flash"></div>
         <div class="admin-form-card">
@@ -13,153 +13,34 @@
                     <h4>创建用户级AKSK</h4>
                 </div>
                 <div class="card-body">
-                    <!-- 错误提示 -->
+                    <!-- 错误提示（直接 POST 被拒时） -->
                     <div class="alert alert-danger" role="alert" th:if="${error}">
                         <span th:text="${error}"></span>
                     </div>
 
-                    <form method="post" th:action="@{/admin/create-user}">
-                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden"/>
+                    <div class="alert alert-info" role="alert">
+                        用户级 AKU 已收敛为<b>本人自助创建</b>：请使用本人账号登录统一应用门户，
+                        进入「AKSK访问凭证管理 → 我的 AKSK 访问凭证」页面创建。
+                        AKU 的页面、接口与数据授权来自 IAM 权限投影，管理面不再代建。
+                    </div>
 
-                        <div class="mb-3">
-                            <label class="form-label" for="ownerUserId">用户ID <span
-                                    class="text-danger">*</span></label>
-                            <input class="form-control" id="ownerUserId" name="ownerUserId" placeholder="例如：user123"
-                                   required type="text">
-                            <div class="form-text">拥有此AKSK的用户唯一标识</div>
-                        </div>
+                    <div class="mb-3">
+                        <b>管理面仍可对既有用户级 Client 做什么？</b>
+                        <ul class="mb-0 mt-2">
+                            <li>查询：Client 列表与详情、按归属用户查询（授权范围内）</li>
+                            <li>维护：启用/禁用、改名、调整 Scope、更新归属信息</li>
+                            <li>令牌：查询与撤销名下 Token</li>
+                        </ul>
+                    </div>
 
-                        <div class="mb-3">
-                            <label class="form-label" for="ownerUsername">用户名 <span
-                                    class="text-danger">*</span></label>
-                            <input class="form-control" id="ownerUsername" name="ownerUsername" placeholder="例如：张三"
-                                   required type="text">
-                            <div class="form-text">用户的显示名称</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label" for="name">AKSK名称 <span class="text-danger">*</span></label>
-                            <input class="form-control" id="name" name="name" placeholder="例如：移动端应用密钥"
-                                   required type="text">
-                            <div class="form-text">用于标识此AKSK的用途</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label" for="scopes">OAuth2 Scope（可选）</label>
-                            <textarea class="form-control" id="scopes" name="scopes"
-                                      placeholder="例如：orders.read,orders.write"
-                                      rows="4"></textarea>
-                            <div class="form-text">
-                                多个 Scope 用<strong>逗号</strong>分隔。<span
-                                    class="text-danger">不允许使用回车换行</span>
-                            </div>
-                            <div class="form-text text-danger" id="scopeError" style="display:none;">
-                                ⚠️ 检测到回车换行或空格，请使用逗号分隔
-                            </div>
-                            <div class="alert alert-secondary mt-2 mb-0" role="alert" style="font-size:0.875em;">
-                                <strong>Scope 格式说明：</strong><br>
-                                OAuth2 Scope 仅表示令牌请求范围，例如 <code>orders.read</code>、<code>orders.write</code>。<br>
-                                Scope 不会自动生成 API permission 或 DATA grant；应用授权请在 Client 详情中单独配置。
-                            </div>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary" id="submitBtn" type="submit">创建</button>
-                            <a class="btn btn-secondary" href="/admin">返回</a>
-                        </div>
-                    </form>
+                    <div class="d-grid gap-2">
+                        <a class="btn btn-secondary" href="/admin">返回</a>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 </main>
 <th:block th:replace="admin/fragments/layout :: scripts"></th:block>
-<script>
-    (function () {
-        const scopesTextarea = document.getElementById('scopes');
-        const scopeError = document.getElementById('scopeError');
-        const form = document.querySelector('form');
-
-        // 1. 阻止回车和空格输入（仅允许逗号分隔）
-        scopesTextarea.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                scopeError.style.display = 'block';
-                scopesTextarea.classList.add('is-invalid');
-
-                // 3秒后自动隐藏错误提示
-                setTimeout(function () {
-                    scopeError.style.display = 'none';
-                    scopesTextarea.classList.remove('is-invalid');
-                }, 3000);
-            }
-        });
-
-        // 2. 处理粘贴内容，自动替换换行和空格为逗号
-        scopesTextarea.addEventListener('paste', function (e) {
-            e.preventDefault();
-            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-
-            // 将所有换行符和空格替换为逗号
-            const cleanedText = pastedText.replace(/[\r\n\s]+/g, ',');
-
-            // 插入到光标位置
-            const start = this.selectionStart;
-            const end = this.selectionEnd;
-            const currentValue = this.value;
-            this.value = currentValue.substring(0, start) + cleanedText + currentValue.substring(end);
-
-            // 设置光标位置
-            const newPosition = start + cleanedText.length;
-            this.setSelectionRange(newPosition, newPosition);
-
-            // 如果原始内容包含换行，显示提示
-            if (pastedText !== cleanedText) {
-                scopeError.textContent = '✓ 已自动将换行符和空格替换为逗号';
-                scopeError.classList.remove('text-danger');
-                scopeError.classList.add('text-success');
-                scopeError.style.display = 'block';
-
-                setTimeout(function () {
-                    scopeError.style.display = 'none';
-                    scopeError.classList.remove('text-success');
-                    scopeError.classList.add('text-danger');
-                    scopeError.textContent = '⚠️ 检测到回车换行或空格，请使用逗号分隔';
-                }, 3000);
-            }
-        });
-
-        // 3. 表单提交前验证
-        form.addEventListener('submit', function (e) {
-            const scopesValue = scopesTextarea.value;
-
-            // 检查是否包含换行符
-            if (/[\r\n\s]/.test(scopesValue)) {
-                e.preventDefault();
-                scopeError.textContent = '⚠️ 检测到回车换行或空格，请使用逗号分隔';
-                scopeError.style.display = 'block';
-                scopesTextarea.classList.add('is-invalid');
-                scopesTextarea.focus();
-
-                // 滚动到错误位置
-                scopesTextarea.scrollIntoView({behavior: 'smooth', block: 'center'});
-                return false;
-            }
-
-            return true;
-        });
-
-        // 4. 输入时实时检查（换行或空格）
-        scopesTextarea.addEventListener('input', function () {
-            if (/[\r\n\s]/.test(this.value)) {
-                scopeError.style.display = 'block';
-                this.classList.add('is-invalid');
-            } else {
-                scopeError.style.display = 'none';
-                this.classList.remove('is-invalid');
-            }
-        });
-    })();
-</script>
 </body>
 </html>
