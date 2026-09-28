@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.constant;
 import lombok.Getter;
 
 /**
- * OWNER_INHERITED AKU 的 IAM 授权同步模式 Enum
+ * OWNER_INHERITED AKU 的身份源授权同步模式 Enum
  *
  * <p>code 与常量名同形，配置值与日志中的形态保持稳定。</p>
  *
@@ -18,7 +18,7 @@ public enum AkskOwnerAuthorizationSynchronizationMode {
     EVENTUAL_WITH_LEASE("EVENTUAL_WITH_LEASE", "本地投影加同步租约"),
 
     /**
-     * 兼容诊断模式：每次判定同步 resolve IAM，不作为默认生产模式
+     * 兼容诊断模式：每次判定同步 resolve 身份源，不作为默认生产模式
      */
     STRICT_ONLINE("STRICT_ONLINE", "每次判定在线 resolve");
 

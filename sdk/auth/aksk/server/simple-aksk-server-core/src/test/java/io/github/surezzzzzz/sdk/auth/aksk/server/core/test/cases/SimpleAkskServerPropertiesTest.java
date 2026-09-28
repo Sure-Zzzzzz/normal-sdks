@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.server.core.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.configuration.SimpleAkskServerProperties;
+import io.github.surezzzzzz.sdk.auth.aksk.server.constant.AkskOwnerAuthorizationSynchronizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.core.test.SimpleAkskServerCoreTestApplication;
 import lombok.extern.slf4j.Slf4j;
@@ -95,6 +96,30 @@ class SimpleAkskServerPropertiesTest {
     void shouldNotExposeAnonymousIntrospectConfiguration() {
         assertFalse(hasMethod(SimpleAkskServerProperties.class, "getIntrospect"));
         assertFalse(hasNestedClass(SimpleAkskServerProperties.class, "IntrospectConfig"));
+    }
+
+    @Test
+    void shouldInitializeOwnerAuthorizationProjectionDefaults() {
+        SimpleAkskServerProperties.OwnerAuthorizationProjectionConfig config =
+                new SimpleAkskServerProperties().getOwnerAuthorization();
+
+        assertFalse(config.getEnabled());
+        assertNull(config.getOwnerSourceId());
+        assertEquals("human", config.getHumanResourceSourceId());
+        assertEquals(AkskOwnerAuthorizationSynchronizationMode.EVENTUAL_WITH_LEASE,
+                config.getSynchronizationMode());
+        assertEquals(Integer.valueOf(1000), config.getPullIntervalMillis());
+        assertEquals(Integer.valueOf(30), config.getLeaseSeconds());
+    }
+
+    /**
+     * 聚散边界：身份源连接配置（endpoint、凭据、超时）归协作适配器承载，
+     * 本模块只保留中性投影与租约策略。
+     */
+    @Test
+    void shouldNotExposeIdentityProviderConnectionConfiguration() {
+        assertFalse(hasNestedClass(SimpleAkskServerProperties.class, "IamOwnerAuthorizationReaderConfig"));
+        assertFalse(hasMethod(SimpleAkskServerProperties.class, "getIamOwnerAuthorizationReader"));
     }
 
     private void assertEndpointConfig(SimpleAkskServerProperties.LimiterConfig.EndpointLimitConfig config,

@@ -1,6 +1,6 @@
 # simple-aksk-server-core
 
-[![Version](https://img.shields.io/badge/version-3.0.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.4-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key 规则和 Token 生命周期事件。业务通常通过 `simple-aksk-server-starter` 使用这些契约；只有需要直接订阅、转换或持久化 Token 生命周期事件的扩展模块，才需要直接依赖本模块。
@@ -12,7 +12,7 @@ AKSK Server 的共享契约模块，提供服务端配置、常量、Redis Key �
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.3'
+implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.4'
 ```
 
 `simple-aksk-server-starter` 通过 `api` 传递引入本模块。仅使用 Server Starter 的应用通常不需要重复声明；独立审计、指标或集成模块可直接声明该坐标。
@@ -30,7 +30,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.3'
 - Admin：本地管理页面开关、管理员账户及会话时长。
 - 限流：OAuth2 Token、Introspect、Revoke 端点的开关、算法、降级策略、Key 策略和规则。
 - 过期 Token 清理：定时清理开关、cron 调度表达式、分批删除批大小、分布式锁租约时长。
-- 所属人授权 reader：默认关闭的 IAM HTTPS reader、同步模式、拉取间隔与本地授权租约配置。
+- 所属人授权投影：默认关闭的中性投影与租约策略（开关、身份源标识、HUMAN 认证来源标识、同步模式、拉取间隔、本地授权租约）。身份源连接配置（endpoint、凭据、超时）不在本模块，由协作适配器自带。
 
 ### 服务端常量
 
@@ -130,11 +130,15 @@ Token 生命周期事件属于内部服务端事件契约，不是认证材料�
 
 为兼容既有生命周期事件实现，事件对象可能包含内部认证值；这不构成对消费者处理或传播该值的授权。独立审计实现应仅消费脱敏记录，并确保下游 Handler 永远不依赖原始认证值。
 
-事件不会新增或携带应用授权内容、权限清单、操作者、IAM 主体或 Secret。IAM 集成仍应通过可选适配器或稳定的服务契约完成，本模块不引入 IAM 运行时依赖。
+事件不会新增或携带应用授权内容、权限清单、操作者、身份源主体或 Secret。身份源集成仍应通过可选适配器或稳定的服务契约完成，本模块不引入任何身份源运行时依赖。
 
 ---
 
 ## 版本历史
+
+### 3.0.4
+
+配置归位与措辞中性化：所属人授权配置块由 `IamOwnerAuthorizationReaderConfig` 改为只保留中性投影与租约策略的 `OwnerAuthorizationProjectionConfig`（身份源连接配置外移到协作适配器），相关说明措辞统一为"身份源"；新增 `OWNER_SUBJECT_ID_MAX_LENGTH` 稳定主体长度契约；依赖升至 `simple-aksk-core` 3.0.2。详见 [CHANGELOG.3.0.4.md](CHANGELOG.3.0.4.md)。
 
 ### 3.0.3
 

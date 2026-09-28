@@ -49,13 +49,12 @@ public class SimpleAkskServerProperties {
     private CleanupConfig cleanup = new CleanupConfig();
 
     /**
-     * IAM 所属人授权 reader 配置。
+     * 外部所属人授权投影配置。
      *
-     * <p>仅 OWNER_INHERITED AKU 使用这条通道。密钥必须由部署环境注入，
-     * 不得放入 binding、数据库或浏览器请求。</p>
+     * <p>这里只保存 AKSK 通用的投影与租约策略，不包含任何身份源 endpoint、client 或 secret。</p>
      */
-    private IamOwnerAuthorizationReaderConfig iamOwnerAuthorizationReader =
-            new IamOwnerAuthorizationReaderConfig();
+    private OwnerAuthorizationProjectionConfig ownerAuthorization =
+            new OwnerAuthorizationProjectionConfig();
 
     @Data
     public static class JwtConfig {
@@ -213,57 +212,22 @@ public class SimpleAkskServerProperties {
     }
 
     @Data
-    public static class IamOwnerAuthorizationReaderConfig {
+    public static class OwnerAuthorizationProjectionConfig {
 
         /**
-         * 默认关闭，完成 IAM reader 与目标资源端严格在线验收后才允许开启。
+         * 默认关闭；只有宿主显式提供所属人授权 provider 后才允许开启。
          */
         private Boolean enabled = Boolean.FALSE;
 
         /**
-         * IAM OAuth2 token endpoint，必须是 HTTPS 地址。
-         */
-        private String tokenUri;
-
-        /**
-         * IAM owner projection reader 的 HTTPS 基地址。
-         */
-        private String baseUri;
-
-        /**
-         * IAM 部署固定 owner source。
+         * 所属人授权身份源标识。
          */
         private String ownerSourceId;
 
         /**
-         * 公共资源认证层中 IAM HUMAN 的认证来源标识。
+         * 公共资源认证层中 HUMAN 的认证来源标识。
          */
-        private String humanResourceSourceId = "iam";
-
-        /**
-         * IAM 固定内部 SERVICE clientId。
-         */
-        private String clientId;
-
-        /**
-         * IAM 固定内部 SERVICE secret，仅允许环境变量或密钥系统注入。
-         */
-        private String clientSecret;
-
-        /**
-         * 单次网络连接超时毫秒。
-         */
-        private Integer connectTimeoutMillis = 1000;
-
-        /**
-         * 单次网络读取超时毫秒。
-         */
-        private Integer readTimeoutMillis = 2000;
-
-        /**
-         * 同一次授权解析的最大请求次数，必须为有限正数。
-         */
-        private Integer maxAttempts = 2;
+        private String humanResourceSourceId = "human";
 
         /**
          * 默认用本地投影；STRICT_ONLINE 仅用于受控诊断或显式收紧场景。
@@ -277,7 +241,7 @@ public class SimpleAkskServerProperties {
         private Integer pullIntervalMillis = 1000;
 
         /**
-         * IAM 暂不可用时，本地 inherited 授权最多继续服务的秒数。
+         * 外部授权源暂不可用时，本地 inherited 授权最多继续服务的秒数。
          */
         private Integer leaseSeconds = 30;
 

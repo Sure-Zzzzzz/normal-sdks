@@ -241,7 +241,7 @@ public final class SimpleAkskServerConstant {
     public static final String JWT_CLAIM_APPLICATION_AUTHORIZATION_EPOCH =
             JwtClaimConstant.APPLICATION_AUTHORIZATION_EPOCH;
     /**
-     * JWT Claim名称: IAM 稳定所属人来源。
+     * JWT Claim名称: 身份源稳定所属人来源。
      */
     public static final String JWT_CLAIM_OWNER_SOURCE_ID = JwtClaimConstant.OWNER_SOURCE_ID;
     /**
@@ -372,6 +372,10 @@ public final class SimpleAkskServerConstant {
      * Client 所属用户维度。
      */
     public static final String MANAGEMENT_DIMENSION_OWNER_USER_ID = "ownerUserId";
+    /**
+     * 身份源稳定主体 subjectId 在 AKSK owner binding 中的最大长度；该值属于稳定主体契约，不是 username 长度。
+     */
+    public static final int OWNER_SUBJECT_ID_MAX_LENGTH = 128;
     /**
      * Token 标识维度。
      */
