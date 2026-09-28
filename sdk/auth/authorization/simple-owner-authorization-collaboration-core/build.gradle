@@ -1,0 +1,6 @@
+// 中性协作 SPI 与传输无关模型。
+// 本模块不得依赖具体身份源、具体消费端、数据库、Spring Web 或任何实现。
+
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+}
