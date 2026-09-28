@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.event.*;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -89,5 +90,14 @@ class IamEventContractTest {
                 PortalMenuNodeType.values());
         assertArrayEquals(new PortalPresentationMode[]{PortalPresentationMode.STANDARD, PortalPresentationMode.IMMERSIVE},
                 PortalPresentationMode.values());
+    }
+
+    @Test
+    void shouldExposeDashboardPermissionAndNeutralOwnerAuthorizationPath() {
+        assertEquals("iam:dashboard:page", SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
+        assertTrue(Arrays.asList(SimpleIamServerConstant.BUILT_IN_PAGE_PERMISSION_CODES)
+                .contains(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE));
+        assertEquals("/iam/internal/owner-authorization/**",
+                SimpleIamServerConstant.PATH_INTERNAL_OWNER_AUTHORIZATION_API);
     }
 }

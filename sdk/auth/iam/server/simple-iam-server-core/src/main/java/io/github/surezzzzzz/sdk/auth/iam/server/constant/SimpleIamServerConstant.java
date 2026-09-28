@@ -534,6 +534,10 @@ public final class SimpleIamServerConstant {
      */
     public static final String BUILT_IN_PERMISSION_USER_GROUP_API = "iam:user-group:api";
     /**
+     * 内置权限编码：IAM 仪表盘页面
+     */
+    public static final String BUILT_IN_PERMISSION_DASHBOARD_PAGE = "iam:dashboard:page";
+    /**
      * 内置权限编码：IAM 仪表盘统计接口
      */
     public static final String BUILT_IN_PERMISSION_DASHBOARD_API = "iam:dashboard:api";
@@ -573,7 +577,8 @@ public final class SimpleIamServerConstant {
             BUILT_IN_PERMISSION_MESSAGE_PAGE,
             BUILT_IN_PERMISSION_TRUSTED_APPLICATION_PAGE,
             BUILT_IN_PERMISSION_DEPARTMENT_PAGE,
-            BUILT_IN_PERMISSION_USER_GROUP_PAGE};
+            BUILT_IN_PERMISSION_USER_GROUP_PAGE,
+            BUILT_IN_PERMISSION_DASHBOARD_PAGE};
     /**
      * 站内信发送目标摘要模板
      */
@@ -588,7 +593,7 @@ public final class SimpleIamServerConstant {
      * 凭证服务所属人授权内部 reader API 路径（协作契约约定路径）。该路径只接受固定 SERVICE 的短时 Bearer，
      * 不复用资源验证 Basic 或浏览器会话链。
      */
-    public static final String PATH_INTERNAL_AKSK_API = "/iam/internal/aksk/**";
+    public static final String PATH_INTERNAL_OWNER_AUTHORIZATION_API = "/iam/internal/owner-authorization/**";
     /**
      * Web 统一 API 路径
      */
