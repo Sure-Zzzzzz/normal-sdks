@@ -42,6 +42,6 @@ class AkskAuthorizationModeTest {
     @Test
     void shouldCarryChineseDescription() {
         assertEquals("本地静态授权", AkskAuthorizationMode.STATIC_LEGACY.getDescription());
-        assertEquals("IAM 所属人授权投影", AkskAuthorizationMode.OWNER_INHERITED.getDescription());
+        assertEquals("身份源所属人授权投影", AkskAuthorizationMode.OWNER_INHERITED.getDescription());
     }
 }

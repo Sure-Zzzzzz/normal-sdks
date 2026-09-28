@@ -77,7 +77,7 @@ public final class JwtClaimConstant {
      */
     public static final String APPLICATION_AUTHORIZATION_EPOCH = "application_authorization_epoch";
     /**
-     * OWNER_INHERITED AKU 的 IAM 稳定所属人来源。
+     * OWNER_INHERITED AKU 的身份源稳定所属人来源。
      */
     public static final String OWNER_SOURCE_ID = "owner_source_id";
     /**

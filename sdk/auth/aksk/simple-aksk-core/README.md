@@ -1,6 +1,6 @@
 # Simple AKSK Core
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 AKSK（Access Key / Secret Key）认证体系的核心模块，提供跨模块共享的常量、模型、工具类和异常定义。
@@ -50,7 +50,7 @@ AKSK（Access Key / Secret Key）认证体系的核心模块，提供跨模块�
 ## 依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
 ```
 
 无 Spring 依赖，可被 Server 端和 Client 端同时使用。
@@ -59,9 +59,13 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.1'
 
 ## 版本历史
 
+### 3.0.2
+
+OWNER_INHERITED 相关协议常量的说明措辞中性化：`AkskAuthorizationMode` 枚举描述与 `JwtClaimConstant` 注释中的"IAM"统一为"身份源"（协作 SPI 的正式术语，见 simple-owner-authorization-collaboration-core），协议值（code / claim 名）零变化，纯文档与展示文案对齐。详见 [CHANGELOG.3.0.2.md](CHANGELOG.3.0.2.md)。
+
 ### 3.0.1
 
-新增 `OWNER_INHERITED` 授权模式枚举（规范形态：code/description、`fromCode()`、`isValid()`，code 与常量名同形保证协议稳定）和所属人、目标应用、四类授权纪元的 JWT Claim 常量，供 AKSK Server 将 IAM 三权投影写入令牌并在本地校验。详见 [CHANGELOG.3.0.1.md](CHANGELOG.3.0.1.md)。
+新增 `OWNER_INHERITED` 授权模式枚举（规范形态：code/description、`fromCode()`、`isValid()`，code 与常量名同形保证协议稳定）和所属人、目标应用、四类授权纪元的 JWT Claim 常量，供 AKSK Server 将身份源三权投影写入令牌并在本地校验。详见 [CHANGELOG.3.0.1.md](CHANGELOG.3.0.1.md)。
 
 ### 3.0.0
 

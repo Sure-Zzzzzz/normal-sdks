@@ -5,7 +5,7 @@ import lombok.Getter;
 /**
  * AKSK 令牌授权事实的来源模式 Enum
  *
- * <p>该枚举是跨 AKSK Server、资源服务的协议常量；OWNER_INHERITED 的三权真值始终来自 IAM。
+ * <p>该枚举是跨 AKSK Server、资源服务的协议常量；OWNER_INHERITED 的三权真值始终来自外部身份源。
  * code 与常量名同形，令牌 Claim、introspection 与日志中的值保持稳定。</p>
  *
  * @author surezzzzzz
@@ -19,9 +19,9 @@ public enum AkskAuthorizationMode {
     STATIC_LEGACY("STATIC_LEGACY", "本地静态授权"),
 
     /**
-     * 由 IAM 人员授权投影实时决定的用户 AKU
+     * 由身份源人员授权投影实时决定的用户 AKU
      */
-    OWNER_INHERITED("OWNER_INHERITED", "IAM 所属人授权投影");
+    OWNER_INHERITED("OWNER_INHERITED", "身份源所属人授权投影");
 
     private final String code;
     private final String description;
