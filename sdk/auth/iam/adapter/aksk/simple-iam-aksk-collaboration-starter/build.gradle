@@ -1,0 +1,14 @@
+// IAM 协作适配器只实现中性 owner-authorization SPI。
+// 它不是 simple-aksk-server-starter 的传递依赖，由部署 AKSK 的业务应用按需引入。
+
+dependencies {
+    // 对外暴露协作 SPI 和 AKSK 投影配置类型，供业务应用组合两个 Starter。
+    api 'io.github.sure-zzzzzz:simple-owner-authorization-collaboration-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-server-core:3.0.4'
+
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
