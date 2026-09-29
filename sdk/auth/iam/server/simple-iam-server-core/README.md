@@ -2,7 +2,7 @@
 
 IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件、错误码、常量和异常，不含任何技术设施实现。
 
-当前版本为 `1.3.0`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.1`。版本沿革见各 `CHANGELOG.*.md`。
 
 本模块是 IAM 契约链路的中间层：`simple-iam-core`（身份协议契约基座）→ **`simple-iam-server-core`（本模块，IAM Server 域契约）** → `simple-iam-server-starter`（应用层：Web API、服务、装配、实体与仓储）。
 
@@ -21,7 +21,13 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ### 错误码与常量（constant 包）
 
-`ErrorCode`（对外 API 错误码，含主体 ID 生成/分配契约 `SUBJECT_ID_001/002`）、`ServerErrorMessage`（脱敏错误文案，含主体 ID 与手机号挑战 HMAC 配置文案）、`SimpleIamServerConstant`（配置前缀与域常量，含主体 ID 默认策略、手机号挑战 / 冷却 / 三维频控默认值与 `PHONE_CHALLENGE_PURPOSE_*`——取值单一来源于 `simple-iam-core` 的 `SMS_PURPOSE_*`）、`IamAuthorizeContextStatus`、`PermissionType`、`RoleSource`（角色来源：内置 / 应用申报）、`TrustedApplicationClientType`、`TrustedApplicationIcon`、`PortalMenuNodeType`、`PortalPresentationMode`。
+`ErrorCode`（对外 API 错误码，含主体 ID 生成/分配契约 `SUBJECT_ID_001/002`）、`ServerErrorMessage`（脱敏错误文案，含主体 ID、手机号挑战 HMAC 配置及用户导入校验文案）、`SimpleIamServerConstant`（配置前缀与域常量，含主体 ID 默认策略、手机号挑战 / 冷却 / 三维频控默认值、`PHONE_CHALLENGE_PURPOSE_*` 和用户导入模板契约——取值单一来源于 `simple-iam-core` 的 `SMS_PURPOSE_*`）、`IamAuthorizeContextStatus`、`PermissionType`、`RoleSource`（角色来源：内置 / 应用申报）、`TrustedApplicationClientType`、`TrustedApplicationIcon`、`PortalMenuNodeType`、`PortalPresentationMode`。
+
+### 用户导入模板（constant 包）
+
+用户导入的跨层输入契约由 `SimpleIamServerConstant` 和 `ServerErrorMessage` 统一声明：上传字段名、模板文件名与媒体类型、单工作表约束、表头行、六个字段的固定顺序（`username`、`displayName`、`initialPassword`、`departmentCode`、`phone`、`email`）以及单次最多 500 条非空数据行。解析失败、表头不匹配、部门不可用和单行创建结果等调用方可见文案由 `ServerErrorMessage` 集中维护。
+
+本模块不包含 Excel 解析、HTTP 接口、数据库写入或导入专用审计事件。它们属于 `simple-iam-server-starter`：每一条成功创建复用既有用户创建流程及 `CREATED/USER` 审计事件，不新增并行事件类型。
 
 ### 异常（exception 包）
 
@@ -31,7 +37,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.0"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.1"
 }
 ```
 
@@ -46,6 +52,7 @@ dependencies {
 
 ## 版本记录
 
+- [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)：用户导入模板、字段和校验文案的稳定契约。
 - [CHANGELOG.1.3.0.md](CHANGELOG.1.3.0.md)：仪表盘页面权限契约，以及所属人授权内部协作路径的中性化迁移。
 - [CHANGELOG.1.2.0.md](CHANGELOG.1.2.0.md)：稳定主体 ID 与手机号挑战相关的错误码、错误文案和默认策略契约。
 - [CHANGELOG.1.1.3.md](CHANGELOG.1.1.3.md)：可信应用安全生命周期与 AKSK 所属人授权读取的错误、常量契约。

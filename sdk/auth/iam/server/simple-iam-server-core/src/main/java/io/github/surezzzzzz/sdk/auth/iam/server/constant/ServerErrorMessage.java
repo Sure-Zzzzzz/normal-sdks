@@ -77,6 +77,16 @@ public final class ServerErrorMessage {
     public static final String USER_DISABLED = "用户已被禁用：%s";
     public static final String LAST_ADMIN_PROTECTED = "最后一个可用 IAM 管理员不能被撤销角色、删除或禁用：%s";
     public static final String DEPARTMENT_NOT_FOUND = "部门不存在：%s";
+    public static final String USER_IMPORT_FILE_REQUIRED = "用户导入文件不能为空";
+    public static final String USER_IMPORT_WORKBOOK_INVALID = "用户导入文件必须且只能包含一个工作表";
+    public static final String USER_IMPORT_WORKBOOK_UNREADABLE = "用户导入文件无法读取";
+    public static final String USER_IMPORT_ROWS_EXCEEDED = "单次用户导入最多允许%d行";
+    public static final String USER_IMPORT_HEADER_MISSING = "用户导入文件缺少表头";
+    public static final String USER_IMPORT_HEADER_MISMATCH = "用户导入表头不匹配，请使用下载模板";
+    public static final String USER_IMPORT_FIELD_REQUIRED = "%s不能为空";
+    public static final String USER_IMPORT_DEPARTMENT_NOT_FOUND = "departmentCode不存在：%s";
+    public static final String USER_IMPORT_DEPARTMENT_INACTIVE = "departmentCode已停用：%s";
+    public static final String USER_IMPORT_ROW_CREATED = "创建成功";
 
     // ==================== 部门管理消息 ====================
     public static final String DEPARTMENT_ALREADY_EXISTS = "部门编码已存在：%s";

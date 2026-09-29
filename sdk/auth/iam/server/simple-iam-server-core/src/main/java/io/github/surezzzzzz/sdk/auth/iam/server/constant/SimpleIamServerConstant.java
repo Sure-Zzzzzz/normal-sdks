@@ -2,6 +2,10 @@ package io.github.surezzzzzz.sdk.auth.iam.server.constant;
 
 import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Simple IAM Server Constants
  *
@@ -139,6 +143,98 @@ public final class SimpleIamServerConstant {
      * 管理端默认页大小请求参数值
      */
     public static final String DEFAULT_ADMIN_PAGE_SIZE_VALUE = "20";
+    // ==================== 用户导入 ====================
+    /**
+     * 单次用户导入的最大非空数据行数
+     */
+    public static final int USER_IMPORT_MAX_ROWS = 500;
+    /**
+     * 用户导入文件表单字段名
+     */
+    public static final String USER_IMPORT_FILE_PART_NAME = "file";
+    /**
+     * 用户导入模板下载文件名
+     */
+    public static final String USER_IMPORT_TEMPLATE_FILE_NAME = "user-import-template.xlsx";
+    /**
+     * 用户导入模板下载响应头格式
+     */
+    public static final String USER_IMPORT_TEMPLATE_CONTENT_DISPOSITION = "attachment; filename=%s";
+    /**
+     * 用户导入工作簿媒体类型
+     */
+    public static final String USER_IMPORT_WORKBOOK_MEDIA_TYPE =
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    /**
+     * 用户导入工作表名称
+     */
+    public static final String USER_IMPORT_WORKBOOK_SHEET_NAME = "用户导入";
+    /**
+     * 用户导入模板列宽（Excel 单位）
+     */
+    public static final int USER_IMPORT_TEMPLATE_COLUMN_WIDTH = 5120;
+    /**
+     * 用户导入表头所在行号
+     */
+    public static final int USER_IMPORT_HEADER_ROW_INDEX = 0;
+    /**
+     * 用户导入用户名列下标
+     */
+    public static final int USER_IMPORT_COLUMN_USERNAME = 0;
+    /**
+     * 用户导入展示名列下标
+     */
+    public static final int USER_IMPORT_COLUMN_DISPLAY_NAME = 1;
+    /**
+     * 用户导入初始密码列下标
+     */
+    public static final int USER_IMPORT_COLUMN_INITIAL_PASSWORD = 2;
+    /**
+     * 用户导入部门编码列下标
+     */
+    public static final int USER_IMPORT_COLUMN_DEPARTMENT_CODE = 3;
+    /**
+     * 用户导入手机号列下标
+     */
+    public static final int USER_IMPORT_COLUMN_PHONE = 4;
+    /**
+     * 用户导入邮箱列下标
+     */
+    public static final int USER_IMPORT_COLUMN_EMAIL = 5;
+    /**
+     * 用户导入用户名列名
+     */
+    public static final String USER_IMPORT_HEADER_USERNAME = "username";
+    /**
+     * 用户导入展示名列名
+     */
+    public static final String USER_IMPORT_HEADER_DISPLAY_NAME = "displayName";
+    /**
+     * 用户导入初始密码列名
+     */
+    public static final String USER_IMPORT_HEADER_INITIAL_PASSWORD = "initialPassword";
+    /**
+     * 用户导入部门编码列名
+     */
+    public static final String USER_IMPORT_HEADER_DEPARTMENT_CODE = "departmentCode";
+    /**
+     * 用户导入手机号列名
+     */
+    public static final String USER_IMPORT_HEADER_PHONE = "phone";
+    /**
+     * 用户导入邮箱列名
+     */
+    public static final String USER_IMPORT_HEADER_EMAIL = "email";
+    /**
+     * 用户导入表头，顺序即数据列映射。
+     */
+    public static final List<String> USER_IMPORT_HEADERS = Collections.unmodifiableList(Arrays.asList(
+            USER_IMPORT_HEADER_USERNAME,
+            USER_IMPORT_HEADER_DISPLAY_NAME,
+            USER_IMPORT_HEADER_INITIAL_PASSWORD,
+            USER_IMPORT_HEADER_DEPARTMENT_CODE,
+            USER_IMPORT_HEADER_PHONE,
+            USER_IMPORT_HEADER_EMAIL));
     /**
      * 默认授权交易有效期（秒）
      */

@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.core.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.*;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -14,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author surezzzzzz
  */
+@Slf4j
 class IamEventContractTest {
 
     @Test
@@ -95,9 +97,25 @@ class IamEventContractTest {
     @Test
     void shouldExposeDashboardPermissionAndNeutralOwnerAuthorizationPath() {
         assertEquals("iam:dashboard:page", SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
-        assertTrue(Arrays.asList(SimpleIamServerConstant.BUILT_IN_PAGE_PERMISSION_CODES)
+        assertTrue(Arrays.asList(SimpleIamServerConstant.ADMIN_CONSOLE_ENTRANCE_AUTHORITIES)
                 .contains(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE));
         assertEquals("/iam/internal/owner-authorization/**",
                 SimpleIamServerConstant.PATH_INTERNAL_OWNER_AUTHORIZATION_API);
+    }
+
+    @Test
+    void shouldExposeUserImportTemplateContract() {
+        log.info("验证用户导入模板契约: maxRows={}, headers={}",
+                SimpleIamServerConstant.USER_IMPORT_MAX_ROWS, SimpleIamServerConstant.USER_IMPORT_HEADERS);
+
+        assertEquals(500, SimpleIamServerConstant.USER_IMPORT_MAX_ROWS);
+        assertEquals(Arrays.asList("username", "displayName", "initialPassword", "departmentCode", "phone", "email"),
+                SimpleIamServerConstant.USER_IMPORT_HEADERS);
+        assertEquals("file", SimpleIamServerConstant.USER_IMPORT_FILE_PART_NAME);
+        assertEquals("用户导入文件不能为空", ServerErrorMessage.USER_IMPORT_FILE_REQUIRED);
+        assertEquals("创建成功", ServerErrorMessage.USER_IMPORT_ROW_CREATED);
+
+        log.info("用户导入模板契约验证通过: filePartName={}",
+                SimpleIamServerConstant.USER_IMPORT_FILE_PART_NAME);
     }
 }
