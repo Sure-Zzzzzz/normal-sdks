@@ -157,7 +157,7 @@ dependencies {
 |---|---|
 | `GET /iam/admin/dashboard` | 仪表盘聚合（用户 / 部门 / 协作组 / 角色 / 权限 / 可信应用计数 + 在期会话 / 今日登录人数 / 锁定 / 禁用 / 无部门用户运行态，`iam:dashboard:api`） |
 | `GET /iam/admin/dashboard/recent-logins` | 最近登录记录分页（用户 + 部门 + 时间） |
-| `GET /iam/admin/sessions` | 在期会话分页（可按 `userId` 过滤；会话 / 用户 / 客户端 / IP / UA / 认证与最后活跃时间，`iam:session:api`） |
+| `GET /iam/admin/sessions` | 在期会话分页（可按 `subjectId` 过滤；会话 / 用户 / 客户端 / IP / UA / 认证与最后活跃时间，`iam:session:api`） |
 | `PUT /iam/admin/sessions/users/{subjectId}/revoke` | 强制下线：吊销该用户全部会话（等价用户级全端吊销，返回吊销数，发 `REVOKED` 审计） |
 
 组织与用户：
@@ -361,7 +361,7 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 |---|---|
 | MFA | `mfa.enabled` 开关 + SPI 预留，默认关闭，无实现 |
 | 开放注册 | `registration.open` 占位；开户走管理员建账 |
-| 自助密码重置 | `password-reset.self-service` 占位；`PasswordResetService` 的 token 凭证机制已实现但未暴露 HTTP 端点，`iam_password_reset` 表为配套预留 |
+| 自助密码重置 | `password-reset.self-service` 默认关闭；开启且装配短信投递能力后，通过手机号挑战和 `POST /iam/web/auth/password-reset` 完成重置，成功即吊销全部会话 |
 
 **明确不做（一期排除）**：机器对机器凭证（凭证签发走 aksk-server，本模块只作被调方）、多因素认证、账号密码找回邮件链路；组织架构与人员同步经开放 API（`/iam/api/**`，AKSK 凭证）。
 

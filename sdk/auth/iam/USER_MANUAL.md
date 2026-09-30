@@ -1,6 +1,8 @@
 # Simple IAM 用户手册
 
-> 本手册是 IAM 1.0.0 的**从零部署到验收导引**：按角色（平台部署方 / 前端部署方 / 业务应用方 / 资源服务方）给出接入路径。各模块的精确契约以模块 README 与领域文档为权威，手册每章末尾给出链接；两者不一致时以模块 README 为准。
+> 本手册是 IAM 1.3.0 的**从零部署到验收导引**：按角色（平台部署方 / 前端部署方 / 业务应用方 / 资源服务方）给出接入路径。HTTP 字段、URI 和状态码以 `server/contract` 下的 OpenAPI 为单一事实源；模块 README 与领域文档说明部署边界和运行语义。
+
+> **1.3.0 升级要点**：对外用户主体统一为稳定 `subjectId`，数字数据库主键不再出现在 URI、claim 或事件载荷；新增手机号绑定、短信登录、手机忘记密码、Excel 用户导入、内置可信应用管理和 owner-authorization 协作契约。存量 1.2.0 环境执行 [V1.2.0__to__V1.3.0__subject_and_phone.sql](server/simple-iam-server-starter/docs/migration/V1.2.0__to__V1.3.0__subject_and_phone.sql)，不得以全新 `schema.sql` 覆盖已有数据。
 
 ## 目录
 
@@ -49,7 +51,7 @@ Simple IAM 是一套统一身份认证与授权服务（IAM Server）：承载�
 | Spring Authorization Server | 0.4.1 | OAuth2 / OIDC 授权服务器 |
 | Spring Security | 5.7.x | 安全框架 |
 | Java | 8+（源码兼容） | 运行环境 |
-| MySQL | 5.7+ / 8.0+ | 持久化，字符集 `utf8mb4`，26 张表 |
+| MySQL | 5.7+ / 8.0+ | 持久化，字符集 `utf8mb4`，27 张表 |
 | Redis | 6+ | 会话 / 缓存 / 限流 / 锁 / SSE 广播 / OAuth2 授权缓存共用 |
 | RSA + 可选 AES-256 | — | Token 签名密钥对；`jwe` 模式另需加密密钥 |
 
@@ -108,17 +110,20 @@ IAM Server 的 HTTP 面按安全链分七区（Order 精确分工，先匹配先
 
 ## 3. 模块总览
 
-IAM 1.1.1 发布矩阵（Server 及 Core 均已在 Maven Central；前端为独立源码仓本地发布版本）：
+IAM 1.3.0 部署矩阵（Server 与 Core 为 Maven 坐标；前端为独立源码仓构建产物）：
 
 ```text
-simple-iam-core                                   1.0.0   协议契约基座（SPI / 路由键 / 错误契约）
-simple-iam-server-core                            1.1.2   Server 域契约（事件 / 错误码 / 常量）
-simple-iam-server-starter                         1.1.1   IAM Server 应用模块（本手册主角）
+simple-iam-core                                   1.1.0   协议契约基座（SPI / 路由键 / 错误契约）
+simple-iam-server-core                            1.3.1   Server 域契约（事件 / 错误码 / 常量）
+simple-iam-server-starter                         1.3.0   IAM Server 应用模块（本手册主角）
 simple-iam-ldap-adapter-starter                   1.0.0   LDAP 凭证型登录适配器
 simple-iam-oidc-adapter-starter                   1.0.0   OIDC 跳转型登录适配器
 simple-iam-captcha-adapter-starter                1.0.0   图片验证码适配器（server-starter 已传递引入）
+simple-iam-sms-b2m-adapter-starter                1.0.0   B2M 短信投递适配器（按需引入）
 simple-iam-resource-core                          1.0.0   IAM 人员认证结果模型
 simple-iam-resource-server-starter                1.0.0   资源服务 IAM Provider
+simple-iam-resource-server-jakarta-starter        1.0.0   Spring Boot 3 / Jakarta 资源服务 IAM Provider
+simple-iam-aksk-collaboration-starter             1.0.0   AKSK 所属人授权协作适配器（部署 AKSK 的业务应用按需引入）
 simple-iam-server-audit-listener-starter          1.0.0   Server 审计事件挂件（可选）
 simple-iam-resource-audit-listener-starter        1.0.0   资源访问审计挂件（可选）
 ```
@@ -142,6 +147,13 @@ ldap/oidc/captcha adapter（任选） ──────────────
 - **写新登录适配器**：`simple-iam-core` 的 SPI
 - **业务资源服务接 IAM 身份**：公共资源层 + IAM Provider（第 8 章）
 
+### 3.1 IAM 1.3.0 新能力操作入口
+
+- **稳定主体**：所有管理面、开放 API、会话管理与协作 URI 使用 `subjectId`。用户名仅是账号名，`displayName` 仅是展示字段；两者都不能替代 `subjectId` 作为跨服务绑定键。
+- **手机号与忘记密码**：部署方按需引入 `simple-iam-sms-b2m-adapter-starter` 并配置投递凭据；开启 `password-reset.self-service` 后，调用方以 `purpose=login` 或 `forgot-password` 创建 `/iam/web/auth/phone-challenges`，再分别调用 `/iam/web/auth/phone-login` 或 `/iam/web/auth/password-reset`。短信能力未装配时，相关入口不开放，不能退化为弱校验。
+- **Excel 用户导入**：管理员先下载 `GET /iam/admin/users/import/template`，再以 `POST /iam/admin/users/import` 上传单工作表 xlsx。固定列为 `username`、`displayName`、`initialPassword`、`departmentCode`、`phone`、`email`；文件只在请求期解析，不保存，不创建部门，不导入角色，每行独立创建且允许部分成功。
+- **AKSK 所属人继承**：仅部署 AKSK 的业务应用在需要 `OWNER_INHERITED` AKU 时显式组合 `simple-aksk-server-starter` 与 `simple-iam-aksk-collaboration-starter`。AKSK Server 本体不依赖 IAM；所属人绑定键为 `ownerSourceId + ownerSubjectId`，`ownerUsername` 只用于展示快照。
+
 ## 4. 部署 IAM Server
 
 ### 4.1 依赖引入
@@ -150,7 +162,7 @@ ldap/oidc/captcha adapter（任选） ──────────────
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0"   // IAM 本体（连带五件配套组件与 MySQL 驱动）
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0"   // IAM 本体（连带五件配套组件与 MySQL 驱动）
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -161,7 +173,7 @@ dependencies {
 
 ### 4.2 初始化数据库
 
-在**全新环境**执行 [schema.sql](server/simple-iam-server-starter/docs/schema.sql)（26 张表 = 3 张 SAS 标准表 + 23 张 `iam_*` 业务表）。该脚本包含建表前置清理，**不能直接用于已有数据环境**。
+在**全新环境**执行 [schema.sql](server/simple-iam-server-starter/docs/schema.sql)（27 张表 = 3 张 SAS 标准表 + 24 张 `iam_*` 业务表）。该脚本包含建表前置清理，**不能直接用于已有数据环境**。
 
 ```sql
 CREATE DATABASE sure_auth_iam DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -202,7 +214,7 @@ io:
             primary-datasource: default
             datasources:
               default:
-                url: jdbc:mysql://127.0.0.1:3306/sure_auth_iam?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+                url: jdbc:mysql://<MYSQL_HOST>:3306/sure_auth_iam?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
                 username: ${IAM_DB_USERNAME}
                 password: ${IAM_DB_PASSWORD}
         # ② Redis（redis-route 接管；会话/缓存/限流/锁/SSE 共用这一套）
@@ -213,7 +225,7 @@ io:
             sources:
               default:
                 mode: standalone            # standalone 单机 / sentinel 哨兵 / cluster 集群
-                host: 127.0.0.1
+                host: <REDIS_HOST>
                 port: 6379
                 database: 0
         # ③ 分布式锁（连上面同一套 Redis，无需额外地址）
@@ -338,7 +350,7 @@ curl -s https://iam.example.com/.well-known/openid-configuration
 
 ## 5. 前端部署（门户形态）
 
-> **发布现状**：三个前端仓独立发布并与 IAM Server 1.1.1 对齐：login-web `v1.0.1`、portal-web `v1.1.1`、admin-web `v1.1.1`；npm 包形态的接入方式当前不适用，本章按源码仓构建部署。
+> 三个前端仓独立构建发布。IAM 1.3.0 部署必须使用声明兼容 IAM Server 与 IAM Contract `1.3.x` 的 Login、Portal 与 Admin 构建产物；历史 `v1.0.1` / `v1.1.1` 仅适用于其各自记录的 1.1.x 契约范围。npm 包形态的接入方式不适用，本章按源码仓构建部署。
 
 ### 5.1 三个前端仓
 
@@ -348,7 +360,7 @@ curl -s https://iam.example.com/.well-known/openid-configuration
 | simple-unified-application-portal-web | https://github.com/Sure-Zzzzzz/simple-unified-application-portal-web | 统一应用门户壳：应用入口、主题、站内信、qiankun 微前端挂载 | nginx `/app/` | dist（vite base `/app/`） |
 | simple-iam-admin-web | https://github.com/Sure-Zzzzzz/simple-iam-admin-web | IAM 管理台（qiankun 子应用）：用户、组织、角色、可信应用、站内信管理 | nginx `/app/iam/`，由门户挂载 | dist |
 
-主题契约独立成仓：[simple-iam-theme-contract](https://github.com/Sure-Zzzzzz/simple-iam-theme-contract)（npm 包 `@sure-zzzzzz/simple-iam-theme-contract`，已发布 1.0.1）。门户是主题状态的唯一管理方；业务微前端只消费 IAM 传入的只读主题快照，不自行保存主题偏好。
+主题契约独立成仓：[simple-iam-theme-contract](https://github.com/Sure-Zzzzzz/simple-iam-theme-contract)（npm 包 `@sure-zzzzzz/simple-iam-theme-contract`，`1.0.3`）。门户是主题状态的唯一管理方；业务微前端只消费 IAM 传入的只读主题快照，不自行保存主题偏好。
 
 各仓构建（Node.js 22+、pnpm 9.15.4）：
 
@@ -357,7 +369,7 @@ npx pnpm@9.15.4 install
 npx pnpm@9.15.4 run build
 ```
 
-权威 API 契约由 IAM Server 仓 `sdk/auth/iam/server/contract/` 维护（五份 OpenAPI：login-web / portal-web / admin-web / 开放 API / 资源验证）；各前端 release 必须声明兼容的 Server 与 Contract 版本范围。
+权威 API 契约由 IAM Server 仓 `sdk/auth/iam/server/contract/` 维护（六份 OpenAPI：login-web / portal-web / admin-web / 开放 API / 资源验证 / owner-authorization）；各前端 release 必须声明兼容的 Server 与 Contract 版本范围。
 
 ### 5.2 nginx 统一入口
 
@@ -372,8 +384,8 @@ map $uri $static_cache {
 }
 
 upstream iam_cluster {
-    server 10.0.0.11:8180;   # IAM Server 实例 A
-    server 10.0.0.12:8180;   # IAM Server 实例 B（多实例时）
+    server <IAM_BACKEND_A>;   # IAM Server 实例 A
+    server <IAM_BACKEND_B>;   # IAM Server 实例 B（多实例时）
 }
 
 server {
@@ -457,7 +469,7 @@ IAM Server 不托管任何前端构建产物。前端本地开发（端口 5174 
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0'
     implementation 'io.github.sure-zzzzzz:simple-iam-ldap-adapter-starter:1.0.0'
 }
 ```
@@ -491,7 +503,7 @@ io:
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0'
     implementation 'io.github.sure-zzzzzz:simple-iam-oidc-adapter-starter:1.0.0'
 }
 ```
@@ -546,7 +558,7 @@ io:
 外部认证成功后的账号归一对三种适配器一致：
 
 1. 已绑定该 `identitySource + externalId` → 直接复用本地账号
-2. 未绑定但存在**同名**本地账号 → **拒绝，绝不自动并号**（防接管；提示管理员用 `POST /iam/admin/users/{userId}/external-identity` 预绑定）
+2. 未绑定但存在**同名**本地账号 → **拒绝，绝不自动并号**（防接管；提示管理员用 `POST /iam/admin/users/{subjectId}/external-identity` 预绑定）
 3. 无同名 → 按 `external-identity.provisioning-mode` 处置：`jit`（首次登录自动创建本地账号，本地密码为随机不可登录值）或 `pre-bound-only`（仅预绑定身份可登录）
 
 机制细节（登录时序图、失败锁定维度、会话生命周期、登出联动吊销）见 [登录认证与会话](server/simple-iam-server-starter/docs/领域文档/登录认证与会话.md)。
@@ -555,12 +567,24 @@ io:
 
 业务系统以可信应用身份接入统一应用门户，四步（每步一个端点，全部走管理台或管理 API）：
 
+### 7.1 可信应用注册边界
+
+可信应用是 IAM 对业务应用的统一登记与准入记录，不等同于 OAuth Client，也不等同于业务角色。注册时由平台管理员确认以下边界：
+
+- **身份**：`applicationCode` 在 IAM 内唯一且创建后不改；`applicationName`、描述和受控内置图标用于管理台、Portal 与 Consent 展示。
+- **入口**：需要挂 Portal 的应用才配置 `portal.entry`、`routePrefix` 和菜单树；入口必须是部署方认可的 HTTPS 地址，不能把任意外部 URL 当作权限依据。
+- **协议客户端**：`initialClient` 只登记 OAuth Client 的类型、精确 redirect URI、scope 和是否需要 Consent；公共客户端必须启用 PKCE，密钥只在创建或轮换响应中显示一次。
+- **授权来源**：应用权限清单是业务方申报的事实源；角色规则和用户准入由 IAM 管理，页面/API/DATA 权限不能由前端菜单或 OAuth scope 推导。
+- **资源验证**：需要资源服务回源验 Token 时，单独创建 verification client 并把 secret 放在服务端密钥注入系统，不进入浏览器或前端构建产物。
+
+注册完成不代表所有用户都能访问：只有用户的应用准入和权限投影满足条件时，Portal 才返回该应用；受保护资源仍必须在服务端验证 Token、API permission 与 DATA 授权。
+
 | # | 步骤 | 端点 | 说明 |
 |---|---|---|---|
 | 1 | 建可信应用 | `POST /iam/admin/trusted-applications`（必须带初始 OAuth 客户端） | `entry` 与 `routePrefix` 决定门户挂载位置 |
 | 2 | 申报权限清单 | `PUT /iam/admin/trusted-applications/{applicationId}/permission-manifest` | 该应用权限码空间的**事实源**；全量替换语义 |
 | 3 | 配角色应用授权规则 | `PUT /iam/admin/roles/{roleId}/authorization-rules/{applicationId}` | 角色 × 应用的码集合，投影的**计算源**；变更即触发投影重算 |
-| 4 | 给用户准入 | `PUT /iam/admin/users/{userId}/application-authorizations/{applicationId}`（`admitted=true`） | 决定用户 Token 中的投影内容与门户可见性 |
+| 4 | 给用户准入 | `PUT /iam/admin/users/{subjectId}/application-authorizations/{applicationId}`（`admitted=true`） | 决定用户 Token 中的投影内容与门户可见性 |
 
 **第 2 步是业务方唯一需要"发明"的东西**——把应用里所有受控权限点一次列全：
 
@@ -588,7 +612,7 @@ io:
   }
 }
 
-// 第 4 步 PUT /iam/admin/users/{userId}/application-authorizations/{applicationId}
+// 第 4 步 PUT /iam/admin/users/{subjectId}/application-authorizations/{applicationId}
 // 四个字段全部必填；权限内容按角色规则自动投影，这里通常传空数组
 {
   "admitted": true,
@@ -778,7 +802,7 @@ io:
 | 站内信 SSE 收不到推送 | 反代缓冲了事件帧 | `proxy_buffering off` + 拉长 `proxy_read_timeout` |
 | 资源服务验证 401 | 会话已吊销 / 用户禁用 / 授权投影失效 | IAM 受控验证五重校验任一不过即 401（token 没到期也会拒——`sid` 绑定会话） |
 | refresh token 报 invalid_grant | 旧值二次使用（重放），整族已吊销 | 正常防线；客户端重走授权码流程 |
-| 1.0.0 有没有 introspection / revocation 端点 | 无（SAS 0.4.1 未提供） | token 失效以会话联动吊销 + 短有效期兜底；资源端用 verify 端点 |
+| 是否提供 RFC 7662 introspection / OAuth revocation 端点 | 不提供（SAS 0.4.1 未提供） | token 失效以会话联动吊销 + 短有效期兜底；资源端使用受控 `POST /iam/resource/tokens/verify` 端点 |
 
 ## 12. 文档地图
 
@@ -790,8 +814,8 @@ io:
 | [权限与授权投影](server/simple-iam-server-starter/docs/领域文档/权限与授权投影.md) | 清单 → 规则 → 投影三层 / 业务方上报指引 / 平台管理员特权 / DATA 消费 |
 | [管理台与站内信](server/simple-iam-server-starter/docs/领域文档/管理台与站内信.md) | 管理面操作模式 / 仪表盘 / SSE 推送 |
 | [配置与多实例部署](server/simple-iam-server-starter/docs/领域文档/配置与多实例部署.md) | **全量配置参考** / 配套组件接线 / 多实例 / bootstrap 恢复码 / 审计事件流 |
-| [schema.sql](server/simple-iam-server-starter/docs/schema.sql) | 全新环境数据库初始化（26 张表） |
-| [contract README](server/contract/README.md) | 五份 OpenAPI 契约入口 |
+| [schema.sql](server/simple-iam-server-starter/docs/schema.sql) | 全新环境数据库初始化（27 张表） |
+| [contract README](server/contract/README.md) | 六份 OpenAPI 契约入口 |
 | [simple-iam-core README](simple-iam-core/README.md) | 协议 SPI：外部身份源 / 人机验证 / 路由键 |
 | [IAM 与 AKSK 协作接入](../README.IAM-AKSK协作.md) | 双身份组合边界与操作序 |
 | [Simple AKSK 用户手册](../aksk/USER_MANUAL.md) | AKSK 3.x 手册 |
