@@ -85,10 +85,12 @@ DROP TABLE IF EXISTS iam_user;
 CREATE TABLE iam_user (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     username VARCHAR(64) NOT NULL COMMENT '用户名',
+    subject_id VARCHAR(64) DEFAULT NULL COMMENT '对外用户主体，SPI 生成，写后不改；软删行永久占位永不复用',
     password_hash VARCHAR(200) NOT NULL COMMENT '密码哈希',
     display_name VARCHAR(128) DEFAULT NULL COMMENT '显示名',
     email VARCHAR(128) DEFAULT NULL COMMENT '邮箱',
-    phone VARCHAR(32) DEFAULT NULL COMMENT '手机号',
+    phone VARCHAR(32) DEFAULT NULL COMMENT '手机号（E.164 规范化，+86/裸号归一）',
+    phone_bound_at TIMESTAMP NULL DEFAULT NULL COMMENT '手机号绑定时间（绑定/换绑验证通过时写入，登录不更新）；NULL=未绑定',
     department_id BIGINT DEFAULT NULL COMMENT '所属部门ID',
     identity_source VARCHAR(64) DEFAULT NULL COMMENT '外部身份源编码，本地账号为 NULL',
     external_id VARCHAR(128) DEFAULT NULL COMMENT '外部体系稳定 ID',
@@ -102,9 +104,10 @@ CREATE TABLE iam_user (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_username (username),
+    UNIQUE KEY uk_subject_id (subject_id),
     UNIQUE KEY uk_identity_src_ext (identity_source, external_id),
+    UNIQUE KEY uk_phone (phone),
     KEY idx_email (email),
-    KEY idx_phone (phone),
     KEY idx_department_id (department_id),
     KEY idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM用户表';
@@ -342,7 +345,7 @@ CREATE TABLE iam_consent (
 -- =====================================================
 
 DROP TABLE IF EXISTS iam_resource_verification_client;
-DROP TABLE IF EXISTS iam_aksk_authorization_change;
+DROP TABLE IF EXISTS iam_owner_authorization_change_log;
 DROP TABLE IF EXISTS iam_trusted_application_cleanup_operation;
 DROP TABLE IF EXISTS iam_application_authorization_state;
 DROP TABLE IF EXISTS iam_application_authorization;
@@ -360,6 +363,7 @@ CREATE TABLE iam_trusted_application (
     icon VARCHAR(64) DEFAULT NULL COMMENT '应用图标标识',
     status INT NOT NULL DEFAULT 1 COMMENT '应用全局安全状态：1=可用，0=停用',
     application_security_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '应用OAuth安全纪元，停用/恢复单调递增',
+    built_in TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否平台内置应用；引导配置清单内的编码无论本列取值一律视为内置',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
@@ -396,8 +400,8 @@ CREATE TABLE iam_application_authorization (
     data_grant_document_json LONGTEXT DEFAULT NULL COMMENT '数据授权文档JSON',
     authorization_version BIGINT NOT NULL COMMENT '单调递增的应用授权版本',
     owner_security_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人安全纪元：iam_user.permission_version + 1',
-    application_authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '可信应用 AKU 授权纪元',
-    projection_access_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人应用访问纪元，撤权或替换后旧AKU不可复活',
+    application_authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人对可信应用的授权纪元',
+    projection_access_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '所属人应用访问纪元，撤权或替换后旧凭证不可复活',
     manifest_version VARCHAR(128) NOT NULL COMMENT '权限清单版本',
     manifest_digest VARCHAR(256) NOT NULL COMMENT '权限清单摘要',
     status INT NOT NULL DEFAULT 1 COMMENT '状态：1=有效，0=撤销',
@@ -412,18 +416,18 @@ CREATE TABLE iam_application_authorization (
 
 CREATE TABLE iam_application_authorization_state (
     application_id BIGINT NOT NULL COMMENT '可信应用ID',
-    authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT 'AKU应用授权纪元，只增不减',
+    authorization_epoch BIGINT NOT NULL DEFAULT 1 COMMENT '应用授权纪元，只增不减',
     owner_inherited_access_epoch BIGINT NOT NULL DEFAULT 1 COMMENT 'OWNER_INHERITED目标应用访问纪元，只增不减',
-    owner_inheritance_enabled INT NOT NULL DEFAULT 0 COMMENT '是否允许创建和使用OWNER_INHERITED AKU',
+    owner_inheritance_enabled INT NOT NULL DEFAULT 0 COMMENT '是否允许所属人授权继承（凭证代办压到本人）',
     recompute_barrier INT NOT NULL DEFAULT 0 COMMENT '批量投影重算屏障，1时reader失败关闭',
     barrier_version BIGINT NOT NULL DEFAULT 0 COMMENT '屏障版本',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (application_id),
     KEY idx_inheritance_barrier (owner_inheritance_enabled, recompute_barrier, application_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM可信应用AKU授权状态表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM所属人授权状态表';
 
-CREATE TABLE iam_aksk_authorization_change (
+CREATE TABLE iam_owner_authorization_change_log (
     source_sequence BIGINT NOT NULL AUTO_INCREMENT COMMENT '全局授权变更顺序',
     event_id VARCHAR(36) NOT NULL COMMENT '事件幂等标识',
     change_type VARCHAR(32) NOT NULL COMMENT 'OWNER_STATE/TARGET_APPLICATION_STATE/OWNER_APPLICATION_PROJECTION',
@@ -433,9 +437,9 @@ CREATE TABLE iam_aksk_authorization_change (
     payload_json LONGTEXT NOT NULL COMMENT '最终授权状态快照，不保存密钥或Token',
     occurred_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交前记录时间',
     PRIMARY KEY (source_sequence),
-    UNIQUE KEY uk_iam_aksk_authorization_change_event (event_id),
-    KEY idx_iam_aksk_authorization_change_occurred (occurred_at, source_sequence)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM到AKSK授权控制面变更日志';
+    UNIQUE KEY uk_iam_owner_authorization_change_log_event (event_id),
+    KEY idx_iam_owner_authorization_change_log_occurred (occurred_at, source_sequence)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='IAM所属人授权变更日志';
 
 CREATE TABLE iam_application_permission_manifest (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -599,4 +603,4 @@ WHERE r.code = 'iam_admin'
   );
 
 SET FOREIGN_KEY_CHECKS = 1;
-SELECT 'Simple IAM Server 1.2.0 schema initialization completed!' AS status;
+SELECT 'Simple IAM Server 1.3.0 schema initialization completed!' AS status;

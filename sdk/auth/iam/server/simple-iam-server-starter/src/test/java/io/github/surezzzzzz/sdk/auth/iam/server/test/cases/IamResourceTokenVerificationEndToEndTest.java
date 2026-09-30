@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.iam.core.spi.SubjectIdGenerator;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutApplicationAuthorizationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
@@ -89,6 +90,9 @@ class IamResourceTokenVerificationEndToEndTest {
     private RegisteredClientRepository registeredClientRepository;
 
     @Autowired
+    private SubjectIdGenerator subjectIdGenerator;
+
+    @Autowired
     private OAuth2AuthorizationService authorizationService;
 
     @Autowired
@@ -149,7 +153,7 @@ class IamResourceTokenVerificationEndToEndTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size(), "受控响应只能包含两个顶级字段");
-        assertEquals(String.valueOf(user.getId()), response.getBody().get("sub"));
+        assertEquals(user.getSubjectId(), response.getBody().get("sub"));
         assertTrue(response.getBody().containsKey("iam_authorization"));
     }
 
@@ -296,6 +300,7 @@ class IamResourceTokenVerificationEndToEndTest {
         Instant now = Instant.now();
         IamUserEntity entity = new IamUserEntity();
         entity.setUsername(username);
+        entity.setSubjectId(subjectIdGenerator.generate());
         entity.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
         entity.setDisplayName(username);
         entity.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);

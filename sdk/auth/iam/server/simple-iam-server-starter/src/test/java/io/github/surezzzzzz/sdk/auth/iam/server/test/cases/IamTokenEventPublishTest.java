@@ -110,6 +110,7 @@ class IamTokenEventPublishTest {
     private TokenEventCapture eventCapture;
 
     private Long userId;
+    private String subjectId;
     private Long applicationId;
     private String verificationClientSecret;
 
@@ -121,6 +122,7 @@ class IamTokenEventPublishTest {
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
         userId = userService.createUser(userRequest).getId();
+        subjectId = userRepository.findById(userId).orElseThrow().getSubjectId();
 
         CreateTrustedApplicationClientRequest client = new CreateTrustedApplicationClientRequest();
         client.setClientId(oauthClientId);
@@ -185,7 +187,7 @@ class IamTokenEventPublishTest {
                 item -> username.equals(item.getUsername()));
         assertNotNull(event);
         assertEquals(oauthClientId, event.getClientId());
-        assertEquals(String.valueOf(userId), event.getUserId());
+        assertEquals(subjectId, event.getUserId());
         assertEquals(TokenEventType.ISSUED, event.getEventType());
         assertNotNull(event.getExpiresAt());
         assertTrue(event.getScopes().contains("openid"));
@@ -207,7 +209,7 @@ class IamTokenEventPublishTest {
         assertNotNull(successEvent);
         assertEquals(verificationClientId, successEvent.getVerificationClientId());
         assertEquals(username, successEvent.getUsername());
-        assertEquals(String.valueOf(userId), successEvent.getUserId());
+        assertEquals(subjectId, successEvent.getUserId());
 
         HttpStatus failureStatus = verifyToken(headers, "no-such-token-" + suffix);
         assertEquals(HttpStatus.UNAUTHORIZED, failureStatus);
@@ -267,7 +269,7 @@ class IamTokenEventPublishTest {
         assertEquals(TokenEventType.REUSE_DETECTED, event.getEventType());
         assertEquals(TokenEventCause.REFRESH_TOKEN_REUSE, event.getCause());
         assertEquals(username, event.getUsername());
-        assertEquals(String.valueOf(userId), event.getUserId());
+        assertEquals(subjectId, event.getUserId());
         assertNull(event.getTokenValue(), "复用检测事件不得携带攻击者输入的 token 原文");
         log.info("RefreshTokenReuseDetectedEvent 断言完成：familyId={}", familyId);
     }

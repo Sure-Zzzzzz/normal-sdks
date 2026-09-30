@@ -7,7 +7,7 @@ import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
 /**
- * AKSK 从 IAM 拉取授权变更日志的请求。
+ * 协作消费方拉取授权变更日志的请求。
  */
 @Data
 public class OwnerAuthorizationChangePullRequest {

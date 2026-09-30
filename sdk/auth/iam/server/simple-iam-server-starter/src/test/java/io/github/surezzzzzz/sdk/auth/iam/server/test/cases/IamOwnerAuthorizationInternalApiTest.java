@@ -50,9 +50,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Execution(ExecutionMode.SAME_THREAD)
 class IamOwnerAuthorizationInternalApiTest {
 
-    private static final String API = "/iam/internal/aksk/owner-authorizations/candidate-applications";
-    private static final String RESOLVE_API = "/iam/internal/aksk/owner-authorizations/resolve";
-    private static final String CHANGE_PULL_API = "/iam/internal/aksk/owner-authorizations/changes/pull";
+    private static final String API = "/iam/internal/owner-authorization/candidate-applications";
+    private static final String RESOLVE_API = "/iam/internal/owner-authorization/resolve";
+    private static final String CHANGE_PULL_API = "/iam/internal/owner-authorization/changes/pull";
     private static final String READER_SECRET = "Reader-Test-Only@2026";
     private static final String ROTATED_READER_SECRET = "Reader-Rotated@2026";
 
@@ -103,7 +103,7 @@ class IamOwnerAuthorizationInternalApiTest {
     void missingBearerMustBeUnauthorized() throws Exception {
         log.info("验证内部 reader API 缺失 Bearer 时拒绝访问");
         mockMvc.perform(post(API).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1\"}"))
+                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1234567890123456\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -115,7 +115,7 @@ class IamOwnerAuthorizationInternalApiTest {
 
         mockMvc.perform(post(API).contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer " + token)
-                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1\"}"))
+                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1234567890123456\"}"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "no-store"));
     }
@@ -163,7 +163,7 @@ class IamOwnerAuthorizationInternalApiTest {
 
         mockMvc.perform(post(API).contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer " + token)
-                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1\"}"))
+                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1234567890123456\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -187,7 +187,7 @@ class IamOwnerAuthorizationInternalApiTest {
                 .andExpect(header().string("Cache-Control", "no-store"));
         mockMvc.perform(post(API).contentType(MediaType.APPLICATION_JSON)
                         .header("Authorization", "Bearer " + streamToken)
-                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1\"}"))
+                        .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"1234567890123456\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -197,8 +197,9 @@ class IamOwnerAuthorizationInternalApiTest {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String username = "owner-reader-" + suffix;
         String applicationCode = "owner-reader-app-" + suffix;
-        jdbcTemplate.update("INSERT INTO iam_user (username, password_hash, status, permission_version) "
-                + "VALUES (?, ?, 1, 0)", username, "Reader-Test-Only@2026");
+        jdbcTemplate.update("INSERT INTO iam_user (username, password_hash, status, permission_version, subject_id) "
+                        + "VALUES (?, ?, 1, 0, ?)", username, "Reader-Test-Only@2026",
+                "9" + suffix + "0000000");
         Long userId = jdbcTemplate.queryForObject("SELECT id FROM iam_user WHERE username = ?", Long.class, username);
         jdbcTemplate.update("INSERT INTO iam_trusted_application (application_code, application_name, status) "
                 + "VALUES (?, ?, 1)", applicationCode, "owner reader acceptance");
@@ -218,7 +219,7 @@ class IamOwnerAuthorizationInternalApiTest {
 
             MvcResult result = mockMvc.perform(post(RESOLVE_API).contentType(MediaType.APPLICATION_JSON)
                             .header("Authorization", "Bearer " + token)
-                            .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"" + userId
+                            .content("{\"ownerSourceId\":\"local-iam\",\"ownerSubjectId\":\"" + subjectIdOf(userId)
                                     + "\",\"targetApplicationId\":" + applicationId + "}"))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Cache-Control", "no-store"))
@@ -237,6 +238,13 @@ class IamOwnerAuthorizationInternalApiTest {
             jdbcTemplate.update("DELETE FROM iam_trusted_application WHERE id = ?", applicationId);
             jdbcTemplate.update("DELETE FROM iam_user WHERE id = ?", userId);
         }
+    }
+
+    /**
+     * 内部 userId -> 对外主体（resolve 真值用例按 iam_user.subject_id 请求）。
+     */
+    private String subjectIdOf(Long userId) {
+        return jdbcTemplate.queryForObject("SELECT subject_id FROM iam_user WHERE id = ?", String.class, userId);
     }
 
     private String accessToken(String clientId, String clientSecret) throws Exception {

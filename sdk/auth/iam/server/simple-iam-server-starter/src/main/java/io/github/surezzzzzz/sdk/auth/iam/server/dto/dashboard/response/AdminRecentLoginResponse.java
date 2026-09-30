@@ -15,7 +15,7 @@ import java.time.Instant;
 @AllArgsConstructor
 public class AdminRecentLoginResponse {
 
-    private Long userId;
+    private String subjectId;
 
     private String username;
 
@@ -30,7 +30,7 @@ public class AdminRecentLoginResponse {
      */
     public static AdminRecentLoginResponse from(IamUserEntity user, String departmentName) {
         return new AdminRecentLoginResponse(
-                user.getId(),
+                user.getSubjectId(),
                 user.getUsername(),
                 user.getDisplayName(),
                 departmentName,

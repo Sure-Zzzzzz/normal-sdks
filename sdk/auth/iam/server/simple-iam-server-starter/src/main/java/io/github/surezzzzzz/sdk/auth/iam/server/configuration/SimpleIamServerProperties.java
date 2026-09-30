@@ -101,12 +101,17 @@ public class SimpleIamServerProperties {
     private CleanupConfig cleanup = new CleanupConfig();
 
     /**
+     * 手机号挑战配置（验证码/频控/密钥）
+     */
+    private PhoneChallengeConfig phoneChallenge = new PhoneChallengeConfig();
+
+    /**
      * IAM 安装期固定的人员来源命名空间，AKU binding 不得使用可变 username。
      */
     private String ownerSourceId = "local-iam";
 
     /**
-     * IAM 自管的 AKSK 所属人授权 reader SERVICE 配置。
+     * IAM 自管的协作 reader SERVICE(凭证服务所属人授权消费方)配置。
      */
     private InternalReaderConfig internalReader = new InternalReaderConfig();
 
@@ -114,7 +119,7 @@ public class SimpleIamServerProperties {
     public static class InternalReaderConfig {
 
         /**
-         * 是否启用 AKSK 所属人授权 reader。关闭时内部 API 仍由独立链拒绝，
+         * 是否启用协作所属人授权 reader。关闭时内部 API 仍由独立链拒绝，
          * 已存在的 reader client 不能借由关闭配置继续读取。
          */
         private boolean enabled = false;
@@ -349,7 +354,7 @@ public class SimpleIamServerProperties {
 
         /**
          * 内置可信应用列表（平台自身子应用，随引导注册进门户；已存在的应用编码跳过不覆盖）。
-         * 列表整体可被配置覆盖/追加（如 AKSK 管理台）；单项 entry 置空则跳过该项。
+         * 列表整体可被配置覆盖/追加（如协作管理台）；单项 entry 置空则跳过该项。
          */
         private List<BuiltInApplicationConfig> builtInApplications = new ArrayList<>(
                 Collections.singletonList(defaultIamAdminApplication()));
@@ -374,7 +379,8 @@ public class SimpleIamServerProperties {
                     menu("roles", "角色管理", "/roles"),
                     menu("trusted-applications", "可信应用", "/trusted-applications"),
                     menu("messages", "站内信", "/messages"))));
-            BuiltInApplicationMenuConfig dashboard = page("dashboard", "仪表盘", "dashboard", "/", null);
+            BuiltInApplicationMenuConfig dashboard = page("dashboard", "仪表盘", "dashboard", "/",
+                    SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
             // 仪表盘承载全局概览与下钻入口；跳到其他标准 PAGE 时由 Portal 自动恢复导航壳。
             dashboard.setPresentationMode(PortalPresentationMode.IMMERSIVE);
             application.setMenuTree(new ArrayList<>(Arrays.asList(
@@ -545,4 +551,64 @@ public class SimpleIamServerProperties {
          */
         private String customJsUrl;
     }
+
+    @Data
+    public static class PhoneChallengeConfig {
+
+        /**
+         * 挑战 HMAC 密钥（敏感：只进 application-local.yml；≥32 字节，装配投递实现后启动校验）
+         */
+        private String hmacKey;
+
+        /**
+         * 验证码长度（默认 6 位）
+         */
+        private int codeLength = SimpleIamServerConstant.DEFAULT_PHONE_CODE_LENGTH;
+
+        /**
+         * 挑战有效期（秒）
+         */
+        private int ttlSeconds = SimpleIamServerConstant.DEFAULT_PHONE_CHALLENGE_TTL_SECONDS;
+
+        /**
+         * 单挑战验证次数上限
+         */
+        private int maxAttempts = SimpleIamServerConstant.DEFAULT_PHONE_CHALLENGE_MAX_ATTEMPTS;
+
+        /**
+         * 同号发送冷却（秒）
+         */
+        private int sendCooldownSeconds = SimpleIamServerConstant.DEFAULT_PHONE_SEND_COOLDOWN_SECONDS;
+
+        /**
+         * 号维度频控窗口（秒）
+         */
+        private int rateLimitPhoneWindowSeconds = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_PHONE_WINDOW_SECONDS;
+
+        /**
+         * 号维度频控阈值
+         */
+        private int rateLimitPhoneLimit = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_PHONE_LIMIT;
+
+        /**
+         * IP 维度频控窗口（秒）
+         */
+        private int rateLimitIpWindowSeconds = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_IP_WINDOW_SECONDS;
+
+        /**
+         * IP 维度频控阈值
+         */
+        private int rateLimitIpLimit = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_IP_LIMIT;
+
+        /**
+         * 全局维度频控窗口（秒）
+         */
+        private int rateLimitGlobalWindowSeconds = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_GLOBAL_WINDOW_SECONDS;
+
+        /**
+         * 全局维度频控阈值
+         */
+        private int rateLimitGlobalLimit = SimpleIamServerConstant.DEFAULT_PHONE_RATE_LIMIT_GLOBAL_LIMIT;
+    }
+
 }

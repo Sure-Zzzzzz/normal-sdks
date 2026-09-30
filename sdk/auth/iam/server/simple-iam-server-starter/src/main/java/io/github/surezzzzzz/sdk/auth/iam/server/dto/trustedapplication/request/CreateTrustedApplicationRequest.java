@@ -37,6 +37,11 @@ public class CreateTrustedApplicationRequest {
     /**
      * Portal 集成配置，可选
      */
+    /**
+     * 是否标记为平台内置应用；内置应用禁删除/禁停用，客户端强制免授权确认。
+     */
+    private Boolean builtIn;
+
     private PortalIntegrationRequest portal;
 
     /**

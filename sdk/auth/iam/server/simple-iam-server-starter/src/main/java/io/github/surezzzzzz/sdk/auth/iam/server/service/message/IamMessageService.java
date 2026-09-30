@@ -193,10 +193,10 @@ public class IamMessageService {
             IamUserEntity user = usersById.get(userId);
             java.sql.Timestamp readAt = readAts.get(i);
             content.add(MessageBatchRecipientResponse.builder()
-                    .userId(userId)
-                    .username(user != null ? user.getUsername() : "#" + userId)
+                    .subjectId(user != null ? user.getSubjectId() : null)
+                    .username(user != null ? user.getUsername() : null)
                     .displayName(user != null && user.getDisplayName() != null
-                            ? user.getDisplayName() : "已注销用户 #" + userId)
+                            ? user.getDisplayName() : "已注销用户")
                     .readAt(readAt != null ? readAt.toInstant() : null)
                     .build());
         }
@@ -320,10 +320,7 @@ public class IamMessageService {
 
     private Set<Long> resolveRecipientUserIds(CreateMessageRequest request) {
         Set<Long> recipientUserIds = new LinkedHashSet<Long>();
-        Set<Long> explicitUserIds = new LinkedHashSet<Long>(normalizeIds(request.getRecipientUserIds()));
-        if (request.getRecipientUserId() != null) {
-            explicitUserIds.add(request.getRecipientUserId());
-        }
+        Set<Long> explicitUserIds = resolveExplicitUserIds(request);
         addActiveExplicitRecipients(recipientUserIds, explicitUserIds);
 
         List<Long> departmentIds = departmentService.resolveActiveDepartmentIds(
@@ -337,6 +334,31 @@ public class IamMessageService {
 
         addActiveExistingRecipients(recipientUserIds, userGroupService.resolveActiveMemberUserIds(request.getUserGroupIds()));
         return recipientUserIds;
+    }
+
+    /**
+     * 显式收件人定位统一口径：入参为公开主体 ID，落库前解析为数字 userId（未知主体快速失败）
+     */
+    private Set<Long> resolveExplicitUserIds(CreateMessageRequest request) {
+        Set<String> subjectIds = new LinkedHashSet<String>();
+        if (request.getRecipientSubjectIds() != null) {
+            for (String subjectId : request.getRecipientSubjectIds()) {
+                if (subjectId != null && !subjectId.trim().isEmpty()) {
+                    subjectIds.add(subjectId.trim());
+                }
+            }
+        }
+        if (request.getRecipientSubjectId() != null && !request.getRecipientSubjectId().trim().isEmpty()) {
+            subjectIds.add(request.getRecipientSubjectId().trim());
+        }
+        Set<Long> userIds = new LinkedHashSet<Long>();
+        for (String subjectId : subjectIds) {
+            userIds.add(userRepository.findBySubjectId(subjectId)
+                    .orElseThrow(() -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
+                            String.format(ServerErrorMessage.USER_NOT_FOUND, subjectId)))
+                    .getId());
+        }
+        return userIds;
     }
 
     private void addActiveExplicitRecipients(Set<Long> recipientUserIds, Set<Long> explicitUserIds) {
@@ -392,10 +414,7 @@ public class IamMessageService {
     }
 
     private String buildTargetSummary(CreateMessageRequest request) {
-        Set<Long> explicitUserIds = new LinkedHashSet<Long>(normalizeIds(request.getRecipientUserIds()));
-        if (request.getRecipientUserId() != null) {
-            explicitUserIds.add(request.getRecipientUserId());
-        }
+        Set<Long> explicitUserIds = resolveExplicitUserIds(request);
         return String.format(SimpleIamServerConstant.TEMPLATE_MESSAGE_TARGET_SUMMARY,
                 explicitUserIds.size(),
                 normalizeIds(request.getDepartmentIds()).size(),

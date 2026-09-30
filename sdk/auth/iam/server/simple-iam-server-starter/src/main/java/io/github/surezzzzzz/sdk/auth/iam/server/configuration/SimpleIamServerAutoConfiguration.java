@@ -1,9 +1,12 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
+import io.github.surezzzzzz.sdk.auth.iam.core.spi.SubjectIdGenerator;
 import io.github.surezzzzzz.sdk.auth.iam.server.SimpleIamServerPackage;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
+import io.github.surezzzzzz.sdk.auth.iam.server.support.DefaultSubjectIdGenerator;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.boot.autoconfigure.session.SessionAutoConfiguration;
@@ -38,4 +41,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         )
 )
 public class SimpleIamServerAutoConfiguration {
+
+    /**
+     * 默认主体 ID 生成器：16 位全随机数字；业务方注册同接口 bean 即覆盖。
+     */
+    @Bean
+    @ConditionalOnMissingBean(SubjectIdGenerator.class)
+    public SubjectIdGenerator defaultSubjectIdGenerator() {
+        return new DefaultSubjectIdGenerator();
+    }
 }

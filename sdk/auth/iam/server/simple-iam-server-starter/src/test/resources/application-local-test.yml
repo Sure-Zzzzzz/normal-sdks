@@ -1,0 +1,17 @@
+# 开发测试库隔离（受管）：模块测试只写 *_devtest 库与独立 Redis database，
+# 联调库（sure_auth_iam / Redis db2）只归 8180 联调服务——测试与联调互不踩踏。
+# 密码仍由 gitignored application-local.yml 提供（profile 顺序 local-test,local：url 用本文件、密码用 local）。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/sure_auth_iam_dev?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+        redis:
+          route:
+            sources:
+              default:
+                database: 14

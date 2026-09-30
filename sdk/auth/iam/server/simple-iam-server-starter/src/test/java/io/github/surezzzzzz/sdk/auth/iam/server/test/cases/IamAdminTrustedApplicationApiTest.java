@@ -358,6 +358,78 @@ class IamAdminTrustedApplicationApiTest {
     }
 
     @Test
+    @DisplayName("管理面可把普通应用调整为内置并受删除保护，摘除后恢复可删")
+    void testUpdateApplicationBuiltInFlagFromAdminApi() throws Exception {
+        Long applicationId = createApplication("https://example.com/callback");
+
+        // 置为内置：详情回显 true，删除被 409 拒绝
+        mockMvc.perform(put("/iam/admin/trusted-applications/" + applicationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"builtIn\":true}")
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.builtIn").value(true));
+        mockMvc.perform(delete("/iam/admin/trusted-applications/" + applicationId)
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isConflict());
+
+        // 非配置兜底编码可摘除内置标记，恢复可删
+        mockMvc.perform(put("/iam/admin/trusted-applications/" + applicationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"builtIn\":false}")
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.builtIn").value(false));
+        mockMvc.perform(delete("/iam/admin/trusted-applications/" + applicationId)
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isAccepted());
+        log.info("内置标记页面调整契约验证通过：applicationId={}", applicationId);
+    }
+
+    @Test
+    @DisplayName("内置应用的客户端强制免授权确认，且配置兜底编码不可摘除内置标记")
+    void testBuiltInApplicationClientConsentForcedOff() throws Exception {
+        Long applicationId = createApplication("https://example.com/callback");
+        mockMvc.perform(put("/iam/admin/trusted-applications/" + applicationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"builtIn\":true}")
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isOk());
+
+        // 内置应用下新建客户端：请求要求授权确认也会被强制关闭
+        mockMvc.perform(post("/iam/admin/trusted-applications/" + applicationId + "/clients")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createClientJson(clientId + "-forced", "https://example.com/callback2")
+                                .replace("\"authenticationMethods\":[\"client_secret_basic\"]}",
+                                        "\"authenticationMethods\":[\"client_secret_basic\"],\"requireConsent\":true}"))
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isCreated());
+        mockMvc.perform(get("/iam/admin/trusted-applications/" + applicationId
+                        + "/clients/" + clientId + "-forced").cookie(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requireConsent").value(false));
+
+        // 引导配置兜底编码（iam）即使列被置 0 仍判定内置，摘除请求被拒
+        java.util.List<Long> iamIds = jdbcTemplate.queryForList(
+                "SELECT id FROM iam_trusted_application WHERE application_code = ?",
+                Long.class, SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM);
+        org.junit.jupiter.api.Assumptions.assumeTrue(!iamIds.isEmpty(), "引导未注册内置应用，跳过");
+        mockMvc.perform(put("/iam/admin/trusted-applications/" + iamIds.get(0))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"builtIn\":false}")
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isConflict());
+        log.info("内置应用客户端免确认与配置兜底保护验证通过：applicationId={}", applicationId);
+
+        // 摘回普通标记，交还 @AfterEach 统一清理
+        mockMvc.perform(put("/iam/admin/trusted-applications/" + applicationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"builtIn\":false}")
+                        .cookie(adminSession).with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     @DisplayName("可信应用管理 API 畸形 JSON 应返回脱敏 400")
     void testMalformedRequestReturnsBadRequest() throws Exception {
         mockMvc.perform(post("/iam/admin/trusted-applications")
@@ -410,9 +482,9 @@ class IamAdminTrustedApplicationApiTest {
      * Portal 列表对所有人（含 admin）一律按 admitted+active 授权过滤，测试须先给 admin 准入。
      */
     private void admitApplicationToAdmin(Long applicationId) throws Exception {
-        Long adminUserId = userRepository.findByUsername(adminUsername)
-                .orElseThrow(() -> new AssertionError("管理员用户必须存在：" + adminUsername)).getId();
-        mockMvc.perform(put("/iam/admin/users/" + adminUserId + "/application-authorizations/" + applicationId)
+        String adminSubjectId = userRepository.findByUsername(adminUsername)
+                .orElseThrow(() -> new AssertionError("管理员用户必须存在：" + adminUsername)).getSubjectId();
+        mockMvc.perform(put("/iam/admin/users/" + adminSubjectId + "/application-authorizations/" + applicationId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"admitted\":true,\"roles\":[],\"pagePermissions\":[],"
                                 + "\"apiPermissions\":[]}")

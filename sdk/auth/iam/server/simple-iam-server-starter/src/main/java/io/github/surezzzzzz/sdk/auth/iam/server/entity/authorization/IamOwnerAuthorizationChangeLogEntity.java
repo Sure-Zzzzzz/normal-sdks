@@ -9,14 +9,14 @@ import java.time.Instant;
  * IAM 授权控制面变更日志。
  *
  * <p>主键同时是全局单调 sourceSequence。该表只保存提交后的最终状态，
- * 不承担向 AKSK 推送的职责。</p>
+ * 不承担向协作消费方推送的职责。</p>
  *
  * @author surezzzzzz
  */
 @Data
 @Entity
-@Table(name = "iam_aksk_authorization_change")
-public class IamAkskAuthorizationChangeEntity {
+@Table(name = "iam_owner_authorization_change_log")
+public class IamOwnerAuthorizationChangeLogEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +28,7 @@ public class IamAkskAuthorizationChangeEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "change_type", length = 32, nullable = false)
-    private IamAkskAuthorizationChangeType changeType;
+    private IamOwnerAuthorizationChangeLogType changeType;
 
     @Column(name = "aggregate_key", length = 320, nullable = false)
     private String aggregateKey;

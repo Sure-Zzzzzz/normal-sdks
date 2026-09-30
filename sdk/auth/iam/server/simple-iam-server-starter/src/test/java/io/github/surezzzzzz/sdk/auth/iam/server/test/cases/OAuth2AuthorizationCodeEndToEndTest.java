@@ -200,7 +200,7 @@ class OAuth2AuthorizationCodeEndToEndTest {
                 .getJWTClaimsSet().getClaims();
         Map<String, Object> idClaims = SignedJWT.parse((String) tokenResponse.getBody().get("id_token"))
                 .getJWTClaimsSet().getClaims();
-        assertEquals(String.valueOf(user.getId()), accessClaims.get("sub"));
+        assertEquals(user.getSubjectId(), accessClaims.get("sub"));
         assertEquals(accessClaims.get("sub"), idClaims.get("sub"));
         assertNotNull(idClaims.get("sid"));
         assertNotNull(idClaims.get("auth_time"));
@@ -218,7 +218,7 @@ class OAuth2AuthorizationCodeEndToEndTest {
         ResponseEntity<Map> userInfoResponse = exchange(HttpMethod.GET, "/userinfo",
                 new HttpEntity<>(userInfoHeaders), null, Map.class);
         assertEquals(HttpStatus.OK, userInfoResponse.getStatusCode());
-        assertEquals(String.valueOf(user.getId()), userInfoResponse.getBody().get("sub"));
+        assertEquals(user.getSubjectId(), userInfoResponse.getBody().get("sub"));
         assertEquals(username, userInfoResponse.getBody().get("preferred_username"));
     }
 

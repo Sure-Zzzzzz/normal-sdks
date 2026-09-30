@@ -192,7 +192,7 @@ class JweAuthorizationCodeUserInfoEndToEndTest {
         ResponseEntity<Map> userInfoResponse = exchange(HttpMethod.GET, "/userinfo",
                 new HttpEntity<>(userInfoHeaders), Map.class);
         assertEquals(HttpStatus.OK, userInfoResponse.getStatusCode());
-        assertEquals(String.valueOf(user.getId()), userInfoResponse.getBody().get("sub"));
+        assertEquals(user.getSubjectId(), userInfoResponse.getBody().get("sub"));
         assertEquals(username, userInfoResponse.getBody().get("preferred_username"));
         log.info("JWE UserInfo 访问成功：userId={}", user.getId());
     }

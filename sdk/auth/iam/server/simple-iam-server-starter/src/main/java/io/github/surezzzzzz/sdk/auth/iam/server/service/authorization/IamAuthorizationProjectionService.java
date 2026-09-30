@@ -61,7 +61,7 @@ public class IamAuthorizationProjectionService {
     private final IamApplicationPermissionManifestService manifestService;
     private final IamEffectiveRoleResolver effectiveRoleResolver;
     private final IamApplicationAuthorizationStateService authorizationStateService;
-    private final IamAkskAuthorizationChangeService changeService;
+    private final IamOwnerAuthorizationChangeLogService changeService;
 
     /**
      * 场景1：管理员为用户授予某应用的准入权限。
@@ -147,7 +147,7 @@ public class IamAuthorizationProjectionService {
             authorization.setManifestDigest(manifest.getManifestDigest());
             authorization.setUpdatedAt(Instant.now());
             authorizationRepository.save(authorization);
-            changeService.recordProjection(authorization, IamAkskAuthorizationChangeService.REASON_APPLICATION_ADMISSION_REVOKED);
+            changeService.recordProjection(authorization, IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_ADMISSION_REVOKED);
             syncedOnly++;
         }
         log.info("授权投影清单同步完成：applicationId={}, 重算用户数={}, 仅同步版本数={}",
@@ -171,7 +171,7 @@ public class IamAuthorizationProjectionService {
             authorization.setRevokedAt(Instant.now());
             authorization.setUpdatedAt(Instant.now());
             authorizationRepository.save(authorization);
-            changeService.recordProjection(authorization, IamAkskAuthorizationChangeService.REASON_OWNER_SECURITY_EPOCH_SYNCHRONIZED);
+            changeService.recordProjection(authorization, IamOwnerAuthorizationChangeLogService.REASON_OWNER_SECURITY_EPOCH_SYNCHRONIZED);
         }
     }
 
@@ -313,8 +313,8 @@ public class IamAuthorizationProjectionService {
         authorization.setUpdatedAt(Instant.now());
 
         authorizationRepository.save(authorization);
-        changeService.recordProjection(authorization, created ? IamAkskAuthorizationChangeService.REASON_APPLICATION_PROJECTION_CREATED
-                : IamAkskAuthorizationChangeService.REASON_APPLICATION_PROJECTION_RECOMPUTED);
+        changeService.recordProjection(authorization, created ? IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_PROJECTION_CREATED
+                : IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_PROJECTION_RECOMPUTED);
 
         log.info("授权投影{}成功：userId={}, applicationId={}, roles={}, pages={}, apis={}, version={}",
                 created ? "创建" : "更新", userId, applicationId, roleCodes.size(),

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.message.IamMessageRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
@@ -29,6 +30,8 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -97,20 +100,20 @@ class IamAdminMessageApiTest {
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
     }
 
-    private Long createUser(String label) {
+    private String createUser(String label) {
         CreateUserRequest request = new CreateUserRequest();
         request.setUsername(label + "-" + suffix);
         request.setPassword("User@1234");
         request.setDisplayName(label + "-展示名");
-        Long userId = userService.createUser(request).getId();
-        userIds.add(userId);
-        return userId;
+        IamUserEntity created = userService.createUser(request);
+        userIds.add(created.getId());
+        return created.getSubjectId();
     }
 
-    private String sendMessage(Long recipientUserId, String title) throws Exception {
+    private String sendMessage(String recipientSubjectId, String title) throws Exception {
         MvcResult result = mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipientUserId + "],\"title\":\"" + title
+                        .content("{\"recipientSubjectIds\":[\"" + recipientSubjectId + "\"],\"title\":\"" + title
                                 + "\",\"content\":\"批次测试内容\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated())
@@ -121,8 +124,8 @@ class IamAdminMessageApiTest {
     @Test
     @DisplayName("批次分页应聚合发送记录并返回结构化目标数")
     void testMessageBatchPageContract() throws Exception {
-        Long firstRecipient = createUser("batch-first");
-        Long secondRecipient = createUser("batch-second");
+        String firstRecipient = createUser("batch-first");
+        String secondRecipient = createUser("batch-second");
         String firstBatchId = sendMessage(firstRecipient, "批次列表第一条");
         String secondBatchId = sendMessage(secondRecipient, "批次列表第二条");
 
@@ -148,7 +151,7 @@ class IamAdminMessageApiTest {
     @Test
     @DisplayName("批次详情应返回内容与目标结构化字段")
     void testMessageBatchDetailContract() throws Exception {
-        Long recipient = createUser("batch-detail");
+        String recipient = createUser("batch-detail");
         String batchId = sendMessage(recipient, "批次详情标题");
 
         mockMvc.perform(get("/iam/admin/messages/" + batchId).cookie(adminSession))
@@ -169,34 +172,46 @@ class IamAdminMessageApiTest {
     @Test
     @DisplayName("批次收件人应分页返回并携带已读状态")
     void testMessageBatchRecipientsPageContract() throws Exception {
-        Long firstRecipient = createUser("batch-recipient-a");
-        Long secondRecipient = createUser("batch-recipient-b");
+        String firstRecipient = createUser("batch-recipient-a");
+        String secondRecipient = createUser("batch-recipient-b");
         MvcResult result = mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + firstRecipient + "," + secondRecipient
+                        .content("{\"recipientSubjectIds\":[\"" + firstRecipient + "\",\"" + secondRecipient + "\""
                                 + "],\"title\":\"收件人分页标题\",\"content\":\"批次测试内容\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated())
                 .andReturn();
         String batchId = OBJECT_MAPPER.readTree(result.getResponse().getContentAsString()).get("sendBatchId").asText();
         jdbcTemplate.update("UPDATE iam_message SET read_at = NOW() WHERE send_batch_id = ? AND recipient_user_id = ?",
-                batchId, firstRecipient);
+                batchId, userRepository.findBySubjectId(firstRecipient).orElseThrow().getId());
 
-        mockMvc.perform(get("/iam/admin/messages/" + batchId + "/recipients")
+        MvcResult page1 = mockMvc.perform(get("/iam/admin/messages/" + batchId + "/recipients")
                         .param("page", "1").param("size", "1").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].userId").value(firstRecipient))
-                .andExpect(jsonPath("$.content[0].readAt").isNotEmpty());
+                .andReturn();
+        com.fasterxml.jackson.databind.JsonNode node1 = OBJECT_MAPPER.readTree(page1.getResponse().getContentAsString());
+        String sid1 = node1.at("/content/0/subjectId").asText();
+        boolean read1 = !node1.at("/content/0/readAt").isNull() && node1.at("/content/0/readAt").asText("").isEmpty() == false;
 
-        mockMvc.perform(get("/iam/admin/messages/" + batchId + "/recipients")
+        MvcResult page2 = mockMvc.perform(get("/iam/admin/messages/" + batchId + "/recipients")
                         .param("page", "2").param("size", "1").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page").value(2))
                 .andExpect(jsonPath("$.last").value(true))
-                .andExpect(jsonPath("$.content[0].userId").value(secondRecipient))
-                .andExpect(jsonPath("$.content[0].readAt").isEmpty());
+                .andReturn();
+        com.fasterxml.jackson.databind.JsonNode node2 = OBJECT_MAPPER.readTree(page2.getResponse().getContentAsString());
+        String sid2 = node2.at("/content/0/subjectId").asText();
+        boolean read2 = !node2.at("/content/0/readAt").isNull() && node2.at("/content/0/readAt").asText("").isEmpty() == false;
+
+        // 收件人集合与已读状态按主体断言，不假设分页顺序
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList(firstRecipient, secondRecipient)),
+                new java.util.HashSet<>(java.util.Arrays.asList(sid1, sid2)));
+        assertTrue((firstRecipient.equals(sid1) && read1) || (firstRecipient.equals(sid2) && read2),
+                "已读收件人必须携带 readAt");
+        assertTrue((secondRecipient.equals(sid1) && !read1) || (secondRecipient.equals(sid2) && !read2),
+                "未读收件人 readAt 必须为空");
         log.info("批次收件人分页契约验证成功：batchId={}", batchId);
     }
 

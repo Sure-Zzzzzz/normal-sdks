@@ -1,7 +1,9 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service.user;
 
 import io.github.surezzzzzz.sdk.auth.iam.core.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalIdentity;
+import io.github.surezzzzzz.sdk.auth.iam.core.spi.SubjectIdGenerator;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -37,6 +40,7 @@ public class IamExternalIdentityResolutionService {
     private final PasswordEncoder passwordEncoder;
     private final SimpleIamServerProperties properties;
     private final IamLoginFailurePolicyService failurePolicySupport;
+    private final SubjectIdGenerator subjectIdGenerator;
 
     /**
      * 归一外部身份为可登录的本地用户（含禁用/锁定检查）。
@@ -77,6 +81,7 @@ public class IamExternalIdentityResolutionService {
         }
 
         IamUserEntity user = new IamUserEntity();
+        user.setSubjectId(assignSubjectId());
         user.setUsername(suggestedUsername);
         user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
         user.setDisplayName(defaultString(identity.getDisplayName(), suggestedUsername));
@@ -91,6 +96,30 @@ public class IamExternalIdentityResolutionService {
         log.info("外部身份首次登录自动开号：provider={}, username={}, userId={}",
                 identity.getProviderCode(), suggestedUsername, saved.getId());
         return saved;
+    }
+
+    /**
+     * 分配对外主体 ID：与本地建号/存量回填同一契约（生成器输出校验+唯一冲突重试），
+     * JIT 开号即有号，不再依赖下次启动的存量回填补号。
+     */
+    private String assignSubjectId() {
+        for (int attempt = 0; attempt <= SimpleIamServerConstant.SUBJECT_ID_RETRY_LIMIT; attempt++) {
+            String candidate = subjectIdGenerator.generate();
+            if (!StringUtils.hasText(candidate) || candidate.length() > SimpleIamCoreConstant.SUBJECT_ID_MAX_LENGTH) {
+                throw new SimpleIamServerException(
+                        io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.SUBJECT_ID_GENERATE_INVALID,
+                        String.format(ServerErrorMessage.SUBJECT_ID_GENERATE_INVALID,
+                                SimpleIamCoreConstant.SUBJECT_ID_MAX_LENGTH));
+            }
+            if (!userRepository.existsBySubjectId(candidate)) {
+                return candidate;
+            }
+            log.debug("主体ID唯一冲突，重试生成：attempt={}", attempt);
+        }
+        throw new SimpleIamServerException(
+                io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.SUBJECT_ID_ASSIGN_EXHAUSTED,
+                String.format(ServerErrorMessage.SUBJECT_ID_ASSIGN_EXHAUSTED,
+                        SimpleIamServerConstant.SUBJECT_ID_RETRY_LIMIT));
     }
 
     private String defaultString(String value, String fallback) {

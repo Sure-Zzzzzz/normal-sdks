@@ -94,7 +94,7 @@ public class IamDepartmentService {
         department.setCreatedAt(Instant.now());
         department.setUpdatedAt(Instant.now());
         IamDepartmentEntity saved = departmentRepository.save(department);
-        bindMembers(saved, request.getMemberIds());
+        bindMembers(saved, request.getMemberSubjectIds());
         log.info("部门创建成功：code={}, id={}", saved.getCode(), saved.getId());
         auditEventPublisher.publishAdminAction(AdminActionType.CREATED, AdminSubjectType.DEPARTMENT,
                 String.valueOf(saved.getId()), saved.getCode(), null);
@@ -105,21 +105,21 @@ public class IamDepartmentService {
      * 创建部门时同步绑定已有成员：同一事务内把成员挂到新部门，
      * 任一成员不存在则整体回滚（部门也不落库）。
      */
-    private void bindMembers(IamDepartmentEntity department, List<Long> memberIds) {
-        if (memberIds == null || memberIds.isEmpty()) {
+    private void bindMembers(IamDepartmentEntity department, List<String> memberSubjectIds) {
+        if (memberSubjectIds == null || memberSubjectIds.isEmpty()) {
             return;
         }
-        for (Long memberId : memberIds) {
-            IamUserEntity member = userRepository.findById(memberId)
+        for (String subjectId : memberSubjectIds) {
+            IamUserEntity member = userRepository.findBySubjectId(subjectId)
                     .orElseThrow(() -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
-                            String.format(ServerErrorMessage.USER_NOT_FOUND, memberId)));
+                            String.format(ServerErrorMessage.USER_NOT_FOUND, subjectId)));
             member.setDepartmentId(department.getId());
             member.setUpdatedAt(Instant.now());
             userRepository.save(member);
             auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.USER,
-                    String.valueOf(memberId), member.getUsername(), null);
+                    member.getSubjectId(), member.getUsername(), null);
         }
-        log.info("部门成员绑定完成：departmentCode={}, memberCount={}", department.getCode(), memberIds.size());
+        log.info("部门成员绑定完成：departmentCode={}, memberCount={}", department.getCode(), memberSubjectIds.size());
     }
 
     /**

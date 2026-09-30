@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.dashboard.response.AdminSessionResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
@@ -32,6 +33,7 @@ public class IamAdminSessionService {
     private final IamSessionRepository sessionRepository;
     private final IamUserService userService;
     private final IamSessionService sessionService;
+    private final io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository userRepository;
     private final IamAuditEventPublisher auditEventPublisher;
 
     /**
@@ -41,8 +43,13 @@ public class IamAdminSessionService {
         int safePage = Math.max(page, 1) - 1;
         int safeSize = Math.min(Math.max(size, 1), SimpleIamServerConstant.MAX_ADMIN_PAGE_SIZE);
         Pageable pageable = PageRequest.of(safePage, safeSize);
-        return sessionRepository.searchActiveSessions(userId, Instant.now(), pageable)
-                .map(AdminSessionResponse::from);
+        Page<IamSessionEntity> sessions = sessionRepository.searchActiveSessions(userId, Instant.now(), pageable);
+        java.util.Map<Long, String> subjectIds = userRepository.findAllById(
+                        sessions.getContent().stream().map(IamSessionEntity::getUserId).collect(java.util.stream.Collectors.toList()))
+                .stream().filter(user -> user.getSubjectId() != null).collect(java.util.stream.Collectors.toMap(IamUserEntity::getId,
+                        u -> u.getSubjectId() == null ? "#" + u.getId() : u.getSubjectId(), (a, b) -> a));
+        return sessions.map(session -> AdminSessionResponse.from(session,
+                subjectIds.get(session.getUserId())));
     }
 
     /**
@@ -58,7 +65,7 @@ public class IamAdminSessionService {
         auditEventPublisher.publishAdminAction(
                 AdminActionType.REVOKED,
                 AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), "revokedSessions=" + revoked);
+                user.getSubjectId(), user.getUsername(), "revokedSessions=" + revoked);
         return revoked;
     }
 }

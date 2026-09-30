@@ -2,14 +2,14 @@ package io.github.surezzzzzz.sdk.auth.iam.server.service.authorization;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationChange;
+import io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationChangePage;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationChangePullResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationChangeResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamAkskAuthorizationChangeEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOwnerAuthorizationChangeLogEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamAkskAuthorizationChangeRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamOwnerAuthorizationChangeLogRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  */
 @SimpleIamServerComponent
 @RequiredArgsConstructor
-public class IamAkskAuthorizationChangePullService {
+public class IamOwnerAuthorizationChangeLogPullService {
 
     private static final int MAX_PAGE_SIZE = 200;
     private static final ObjectMapper PAYLOAD_OBJECT_MAPPER = new ObjectMapper();
@@ -35,51 +35,38 @@ public class IamAkskAuthorizationChangePullService {
             new TypeReference<Map<String, Object>>() {
             };
 
-    private final IamAkskAuthorizationChangeRepository changeRepository;
+    private final IamOwnerAuthorizationChangeLogRepository changeRepository;
 
     /**
      * 读取 afterSequence 之后的一页连续最终态快照。
      */
     @Transactional(readOnly = true)
-    public OwnerAuthorizationChangePullResponse pull(Long afterSequence, Integer pageSize) {
+    public OwnerAuthorizationChangePage pull(Long afterSequence, Integer pageSize) {
         long cursor = afterSequence == null ? 0L : afterSequence.longValue();
         int size = pageSize == null ? MAX_PAGE_SIZE : Math.min(pageSize.intValue(), MAX_PAGE_SIZE);
-        IamAkskAuthorizationChangeEntity oldest = changeRepository.findFirstByOrderBySourceSequenceAsc();
-        IamAkskAuthorizationChangeEntity newest = changeRepository.findFirstByOrderBySourceSequenceDesc();
+        IamOwnerAuthorizationChangeLogEntity oldest = changeRepository.findFirstByOrderBySourceSequenceAsc();
+        IamOwnerAuthorizationChangeLogEntity newest = changeRepository.findFirstByOrderBySourceSequenceDesc();
         long oldestSequence = oldest == null ? 0L : oldest.getSourceSequence().longValue();
         long highWaterSequence = newest == null ? 0L : newest.getSourceSequence().longValue();
         if (oldest != null && cursor > 0L && cursor < oldestSequence - 1L) {
-            return OwnerAuthorizationChangePullResponse.builder()
-                    .resyncRequired(true)
-                    .oldestAvailableSequence(oldestSequence)
-                    .highWaterSequence(highWaterSequence)
-                    .changes(Collections.<OwnerAuthorizationChangeResponse>emptyList())
-                    .build();
+            return new OwnerAuthorizationChangePage(true, true,
+                    Collections.<OwnerAuthorizationChange>emptyList(),
+                    Long.valueOf(oldestSequence), Long.valueOf(highWaterSequence), java.time.Instant.now());
         }
-        List<OwnerAuthorizationChangeResponse> changes = changeRepository
+        List<OwnerAuthorizationChange> changes = changeRepository
                 .findBySourceSequenceGreaterThanOrderBySourceSequenceAsc(Long.valueOf(cursor),
                         PageRequest.of(0, size))
                 .stream().map(this::toResponse).collect(Collectors.toList());
-        return OwnerAuthorizationChangePullResponse.builder()
-                .resyncRequired(false)
-                .oldestAvailableSequence(oldestSequence)
-                .highWaterSequence(highWaterSequence)
-                .changes(changes)
-                .build();
+        return new OwnerAuthorizationChangePage(true, false, changes,
+                Long.valueOf(oldestSequence), Long.valueOf(highWaterSequence), java.time.Instant.now());
     }
 
-    private OwnerAuthorizationChangeResponse toResponse(IamAkskAuthorizationChangeEntity entity) {
+    private OwnerAuthorizationChange toResponse(IamOwnerAuthorizationChangeLogEntity entity) {
         try {
-            return OwnerAuthorizationChangeResponse.builder()
-                    .sourceSequence(entity.getSourceSequence())
-                    .eventId(entity.getEventId())
-                    .changeType(entity.getChangeType())
-                    .aggregateKey(entity.getAggregateKey())
-                    .reasonCode(entity.getReasonCode())
-                    .schemaVersion(entity.getSchemaVersion())
-                    .payload(PAYLOAD_OBJECT_MAPPER.readValue(entity.getPayloadJson(), PAYLOAD_TYPE))
-                    .occurredAt(entity.getOccurredAt() == null ? null : entity.getOccurredAt().toEpochMilli())
-                    .build();
+            // 协议行只保留消费方消费的四个字段；聚合键/原因码/时间戳等审计细节不出内部端点
+            return new OwnerAuthorizationChange(entity.getSourceSequence(), entity.getEventId(),
+                    entity.getChangeType().toString(),
+                    PAYLOAD_OBJECT_MAPPER.readValue(entity.getPayloadJson(), PAYLOAD_TYPE));
         } catch (Exception exception) {
             // 载荷由同一 SDK 的写侧生成；损坏数据不能被静默降级为旧授权。
             throw new SimpleIamServerException(ErrorCode.APPLICATION_AUTHORIZATION_CHANGE_PAYLOAD_INVALID,

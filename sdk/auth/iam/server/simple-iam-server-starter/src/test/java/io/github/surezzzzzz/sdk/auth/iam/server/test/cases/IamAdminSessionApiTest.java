@@ -104,7 +104,7 @@ class IamAdminSessionApiTest {
 
         // 库中可能有其他未过期会话（真实登录残留），列表断言全部走 userId 过滤以隔离外部数据
         mockMvc.perform(get("/iam/admin/sessions")
-                        .param("userId", String.valueOf(targetUser.getId()))
+                        .param("subjectId", targetUser.getSubjectId())
                         .param("size", "500").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -116,7 +116,7 @@ class IamAdminSessionApiTest {
                         .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(targetUser.getUsername()))));
 
         mockMvc.perform(get("/iam/admin/sessions")
-                        .param("userId", String.valueOf(otherUser.getId())).cookie(adminSession))
+                        .param("subjectId", otherUser.getSubjectId()).cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
                 .andExpect(jsonPath("$.content[0].sessionId").value(newestSession.getId()))
@@ -125,7 +125,7 @@ class IamAdminSessionApiTest {
                 .andExpect(jsonPath("$.content[0].userAgent").value("Mozilla/5.0 session-api-test"));
 
         mockMvc.perform(get("/iam/admin/sessions")
-                        .param("userId", String.valueOf(targetUser.getId()))
+                        .param("subjectId", targetUser.getSubjectId())
                         .param("page", "1").param("size", "1").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
@@ -133,7 +133,7 @@ class IamAdminSessionApiTest {
                 .andExpect(jsonPath("$.content[0].sessionId").value(sessionIds.get(1)));
 
         mockMvc.perform(get("/iam/admin/sessions")
-                        .param("userId", String.valueOf(targetUser.getId()))
+                        .param("subjectId", targetUser.getSubjectId())
                         .param("page", "2").param("size", "1").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(1))
@@ -141,14 +141,14 @@ class IamAdminSessionApiTest {
     }
 
     @Test
-    @DisplayName("强制下线应撤销用户全部活跃会话并从列表消失，用户不存在返回 400")
+    @DisplayName("强制下线应撤销用户全部活跃会话并从列表消失，用户不存在返回 404")
     void testRevokeUserSessionsTearsDownAndRejectsUnknownUser() throws Exception {
         Instant now = Instant.now();
         IamUserEntity targetUser = createUser("session-revoke");
         createSession(targetUser, now.minusSeconds(60), now.plusSeconds(1800), "console-r1");
         createSession(targetUser, now.minusSeconds(30), now.plusSeconds(1800), "console-r2");
 
-        mockMvc.perform(put("/iam/admin/sessions/users/" + targetUser.getId() + "/revoke")
+        mockMvc.perform(put("/iam/admin/sessions/users/" + targetUser.getSubjectId() + "/revoke")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revoked").value(2));
@@ -162,14 +162,14 @@ class IamAdminSessionApiTest {
         }
 
         mockMvc.perform(get("/iam/admin/sessions")
-                        .param("userId", String.valueOf(targetUser.getId())).cookie(adminSession))
+                        .param("subjectId", targetUser.getSubjectId()).cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(0))
                 .andExpect(jsonPath("$.totalElements").value(0));
 
         mockMvc.perform(put("/iam/admin/sessions/users/999999999/revoke")
                         .cookie(adminSession).with(csrf()))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isNotFound());
     }
 
     @Test

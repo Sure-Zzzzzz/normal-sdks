@@ -61,6 +61,7 @@ class IamPortalAccessibleApplicationApiTest {
     private Cookie adminSession;
     private Cookie userSession;
     private Long targetUserId;
+    private String targetSubjectId;
     private Long applicationXId;
     private Long applicationYId;
     @Autowired
@@ -97,6 +98,7 @@ class IamPortalAccessibleApplicationApiTest {
         userRequest.setPassword("Admin@1234");
         userRequest.setDisplayName(username);
         targetUserId = userService.createUser(userRequest).getId();
+        targetSubjectId = userRepository.findById(targetUserId).orElseThrow().getSubjectId();
         userSession = loginSession(username);
 
         applicationXId = createPortalApplication(applicationXCode);
@@ -162,7 +164,7 @@ class IamPortalAccessibleApplicationApiTest {
     }
 
     private String authorizationPath(Long applicationId) {
-        return "/iam/admin/users/" + targetUserId + "/application-authorizations/" + applicationId;
+        return "/iam/admin/users/" + targetSubjectId + "/application-authorizations/" + applicationId;
     }
 
     private Long createPortalApplication(String applicationCode) {

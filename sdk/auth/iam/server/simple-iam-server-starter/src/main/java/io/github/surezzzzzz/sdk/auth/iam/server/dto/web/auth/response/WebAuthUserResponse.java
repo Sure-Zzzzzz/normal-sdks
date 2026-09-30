@@ -14,7 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 public class WebAuthUserResponse {
 
-    private Long userId;
+    private String subjectId;
 
     private String username;
 

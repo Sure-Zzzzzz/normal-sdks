@@ -95,7 +95,7 @@ class IamWebMessageSseTest {
     @DisplayName("站内信分页接口应返回当前用户消息")
     void testMessagePageReturnsCurrentUserMessages() throws Exception {
         IamUserEntity recipient = createUser();
-        messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin");
+        messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin");
 
         mockMvc.perform(get("/iam/web/messages/page")
                         .param("page", "1")
@@ -112,7 +112,7 @@ class IamWebMessageSseTest {
     @DisplayName("兼容列表接口始终返回数组且分页参数不改变响应形状")
     void testMessageListCompatibilityResponseShape() throws Exception {
         IamUserEntity recipient = createUser();
-        messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin");
+        messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin");
 
         mockMvc.perform(get("/iam/web/messages").cookie(session))
                 .andExpect(status().isOk())
@@ -129,7 +129,7 @@ class IamWebMessageSseTest {
     @DisplayName("全部标记已读只能更新当前用户未读消息并保持幂等")
     void testMarkAllRead() throws Exception {
         IamUserEntity recipient = createUser();
-        IamMessageEntity message = messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin");
+        IamMessageEntity message = messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin");
 
         mockMvc.perform(put("/iam/web/messages/read-all").cookie(session).with(csrf()))
                 .andExpect(status().isNoContent());
@@ -144,7 +144,7 @@ class IamWebMessageSseTest {
     @DisplayName("SSE 通道建立后应注册 emitter 并推送首帧未读数")
     void testEventsInitialUnreadCount() throws Exception {
         IamUserEntity recipient = createUser();
-        messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin");
+        messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin");
         when(sseService.register(eq(recipient.getId()), any())).thenReturn(new SseEmitter());
 
         mockMvc.perform(get("/iam/web/messages/events")
@@ -165,7 +165,7 @@ class IamWebMessageSseTest {
     @DisplayName("用户不能标记其他用户的站内信为已读")
     void testMarkReadOtherUserMessageForbidden() throws Exception {
         IamUserEntity otherUser = createOtherUser();
-        Long messageId = messageService.createMessage(createMessageRequest(otherUser.getId()), 1L, "admin").getId();
+        Long messageId = messageService.createMessage(createMessageRequest(otherUser.getSubjectId()), 1L, "admin").getId();
 
         mockMvc.perform(put("/iam/web/messages/" + messageId + "/read").cookie(session).with(csrf()))
                 .andExpect(status().isForbidden());
@@ -176,7 +176,7 @@ class IamWebMessageSseTest {
     void testMessageChangePushesUnreadCount() {
         IamUserEntity recipient = createUser();
 
-        Long messageId = messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin").getId();
+        Long messageId = messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin").getId();
         messageService.markRead(recipient.getId(), messageId);
 
         verify(sseService).pushUnreadCount(recipient.getId(), 1L);
@@ -188,7 +188,7 @@ class IamWebMessageSseTest {
     @Transactional
     void testRollbackDoesNotPushUnreadCount() {
         IamUserEntity recipient = createUser();
-        messageService.createMessage(createMessageRequest(recipient.getId()), 1L, "admin");
+        messageService.createMessage(createMessageRequest(recipient.getSubjectId()), 1L, "admin");
         verify(sseService, never()).pushUnreadCount(anyLong(), anyLong());
     }
 
@@ -257,9 +257,9 @@ class IamWebMessageSseTest {
         return result.getResponse().getCookie(SimpleIamServerConstant.SESSION_COOKIE_NAME);
     }
 
-    private CreateMessageRequest createMessageRequest(Long recipientUserId) {
+    private CreateMessageRequest createMessageRequest(String recipientSubjectId) {
         CreateMessageRequest request = new CreateMessageRequest();
-        request.setRecipientUserId(recipientUserId);
+        request.setRecipientSubjectId(recipientSubjectId);
         request.setTitle("SSE 未读测试");
         request.setContent("SSE 未读测试内容");
         return request;

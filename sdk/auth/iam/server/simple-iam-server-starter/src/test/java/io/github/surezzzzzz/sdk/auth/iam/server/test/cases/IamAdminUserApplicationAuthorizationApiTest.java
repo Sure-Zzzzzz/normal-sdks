@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationService;
@@ -66,8 +67,9 @@ class IamAdminUserApplicationAuthorizationApiTest {
     private Cookie adminSession;
     private Cookie userSession;
     private Long adminUserId;
-    private Long targetUserId;
-    private Long otherUserId;
+    private String adminSubjectId;
+    private String targetUserId;
+    private String otherUserId;
     private Long applicationId;
 
     @Autowired
@@ -103,6 +105,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
         adminRequest.setPassword("Admin@1234");
         adminRequest.setDisplayName(adminUsername);
         adminUserId = userService.createUser(adminRequest).getId();
+        adminSubjectId = userRepository.findById(adminUserId).orElseThrow().getSubjectId();
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         roleService.assignRole(adminUserId, adminRole.getId());
         adminSession = loginSession(adminUsername);
@@ -136,8 +139,11 @@ class IamAdminUserApplicationAuthorizationApiTest {
     void cleanup() {
         authorizationRepository.findByUserId(adminUserId)
                 .forEach(authorization -> authorizationRepository.delete(authorization));
-        authorizationRepository.findByUserId(targetUserId)
-                .forEach(authorization -> authorizationRepository.delete(authorization));
+        Long targetNumericId = userRepository.findBySubjectId(targetUserId).map(IamUserEntity::getId).orElse(null);
+        if (targetNumericId != null) {
+            authorizationRepository.findByUserId(targetNumericId)
+                    .forEach(authorization -> authorizationRepository.delete(authorization));
+        }
         trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
         userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
         userRepository.findByUsername(userUsername).ifPresent(user -> userService.deleteUser(user.getId()));
@@ -274,7 +280,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
         Instant later = now.plusSeconds(3600);
 
         assertNull(applicationAuthorizationService.loadActiveContext(
-                targetUserId, applicationId, now, later), "普通用户无授权行不得解析出授权");
+                userRepository.findBySubjectId(targetUserId).map(IamUserEntity::getId).orElse(null), applicationId, now, later), "普通用户无授权行不得解析出授权");
 
         ApplicationAuthorizationContext privileged = applicationAuthorizationService.loadActiveContext(
                 adminUserId, applicationId, now, later);
@@ -319,14 +325,14 @@ class IamAdminUserApplicationAuthorizationApiTest {
     @Test
     @DisplayName("授权摘要与详情按用户是否平台管理员下发 platformAdmin 标记")
     void testPlatformAdminFlagInResponses() throws Exception {
-        mockMvc.perform(put(basePath(adminUserId) + "/" + applicationId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put(basePath(adminSubjectId) + "/" + applicationId).contentType(MediaType.APPLICATION_JSON)
                         .content(validBody()).cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated());
         mockMvc.perform(put(basePath(targetUserId) + "/" + applicationId).contentType(MediaType.APPLICATION_JSON)
                         .content(validBody()).cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated());
 
-        mockMvc.perform(get(basePath(adminUserId)).cookie(adminSession))
+        mockMvc.perform(get(basePath(adminSubjectId)).cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].platformAdmin").value(true));
 
@@ -334,7 +340,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].platformAdmin").value(false));
 
-        mockMvc.perform(get(basePath(adminUserId) + "/" + applicationId).cookie(adminSession))
+        mockMvc.perform(get(basePath(adminSubjectId) + "/" + applicationId).cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.platformAdmin").value(true));
 
@@ -353,12 +359,12 @@ class IamAdminUserApplicationAuthorizationApiTest {
         return session;
     }
 
-    private Long createUser(String username) {
+    private String createUser(String username) {
         CreateUserRequest request = new CreateUserRequest();
         request.setUsername(username);
         request.setPassword("Admin@1234");
         request.setDisplayName(username);
-        return userService.createUser(request).getId();
+        return userService.createUser(request).getSubjectId();
     }
 
     private Long createApplication(String code, String oauthClientId) {
@@ -379,8 +385,8 @@ class IamAdminUserApplicationAuthorizationApiTest {
         return trustedApplicationService.createApplication(request).getApplication().getId();
     }
 
-    private String basePath(Long userId) {
-        return "/iam/admin/users/" + userId + "/application-authorizations";
+    private String basePath(String subjectId) {
+        return "/iam/admin/users/" + subjectId + "/application-authorizations";
     }
 
     private String validBody() {

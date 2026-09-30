@@ -176,6 +176,40 @@ public class RedisKeyHelper {
      * @param dataId       数据 id
      * @return 完整 Redis key
      */
+    // ==================== Phone Challenge ====================
+
+    /**
+     * 构建号→活跃挑战映射 key（dataId=手机号哈希；与详情键同 {me} slot，Lua 可原子联动）
+     *
+     * @param phoneHash 手机号哈希
+     * @return Redis key
+     */
+    public String buildPhoneChallengeActiveKey(String phoneHash) {
+        return buildKey(SimpleIamServerConstant.BUSINESS_PHONE_CHALLENGE_ACTIVE, phoneHash);
+    }
+
+    /**
+     * 构建挑战详情 key
+     *
+     * @param challengeId 挑战 ID
+     * @return Redis key
+     */
+    public String buildPhoneChallengeDetailKey(String challengeId) {
+        return buildKey(SimpleIamServerConstant.BUSINESS_PHONE_CHALLENGE_DETAIL, challengeId);
+    }
+
+    /**
+     * 构建手机号挑战频控计数 key
+     *
+     * @param dimension 维度（phone/ip/global）
+     * @param id        维度标识（手机号哈希/IP/固定全局标识）
+     * @return Redis key
+     */
+    public String buildPhoneRateKey(String dimension, String id) {
+        return buildKey("phone-rate:" + dimension, id);
+    }
+
+
     public String buildKey(String businessType, String dataId) {
         return SimpleIamServerConstant.KEY_PREFIX
                 + SEPARATOR_COLON + businessType

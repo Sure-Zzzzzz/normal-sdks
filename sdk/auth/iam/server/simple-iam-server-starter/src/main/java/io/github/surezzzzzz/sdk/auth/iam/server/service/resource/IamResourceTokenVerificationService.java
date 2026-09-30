@@ -114,7 +114,7 @@ public class IamResourceTokenVerificationService {
             return null;
         }
         return ResourceTokenVerificationResponse.builder()
-                .sub(String.valueOf(user.getId()))
+                .sub(user.getSubjectId())
                 .iamAuthorization(ApplicationAuthorizationContextClaimMapper.toClaim(context))
                 .build();
     }

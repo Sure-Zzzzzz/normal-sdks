@@ -18,7 +18,7 @@ import java.util.*;
 /**
  * 开放 API 部门族（{@code /iam/api/departments}）。
  *
- * <p>主体为 AKSK 凭证，由公共资源层链鉴权；端点级 @RequireApiPermission
+ * <p>主体为外部凭证，由公共资源层链鉴权；端点级 @RequireApiPermission
  * 精确码控（iam:department:api）。列表为平铺全量（含 fullPath），外部系统
  * 自行重建树；第一版不挂 DATA（纯码控）。删除走既有级联规则。
  *

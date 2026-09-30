@@ -64,45 +64,36 @@ class IamAdminOrganizationApiTest {
     private String userUsername;
     private Cookie adminSession;
     private Cookie userSession;
-
     @Autowired
     private MockMvc mockMvc;
-
     @Autowired
     private IamUserService userService;
-
     @Autowired
     private IamRoleService roleService;
-
     @Autowired
     private IamUserRepository userRepository;
-
     @Autowired
     private IamDepartmentRepository departmentRepository;
-
     @Autowired
     private IamUserGroupRepository groupRepository;
-
     @Autowired
     private IamUserGroupMemberRepository memberRepository;
-
     @Autowired
     private IamUserRoleRepository userRoleRepository;
-
     @Autowired
     private IamDepartmentRoleRepository departmentRoleRepository;
-
     @Autowired
     private IamRoleRepository roleRepository;
-
     @Autowired
     private IamRolePermissionRepository rolePermissionRepository;
-
     @Autowired
     private IamPermissionRepository permissionRepository;
-
     @Autowired
     private IamMessageRepository messageRepository;
+
+    private String subjectIdOf(Long userId) {
+        return userService.getById(userId).getSubjectId();
+    }
 
     @BeforeEach
     void loginUsers() throws Exception {
@@ -214,13 +205,13 @@ class IamAdminOrganizationApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.description").value("更新后的描述"));
 
-        mockMvc.perform(post("/iam/admin/user-groups/" + group.getId() + "/users/" + user.getId())
+        mockMvc.perform(post("/iam/admin/user-groups/" + group.getId() + "/users/" + user.getSubjectId())
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/iam/admin/user-groups/" + group.getId() + "/users").cookie(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(user.getId()));
-        mockMvc.perform(delete("/iam/admin/user-groups/" + group.getId() + "/users/" + user.getId())
+                .andExpect(jsonPath("$[0].subjectId").value(user.getSubjectId()));
+        mockMvc.perform(delete("/iam/admin/user-groups/" + group.getId() + "/users/" + user.getSubjectId())
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isNoContent());
         mockMvc.perform(delete("/iam/admin/user-groups/" + group.getId()).cookie(adminSession).with(csrf()))
@@ -241,12 +232,12 @@ class IamAdminOrganizationApiTest {
         log.info("组织工作台测试数据：rootId={}, childId={}, rootUserId={}, disabledUserId={}, childUserId={}",
                 root.getId(), child.getId(), rootUser.getId(), disabledRootUser.getId(), childUser.getId());
 
-        mockMvc.perform(put("/iam/admin/users/" + disabledRootUser.getId() + "/disable")
+        mockMvc.perform(put("/iam/admin/users/" + disabledRootUser.getSubjectId() + "/disable")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isOk());
 
         IamUserGroupEntity group = createUserGroup("workbench-group-" + suffix, "工作台协作组");
-        mockMvc.perform(post("/iam/admin/user-groups/" + group.getId() + "/users/" + rootUser.getId())
+        mockMvc.perform(post("/iam/admin/user-groups/" + group.getId() + "/users/" + rootUser.getSubjectId())
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isOk());
 
@@ -270,9 +261,9 @@ class IamAdminOrganizationApiTest {
                 .andExpect(jsonPath("$.members.totalElements").value(2))
                 .andExpect(jsonPath("$.members.page").value(1))
                 .andExpect(jsonPath("$.members.number").doesNotExist())
-                .andExpect(jsonPath("$.members.content[?(@.id == " + rootUser.getId() + ")].id")
-                        .value(contains(rootUser.getId().intValue())));
-        mockMvc.perform(get("/iam/admin/organizations/users/" + rootUser.getId() + "/profile").cookie(adminSession))
+                .andExpect(jsonPath("$.members.content[?(@.subjectId == \"" + rootUser.getSubjectId() + "\")].subjectId")
+                        .value(contains(rootUser.getSubjectId())));
+        mockMvc.perform(get("/iam/admin/organizations/users/" + rootUser.getSubjectId() + "/profile").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.user.departmentId").value(root.getId()))
                 .andExpect(jsonPath("$.department.id").value(root.getId()))
@@ -302,7 +293,7 @@ class IamAdminOrganizationApiTest {
         assignRole(deptUser.getId(), mixedRole.getId());
         assignDepartmentRole(department.getId(), mixedRole.getId());
 
-        mockMvc.perform(get("/iam/admin/organizations/users/" + deptUser.getId() + "/profile").cookie(adminSession))
+        mockMvc.perform(get("/iam/admin/organizations/users/" + deptUser.getSubjectId() + "/profile").cookie(adminSession))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles[?(@.code == '" + departmentOnlyRole.getCode() + "')].source")
                         .value(contains("department_inherited")))
@@ -349,9 +340,9 @@ class IamAdminOrganizationApiTest {
         IamUserEntity user = createUser("workbench-empty");
         log.info("无关联用户详情测试：userId={}", user.getId());
 
-        mockMvc.perform(get("/iam/admin/organizations/users/" + user.getId() + "/profile").cookie(adminSession))
+        mockMvc.perform(get("/iam/admin/organizations/users/" + user.getSubjectId() + "/profile").cookie(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user.id").value(user.getId()))
+                .andExpect(jsonPath("$.user.subjectId").value(user.getSubjectId()))
                 .andExpect(jsonPath("$.department").value(nullValue()))
                 .andExpect(jsonPath("$.userGroups").isEmpty())
                 .andExpect(jsonPath("$.roles").isEmpty())
@@ -393,15 +384,15 @@ class IamAdminOrganizationApiTest {
                         .param("lastLoginAfter", todayStart.toString())
                         .param("size", "500").cookie(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.id == " + recentUser.getId() + ")]").exists())
-                .andExpect(jsonPath("$.content[?(@.id == " + yesterdayUser.getId() + ")]").doesNotExist())
-                .andExpect(jsonPath("$.content[?(@.id == " + neverUser.getId() + ")]").doesNotExist());
+                .andExpect(jsonPath("$.content[?(@.subjectId == \"" + recentUser.getSubjectId() + "\")]").exists())
+                .andExpect(jsonPath("$.content[?(@.subjectId == \"" + yesterdayUser.getSubjectId() + "\")]").doesNotExist())
+                .andExpect(jsonPath("$.content[?(@.subjectId == \"" + neverUser.getSubjectId() + "\")]").doesNotExist());
 
         mockMvc.perform(get("/iam/admin/users")
                         .param("lockedUntilAfter", now.toString())
                         .param("size", "500").cookie(adminSession))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[?(@.id == " + lockedUser.getId() + ")]").exists())
+                .andExpect(jsonPath("$.content[?(@.subjectId == \"" + lockedUser.getSubjectId() + "\")]").exists())
                 .andExpect(jsonPath("$.content[?(@.id == " + recentUser.getId() + ")]").doesNotExist());
     }
 
@@ -420,7 +411,7 @@ class IamAdminOrganizationApiTest {
 
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId() + "],\"title\":\"API群发\",\"content\":\"消息内容\"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\"API群发\",\"content\":\"消息内容\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sendBatchId").isNotEmpty())
@@ -428,13 +419,13 @@ class IamAdminOrganizationApiTest {
 
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId() + "],\"title\":\" \",\"content\":\"消息内容\"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\" \",\"content\":\"消息内容\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("标题不能为空")));
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId() + "],\"title\":\"内容校验\",\"content\":\" \"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\"内容校验\",\"content\":\" \"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("内容不能为空")));
@@ -445,7 +436,7 @@ class IamAdminOrganizationApiTest {
     void testMessageSendRequiresAdminAuthority() throws Exception {
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[1],\"title\":\"安全校验\",\"content\":\"安全校验内容\"}")
+                        .content("{\"recipientSubjectIds\":[\"1\"],\"title\":\"安全校验\",\"content\":\"安全校验内容\"}")
                         .cookie(userSession).with(csrf()))
                 .andExpect(status().isForbidden());
     }
@@ -462,24 +453,21 @@ class IamAdminOrganizationApiTest {
 
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId()
-                                + "],\"title\":\"" + maxTitle + "\",\"content\":\"" + maxContent + "\"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\"" + maxTitle + "\",\"content\":\"" + maxContent + "\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.recipientCount").value(1));
 
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId()
-                                + "],\"title\":\"" + tooLongTitle + "\",\"content\":\"正常内容\"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\"" + tooLongTitle + "\",\"content\":\"正常内容\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("标题不能为空且不能超过")));
 
         mockMvc.perform(post("/iam/admin/messages")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"recipientUserIds\":[" + recipient.getId()
-                                + "],\"title\":\"正常标题\",\"content\":\"" + tooLongContent + "\"}")
+                        .content("{\"recipientSubjectIds\":[\"" + recipient.getSubjectId() + "\"],\"title\":\"正常标题\",\"content\":\"" + tooLongContent + "\"}")
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("内容不能为空且不能超过")));
@@ -551,7 +539,7 @@ class IamAdminOrganizationApiTest {
     }
 
     private void assignRole(Long userId, Long roleId) throws Exception {
-        mockMvc.perform(post("/iam/admin/users/" + userId + "/roles/" + roleId)
+        mockMvc.perform(post("/iam/admin/users/" + subjectIdOf(userId) + "/roles/" + roleId)
                         .cookie(adminSession).with(csrf()))
                 .andExpect(status().isOk());
     }

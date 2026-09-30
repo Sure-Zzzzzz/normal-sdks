@@ -56,7 +56,7 @@ import java.util.Collections;
  * <ol>
  *   <li>Order(0) Error Dispatch {@code /error}：permitAll，保住 sendError 的原始状态码不被兜底链覆盖。</li>
  *   <li>Order(1) Authorization Server：SAS 标准端点，CSRF 关闭。</li>
- *   <li>Order(2) Internal reader {@code /iam/internal/aksk/**}：固定 SERVICE 短时 Bearer。</li>
+ *   <li>Order(2) Internal reader {@code /iam/internal/owner-authorization/**}(协作契约路径)：固定 SERVICE 短时 Bearer。</li>
  *   <li>Order(3) Resource verification {@code /iam/resource/**}：独立客户端 Basic 认证。</li>
  *   <li>Order(4) Web API {@code /iam/web/**}：登录态和普通用户 JSON API。</li>
  *   <li>Order(5) Admin API {@code /iam/admin/**}：需 ROLE_iam_admin 或任一页面权限码（入口门），方法级 @PreAuthorize 逐端点强制 + CSRF 开启。</li>
@@ -64,7 +64,7 @@ import java.util.Collections;
  *   <li>Order(7) Fallback {@code /**}：denyAll。</li>
  * </ol>
  *
- * <p>开放 API {@code /iam/api/**}（AKSK 凭证主体）不在本类七链内：宿主配置
+ * <p>开放 API {@code /iam/api/**}（外部凭证主体）不在本类七链内：宿主配置
  * protected-paths 后由公共资源层链（simple-resource-server-starter，HIGHEST_PRECEDENCE）
  * 接管——STATELESS、排斥 Cookie、无 CSRF、失败统一 401/403；未配置时该路径落
  * Order(5) 会话链拒绝（失败关闭）。见 {@link SimpleIamServerStartupValidator}。
@@ -197,7 +197,8 @@ public class OAuth2SecurityConfiguration {
     private OidcUserInfo toUserInfo(String username, java.util.Set<String> scopes) {
         IamUserEntity user = userRepository.findByUsername(username).orElseThrow(
                 () -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND, "OIDC主体不存在：" + username));
-        OidcUserInfo.Builder builder = OidcUserInfo.builder().subject(String.valueOf(user.getId()));
+        // userinfo 的 sub 必须与 id_token 一致，且绝不能回退为数据库自增 ID。
+        OidcUserInfo.Builder builder = OidcUserInfo.builder().subject(requireSubjectId(user));
         if (scopes.contains("profile")) {
             builder.name(user.getDisplayName()).preferredUsername(user.getUsername());
         }
@@ -210,17 +211,26 @@ public class OAuth2SecurityConfiguration {
         return builder.build();
     }
 
+    private String requireSubjectId(IamUserEntity user) {
+        if (!org.springframework.util.StringUtils.hasText(user.getSubjectId())) {
+            log.debug("OIDC userinfo 拒绝缺少主体ID的用户：userId={}", user.getId());
+            throw new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
+                    String.format(ServerErrorMessage.USER_NOT_FOUND, user.getUsername()));
+        }
+        return user.getSubjectId();
+    }
+
     /**
-     * Order(2) 固定 AKSK reader SERVICE：无状态 Bearer 认证。
+     * Order(2) 固定协作 reader SERVICE：无状态 Bearer 认证。
      *
      * <p>必须同时校验 issuer、client_id、sub、token_use 和 scope。只校验 scope 会让普通
      * 可信应用借同名 scope 越权；只校验 client 仍可能把错误类型 token 带入内部链。</p>
      */
     @Bean
     @Order(2)
-    public SecurityFilterChain internalAkskReaderSecurityFilterChain(HttpSecurity http,
-                                                                     JwtDecoder jwtDecoder) throws Exception {
-        http.antMatcher(SimpleIamServerConstant.PATH_INTERNAL_AKSK_API)
+    public SecurityFilterChain internalOwnerAuthorizationReaderSecurityFilterChain(HttpSecurity http,
+                                                                                   JwtDecoder jwtDecoder) throws Exception {
+        http.antMatcher(SimpleIamServerConstant.PATH_INTERNAL_OWNER_AUTHORIZATION_API)
                 .securityContext(context -> context.securityContextRepository(new NullSecurityContextRepository()))
                 .csrf().disable()
                 .formLogin().disable()
@@ -230,7 +240,7 @@ public class OAuth2SecurityConfiguration {
             return http.build();
         }
         http.authorizeRequests(authorize -> authorize
-                        .antMatchers("/iam/internal/aksk/owner-authorizations/changes/pull")
+                        .antMatchers("/iam/internal/owner-authorization/changes/pull")
                         .hasAuthority("SCOPE_" + IamInternalReaderBootstrap.STREAM_SCOPE)
                         .anyRequest().hasAuthority("SCOPE_" + IamInternalReaderBootstrap.READER_SCOPE))
                 .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt
@@ -311,6 +321,9 @@ public class OAuth2SecurityConfiguration {
                                 SimpleIamServerConstant.PATH_WEB_AUTH_CAPTCHA,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_AUTHORIZE,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_CALLBACK,
+                                SimpleIamServerConstant.PATH_WEB_AUTH_PHONE_CHALLENGES,
+                                SimpleIamServerConstant.PATH_WEB_AUTH_PHONE_LOGIN,
+                                SimpleIamServerConstant.PATH_WEB_AUTH_PASSWORD_RESET,
                                 SimpleIamServerConstant.PATH_WEB_BRANDING)
                         .permitAll()
                         .anyRequest().authenticated())

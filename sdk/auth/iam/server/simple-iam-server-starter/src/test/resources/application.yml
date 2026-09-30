@@ -1,6 +1,8 @@
 spring:
+  # 模块测试默认叠加 local-test（开发测试库，物理隔离联调库）；联调起服命令行显式传
+  # --spring.profiles.active=local,manual 覆盖本值，不受影响
   profiles:
-    active: local
+    active: local-test,local
   jpa:
     hibernate:
       ddl-auto: validate

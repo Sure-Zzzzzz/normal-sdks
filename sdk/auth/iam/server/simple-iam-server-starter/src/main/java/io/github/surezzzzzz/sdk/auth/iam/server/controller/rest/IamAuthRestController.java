@@ -8,17 +8,20 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.ChangePasswordRequest;
-import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.WebLoginRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.response.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.web.auth.IamSessionEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
+import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AuthenticationEventType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.message.IamMessageSseService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.*;
+import io.github.surezzzzzz.sdk.auth.iam.server.support.PhoneNormalizationHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.ProviderDisplayHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +81,9 @@ public class IamAuthRestController {
     private final SimpleIamServerProperties properties;
     private final CsrfTokenRepository csrfTokenRepository;
     private final IamAuditEventPublisher auditEventPublisher;
+    private final IamPhoneChallengeService phoneChallengeService;
+    private final IamUserRepository userRepository;
+    private final IamLoginFailurePolicyService loginFailurePolicyService;
 
     /**
      * 取 CSRF token（匿名，登录页用）
@@ -106,16 +112,97 @@ public class IamAuthRestController {
     public ResponseEntity<WebLoginProvidersResponse> providers() {
         List<WebLoginProviderResponse> list = new ArrayList<>();
         list.add(new WebLoginProviderResponse(SimpleIamServerConstant.LOGIN_PROVIDER_LOCAL_PASSWORD,
-                "账号密码登录", "password", true, null, "使用账号和密码登录"));
+                "账号密码登录", "password", true, null, "使用账号和密码登录", null));
         providerRegistry.getCredentialAuthenticators().keySet().forEach(code ->
                 list.add(new WebLoginProviderResponse(code, providerDisplayHelper.displayName(code),
-                        "ldap", true, null, providerDisplayHelper.displayDescription(code))));
+                        "ldap", true, null, providerDisplayHelper.displayDescription(code), null)));
+        if (phoneChallengeService.deliveryAvailable()) {
+            list.add(new WebLoginProviderResponse(SimpleIamServerConstant.LOGIN_PROVIDER_PHONE_SMS,
+                    "手机号登录", "phone", true, null, null,
+                    String.join(",", phoneChallengeService.deliveryProvider().supportedRegions())));
+        }
         providerRegistry.getBrowserLoginProviders().forEach((code, provider) ->
                 list.add(new WebLoginProviderResponse(code, providerDisplayHelper.displayName(code),
                         "sso", true, "/iam/web/auth/authorize/" + code,
-                        providerDisplayHelper.displayDescription(code))));
+                        providerDisplayHelper.displayDescription(code), null)));
         return ResponseEntity.ok(new WebLoginProvidersResponse(
                 SimpleIamServerConstant.LOGIN_PROVIDER_LOCAL_PASSWORD, list));
+    }
+
+    /**
+     * 创建手机号挑战（匿名+频控；登录/忘记密码两 purpose）。
+     * 未知号与未验证登记号统一受理（201）不投递（防枚举）；只有已验证号码可用于
+     * 短信登录或密码重置。唯一例外：忘记密码对外部身份源账号
+     * （域账号等）永不成功，按未知号同口径受理不投递，防枚举语义不变且不浪费短信。
+     */
+    @PostMapping("/phone-challenges")
+    public ResponseEntity<WebPhoneChallengeResponse> phoneChallenge(
+            @RequestBody WebPhoneChallengeRequest request, HttpServletRequest servletRequest) {
+        if (!phoneChallengeService.deliveryAvailable()) {
+            return ResponseEntity.notFound().build();
+        }
+        String phone = PhoneNormalizationHelper.normalize(request.getPhone());
+        boolean forgotPurpose = SimpleIamServerConstant.PHONE_CHALLENGE_PURPOSE_FORGOT_PASSWORD
+                .equals(request.getPurpose());
+        String purpose = forgotPurpose
+                ? request.getPurpose() : SimpleIamServerConstant.PHONE_CHALLENGE_PURPOSE_LOGIN;
+        IamUserEntity holder = userRepository.findByPhone(phone).orElse(null);
+        boolean deliver = holder != null && holder.getPhoneBoundAt() != null
+                && !(forgotPurpose && StringUtils.hasText(holder.getIdentitySource()));
+        String challengeId = phoneChallengeService.createChallenge(phone, purpose,
+                servletRequest.getRemoteAddr(), deliver);
+        return ResponseEntity.status(201).body(new WebPhoneChallengeResponse(challengeId, phoneChallengeService.sendCooldownSeconds()));
+    }
+
+    /**
+     * 手机号验证码登录（与密码登录会话语义完全一致，provider=phone 审计对齐）。
+     */
+    @PostMapping("/phone-login")
+    public ResponseEntity<WebLoginResponse> phoneLogin(@RequestBody WebPhoneLoginRequest request,
+                                                       HttpServletRequest servletRequest) {
+        String phone = PhoneNormalizationHelper.normalize(request.getPhone());
+        if (!phoneChallengeService.consumeChallenge(request.getChallengeId(), request.getCode(),
+                SimpleIamServerConstant.PHONE_CHALLENGE_PURPOSE_LOGIN, phone)) {
+            auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_FAILED,
+                    "phone", "phone", null, servletRequest.getRemoteAddr(),
+                    servletRequest.getHeader("User-Agent"), "PHONE_CODE_INVALID", null);
+            throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
+        }
+        IamUserEntity user = userRepository.findByPhone(phone).orElse(null);
+        if (user == null || user.getPhoneBoundAt() == null) {
+            throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
+        }
+        // 与密码/外部身份登录同口径：禁用或锁定账号不得经短信登录
+        loginFailurePolicyService.assertAccountUsable(user);
+        UserDetails userDetails = establishSession(user, servletRequest);
+        auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_SUCCEEDED,
+                "phone", user.getUsername(), user.getId(),
+                servletRequest.getRemoteAddr(), servletRequest.getHeader("User-Agent"), null, null);
+        return ResponseEntity.ok(new WebLoginResponse("登录成功", toResponse(userDetails), false,
+                Boolean.TRUE.equals(user.getMustChangePassword())));
+    }
+
+    /**
+     * 忘记密码重置（手机验证一步完成，不建会话；成功吊销全部会话——夺回场景旧会话必须死）。
+     */
+    @PostMapping("/password-reset")
+    public ResponseEntity<Void> passwordReset(@RequestBody WebPasswordResetRequest request,
+                                              HttpServletRequest servletRequest) {
+        String phone = PhoneNormalizationHelper.normalize(request.getPhone());
+        if (!phoneChallengeService.consumeChallenge(request.getChallengeId(), request.getCode(),
+                SimpleIamServerConstant.PHONE_CHALLENGE_PURPOSE_FORGOT_PASSWORD, phone)) {
+            throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
+        }
+        IamUserEntity user = userRepository.findByPhone(phone).orElse(null);
+        if (user == null || user.getPhoneBoundAt() == null) {
+            throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED,
+                    "该手机号未完成验证，请联系管理员重置密码");
+        }
+        userService.resetPasswordByForgot(user.getId(), request.getNewPassword());
+        sessionService.revokeAllByUserId(user.getId());
+        auditEventPublisher.publishAdminAction(AdminActionType.PASSWORD_RESET, AdminSubjectType.USER,
+                user.getSubjectId(), user.getUsername(), "provider=forgot-password");
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -445,7 +532,7 @@ public class IamAuthRestController {
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.toList());
         return new WebAuthUserResponse(
-                userId,
+                user == null ? null : user.getSubjectId(),
                 userDetails.getUsername(),
                 user == null ? userDetails.getUsername() : user.getDisplayName(),
                 authorities.contains(SimpleIamServerConstant.ROLE_IAM_ADMIN),

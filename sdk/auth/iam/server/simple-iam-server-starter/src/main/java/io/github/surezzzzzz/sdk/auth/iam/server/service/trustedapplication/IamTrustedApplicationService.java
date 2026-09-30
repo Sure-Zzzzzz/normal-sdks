@@ -101,6 +101,7 @@ public class IamTrustedApplicationService {
     private final IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     private final IamTrustedApplicationClientService trustedApplicationClientService;
     private final IamTrustedApplicationLifecycleService lifecycleService;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
     private final IamApplicationAuthorizationStateService authorizationStateService;
     private final JdbcTemplate jdbcTemplate;
     private final IamAuditEventPublisher auditEventPublisher;
@@ -133,6 +134,7 @@ public class IamTrustedApplicationService {
         app.setDescription(request.getDescription());
         app.setIcon(normalizeIcon(request.getIcon()));
         app.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
+        app.setBuiltIn(Boolean.TRUE.equals(request.getBuiltIn()));
         app.setApplicationSecurityEpoch(1L);
         app.setCreatedAt(now);
         app.setUpdatedAt(now);
@@ -170,7 +172,7 @@ public class IamTrustedApplicationService {
                 .applicationName(app.getApplicationName())
                 .description(app.getDescription())
                 .icon(app.getIcon())
-                .builtIn(isBuiltInApplication(app.getApplicationCode()))
+                .builtIn(builtInResolver.isBuiltIn(app))
                 .portal(portal)
                 .clients(trustedApplicationClientService.listClients(applicationId))
                 .build();
@@ -223,6 +225,15 @@ public class IamTrustedApplicationService {
         if (request.getIcon() != null) {
             app.setIcon(normalizeIcon(request.getIcon()));
         }
+        if (request.getBuiltIn() != null) {
+            if (!request.getBuiltIn() && builtInResolver.isBuiltIn(app)
+                    && isConfiguredBuiltIn(app.getApplicationCode())) {
+                throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
+                        String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED,
+                                app.getApplicationCode()));
+            }
+            app.setBuiltIn(request.getBuiltIn());
+        }
         app.setUpdatedAt(Instant.now());
         trustedApplicationRepository.save(app);
 
@@ -246,7 +257,7 @@ public class IamTrustedApplicationService {
     public io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCleanupOperationResponse
     deleteApplication(Long applicationId) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
-        if (isBuiltInApplication(app.getApplicationCode())) {
+        if (builtInResolver.isBuiltIn(app)) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED, app.getApplicationCode()));
         }
@@ -531,17 +542,16 @@ public class IamTrustedApplicationService {
     }
 
     /**
-     * 是否内置应用：以引导配置列表（admin.bootstrap.built-in-applications）为唯一口径，
-     * 内置应用禁止删除；下线走关闭门户集成。
+     * 引导配置清单口径：这些编码的内置性不可被管理面摘除。
      */
-    private boolean isBuiltInApplication(String applicationCode) {
+    private boolean isConfiguredBuiltIn(String applicationCode) {
         return properties.getBootstrap().getBuiltInApplications().stream()
                 .anyMatch(config -> config.getApplicationCode() != null
                         && config.getApplicationCode().equals(applicationCode));
     }
 
     private void assertNotBuiltIn(IamTrustedApplicationEntity application) {
-        if (isBuiltInApplication(application.getApplicationCode())) {
+        if (builtInResolver.isBuiltIn(application)) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_DELETE_BLOCKED,
                             application.getApplicationCode()));
@@ -563,7 +573,7 @@ public class IamTrustedApplicationService {
                 .icon(app.getIcon())
                 .clientCount(clientCount)
                 .portalEnabled(portalEnabled)
-                .builtIn(isBuiltInApplication(app.getApplicationCode()))
+                .builtIn(builtInResolver.isBuiltIn(app))
                 .build();
     }
 

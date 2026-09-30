@@ -244,10 +244,11 @@ class ExternalIdentityLoginApiTest {
     @Test
     @DisplayName("管理员应可预绑定外部身份并解绑")
     void testAdminBindExternalIdentity() throws Exception {
-        Long userId = createAdminAndLogin();
+        createAdminAndLogin();
+        String subjectId = userRepository.findByUsername(adminUsername).orElseThrow().getSubjectId();
         Cookie adminSession = adminSession();
 
-        mockMvc.perform(post("/iam/admin/users/" + userId + "/external-identity")
+        mockMvc.perform(post("/iam/admin/users/" + subjectId + "/external-identity")
                         .cookie(adminSession)
                         .contentType("application/json")
                         .content("{\"providerCode\":\"ldap-password\",\"externalId\":\"uid=bound-" + suffix
@@ -257,20 +258,21 @@ class ExternalIdentityLoginApiTest {
                 .andExpect(jsonPath("$.identitySource").value(FakeExternalIdentitySupport.LDAP_PROVIDER_CODE));
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .delete("/iam/admin/users/" + userId + "/external-identity")
+                        .delete("/iam/admin/users/" + subjectId + "/external-identity")
                         .cookie(adminSession)
                         .with(csrf()))
                 .andExpect(status().isNoContent());
-        assertNull(userRepository.findById(userId).map(IamUserEntity::getIdentitySource).orElse(null));
+        assertNull(userRepository.findByUsername(ldapUsername).map(IamUserEntity::getIdentitySource).orElse(null));
     }
 
     @Test
     @DisplayName("绑定未装配的登录方式应被拒绝")
     void testAdminBindUnknownProviderRejected() throws Exception {
-        Long userId = createAdminAndLogin();
+        createAdminAndLogin();
+        String subjectId = userRepository.findByUsername(adminUsername).orElseThrow().getSubjectId();
         Cookie adminSession = adminSession();
 
-        mockMvc.perform(post("/iam/admin/users/" + userId + "/external-identity")
+        mockMvc.perform(post("/iam/admin/users/" + subjectId + "/external-identity")
                         .cookie(adminSession)
                         .contentType("application/json")
                         .content("{\"providerCode\":\"not-installed\",\"externalId\":\"whatever\"}")
@@ -462,13 +464,13 @@ class ExternalIdentityLoginApiTest {
     void testUnboundJitAccountLocalPasswordStillRejected() throws Exception {
         loginWithProvider(FakeExternalIdentitySupport.LDAP_PROVIDER_CODE,
                 ldapUsername, FakeExternalIdentitySupport.LDAP_VALID_CREDENTIAL);
-        Long userId = userRepository.findByUsername(ldapUsername)
-                .map(IamUserEntity::getId)
+        String subjectId = userRepository.findByUsername(ldapUsername)
+                .map(IamUserEntity::getSubjectId)
                 .orElseThrow(() -> new AssertionError("JIT 账号登录后必须可按用户名查到：" + ldapUsername));
         createAdminAndLogin();
 
         mockMvc.perform(MockMvcRequestBuilders
-                        .delete("/iam/admin/users/" + userId + "/external-identity")
+                        .delete("/iam/admin/users/" + subjectId + "/external-identity")
                         .cookie(adminSession())
                         .with(csrf()))
                 .andExpect(status().isNoContent());
@@ -491,7 +493,7 @@ class ExternalIdentityLoginApiTest {
         Long ownerUserId = userService.createUser(ownerRequest).getId();
         createAdminAndLogin();
 
-        mockMvc.perform(post("/iam/admin/users/" + ownerUserId + "/external-identity")
+        mockMvc.perform(post("/iam/admin/users/" + userRepository.findById(ownerUserId).orElseThrow().getSubjectId() + "/external-identity")
                         .cookie(adminSession())
                         .contentType("application/json")
                         .content("{\"providerCode\":\"ldap-password\",\"externalId\":\"" + externalId + "\"}")
@@ -504,7 +506,7 @@ class ExternalIdentityLoginApiTest {
         otherRequest.setDisplayName("重复绑定账号");
         Long otherUserId = userService.createUser(otherRequest).getId();
 
-        mockMvc.perform(post("/iam/admin/users/" + otherUserId + "/external-identity")
+        mockMvc.perform(post("/iam/admin/users/" + userRepository.findById(otherUserId).orElseThrow().getSubjectId() + "/external-identity")
                         .cookie(adminSession())
                         .contentType("application/json")
                         .content("{\"providerCode\":\"ldap-password\",\"externalId\":\"" + externalId + "\"}")
@@ -518,7 +520,7 @@ class ExternalIdentityLoginApiTest {
                         .with(csrf()))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(post("/iam/admin/users/" + otherUserId + "/external-identity")
+        mockMvc.perform(post("/iam/admin/users/" + userRepository.findById(otherUserId).orElseThrow().getSubjectId() + "/external-identity")
                         .cookie(adminSession())
                         .contentType("application/json")
                         .content("{\"providerCode\":\"ldap-password\",\"externalId\":\" \"}")
@@ -552,7 +554,9 @@ class ExternalIdentityLoginApiTest {
         request.setUsername(adminUsername);
         request.setPassword("Admin@1234");
         request.setDisplayName("外部身份测试管理员");
-        Long userId = userService.createUser(request).getId();
+        IamUserEntity created = userService.createUser(request);
+        Long userId = created.getId();
+        String subjectId = created.getSubjectId();
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         roleService.assignRole(userId, adminRole.getId());
         MvcResult loginResult = mockMvc.perform(post("/iam/web/auth/login")

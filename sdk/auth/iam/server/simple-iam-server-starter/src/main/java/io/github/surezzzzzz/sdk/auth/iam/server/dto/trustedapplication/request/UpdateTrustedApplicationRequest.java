@@ -32,5 +32,10 @@ public class UpdateTrustedApplicationRequest {
     /**
      * Portal 集成配置（整体覆盖：传则按传入值重写 portal + 菜单，不传则保持不动）
      */
+    /**
+     * 是否标记为平台内置应用；null 表示保持现状。引导配置清单内的编码（如 iam）不可摘除内置标记。
+     */
+    private Boolean builtIn;
+
     private PortalIntegrationRequest portal;
 }

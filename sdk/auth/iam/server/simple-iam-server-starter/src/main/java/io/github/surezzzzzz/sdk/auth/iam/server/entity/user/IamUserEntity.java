@@ -32,7 +32,19 @@ public class IamUserEntity {
     @Column(name = "email", length = 128)
     private String email;
 
-    @Column(name = "phone", length = 32)
+    /**
+     * 对外用户主体：SPI 生成，写后不改；软删行永久占位（永不复用）
+     */
+    @Column(name = "subject_id", length = 64, unique = true)
+    private String subjectId;
+
+    /**
+     * 手机号绑定时间（绑定/换绑验证通过时写入，登录不更新）；NULL=未绑定
+     */
+    @Column(name = "phone_bound_at")
+    private Instant phoneBoundAt;
+
+    @Column(name = "phone", length = 32, unique = true)
     private String phone;
 
     @Column(name = "department_id")

@@ -55,7 +55,7 @@ public class IamExternalIdentityBindingService {
         IamUserEntity saved = userRepository.save(user);
         log.info("外部身份绑定：userId={}, provider={}, externalId={}", userId, providerCode, externalId);
         auditEventPublisher.publishAdminAction(AdminActionType.BOUND, AdminSubjectType.EXTERNAL_BINDING,
-                String.valueOf(userId), user.getUsername(), providerCode + ":" + externalId);
+                user.getSubjectId(), user.getUsername(), providerCode + ":" + externalId);
         return saved;
     }
 
@@ -80,7 +80,7 @@ public class IamExternalIdentityBindingService {
             userRepository.save(user);
             log.info("外部身份解绑：userId={}, username={}", userId, user.getUsername());
             auditEventPublisher.publishAdminAction(AdminActionType.UNBOUND, AdminSubjectType.EXTERNAL_BINDING,
-                    String.valueOf(userId), user.getUsername(), previousBinding);
+                    user.getSubjectId(), user.getUsername(), previousBinding);
         }
     }
 

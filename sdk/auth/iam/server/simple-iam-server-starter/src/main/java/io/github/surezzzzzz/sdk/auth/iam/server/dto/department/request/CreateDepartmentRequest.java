@@ -25,5 +25,5 @@ public class CreateDepartmentRequest {
     /**
      * 创建时同步绑定的已有成员用户 ID 列表（同一事务内挂到新部门）
      */
-    private List<Long> memberIds;
+    private List<String> memberSubjectIds;
 }

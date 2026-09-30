@@ -8,11 +8,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.session.data.redis.RedisIndexedSessionRepository;
 import org.springframework.session.data.redis.config.ConfigureRedisAction;
 import org.springframework.session.data.redis.config.annotation.web.http.EnableRedisHttpSession;
 import org.springframework.session.web.http.CookieSerializer;
 import org.springframework.session.web.http.DefaultCookieSerializer;
+
+import java.util.concurrent.ThreadPoolExecutor;
 
 /**
  * spring-session Redis HttpSession 装配
@@ -66,6 +69,39 @@ public class IamRedisHttpSessionConfiguration implements InitializingBean {
      */
     public ConfigureRedisAction iamSessionConfigureRedisNoOp() {
         return ConfigureRedisAction.NO_OP;
+    }
+
+    /**
+     * Spring Session 默认使用无界 SimpleAsyncTaskExecutor 执行 Redis 键空间事件；
+     * Redis 短暂重连时会不断新建线程。单线程有界队列保证事件按序处理，饱和时由提交线程
+     * 回压，不丢会话失效事件也不耗尽进程线程。
+     *
+     * @return Spring Session Redis 事件执行器
+     */
+    @Bean(name = "springSessionRedisTaskExecutor")
+    public ThreadPoolTaskExecutor iamSessionRedisTaskExecutor() {
+        return createSessionExecutor("iam-session-redis-event-", 64);
+    }
+
+    /**
+     * Redis 订阅循环必须串行，使用受 Spring 生命周期管理的单线程执行器替代默认无界执行器。
+     *
+     * @return Spring Session Redis 订阅执行器
+     */
+    @Bean(name = "springSessionRedisSubscriptionExecutor")
+    public ThreadPoolTaskExecutor iamSessionRedisSubscriptionExecutor() {
+        return createSessionExecutor("iam-session-redis-subscription-", 1);
+    }
+
+    private ThreadPoolTaskExecutor createSessionExecutor(String threadNamePrefix, int queueCapacity) {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(queueCapacity);
+        executor.setThreadNamePrefix(threadNamePrefix);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.initialize();
+        return executor;
     }
 
     /**

@@ -79,6 +79,7 @@ public class IamTrustedApplicationClientService {
     private final RedirectUriHelper redirectUriHelper;
     private final IamAuditEventPublisher auditEventPublisher;
     private final IamTrustedApplicationLifecycleService lifecycleService;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
     private final IamTrustedApplicationAuthorizationCleanupService authorizationCleanupService;
     private final SimpleIamServerProperties properties;
     private final SecureRandom secureRandom = new SecureRandom();
@@ -116,9 +117,11 @@ public class IamTrustedApplicationClientService {
                 request.getAuthenticationMethods(), clientType);
         validateClientPolicy(clientType, rawSecret, grantTypes, authenticationMethods);
 
+        boolean requireConsent = !builtInResolver.isBuiltIn(applicationId)
+                && Boolean.TRUE.equals(request.getRequireConsent());
         RegisteredClient saved = buildAndSaveClient(null, clientId, clientName, clientType, rawSecret,
                 redirectUris, grantTypes, authenticationMethods, request.getScopes(),
-                Boolean.TRUE.equals(request.getRequireConsent()));
+                requireConsent);
 
         // SAS save 不感知 application_id 列，创建后回填
         jdbcTemplate.update(SQL_SET_APPLICATION_ID, applicationId, saved.getId());
@@ -200,7 +203,8 @@ public class IamTrustedApplicationClientService {
         RegisteredClient updated = buildAndSaveClient(existing, existing.getClientId(), clientName, clientType,
                 existing.getClientSecret(), redirectUris, grantTypes, authenticationMethods,
                 request.getScopes(),
-                request.getRequireConsent() == null
+                builtInResolver.isBuiltIn(applicationId) ? Boolean.FALSE
+                        : request.getRequireConsent() == null
                         ? existing.getClientSettings().isRequireAuthorizationConsent()
                         : request.getRequireConsent());
 
@@ -349,7 +353,7 @@ public class IamTrustedApplicationClientService {
             }
             String value = raw.trim();
             // refresh_token 是授权码流程签发 refresh token 的必备伴生 grant，放行；
-            // client_credentials 等机器凭证类型仍拒绝（走 aksk-server 签发 AK/SK）
+            // client_credentials 等机器凭证类型仍拒绝（走对应的凭证签发服务）
             if (AuthorizationGrantType.REFRESH_TOKEN.getValue().equals(value)) {
                 result.add(new AuthorizationGrantType(value));
                 continue;

@@ -19,7 +19,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * IAM Web 站内信 API
@@ -33,6 +32,7 @@ import java.util.stream.Collectors;
 public class IamMessageRestController {
 
     private final IamMessageService messageService;
+    private final io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository userRepository;
     private final IamMessageSseService sseService;
 
     /**
@@ -47,16 +47,10 @@ public class IamMessageRestController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         if (page == null && size == null) {
-            return ResponseEntity.ok(messageService.listMessages(userId).stream()
-                    .map(WebMessageResponse::from)
-                    .collect(Collectors.toList()));
+            return ResponseEntity.ok(toResponses(messageService.listMessages(userId)));
         }
-        return ResponseEntity.ok(messageService.listMessages(userId,
-                        page == null ? 1 : page,
-                        size == null ? 20 : size)
-                .getContent().stream()
-                .map(WebMessageResponse::from)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(toResponses(messageService.listMessages(userId,
+                page == null ? 1 : page, size == null ? 20 : size).getContent()));
     }
 
     /**
@@ -70,7 +64,9 @@ public class IamMessageRestController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(WebMessagePageResponse.from(messageService.listMessages(userId, page, size)));
+        org.springframework.data.domain.Page<io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity> messagePage =
+                messageService.listMessages(userId, page, size);
+        return ResponseEntity.ok(WebMessagePageResponse.from(messagePage, subjectIdMap(messagePage.getContent())));
     }
 
     /**
@@ -108,7 +104,8 @@ public class IamMessageRestController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(WebMessageResponse.from(messageService.markRead(userId, messageId)));
+        return ResponseEntity.ok(WebMessageResponse.from(messageService.markRead(userId, messageId),
+                subjectIdMap(java.util.Collections.singletonList(messageService.markRead(userId, messageId)))));
     }
 
     /**
@@ -132,6 +129,28 @@ public class IamMessageRestController {
         // 会随 emitter 终身占用（连接池泄漏），首帧必须由后台线程查询并推送
         sseService.pushInitialUnreadCount(userId, emitter, () -> messageService.countUnreadMessages(userId));
         return ResponseEntity.ok(emitter);
+    }
+
+    private java.util.Map<Long, String> subjectIdMap(java.util.List<io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity> messages) {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity m : messages) {
+            ids.add(m.getRecipientUserId());
+            ids.add(m.getSenderUserId());
+        }
+        return userRepository.findAllById(ids).stream()
+                .filter(user -> user.getSubjectId() != null)
+                .collect(java.util.stream.Collectors.toMap(
+                io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getId,
+                io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getSubjectId, (a, b) -> a));
+    }
+
+    private java.util.List<WebMessageResponse> toResponses(java.util.List<io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity> messages) {
+        java.util.Map<Long, String> subjectIds = subjectIdMap(messages);
+        java.util.List<WebMessageResponse> out = new java.util.ArrayList<>();
+        for (io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity m : messages) {
+            out.add(WebMessageResponse.from(m, subjectIds));
+        }
+        return out;
     }
 
     private Long getUserId(UserDetails userDetails) {

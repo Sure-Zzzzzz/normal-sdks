@@ -3,12 +3,12 @@ package io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization;
 import lombok.Getter;
 
 /**
- * IAM 向 AKSK 暴露的授权控制面最终状态类型。
+ * IAM 向协作消费方暴露的授权控制面最终状态类型。
  *
  * @author surezzzzzz
  */
 @Getter
-public enum IamAkskAuthorizationChangeType {
+public enum IamOwnerAuthorizationChangeLogType {
 
     /**
      * 所属人启停或权限版本变化。
@@ -35,7 +35,7 @@ public enum IamAkskAuthorizationChangeType {
      */
     private final String description;
 
-    IamAkskAuthorizationChangeType(String code, String description) {
+    IamOwnerAuthorizationChangeLogType(String code, String description) {
         this.code = code;
         this.description = description;
     }
@@ -46,11 +46,11 @@ public enum IamAkskAuthorizationChangeType {
      * @param code 类型代码
      * @return 枚举，如果不存在返回 null
      */
-    public static IamAkskAuthorizationChangeType fromCode(String code) {
+    public static IamOwnerAuthorizationChangeLogType fromCode(String code) {
         if (code == null) {
             return null;
         }
-        for (IamAkskAuthorizationChangeType type : values()) {
+        for (IamOwnerAuthorizationChangeLogType type : values()) {
             if (type.code.equalsIgnoreCase(code)) {
                 return type;
             }
@@ -74,7 +74,7 @@ public enum IamAkskAuthorizationChangeType {
      * @return 类型代码数组
      */
     public static String[] getAllCodes() {
-        IamAkskAuthorizationChangeType[] types = values();
+        IamOwnerAuthorizationChangeLogType[] types = values();
         String[] codes = new String[types.length];
         for (int i = 0; i < types.length; i++) {
             codes[i] = types[i].code;

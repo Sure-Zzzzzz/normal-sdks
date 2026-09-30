@@ -17,7 +17,7 @@ public class AdminSessionResponse {
 
     private String sessionId;
 
-    private Long userId;
+    private String subjectId;
 
     private String username;
 
@@ -36,10 +36,10 @@ public class AdminSessionResponse {
     /**
      * 会话实体转响应视图
      */
-    public static AdminSessionResponse from(IamSessionEntity session) {
+    public static AdminSessionResponse from(IamSessionEntity session, String subjectId) {
         return new AdminSessionResponse(
                 session.getId(),
-                session.getUserId(),
+                subjectId,
                 session.getUsername(),
                 session.getClientId(),
                 session.getRemoteIp(),

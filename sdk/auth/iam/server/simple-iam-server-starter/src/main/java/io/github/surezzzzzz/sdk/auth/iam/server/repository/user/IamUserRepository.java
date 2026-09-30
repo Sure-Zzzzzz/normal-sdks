@@ -34,6 +34,26 @@ public interface IamUserRepository extends JpaRepository<IamUserEntity, Long> {
     boolean existsByUsername(String username);
 
     /**
+     * 根据对外主体 ID 查询（reader 失败关闭路径）
+     */
+    Optional<IamUserEntity> findBySubjectId(String subjectId);
+
+    /**
+     * 查询尚未分配主体 ID 的行（存量回填，含 INACTIVE 归档行）
+     */
+    List<IamUserEntity> findBySubjectIdIsNull();
+
+    /**
+     * 主体 ID 唯一冲突预检
+     */
+    boolean existsBySubjectId(String subjectId);
+
+    /**
+     * 根据手机号查询（E.164 规范化形态；登录/绑定冲突检查）
+     */
+    Optional<IamUserEntity> findByPhone(String phone);
+
+    /**
      * 根据外部身份源与外部 ID 查询已绑定用户
      */
     Optional<IamUserEntity> findByIdentitySourceAndExternalId(String identitySource, String externalId);
@@ -138,4 +158,13 @@ public interface IamUserRepository extends JpaRepository<IamUserEntity, Long> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE IamUserEntity u SET u.permissionVersion = u.permissionVersion + 1 WHERE u.id IN :userIds")
     void bumpPermissionVersion(@Param("userIds") Collection<Long> userIds);
+
+    /**
+     * 乐观式分配主体 ID：仅当当前值为 NULL 时写入，返回受影响行数（0=已被并发实例处理）。
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE IamUserEntity u SET u.subjectId = :subjectId, u.updatedAt = :updatedAt "
+            + "WHERE u.id = :id AND u.subjectId IS NULL")
+    int updateSubjectIdIfAbsent(@Param("id") Long id, @Param("subjectId") String subjectId,
+                                @Param("updatedAt") Instant updatedAt);
 }

@@ -73,7 +73,7 @@ public class IamAuditEventPublisher {
      *
      * <p>开放 API 调用主体（公共资源层 {@code VerifiedResourceAuthentication}，principal 为
      * {@code VerifiedResourceContext}）未覆写 getName，直接取名会得到整段 toString；
-     * 特判后 operator 为 {@code <sourceId>:<subjectId>}（如 {@code aksk:crm-sync}），
+     * 特判后 operator 为 {@code <sourceId>:<subjectId>}，
      * 与 ResourceAccessEvent 的 subjectId 同源，访问级与领域级审计可串查。
      */
     private String resolveOperator() {

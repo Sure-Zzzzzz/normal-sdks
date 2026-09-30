@@ -8,13 +8,16 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.DataResourceDeclaration;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,6 +53,7 @@ public class IamPlatformAdminPrivilegeService {
     private static final String UNMANIFESTED_VERSION = "0";
     private static final String UNMANIFESTED_DIGEST = "unmanifested";
 
+    private final IamUserRepository userRepository;
     private final IamEffectiveRoleResolver effectiveRoleResolver;
     private final IamRoleRepository roleRepository;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
@@ -75,6 +79,20 @@ public class IamPlatformAdminPrivilegeService {
      *
      * @return 应用不存在返回 null；无 manifest 返回空权限集 context（仅准入）
      */
+    /**
+     * 平台管理员兜底上下文的主体段：公开主体 ID；缺失即不兜底（失败关闭，不留数字 id 语义）。
+     */
+    private String resolveSubjectId(Long userId) {
+        String subjectId = userRepository.findById(userId)
+                .map(user -> user.getSubjectId() != null ? user.getSubjectId() : null)
+                .orElse(null);
+        if (subjectId == null) {
+            throw new SimpleIamServerException(ErrorCode.CONFIG_VALIDATION_FAILED,
+                    "平台管理员主体缺失 subject_id，拒绝兜底上下文");
+        }
+        return subjectId;
+    }
+
     public ApplicationAuthorizationContext buildPrivilegedContext(Long userId, Long applicationId,
                                                                   Instant issuedAt, Instant expiresAt) {
         IamTrustedApplicationEntity application = trustedApplicationRepository
@@ -90,7 +108,7 @@ public class IamPlatformAdminPrivilegeService {
                     SimpleApplicationAuthorizationConstant.PROTOCOL,
                     SimpleApplicationAuthorizationConstant.VERSION,
                     ApplicationAuthorizationSubjectType.HUMAN,
-                    String.valueOf(userId),
+                    resolveSubjectId(userId),
                     application.getApplicationCode(),
                     true,
                     Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null,
@@ -113,7 +131,7 @@ public class IamPlatformAdminPrivilegeService {
                 SimpleApplicationAuthorizationConstant.PROTOCOL,
                 SimpleApplicationAuthorizationConstant.VERSION,
                 ApplicationAuthorizationSubjectType.HUMAN,
-                String.valueOf(userId),
+                resolveSubjectId(userId),
                 application.getApplicationCode(),
                 true,
                 IamApplicationAuthorizationJsonCodec.readStringList(manifest.getRolesJson(), "roles"),

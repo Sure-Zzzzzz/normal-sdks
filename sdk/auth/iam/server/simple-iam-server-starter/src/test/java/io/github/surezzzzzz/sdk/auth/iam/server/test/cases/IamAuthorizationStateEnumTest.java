@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamAkskAuthorizationChangeType;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOwnerAuthorizationChangeLogType;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.TrustedApplicationCleanupOperationState;
 import org.junit.jupiter.api.Test;
 
@@ -15,14 +15,14 @@ class IamAuthorizationStateEnumTest {
 
     @Test
     void changeTypeShouldResolveByCodeIgnoringCase() {
-        assertEquals(IamAkskAuthorizationChangeType.OWNER_STATE,
-                IamAkskAuthorizationChangeType.fromCode("OWNER_STATE"));
-        assertEquals(IamAkskAuthorizationChangeType.TARGET_APPLICATION_STATE,
-                IamAkskAuthorizationChangeType.fromCode("target_application_state"));
-        assertNull(IamAkskAuthorizationChangeType.fromCode(null));
-        assertNull(IamAkskAuthorizationChangeType.fromCode("unknown"));
-        assertTrue(IamAkskAuthorizationChangeType.isValid("OWNER_APPLICATION_PROJECTION"));
-        assertFalse(IamAkskAuthorizationChangeType.isValid("owner"));
+        assertEquals(IamOwnerAuthorizationChangeLogType.OWNER_STATE,
+                IamOwnerAuthorizationChangeLogType.fromCode("OWNER_STATE"));
+        assertEquals(IamOwnerAuthorizationChangeLogType.TARGET_APPLICATION_STATE,
+                IamOwnerAuthorizationChangeLogType.fromCode("target_application_state"));
+        assertNull(IamOwnerAuthorizationChangeLogType.fromCode(null));
+        assertNull(IamOwnerAuthorizationChangeLogType.fromCode("unknown"));
+        assertTrue(IamOwnerAuthorizationChangeLogType.isValid("OWNER_APPLICATION_PROJECTION"));
+        assertFalse(IamOwnerAuthorizationChangeLogType.isValid("owner"));
     }
 
     /**
@@ -30,12 +30,12 @@ class IamAuthorizationStateEnumTest {
      */
     @Test
     void changeTypeCodeMustStayIdenticalToConstantName() {
-        for (IamAkskAuthorizationChangeType type : IamAkskAuthorizationChangeType.values()) {
+        for (IamOwnerAuthorizationChangeLogType type : IamOwnerAuthorizationChangeLogType.values()) {
             assertEquals(type.name(), type.getCode(), "code 必须与常量名同形");
             assertEquals(type.name(), type.toString(), "toString 必须返回 code");
         }
         assertEquals(Arrays.asList("OWNER_STATE", "TARGET_APPLICATION_STATE", "OWNER_APPLICATION_PROJECTION"),
-                Arrays.asList(IamAkskAuthorizationChangeType.getAllCodes()));
+                Arrays.asList(IamOwnerAuthorizationChangeLogType.getAllCodes()));
     }
 
     @Test

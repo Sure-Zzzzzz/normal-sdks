@@ -155,7 +155,7 @@ class IamOrganizationBroadcastServiceTest {
                 SimpleIamServerConstant.STATUS_INACTIVE);
         userGroupService.assignUser(disabledGroup.getId(), activeDisabledDepartmentUser.getId());
 
-        assertNoRecipient(createMessageRequest(disabledDepartmentUser.getId(), null, null));
+        assertNoRecipient(createMessageRequest(disabledDepartmentUser.getSubjectId(), null, null));
         assertNoRecipient(createMessageRequest(null, Collections.singletonList(activeDepartment.getId()), null));
         assertNoRecipient(createMessageRequest(null, Collections.singletonList(disabledDepartment.getId()), null));
         assertNoRecipient(createMessageRequest(null, null, Collections.singletonList(activeGroup.getId())));
@@ -175,8 +175,8 @@ class IamOrganizationBroadcastServiceTest {
         userGroupService.assignUser(group.getId(), explicitUser.getId());
 
         CreateMessageRequest request = new CreateMessageRequest();
-        request.setRecipientUserId(explicitUser.getId());
-        request.setRecipientUserIds(Arrays.asList(explicitUser.getId(), childUser.getId()));
+        request.setRecipientSubjectId(explicitUser.getSubjectId());
+        request.setRecipientSubjectIds(Arrays.asList(explicitUser.getSubjectId(), childUser.getSubjectId()));
         request.setDepartmentIds(Collections.singletonList(root.getId()));
         request.setUserGroupIds(Collections.singletonList(group.getId()));
         request.setIncludeChildDepartments(true);
@@ -214,7 +214,7 @@ class IamOrganizationBroadcastServiceTest {
     @DisplayName("显式收件人不存在时应抛 USER_NOT_FOUND，而不是空收件人错误")
     void testNonExistentExplicitRecipientThrowsUserNotFound() {
         CreateMessageRequest request = new CreateMessageRequest();
-        request.setRecipientUserId(9_999_999L);
+        request.setRecipientSubjectId("sid-9999999");
         request.setTitle("不存在的收件人");
         request.setContent("内容");
         SimpleIamServerException exception = assertThrows(SimpleIamServerException.class,
@@ -329,11 +329,11 @@ class IamOrganizationBroadcastServiceTest {
         return group;
     }
 
-    private CreateMessageRequest createMessageRequest(Long recipientUserId,
+    private CreateMessageRequest createMessageRequest(String recipientSubjectId,
                                                       List<Long> departmentIds,
                                                       List<Long> groupIds) {
         CreateMessageRequest request = new CreateMessageRequest();
-        request.setRecipientUserId(recipientUserId);
+        request.setRecipientSubjectId(recipientSubjectId);
         request.setDepartmentIds(departmentIds);
         request.setUserGroupIds(groupIds);
         request.setTitle("禁用目标测试");

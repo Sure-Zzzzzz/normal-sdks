@@ -35,12 +35,12 @@ import java.util.stream.Collectors;
 /**
  * 开放 API 用户族（{@code /iam/api/users}）。
  *
- * <p>主体为 AKSK 凭证（外部业务系统组织与人员同步），由公共资源层链鉴权；
+ * <p>主体为外部凭证(外部业务系统组织与人员同步)，由公共资源层链鉴权；
  * 端点级 @RequireApiPermission 精确码控（iam:user:api）+ DATA 范围消费
  * （resource=iam:user：读=部门范围与请求条件求交、越权数据不出库，写=目标
  * 部门须完整落在授权范围内，计划不可执行一律失败关闭 403）。响应为开放 API 独立
  * 字段集，不带管理台视图字段；操作事实经 AdminActionEvent 审计，operator
- * 为 AKSK 主体标识（sourceId:subjectId）。
+ * 为外部主体标识（sourceId:subjectId）。
  *
  * @author surezzzzzz
  */
@@ -81,13 +81,13 @@ public class IamUserRestController {
     /**
      * 用户详情（含角色编码列表；目标部门须在 DATA 授权范围内）。
      */
-    @GetMapping("/{userId}")
+    @GetMapping("/{subjectId}")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ)
-    public ResponseEntity<UserRestResponse> getUser(@PathVariable Long userId,
+    public ResponseEntity<UserRestResponse> getUser(@PathVariable String subjectId,
                                                     @CurrentDataAccessPlan DataAccessPlan plan) {
-        IamUserEntity user = userService.getById(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
         requireWithinScope(plan, user);
         return ResponseEntity.ok(toUserRestResponse(user));
     }
@@ -95,15 +95,15 @@ public class IamUserRestController {
     /**
      * 用户角色列表（目标部门须在 DATA 授权范围内）。
      */
-    @GetMapping("/{userId}/roles")
+    @GetMapping("/{subjectId}/roles")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ)
-    public ResponseEntity<List<String>> getUserRoles(@PathVariable Long userId,
+    public ResponseEntity<List<String>> getUserRoles(@PathVariable String subjectId,
                                                      @CurrentDataAccessPlan DataAccessPlan plan) {
-        IamUserEntity user = userService.getById(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
         requireWithinScope(plan, user);
-        return ResponseEntity.ok(roleCodes(userId));
+        return ResponseEntity.ok(roleCodes(user.getId()));
     }
 
     /**
@@ -123,104 +123,110 @@ public class IamUserRestController {
     /**
      * 更新用户（现有部门与变更后部门均须在 DATA 授权范围内）。
      */
-    @PutMapping("/{userId}")
+    @PutMapping("/{subjectId}")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<UserRestResponse> updateUser(@PathVariable Long userId,
+    public ResponseEntity<UserRestResponse> updateUser(@PathVariable String subjectId,
                                                        @RequestBody UpdateUserRequest request,
                                                        @CurrentDataAccessPlan DataAccessPlan plan) {
-        IamUserEntity user = userService.getById(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
         requireWithinScope(plan, user);
         if (request.getDepartmentId() != null
                 && !request.getDepartmentId().equals(user.getDepartmentId())) {
             requireDepartmentWithinScope(plan, request.getDepartmentId());
         }
-        return ResponseEntity.ok(toUserRestResponse(userService.updateUser(userId, request)));
+        return ResponseEntity.ok(toUserRestResponse(userService.updateUser(user.getId(), request)));
     }
 
     /**
      * 删除用户（物理删除，级联清理角色绑定、组成员与应用授权投影）。
      */
-    @DeleteMapping("/{userId}")
+    @DeleteMapping("/{subjectId}")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> deleteUser(@PathVariable Long userId,
+    public ResponseEntity<Void> deleteUser(@PathVariable String subjectId,
                                            @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        userService.deleteUser(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        userService.deleteUser(user.getId());
         return ResponseEntity.noContent().build();
     }
 
     /**
      * 启用用户。
      */
-    @PutMapping("/{userId}/enable")
+    @PutMapping("/{subjectId}/enable")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> enableUser(@PathVariable Long userId,
+    public ResponseEntity<Void> enableUser(@PathVariable String subjectId,
                                            @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        userService.enableUser(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        userService.enableUser(user.getId());
         return ResponseEntity.ok().build();
     }
 
     /**
      * 禁用用户（全端吊销会话）。
      */
-    @PutMapping("/{userId}/disable")
+    @PutMapping("/{subjectId}/disable")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> disableUser(@PathVariable Long userId,
+    public ResponseEntity<Void> disableUser(@PathVariable String subjectId,
                                             @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        userService.disableUser(userId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        userService.disableUser(user.getId());
         return ResponseEntity.ok().build();
     }
 
     /**
-     * 重置密码（即全端吊销）；requestedBy 记AKSK 主体标识。
+     * 重置密码（即全端吊销）；requestedBy 记外部凭证主体标识。
      */
-    @PutMapping("/{userId}/reset-password")
+    @PutMapping("/{subjectId}/reset-password")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> resetPassword(@PathVariable Long userId,
+    public ResponseEntity<Void> resetPassword(@PathVariable String subjectId,
                                               @RequestBody ResetPasswordRequest request,
                                               @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        userService.resetPassword(userId, request.getNewPassword(), resolveOperator());
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        userService.resetPassword(user.getId(), request.getNewPassword(), resolveOperator());
         return ResponseEntity.ok().build();
     }
 
     /**
      * 绑定角色。
      */
-    @PostMapping("/{userId}/roles/{roleId}")
+    @PostMapping("/{subjectId}/roles/{roleId}")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> assignRole(@PathVariable Long userId, @PathVariable Long roleId,
+    public ResponseEntity<Void> assignRole(@PathVariable String subjectId, @PathVariable Long roleId,
                                            @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        roleService.assignRole(userId, roleId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        roleService.assignRole(user.getId(), roleId);
         return ResponseEntity.ok().build();
     }
 
     /**
      * 解绑角色。
      */
-    @DeleteMapping("/{userId}/roles/{roleId}")
+    @DeleteMapping("/{subjectId}/roles/{roleId}")
     @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API)
     @DataPermissionOperation(resource = SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
             action = SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE)
-    public ResponseEntity<Void> revokeRole(@PathVariable Long userId, @PathVariable Long roleId,
+    public ResponseEntity<Void> revokeRole(@PathVariable String subjectId, @PathVariable Long roleId,
                                            @CurrentDataAccessPlan DataAccessPlan plan) {
-        requireWithinScope(plan, userService.getById(userId));
-        roleService.revokeRole(userId, roleId);
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        requireWithinScope(plan, user);
+        roleService.revokeRole(user.getId(), roleId);
         return ResponseEntity.noContent().build();
     }
 
@@ -251,7 +257,7 @@ public class IamUserRestController {
     }
 
     /**
-     * 解析 AKSK 主体标识（sourceId:subjectId，如 aksk:crm-sync）；非 AKSK 主体（理论不达）回退认证名。
+     * 解析外部主体标识（sourceId:subjectId）；非外部凭证主体（理论不达）回退认证名。
      */
     private String resolveOperator() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

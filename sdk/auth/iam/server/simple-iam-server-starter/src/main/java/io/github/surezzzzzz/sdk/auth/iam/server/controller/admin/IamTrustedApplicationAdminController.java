@@ -29,7 +29,7 @@ import java.util.List;
  *
  * <p>一应用可关联多个 OAuth2 客户端。应用维度管理应用主表 / Portal 集成 / 菜单；
  * client 维度挂在应用下，管理 OAuth2 客户端的 redirect_uri / scope / clientType / PKCE / secret。
- * 机器凭证（AK/SK）不在本接口创建，请通过 aksk-server。
+ * 机器凭证（AK/SK）不在本接口创建，请通过对应的凭证签发服务。
  *
  * <p>权限：需要 ROLE_iam_admin + iam:trusted-application:api（SecurityFilterChain 鉴权）。
  *

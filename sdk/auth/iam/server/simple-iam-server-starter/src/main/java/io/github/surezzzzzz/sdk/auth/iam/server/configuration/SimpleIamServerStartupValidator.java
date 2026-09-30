@@ -21,7 +21,7 @@ import java.util.List;
  * IAM Server 开放 API 启动校验。
  *
  * <p>开放 API（{@code /iam/api/**}）由公共资源层鉴权链接管，启用方式为宿主显式配置
- * protected-paths 并外插认证 Provider（如 aksk-resource）。本开放 API 不注入默认路径：
+ * protected-paths 并外插认证 Provider（如凭证服务 resource 适配器）。本开放 API 不注入默认路径：
  * 公共层对"配了路径却无任何 Provider 适配器"直接 fail-fast，注入默认会把未外插
  * Provider 的宿主（纯会话形态）全部拦在启动外。校验语义：
  * <ul>

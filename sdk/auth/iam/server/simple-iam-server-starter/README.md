@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.2.0`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.0`。版本沿革见各 `CHANGELOG.*.md`。
+
+> **1.3.0 要点**：对外身份口径全面切换为稳定公开主体 `subjectId`（管理面/开放 API/URI/claim/事件载荷，数字 userId 退出对外）；新增手机号绑定与短信登录、忘记密码、Excel 用户导入、B2M 短信投递适配器；可信应用内置标记管理面可调。升级与破坏性说明见 [CHANGELOG.1.3.0.md](CHANGELOG.1.3.0.md)。
 
 本模块**不提供浏览器页面**：登录页、授权确认页、Portal 和管理界面统一由 Vue Web 承载，IAM Server 只提供 OAuth2/OIDC 协议端点和 JSON API。
 
@@ -36,7 +38,7 @@
 - **OAuth 2.1 授权码 + PKCE**：公共客户端强制 S256；授权码一次性消费
 - **OIDC**：ID Token、userinfo 按 scope 暴露身份字段
 - **Token 格式双模式**：`jwt`（JWS RS256，默认）或 `jwe`（Access Token = `JWE(JWS(payload))`，ID Token 仍为标准 JWS）
-- **claims 注入**：`sub`（稳定的 IAM 用户 ID）、`sid`（IAM 会话）、`auth_time`；Access Token 附带 `roles` / `permissions` 与应用授权投影
+- **claims 注入**：`sub`（稳定公开主体 `subjectId`）、`sid`（IAM 会话）、`auth_time`；Access Token 附带 `roles` / `permissions` 与应用授权投影
 - **Consent 授权确认**：应用可要求用户确认授权范围，确认结果落库为投影
 - **Refresh Token 主动防线**：客户端显式配置 `refresh_token` 授权类型时按标准流程签发（默认不配置即不签发）；全局一次性使用（`reuseRefreshTokens=false`）——refresh grant 必轮换签发新值；旧值二次使用即重放：整族吊销（当前 token 同步失效，失败关闭）+ 发布 `RefreshTokenReuseDetectedEvent`；登出 / 禁用 / 删除 / 改密联动族失效；TTL 取 `token.access-expires-in` / `token.refresh-expires-in`（默认 30 分钟 / 10 小时）
 - **资源端 Token 验证端点**：供无法本地验签的资源系统远程校验，验证客户端以 Basic 独立认证
@@ -47,7 +49,7 @@
 
 - 用户 / 部门 / 协作组 / 角色 / 权限 CRUD 与关系分配（含外部身份预绑定）
 - 最后管理员保护（最后一个可用管理员不可删除 / 禁用 / 撤销角色）、内置角色与权限保护
-- 可信应用管理：OAuth 客户端（原始 secret 仅创建时返回一次，后续查询仅 `secretPresent`）、Portal 集成、应用菜单树与默认入口；PAGE 可选择标准布局或隐藏 Portal 顶栏和侧栏的沉浸展示，平台管理员可指定无深链登录首页
+- 可信应用管理：OAuth 客户端（原始 secret 仅创建时返回一次，后续查询仅 `secretPresent`）、Portal 集成、应用菜单树与默认入口；PAGE 可选择标准布局或隐藏 Portal 顶栏和侧栏的沉浸展示，平台管理员可指定无深链登录首页；可信应用可标记为平台内置（管理面可调，禁删除/禁停用，下线走关闭门户集成，判定口径 = `built_in` 列优先、引导配置清单兜底）
 - 用户应用授权管理（决定 Access Token 中的应用授权投影内容）
 - 角色应用授权规则：角色 × 应用的权限集合定义，配合应用权限清单与授权投影联动（见 [权限与授权投影](docs/领域文档/权限与授权投影.md)）
 - 资源验证客户端管理（独立于 OAuth 客户端的验证凭证，支持密钥轮换）
@@ -70,7 +72,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.2.0"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -156,7 +158,7 @@ dependencies {
 | `GET /iam/admin/dashboard` | 仪表盘聚合（用户 / 部门 / 协作组 / 角色 / 权限 / 可信应用计数 + 在期会话 / 今日登录人数 / 锁定 / 禁用 / 无部门用户运行态，`iam:dashboard:api`） |
 | `GET /iam/admin/dashboard/recent-logins` | 最近登录记录分页（用户 + 部门 + 时间） |
 | `GET /iam/admin/sessions` | 在期会话分页（可按 `userId` 过滤；会话 / 用户 / 客户端 / IP / UA / 认证与最后活跃时间，`iam:session:api`） |
-| `PUT /iam/admin/sessions/users/{userId}/revoke` | 强制下线：吊销该用户全部会话（等价用户级全端吊销，返回吊销数，发 `REVOKED` 审计） |
+| `PUT /iam/admin/sessions/users/{subjectId}/revoke` | 强制下线：吊销该用户全部会话（等价用户级全端吊销，返回吊销数，发 `REVOKED` 审计） |
 
 组织与用户：
 
@@ -165,12 +167,12 @@ dependencies {
 | `GET /iam/admin/organizations/tree` | 组织树（部门 + 协作组） |
 | `GET /iam/admin/organizations/departments/{id}/workspace` | 部门工作台视图 |
 | `GET /iam/admin/organizations/users/{id}/profile` | 用户组织画像（有效角色与权限各带 `source` 来源标记：`direct` 个人直接 / `department_inherited` 部门继承） |
-| `GET / POST /iam/admin/users`、`GET / PUT / DELETE /iam/admin/users/{userId}` | 用户 CRUD 与分页（分页过滤：status / departmentId / keyword / lastLoginAfter / lockedUntilAfter / noDepartment——未挂部门筛选，仪表盘下钻用；删除级联清理角色绑定、组成员与应用授权投影） |
-| `PUT /iam/admin/users/{userId}/enable` / `disable` | 启用 / 禁用（禁用即全端吊销） |
-| `PUT /iam/admin/users/{userId}/unlock` | 手动解锁（清除登录失败锁定与失败计数，不等 15 分钟自动过期） |
-| `PUT /iam/admin/users/{userId}/reset-password` | 管理员重置密码（即全端吊销） |
-| `POST / DELETE /iam/admin/users/{userId}/external-identity` | 外部身份预绑定 / 解绑 |
-| `GET /iam/admin/users/{userId}/roles`、`POST / DELETE /iam/admin/users/{userId}/roles/{roleId}` | 用户角色查询与分配 |
+| `GET / POST /iam/admin/users`、`GET / PUT / DELETE /iam/admin/users/{subjectId}` | 用户 CRUD 与分页（分页过滤：status / departmentId / keyword / lastLoginAfter / lockedUntilAfter / noDepartment——未挂部门筛选，仪表盘下钻用；删除级联清理角色绑定、组成员与应用授权投影） |
+| `PUT /iam/admin/users/{subjectId}/enable` / `disable` | 启用 / 禁用（禁用即全端吊销） |
+| `PUT /iam/admin/users/{subjectId}/unlock` | 手动解锁（清除登录失败锁定与失败计数，不等自动过期） |
+| `PUT /iam/admin/users/{subjectId}/reset-password` | 管理员重置密码（即全端吊销） |
+| `POST / DELETE /iam/admin/users/{subjectId}/external-identity` | 外部身份预绑定 / 解绑 |
+| `GET /iam/admin/users/{subjectId}/roles`、`POST / DELETE /iam/admin/users/{subjectId}/roles/{roleId}` | 用户角色查询与分配 |
 
 部门与协作组：
 
@@ -179,7 +181,7 @@ dependencies {
 | `GET / POST /iam/admin/departments`、`GET / PUT / DELETE /iam/admin/departments/{id}`、`GET /iam/admin/departments/page` | 部门 CRUD 与分页 |
 | `GET /iam/admin/departments/{departmentId}/roles`、`POST / DELETE /iam/admin/departments/{departmentId}/roles/{roleId}` | 部门挂载角色查询与分配——部门下全体成员自动继承（个人直接角色之外的并集，转部门实时生效）；撤销 `iam_admin` 命中部门级最后管理员保护时 409 |
 | `GET / POST /iam/admin/user-groups`、`GET / PUT / DELETE /iam/admin/user-groups/{id}`、`GET /iam/admin/user-groups/page` | 协作组 CRUD 与分页 |
-| `GET / POST / DELETE /iam/admin/user-groups/{groupId}/users/{userId}`、`GET /iam/admin/user-groups/{groupId}/users` | 协作组成员管理 |
+| `GET / POST / DELETE /iam/admin/user-groups/{groupId}/users/{subjectId}`、`GET /iam/admin/user-groups/{groupId}/users` | 协作组成员管理 |
 
 角色与权限（内置项受保护不可改删）：
 
@@ -196,7 +198,7 @@ dependencies {
 
 | 端点 | 说明 |
 |---|---|
-| `GET / POST /iam/admin/trusted-applications`、`GET / PUT / DELETE /iam/admin/trusted-applications/{id}`、`GET /iam/admin/trusted-applications/page` | 可信应用 CRUD 与分页（创建必须带初始客户端） |
+| `GET / POST /iam/admin/trusted-applications`、`GET / PUT / DELETE /iam/admin/trusted-applications/{id}`、`GET /iam/admin/trusted-applications/page` | 可信应用 CRUD 与分页（创建必须带初始客户端；`builtIn` 可在创建与更新时标记，内置应用禁删除/禁停用，其 OAuth 客户端强制免授权确认；引导配置清单内的编码不可摘除内置标记） |
 | `GET / POST /iam/admin/trusted-applications/{id}/clients`、`GET / PUT / DELETE …/clients/{clientId}` | OAuth 客户端管理（原始 secret 仅创建时返回一次） |
 | `PUT /iam/admin/trusted-applications/{id}/portal/configuration` | 原子更新 Portal 集成、菜单树与默认入口（`configVersion` 乐观锁） |
 | `GET / PUT /iam/admin/portal/login-landing` | 查询或更新无深链登录首页单例（仅 `iam_admin`） |
@@ -205,7 +207,7 @@ dependencies {
 
 | 端点 | 说明 |
 |---|---|
-| `GET / PUT / DELETE /iam/admin/users/{userId}/application-authorizations/{applicationId}`、`GET /iam/admin/users/{userId}/application-authorizations` | 用户应用授权（投影进 Access Token）；摘要与详情按用户是否平台管理员下发 `platformAdmin` 标记（特权不受单应用撤销影响） |
+| `GET / PUT / DELETE /iam/admin/users/{subjectId}/application-authorizations/{applicationId}`、`GET /iam/admin/users/{subjectId}/application-authorizations` | 用户应用授权（投影进 Access Token）；摘要与详情按用户是否平台管理员下发 `platformAdmin` 标记（特权不受单应用撤销影响） |
 | `GET / POST /iam/admin/trusted-applications/{id}/resource-verification-clients`、`GET / DELETE …/{clientId}`、`POST …/{clientId}/secret` | 验证客户端管理（含密钥轮换） |
 
 站内信：
@@ -227,11 +229,11 @@ dependencies {
 
 | 端点 | 说明 |
 |---|---|
-| `GET /iam/api/users`、`GET /iam/api/users/{userId}` | 用户分页 / 详情（DATA 部门范围求交，越权数据不出库） |
-| `GET /iam/api/users/{userId}/roles` | 用户角色列表 |
-| `POST /iam/api/users`、`PUT / DELETE /iam/api/users/{userId}` | 用户创建 / 更新 / 删除（目标部门须在 DATA 范围内） |
-| `PUT /iam/api/users/{userId}/enable` / `disable` / `reset-password` | 启用 / 禁用（全端吊销）/ 重置密码（审计 operator 为 AKSK 主体标识） |
-| `POST / DELETE /iam/api/users/{userId}/roles/{roleId}` | 角色绑定 / 解绑 |
+| `GET /iam/api/users`、`GET /iam/api/users/{subjectId}` | 用户分页 / 详情（DATA 部门范围求交，越权数据不出库） |
+| `GET /iam/api/users/{subjectId}/roles` | 用户角色列表 |
+| `POST /iam/api/users`、`PUT / DELETE /iam/api/users/{subjectId}` | 用户创建 / 更新 / 删除（目标部门须在 DATA 范围内） |
+| `PUT /iam/api/users/{subjectId}/enable` / `disable` / `reset-password` | 启用 / 禁用（全端吊销）/ 重置密码（审计 operator 为 AKSK 主体标识） |
+| `POST / DELETE /iam/api/users/{subjectId}/roles/{roleId}` | 角色绑定 / 解绑 |
 
 部门族（API 码 `iam:department:api`，第一版纯码控不评估 DATA）：
 
@@ -336,7 +338,7 @@ io:
 
 ## 业务应用接入（挂门户）
 
-业务系统以可信应用身份接入统一应用门户，四步（机制详见 [权限与授权投影](docs/领域文档/权限与授权投影.md)）：
+业务系统以可信应用身份接入统一应用门户，按以下四步完成：
 
 | # | 步骤 | 操作 | 说明 |
 |---|---|---|---|
@@ -345,7 +347,7 @@ io:
 | 3 | 配角色应用授权规则 | `PUT /iam/admin/roles/{roleId}/authorization-rules/{applicationId}` | 角色 × 应用的码集合，投影的计算源；变更即触发投影重算 |
 | 4 | 给用户准入 | 用户应用授权 admitted（已申报清单的应用走准入 + 角色规则自动投影；特殊需要可手工授权行微调） | 决定用户 Token 中的投影内容与门户可见性 |
 
-验证：用户登录门户核对应用可见与菜单，解出的 Access Token 中核对 `iam_authorization` 投影内容（投影的端到端操作序见 [权限与授权投影](docs/领域文档/权限与授权投影.md) 的「业务方上报指引」）。
+验证：用户登录门户后核对应用可见性与菜单；解出 Access Token，核对 `iam_authorization` 投影内容与已申报的清单、角色规则和准入状态一致。
 
 Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/application-order` 维护。更新必须提交读取时的 `version` 和全部 Portal 集成 ID；冲突返回 `409` 后重读再调整。服务端按该顺序返回当前用户可访问的应用，前端不得按编码或名称二次排序。OAuth2 Consent 页面会同时展示可信应用名称与内置图标；没有归属的历史客户端回退为客户端名称和默认图标。
 

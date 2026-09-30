@@ -80,7 +80,7 @@ public class IamRoleService {
         projectionService.onUserRoleAssigned(userId);
 
         auditEventPublisher.publishAdminAction(AdminActionType.ASSIGNED, AdminSubjectType.USER,
-                String.valueOf(userId), subjectNameOfUser(userId), "roleId=" + roleId);
+                subjectIdOfUser(userId), subjectNameOfUser(userId), "roleId=" + roleId);
     }
 
     /**
@@ -104,7 +104,7 @@ public class IamRoleService {
             projectionService.onUserRoleAssigned(userId);
         }
         auditEventPublisher.publishAdminAction(AdminActionType.UNASSIGNED, AdminSubjectType.USER,
-                String.valueOf(userId), subjectNameOfUser(userId), "roleId=" + roleId);
+                subjectIdOfUser(userId), subjectNameOfUser(userId), "roleId=" + roleId);
     }
 
     /**
@@ -155,6 +155,13 @@ public class IamRoleService {
      */
     private String subjectNameOfUser(Long userId) {
         return userRepository.findById(userId).map(IamUserEntity::getUsername).orElse(null);
+    }
+
+    /**
+     * 审计事件目标用户的公开主体；并发删除后不再以数据库自增 ID 回退。
+     */
+    private String subjectIdOfUser(Long userId) {
+        return userRepository.findById(userId).map(IamUserEntity::getSubjectId).orElse(null);
     }
 
     /**

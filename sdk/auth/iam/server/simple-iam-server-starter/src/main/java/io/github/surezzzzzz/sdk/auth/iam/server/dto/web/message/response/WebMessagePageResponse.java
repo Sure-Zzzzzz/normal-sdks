@@ -36,10 +36,10 @@ public class WebMessagePageResponse {
     /**
      * 站内信分页结果转响应视图
      */
-    public static WebMessagePageResponse from(Page<IamMessageEntity> source) {
+    public static WebMessagePageResponse from(Page<IamMessageEntity> source, java.util.Map<Long, String> subjectIds) {
         WebMessagePageResponse response = new WebMessagePageResponse();
         response.setContent(source.getContent().stream()
-                .map(WebMessageResponse::from)
+                .map(message -> WebMessageResponse.from(message, subjectIds))
                 .collect(Collectors.toList()));
         response.setTotalElements(source.getTotalElements());
         response.setTotalPages(source.getTotalPages());

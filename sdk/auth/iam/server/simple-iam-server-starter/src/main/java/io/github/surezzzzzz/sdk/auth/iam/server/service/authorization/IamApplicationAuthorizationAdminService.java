@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.Appli
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.ApplicationAuthorizationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
@@ -51,7 +52,7 @@ public class IamApplicationAuthorizationAdminService {
     private final IamTrustedApplicationMutationGuard mutationGuard;
     private final IamApplicationAuthorizationStateService authorizationStateService;
     private final IamEffectiveRoleResolver effectiveRoleResolver;
-    private final IamAkskAuthorizationChangeService changeService;
+    private final IamOwnerAuthorizationChangeLogService changeService;
 
     /**
      * 列出用户全部应用授权摘要。
@@ -98,7 +99,7 @@ public class IamApplicationAuthorizationAdminService {
     @Transactional
     public ApplicationAuthorizationDetailResponse putAuthorization(
             Long userId, Long applicationId, PutApplicationAuthorizationRequest request) {
-        requireUser(userId);
+        IamUserEntity user = requireUser(userId);
         requireApplication(applicationId);
         mutationGuard.requireMutable(applicationId);
         normalize(request);
@@ -142,13 +143,13 @@ public class IamApplicationAuthorizationAdminService {
             throw new SimpleIamServerException(ErrorCode.APPLICATION_AUTHORIZATION_CONFLICT,
                     String.format(ServerErrorMessage.APPLICATION_AUTHORIZATION_CONFLICT, userId, applicationId));
         }
-        changeService.recordProjection(entity, created ? IamAkskAuthorizationChangeService.REASON_APPLICATION_AUTHORIZATION_GRANTED
-                : IamAkskAuthorizationChangeService.REASON_APPLICATION_AUTHORIZATION_REPLACED);
+        changeService.recordProjection(entity, created ? IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_AUTHORIZATION_GRANTED
+                : IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_AUTHORIZATION_REPLACED);
         log.info("应用授权{}成功：userId={}, applicationId={}, version={}",
                 created ? "创建" : "替换", userId, applicationId, entity.getAuthorizationVersion());
         auditEventPublisher.publishAdminAction(
                 created ? AdminActionType.GRANTED : AdminActionType.REPLACED,
-                AdminSubjectType.APPLICATION_AUTHORIZATION, String.valueOf(userId), null,
+                AdminSubjectType.APPLICATION_AUTHORIZATION, user.getSubjectId(), null,
                 "applicationId=" + applicationId + ", authorizationVersion=" + entity.getAuthorizationVersion());
         return toDetail(entity, platformAdminPrivilegeSupport.isPlatformAdmin(userId));
     }
@@ -161,30 +162,31 @@ public class IamApplicationAuthorizationAdminService {
      */
     @Transactional
     public void revokeAuthorization(Long userId, Long applicationId) {
-        requireUser(userId);
+        IamUserEntity user = requireUser(userId);
         mutationGuard.requireMutable(applicationId);
         IamApplicationAuthorizationEntity entity = requireAuthorization(userId, applicationId);
         if (entity.getStatus() != null
                 && SimpleIamServerConstant.STATUS_ACTIVE == entity.getStatus().intValue()) {
             entity.setStatus(SimpleIamServerConstant.STATUS_INACTIVE);
+            // admitted 必须同步关闭：投影例行重算只保留 admitted 原值，若撤销只关 status，
+            // 角色规则触发的重算会刷出"权限内容全新但准入仍开"的半开授权
+            entity.setAdmitted(SimpleIamServerConstant.STATUS_INACTIVE);
             entity.setProjectionAccessEpoch(resolveNextProjectionAccessEpoch(entity));
             entity.setRevokedAt(Instant.now());
             entity.setUpdatedAt(Instant.now());
             authorizationRepository.saveAndFlush(entity);
-            changeService.recordProjection(entity, IamAkskAuthorizationChangeService.REASON_APPLICATION_AUTHORIZATION_REVOKED);
+            changeService.recordProjection(entity, IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_AUTHORIZATION_REVOKED);
             log.info("应用授权撤销成功：userId={}, applicationId={}, version={}",
                     userId, applicationId, entity.getAuthorizationVersion());
             auditEventPublisher.publishAdminAction(AdminActionType.REVOKED,
-                    AdminSubjectType.APPLICATION_AUTHORIZATION, String.valueOf(userId), null,
+                    AdminSubjectType.APPLICATION_AUTHORIZATION, user.getSubjectId(), null,
                     "applicationId=" + applicationId + ", authorizationVersion=" + entity.getAuthorizationVersion());
         }
     }
 
-    private void requireUser(Long userId) {
-        if (!userRepository.existsById(userId)) {
-            throw new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
-                    String.format(ServerErrorMessage.USER_NOT_FOUND, userId));
-        }
+    private IamUserEntity requireUser(Long userId) {
+        return userRepository.findById(userId).orElseThrow(() -> new SimpleIamServerException(
+                ErrorCode.USER_NOT_FOUND, String.format(ServerErrorMessage.USER_NOT_FOUND, userId)));
     }
 
     private void requireApplication(Long applicationId) {

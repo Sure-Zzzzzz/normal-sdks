@@ -7,12 +7,16 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.C
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,6 +34,23 @@ public class SimpleIamServerTestApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(SimpleIamServerTestApplication.class, args);
+    }
+
+    /**
+     * 模块测试批量造用户时使用低成本 BCrypt；格式保持 {bcrypt}，历史生产哈希仍由同一算法校验。
+     */
+    @Bean
+    static BeanPostProcessor testPasswordEncoderPostProcessor() {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) {
+                if (bean instanceof PasswordEncoder && "passwordEncoder".equals(beanName)) {
+                    return new DelegatingPasswordEncoder("bcrypt", Collections.<String, PasswordEncoder>singletonMap(
+                            "bcrypt", new BCryptPasswordEncoder(4)));
+                }
+                return bean;
+            }
+        };
     }
 
     @Bean

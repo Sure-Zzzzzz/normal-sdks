@@ -57,7 +57,7 @@ public class IamJwtTokenCustomizer implements OAuth2TokenCustomizer<JwtEncodingC
             return;
         }
         Long userId = user.getId();
-        context.getClaims().subject(String.valueOf(userId));
+        context.getClaims().subject(user.getSubjectId());
         if (session != null) {
             context.getClaims().claim("sid", session.getId());
             if (session.getAuthTime() != null) {

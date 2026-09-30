@@ -7,11 +7,13 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalMenuNodeType;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalPresentationMode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.DataResourceDeclaration;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalMenuTreeNodeRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalMenuTreeNodeResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
@@ -93,6 +95,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_TRUSTED_APPLICATION_PAGE, "IAM 可信应用管理页面", "page"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_PAGE, "IAM 部门管理页面", "page"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_GROUP_PAGE, "IAM 协作组管理页面", "page"),
+                new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE, "IAM 仪表盘页面", "page"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API, "IAM 用户管理接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API, "IAM 角色管理接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_PERMISSION_API, "IAM 权限管理接口", "api"),
@@ -129,8 +132,10 @@ public class IamBootstrapService implements ApplicationRunner {
                 ensureRootDepartment();
                 ensureBuiltInApplications();
                 ensureBuiltInApplicationManifests();
+                upgradeIamDashboardPermissionIfNeeded(false);
                 ensureBuiltInApplicationMenus();
                 ensureAdminRoleAuthorizationRules();
+                upgradeIamDashboardPermissionIfNeeded(true);
                 String bootstrapInitialPassword = ensureAdminUser();
                 ensureAdminApplicationAuthorizations();
                 deploymentPasswordRecoveryService.recoverBootstrapAdministratorIfRequested(bootstrapInitialPassword);
@@ -610,6 +615,146 @@ public class IamBootstrapService implements ApplicationRunner {
         declaration.setDimensions(Collections.singletonList(
                 SimpleIamServerConstant.DATA_RESOURCE_DIMENSION_DEPARTMENT_ID));
         return declaration;
+    }
+
+    /**
+     * 存量实例补齐仪表盘页面权限门禁（1.3.0 前仪表盘菜单节点无权限要求，
+     * 任何持有 IAM 应用准入授权的用户都能看到该节点并被门户当作落地页，
+     * 进入管理台后却是无权限空壳页）。
+     *
+     * <p>回填顺序固定：清单先声明，角色规则后补，菜单节点最后落权限，
+     * 保证任何时刻不存在引用未声明权限的菜单。只做增量补齐，
+     * 不覆盖管理员对其他权限/菜单的裁剪。
+     */
+    private void upgradeIamDashboardPermissionIfNeeded(boolean updateMenu) {
+        IamTrustedApplicationEntity iamApp = trustedApplicationRepository
+                .findByApplicationCode(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM).orElse(null);
+        if (iamApp == null) {
+            return;
+        }
+        if (!isManagedDefaultIamMenu(iamApp.getId())) {
+            log.info("IAM 菜单已定制，跳过仪表盘权限引导回填：applicationId={}", iamApp.getId());
+            return;
+        }
+        IamApplicationPermissionManifestEntity manifest = manifestRepository.findByApplicationId(iamApp.getId())
+                .orElse(null);
+        if (manifest == null) {
+            return;
+        }
+        boolean manifestUpgraded = false;
+        List<String> pages = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readStringList(manifest.getPagePermissionsJson(), "pagePermissions"));
+        if (!pages.contains(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE)) {
+            pages.add(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
+            PutApplicationPermissionManifestRequest request = new PutApplicationPermissionManifestRequest();
+            request.setRoles(new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                    .readStringList(manifest.getRolesJson(), "roles")));
+            request.setPagePermissions(pages);
+            request.setApiPermissions(new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                    .readStringList(manifest.getApiPermissionsJson(), "apiPermissions")));
+            request.setDataResources(new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                    .readDataResourceList(manifest.getDataResourcesJson())));
+            manifestService.putManifest(iamApp.getId(), request);
+            manifestUpgraded = true;
+            log.info("IAM 应用清单已补齐仪表盘页面权限：applicationId={}", iamApp.getId());
+        }
+
+        boolean ruleUpgraded = false;
+        IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
+        IamRoleAuthorizationRuleEntity adminRule = roleAuthorizationRuleRepository
+                .findByRoleIdAndApplicationId(adminRole.getId(), iamApp.getId()).orElse(null);
+        if (adminRule != null) {
+            List<String> rulePages = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                    .readStringList(adminRule.getPagePermissionsJson(), "pagePermissions"));
+            if (!rulePages.contains(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE)) {
+                rulePages.add(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
+                adminRule.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(rulePages));
+                adminRule.setUpdatedAt(Instant.now());
+                roleAuthorizationRuleRepository.save(adminRule);
+                ruleUpgraded = true;
+                log.info("iam_admin 角色规则已补齐仪表盘页面权限：roleId={}, applicationId={}",
+                        adminRole.getId(), iamApp.getId());
+            }
+        }
+
+        boolean menuUpgraded = false;
+        if (updateMenu) {
+            for (IamTrustedApplicationMenuEntity menu : trustedApplicationMenuRepository
+                    .findByApplicationIdOrderBySortOrderAsc(iamApp.getId())) {
+                if ("dashboard".equals(menu.getCode()) && menu.getNodeType() == PortalMenuNodeType.PAGE
+                        && menu.getRequiredPagePermission() == null) {
+                    menu.setRequiredPagePermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
+                    trustedApplicationMenuRepository.save(menu);
+                    menuUpgraded = true;
+                    log.info("IAM 仪表盘菜单节点已补齐页面权限：applicationId={}", iamApp.getId());
+                }
+            }
+        }
+
+        if (manifestUpgraded || ruleUpgraded || menuUpgraded) {
+            // 规则内容变化必须走投影重算，否则存量 iam_admin 持有者的授权行不会出现新权限
+            projectionService.onRoleAuthorizationRuleChanged(adminRole.getId(), iamApp.getId());
+        }
+    }
+
+    /**
+     * 仅识别官方默认菜单：精确 1.0 扁平菜单或与当前引导配置一致的树。
+     * 管理员改过任一节点时完全跳过回填，启动过程不能借权限升级覆盖人工配置。
+     */
+    private boolean isManagedDefaultIamMenu(Long applicationId) {
+        if (isLegacyDefaultIamMenu(applicationId)) {
+            return true;
+        }
+        SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig config = properties.getBootstrap()
+                .getBuiltInApplications().stream()
+                .filter(item -> SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM.equals(item.getApplicationCode()))
+                .findFirst().orElse(null);
+        return config != null && isSameBuiltInMenuTree(
+                portalMenuTreeService.getManagementTree(applicationId),
+                toMenuTreeRequests(builtInMenuTree(config)));
+    }
+
+    private boolean isSameBuiltInMenuTree(List<PortalMenuTreeNodeResponse> actual,
+                                          List<PortalMenuTreeNodeRequest> expected) {
+        List<PortalMenuTreeNodeResponse> actualNodes = actual == null
+                ? Collections.<PortalMenuTreeNodeResponse>emptyList() : actual;
+        List<PortalMenuTreeNodeRequest> expectedNodes = expected == null
+                ? Collections.<PortalMenuTreeNodeRequest>emptyList() : expected;
+        if (actualNodes.size() != expectedNodes.size()) {
+            return false;
+        }
+        for (int index = 0; index < expectedNodes.size(); index++) {
+            PortalMenuTreeNodeRequest expectedNode = expectedNodes.get(index);
+            PortalMenuTreeNodeResponse actualNode = actualNodes.get(index);
+            if (expectedNode == null || actualNode == null
+                    || !Objects.equals(expectedNode.getCode(), actualNode.getCode())
+                    || !Objects.equals(expectedNode.getName(), actualNode.getName())
+                    || !Objects.equals(expectedNode.getNodeType(), actualNode.getNodeType())
+                    || !Objects.equals(expectedNode.getIcon(), actualNode.getIcon())
+                    || !Objects.equals(expectedNode.getRoute(), actualNode.getRoute())
+                    || !Objects.equals(expectedNode.getSortOrder(), actualNode.getSortOrder())
+                    || !Objects.equals(expectedPresentationMode(expectedNode), actualNode.getPresentationMode())) {
+                return false;
+            }
+            boolean missingDashboardPermission = "dashboard".equals(expectedNode.getCode())
+                    && actualNode.getRequiredPagePermission() == null;
+            if (!missingDashboardPermission
+                    && !Objects.equals(expectedNode.getRequiredPagePermission(), actualNode.getRequiredPagePermission())) {
+                return false;
+            }
+            if (!isSameBuiltInMenuTree(actualNode.getChildren(), expectedNode.getChildren())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String expectedPresentationMode(PortalMenuTreeNodeRequest node) {
+        if (PortalMenuNodeType.GROUP.name().equals(node.getNodeType())) {
+            return PortalPresentationMode.STANDARD.name();
+        }
+        return node.getPresentationMode() == null
+                ? PortalPresentationMode.STANDARD.name() : node.getPresentationMode();
     }
 
     /**

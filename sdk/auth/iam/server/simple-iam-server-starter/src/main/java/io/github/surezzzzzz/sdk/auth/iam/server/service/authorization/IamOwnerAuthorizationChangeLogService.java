@@ -8,19 +8,21 @@ import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerPro
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamAkskAuthorizationChangeEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamAkskAuthorizationChangeType;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationStateEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOwnerAuthorizationChangeLogEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOwnerAuthorizationChangeLogType;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
-import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamAkskAuthorizationChangeRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationStateRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamOwnerAuthorizationChangeLogRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -28,14 +30,15 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * IAM 到 AKSK 授权控制面日志写侧。
+ * IAM 对外凭证服务的授权控制面日志写侧(协作契约)。
  *
  * <p>只写已持久化业务状态的规范化最终快照；不使用应用事件替代持久化，
- * 不发 HTTP 回调，也不与 AKSK 共享数据库模型。</p>
+ * 不发 HTTP 回调，也不与协作消费方共享数据库模型。</p>
  */
+@Slf4j
 @SimpleIamServerComponent
 @RequiredArgsConstructor
-public class IamAkskAuthorizationChangeService {
+public class IamOwnerAuthorizationChangeLogService {
 
     // ==================== 变更原因码（变更流 reason_code 列的稳定取值，改名即破坏协议） ====================
     public static final String REASON_OWNER_ENABLED = "OWNER_ENABLED";
@@ -53,7 +56,7 @@ public class IamAkskAuthorizationChangeService {
     public static final String REASON_APPLICATION_PROJECTION_RECOMPUTED = "APPLICATION_PROJECTION_RECOMPUTED";
     private static final long SCHEMA_VERSION = 1L;
     private static final ObjectMapper PAYLOAD_OBJECT_MAPPER = new ObjectMapper();
-    // ==================== 变更流载荷键（与 AKSK reader 的解析契约字段，改名即破坏协议） ====================
+    // ==================== 变更流载荷键（与协作 reader 的解析契约字段，改名即破坏协议） ====================
     private static final String FIELD_OWNER_SOURCE_ID = "ownerSourceId";
     private static final String FIELD_OWNER_SUBJECT_ID = "ownerSubjectId";
     private static final String FIELD_TARGET_APPLICATION_ID = "targetApplicationId";
@@ -71,7 +74,7 @@ public class IamAkskAuthorizationChangeService {
     private static final String AGGREGATE_PROJECTION_PREFIX = "projection:";
 
     private final SimpleIamServerProperties properties;
-    private final IamAkskAuthorizationChangeRepository changeRepository;
+    private final IamOwnerAuthorizationChangeLogRepository changeRepository;
     private final IamApplicationAuthorizationStateRepository stateRepository;
     private final IamUserRepository userRepository;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
@@ -85,13 +88,14 @@ public class IamAkskAuthorizationChangeService {
         if (owner == null || owner.getId() == null) {
             return;
         }
+        String ownerSubjectId = requireSubjectId(owner);
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put(FIELD_OWNER_SOURCE_ID, properties.getOwnerSourceId());
-        payload.put(FIELD_OWNER_SUBJECT_ID, String.valueOf(owner.getId()));
+        payload.put(FIELD_OWNER_SUBJECT_ID, ownerSubjectId);
         payload.put(FIELD_ACTIVE, isActive(owner));
         payload.put(FIELD_OWNER_SECURITY_EPOCH, positiveOrOne(owner.getPermissionVersion() == null
                 ? null : owner.getPermissionVersion() + 1L));
-        save(IamAkskAuthorizationChangeType.OWNER_STATE, AGGREGATE_OWNER_PREFIX + owner.getId(), reasonCode, payload);
+        save(IamOwnerAuthorizationChangeLogType.OWNER_STATE, AGGREGATE_OWNER_PREFIX + ownerSubjectId, reasonCode, payload);
     }
 
     /**
@@ -111,7 +115,7 @@ public class IamAkskAuthorizationChangeService {
                 : state.getAuthorizationEpoch()));
         payload.put(FIELD_OWNER_INHERITED_ACCESS_EPOCH, positiveOrOne(state == null ? null
                 : state.getOwnerInheritedAccessEpoch()));
-        save(IamAkskAuthorizationChangeType.TARGET_APPLICATION_STATE, AGGREGATE_APPLICATION_PREFIX + applicationId,
+        save(IamOwnerAuthorizationChangeLogType.TARGET_APPLICATION_STATE, AGGREGATE_APPLICATION_PREFIX + applicationId,
                 reasonCode, payload);
     }
 
@@ -130,9 +134,10 @@ public class IamAkskAuthorizationChangeService {
                 .findById(projection.getApplicationId()).orElse(null);
         boolean active = isActive(owner) && isActive(application) && isInheritanceEnabled(state)
                 && isActiveAndAdmitted(projection);
+        String ownerSubjectId = resolveSubjectId(projection.getUserId());
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put(FIELD_OWNER_SOURCE_ID, properties.getOwnerSourceId());
-        payload.put(FIELD_OWNER_SUBJECT_ID, String.valueOf(projection.getUserId()));
+        payload.put(FIELD_OWNER_SUBJECT_ID, ownerSubjectId);
         payload.put(FIELD_TARGET_APPLICATION_ID, projection.getApplicationId());
         payload.put(FIELD_ACTIVE, active);
         payload.put(FIELD_OWNER_SECURITY_EPOCH, positiveOrOne(projection.getOwnerSecurityEpoch()));
@@ -150,14 +155,37 @@ public class IamAkskAuthorizationChangeService {
                 payload.put(FIELD_ACTIVE, false);
             }
         }
-        save(IamAkskAuthorizationChangeType.OWNER_APPLICATION_PROJECTION,
-                AGGREGATE_PROJECTION_PREFIX + projection.getUserId() + ":" + projection.getApplicationId(), reasonCode, payload);
+        save(IamOwnerAuthorizationChangeLogType.OWNER_APPLICATION_PROJECTION,
+                AGGREGATE_PROJECTION_PREFIX + ownerSubjectId + ":" + projection.getApplicationId(), reasonCode, payload);
     }
 
-    private void save(IamAkskAuthorizationChangeType changeType, String aggregateKey, String reasonCode,
+    /**
+     * 内部 userId 翻译为对外主体（聚合键主体段用）。投影来源用户必须已有 subjectId；
+     * 缺失时失败关闭，避免把数据库自增 ID 写入协作契约。
+     */
+    private String resolveSubjectId(Long userId) {
+        return userRepository.findById(userId)
+                .map(this::requireSubjectId)
+                .orElseThrow(() -> subjectIdMissing(userId));
+    }
+
+    private String requireSubjectId(IamUserEntity user) {
+        if (!StringUtils.hasText(user.getSubjectId())) {
+            throw subjectIdMissing(user.getId());
+        }
+        return user.getSubjectId();
+    }
+
+    private SimpleIamServerException subjectIdMissing(Long userId) {
+        log.debug("所属人授权协作拒绝缺少主体ID的用户：userId={}", userId);
+        return new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
+                String.format(ServerErrorMessage.USER_NOT_FOUND, ""));
+    }
+
+    private void save(IamOwnerAuthorizationChangeLogType changeType, String aggregateKey, String reasonCode,
                       Map<String, Object> payload) {
         try {
-            IamAkskAuthorizationChangeEntity entity = new IamAkskAuthorizationChangeEntity();
+            IamOwnerAuthorizationChangeLogEntity entity = new IamOwnerAuthorizationChangeLogEntity();
             entity.setEventId(UUID.randomUUID().toString());
             entity.setChangeType(changeType);
             entity.setAggregateKey(aggregateKey);

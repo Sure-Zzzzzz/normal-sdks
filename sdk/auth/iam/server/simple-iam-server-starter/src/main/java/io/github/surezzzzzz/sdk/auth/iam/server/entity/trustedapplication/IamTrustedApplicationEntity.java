@@ -46,6 +46,13 @@ public class IamTrustedApplicationEntity {
     @Column(name = "application_security_epoch", nullable = false)
     private Long applicationSecurityEpoch;
 
+    /**
+     * 是否平台内置应用（管理面可调整；内置应用禁删除/禁停用，下线走关闭门户集成）。
+     * 引导配置清单中的编码（如 iam）无论本列取值一律视为内置。
+     */
+    @Column(name = "built_in", nullable = false)
+    private Boolean builtIn = Boolean.FALSE;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

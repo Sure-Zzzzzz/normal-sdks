@@ -23,20 +23,20 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * 初始化 IAM 内部 AKSK reader SERVICE。
+ * 初始化 IAM 内部协作 reader SERVICE(凭证服务所属人授权消费方)。
  *
- * <p>该主体不关联可信应用，避免首次安装时依赖 AKSK 应用已登记而形成循环。
+ * <p>该主体不关联可信应用，避免首次安装时依赖协作消费方应用已登记而形成循环。
  */
 @Slf4j
 @SimpleIamServerComponent
 @RequiredArgsConstructor
 public class IamInternalReaderBootstrap implements ApplicationRunner {
 
-    public static final String READER_CLIENT_ID = "aksk-owner-authorization-reader";
-    public static final String READER_SUBJECT = "iam-internal:aksk-owner-authorization-reader";
+    public static final String READER_CLIENT_ID = "owner-authorization-reader";
+    public static final String READER_SUBJECT = "iam-internal:owner-authorization-reader";
     public static final String READER_TOKEN_USE = "internal_service";
-    public static final String READER_SCOPE = "iam:internal:aksk-owner-authorization:read";
-    public static final String STREAM_SCOPE = "iam:internal:aksk-owner-authorization:stream";
+    public static final String READER_SCOPE = "iam:internal:owner-authorization:read";
+    public static final String STREAM_SCOPE = "iam:internal:owner-authorization:stream";
 
     private static final String SQL_DELETE_AUTHORIZATION =
             "DELETE FROM oauth2_authorization WHERE registered_client_id = ?";
@@ -55,12 +55,12 @@ public class IamInternalReaderBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         SimpleIamServerProperties.InternalReaderConfig reader = properties.getInternalReader();
         if (!reader.isEnabled()) {
-            log.info("AKSK 所属人授权 reader 未启用：内部 API 保持拒绝状态");
+            log.info("协作所属人授权 reader 未启用：内部 API 保持拒绝状态");
             return;
         }
         if (!StringUtils.hasText(reader.getClientSecret())) {
             throw new SimpleIamServerException(ErrorCode.CONFIG_VALIDATION_FAILED,
-                    "AKSK 所属人授权 reader 已启用但缺少部署注入密钥");
+                    "协作所属人授权 reader 已启用但缺少部署注入密钥");
         }
         RegisteredClient existing = registeredClientRepository.findByClientId(READER_CLIENT_ID);
         // SAS 0.4.x 对已有 client 的 save 不更新 client_secret；固定 reader 可受控重建，保证轮换生效。
@@ -82,7 +82,7 @@ public class IamInternalReaderBootstrap implements ApplicationRunner {
                         .build())
                 .build();
         registeredClientRepository.save(registeredClient);
-        log.info("AKSK 所属人授权 reader SERVICE 已同步部署凭据：clientId={}", READER_CLIENT_ID);
+        log.info("协作所属人授权 reader SERVICE 已同步部署凭据：clientId={}", READER_CLIENT_ID);
     }
 
     /**

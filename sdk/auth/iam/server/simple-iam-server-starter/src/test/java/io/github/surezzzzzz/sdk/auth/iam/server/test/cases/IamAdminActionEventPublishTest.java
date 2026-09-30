@@ -138,17 +138,18 @@ class IamAdminActionEventPublishTest {
         userRequest.setPassword(PASSWORD);
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
-        Long createdUserId = userService.createUser(userRequest).getId();
+        IamUserEntity createdUser = userService.createUser(userRequest);
+        Long createdUserId = createdUser.getId();
 
         AdminActionEvent event = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.CREATED
                         && item.getSubjectType() == AdminSubjectType.USER
-                        && String.valueOf(createdUserId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(event);
         assertEquals(username, event.getSubjectName());
         assertNull(event.getOperator(), "service 直调无认证上下文，operator 必须降级为 null");
         userId = createdUserId;
-        log.info("USER CREATED 断言完成：username={}, subjectId={}", username, createdUserId);
+        log.info("USER CREATED 断言完成：username={}, subjectId={}", username, createdUser.getSubjectId());
     }
 
     @Test
@@ -159,7 +160,8 @@ class IamAdminActionEventPublishTest {
         userRequest.setPassword(PASSWORD);
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
-        Long createdUserId = userService.createUser(userRequest).getId();
+        IamUserEntity createdUser = userService.createUser(userRequest);
+        Long createdUserId = createdUser.getId();
         userId = createdUserId;
 
         userService.disableUser(createdUserId);
@@ -167,7 +169,7 @@ class IamAdminActionEventPublishTest {
         AdminActionEvent disabledEvent = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.DISABLED
                         && item.getSubjectType() == AdminSubjectType.USER
-                        && String.valueOf(createdUserId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(disabledEvent);
         assertEquals(username, disabledEvent.getSubjectName());
 
@@ -195,14 +197,15 @@ class IamAdminActionEventPublishTest {
         userRequest.setPassword(PASSWORD);
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
-        userId = userService.createUser(userRequest).getId();
+        IamUserEntity createdUser = userService.createUser(userRequest);
+        userId = createdUser.getId();
 
         roleService.assignRole(userId, roleId);
 
         AdminActionEvent event = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.ASSIGNED
                         && item.getSubjectType() == AdminSubjectType.USER
-                        && String.valueOf(userId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(event);
         assertEquals(username, event.getSubjectName());
         assertNotNull(event.getDetail());
@@ -247,14 +250,15 @@ class IamAdminActionEventPublishTest {
         userRequest.setPassword(PASSWORD);
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
-        userId = userService.createUser(userRequest).getId();
+        IamUserEntity createdUser = userService.createUser(userRequest);
+        userId = createdUser.getId();
 
         authorizationAdminService.putAuthorization(userId, applicationId, authorizationRequest());
 
         AdminActionEvent grantedEvent = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.GRANTED
                         && item.getSubjectType() == AdminSubjectType.APPLICATION_AUTHORIZATION
-                        && String.valueOf(userId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(grantedEvent);
         assertTrue(grantedEvent.getDetail().contains("applicationId=" + applicationId));
         assertTrue(grantedEvent.getDetail().contains("authorizationVersion=1"));
@@ -264,7 +268,7 @@ class IamAdminActionEventPublishTest {
         AdminActionEvent replacedEvent = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.REPLACED
                         && item.getSubjectType() == AdminSubjectType.APPLICATION_AUTHORIZATION
-                        && String.valueOf(userId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(replacedEvent);
         assertTrue(replacedEvent.getDetail().contains("authorizationVersion=2"));
 
@@ -273,11 +277,11 @@ class IamAdminActionEventPublishTest {
         AdminActionEvent revokedEvent = awaitEvent(AdminActionEvent.class,
                 item -> item.getAction() == AdminActionType.REVOKED
                         && item.getSubjectType() == AdminSubjectType.APPLICATION_AUTHORIZATION
-                        && String.valueOf(userId).equals(item.getSubjectId()));
+                        && createdUser.getSubjectId().equals(item.getSubjectId()));
         assertNotNull(revokedEvent);
         assertTrue(revokedEvent.getDetail().contains("applicationId=" + applicationId));
-        log.info("APPLICATION_AUTHORIZATION GRANTED / REPLACED / REVOKED 断言完成：userId={}, applicationId={}",
-                userId, applicationId);
+        log.info("APPLICATION_AUTHORIZATION GRANTED / REPLACED / REVOKED 断言完成：subjectId={}, applicationId={}",
+                createdUser.getSubjectId(), applicationId);
     }
 
     @Test

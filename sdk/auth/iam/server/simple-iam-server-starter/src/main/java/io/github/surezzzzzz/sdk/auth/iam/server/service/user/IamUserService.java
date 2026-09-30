@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service.user;
 
+import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
+import io.github.surezzzzzz.sdk.auth.iam.core.spi.SubjectIdGenerator;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
@@ -16,8 +18,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamUser
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.usergroup.IamUserGroupMemberRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.web.auth.IamRedisTokenRepository;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAkskAuthorizationChangeService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOwnerAuthorizationChangeLogService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamLoginFailurePolicyService;
@@ -59,9 +61,10 @@ public class IamUserService {
     private final IamAuditEventPublisher auditEventPublisher;
     private final IamRoleService roleService;
     private final IamAuthorizationProjectionService projectionService;
-    private final IamAkskAuthorizationChangeService changeService;
+    private final IamOwnerAuthorizationChangeLogService changeService;
     private final IamRedisTokenRepository redisTokenRepository;
     private final IamLoginFailurePolicyService loginFailurePolicySupport;
+    private final SubjectIdGenerator subjectIdGenerator;
 
     /**
      * 创建用户
@@ -76,6 +79,7 @@ public class IamUserService {
         validateDepartment(request.getDepartmentId());
 
         IamUserEntity user = new IamUserEntity();
+        user.setSubjectId(assignSubjectId());
         user.setUsername(request.getUsername());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setDisplayName(request.getDisplayName());
@@ -91,8 +95,35 @@ public class IamUserService {
         IamUserEntity saved = userRepository.save(user);
         log.info("用户创建成功：username={}, id={}", saved.getUsername(), saved.getId());
         auditEventPublisher.publishAdminAction(AdminActionType.CREATED, AdminSubjectType.USER,
-                String.valueOf(saved.getId()), saved.getUsername(), null);
+                saved.getSubjectId(), saved.getUsername(), null);
         return saved;
+    }
+
+    /**
+     * 分配对外主体 ID：生成器输出校验（非空、长度上限）+ 唯一冲突重试；耗尽抛异常不静默吞。
+     */
+    private String assignSubjectId() {
+        for (int attempt = 0; attempt <= SimpleIamServerConstant.SUBJECT_ID_RETRY_LIMIT; attempt++) {
+            String candidate = requireValidSubjectId(subjectIdGenerator.generate());
+            if (!userRepository.existsBySubjectId(candidate)) {
+                return candidate;
+            }
+            log.debug("主体ID唯一冲突，重试生成：attempt={}", attempt);
+        }
+        throw new SimpleIamServerException(ErrorCode.SUBJECT_ID_ASSIGN_EXHAUSTED, String.format(
+                ServerErrorMessage.SUBJECT_ID_ASSIGN_EXHAUSTED, SimpleIamServerConstant.SUBJECT_ID_RETRY_LIMIT));
+    }
+
+    /**
+     * 校验生成器输出满足 SPI 契约（非空、长度不超过上限）。
+     */
+    private String requireValidSubjectId(String candidate) {
+        if (!org.springframework.util.StringUtils.hasText(candidate)
+                || candidate.length() > SimpleIamCoreConstant.SUBJECT_ID_MAX_LENGTH) {
+            throw new SimpleIamServerException(ErrorCode.SUBJECT_ID_GENERATE_INVALID, String.format(
+                    ServerErrorMessage.SUBJECT_ID_GENERATE_INVALID, SimpleIamCoreConstant.SUBJECT_ID_MAX_LENGTH));
+        }
+        return candidate;
     }
 
     /**
@@ -136,7 +167,7 @@ public class IamUserService {
             projectionService.onUserRoleAssigned(userId);
         }
         auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.USER,
-                String.valueOf(userId), saved.getUsername(), null);
+                saved.getSubjectId(), saved.getUsername(), null);
         return saved;
     }
 
@@ -186,7 +217,7 @@ public class IamUserService {
         user.setPermissionVersion((user.getPermissionVersion() == null ? 0L : user.getPermissionVersion()) + 1L);
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
-        changeService.recordOwnerState(user, IamAkskAuthorizationChangeService.REASON_OWNER_DELETED);
+        changeService.recordOwnerState(user, IamOwnerAuthorizationChangeLogService.REASON_OWNER_DELETED);
         sessionService.revokeAllByUserId(userId);
         userRoleRepository.deleteByUserId(userId);
         userGroupMemberRepository.deleteByUserId(userId);
@@ -194,7 +225,7 @@ public class IamUserService {
         userRepository.delete(user);
         log.info("用户删除成功：username={}, id={}", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.DELETED, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), null);
+                user.getSubjectId(), user.getUsername(), null);
     }
 
     /**
@@ -207,10 +238,10 @@ public class IamUserService {
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         advanceAuthorizationForUserLifecycle(userId);
-        changeService.recordOwnerState(getById(userId), IamAkskAuthorizationChangeService.REASON_OWNER_ENABLED);
+        changeService.recordOwnerState(getById(userId), IamOwnerAuthorizationChangeLogService.REASON_OWNER_ENABLED);
         log.info("用户启用成功：username={}, id={}", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.ENABLED, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), null);
+                user.getSubjectId(), user.getUsername(), null);
     }
 
     /**
@@ -225,10 +256,10 @@ public class IamUserService {
         userRepository.save(user);
         sessionService.revokeAllByUserId(userId);
         advanceAuthorizationForUserLifecycle(userId);
-        changeService.recordOwnerState(getById(userId), IamAkskAuthorizationChangeService.REASON_OWNER_DISABLED);
+        changeService.recordOwnerState(getById(userId), IamOwnerAuthorizationChangeLogService.REASON_OWNER_DISABLED);
         log.info("用户禁用成功：username={}, id={}, 已吊销会话", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.DISABLED, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), null);
+                user.getSubjectId(), user.getUsername(), null);
     }
 
     /**
@@ -244,7 +275,7 @@ public class IamUserService {
         redisTokenRepository.deleteLoginFailure(user.getUsername());
         log.info("用户手动解锁成功：username={}, id={}, 已清除失败计数", user.getUsername(), userId);
         auditEventPublisher.publishAdminAction(AdminActionType.UNLOCKED, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), null);
+                user.getSubjectId(), user.getUsername(), null);
     }
 
     /**
@@ -281,7 +312,7 @@ public class IamUserService {
         sessionService.revokeAllByUserId(userId);
         log.info("密码重置成功：username={}, requestedBy={}", user.getUsername(), requestedBy);
         auditEventPublisher.publishAdminAction(AdminActionType.PASSWORD_RESET, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), requestedBy);
+                user.getSubjectId(), user.getUsername(), requestedBy);
     }
 
     /**
@@ -327,7 +358,33 @@ public class IamUserService {
         }
         log.info("用户自助改密成功：username={}", user.getUsername());
         auditEventPublisher.publishAdminAction(AdminActionType.PASSWORD_CHANGED, AdminSubjectType.USER,
-                String.valueOf(userId), user.getUsername(), user.getUsername());
+                user.getSubjectId(), user.getUsername(), user.getUsername());
+    }
+
+    /**
+     * 忘记密码重置（手机验证通过后调用）：复用改密策略校验链，写新密码并清失败计数/锁定；
+     * 会话吊销与审计由调用方承担。
+     * 外部身份源账号与 resetPassword/changePassword 同口径拒绝——给域账号写本地密码无意义。
+     *
+     * @param userId      用户 ID
+     * @param newPassword 新密码
+     */
+    @Transactional
+    public void resetPasswordByForgot(Long userId, String newPassword) {
+        IamUserEntity user = getById(userId);
+        if (StringUtils.hasText(user.getIdentitySource())) {
+            throw new SimpleIamServerException(ErrorCode.PASSWORD_CHANGE_NOT_ALLOWED,
+                    ServerErrorMessage.PASSWORD_CHANGE_NOT_ALLOWED);
+        }
+        loginFailurePolicySupport.assertAccountUsable(user);
+        passwordPolicyValidator.validate(newPassword);
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
+        user.setLockedUntil(null);
+        user.setMustChangePassword(Boolean.FALSE);
+        user.setUpdatedAt(Instant.now());
+        userRepository.save(user);
+        redisTokenRepository.deleteLoginFailure(user.getUsername());
     }
 
     /**
@@ -335,7 +392,7 @@ public class IamUserService {
      */
     public IamUserEntity getById(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new SimpleIamServerException(
+                .orElseThrow(() -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
                         String.format(ServerErrorMessage.USER_NOT_FOUND, userId)));
     }
 
@@ -344,8 +401,17 @@ public class IamUserService {
      */
     public IamUserEntity getByUsername(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new SimpleIamServerException(
+                .orElseThrow(() -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
                         String.format(ServerErrorMessage.USER_NOT_FOUND, username)));
+    }
+
+    /**
+     * 根据公开主体 ID 查询用户，不存在则抛异常（管理面定位统一口径）
+     */
+    public IamUserEntity getBySubjectId(String subjectId) {
+        return userRepository.findBySubjectId(subjectId)
+                .orElseThrow(() -> new SimpleIamServerException(ErrorCode.USER_NOT_FOUND,
+                        String.format(ServerErrorMessage.USER_NOT_FOUND, subjectId)));
     }
 
     private void validateDepartment(Long departmentId) {

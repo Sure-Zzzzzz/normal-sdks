@@ -7,7 +7,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 
 /**
- * AKSK 创建 owner binding 前查询可选目标应用的请求。
+ * 协作消费方创建 owner binding 前查询可选目标应用的请求。
  */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = false)

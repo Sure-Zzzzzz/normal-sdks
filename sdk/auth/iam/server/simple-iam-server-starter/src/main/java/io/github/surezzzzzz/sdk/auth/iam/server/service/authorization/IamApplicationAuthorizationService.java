@@ -8,8 +8,10 @@ import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizatio
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicationAuthorizationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -28,6 +30,7 @@ public class IamApplicationAuthorizationService {
     private static final String SQL_FIND_APPLICATION_ID_BY_OAUTH_CLIENT_ID =
             "SELECT application_id FROM oauth2_registered_client WHERE client_id = ?";
 
+    private final IamUserRepository userRepository;
     private final IamApplicationAuthorizationRepository authorizationRepository;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamPlatformAdminPrivilegeService platformAdminPrivilegeSupport;
@@ -56,12 +59,17 @@ public class IamApplicationAuthorizationService {
         if (application == null) {
             return null;
         }
+        String subjectId = userRepository.findById(userId)
+                .map(IamUserEntity::getSubjectId).orElse(null);
+        if (subjectId == null) {
+            return null;
+        }
         try {
             return new ApplicationAuthorizationContext(
                     SimpleApplicationAuthorizationConstant.PROTOCOL,
                     SimpleApplicationAuthorizationConstant.VERSION,
                     ApplicationAuthorizationSubjectType.HUMAN,
-                    String.valueOf(userId),
+                    subjectId,
                     application.getApplicationCode(),
                     true,
                     IamApplicationAuthorizationJsonCodec.readStringList(

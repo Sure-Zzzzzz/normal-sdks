@@ -17,7 +17,7 @@ public class MessageBatchRecipientResponse {
     /**
      * 收件人用户ID
      */
-    private Long userId;
+    private String subjectId;
 
     /**
      * 收件人用户名

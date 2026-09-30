@@ -12,9 +12,9 @@ import java.util.List;
 @Data
 public class CreateMessageRequest {
 
-    private Long recipientUserId;
+    private String recipientSubjectId;
 
-    private List<Long> recipientUserIds;
+    private List<String> recipientSubjectIds;
 
     private List<Long> departmentIds;
 

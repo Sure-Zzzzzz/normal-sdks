@@ -27,7 +27,7 @@ public class IamApplicationAuthorizationStateService {
     private final IamApplicationAuthorizationRepository authorizationRepository;
     private final IamTrustedApplicationMutationGuard mutationGuard;
     private final SimpleIamServerProperties properties;
-    private final IamAkskAuthorizationChangeService changeService;
+    private final IamOwnerAuthorizationChangeLogService changeService;
 
     @Transactional
     public IamApplicationAuthorizationStateEntity ensureInitialState(Long applicationId) {
@@ -55,7 +55,7 @@ public class IamApplicationAuthorizationStateService {
         state.setUpdatedAt(Instant.now());
         state = stateRepository.save(state);
         synchronizeProjectionEpoch(state);
-        changeService.recordTargetApplicationState(applicationId, IamAkskAuthorizationChangeService.REASON_APPLICATION_AUTHORIZATION_EPOCH_CHANGED);
+        changeService.recordTargetApplicationState(applicationId, IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_AUTHORIZATION_EPOCH_CHANGED);
         return state;
     }
 
@@ -75,7 +75,7 @@ public class IamApplicationAuthorizationStateService {
             state.setUpdatedAt(Instant.now());
             state = stateRepository.save(state);
             synchronizeProjectionEpoch(state);
-            changeService.recordTargetApplicationState(applicationId, IamAkskAuthorizationChangeService.REASON_OWNER_INHERITANCE_CHANGED);
+            changeService.recordTargetApplicationState(applicationId, IamOwnerAuthorizationChangeLogService.REASON_OWNER_INHERITANCE_CHANGED);
         }
         return state;
     }
@@ -102,7 +102,7 @@ public class IamApplicationAuthorizationStateService {
         state.setOwnerInheritedAccessEpoch(state.getOwnerInheritedAccessEpoch() + 1L);
         state.setUpdatedAt(Instant.now());
         state = stateRepository.save(state);
-        changeService.recordTargetApplicationState(applicationId, IamAkskAuthorizationChangeService.REASON_OWNER_INHERITED_ACCESS_EPOCH_CHANGED);
+        changeService.recordTargetApplicationState(applicationId, IamOwnerAuthorizationChangeLogService.REASON_OWNER_INHERITED_ACCESS_EPOCH_CHANGED);
         return state;
     }
 

@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.request.CreateUser
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.request.UpdateUserGroupRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.usergroup.response.UserGroupResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.usergroup.IamUserGroupService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,7 @@ public class IamUserGroupAdminController {
 
     private final IamUserGroupService userGroupService;
     private final IamDepartmentService departmentService;
+    private final IamUserService userService;
 
     /**
      * 协作组列表
@@ -110,24 +112,24 @@ public class IamUserGroupAdminController {
     }
 
     /**
-     * 添加协作组成员
+     * 添加协作组成员（成员定位一律 subjectId）
      */
-    @PostMapping("/user-groups/{groupId}/users/{userId}")
+    @PostMapping("/user-groups/{groupId}/users/{subjectId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_GROUP_API + "')")
     public ResponseEntity<Void> assignUserGroupUser(@PathVariable Long groupId,
-                                                    @PathVariable Long userId) {
-        userGroupService.assignUser(groupId, userId);
+                                                    @PathVariable String subjectId) {
+        userGroupService.assignUser(groupId, userService.getBySubjectId(subjectId).getId());
         return ResponseEntity.ok().build();
     }
 
     /**
      * 移除协作组成员
      */
-    @DeleteMapping("/user-groups/{groupId}/users/{userId}")
+    @DeleteMapping("/user-groups/{groupId}/users/{subjectId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_GROUP_API + "')")
     public ResponseEntity<Void> revokeUserGroupUser(@PathVariable Long groupId,
-                                                    @PathVariable Long userId) {
-        userGroupService.revokeUser(groupId, userId);
+                                                    @PathVariable String subjectId) {
+        userGroupService.revokeUser(groupId, userService.getBySubjectId(subjectId).getId());
         return ResponseEntity.noContent().build();
     }
 }

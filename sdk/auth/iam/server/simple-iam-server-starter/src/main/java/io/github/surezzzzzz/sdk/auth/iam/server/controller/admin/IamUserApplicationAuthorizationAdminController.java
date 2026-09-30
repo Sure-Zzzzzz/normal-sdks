@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutApp
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.ApplicationAuthorizationDetailResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.ApplicationAuthorizationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationAdminService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,20 +29,21 @@ import java.util.List;
  */
 @SimpleIamServerComponent
 @RestController
-@RequestMapping("/iam/admin/users/{userId}/application-authorizations")
+@RequestMapping("/iam/admin/users/{subjectId}/application-authorizations")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API + "')")
 public class IamUserApplicationAuthorizationAdminController {
 
     private final IamApplicationAuthorizationAdminService authorizationAdminService;
+    private final IamUserService userService;
 
     /**
      * 列出用户全部应用授权摘要。
      */
     @GetMapping
     public ResponseEntity<List<ApplicationAuthorizationResponse>> listAuthorizations(
-            @PathVariable Long userId) {
-        return ResponseEntity.ok(authorizationAdminService.listAuthorizations(userId));
+            @PathVariable String subjectId) {
+        return ResponseEntity.ok(authorizationAdminService.listAuthorizations(userService.getBySubjectId(subjectId).getId()));
     }
 
     /**
@@ -49,8 +51,8 @@ public class IamUserApplicationAuthorizationAdminController {
      */
     @GetMapping("/{applicationId}")
     public ResponseEntity<ApplicationAuthorizationDetailResponse> getAuthorization(
-            @PathVariable Long userId, @PathVariable Long applicationId) {
-        return ResponseEntity.ok(authorizationAdminService.getAuthorization(userId, applicationId));
+            @PathVariable String subjectId, @PathVariable Long applicationId) {
+        return ResponseEntity.ok(authorizationAdminService.getAuthorization(userService.getBySubjectId(subjectId).getId(), applicationId));
     }
 
     /**
@@ -58,11 +60,11 @@ public class IamUserApplicationAuthorizationAdminController {
      */
     @PutMapping("/{applicationId}")
     public ResponseEntity<ApplicationAuthorizationDetailResponse> putAuthorization(
-            @PathVariable Long userId,
+            @PathVariable String subjectId,
             @PathVariable Long applicationId,
             @RequestBody PutApplicationAuthorizationRequest request) {
         ApplicationAuthorizationDetailResponse response =
-                authorizationAdminService.putAuthorization(userId, applicationId, request);
+                authorizationAdminService.putAuthorization(userService.getBySubjectId(subjectId).getId(), applicationId, request);
         // version 从 1 单调递增且记录不物理删除，version=1 即首次创建
         boolean created = response.getAuthorizationVersion() != null
                 && response.getAuthorizationVersion() == 1L;
@@ -74,8 +76,8 @@ public class IamUserApplicationAuthorizationAdminController {
      */
     @DeleteMapping("/{applicationId}")
     public ResponseEntity<Void> revokeAuthorization(
-            @PathVariable Long userId, @PathVariable Long applicationId) {
-        authorizationAdminService.revokeAuthorization(userId, applicationId);
+            @PathVariable String subjectId, @PathVariable Long applicationId) {
+        authorizationAdminService.revokeAuthorization(userService.getBySubjectId(subjectId).getId(), applicationId);
         return ResponseEntity.noContent().build();
     }
 }

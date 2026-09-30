@@ -399,8 +399,8 @@ class IamAuthorizationProjectionScenarioTest {
         authorizationAdminService.putAuthorization(userId, applicationId, manualRequest);
         authorizationStateService.updateOwnerInheritance(applicationId, true);
 
-        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse before =
-                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationReadResult before =
+                ownerAuthorizationReaderService.resolve("local-iam", subjectIdOf(userId), applicationId);
         assertNotNull(before);
         assertTrue(before.isActive(), "前置：启用用户的 current projection 应可用");
         assertEquals(set("proj:a2"), authorizationApiPermissions(before),
@@ -408,15 +408,15 @@ class IamAuthorizationProjectionScenarioTest {
         assertNotNull(authorizationDataGrant(before), "前置：reader 必须返回管理面直接维护的 DATA 授权");
 
         userService.disableUser(userId);
-        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse disabled =
-                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationReadResult disabled =
+                ownerAuthorizationReaderService.resolve("local-iam", subjectIdOf(userId), applicationId);
         assertNotNull(disabled);
         assertFalse(disabled.isActive(), "禁用用户后 reader 必须立即失败关闭");
         assertNull(disabled.getOwnerSecurityEpoch(), "inactive 响应不得泄露可用授权快照");
 
         userService.enableUser(userId);
-        io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse restored =
-                ownerAuthorizationReaderService.resolve("local-iam", String.valueOf(userId), applicationId);
+        io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationReadResult restored =
+                ownerAuthorizationReaderService.resolve("local-iam", subjectIdOf(userId), applicationId);
         assertNotNull(restored);
         assertTrue(restored.isActive(), "恢复后的投影重算完成后才可重新使用");
         assertTrue(restored.getOwnerSecurityEpoch().longValue() > before.getOwnerSecurityEpoch().longValue(),
@@ -602,6 +602,13 @@ class IamAuthorizationProjectionScenarioTest {
         fail("可信应用删除任务未在测试 worker 推进后完成：" + targetApplicationId);
     }
 
+    /**
+     * 内部 userId -> 对外主体（reader resolve 1.3.0 起按 iam_user.subject_id 查找）。
+     */
+    private String subjectIdOf(Long userId) {
+        return userRepository.findById(userId).map(io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getSubjectId).orElse(null);
+    }
+
     private Set<String> pages(IamApplicationAuthorizationEntity projection) {
         return new HashSet<>(IamApplicationAuthorizationJsonCodec.readStringList(
                 projection.getPagePermissionsJson(), "pagePermissions"));
@@ -609,13 +616,13 @@ class IamAuthorizationProjectionScenarioTest {
 
     @SuppressWarnings("unchecked")
     private Set<String> authorizationApiPermissions(
-            io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse response) {
-        return new HashSet<>((List<String>) response.getIamAuthorization().get("apiPermissions"));
+            io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationReadResult response) {
+        return new HashSet<>((List<String>) response.getAuthorization().get("apiPermissions"));
     }
 
     private Object authorizationDataGrant(
-            io.github.surezzzzzz.sdk.auth.iam.server.dto.internal.response.OwnerAuthorizationResolveResponse response) {
-        return response.getIamAuthorization().get("dataGrantDocument");
+            io.github.surezzzzzz.sdk.auth.authorization.owner.collaboration.core.model.OwnerAuthorizationReadResult response) {
+        return response.getAuthorization().get("dataGrantDocument");
     }
 
     private Set<String> apis(IamApplicationAuthorizationEntity projection) {

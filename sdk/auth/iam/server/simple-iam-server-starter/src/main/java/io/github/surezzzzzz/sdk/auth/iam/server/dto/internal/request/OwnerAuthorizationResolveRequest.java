@@ -8,9 +8,9 @@ import javax.validation.constraints.NotNull;
 import javax.validation.constraints.Size;
 
 /**
- * AKSK 读取既有 owner binding 的当前 IAM 授权投影请求。
+ * 协作消费方读取既有 owner binding 的当前授权投影请求。
  *
- * <p>targetApplicationId 必须来自 AKSK 持久 binding，浏览器不得直接构造此请求。</p>
+ * <p>targetApplicationId 必须来自协作消费方持久 binding，浏览器不得直接构造此请求。</p>
  */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = false)

@@ -51,7 +51,7 @@ public class CreateTrustedApplicationClientRequest {
     private List<String> scopes;
 
     /**
-     * 授权类型：仅允许 authorization_code，机器凭证请走 aksk-server
+     * 授权类型：仅允许 authorization_code，机器凭证请走对应的凭证签发服务
      */
     private List<String> grantTypes;
 

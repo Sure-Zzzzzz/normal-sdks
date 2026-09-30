@@ -17,9 +17,9 @@ public class WebMessageResponse {
 
     private Long id;
 
-    private Long recipientUserId;
+    private String recipientSubjectId;
 
-    private Long senderUserId;
+    private String senderSubjectId;
 
     private String senderUsername;
 
@@ -40,11 +40,11 @@ public class WebMessageResponse {
     /**
      * 站内信实体转响应视图
      */
-    public static WebMessageResponse from(IamMessageEntity message) {
+    public static WebMessageResponse from(IamMessageEntity message, java.util.Map<Long, String> subjectIds) {
         return new WebMessageResponse(
                 message.getId(),
-                message.getRecipientUserId(),
-                message.getSenderUserId(),
+                subjectIds.get(message.getRecipientUserId()),
+                subjectIds.get(message.getSenderUserId()),
                 message.getSenderUsername(),
                 message.getTitle(),
                 message.getContent(),

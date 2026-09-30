@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.Organi
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.OrganizationTreeNodeResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.organization.response.OrganizationUserProfileResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.organization.IamOrganizationService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +28,7 @@ import java.util.List;
 public class IamOrganizationAdminController {
 
     private final IamOrganizationService organizationService;
+    private final IamUserService userService;
 
     /**
      * 组织树（部门 + 协作组）
@@ -55,9 +57,9 @@ public class IamOrganizationAdminController {
     /**
      * 用户组织画像（部门、协作组、角色）
      */
-    @GetMapping("/organizations/users/{userId}/profile")
+    @GetMapping("/organizations/users/{subjectId}/profile")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_API + "')")
-    public ResponseEntity<OrganizationUserProfileResponse> getOrganizationUserProfile(@PathVariable Long userId) {
-        return ResponseEntity.ok(organizationService.getUserProfile(userId));
+    public ResponseEntity<OrganizationUserProfileResponse> getOrganizationUserProfile(@PathVariable String subjectId) {
+        return ResponseEntity.ok(organizationService.getUserProfile(userService.getBySubjectId(subjectId).getId()));
     }
 }

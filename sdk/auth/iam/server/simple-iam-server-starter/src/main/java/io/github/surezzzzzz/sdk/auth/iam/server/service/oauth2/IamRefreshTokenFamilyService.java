@@ -32,6 +32,7 @@ import java.util.UUID;
 public class IamRefreshTokenFamilyService {
 
     private final IamRefreshTokenFamilyRepository refreshTokenFamilyRepository;
+    private final io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository userRepository;
     private final IamRedisTokenRepository redisTokenRepository;
     private final SimpleIamServerProperties properties;
     private final ApplicationEventPublisher eventPublisher;
@@ -96,8 +97,11 @@ public class IamRefreshTokenFamilyService {
         String tokenHash = TokenHashHelper.sha256Hex(refreshToken);
         refreshTokenFamilyRepository.findByPreviousTokenHash(tokenHash).ifPresent(family -> {
             revokeFamily(family.getId());
+            String reuseSubjectId = userRepository.findById(family.getUserId())
+                    .map(user -> user.getSubjectId())
+                    .orElse(String.valueOf(family.getUserId()));
             eventPublisher.publishEvent(new RefreshTokenReuseDetectedEvent(this,
-                    family.getId(), null, String.valueOf(family.getUserId()), family.getUsername(),
+                    family.getId(), null, reuseSubjectId, family.getUsername(),
                     family.getIssuedAt(), family.getExpiresAt()));
             throw new SimpleIamServerException(ErrorCode.REFRESH_TOKEN_REUSE, ServerErrorMessage.REFRESH_TOKEN_REUSE);
         });
