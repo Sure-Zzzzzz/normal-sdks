@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: simple-iam-resource-audit-listener-jakarta-test
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.iam: DEBUG

@@ -1,0 +1,30 @@
+package io.github.surezzzzzz.sdk.audit.iam.test;
+
+import io.github.surezzzzzz.sdk.audit.iam.resource.provider.IamResourceAuditTraceIdProvider;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+/**
+ * 测试用的 TraceId 提供者。
+ *
+ * @author surezzzzzz
+ */
+@Component
+@Slf4j
+public class TestTraceIdProvider implements IamResourceAuditTraceIdProvider {
+
+    private String traceId;
+
+    @Override
+    public String getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(String traceId) {
+        this.traceId = traceId;
+    }
+
+    public void reset() {
+        traceId = null;
+    }
+}

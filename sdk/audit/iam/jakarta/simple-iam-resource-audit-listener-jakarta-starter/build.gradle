@@ -1,0 +1,18 @@
+// resource 侧 jakarta 线的 IAM 访问审计挂件：订阅公共资源层 ResourceAccessEvent（事件模型来自
+// javax 线已发布的 simple-resource-server-core，纯模型零 Spring 依赖，jakarta 直接复用）。
+// 与 javax 线 simple-iam-resource-audit-listener-starter 同包同名，业务方迁移只换依赖坐标。
+
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-iam-core:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-context'
+
+    // jakarta starter 未发版，测试用 project 引用；收口发布后切精确 Maven 坐标
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-jakarta-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-jakarta-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+}
