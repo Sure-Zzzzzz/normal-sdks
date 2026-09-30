@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.AkskResourceIntrospectionClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.exception.SimpleAkskResourceServerConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.model.IntrospectResult;
@@ -31,6 +32,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
 
     private final IntrospectionClient client;
     private final IntrospectLocalCacheHelper cacheHelper;
+    private final boolean strictOnline;
 
     /**
      * 创建AKSK内省缓存适配器。
@@ -41,7 +43,17 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
      */
     public AkskIntrospectionAuthenticationConverter(URI endpoint, RestOperations restOperations,
                                                     IntrospectLocalCacheHelper cacheHelper) {
-        this(new HttpIntrospectionClient(endpoint, restOperations), cacheHelper);
+        this(new HttpIntrospectionClient(endpoint, restOperations), cacheHelper, false);
+    }
+
+    /**
+     * 创建严格在线的 AKSK 内省器。
+     *
+     * <p>严格在线模式不能先读缓存，因为 opaque token 在内省前没有可信的授权模式。</p>
+     */
+    public AkskIntrospectionAuthenticationConverter(URI endpoint, RestOperations restOperations,
+                                                    IntrospectLocalCacheHelper cacheHelper, boolean strictOnline) {
+        this(new HttpIntrospectionClient(endpoint, restOperations), cacheHelper, strictOnline);
     }
 
     /**
@@ -64,20 +76,40 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
             } catch (org.springframework.web.client.RestClientException exception) {
                 throw new IntrospectionEndpointUnavailableException("AKSK内省端点不可用", exception);
             }
-        }, cacheHelper);
+        }, cacheHelper, false);
     }
 
-    private AkskIntrospectionAuthenticationConverter(IntrospectionClient client, IntrospectLocalCacheHelper cacheHelper) {
+    /** 供测试和受控自定义装配使用的严格在线构造器。 */
+    public AkskIntrospectionAuthenticationConverter(OpaqueTokenIntrospector delegate,
+                                                    IntrospectLocalCacheHelper cacheHelper, boolean strictOnline) {
+        this((IntrospectionClient) token -> {
+            try {
+                OAuth2AuthenticatedPrincipal principal = delegate.introspect(token);
+                if (principal == null || principal.getAttributes() == null) {
+                    throw new OAuth2IntrospectionException("AKSK内省响应为空");
+                }
+                Map<String, Object> attributes = principal.getAttributes();
+                return new IntrospectResult(Boolean.TRUE.equals(
+                        attributes.get(AkskResourceIntrospectionClaimConstant.ACTIVE)), attributes);
+            } catch (org.springframework.web.client.RestClientException exception) {
+                throw new IntrospectionEndpointUnavailableException("AKSK内省端点不可用", exception);
+            }
+        }, cacheHelper, strictOnline);
+    }
+
+    private AkskIntrospectionAuthenticationConverter(IntrospectionClient client, IntrospectLocalCacheHelper cacheHelper,
+                                                     boolean strictOnline) {
         if (client == null || cacheHelper == null) {
             throw new SimpleAkskResourceServerConfigurationException("AKSK内省依赖不能为null");
         }
         this.client = client;
         this.cacheHelper = cacheHelper;
+        this.strictOnline = strictOnline;
     }
 
     @Override
     public OAuth2AuthenticatedPrincipal introspect(String token) {
-        if (cacheHelper.isEnabled()) {
+        if (!strictOnline && cacheHelper.isEnabled()) {
             IntrospectResult cached = cacheHelper.get(token);
             if (cached != null) {
                 log.debug("AKSK内省主缓存命中");
@@ -87,7 +119,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
         }
         try {
             IntrospectResult result = client.introspect(token);
-            if (cacheHelper.isEnabled()) {
+            if (!strictOnline && cacheHelper.isEnabled() && canCache(result)) {
                 cacheHelper.put(token, result);
             }
             log.debug("AKSK内省完成，结果状态={}", result != null && result.isActive());
@@ -100,7 +132,7 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
     }
 
     private OAuth2AuthenticatedPrincipal fallback(String token, IntrospectionEndpointUnavailableException exception) {
-        if (!cacheHelper.isFallbackEnabled()) {
+        if (strictOnline || !cacheHelper.isFallbackEnabled()) {
             log.debug("AKSK内省故障降级未启用，拒绝认证");
             throw exception;
         }
@@ -128,6 +160,16 @@ public class AkskIntrospectionAuthenticationConverter implements OpaqueTokenIntr
         }
         return new DefaultOAuth2AuthenticatedPrincipal((String) subject,
                 result.getAttributes(), Collections.emptyList());
+    }
+
+    /**
+     * 继承 AKU 的有效性依赖 IAM 当前人员授权；缓存或端点故障兜底都会把权限变化延后，必须在线读取。
+     * 静态 AKP 和历史静态 AKU 保留调用方显式配置的缓存行为。
+     */
+    private boolean canCache(IntrospectResult result) {
+        return result == null || result.getAttributes() == null
+                || !AkskAuthorizationMode.OWNER_INHERITED.name().equals(
+                result.getAttributes().get(JwtClaimConstant.AUTHORIZATION_MODE));
     }
 
     @FunctionalInterface

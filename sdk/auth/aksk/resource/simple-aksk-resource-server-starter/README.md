@@ -1,6 +1,6 @@
 # Simple AKSK Resource Server Starter
 
-AKSK Resource Server Provider Starter 3.0.1 为公共 Resource Server Starter 提供 AKSK 服务身份认证适配器。业务资源服务需要显式并列引入公共 Resource Server Starter 和本模块；本模块不会反向传递公共资源安全链。
+AKSK Resource Server Provider Starter 3.1.0 为公共 Resource Server Starter 提供 AKSK 服务身份认证适配器。业务资源服务需要显式并列引入公共 Resource Server Starter 和本模块；本模块不会反向传递公共资源安全链。
 
 ## 接入依赖
 
@@ -41,6 +41,27 @@ io:
 ```
 
 启用本模块时，`introspect.endpoint`、`client-id` 和 `client-secret` 必须配置；缺少任一项会在自动配置阶段抛出 `SimpleAkskResourceServerConfigurationException`。内省客户端必须由 AKSK Server 明确授权，凭据只能通过部署平台的受保护配置或密钥管理注入，不能写入源码、文档、日志、响应或前端。
+
+## 接收 OWNER_INHERITED AKU（3.1.0 起）
+
+默认本模块只认证 AKSK 服务身份（AKP 与 STATIC_LEGACY AKU，SERVICE 主体）。要接收门户自助创建的所属人继承 AKU，资源服务需显式声明身份：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                introspect:
+                  owner-inherited:
+                    strict-online: true                              # 声明接收 inherited AKU
+                    target-application-id: 42                        # 本服务对应的 IAM 可信应用 ID
+```
+
+启用后本实例的全部 AKSK Bearer 一律在线内省（不读本地缓存），inherited 令牌额外校验 HUMAN 主体与目标应用绑定——IAM 侧撤权即时生效。不配置时行为与 3.0.1 一致。详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ## 认证边界
 

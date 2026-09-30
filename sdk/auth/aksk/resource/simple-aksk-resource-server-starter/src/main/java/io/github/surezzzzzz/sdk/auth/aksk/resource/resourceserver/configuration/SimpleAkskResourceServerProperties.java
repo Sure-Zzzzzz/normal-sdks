@@ -27,6 +27,14 @@ public class SimpleAkskResourceServerProperties {
     public static class Introspect {
 
         /**
+         * inherited AKU 目标应用的严格在线配置。
+         *
+         * <p>开启后该资源服务实例的全部 AKSK Bearer 都必须在线内省，不能依赖
+         * 内省结果再决定是否使用缓存，否则首次读取旧缓存会绕过 IAM 当前授权。</p>
+         */
+        private OwnerInheritedConfig ownerInherited = new OwnerInheritedConfig();
+
+        /**
          * introspect 端点地址
          * 示例：http://localhost:8280/oauth2/introspect
          */
@@ -46,6 +54,16 @@ public class SimpleAkskResourceServerProperties {
          * 本地缓存配置
          */
         private LocalCacheConfig localCache = new LocalCacheConfig();
+
+        @Data
+        public static class OwnerInheritedConfig {
+
+            /** 是否允许本实例接收 IAM 所属人继承 AKU。 */
+            private boolean strictOnline = false;
+
+            /** 本资源服务实例绑定的 IAM 可信应用 ID。 */
+            private Long targetApplicationId;
+        }
 
         @Data
         public static class LocalCacheConfig {

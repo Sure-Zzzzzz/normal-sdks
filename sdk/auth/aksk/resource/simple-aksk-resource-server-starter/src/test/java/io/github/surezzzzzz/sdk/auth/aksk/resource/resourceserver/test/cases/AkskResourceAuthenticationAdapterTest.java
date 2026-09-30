@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskAuthorizationMode;
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.core.constant.AkskResourceIntrospectionClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.support.AkskResourceAuthenticationAdapter;
@@ -15,6 +16,7 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationFailureCategory;
 import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceAuthenticationOutcome;
+import io.github.surezzzzzz.sdk.auth.resource.core.constant.ResourceSubjectType;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.BearerResourceCredential;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationResult;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationSourceId;
@@ -65,6 +67,22 @@ class AkskResourceAuthenticationAdapterTest {
     }
 
     @Test
+    void shouldAuthenticateExplicitStaticLegacyServiceAuthorization() {
+        OpaqueTokenIntrospector introspector = mock(OpaqueTokenIntrospector.class);
+        Map<String, Object> staticLegacy = claims(CLIENT_ID,
+                ApplicationAuthorizationSubjectType.SERVICE, CLIENT_ID, null);
+        staticLegacy.put(JwtClaimConstant.AUTHORIZATION_MODE, AkskAuthorizationMode.STATIC_LEGACY.name());
+        when(introspector.introspect(anyString())).thenReturn(principal(staticLegacy));
+        AkskResourceAuthenticationAdapter adapter = new AkskResourceAuthenticationAdapter(introspector);
+
+        ResourceAuthenticationResult result = adapter.authenticate(credential(AKSK_SOURCE));
+
+        assertEquals(ResourceAuthenticationOutcome.AUTHENTICATED, result.getOutcome());
+        assertEquals(ResourceSubjectType.SERVICE, result.getPrincipal().getSubjectType());
+        assertEquals(CLIENT_ID, result.getPrincipal().getSubjectId());
+    }
+
+    @Test
     void shouldRestoreNestedDataGrantDocument() {
         OpaqueTokenIntrospector introspector = mock(OpaqueTokenIntrospector.class);
         DataGrantDocument document = dataGrantDocument();
@@ -76,6 +94,53 @@ class AkskResourceAuthenticationAdapterTest {
 
         assertEquals(ResourceAuthenticationOutcome.AUTHENTICATED, result.getOutcome());
         assertEquals(document, result.getApplicationAuthorization().getDataGrantDocument());
+    }
+
+    @Test
+    void shouldAuthenticateOwnerInheritedHumanAuthorization() {
+        OpaqueTokenIntrospector introspector = mock(OpaqueTokenIntrospector.class);
+        String ownerSubjectId = "human-1001";
+        Map<String, Object> inherited = claims("AKU-owner-token",
+                ApplicationAuthorizationSubjectType.HUMAN, ownerSubjectId, null);
+        inherited.put(JwtClaimConstant.AUTHORIZATION_MODE, AkskAuthorizationMode.OWNER_INHERITED.name());
+        inherited.put(JwtClaimConstant.TARGET_APPLICATION_ID, Long.valueOf(9L));
+        when(introspector.introspect(anyString())).thenReturn(principal(inherited));
+        AkskResourceAuthenticationAdapter adapter = new AkskResourceAuthenticationAdapter(introspector, true, Long.valueOf(9L));
+
+        ResourceAuthenticationResult result = adapter.authenticate(credential(AKSK_SOURCE));
+
+        assertEquals(ResourceAuthenticationOutcome.AUTHENTICATED, result.getOutcome());
+        assertEquals(ResourceSubjectType.HUMAN, result.getPrincipal().getSubjectType());
+        assertEquals(ownerSubjectId, result.getPrincipal().getSubjectId());
+        assertEquals(ApplicationAuthorizationSubjectType.HUMAN,
+                result.getApplicationAuthorization().getSubjectType());
+    }
+
+    @Test
+    void shouldRejectOwnerInheritedAuthorizationForAnotherApplication() {
+        OpaqueTokenIntrospector introspector = mock(OpaqueTokenIntrospector.class);
+        Map<String, Object> inherited = claims("AKU-owner-token",
+                ApplicationAuthorizationSubjectType.HUMAN, "human-1001", null);
+        inherited.put(JwtClaimConstant.AUTHORIZATION_MODE, AkskAuthorizationMode.OWNER_INHERITED.name());
+        inherited.put(JwtClaimConstant.TARGET_APPLICATION_ID, Long.valueOf(10L));
+        when(introspector.introspect(anyString())).thenReturn(principal(inherited));
+
+        AkskResourceAuthenticationAdapter adapter = new AkskResourceAuthenticationAdapter(introspector, true, Long.valueOf(9L));
+
+        assertRejected(adapter.authenticate(credential(AKSK_SOURCE)),
+                ResourceAuthenticationFailureCategory.AUTHORIZATION_INVALID);
+    }
+
+    @Test
+    void shouldRejectStaticModeWithHumanAuthorization() {
+        OpaqueTokenIntrospector introspector = mock(OpaqueTokenIntrospector.class);
+        Map<String, Object> invalid = claims(CLIENT_ID, ApplicationAuthorizationSubjectType.HUMAN, "human-1001", null);
+        invalid.put(JwtClaimConstant.AUTHORIZATION_MODE, AkskAuthorizationMode.STATIC_LEGACY.name());
+        when(introspector.introspect(anyString())).thenReturn(principal(invalid));
+        AkskResourceAuthenticationAdapter adapter = new AkskResourceAuthenticationAdapter(introspector);
+
+        assertRejected(adapter.authenticate(credential(AKSK_SOURCE)),
+                ResourceAuthenticationFailureCategory.AUTHORIZATION_INVALID);
     }
 
     @Test

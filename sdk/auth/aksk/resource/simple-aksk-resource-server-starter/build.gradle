@@ -1,7 +1,8 @@
 dependencies {
     // 依赖已发布的 AKSK 3.0 协议模块
     api 'io.github.sure-zzzzzz:simple-aksk-resource-core:3.0.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.0'
+    // 3.2.0 协作开发阶段必须直接联调本仓协议 Core，发布前再恢复为已发布坐标。
+    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
 

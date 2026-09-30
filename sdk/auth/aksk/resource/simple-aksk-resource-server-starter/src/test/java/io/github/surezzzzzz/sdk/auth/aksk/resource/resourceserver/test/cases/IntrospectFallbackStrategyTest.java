@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.AkskAuthorizationMode;
+import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.configuration.SimpleAkskResourceServerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.converter.AkskIntrospectionAuthenticationConverter;
 import io.github.surezzzzzz.sdk.auth.aksk.resource.resourceserver.model.IntrospectResult;
@@ -244,6 +246,47 @@ class IntrospectFallbackStrategyTest {
         assertFalse(cacheHelper.getFallback(CACHE_KEY).isActive(), "兜底缓存不得把inactive改为active");
 
         log.info("✓ inactive令牌已缓存且保持拒绝状态");
+    }
+
+    @Test
+    @DisplayName("继承 AKU 必须每次在线内省，且不得写入主缓存或兜底缓存")
+    void testOwnerInheritedTokenNeverUsesCacheOrFallback() {
+        IntrospectLocalCacheHelper cacheHelper = buildCacheHelper(true, 3, 1000, true, 10, 1000);
+        Map<String, Object> attributes = buildAttributes("AKU-owner", "aksk:owner-inherited");
+        attributes.put(JwtClaimConstant.AUTHORIZATION_MODE, AkskAuthorizationMode.OWNER_INHERITED.name());
+        OAuth2AuthenticatedPrincipal principal = mock(OAuth2AuthenticatedPrincipal.class);
+        when(principal.getAttributes()).thenReturn(attributes);
+        when(principal.getName()).thenReturn("AKU-owner");
+        when(delegate.introspect(CACHE_KEY)).thenReturn(principal);
+        AkskIntrospectionAuthenticationConverter converter =
+                new AkskIntrospectionAuthenticationConverter(delegate, cacheHelper);
+
+        converter.introspect(CACHE_KEY);
+        converter.introspect(CACHE_KEY);
+
+        assertNull(cacheHelper.get(CACHE_KEY), "继承 AKU 不得写入主缓存");
+        assertNull(cacheHelper.getFallback(CACHE_KEY), "继承 AKU 不得写入故障兜底缓存");
+        verify(delegate, times(2)).introspect(CACHE_KEY);
+    }
+
+    @Test
+    @DisplayName("严格在线目标应用：静态 AKP 也不得读取缓存或使用故障兜底")
+    void testStrictOnlineNeverUsesCacheOrFallbackForStaticClient() {
+        IntrospectLocalCacheHelper cacheHelper = buildCacheHelper(true, 3, 1000, true, 10, 1000);
+        Map<String, Object> attributes = buildAttributes("AKP-online", "read");
+        OAuth2AuthenticatedPrincipal principal = mock(OAuth2AuthenticatedPrincipal.class);
+        when(principal.getAttributes()).thenReturn(attributes);
+        when(principal.getName()).thenReturn("AKP-online");
+        when(delegate.introspect(CACHE_KEY)).thenReturn(principal);
+        AkskIntrospectionAuthenticationConverter converter =
+                new AkskIntrospectionAuthenticationConverter(delegate, cacheHelper, true);
+
+        converter.introspect(CACHE_KEY);
+        converter.introspect(CACHE_KEY);
+
+        assertNull(cacheHelper.get(CACHE_KEY), "严格在线模式不得写入主缓存");
+        assertNull(cacheHelper.getFallback(CACHE_KEY), "严格在线模式不得写入兜底缓存");
+        verify(delegate, times(2)).introspect(CACHE_KEY);
     }
 
     // ==================== 工具方法 ====================

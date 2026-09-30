@@ -44,6 +44,14 @@ public class AkskResourceAuthenticationConfiguration {
             throw new SimpleAkskResourceServerConfigurationException(
                     "AKSK introspect.endpoint、client-id和client-secret必须配置");
         }
+        SimpleAkskResourceServerProperties.Introspect.OwnerInheritedConfig ownerInherited =
+                introspect.getOwnerInherited();
+        if (ownerInherited.isStrictOnline()
+                && (ownerInherited.getTargetApplicationId() == null
+                || ownerInherited.getTargetApplicationId().longValue() <= 0L)) {
+            throw new SimpleAkskResourceServerConfigurationException(
+                    "启用AKU严格在线模式时必须配置owner-inherited.target-application-id");
+        }
         URI endpoint;
         try {
             endpoint = URI.create(introspect.getEndpoint());
@@ -62,7 +70,8 @@ public class AkskResourceAuthenticationConfiguration {
         RestTemplate restTemplate = new RestTemplate();
         restTemplate.getInterceptors().add(new BasicAuthenticationInterceptor(
                 introspect.getClientId(), introspect.getClientSecret()));
-        return new AkskIntrospectionAuthenticationConverter(endpoint, restTemplate, cacheHelper);
+        return new AkskIntrospectionAuthenticationConverter(endpoint, restTemplate, cacheHelper,
+                ownerInherited.isStrictOnline());
     }
 
     /**
@@ -74,7 +83,11 @@ public class AkskResourceAuthenticationConfiguration {
     @Bean
     @ConditionalOnMissingBean(name = "akskResourceAuthenticationAdapter")
     public ResourceAuthenticationAdapter akskResourceAuthenticationAdapter(
-            @Qualifier("akskOpaqueTokenIntrospector") OpaqueTokenIntrospector introspector) {
-        return new AkskResourceAuthenticationAdapter(introspector);
+            @Qualifier("akskOpaqueTokenIntrospector") OpaqueTokenIntrospector introspector,
+            SimpleAkskResourceServerProperties properties) {
+        SimpleAkskResourceServerProperties.Introspect.OwnerInheritedConfig ownerInherited =
+                properties.getIntrospect().getOwnerInherited();
+        return new AkskResourceAuthenticationAdapter(introspector, ownerInherited.isStrictOnline(),
+                ownerInherited.isStrictOnline() ? ownerInherited.getTargetApplicationId() : null);
     }
 }
