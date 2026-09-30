@@ -29,18 +29,31 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AkskSelfServiceClientController {
 
+    /**
+     * 候选目录降级标记（3.2.1 起仅在降级时出现）：本地投影同步租约已失效时置 true，
+     * 提示空候选可能是"读不到"而非"没授权"；不改变 200 + 空数组的既有契约响应形态。
+     */
+    public static final String HEADER_PROJECTION_DEGRADED = "X-Aksk-Projection-Degraded";
+
     private final AkskSelfServicePrincipalResolver principalResolver;
     private final AkskOwnerInheritedBindingService bindingService;
     private final AkskClientOwnerBindingRepository bindingRepository;
     private final ClientManagementService clientManagementService;
     private final AkskSelfServiceLifecycleService lifecycleService;
+    private final AkskOwnerAuthorizationProjectionService ownerAuthorizationProjectionService;
 
     @GetMapping("/candidate-applications")
     @RequireApiPermission(SimpleAkskServerConstant.SELF_PERMISSION_CREDENTIAL_READ)
     public ResponseEntity<List<OwnerAuthorizationCandidate>> candidates() {
         AkskSelfServicePrincipal owner = principalResolver.resolve();
-        return owner == null ? ResponseEntity.status(403).build()
-                : ResponseEntity.ok().cacheControl(privateNoStore()).body(bindingService.listCandidates(owner));
+        if (owner == null) {
+            return ResponseEntity.status(403).build();
+        }
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok().cacheControl(privateNoStore());
+        if (ownerAuthorizationProjectionService.isSynchronizationLeaseExpired()) {
+            response = response.header(HEADER_PROJECTION_DEGRADED, "true");
+        }
+        return response.body(bindingService.listCandidates(owner));
     }
 
     @GetMapping

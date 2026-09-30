@@ -46,8 +46,8 @@ Major Release - 应用授权自闭环与 AKSK / IAM 可选协作边界
 
 ## 数据库与升级
 
-- 新部署使用 `docs/01_schema_3.0.0.sql` 建立完整 3.0.0 表结构。
-- 从 2.x 升级使用 `docs/02_upgrade_3.0.0.sql`：保留历史 Client 与 Token 表，仅新建应用授权投影表和查询索引。
+- 新部署使用 `docs/migration/V3.0.0__baseline__full_schema.sql` 建立完整 3.0.0 表结构。
+- 从 2.x 升级使用 `docs/migration/V2.x__to__V3.0.0__application_authorization.sql`：保留历史 Client 与 Token 表，仅新建应用授权投影表和查询索引。
 - 2.x 升级不从旧 Scope 自动推导新权限，也不自动准入任何 Client。
 - 每个存量 Client 在首次 3.0 准入前必须先处理全部 2.x 活跃 Token，再人工配置完整授权并显式准入；进入 3.0 后的替换和撤销由 Server 事务性失效活跃 Token。
 

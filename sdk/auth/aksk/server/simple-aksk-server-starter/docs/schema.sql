@@ -1,9 +1,8 @@
 -- =====================================================
--- Simple AKSK Server 3.2.0 数据库结构初始化脚本
--- 依赖：Spring Authorization Server 0.4.1
--- 数据库：MySQL 5.7+ / MySQL 8.0+
--- =====================================================
-
+-- Simple AKSK Server 3.2.x 数据库初始化脚本（全量重建）
+-- 依赖：Spring Authorization Server 0.4.1 / simple-aksk-server-core 3.0.4
+-- 适用：全新部署，或清库重建。已运行旧版本的库走 migration/ 逐版升级，不要执行本文件。
+-- 结构口径与 3.2.0 相同（3.2.1 为纯接口增量，无表结构变化）。
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 

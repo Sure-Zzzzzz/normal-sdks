@@ -28,15 +28,15 @@ Patch Release - 过期 Token 定时清理（分布式锁多实例互斥 + 分批
 
 ### 变更：`access_token_expires_at` 索引
 
-- `01_schema_3.0.0.sql` 的 `oauth2_authorization` 表新增 `idx_oauth2_authorization_access_token_expires_at`（新装环境直接带索引）。
-- 新增 `03_upgrade_3.1.1.sql`：存量 3.0.0 / 3.0.1 / 3.1.0 环境执行 `ALTER TABLE ... ADD KEY` 补齐索引。
+- `migration/V3.0.0__baseline__full_schema.sql` 的 `oauth2_authorization` 表新增 `idx_oauth2_authorization_access_token_expires_at`（新装环境直接带索引）。
+- 新增 `migration/V3.0.0__to__V3.1.1__expired_token_index.sql`：存量 3.0.0 / 3.0.1 / 3.1.0 环境执行 `ALTER TABLE ... ADD KEY` 补齐索引。
 
 ## 兼容性
 
 - 对外 API、配置键、introspection / token / admin 行为零变化（除下述清理行为项）。
 - 新增配置键 `io.github.surezzzzzz.sdk.auth.aksk.server.cleanup.*` 全部有默认值，存量部署零配置升级即获得自动清理；不希望自动清理的部署显式配 `cleanup.enable: false`。
 - 新增依赖 `simple-redis-lock-starter:1.2.2`（`implementation`，实现细节不泄漏进编译类路径）；其锁通道复用既有 Redis 连接（容器内已有 `StringRedisTemplate` 时自动让位复用）。
-- 存量数据库需执行 `03_upgrade_3.1.1.sql` 补索引，否则清理语句全表扫描（功能可用但大表性能差）。
+- 存量数据库需执行 `migration/V3.0.0__to__V3.1.1__expired_token_index.sql` 补索引，否则清理语句全表扫描（功能可用但大表性能差）。
 - server-core 依赖 3.0.1 → 3.0.2。
 - 本模块运行时仅支持 Spring Boot 2.7.x（既定硬性要求，无变化）。
 

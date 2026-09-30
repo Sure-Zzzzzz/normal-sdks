@@ -72,7 +72,7 @@ CREATE TABLE oauth2_authorization (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='OAuth2授权信息表';
 
 -- =====================================================
--- 2. IAM owner 授权本地投影（AKSK 3.2.0）
+-- 2. 身份源 owner 授权本地投影（AKSK 3.2.0）
 -- =====================================================
 
 CREATE TABLE aksk_owner_authorization_cursor (
@@ -100,13 +100,13 @@ CREATE TABLE aksk_owner_authorization_inbox (
 
 CREATE TABLE aksk_owner_authorization_owner_state (
     owner_key VARCHAR(193) NOT NULL COMMENT 'ownerSourceId与ownerSubjectId稳定组合键',
-    owner_source_id VARCHAR(64) NOT NULL COMMENT 'IAM所属人来源',
-    owner_subject_id VARCHAR(128) NOT NULL COMMENT 'IAM所属人主体',
+    owner_source_id VARCHAR(64) NOT NULL COMMENT '身份源所属人来源',
+    owner_subject_id VARCHAR(128) NOT NULL COMMENT '身份源所属人主体',
     active INT NOT NULL COMMENT '最终可用状态：1=有效，0=无效',
     owner_security_epoch BIGINT NOT NULL COMMENT '所属人安全纪元',
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (owner_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK IAM所属人授权最终态';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AKSK所属人授权最终态';
 
 CREATE TABLE aksk_owner_authorization_target_application_state (
     target_application_id BIGINT NOT NULL COMMENT 'IAM可信应用ID',
@@ -119,8 +119,8 @@ CREATE TABLE aksk_owner_authorization_target_application_state (
 
 CREATE TABLE aksk_owner_authorization_projection (
     projection_key VARCHAR(320) NOT NULL COMMENT '人员-目标应用稳定组合键',
-    owner_source_id VARCHAR(64) NOT NULL COMMENT 'IAM所属人来源',
-    owner_subject_id VARCHAR(128) NOT NULL COMMENT 'IAM所属人主体',
+    owner_source_id VARCHAR(64) NOT NULL COMMENT '身份源所属人来源',
+    owner_subject_id VARCHAR(128) NOT NULL COMMENT '身份源所属人主体',
     target_application_id BIGINT NOT NULL COMMENT 'IAM可信应用ID',
     active INT NOT NULL COMMENT '投影可用状态：1=有效，0=无效',
     owner_security_epoch BIGINT NOT NULL COMMENT '所属人安全纪元',

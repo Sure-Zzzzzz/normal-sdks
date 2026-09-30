@@ -162,7 +162,7 @@ class ClientManagementIntegrationTest {
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertNull(response.getBody());
 
-        log.info("管理API已拒绝创建用户级Client，必须由本人自助接口建立IAM所属人绑定");
+        log.info("管理API已拒绝创建用户级Client，必须由本人自助接口建立身份源所属人绑定");
     }
 
     @Test

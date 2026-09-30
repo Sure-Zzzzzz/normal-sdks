@@ -1,10 +1,10 @@
 # Simple AKSK Server Starter
 
-> 当前版本 **3.2.0**。版本沿革见各 `CHANGELOG.*.md`。
+> 当前版本 **3.2.1**。版本沿革见各 `CHANGELOG.*.md`。
 > 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 > 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.2.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ dependencies {
     // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
     // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
     // runtimeOnly 传递运行时，使用方无需重复声明
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.1'
 
     // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -62,13 +62,13 @@ dependencies {
 
 ```bash
 # 新部署或允许重建时：执行 3.0.0 完整初始化脚本
-mysql -u <database-user> -p <database-name> < docs/01_schema_3.0.0.sql
+mysql -u <database-user> -p <database-name> < docs/schema.sql
 
 # 从 2.x 升级：先备份并停写，再仅执行一次升级脚本
-mysql -u <database-user> -p <database-name> < docs/02_upgrade_3.0.0.sql
+mysql -u <database-user> -p <database-name> < docs/migration/V2.x__to__V3.0.0__application_authorization.sql
 ```
 
-> `01_schema_3.0.0.sql` 会重建 AKSK 相关表，仅用于新部署或确认允许清空数据的环境。`02_upgrade_3.0.0.sql` 仅用于 2.x 升级：它保留现有 Client 与 Token 数据、新建应用授权投影表，但不会从旧 Scope 自动推导或自动准入任何授权；每个 Client 在首次 3.0 准入前必须先处理其 2.x 存量活跃 Token，再配置完整授权并显式准入。同一数据库不要重复执行。进入 3.0 后，完整替换或撤销应用授权会事务性撤销该 Client 的活跃 Token，历史 Token 不会因当前投影更新而获得新授权。
+> 各版本间升级脚本与核对清单见 [migration/README.md](docs/migration/README.md)。`schema.sql`（全量重建，当前版本口径）仅用于新部署或确认允许清空数据的环境。`migration/V2.x__to__V3.0.0__application_authorization.sql` 仅用于 2.x 升级：它保留现有 Client 与 Token 数据、新建应用授权投影表，但不会从旧 Scope 自动推导或自动准入任何授权；每个 Client 在首次 3.0 准入前必须先处理其 2.x 存量活跃 Token，再配置完整授权并显式准入。同一数据库不要重复执行。进入 3.0 后，完整替换或撤销应用授权会事务性撤销该 Client 的活跃 Token，历史 Token 不会因当前投影更新而获得新授权。
 
 ### 3. 配置应用
 
@@ -315,7 +315,7 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/client/{clientId}`             | GET    | 查询 Client 详情        |
 | `/api/client/{clientId}`             | DELETE | 删除 Client（连带撤销其名下全部 Token：除 `akskClient:delete` 与 akskClient 数据计划外，还要求 `akskToken:update` API 权限与 akskToken 数据计划——服务主体（applicationCode=aksk-server）与 IAM 人员令牌投影（applicationCode=可信应用编码）均按各自授权上下文评估）           |
 | `/api/client/{clientId}`             | PATCH  | 更新 Client（enabled、OAuth Scope、名称或归属） |
-| `/api/client?owner_user_id={userId}` | PATCH  | 批量同步用户 OAuth Scope |
+| `/api/client?owner_user_id={ownerSubjectId}` | PATCH  | 批量同步用户 OAuth Scope；`owner_user_id` 是兼容参数名，值必须是所属人的稳定 `subjectId`，不是 IAM 内部自增 ID |
 | `/api/client/{clientId}/secret`      | PUT    | 重置 Client Secret    |
 
 ### Token 管理
@@ -338,7 +338,7 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 - **调度**：默认 cron `0 0 2 * * ?`（每天凌晨 2 点），经 `io.github.surezzzzzz.sdk.auth.aksk.server.cleanup.cron` 覆盖；`cleanup.enable: false` 可整体关闭（清理任务不装配）。
 - **多实例互斥**：清理前先抢 Redis 分布式锁（`simple-redis-lock-starter`），抢到锁的实例执行，抢不到的直接跳过本次调度；某次清理失败不影响下次调度重试。
 - **分批删除**：按 `cleanup.batch-size`（默认 2000 行）分批删除，每批独立事务，避免大事务长锁表。Admin 页面手动清理按钮走同一分批实现。
-- **索引**：清理语句依赖 `oauth2_authorization.access_token_expires_at` 索引（新装环境由 `01_schema_3.0.0.sql` 直接建好；存量环境执行 `03_upgrade_3.1.1.sql` 补齐）。
+- **索引**：清理语句依赖 `oauth2_authorization.access_token_expires_at` 索引（新装环境由 `schema.sql` 直接建好；存量环境执行 `migration/V3.0.0__to__V3.1.1__expired_token_index.sql` 补齐）。
 
 ---
 
@@ -413,7 +413,7 @@ io:
 ## 文档导航
 
 - [3.0.0 新装手册](docs/03_install_3.0.0.md)
-- [2.x 升级手册](docs/04_upgrade_2.x_to_3.0.0.md)
+- [2.x 升级手册](docs/04_upgrade_2.x_to_3.0.0.md)（配套脚本 migration/V2.x__to__V3.0.0__application_authorization.sql）
 - [运维手册](docs/05_operations_3.0.0.md)
 - [发布验收清单](docs/06_release_acceptance_3.0.0.md)
 - [依赖解析验证](docs/07_dependency_resolution_3.0.0.md)
@@ -470,9 +470,13 @@ logging:
 
 ## 版本历史
 
+### 3.2.1
+
+候选目录降级信号：`GET /api/me/aksk-clients/candidate-applications` 在本地投影同步租约过期时额外携带 `X-Aksk-Projection-Degraded` 响应头，前端可区分"没有可创建应用"与"同步暂不可用"；响应契约形态零变化，老消费方无感。详见 [CHANGELOG.3.2.1.md](CHANGELOG.3.2.1.md)。
+
 ### 3.2.0 (2026-09-23)
 
-IAM 所属人授权协作：用户级 AKU 可绑定身份源人员和可信应用，三权从身份源的本地投影读取并以授权纪元校验；正常请求不依赖身份源在线，短时不可用时投影在租约内继续服务，租约过期后发放、续期和内省失败关闭。AKU 创建入口收敛为门户自助唯一路径（管理 REST `type=user` 返回 409）；个人凭证天花板按方案 A 执行（OWNER_INHERITED 令牌路径收敛到所属人，管理台 HUMAN 令牌按身份源投影原样执行）；修复跨资源权限评估的应用编码裂缝。详见 [CHANGELOG.3.2.0.md](CHANGELOG.3.2.0.md)。
+IAM 所属人授权协作：用户级 AKU 可绑定身份源人员和可信应用，三权从身份源的本地投影读取并以授权纪元校验；正常请求不依赖身份源在线，短时不可用时投影在租约内继续服务，租约过期后发放、续期和内省失败关闭。AKU 创建入口收敛为门户自助唯一路径（管理 REST `type=user` 返回 409）；个人凭证天花板按"本人到场 vs 凭证代办"判定生效（OWNER_INHERITED 令牌路径收敛到所属人，管理台 HUMAN 令牌按身份源投影原样执行）；修复跨资源权限评估的应用编码裂缝。详见 [CHANGELOG.3.2.0.md](CHANGELOG.3.2.0.md)。
 
 ### 3.1.1 (2026-09-07)
 

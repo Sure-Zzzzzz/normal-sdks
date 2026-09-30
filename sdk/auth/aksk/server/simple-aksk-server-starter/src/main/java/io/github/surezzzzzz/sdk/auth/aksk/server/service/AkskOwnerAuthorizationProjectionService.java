@@ -165,6 +165,16 @@ public class AkskOwnerAuthorizationProjectionService {
     }
 
     /**
+     * 同步租约是否已过期（游标已存在但不在服务宽限内）：供候选目录标记降级——
+     * 此时空候选可能是"读不到"而非"没授权"。游标不存在（继承链路从未启用/同步）不算降级。
+     */
+    @Transactional(readOnly = true)
+    public boolean isSynchronizationLeaseExpired() {
+        AkskOwnerAuthorizationCursorEntity cursor = cursorRepository.findById(STREAM_KEY).orElse(null);
+        return cursor != null && !hasValidSynchronizationLease();
+    }
+
+    /**
      * 多实例 worker 领取；网络调用不在该事务内执行。
      */
     @Transactional
