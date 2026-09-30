@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: simple-aksk-resource-server-test
+  profiles:
+    active: local
+
+# Simple AKSK Resource Server 配置
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: true
+                introspect:
+                # endpoint、client-id 和 client-secret 仅在被忽略的 application-local.yml 中配置
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/**
+                  - /test/**
+                permit-all-paths:
+                  - /actuator/health
+                  - /public/**
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    org.springframework.security: DEBUG
+
+# 本地测试配置仅放在 Git 忽略的 application-local.yml
+# Spring Boot 会自动加载 application-local.yml（如果存在）

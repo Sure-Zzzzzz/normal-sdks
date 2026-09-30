@@ -1,0 +1,30 @@
+dependencies {
+    // 联调期源码引用（仓库大型跨模块改造规则）；本批收口发布后切精确 Maven 坐标并重跑
+    // 移植基线 = 旧线已提交 HEAD（3.0.1 形态）；在途 3.2.0 批次收口后按 delta 补齐（fallback/owner-inherited 等）
+    api 'io.github.sure-zzzzzz:simple-aksk-resource-core:3.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+
+    // Spring Boot（仅编译时依赖，版本随本地 3.4.2 BOM）
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.security:spring-security-oauth2-resource-server'
+    compileOnly 'org.springframework.security:spring-security-oauth2-jose'
+
+    // 本地缓存（内部实现依赖，不暴露 Caffeine 类型；版本随 BOM）
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // 测试依赖
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-jakarta-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'
+    testImplementation 'com.nimbusds:oauth2-oidc-sdk:9.43.1'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
