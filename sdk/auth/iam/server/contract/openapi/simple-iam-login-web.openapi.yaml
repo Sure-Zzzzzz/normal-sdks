@@ -1,12 +1,14 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Login API
-  version: 1.0.0
+  version: 1.3.0
   description: Login 与其他 Web 前端共用的浏览器会话、品牌与 OAuth2 Consent 辅助接口。
 servers:
   - url: /
 paths:
   /iam/web/auth/providers:
+    description: 1.3.0 起 type 枚举新增 phone（手机号验证码表单型,条目携带 supportedRegions 区号列表）;未装配短信投递时不返回 phone 条目。
+
     get:
       summary: 获取 Web 可用登录方式
       operationId: listLoginProviders
@@ -64,6 +66,80 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
+  /iam/web/auth/phone-challenges:
+    post:
+      summary: 创建手机号验证码挑战（登录/忘记密码）
+      description: |-
+        匿名+三维频控；未知号统一受理（201）不投递（防枚举），已登记号真实投递。
+        未装配短信投递实现时 404（能力未开放）。
+      operationId: createPhoneChallenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, purpose]
+              properties:
+                phone: { type: string, description: 手机号（E.164 或国内 11 位，入口统一规范化） }
+                purpose: { type: string, enum: [login, forgot-password] }
+      responses:
+        '201':
+          description: 挑战已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challengeId: { type: string }
+                  resendAfterSeconds: { type: integer, description: 允许再次发送的等待秒数（服务端同号冷却配置，前端倒计时唯一事实源） }
+        '400': { description: 手机号格式非法或频控超限 }
+        '404': { description: 短信能力未开放 }
+  /iam/web/auth/phone-login:
+    post:
+      summary: 手机号验证码登录（会话语义与密码登录一致）
+      operationId: loginWithPhone
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, code, phone]
+              properties:
+                challengeId: { type: string, format: uuid }
+                code: { type: string }
+                phone: { type: string, description: 须与挑战创建号一致（消费时按号哈希原子校验） }
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { description: 验证码错误或已失效、账号不可用或手机号格式非法 }
+  /iam/web/auth/password-reset:
+    post:
+      summary: 忘记密码重置（手机验证一步完成，不建会话）
+      description: 成功即吊销该用户全部会话；仅已验证手机号可重置，未验证登记号统一拒绝并引导联系管理员。
+      operationId: resetPasswordByPhone
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, code, phone, newPassword]
+              properties:
+                challengeId: { type: string, format: uuid }
+                code: { type: string }
+                phone: { type: string }
+                newPassword: { type: string, format: password }
+      responses:
+        '204': { description: 重置成功（全部会话已吊销） }
+        '400': { description: 验证码错误或已失效、手机号未验证、手机号格式非法或密码策略不满足 }
   /iam/web/auth/captcha:
     get:
       summary: 获取人机验证挑战
@@ -169,6 +245,56 @@ paths:
         '204': { description: 已修改 }
         '400': { description: 旧密码错误（计入失败计数，携带剩余尝试次数文案，达上限锁定）、新密码不符策略、请求字段缺失或外部身份用户 }
         '401': { description: 未登录 }
+  /iam/web/account/phone:
+    get:
+      summary: 获取当前账号手机号状态
+      description: 返回脱敏手机号、登记或验证状态及验证时间；未登记时响应体为 null。短信投递能力未装配时返回 400。
+      operationId: getCurrentAccountPhone
+      security: [ { iamSession: [] } ]
+      responses:
+        '200':
+          description: 当前账号手机号状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhoneStatusResponse', nullable: true }
+        '400': { description: 短信能力未装配 }
+        '401': { description: 未登录 }
+    put:
+      summary: 绑定或换绑手机号
+      operationId: bindCurrentAccountPhone
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhoneBindRequest' }
+      responses:
+        '204': { description: 已绑定或换绑 }
+        '400': { description: 验证码、手机号或短信能力无效 }
+        '401': { description: 未登录 }
+        '409': { description: 手机号已被其他账号绑定 }
+    delete:
+      summary: 解绑当前账号手机号
+      operationId: unbindCurrentAccountPhone
+      security: [ { iamSession: [], csrfToken: [] } ]
+      responses:
+        '204': { description: 已解绑 }
+        '400': { description: 短信能力未装配或手机号尚未验证 }
+        '401': { description: 未登录 }
+  /iam/web/account/phone-challenges:
+    post:
+      summary: 创建当前账号手机号绑定挑战
+      operationId: createCurrentAccountPhoneChallenge
+      security: [ { iamSession: [], csrfToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhoneBindChallengeRequest' }
+      responses:
+        '201': { description: 挑战已创建, content: { application/json: { schema: { $ref: '#/components/schemas/PhoneChallengeResponse' } } } }
+        '400': { description: 手机号格式非法、频控超限或短信能力未装配 }
+        '401': { description: 未登录 }
   /iam/web/branding:
     get:
       summary: 获取登录前可读的品牌信息
@@ -229,10 +355,11 @@ components:
       properties:
         code: { type: string, example: ldap-password }
         name: { type: string }
-        type: { type: string, enum: [password, ldap, sso] }
+        type: { type: string, enum: [password, ldap, sso, phone] }
         enabled: { type: boolean }
         authorizeUrl: { type: string, nullable: true }
         description: { type: string, nullable: true }
+        supportedRegions: { type: string, nullable: true, description: type=phone 时由短信投递能力声明的逗号分隔区号列表；其余类型为 null }
     CsrfTokenResponse:
       type: object
       required: [headerName, parameterName, token]
@@ -257,6 +384,30 @@ components:
       properties:
         oldPassword: { type: string, format: password }
         newPassword: { type: string, format: password, description: 按当前密码策略校验（长度/字符类别） }
+    PhoneBindChallengeRequest:
+      type: object
+      required: [phone]
+      properties:
+        phone: { type: string, description: 手机号（E.164 或国内 11 位，入口统一规范化） }
+    PhoneBindRequest:
+      type: object
+      required: [challengeId, code, phone]
+      properties:
+        challengeId: { type: string }
+        code: { type: string }
+        phone: { type: string, description: 须与绑定挑战的手机号一致 }
+    PhoneChallengeResponse:
+      type: object
+      required: [challengeId, resendAfterSeconds]
+      properties:
+        challengeId: { type: string }
+        resendAfterSeconds: { type: integer, minimum: 0, description: 允许再次发送的等待秒数 }
+    PhoneStatusResponse:
+      type: object
+      properties:
+        maskedPhone: { type: string, example: "138****0000" }
+        status: { type: string, enum: [registered, verified] }
+        boundAt: { type: string, nullable: true, description: 验证通过时的绑定时间 }
     AuthorizeResponse:
       type: object
       required: [authorizeUrl]
@@ -281,7 +432,7 @@ components:
     AuthUser:
       type: object
       properties:
-        userId: { type: integer, format: int64, nullable: true }
+        subjectId: { type: string, nullable: true, description: 对外用户主体（1.3.0 起，原数值 userId 字段移除） }
         username: { type: string }
         displayName: { type: string, nullable: true }
         admin: { type: boolean }

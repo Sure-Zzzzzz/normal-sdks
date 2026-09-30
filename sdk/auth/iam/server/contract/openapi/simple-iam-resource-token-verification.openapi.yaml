@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Resource Token Verification API
-  version: 1.0.0
+  version: 1.3.0
   description: >-
     仅供受控资源服务验证 IAM Access Token 的服务间接口。浏览器、Portal、Admin
     和普通 OAuth Client 不得调用此接口。
@@ -63,7 +63,7 @@ components:
       properties:
         sub:
           type: string
-          description: IAM 稳定用户标识。
+          description: IAM 对外用户主体（iam_user.subject_id，1.3.0 起）。
         iam_authorization:
           $ref: '#/components/schemas/ApplicationAuthorizationContextClaim'
     ApplicationAuthorizationContextClaim:

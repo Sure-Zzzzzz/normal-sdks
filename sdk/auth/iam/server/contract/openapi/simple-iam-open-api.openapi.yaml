@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Open API
-  version: 1.0.0
+  version: 1.3.0
   description: >-
     IAM 对外开放 API（`/iam/api/**`），供外部系统持 AKSK 凭证（平台级 AKP
     或用户级 AKU）调用，做组织与人员同步。浏览器、Portal、Admin 和普通
@@ -83,9 +83,9 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '409': {$ref: '#/components/responses/Conflict'}
-  /iam/api/users/{userId}:
+  /iam/api/users/{subjectId}:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
     get:
       summary: 用户详情
       operationId: getUser
@@ -127,9 +127,9 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
-  /iam/api/users/{userId}/roles:
+  /iam/api/users/{subjectId}/roles:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
     get:
       summary: 用户角色列表
       operationId: getUserRoles
@@ -142,9 +142,9 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /iam/api/users/{userId}/enable:
+  /iam/api/users/{subjectId}/enable:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
     put:
       summary: 启用用户
       operationId: enableUser
@@ -153,9 +153,9 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /iam/api/users/{userId}/disable:
+  /iam/api/users/{subjectId}/disable:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
     put:
       summary: 禁用用户
       operationId: disableUser
@@ -165,9 +165,9 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /iam/api/users/{userId}/reset-password:
+  /iam/api/users/{subjectId}/reset-password:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
     put:
       summary: 重置用户密码
       operationId: resetUserPassword
@@ -183,9 +183,9 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
-  /iam/api/users/{userId}/roles/{roleId}:
+  /iam/api/users/{subjectId}/roles/{roleId}:
     parameters:
-      - {name: userId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
       - {name: roleId, in: path, required: true, schema: {type: integer, format: int64}}
     post:
       summary: 绑定角色

@@ -1,19 +1,19 @@
 openapi: 3.0.3
 info:
-  title: Simple IAM AKSK Owner Authorization Internal API
-  version: 1.2.0
+  title: Simple IAM Owner Authorization Internal API
+  version: 1.3.0
   description: >-
-    仅供 AKSK Server 以固定 IAM 内部 reader SERVICE 读取人员当前应用授权。
+    仅供受控协作服务以固定 IAM 内部 reader SERVICE 读取人员当前应用授权。
     浏览器、Portal、Admin、普通 OAuth Client 和资源验证 Basic Client 不得调用。
 servers:
   - url: /
 paths:
-  /iam/internal/aksk/owner-authorizations/resolve:
+  /iam/internal/owner-authorization/resolve:
     post:
       summary: 读取人员在目标应用的当前授权投影
-      operationId: resolveAkskOwnerAuthorization
+      operationId: resolveOwnerAuthorization
       security:
-        - akskOwnerAuthorizationReader: []
+        - ownerAuthorizationReader: []
       requestBody:
         required: true
         content:
@@ -22,7 +22,7 @@ paths:
               $ref: '#/components/schemas/OwnerAuthorizationResolveRequest'
       responses:
         '200':
-          description: 当前投影已完成且可用于 inherited AKU 授权判定。
+          description: 当前投影已完成且可用于所属人继承凭证授权判定。
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
@@ -34,15 +34,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-  /iam/internal/aksk/owner-authorizations/candidate-applications:
+  /iam/internal/owner-authorization/candidate-applications:
     post:
-      summary: 列出人员当前可创建 AKU 的目标应用
+      summary: 列出人员当前可创建所属人继承凭证的目标应用
       description: >-
-        仅返回可信应用有效、显式开启 AKU 授权继承且该人员当前投影 active 的最小展示字段。
-        结果只用于 AKSK 服务端校验浏览器选择值，不能替代 resolve 授权判定。
-      operationId: listAkskOwnerCandidateApplications
+        仅返回可信应用有效、显式开启所属人授权继承且该人员当前投影 active 的最小展示字段。
+        结果只用于调用服务校验浏览器选择值，不能替代 resolve 授权判定。
+      operationId: listOwnerCandidateApplications
       security:
-        - akskOwnerAuthorizationReader: []
+        - ownerAuthorizationReader: []
       requestBody:
         required: true
         content:
@@ -51,25 +51,27 @@ paths:
               $ref: '#/components/schemas/OwnerAuthorizationCandidateRequest'
       responses:
         '200':
-          description: 当前人员可选择的目标应用列表。
+          description: 当前人员可选择的所属人授权目标应用列表。
           headers:
             Cache-Control:
               $ref: '#/components/headers/NoStore'
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OwnerAuthorizationCandidateResponse'
+                type: array
+                items:
+                  $ref: '#/components/schemas/OwnerAuthorizationCandidateApplication'
         '401':
           $ref: '#/components/responses/Unauthorized'
-  /iam/internal/aksk/owner-authorizations/changes/pull:
+  /iam/internal/owner-authorization/changes/pull:
     post:
-      summary: 拉取 IAM 到 AKSK 的授权控制面最终态日志
+      summary: 拉取 IAM 所属人授权控制面最终态日志
       description: >-
         只允许固定 reader SERVICE 的 stream scope 调用。返回按 sourceSequence 递增的最终态快照；
         resyncRequired=true 时调用方不得继续消费增量，必须先全量 resolve 自己持有的有效 binding。
-      operationId: pullAkskOwnerAuthorizationChanges
+      operationId: pullOwnerAuthorizationChanges
       security:
-        - akskOwnerAuthorizationStream: []
+        - ownerAuthorizationStream: []
       requestBody:
         required: true
         content:
@@ -90,14 +92,14 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 components:
   securitySchemes:
-    akskOwnerAuthorizationReader:
+    ownerAuthorizationReader:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: >-
         IAM bootstrap 创建的固定内部 reader SERVICE 短时 JWE Bearer。
-        它只拥有 iam:internal:aksk-owner-authorization:read，不能由浏览器或普通可信应用创建、编辑或获取。
-    akskOwnerAuthorizationStream:
+        它只拥有 iam:internal:owner-authorization:read，不能由浏览器或普通可信应用创建、编辑或获取。
+    ownerAuthorizationStream:
       type: http
       scheme: bearer
       bearerFormat: JWT
@@ -131,16 +133,16 @@ components:
         ownerSourceId:
           type: string
           maxLength: 64
-          description: IAM 安装期固定、启用后不可变的部署命名空间；只能由 AKSK 已验证的 HUMAN 上下文提供。
+          description: IAM 安装期固定、启用后不可变的部署命名空间；只能由调用服务已验证的 HUMAN 上下文提供。
         ownerSubjectId:
           type: string
-          maxLength: 128
-          description: IAM iam_user.id 的十进制字符串；不得传 username、LDAP DN 或 OIDC subject。
+          maxLength: 64
+          description: IAM 对外用户主体（iam_user.subject_id）；不得传 username、LDAP DN 或 OIDC subject。
         targetApplicationId:
           type: integer
           format: int64
           minimum: 1
-          description: 仅由 AKSK 持久 owner binding 提供的可信应用 ID。
+          description: 仅由调用服务持久 owner binding 提供的可信应用 ID。
     OwnerAuthorizationCandidateRequest:
       type: object
       additionalProperties: false
@@ -151,7 +153,7 @@ components:
           maxLength: 64
         ownerSubjectId:
           type: string
-          maxLength: 128
+          maxLength: 64
     OwnerAuthorizationResolveResponse:
       type: object
       additionalProperties: false
@@ -185,7 +187,11 @@ components:
           format: int64
           minimum: 0
           description: resolve 开始前捕获的日志 high-water；只用于新 binding 的安全引导，不能推进已有 cursor。
-        iamAuthorization:
+        ownerUsername:
+          type: string
+          maxLength: 64
+          description: active=true 时必填的所属人登录名展示快照；不得作为稳定授权键。
+        authorization:
           $ref: '#/components/schemas/ApplicationAuthorizationContextClaim'
     OwnerAuthorizationChangePullRequest:
       type: object
@@ -201,28 +207,68 @@ components:
           minimum: 1
           maximum: 200
     OwnerAuthorizationChangePullResponse:
+      oneOf:
+        - $ref: '#/components/schemas/OwnerAuthorizationAvailableChangePullResponse'
+        - $ref: '#/components/schemas/OwnerAuthorizationUnavailableChangePullResponse'
+    OwnerAuthorizationAvailableChangePullResponse:
       type: object
       additionalProperties: false
-      required: [resyncRequired, oldestAvailableSequence, highWaterSequence, changes]
+      required: [available, resyncRequired, lowWatermark, highWatermark, serverTime, changes]
       properties:
+        available:
+          type: boolean
+          enum: [true]
         resyncRequired:
           type: boolean
-        oldestAvailableSequence:
+          description: true 时 changes 必为空，调用方必须先全量 resolve 自己持有的有效 binding。
+        lowWatermark:
           type: integer
           format: int64
           minimum: 0
-        highWaterSequence:
+        highWatermark:
           type: integer
           format: int64
           minimum: 0
+        serverTime:
+          type: string
+          format: date-time
+          description: IAM 生成本变更页时的服务器时间，调用方用于投影租约判断。
         changes:
           type: array
+          items:
+            $ref: '#/components/schemas/OwnerAuthorizationChange'
+    OwnerAuthorizationUnavailableChangePullResponse:
+      type: object
+      additionalProperties: false
+      required: [available, resyncRequired, lowWatermark, highWatermark, serverTime, changes]
+      properties:
+        available:
+          type: boolean
+          enum: [false]
+        resyncRequired:
+          type: boolean
+          enum: [false]
+        lowWatermark:
+          type: integer
+          format: int64
+          nullable: true
+        highWatermark:
+          type: integer
+          format: int64
+          nullable: true
+        serverTime:
+          type: string
+          format: date-time
+          nullable: true
+        changes:
+          type: array
+          maxItems: 0
           items:
             $ref: '#/components/schemas/OwnerAuthorizationChange'
     OwnerAuthorizationChange:
       type: object
       additionalProperties: false
-      required: [sourceSequence, eventId, changeType, aggregateKey, reasonCode, schemaVersion, payload, occurredAt]
+      required: [sourceSequence, eventId, changeType, payload]
       properties:
         sourceSequence:
           type: integer
@@ -234,31 +280,10 @@ components:
         changeType:
           type: string
           enum: [OWNER_STATE, TARGET_APPLICATION_STATE, OWNER_APPLICATION_PROJECTION]
-        aggregateKey:
-          type: string
-        reasonCode:
-          type: string
-        schemaVersion:
-          type: integer
-          format: int64
-          minimum: 1
         payload:
           type: object
           additionalProperties: true
-          description: 由 changeType 决定的最终态载荷；调用方按 schemaVersion 严格解析，未知字段忽略，缺失必填字段失败关闭。
-        occurredAt:
-          type: integer
-          format: int64
-          description: Unix epoch 毫秒。
-    OwnerAuthorizationCandidateResponse:
-      type: object
-      additionalProperties: false
-      required: [items]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/OwnerAuthorizationCandidateApplication'
+          description: 由 changeType 决定的最终态载荷；调用方按各变更类型的既有字段契约严格解析，缺失必填字段失败关闭。
     OwnerAuthorizationCandidateApplication:
       type: object
       additionalProperties: false
@@ -270,7 +295,7 @@ components:
           minimum: 1
         applicationName:
           type: string
-          maxLength: 128
+          maxLength: 64
         applicationCodeSnapshot:
           type: string
           maxLength: 64
