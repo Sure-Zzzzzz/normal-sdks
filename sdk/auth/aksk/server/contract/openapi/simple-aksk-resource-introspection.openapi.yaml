@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Simple AKSK Resource Introspection API
+  version: 3.2.1
+  description: >-
+    AKSK Server 令牌内省（RFC 7662）接口契约，面向资源服务（simple-aksk-resource-server-starter）
+    与需要服务端判定 AK/SK 令牌当前有效性的内部消费方。响应在标准 introspection 字段之上扩展
+    AKSK 授权声明；所有授权结论由服务端按当前投影重算，客户端不得自行用旧快照替代判定。
+servers:
+  - url: /
+paths:
+  /oauth2/introspect:
+    post:
+      summary: 内省 AK/SK 访问令牌的当前有效性
+      description: >-
+        以 OAuth2 客户端凭据（Basic）调用。active=true 时响应携带签发事实（client_id、iat、exp、nbf、scope）
+        与服务端按当前授权投影重算的 AKSK 授权声明；OWNER_INHERITED 令牌还必须携带不可变绑定键与四类
+        授权纪元，任一与当前投影不一致即按 active=false 失败关闭，旧令牌不因重新授权复活。
+      operationId: introspectAkskToken
+      security:
+        - introspectClientBasic: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: AK/SK 访问令牌原文。
+      responses:
+        '200':
+          description: 内省结论；无效、撤销、过期、纪元不一致一律 active=false，不区分原因。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AkskIntrospectionResponse'
+        '401':
+          description: 内省客户端认证失败。
+components:
+  securitySchemes:
+    introspectClientBasic:
+      type: http
+      scheme: basic
+      description: >-
+        AKSK Server 登记的 OAuth2 客户端凭据；面向资源服务部署时使用平台级内省客户端，
+        不得使用浏览器会话或 IAM 人员令牌调用。
+  schemas:
+    AkskIntrospectionResponse:
+      type: object
+      required: [active]
+      properties:
+        active:
+          type: boolean
+          description: false 时不携带任何授权声明。
+        client_id:
+          type: string
+          description: 签发该令牌的 AK/SK 客户端 AccessKey。
+        scope:
+          type: string
+          description: 空格分隔的技术请求范围；不承载三权。
+        iat:
+          type: integer
+          format: int64
+          description: Unix epoch 秒，服务端截断到整秒。
+        nbf:
+          type: integer
+          format: int64
+          description: Unix epoch 秒，存在时返回。
+        exp:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。
+        token_type:
+          type: string
+          enum: [Bearer]
+        sub:
+          type: string
+          description: 令牌主体，恒为签发该令牌的 AK/SK 客户端 AccessKey（与 client_id 一致）；人员身份不体现在 sub，消费方读取 aksk_authorization.subjectType=HUMAN 时的 subjectId（身份源稳定主体，非自增主键）。
+        authorization_mode:
+          type: string
+          enum: [STATIC_LEGACY, OWNER_INHERITED]
+          description: >-
+            授权来源模式。STATIC_LEGACY 表示本地静态三权；OWNER_INHERITED 表示三权来自身份源（当前为 IAM）的所属人授权投影。
+            历史静态令牌可能不携带该字段，消费方按 STATIC_LEGACY 处理；继承令牌必须显式携带。
+        owner_source_id:
+          type: string
+          description: 仅 OWNER_INHERITED：身份源部署稳定所属人来源（当前 IAM 部署为 local-iam）。
+        target_application_id:
+          type: integer
+          format: int64
+          description: 仅 OWNER_INHERITED：不可变绑定的 IAM 可信应用 ID。
+        owner_security_epoch:
+          type: integer
+          format: int64
+          description: 仅 OWNER_INHERITED：签发时的人员安全纪元，与当前投影不一致即 active=false。
+        application_authorization_epoch:
+          type: integer
+          format: int64
+          description: 仅 OWNER_INHERITED：签发时的目标应用授权纪元。
+        owner_inherited_access_epoch:
+          type: integer
+          format: int64
+          description: 仅 OWNER_INHERITED：签发时的继承访问纪元。
+        projection_access_epoch:
+          type: integer
+          format: int64
+          description: 仅 OWNER_INHERITED：签发时的人员-应用投影访问纪元。
+        aksk_authorization:
+          $ref: '#/components/schemas/AkskAuthorizationClaim'
+    AkskAuthorizationClaim:
+      type: object
+      description: >-
+        服务端按当前投影重算的授权快照；与令牌签发时的声明可能不同，以内省响应为准。
+        消费方必须使用 ApplicationAuthorizationContextClaimMapper 严格还原，不得放宽解析。
+      required:
+        - protocol
+        - version
+        - subjectType
+        - subjectId
+        - applicationCode
+        - admitted
+        - roles
+        - pagePermissions
+        - apiPermissions
+        - dataGrantDocument
+        - authorizationVersion
+        - manifestVersion
+        - manifestDigest
+        - issuedAt
+        - expiresAt
+      properties:
+        protocol:
+          type: string
+          enum: [simple-application-authorization]
+        version:
+          type: string
+          enum: ['1.0']
+        subjectType:
+          type: string
+          enum: [SERVICE, HUMAN]
+          description: SERVICE 为 AK/SK 客户端主体；HUMAN 为 IAM 人员主体（OWNER_INHERITED）。
+        subjectId:
+          type: string
+        applicationCode:
+          type: string
+        admitted:
+          type: boolean
+        roles:
+          type: array
+          items: { type: string }
+        pagePermissions:
+          type: array
+          items: { type: string }
+        apiPermissions:
+          type: array
+          items: { type: string }
+        dataGrantDocument:
+          nullable: true
+          description: 由 simple-data-permission-core 定义的结构化 DATA 授权文档。
+        authorizationVersion:
+          type: integer
+          format: int64
+        manifestVersion:
+          type: string
+        manifestDigest:
+          type: string
+        issuedAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒。
+        expiresAt:
+          type: integer
+          format: int64
+          description: Unix epoch 秒；内省结论的有效期上限。

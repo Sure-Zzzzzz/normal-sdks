@@ -1,0 +1,404 @@
+openapi: 3.0.3
+info:
+  title: Simple AKSK Admin API
+  version: 3.2.1
+  description: >
+    AKSK 管理端 API。认证一律 Bearer（IAM 人员 Access Token，浏览器经 PKCE 公共客户端授权码链取得；
+    AKSK Server 门户形态须外插 simple-iam-resource-server-starter 并配置受控验证）。
+    授权：每个接口要求 action 级 API 权限码（akskClient/akskToken/akskApplicationAuthorization 的
+    create/read/update/delete/revoke），并按 DATA 计划（resource + action）过滤可见与可操作范围；
+    跨资源操作（删除 Client、替换/撤销应用授权）还要求 akskToken:update。`/api/me/aksk-clients`
+    是人员自助 AKU 入口：要求 akskSelfCredential 动作权限，对象范围固定为当前 IAM HUMAN 的 binding，不使用管理 DATA 计划。
+    错误形态：管理异常均为空 body 状态码（401/403/400/404/409）；Client/Token 写端点的资源不存在等
+    未接异常走 Spring 默认错误体（500）。前端按状态码与操作上下文呈现文案。
+servers:
+  - url: /
+security:
+  - bearerToken: []
+paths:
+  /api/me/aksk-clients/candidate-applications:
+    get:
+      summary: 查询当前人员可创建 AKU 的目标可信应用
+      description: 仅返回 IAM 当前授权且已开启 AKU 继承的最小目录。要求 akskSelfCredential:read；reader 故障或无候选均返回空数组。3.2.1 起响应在本地投影同步租约已过期时额外携带 X-Aksk-Projection-Degraded 响应头——此时空候选可能是"读不到"而非"没授权"，前端应按同步暂不可用分流提示。
+      operationId: listMyAkskCandidateApplications
+      responses:
+        '200':
+          description: 候选目录
+          headers:
+            X-Aksk-Projection-Degraded:
+              description: 仅降级时出现（值恒为 true）——本地投影同步租约失效，空候选不可作为"无授权"结论。
+              schema: { type: string, enum: [ 'true' ] }
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/IamOwnerAuthorizationCandidate' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/me/aksk-clients:
+    get:
+      summary: 查询当前人员本人 AKU
+      description: 仅返回当前 IAM HUMAN 已绑定且有效的 AKU。要求 akskSelfCredential:read；不使用管理 DATA 计划。
+      operationId: listMyAkskClients
+      responses: { '200': { description: 本人 AKU, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ClientInfoResponse' } } } } }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建当前人员的 inherited AKU
+      description: 浏览器只能提交候选目录中的 targetApplicationId；服务端重新读取 IAM 候选并落不可变 binding。要求 akskSelfCredential:create 与 Idempotency-Key；首次成功才返回 clientSecret。
+      operationId: createMyAkskClient
+      parameters: [ { name: Idempotency-Key, in: header, required: true, schema: { type: string, maxLength: 128 } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateMyAkskClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/ClientInfo' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '409': { $ref: '#/components/responses/ConflictEmpty' }, '412': { description: 目标应用当前不可用或不可继承 } }
+  /api/me/aksk-clients/{clientId}:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    patch:
+      summary: 修改本人 AKU 名称
+      description: 只允许当前 owner 修改。要求 akskSelfCredential:update 与 If-Match lifecycleVersion；缺少前置条件返回 428，版本过期返回 412。
+      operationId: renameMyAkskClient
+      parameters: [ { name: If-Match, in: header, required: true, schema: { type: string } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateMyAkskClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/ClientInfo' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '412': { description: lifecycleVersion 不匹配 }, '428': { description: 缺少 If-Match } }
+    delete:
+      summary: 终止本人 AKU
+      description: 只允许当前 owner 终止，服务端撤销 Token 并保留 tombstone。要求 akskSelfCredential:delete 与 If-Match lifecycleVersion。
+      operationId: terminateMyAkskClient
+      parameters: [ { name: If-Match, in: header, required: true, schema: { type: string } } ]
+      responses: { '204': { description: 已终止 }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '412': { description: lifecycleVersion 不匹配 }, '428': { description: 缺少 If-Match } }
+  /api/me/aksk-clients/{clientId}/secret:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    put:
+      summary: 轮换本人 AKU Secret
+      description: 只允许当前 owner 轮换。要求 akskSelfCredential:update 与 If-Match lifecycleVersion；新 clientSecret 仅本次响应返回。
+      operationId: rotateMyAkskClientSecret
+      parameters: [ { name: If-Match, in: header, required: true, schema: { type: string } } ]
+      responses: { '200': { $ref: '#/components/responses/ClientInfo' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '412': { description: lifecycleVersion 不匹配 }, '428': { description: 缺少 If-Match } }
+  /api/client:
+    post:
+      summary: 创建 Client（仅平台级）
+      description: 仅 type=platform 建平台级；type=user 返回 409——用户级 AKU 须由本人经 /api/me/aksk-clients 以已验证 IAM 身份建立 immutable binding，管理面不再接收 owner 创建静态用户凭证。成功响应一次性返回明文 clientSecret，此后不再可见。要求 akskClient:create。
+      operationId: createAkskClient
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/CreateClient' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { description: type=user 已禁止管理面创建，改走 /api/me/aksk-clients } }
+    get:
+      summary: 查询 Client 列表
+      description: 携带 clientIds 时走批量查询（返回 clients 映射，忽略分页）；否则分页列表。要求 akskClient:read。
+      operationId: listAkskClients
+      parameters: [ { $ref: '#/components/parameters/ClientIdsQuery' }, { $ref: '#/components/parameters/OwnerUserIdQuery' }, { $ref: '#/components/parameters/ClientTypeTextQuery' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size20' } ]
+      responses: { '200': { $ref: '#/components/responses/ClientList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    patch:
+      summary: 按用户同步全部 Client 的 scopes
+      description: 把 owner_user_id 名下全部 Client 的 scopes 整体替换为请求 scopes，返回更新条数。要求 akskClient:update。
+      operationId: syncAkskUserScopes
+      parameters: [ { $ref: '#/components/parameters/OwnerUserIdParam' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/SyncScopes' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/client/{clientId}:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    get:
+      summary: 查询 Client 详情
+      operationId: getAkskClient
+      responses: { '200': { $ref: '#/components/responses/ClientInfo' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' } }
+    patch:
+      summary: 单字段更新 Client（四选一）
+      description: 服务端按 enabled/scopes/name/ownerUserId 顺序取第一个非空字段执行；更新归属时 ownerUserId（兼容字段名，承载稳定主体 ID）与 ownerUsername 成对提交。全部为空返回 400；资源不存在返回 500（Spring 默认错误体）。要求 akskClient:update。
+      operationId: updateAkskClient
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateClientRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/UpdateOk' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '500': { $ref: '#/components/responses/ServerError' } }
+    delete:
+      summary: 删除 Client
+      description: 级联撤销该 Client 下全部活跃 Token 后删除本体；应用授权记录不级联删除。资源不存在返回 500。要求 akskClient:delete，且要求 akskToken:update（跨资源）。
+      operationId: deleteAkskClient
+      responses: { '200': { description: 已删除（空 body） }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /api/client/{clientId}/secret:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    put:
+      summary: 重置 Client Secret
+      description: 新明文 clientSecret 仅本次响应返回。revokeTokens=true 时同时吊销既有全部 Token（此时要求 akskToken:update 跨资源权限）。要求 akskClient:update。
+      operationId: resetAkskClientSecret
+      parameters: [ { $ref: '#/components/parameters/RevokeTokens' } ]
+      responses: { '200': { $ref: '#/components/responses/ResetSecret' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /api/token:
+    get:
+      summary: 查询 Token 列表（MySQL 源）
+      description: 不含 token 值（管理 API 不暴露）。要求 akskToken:read。
+      operationId: listAkskTokens
+      parameters: [ { $ref: '#/components/parameters/ClientIdQuery' }, { $ref: '#/components/parameters/TokenClientTypeQuery' }, { $ref: '#/components/parameters/TokenStatusQuery' }, { $ref: '#/components/parameters/SearchQuery' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size10' } ]
+      responses: { '200': { $ref: '#/components/responses/TokenPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    delete:
+      summary: 按 Client 批量撤销活跃 Token
+      description: 撤销指定 Client 下全部活跃 Token，返回撤销条数。要求 akskToken:update。
+      operationId: revokeAkskTokensByClientId
+      parameters: [ { $ref: '#/components/parameters/ClientIdQueryRequired' } ]
+      responses: { '200': { $ref: '#/components/responses/BatchRevoke' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/token/redis:
+    get:
+      summary: 查询 Redis 源 Token 列表
+      description: 仅支持状态过滤与分页。要求 akskToken:read。
+      operationId: listAkskRedisTokens
+      parameters: [ { $ref: '#/components/parameters/TokenStatusQuery' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size10' } ]
+      responses: { '200': { $ref: '#/components/responses/TokenPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/token/statistics:
+    get:
+      summary: Token 统计
+      description: 要求 akskToken:read。
+      operationId: getAkskTokenStatistics
+      responses: { '200': { $ref: '#/components/responses/TokenStatistics' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/token/expired:
+    delete:
+      summary: 清理过期 Token
+      description: 要求 akskToken:delete。
+      operationId: deleteAkskExpiredTokens
+      responses: { '200': { $ref: '#/components/responses/DeleteExpired' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/token/{id}:
+    parameters: [ { $ref: '#/components/parameters/TokenIdPath' } ]
+    get:
+      summary: 查询 Token 详情（MySQL 源）
+      description: 要求 akskToken:read。
+      operationId: getAkskToken
+      responses: { '200': { $ref: '#/components/responses/TokenInfo' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' } }
+    delete:
+      summary: 删除单个 Token
+      description: 资源不存在返回 500（Spring 默认错误体）。要求 akskToken:delete。
+      operationId: deleteAkskToken
+      responses: { '200': { description: 已删除（空 body） }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /api/token/{id}/revoke:
+    parameters: [ { $ref: '#/components/parameters/TokenIdPath' } ]
+    post:
+      summary: 撤销单个 Token
+      description: 资源不存在返回 500（Spring 默认错误体）。要求 akskToken:update。
+      operationId: revokeAkskToken
+      responses: { '200': { description: 已撤销（空 body） }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '500': { $ref: '#/components/responses/ServerError' } }
+  /api/application-authorization:
+    post:
+      summary: 创建应用授权
+      description: 该 Client 已有授权时返回 409（空 body）；Client 不存在返回 404。要求 akskApplicationAuthorization:create，且 DATA 计划须允许在该 applicationCode 下创建。
+      operationId: createAkskApplicationAuthorization
+      parameters: [ { $ref: '#/components/parameters/ClientIdQueryRequired' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationAuthorizationRequest' } } } }
+      responses: { '201': { $ref: '#/components/responses/AuthorizationDetail' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '409': { $ref: '#/components/responses/ConflictEmpty' } }
+    get:
+      summary: 分页查询应用授权列表
+      description: 要求 akskApplicationAuthorization:read。
+      operationId: listAkskApplicationAuthorizations
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size20' } ]
+      responses: { '200': { $ref: '#/components/responses/AuthorizationPage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+  /api/application-authorization/{clientId}:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    get:
+      summary: 查询单个应用授权
+      description: 要求 akskApplicationAuthorization:read。
+      operationId: getAkskApplicationAuthorization
+      responses: { '200': { $ref: '#/components/responses/AuthorizationDetail' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' } }
+    put:
+      summary: 整单替换应用授权
+      description: applicationCode 必须与现值一致（不可变更），否则 400；替换成功后该 Client 下全部活跃 Token 被撤销（权限快照不残留）；并发修改返回 409（空 body，乐观锁版本由服务端单调递增，请求不携带）。要求 akskApplicationAuthorization:update，且要求 akskToken:update（跨资源）。
+      operationId: replaceAkskApplicationAuthorization
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationAuthorizationRequest' } } } }
+      responses: { '200': { $ref: '#/components/responses/AuthorizationDetail' }, '400': { $ref: '#/components/responses/BadRequestEmpty' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' }, '409': { $ref: '#/components/responses/ConflictEmpty' } }
+  /api/application-authorization/{clientId}/revoke:
+    parameters: [ { $ref: '#/components/parameters/ClientIdPath' } ]
+    post:
+      summary: 撤销应用授权
+      description: 撤销后 enabled=false、admitted=false、记录 revokedAt，该 Client 下全部活跃 Token 一并失效，且不再向新 Token 签发授权快照。要求 akskApplicationAuthorization:revoke，且要求 akskToken:update（跨资源）。
+      operationId: revokeAkskApplicationAuthorization
+      responses: { '204': { description: 已撤销（空 body） }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFoundEmpty' } }
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: IAM 人员 Access Token（compact JOSE header 的 kid 前缀路由到 IAM Provider 回源校验）。请求不得同时携带 Cookie 等其他凭据（多凭据拒绝 401）。
+  parameters:
+    ClientIdPath: { name: clientId, in: path, required: true, schema: { type: string } }
+    TokenIdPath: { name: id, in: path, required: true, schema: { type: string } }
+    ClientIdQuery: { name: clientId, in: query, required: false, schema: { type: string } }
+    ClientIdQueryRequired: { name: clientId, in: query, required: true, schema: { type: string } }
+    ClientIdsQuery: { name: clientIds, in: query, required: false, description: 批量查询（优先于分页），最多 100 个, schema: { type: array, items: { type: string }, maxItems: 100 } }
+    OwnerUserIdQuery: { name: ownerUserId, in: query, required: false, description: 兼容参数名；值为归属人的稳定主体 ID, schema: { type: string } }
+    OwnerUserIdParam: { name: owner_user_id, in: query, required: true, description: 兼容参数名；值为归属人的稳定主体 ID, schema: { type: string } }
+    ClientTypeTextQuery: { name: type, in: query, required: false, description: Client 类型（不区分大小写）, schema: { type: string, enum: [platform, user] } }
+    TokenClientTypeQuery: { name: clientType, in: query, required: false, description: 1=平台级，2=用户级, schema: { type: integer, enum: [1, 2] } }
+    TokenStatusQuery: { name: status, in: query, required: false, schema: { type: string, enum: [ACTIVE, EXPIRED, REVOKED] } }
+    SearchQuery: { name: search, in: query, required: false, schema: { type: string } }
+    Page: { name: page, in: query, required: false, description: 从 1 开始的页码, schema: { type: integer, minimum: 1, default: 1 } }
+    Size20: { name: size, in: query, required: false, schema: { type: integer, minimum: 1, default: 20 } }
+    Size10: { name: size, in: query, required: false, schema: { type: integer, minimum: 1, default: 10 } }
+    RevokeTokens: { name: revokeTokens, in: query, required: false, description: 是否同时吊销该 Client 既有全部 Token, schema: { type: boolean, default: true } }
+  responses:
+    Unauthorized: { description: 无 Bearer 凭据、凭据无效或过期，或同时携带多种凭据 }
+    Forbidden: { description: 缺少 API 权限码或 DATA 计划不允许该范围（空 body） }
+    BadRequestEmpty: { description: 请求参数无效（空 body） }
+    NotFoundEmpty: { description: 资源不存在（空 body） }
+    ConflictEmpty: { description: 状态冲突或乐观锁并发修改（空 body） }
+    ServerError: { description: Client/Token 写端点资源不存在等未接异常走 Spring 默认错误体 }
+    UpdateOk: { description: 更新成功, content: { application/json: { schema: { $ref: '#/components/schemas/ApiResponse' } } } }
+    ClientInfo: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ClientInfoResponse' } } } }
+    ClientList:
+      description: 携带 clientIds 时返回批量映射，否则返回分页结果
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/ClientPageResponse'
+              - $ref: '#/components/schemas/BatchClientResponse'
+    CreateClient: { description: 创建成功，明文 clientSecret 仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/CreateClientResponse' } } } }
+    ResetSecret: { description: 重置成功，明文 clientSecret 仅本次响应返回, content: { application/json: { schema: { $ref: '#/components/schemas/ResetSecretResponse' } } } }
+    SyncScopes: { description: 同步完成（无匹配 Client 时 updatedCount=0）, content: { application/json: { schema: { $ref: '#/components/schemas/SyncScopesResponse' } } } }
+    TokenInfo: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TokenInfoResponse' } } } }
+    TokenPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TokenPageResponse' } } } }
+    TokenStatistics: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/TokenStatisticsResponse' } } } }
+    BatchRevoke: { description: 撤销完成, content: { application/json: { schema: { $ref: '#/components/schemas/BatchRevokeResponse' } } } }
+    DeleteExpired: { description: 清理完成, content: { application/json: { schema: { $ref: '#/components/schemas/DeleteExpiredResponse' } } } }
+    AuthorizationDetail: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationAuthorizationResponse' } } } }
+    AuthorizationPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AuthorizationPageResponse' } } } }
+  schemas:
+    CreateClientRequest:
+      type: object
+      required: [type, name]
+      properties:
+        type: { type: string, enum: [platform, user], description: Client 类型（服务端不区分大小写比较）；user 一律 409 }
+        name: { type: string }
+        ownerUserId: { type: string, description: 已废弃——type=user 返回 409，字段被忽略 }
+        ownerUsername: { type: string, description: 已废弃——type=user 返回 409，字段被忽略 }
+        scopes: { type: array, items: { type: string }, description: 缺省时服务端落默认 scopes }
+    UpdateClientRequest:
+      type: object
+      description: 单字段更新：仅携带一个目标字段（enabled/scopes/name；更新归属时 ownerUserId（兼容字段名，承载稳定主体 ID）与 ownerUsername 成对提交）；按用户同步 scopes 时仅携带 scopes
+      properties:
+        enabled: { type: boolean }
+        scopes: { type: array, items: { type: string } }
+        name: { type: string }
+        ownerUserId: { type: string, description: 兼容字段名；值为 IAM 对外稳定主体 ID }
+        ownerUsername: { type: string }
+    ClientInfoResponse:
+      type: object
+      properties:
+        clientId: { type: string, description: AccessKey }
+        clientSecret: { type: string, nullable: true, description: 恒为空（明文仅在创建/重置响应一次性返回） }
+        clientName: { type: string }
+        clientType: { type: integer, enum: [1, 2], description: 1=平台级（AKP），2=用户级（AKU） }
+        ownerUserId: { type: string, nullable: true, description: 兼容字段名；值为 IAM 对外稳定主体 ID，不是内部自增 userId }
+        ownerUsername: { type: string, nullable: true }
+        scopes: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        lifecycleVersion: { type: integer, format: int64, nullable: true, description: 本人 AKU 生命周期版本，仅自助入口返回 }
+        targetApplicationId: { type: integer, format: int64, nullable: true, description: 本人 AKU 绑定的目标业务应用 ID，仅自助入口返回 }
+        clientIdIssuedAt: { type: string, format: date-time }
+    IamOwnerAuthorizationCandidate:
+      type: object
+      required: [applicationId, applicationName, applicationCodeSnapshot]
+      properties:
+        applicationId: { type: integer, format: int64 }
+        applicationName: { type: string }
+        applicationCodeSnapshot: { type: string }
+    CreateMyAkskClientRequest:
+      type: object
+      required: [targetApplicationId, clientName]
+      properties:
+        targetApplicationId: { type: integer, format: int64 }
+        clientName: { type: string, minLength: 1 }
+    UpdateMyAkskClientRequest:
+      type: object
+      required: [clientName]
+      properties:
+        clientName: { type: string, minLength: 1 }
+    ClientPageResponse:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/ClientInfoResponse' } }, total: { type: integer, format: int64 }, page: { type: integer }, size: { type: integer }, totalPages: { type: integer } }
+    BatchClientResponse:
+      type: object
+      properties: { clients: { type: object, additionalProperties: { $ref: '#/components/schemas/ClientInfoResponse' } } }
+    CreateClientResponse:
+      type: object
+      properties: { clientId: { type: string }, clientSecret: { type: string, description: 明文 SecretKey，仅本次响应返回 }, type: { type: string }, name: { type: string } }
+    ResetSecretResponse:
+      type: object
+      properties: { clientId: { type: string }, clientSecret: { type: string, description: 明文 SecretKey，仅本次响应返回 } }
+    SyncScopesResponse:
+      type: object
+      properties: { ownerUserId: { type: string, description: 兼容字段名；值为 IAM 对外稳定主体 ID }, updatedCount: { type: integer }, message: { type: string } }
+    ApiResponse:
+      type: object
+      properties: { message: { type: string } }
+    TokenInfoResponse:
+      type: object
+      description: 不含 token 值（管理 API 不暴露 token 明文）
+      properties:
+        id: { type: string }
+        registeredClientId: { type: string }
+        clientId: { type: string }
+        clientName: { type: string }
+        clientType: { type: integer, enum: [1, 2] }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        scopes: { type: array, items: { type: string } }
+        status: { type: string, enum: [ACTIVE, EXPIRED, REVOKED] }
+        dataSource: { type: string, enum: [MYSQL, REDIS, BOTH], description: 存储位置 }
+        ownerUserId: { type: string, nullable: true, description: 兼容字段名；值为 IAM 对外稳定主体 ID }
+        ownerUsername: { type: string, nullable: true }
+    TokenPageResponse:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/TokenInfoResponse' } }, total: { type: integer, format: int64 }, page: { type: integer }, size: { type: integer }, totalPages: { type: integer } }
+    TokenStatisticsResponse:
+      type: object
+      properties: { totalCount: { type: integer, format: int64 }, activeCount: { type: integer, format: int64 }, revokedCount: { type: integer, format: int64 }, expiredCount: { type: integer, format: int64 }, mysqlCount: { type: integer, format: int64 }, redisCount: { type: integer, format: int64 }, bothCount: { type: integer, format: int64 } }
+    BatchRevokeResponse:
+      type: object
+      properties: { revokedCount: { type: integer } }
+    DeleteExpiredResponse:
+      type: object
+      properties: { deletedCount: { type: integer }, message: { type: string } }
+    ApplicationAuthorizationRequest:
+      type: object
+      required: [applicationCode, roles, pagePermissions, apiPermissions, manifestVersion, manifestDigest]
+      properties:
+        applicationCode: { type: string, description: 创建时指定；替换时必须与现值一致（不可变更） }
+        admitted: { type: boolean, description: 是否允许向 Token 签发授权快照；false=草稿。缺省视为 false }
+        roles: { type: array, items: { type: string } }
+        pagePermissions: { type: array, items: { type: string } }
+        apiPermissions: { type: array, items: { type: string } }
+        dataGrantDocument: { $ref: '#/components/schemas/DataGrantDocument', nullable: true }
+        manifestVersion: { type: string }
+        manifestDigest: { type: string }
+    ApplicationAuthorizationResponse:
+      type: object
+      properties:
+        clientId: { type: string }
+        clientType: { type: integer, enum: [1, 2] }
+        ownerUserId: { type: string, nullable: true, description: 兼容字段名；值为 IAM 对外稳定主体 ID }
+        applicationCode: { type: string }
+        admitted: { type: boolean }
+        enabled: { type: boolean }
+        roles: { type: array, items: { type: string } }
+        pagePermissions: { type: array, items: { type: string } }
+        apiPermissions: { type: array, items: { type: string } }
+        dataGrantDocument: { $ref: '#/components/schemas/DataGrantDocument', nullable: true }
+        authorizationVersion: { type: integer, format: int64, description: 服务端单调递增，请求不携带 }
+        manifestVersion: { type: string }
+        manifestDigest: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time, nullable: true }
+    AuthorizationPageResponse:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/ApplicationAuthorizationResponse' } }, total: { type: integer, format: int64 }, page: { type: integer }, size: { type: integer }, totalPages: { type: integer } }
+    DataGrantDocument:
+      type: object
+      description: 数据授权文档。字段精确匹配（多字段/少字段均 400）；grant 间 OR、grant 内 AND
+      required: [protocol, version, grants]
+      properties:
+        protocol: { type: string }
+        version: { type: string }
+        grants: { type: array, items: { $ref: '#/components/schemas/DataGrant' } }
+    DataGrant:
+      type: object
+      required: [resource, actions, all, constraints]
+      properties:
+        resource: { type: string }
+        actions: { type: array, items: { type: string } }
+        all: { type: boolean, description: true 表示该资源全量授权，此时 constraints 必须为空数组 }
+        constraints: { type: array, items: { $ref: '#/components/schemas/DataConstraint' } }
+    DataConstraint:
+      type: object
+      required: [dimension, operator, values]
+      properties:
+        dimension: { type: string }
+        operator: { type: string, enum: [IN] }
+        values: { type: array, items: { type: string } }
