@@ -1,0 +1,9 @@
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-redis'
+    api 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+}

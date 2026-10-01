@@ -1,0 +1,3 @@
+io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockConfiguration
+io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockRouteConfiguration
+io.github.surezzzzzz.sdk.lock.redis.configuration.SimpleRedisLockRouteMissingConfiguration
