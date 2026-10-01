@@ -1,0 +1,2 @@
+io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteManagedDatasourceConfiguration
+io.github.surezzzzzz.sdk.mysql.route.configuration.SimpleMysqlRouteJdbcTemplateAliasConfiguration

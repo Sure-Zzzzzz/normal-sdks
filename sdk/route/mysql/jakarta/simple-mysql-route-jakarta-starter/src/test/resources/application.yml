@@ -1,0 +1,68 @@
+spring:
+  main:
+    web-application-type: none
+  profiles:
+    active: local
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.mysql.route.template.MySqlRouteTemplate: DEBUG
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: mysql57-ops
+            datasources:
+              mysql57-ops:
+                url: jdbc:mysql://localhost:24357/test_ops?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql57_ops_route
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 4
+                  minimum-idle: 1
+                  connection-timeout: 5000
+              mysql57-audit:
+                url: jdbc:mysql://localhost:24357/test_audit?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql57_audit_route
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 4
+                  minimum-idle: 1
+                  connection-timeout: 5000
+              mysql84-ops:
+                url: jdbc:mysql://localhost:24384/test_ops?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql84_ops_route
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 4
+                  minimum-idle: 1
+                  connection-timeout: 5000
+              mysql84-audit:
+                url: jdbc:mysql://localhost:24384/test_audit?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&connectTimeout=5000&socketTimeout=5000
+                username: mysql84_audit_route
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 4
+                  minimum-idle: 1
+                  connection-timeout: 5000
+            rules:
+              - pattern: test_order
+                match-type: exact
+                datasource: mysql57-ops
+                priority: 100
+              - pattern: test_user
+                match-type: exact
+                datasource: mysql57-audit
+                priority: 100
+              - pattern: test_wildcard
+                match-type: exact
+                datasource: mysql84-ops
+                priority: 100
+              - pattern: extraField
+                match-type: exact
+                datasource: mysql84-audit
+                priority: 100
