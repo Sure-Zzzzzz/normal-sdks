@@ -1,0 +1,151 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  pool:
+                    enabled: true
+                    max-active: 12
+                    max-idle: 8
+                    min-idle: 2
+                    max-wait-ms: 1000
+              cache:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 1
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  pool:
+                    enabled: true
+                    max-active: 10
+                    max-idle: 6
+                    min-idle: 1
+                    max-wait-ms: 500
+              lock:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 2
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Standalone:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis5Standalone:
+                mode: standalone
+                host: localhost
+                port: 16380
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis7Standalone:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis5Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+                  pool:
+                    enabled: true
+                    max-active: 16
+                    max-idle: 10
+                    min-idle: 2
+                    max-wait-ms: 1000
+              redis7Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+                  pool:
+                    enabled: true
+                    max-active: 14
+                    max-idle: 8
+                    min-idle: 2
+                    max-wait-ms: 800
+              topologyCluster:
+                mode: cluster
+                nodes:
+                  - redis-node-0.redis-topology-headless.route-test.svc.cluster.local:17120
+                cluster-topology-address-follow-nodes: true
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 1000
+            rules:
+              - pattern: "cache:"
+                type: prefix
+                datasource: cache
+                priority: 1
+              - pattern: "lock:"
+                type: prefix
+                datasource: lock
+                priority: 2
+              - pattern: "matrix-cache:"
+                type: prefix
+                datasource: redis5Standalone
+                priority: 3
+              - pattern: "matrix-cluster:"
+                type: prefix
+                datasource: redis5Cluster
+                priority: 4
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.redis.route: DEBUG
