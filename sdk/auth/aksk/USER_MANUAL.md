@@ -375,7 +375,7 @@ io:
 ```gradle
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
 }
 ```
 

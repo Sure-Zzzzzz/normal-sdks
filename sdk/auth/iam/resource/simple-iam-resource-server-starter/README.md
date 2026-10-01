@@ -91,7 +91,7 @@ io:
 
 `1.0.x` 兼容：
 
-- IAM Server 与 IAM Contract `1.0.x`
+- IAM Server 与 IAM Contract `1.0.x` 至 `1.3.x`（验证成功体始终为 `sub` + `iam_authorization`，`sub` 在 1.3.0 起承载稳定 `subjectId`）
 - IAM Resource Core `1.0.x`
 - Resource Server Starter `1.1.1`
 - Spring Boot `2.2.13.RELEASE` / `2.3.12.RELEASE` / `2.4.5` / `2.7.9`、Spring Security 5、`javax.servlet`

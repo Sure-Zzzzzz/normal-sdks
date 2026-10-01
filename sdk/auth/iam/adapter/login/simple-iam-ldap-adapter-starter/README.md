@@ -11,7 +11,7 @@ Gradle：
 ```gradle
 dependencies {
     // 登录路由、账号归一、会话管理由 server-starter 提供，需一并引入。
-    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-server-starter:1.3.1'
     implementation 'io.github.sure-zzzzzz:simple-iam-ldap-adapter-starter:1.0.0'
 }
 ```

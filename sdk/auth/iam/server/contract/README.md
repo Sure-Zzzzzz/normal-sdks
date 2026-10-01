@@ -4,14 +4,19 @@
 
 ## 版本对应关系
 
-| IAM Server | Contract | Login Web | Portal Web | Admin Web |
-|------------|----------|-----------|------------|-----------|
-| `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` | `1.0.x` |
-| `1.1.x` | `1.1.x` | `1.0.x` | `1.1.x` | `1.1.x` |
-| `1.2.x` | `1.2.x` | `1.0.x` | `1.2.x` | `1.2.x` |
-| `1.3.x` | `1.3.x` | `1.3.x` | `1.3.x` | `1.3.x` |
+### 1.3.0 集成基线
 
-首次独立发布时，以 Server `1.0.0` 对应 Login、Portal、Admin 各自仓库的 `v1.0.0` tag。后续前端 patch 可独立发布，但 release notes 必须声明其兼容的 Server 与 Contract 范围。
+| 组件 | 版本 | 关系 |
+| --- | --- | --- |
+| IAM Server | `1.3.0` | 提供浏览器会话、管理 API、Portal API 与 OAuth2 协议端点 |
+| IAM Contract | `1.3.0` | 上述浏览器 API 的唯一契约来源 |
+| Login Web | `1.1.0` | 消费登录、短信验证、账号安全与 Consent 契约；构建期使用 IAM Theme Contract `1.0.0` |
+| Unified Application Portal Web | `1.2.0` | 消费 Portal、站内信和本人手机号绑定契约；构建期使用 IAM Theme Contract `1.0.3` 与 Frontend Contract `1.0.0` |
+| IAM Admin Web | `1.2.0` | 消费 `/iam/admin/**`，包括 subjectId 与用户 Excel 导入契约；构建期使用 IAM Theme Contract `1.0.3` 与 Frontend Contract `1.0.0` |
+
+该表是同轮联调的精确组合，不要求组件版本号与 Server 同号。Server/Contract 在 `1.3.x` 内仅新增向后兼容字段或端点时，已发布前端可独立发布 patch；改变既有请求、响应或权限语义时，必须提升 Contract minor，并重新给出完整组合。
+
+前端构建物不通过运行时版本探测决定兼容性：部署记录必须保存本表中的完整版本元组，发布前以对应 OpenAPI、前端 `check` 与真实联调共同确认。这样既避免浏览器把版本检查变成新的可用性依赖，也避免只凭版本号猜测接口可用性。
 
 ## 目录
 
