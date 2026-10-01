@@ -12,8 +12,8 @@ import io.github.surezzzzzz.sdk.auth.iam.server.exception.ValidationException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException;
 import org.apache.poi.ooxml.POIXMLException;
+import org.apache.poi.openxml4j.exceptions.NotOfficeXmlFileException;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -103,10 +103,10 @@ public class IamUserExcelImportService {
             CreateUserRequest request = new CreateUserRequest();
             request.setUsername(requireValue(username, SimpleIamServerConstant.USER_IMPORT_HEADER_USERNAME));
             request.setDisplayName(requireValue(cellValue(row,
-                    SimpleIamServerConstant.USER_IMPORT_COLUMN_DISPLAY_NAME, formatter),
+                            SimpleIamServerConstant.USER_IMPORT_COLUMN_DISPLAY_NAME, formatter),
                     SimpleIamServerConstant.USER_IMPORT_HEADER_DISPLAY_NAME));
             request.setPassword(requireValue(cellValue(row,
-                    SimpleIamServerConstant.USER_IMPORT_COLUMN_INITIAL_PASSWORD, formatter),
+                            SimpleIamServerConstant.USER_IMPORT_COLUMN_INITIAL_PASSWORD, formatter),
                     SimpleIamServerConstant.USER_IMPORT_HEADER_INITIAL_PASSWORD));
             request.setDepartmentId(resolveDepartmentId(cellValue(row,
                     SimpleIamServerConstant.USER_IMPORT_COLUMN_DEPARTMENT_CODE, formatter)));

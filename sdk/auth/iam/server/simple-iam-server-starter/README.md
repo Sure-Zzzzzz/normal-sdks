@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.0`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.1`。版本沿革见各 `CHANGELOG.*.md`。
+
+> **1.3.1 要点**：平台管理员特权域收窄至内置应用（模块默认仅 `iam`，部署方可经引导配置追加）——非内置（业务）应用不再走 iam_admin 特权兜底（门户可见性、令牌投影、资源校验一律要求真实授权行）；无清单应用的"仅准入"隐性通道同步收窄；内置应用行为不变。详见 [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)。
 
 > **1.3.0 要点**：对外身份口径全面切换为稳定公开主体 `subjectId`（管理面/开放 API/URI/claim/事件载荷，数字 userId 退出对外）；新增手机号绑定与短信登录、忘记密码、Excel 用户导入、B2M 短信投递适配器；可信应用内置标记管理面可调。升级与破坏性说明见 [CHANGELOG.1.3.0.md](CHANGELOG.1.3.0.md)。
 
@@ -42,7 +44,7 @@
 - **Consent 授权确认**：应用可要求用户确认授权范围，确认结果落库为投影
 - **Refresh Token 主动防线**：客户端显式配置 `refresh_token` 授权类型时按标准流程签发（默认不配置即不签发）；全局一次性使用（`reuseRefreshTokens=false`）——refresh grant 必轮换签发新值；旧值二次使用即重放：整族吊销（当前 token 同步失效，失败关闭）+ 发布 `RefreshTokenReuseDetectedEvent`；登出 / 禁用 / 删除 / 改密联动族失效；TTL 取 `token.access-expires-in` / `token.refresh-expires-in`（默认 30 分钟 / 10 小时）
 - **资源端 Token 验证端点**：供无法本地验签的资源系统远程校验，验证客户端以 Basic 独立认证
-- **平台管理员特权**：挂内置 `iam_admin` 的用户在授权解析时特权合并（admitted + 各应用清单申报全量，含 DATA all=true），不落库、挂 / 摘角色即时生效、摘除即降权（机制见 [权限与授权投影](docs/领域文档/权限与授权投影.md)）
+- **平台管理员特权（1.3.1 起特权域=内置应用）**：挂内置 `iam_admin` 的用户在授权解析时对**内置应用**特权合并（admitted + 清单申报全量，含 DATA all=true），不落库、挂 / 摘角色即时生效、摘除即降权；**非内置（业务）应用不走特权**——访问须有真实授权行（显式授予或业务自宣告角色投影）（机制见 [权限与授权投影](docs/领域文档/权限与授权投影.md)）
 - **开放 API**：`/iam/api/**` 供 AKSK 凭证做组织与人员同步（码 + DATA 双闸，公共资源层链接管，默认失败关闭）
 
 ### 管理面
@@ -72,7 +74,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.0"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.1"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -138,7 +140,7 @@ dependencies {
 | `/iam/web/auth/me` | GET | 已认证 | 当前用户信息 |
 | `/iam/web/auth/password` | PUT | 已认证 | 自助修改密码（body `oldPassword` / `newPassword`；成功 204，踢其他终端保留当前会话；须改密拦截期在白名单内放行） |
 | `/iam/web/oauth2/consent-info` | GET | 已认证 | Consent 页供数（state 换授权请求详情；授权码流程中用户已登录） |
-| `/iam/web/portal/accessible-applications` | GET | 已认证 | 当前用户可访问且已启用 Portal 集成的应用及菜单；平台管理员直通全部已启用应用 |
+| `/iam/web/portal/accessible-applications` | GET | 已认证 | 当前用户可访问且已启用 Portal 集成的应用及菜单；平台管理员直通**内置**应用（1.3.1 起非内置应用同样要求授权行） |
 | `/iam/web/portal/navigation-context` | GET | 已认证 | 当前用户的可访问应用、应用默认入口与无深链登录首页候选；Portal 仅在根路由时使用 |
 | `/iam/web/branding` | GET | 匿名 | 品牌配置 |
 | `/iam/web/messages` | GET | 已认证 | 站内信列表 |
@@ -207,7 +209,7 @@ dependencies {
 
 | 端点 | 说明 |
 |---|---|
-| `GET / PUT / DELETE /iam/admin/users/{subjectId}/application-authorizations/{applicationId}`、`GET /iam/admin/users/{subjectId}/application-authorizations` | 用户应用授权（投影进 Access Token）；摘要与详情按用户是否平台管理员下发 `platformAdmin` 标记（特权不受单应用撤销影响） |
+| `GET / PUT / DELETE /iam/admin/users/{subjectId}/application-authorizations/{applicationId}`、`GET /iam/admin/users/{subjectId}/application-authorizations` | 用户应用授权（投影进 Access Token）；摘要与详情按用户是否平台管理员下发 `platformAdmin` 标记（纯展示字段；特权不受单应用撤销影响——1.3.1 起该语义仅对内置应用成立） |
 | `GET / POST /iam/admin/trusted-applications/{id}/resource-verification-clients`、`GET / DELETE …/{clientId}`、`POST …/{clientId}/secret` | 验证客户端管理（含密钥轮换） |
 
 站内信：

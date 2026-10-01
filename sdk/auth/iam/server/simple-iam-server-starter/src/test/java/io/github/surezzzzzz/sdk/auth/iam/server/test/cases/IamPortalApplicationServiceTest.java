@@ -142,11 +142,14 @@ class IamPortalApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("平台管理员无授权行特权直通全部启用应用，普通用户按授权行过滤")
+    @DisplayName("1.3.1 特权直通仅限内置应用：管理员直通 iam 不直通非内置，普通用户按授权行过滤")
     void testPortalFilteringAndPlatformAdminPassThrough() {
         List<String> adminCodes = accessibleCodes(adminUserId);
-        assertTrue(adminCodes.contains(applicationCodeA), "平台管理员应直通应用 A（无授权行）");
-        assertTrue(adminCodes.contains(applicationCodeB), "平台管理员应直通应用 B（无授权行）");
+        // 1.3.1：特权直通收窄至内置应用——引导注册的 aksk 无授权行仍直通
+        assertTrue(adminCodes.contains("iam"), "平台管理员应直通内置应用 iam（无授权行）");
+        // 非内置应用 A/B 无授权行：管理员不再特权直通
+        assertFalse(adminCodes.contains(applicationCodeA), "1.3.1 平台管理员不得直通非内置应用 A（无授权行）");
+        assertFalse(adminCodes.contains(applicationCodeB), "1.3.1 平台管理员不得直通非内置应用 B（无授权行）");
 
         List<String> userCodes = accessibleCodes(targetUserId);
         assertTrue(userCodes.contains(applicationCodeA), "普通用户应看到已授权应用 A");
@@ -197,14 +200,16 @@ class IamPortalApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("平台管理员多个应用的权限清单应一次批量读取，不得退化为逐应用查询")
+    @DisplayName("1.3.1 特权清单批量读取仅服务内置应用直通，非内置应用不触发清单读取")
     void platformAdminReadsManifestsInBatch() {
         clearInvocations(manifestRepository);
 
         List<String> adminCodes = accessibleCodes(adminUserId);
 
-        assertTrue(adminCodes.contains(applicationCodeA), "平台管理员批量投影后仍应看到应用 A");
-        assertTrue(adminCodes.contains(applicationCodeB), "平台管理员批量投影后仍应看到应用 B");
+        // 1.3.1：非内置应用 A/B 无授权行不再进入可达列表，特权清单批量读取仅为内置直通服务
+        assertFalse(adminCodes.contains(applicationCodeA), "非内置应用 A 无授权行不得进入特权可达列表");
+        assertFalse(adminCodes.contains(applicationCodeB), "非内置应用 B 无授权行不得进入特权可达列表");
+        assertTrue(adminCodes.contains("iam"), "内置应用 iam 特权直通仍需清单批量读取");
         verify(manifestRepository, times(1)).findByApplicationIdIn(anyList());
         verify(manifestRepository, never()).findByApplicationId(anyLong());
         log.info("平台管理员权限清单批量读取断言完成：adminCodes={}", adminCodes);
@@ -219,6 +224,8 @@ class IamPortalApplicationServiceTest {
         List<String> adminCodes = accessibleCodes(adminUserId);
         assertFalse(adminCodes.contains(applicationCodeA), "摘角色后无授权行的应用 A 应不可见");
         assertFalse(adminCodes.contains(applicationCodeB), "摘角色后无授权行的应用 B 应不可见");
+        // 1.3.1：内置应用的特权直通同样随角色摘除立即失效
+        assertFalse(adminCodes.contains("iam"), "摘角色后无授权行的内置应用 iam 特权直通也应失效");
 
         log.info("摘除 iam_admin 门户直通失效断言完成：adminCodes={}", adminCodes);
     }
@@ -360,9 +367,13 @@ class IamPortalApplicationServiceTest {
         assertFalse(accessibleCodes(targetUserId).contains(applicationCodeA),
                 "普通用户未获得页面权限时，空分组应一起裁剪且应用不可见");
 
+        // 1.3.1：非内置应用对平台管理员不再特权全量——给 admin 显式授权行（全量页面码）后按授权行获得完整菜单
+        authorizationRepository.findByUserId(adminUserId)
+                .forEach(authorization -> authorizationRepository.delete(authorization));
+        grantAdmitted(adminUserId, applicationIdA, Collections.singletonList(pagePermission));
         PortalAccessibleApplication adminApplication = findAccessibleApplication(adminUserId, applicationCodeA);
         assertEquals("organization", adminApplication.getMenuTree().get(0).getCode(),
-                "平台管理员应以权限清单获得完整菜单树");
+                "平台管理员经显式授权后应以授权行获得完整菜单树");
 
         authorizationRepository.findByUserId(targetUserId)
                 .forEach(authorization -> authorizationRepository.delete(authorization));

@@ -140,8 +140,8 @@ public class IamMessageRestController {
         return userRepository.findAllById(ids).stream()
                 .filter(user -> user.getSubjectId() != null)
                 .collect(java.util.stream.Collectors.toMap(
-                io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getId,
-                io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getSubjectId, (a, b) -> a));
+                        io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getId,
+                        io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity::getSubjectId, (a, b) -> a));
     }
 
     private java.util.List<WebMessageResponse> toResponses(java.util.List<io.github.surezzzzzz.sdk.auth.iam.server.entity.message.IamMessageEntity> messages) {

@@ -20,6 +20,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedAppl
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamPlatformAdminPrivilegeService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.TrustedApplicationBuiltInResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +47,7 @@ public class IamPortalApplicationService {
     private final IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     private final IamApplicationPermissionManifestRepository manifestRepository;
     private final IamPlatformAdminPrivilegeService platformAdminPrivilegeSupport;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
     private final IamPortalMenuTreeService portalMenuTreeService;
 
     /**
@@ -72,14 +74,18 @@ public class IamPortalApplicationService {
             applications.put(application.getId(), application);
         Map<Long, List<IamTrustedApplicationMenuEntity>> menus = trustedApplicationMenuRepository.findByApplicationIdIn(applicationIds)
                 .stream().collect(Collectors.groupingBy(IamTrustedApplicationMenuEntity::getApplicationId));
-        Map<Long, IamApplicationPermissionManifestEntity> manifests = platformAdmin
+        // manifest 批量读取仅为特权直通（内置应用）服务；非内置应用按授权行权限裁剪
+        boolean anyPrivilegedApp = platformAdmin && applicationIds.stream().anyMatch(builtInResolver::isBuiltIn);
+        Map<Long, IamApplicationPermissionManifestEntity> manifests = anyPrivilegedApp
                 ? manifestRepository.findByApplicationIdIn(applicationIds).stream().collect(Collectors.toMap(
                 IamApplicationPermissionManifestEntity::getApplicationId, item -> item))
                 : Collections.<Long, IamApplicationPermissionManifestEntity>emptyMap();
         List<PortalAccessibleApplication> result = new ArrayList<>();
         for (IamTrustedApplicationPortalEntity portal : portals) {
             IamApplicationAuthorizationEntity authorization = authorizations.get(portal.getApplicationId());
-            if (!platformAdmin && authorization == null) {
+            // 1.3.1 特权直通仅限内置应用；非内置（业务）应用对平台管理员同样要求真实授权行
+            boolean privilegedPortalApp = platformAdmin && builtInResolver.isBuiltIn(portal.getApplicationId());
+            if (!privilegedPortalApp && authorization == null) {
                 continue;
             }
             IamTrustedApplicationEntity app = applications.get(portal.getApplicationId());
@@ -137,9 +143,14 @@ public class IamPortalApplicationService {
     private Set<String> resolvePagePermissions(Long applicationId, IamApplicationAuthorizationEntity authorization,
                                                IamApplicationPermissionManifestEntity manifest, boolean platformAdmin) {
         try {
-            if (!platformAdmin) return authorization == null ? Collections.emptySet() : new HashSet<>(
-                    IamApplicationAuthorizationJsonCodec.readStringList(authorization.getPagePermissionsJson(), "pagePermissions"));
-            return manifest == null ? Collections.emptySet() : new HashSet<>(
+            // 特权全量菜单仅对内置应用（manifest 存在即特权直通应用）；非内置应用走授权行裁剪。
+            // 内置但无清单的特权应用（manifest 缺失）也落入授权行分支（可能为空集），与 1.3.0 一致
+            if (!platformAdmin || manifest == null) {
+                return authorization == null ? Collections.emptySet() : new HashSet<>(
+                        IamApplicationAuthorizationJsonCodec.readStringList(
+                                authorization.getPagePermissionsJson(), "pagePermissions"));
+            }
+            return new HashSet<>(
                     IamApplicationAuthorizationJsonCodec.readStringList(manifest.getPagePermissionsJson(), "pagePermissions"));
         } catch (RuntimeException exception) {
             log.debug("Portal 菜单页面权限解析失败：applicationId={}, exceptionType={}", applicationId,

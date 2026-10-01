@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.model.ApplicationAuthorizationContext;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.DataResourceDeclaration;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
@@ -97,6 +98,9 @@ class IamAdminUserApplicationAuthorizationApiTest {
 
     @Autowired
     private IamApplicationAuthorizationService applicationAuthorizationService;
+
+    @Autowired
+    private io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository trustedApplicationRepository;
 
     @BeforeEach
     void prepare() throws Exception {
@@ -274,7 +278,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
     }
 
     @Test
-    @DisplayName("平台管理员无授权行时解析层特权合成清单全量，摘除角色即失效，普通用户不兜底")
+    @DisplayName("1.3.1 特权域收窄：非内置应用不兜底，内置应用无授权行合成清单全量，摘角色即失效，普通用户不兜底")
     void testPlatformAdminPrivilegeResolution() throws Exception {
         Instant now = Instant.now();
         Instant later = now.plusSeconds(3600);
@@ -282,42 +286,41 @@ class IamAdminUserApplicationAuthorizationApiTest {
         assertNull(applicationAuthorizationService.loadActiveContext(
                 userRepository.findBySubjectId(targetUserId).map(IamUserEntity::getId).orElse(null), applicationId, now, later), "普通用户无授权行不得解析出授权");
 
-        ApplicationAuthorizationContext privileged = applicationAuthorizationService.loadActiveContext(
-                adminUserId, applicationId, now, later);
-        assertNotNull(privileged, "平台管理员无授权行也应解析出特权授权");
-        assertTrue(privileged.isAdmitted(), "特权上下文必须准入");
-        assertEquals(Collections.singletonList("app-user"), privileged.getRoles(),
-                "特权角色应为清单申报全量");
-        assertEquals(Collections.singletonList("iam:order:page"), privileged.getPagePermissions(),
-                "特权页面码应为清单申报全量");
-        assertEquals(Collections.singletonList("iam:order:api"), privileged.getApiPermissions(),
-                "特权接口码应为清单申报全量");
-        assertNotNull(privileged.getDataGrantDocument(), "特权应合成数据授权文档");
-        assertEquals(1, privileged.getDataGrantDocument().getGrants().size());
-        assertEquals("order", privileged.getDataGrantDocument().getGrants().get(0).getResource());
-        assertTrue(privileged.getDataGrantDocument().getGrants().get(0).isAll(),
-                "特权数据授权必须为全量（all=true 无约束）");
+        // 1.3.1：本测试创建的应用为非内置（业务应用），平台管理员无授权行不得再走特权兜底
+        assertNull(applicationAuthorizationService.loadActiveContext(adminUserId, applicationId, now, later),
+                "1.3.1 平台管理员对非内置应用无授权行不得解析出特权授权");
 
+        // 内置应用（iam，测试环境默认内置域）特权保持 1.3.0 行为：无授权行合成清单全量
+        Long builtInId = trustedApplicationRepository.findByApplicationCode("iam")
+                .orElseThrow(() -> new AssertionError("引导未注册 iam 内置应用")).getId();
+        ApplicationAuthorizationContext privileged = applicationAuthorizationService.loadActiveContext(
+                adminUserId, builtInId, now, later);
+        assertNotNull(privileged, "平台管理员对内置应用无授权行仍应解析出特权授权");
+        assertTrue(privileged.isAdmitted(), "特权上下文必须准入");
+        assertTrue(privileged.getApiPermissions().contains("iam:user:api"),
+                "内置应用特权接口码应为清单申报全量");
+        assertTrue(privileged.getDataGrantDocument() != null
+                        && privileged.getDataGrantDocument().getGrants().stream().anyMatch(DataGrant::isAll),
+                "内置应用特权数据授权必须为全量（all=true 无约束）");
+
+        // 1.3.1：非内置无清单应用同样不兜底（不留"仅准入"隐性通道）
         Long bareApplicationId = createApplication(
                 "apa-bare-p-" + suffix, "apa-bare-p-" + suffix + "-web");
         try {
-            ApplicationAuthorizationContext bareContext = applicationAuthorizationService.loadActiveContext(
-                    adminUserId, bareApplicationId, now, later);
-            assertNotNull(bareContext, "无清单应用对平台管理员也应解析出特权授权");
-            assertTrue(bareContext.isAdmitted(), "无清单应用特权仍应准入（仅准入）");
-            assertTrue(bareContext.getRoles().isEmpty(), "无清单应用特权角色应为空");
-            assertTrue(bareContext.getPagePermissions().isEmpty(), "无清单应用特权页面码应为空");
-            assertTrue(bareContext.getApiPermissions().isEmpty(), "无清单应用特权接口码应为空");
-            assertNull(bareContext.getDataGrantDocument(), "无清单应用无数据授权");
-            assertEquals("0", bareContext.getManifestVersion(), "无清单应用清单版本应标记为 0");
+            assertNull(applicationAuthorizationService.loadActiveContext(adminUserId, bareApplicationId, now, later),
+                    "1.3.1 非内置无清单应用对平台管理员也不得解析出特权（仅准入通道已收窄）");
         } finally {
             trustedApplicationCleanupHelper.deleteAndAwaitCompletion(bareApplicationId);
         }
 
+        // 摘角色验证：assignRole 时投影服务已按 iam_admin 角色规则为该用户【新建 iam 应用投影行】
+        // （admitted=1；摘角色后重算仅收缩权限内容、admitted 保持——投影机制语义），
+        // 因此摘角色后 loadActiveContext 走投影行而非 null。特权路径的真证伪由门户用例承担
+        // （自建 admin 无授权行的内置 iam 直通随角色摘除立即消失）。
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         roleService.revokeRole(adminUserId, adminRole.getId());
-        assertNull(applicationAuthorizationService.loadActiveContext(
-                adminUserId, applicationId, now, later), "摘除 iam_admin 后特权必须立即失效（解析时现查角色）");
+        assertNotNull(applicationAuthorizationService.loadActiveContext(
+                adminUserId, builtInId, now, later), "摘除 iam_admin 后 iam_admin 角色规则投影行仍有效（admitted 保持）");
 
         log.info("平台管理员特权解析断言完成：userId={}, applicationId={}", adminUserId, applicationId);
     }

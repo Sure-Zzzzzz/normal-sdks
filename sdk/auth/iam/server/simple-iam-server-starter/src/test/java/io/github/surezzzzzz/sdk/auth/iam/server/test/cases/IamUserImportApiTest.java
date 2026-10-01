@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AbstractIamEvent;
@@ -26,9 +26,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.stereotype.Component;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.stereotype.Component;
 
 import javax.servlet.http.Cookie;
 import java.io.ByteArrayOutputStream;

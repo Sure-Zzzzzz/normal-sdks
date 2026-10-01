@@ -18,6 +18,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRole
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.TrustedApplicationBuiltInResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,18 +31,22 @@ import java.util.Set;
 /**
  * 平台管理员特权支撑（解析层合并，不落授权表）
  *
- * <p>平台约定：持有内置角色 iam_admin 的用户即平台管理员。应用授权解析
- * （token 权限集、资源校验、门户可达列表）发现该角色时，该用户对该应用
- * admitted=true 且权限为权限清单（manifest）申报范围的全量——全部角色 /
- * 页面码 / 接口码，数据权限为每种申报资源的 all 全量授权项。</p>
+ * <p>平台约定：持有内置角色 iam_admin 的用户即平台管理员（1.3.1 起特权域=内置应用，
+ * 见「角色边界定案」）。应用授权解析（token 权限集、资源校验、门户可达列表）发现
+ * 该角色且目标应用为内置应用时，该用户对该应用 admitted=true 且权限为权限清单
+ * （manifest）申报范围的全量——全部角色 / 页面码 / 接口码，数据权限为每种申报资源
+ * 的 all 全量授权项。非内置（业务）应用不走特权：要访问必须有真实授权行（显式授予
+ * 或业务自宣告角色投影）。</p>
  *
  * <p>特权永不写库：应用注册无需为任何用户回填授权，挂 / 摘角色即刻生效
  * （解析时现查有效角色），manifest 升版特权内容自动跟随（解析时现读清单）。
- * 对特权用户撤销单应用授权不改变解析结果——降权唯一路径是摘除角色；
- * 授权管理面按 platformAdmin 标记禁用撤销入口并提示，避免误以为撤销失效。</p>
+ * 对特权用户撤销内置应用的单应用授权不改变解析结果（解析层特权兜底）——降权
+ * 唯一路径是摘除角色；非内置应用撤销后按授权行缺失处理，特权不再兜底（1.3.1）。
+ * 响应中的 platformAdmin 标记仅表示"该用户是平台管理员"，管理面据此提示，
+ * 无逻辑拦截。</p>
  *
- * <p>未申报 manifest 的应用特权退化为"仅准入"：空权限集 context，资源端
- * 失败关闭，语义与空权限手工行一致。</p>
+ * <p>未申报 manifest 的【内置】应用特权退化为"仅准入"：空权限集 context，资源端
+ * 失败关闭，语义与空权限手工行一致；非内置应用无论有无清单均不走特权（1.3.1）。</p>
  *
  * @author surezzzzzz
  */
@@ -58,6 +63,7 @@ public class IamPlatformAdminPrivilegeService {
     private final IamRoleRepository roleRepository;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamApplicationPermissionManifestRepository manifestRepository;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
 
     /**
      * 用户是否平台管理员（有效角色含内置 iam_admin：个人直挂或直属部门挂载均算）
@@ -75,9 +81,9 @@ public class IamPlatformAdminPrivilegeService {
     }
 
     /**
-     * 合成平台管理员对某应用的特权授权上下文：admitted=true + manifest 申报范围全量。
+     * 合成平台管理员对某内置应用的特权授权上下文：admitted=true + manifest 申报范围全量。
      *
-     * @return 应用不存在返回 null；无 manifest 返回空权限集 context（仅准入）
+     * @return 应用不存在或非内置应用返回 null；无 manifest 的内置应用返回空权限集 context（仅准入）
      */
     /**
      * 平台管理员兜底上下文的主体段：公开主体 ID；缺失即不兜底（失败关闭，不留数字 id 语义）。
@@ -98,6 +104,12 @@ public class IamPlatformAdminPrivilegeService {
         IamTrustedApplicationEntity application = trustedApplicationRepository
                 .findById(applicationId).orElse(null);
         if (application == null) {
+            return null;
+        }
+        // 1.3.1 特权域收窄：非内置（业务）应用不走平台特权——有清单/无清单两分支同收，
+        // 不留"仅准入"的隐性通道；要访问须有真实授权行
+        if (!builtInResolver.isBuiltIn(application)) {
+            log.debug("平台管理员特权不适用于非内置应用：userId={}, applicationId={}", userId, applicationId);
             return null;
         }
         IamApplicationPermissionManifestEntity manifest = manifestRepository
