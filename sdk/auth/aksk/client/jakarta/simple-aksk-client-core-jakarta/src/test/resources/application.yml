@@ -1,0 +1,12 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk: DEBUG

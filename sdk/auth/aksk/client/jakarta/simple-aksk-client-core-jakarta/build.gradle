@@ -1,0 +1,13 @@
+dependencies {
+    implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
+    api 'io.github.sure-zzzzzz:task-retry-jakarta-starter:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly "com.fasterxml.jackson.core:jackson-databind"
+    compileOnly 'org.springframework:spring-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+}
