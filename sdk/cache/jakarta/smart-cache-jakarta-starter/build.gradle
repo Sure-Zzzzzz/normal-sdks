@@ -1,0 +1,20 @@
+dependencies {
+    compileOnly 'com.github.ben-manes.caffeine:caffeine'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    implementation 'io.github.sure-zzzzzz:task-retry-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-lock-jakarta-starter:1.0.0'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'com.github.ben-manes.caffeine:caffeine'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}
