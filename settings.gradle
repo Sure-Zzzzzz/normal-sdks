@@ -48,6 +48,7 @@ include(
 //        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
+        ':sdk:route:prometheus:jakarta:simple-prometheus-route-jakarta-starter',
         ':sdk:route:redis:simple-redis-route-starter',
         ':sdk:route:kafka:simple-kafka-route-starter',
         ':sdk:ops:middleware:smart-middleware-ops-server-starter',
@@ -101,3 +102,4 @@ include(
         ':sdk:template:simple-doc-template-starter',
         ':sdk:crm:simple-crm-server-core',
 )
+
