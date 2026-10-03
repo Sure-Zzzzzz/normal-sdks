@@ -27,6 +27,20 @@ io:
 
 `base-url` 只能是 `http` 或 `https` origin：必须包含主机，可包含端口；不能包含路径、query、fragment 或 user-info。Client 固定追加 `/api/kms`，并禁用 HTTP 重定向。
 
+## 为什么 client 不复用 server 模型（双投影定案，2026-10-03 老大认可）
+
+client 与 server 的模型字段大量重叠（KmsKey/KmsPolicy/KmsOwnerDestructionPolicy 两侧各一份）——这是**有意的双投影**，
+不是失控复制：单一事实源是 `sdk/kms/server/contract/openapi` 的 OpenAPI 契约，两侧 Java 类是同一契约的两个消费端形态。
+不抽"共享模型层"（core+servercore+clientcore 三层）的三个理由：
+
+1. **前向兼容**：client 枚举字段是 String——新 server 发新状态/算法值，老 client 照常通过；共享类型枚举会在未知值上抛异常，
+   砍掉"允许服务端成功响应新增未知字段/值"的兼容承诺。
+2. **发版节奏**：server 领域模型加字段（如内部状态字段）不应构成 client 公开 API 变更；共享 kernel 把两边发版焊接。
+3. **领域面隔离**：`stateBeforeDestruction`、密钥材料关联等服务端内部字段不得出现在业务方的 client API 面。
+
+分界线：**内部协议共享 jar（如 IAM↔AKSK 的 owner-authorization-collaboration-core，两端同团队共治、无外部消费者）；
+对外发布的消费 SDK 用投影 + wire 层容忍**。漂移治理的演进项是契约驱动生成（openapi-generator 类），不是共享类。
+
 ## 调用身份
 
 Client 不保存认证凭据、不构造 owner 身份，也不继承宿主全局 `RestTemplate` 拦截器。推荐宿主装配 AKSK `TokenManager`（SDK 自动提供 `AkskTokenManagerKmsAuthenticationInterceptor` 写入 Bearer）；或业务提供唯一的 `KmsClientAuthenticationInterceptor`；两者皆无时由 Server 返回 `401`。自动装配依赖 AKSK client 的自动配置先行注册 `TokenManager`；若顺序不满足，显式声明 `@Bean AkskTokenManagerKmsAuthenticationInterceptor(tokenManager)` 即可。
