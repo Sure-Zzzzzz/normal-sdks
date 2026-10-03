@@ -33,10 +33,10 @@ dependencies {
 ## 初始化数据
 
 1. 创建目标数据库并选择它。
-2. 执行 `01_schema_3.0.0.sql`。
-3. 确认三个表存在，且 `aksk_application_authorization` 含 `authorization_version` 与 `lock_version`。
+2. 执行当前完整初始化脚本 `schema.sql`。
+3. 确认 10 张 AKSK 相关表存在，且 `aksk_application_authorization` 含 `authorization_version` 与 `lock_version`。
 
-`01_schema_3.0.0.sql` 含 `DROP TABLE IF EXISTS`，不得用于保留现有 AKSK 数据的环境。
+`schema.sql` 含 `DROP TABLE IF EXISTS`，不得用于保留现有 AKSK 数据的环境。
 
 ## 最小运行配置
 

@@ -179,6 +179,43 @@ class ManagementDataAccessIntegrationTest {
     }
 
     @Test
+    void shouldHandleHistoricalTokenWithoutClientDuringManagementRead() {
+        String unrestrictedToken = issueManagementToken(
+                Collections.singletonList(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_READ),
+                document(new DataGrant(SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
+                        Collections.singletonList(SimpleAkskServerConstant.MANAGEMENT_ACTION_READ), true,
+                        Collections.<DataConstraint>emptyList())));
+        ClientInfoResponse orphan = clientManagementService.createPlatformClient("Orphan Token Statistics Client");
+        ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, orphan);
+        JwtTokenTestHelper.getTokenByClientCredentials(restTemplate, port, orphan.getClientId(), orphan.getClientSecret());
+        String orphanTokenId = getTokenPage(unrestrictedToken,
+                "/api/token?clientId=" + orphan.getClientId() + "&page=1&size=10").getData().get(0).getId();
+        clientManagementService.deleteClient(orphan.getClientId());
+
+        ResponseEntity<String> unrestrictedStatistics = restTemplate.exchange(clientUrl("/api/token/statistics"),
+                HttpMethod.GET, JwtTokenTestHelper.createAuthEntity(unrestrictedToken), String.class);
+        PageResponse<TokenInfoResponse> unrestrictedTokens = getTokenPage(unrestrictedToken, "/api/token?page=1&size=100");
+
+        assertEquals(HttpStatus.OK, unrestrictedStatistics.getStatusCode(), "历史 Token 不能导致统计接口失败");
+        assertTrue(unrestrictedTokens.getData().stream()
+                .anyMatch(token -> orphanTokenId.equals(token.getId())), "无约束计划必须保留历史 Token 统计口径");
+
+        String constrainedToken = issueManagementToken(
+                Collections.singletonList(SimpleAkskServerConstant.MANAGEMENT_PERMISSION_TOKEN_READ),
+                document(grant(SimpleAkskServerConstant.MANAGEMENT_RESOURCE_TOKEN,
+                        SimpleAkskServerConstant.MANAGEMENT_ACTION_READ,
+                        constraint(SimpleAkskServerConstant.MANAGEMENT_DIMENSION_CLIENT_TYPE,
+                                ClientType.PLATFORM.getValue()))));
+        ResponseEntity<String> constrainedStatistics = restTemplate.exchange(clientUrl("/api/token/statistics"),
+                HttpMethod.GET, JwtTokenTestHelper.createAuthEntity(constrainedToken), String.class);
+        PageResponse<TokenInfoResponse> constrainedTokens = getTokenPage(constrainedToken, "/api/token?page=1&size=100");
+
+        assertEquals(HttpStatus.OK, constrainedStatistics.getStatusCode(), "受约束统计不能因历史 Token 失败");
+        assertFalse(constrainedTokens.getData().stream()
+                .anyMatch(token -> orphanTokenId.equals(token.getId())), "缺失 Client 类型的历史 Token 必须失败关闭");
+    }
+
+    @Test
     void shouldRejectClientDeletionWhenAffectedTokenIsOutsideTokenUpdatePlan() {
         ClientInfoResponse targetClient = clientManagementService.createPlatformClient("Delete Token Restriction Target");
         ApplicationAuthorizationTestHelper.grantManagementAuthorization(applicationAuthorizationRepository, targetClient);

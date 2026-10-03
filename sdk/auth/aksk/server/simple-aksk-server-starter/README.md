@@ -1,10 +1,10 @@
 # Simple AKSK Server Starter
 
-> 当前版本 **3.2.1**。版本沿革见各 `CHANGELOG.*.md`。
+> 当前发布候选版本 **3.2.2**。版本沿革见各 `CHANGELOG.*.md`。
 > 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 > 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.2.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.2.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ dependencies {
     // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
     // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
     // runtimeOnly 传递运行时，使用方无需重复声明
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.2'
 
     // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -329,7 +329,7 @@ introspect 用于确认 Token 是否有效及读取经过服务端校验的 clai
 | `/api/token/{id}/revoke` | POST   | 撤销 Token（同步清除 L1+L2 缓存并广播） |
 | `/api/token/{id}`        | DELETE | 删除 Token（先撤销再删除）           |
 | `/api/token/expired`     | DELETE | 清理过期 Token                 |
-| `/api/token/statistics`  | GET    | 获取 Token 统计信息              |
+| `/api/token/statistics`  | GET    | 获取 Token 统计信息；删除 Client 后保留的撤销 Token 仍按调用方 `DataAccessPlan` 过滤 |
 
 ### 过期 Token 自动清理（3.1.1）
 
@@ -469,6 +469,10 @@ logging:
 ---
 
 ## 版本历史
+
+### 3.2.2
+
+修复删除 Client 后保留的撤销 Token 记录没有 Client 关联时，管理 Token 的 DATA 权限过滤可能导致 Token 列表或统计返回 500。历史记录在无约束计划下保持可统计；带 Client 类型、归属等维度约束时因缺少维度自然不匹配并失败关闭。无 SQL、配置、依赖或 HTTP 契约变化。详见 [CHANGELOG.3.2.2.md](CHANGELOG.3.2.2.md)。
 
 ### 3.2.1
 

@@ -11,9 +11,9 @@
 
 ## 数据库迁移
 
-对同一数据库仅执行一次 `02_upgrade_3.0.0.sql`。该脚本保留 `oauth2_registered_client` 与 `oauth2_authorization`，仅创建应用授权投影和查询索引；不支持重复执行或回滚。
+对同一数据库仅执行一次 `migration/V2.x__to__V3.0.0__application_authorization.sql`。该脚本保留 `oauth2_registered_client` 与 `oauth2_authorization`，仅创建应用授权投影和查询索引；不支持重复执行或回滚。
 
-不要在保留数据的数据库执行 `01_schema_3.0.0.sql`。
+不要在保留数据的数据库执行当前完整初始化脚本 `schema.sql`。
 
 ## 启动后的 Client 迁移
 

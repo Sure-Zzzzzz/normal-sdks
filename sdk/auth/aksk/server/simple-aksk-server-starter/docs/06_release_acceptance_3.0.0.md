@@ -4,8 +4,8 @@
 
 ## 新装与升级
 
-- [ ] 新装环境仅执行 `01_schema_3.0.0.sql`，确认三张表、授权版本与乐观锁字段存在。
-- [ ] 2.x 环境完成备份、停写，并且仅执行一次 `02_upgrade_3.0.0.sql`。
+- [ ] 新装环境仅执行 `schema.sql`，确认 10 张 AKSK 相关表、授权版本与乐观锁字段存在。
+- [ ] 2.x 环境完成备份、停写，并且仅执行一次 `migration/V2.x__to__V3.0.0__application_authorization.sql`。
 - [ ] 每个升级 Client 都先处理 2.x 活跃 Token，再配置完整授权并显式准入。
 
 ## 应用授权与 Token
@@ -14,6 +14,7 @@
 - [ ] Token A 在撤销后 inactive；同一 Client 再准入并签发 Token B 后，A 仍 inactive、B active。
 - [ ] 完整替换授权后，替换前 Token A inactive；新签发 Token B 才能携带新授权版本和新 permission。
 - [ ] `scope` 与 `security_context` 不能扩大 API permission 或 DATA grant。
+- [ ] 删除 Client 后，保留的撤销 Token 在无约束计划下可读取统计；带 Client 类型或归属约束的计划失败关闭，`/api/token` 与 `/api/token/statistics` 不返回 500。
 
 ## 管理安全与一致性
 

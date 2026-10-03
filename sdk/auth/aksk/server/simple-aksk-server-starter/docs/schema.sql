@@ -2,12 +2,12 @@
 -- Simple AKSK Server 3.2.x 数据库初始化脚本（全量重建）
 -- 依赖：Spring Authorization Server 0.4.1 / simple-aksk-server-core 3.0.4
 -- 适用：全新部署，或清库重建。已运行旧版本的库走 migration/ 逐版升级，不要执行本文件。
--- 结构口径与 3.2.0 相同（3.2.1 为纯接口增量，无表结构变化）。
+-- 结构口径与 3.2.0 相同（3.2.1、3.2.2 均无表结构变化）。
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- 注意：请先创建目标数据库并执行 USE <database> 后再执行本脚本。
--- 本脚本为 AKSK 3.2.0 完整初始化脚本，不修改已冻结的 2.x 表结构脚本。
+-- 本脚本为 AKSK 3.2.x 完整初始化脚本，不修改已冻结的 2.x 表结构脚本。
 
 -- =====================================================
 -- 1. Spring Authorization Server 标准表结构
@@ -209,4 +209,4 @@ CREATE TABLE aksk_owner_authorization_projection (
 
 SET FOREIGN_KEY_CHECKS = 1;
 
-SELECT 'AKSK 3.2.0 schema initialization completed!' AS status;
+SELECT 'AKSK 3.2.x schema initialization completed!' AS status;

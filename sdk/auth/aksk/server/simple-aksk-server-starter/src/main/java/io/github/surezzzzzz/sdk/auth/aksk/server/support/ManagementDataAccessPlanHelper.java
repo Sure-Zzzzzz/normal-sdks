@@ -152,6 +152,9 @@ public final class ManagementDataAccessPlanHelper {
     }
 
     private static String clientTypeValue(Integer clientType) {
+        if (clientType == null) {
+            return null;
+        }
         ClientType resolved = ClientType.fromCode(clientType);
         return resolved == null ? null : resolved.getValue();
     }
