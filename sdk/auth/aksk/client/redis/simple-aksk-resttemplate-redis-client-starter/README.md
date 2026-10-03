@@ -1,8 +1,8 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.1**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
@@ -57,7 +57,7 @@
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-aksk-redis-token-manager:3.0.1` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
+| `simple-aksk-redis-token-manager:3.0.2` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
 | `smart-cache-starter:2.2.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
 | Spring Boot / Spring Web | `compileOnly`，**使用方必须自行引入** | RestTemplate 与自动配置 |
 | Spring Data Redis | `compileOnly`，**使用方必须自行引入** | Redis 操作 |
@@ -69,11 +69,11 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
 }
 ```
 
-**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.1`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring 相关依赖使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.2`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring 相关依赖使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -112,7 +112,7 @@ io:
             sources:
               default:
                 mode: standalone          # 部署模式：standalone 单机 / sentinel 哨兵 / cluster 集群
-                host: localhost
+                host: cache.example.test
                 port: 6379
                 database: 0
                 timeout-ms: 3000          # 命令超时（毫秒）
@@ -122,9 +122,9 @@ io:
           aksk:
             client:
               enable: true                # 本 starter 自动配置开关；false 时不注册认证拦截器
-              client-id: AKP1234567890abcdefgh           # AKSK Client ID（AKSK Server Admin 页面创建）
-              client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234   # Client Secret（创建时一次性展示，妥善保存）
-              server-url: http://localhost:8280           # AKSK Server 地址
+              client-id: example-client-id                 # AKSK Client ID
+              client-secret: ${AKSK_CLIENT_SECRET}          # 通过部署环境注入
+              server-url: https://aksk.example.test         # AKSK Server 地址
               token-endpoint: /oauth2/token              # token 端点路径（默认值，一般不改）
               redis:
                 token:
@@ -170,7 +170,7 @@ public class MyService {
 
     public String callApi() {
         // 自动添加 Authorization 头
-        String url = "http://localhost:8280/api/resource";
+        String url = "https://resource.example.test/api/resource";
         ResponseEntity<String> response = akskClientRestTemplate.getForEntity(url, String.class);
         return response.getBody();
     }
@@ -294,7 +294,13 @@ AkskRestTemplateInterceptor 拦截请求
 - **Token 缓存**：Token 由 `RedisTokenManager` 缓存在 Redis 中
 - **Token 刷新**：`RedisTokenManager` 会在 Token 过期前自动刷新
 - **无 Token 处理**：如果 Token 为空，拦截器会记录警告并继续请求（不添加 Authorization 头）
-- **调试日志**：`DEBUG` 级别输出三类埋点——请求入口（方法 + URI）、加头结果（Token 长度、是否覆盖调用方已有 Authorization 头，不记录 Token 值）、请求完成（URI + 响应状态码），便于排查请求是否被拦截器覆盖、定位慢请求与失败请求
+- **调试日志**：`DEBUG` 级别输出三类埋点——请求入口（HTTP 方法 + 目标主机）、加头结果（Token 长度、是否覆盖调用方已有 Authorization 头）和请求完成（响应状态码）。日志不记录 Token、Client Secret、安全上下文、Authorization、Cookie、完整 URL、URL Query、请求体或响应体。
+
+## 日志与审计边界
+
+- 调用端 DEBUG 用于诊断认证头注入和响应状态，Token 不可用时输出不含敏感数据的 WARN。
+- 调用端不为每次出站 HTTP 请求发布审计事件。该路径高频，且客户端无法确认目标资源是否实际执行成功。
+- 认证服务负责凭证签发、撤销和生命周期审计；目标资源启用 AKSK 安全上下文后，在认证成功时发布 `AkskAccessEvent`，这是资源访问审计的权威事件。
 
 ## 测试覆盖
 
@@ -389,6 +395,15 @@ io:
 ```
 
 ## 版本历史
+
+### 3.0.2
+
+- 升级运行时传递的 `simple-aksk-redis-token-manager` 3.0.1 → 3.0.2，默认获得 Token 有效期提前失效、Redis 缓存故障失败关闭和固定分片本地锁的修复。
+- 收紧拦截器诊断日志，避免完整 URL 与 URL Query 进入日志；公开 API、请求认证行为和配置键不变。
+- 已完成 Token 获取与受保护接口调用验证（17 项测试，零失败）。
+- `akskClientRestTemplate`、拦截器公开 API、配置键和认证注入逻辑不变，业务代码无需修改。
+
+详见 [CHANGELOG.3.0.2.md](CHANGELOG.3.0.2.md)。
 
 ### 3.0.1
 

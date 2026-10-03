@@ -170,6 +170,7 @@ class AkskRestTemplateInterceptorTest {
         when(request.getHeaders()).thenReturn(headers);
         when(tokenManager.getToken()).thenReturn("new-token-456");
         when(execution.execute(any(), any())).thenReturn(response);
+        when(response.getStatusCode()).thenReturn(HttpStatus.OK);
         log.info("Given: 请求已有 Authorization: Bearer old-token，新 token = new-token-456");
 
         // When
