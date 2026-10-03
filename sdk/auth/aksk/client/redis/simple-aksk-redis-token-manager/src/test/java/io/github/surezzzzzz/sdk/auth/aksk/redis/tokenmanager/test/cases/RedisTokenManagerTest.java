@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
@@ -88,7 +89,6 @@ class RedisTokenManagerTest {
 
         String token = tokenManager.getToken();
 
-        log.info("获取的 Token: {}", token);
         assertNotNull(token, "Token 不应为 null");
         assertTrue(token.length() > 0, "Token 不应为空字符串");
 
@@ -107,12 +107,10 @@ class RedisTokenManagerTest {
         log.info("========== 测试从缓存获取 Token ==========");
 
         String firstToken = tokenManager.getToken();
-        log.info("第一次获取的 Token: {}", firstToken);
 
         String secondToken = tokenManager.getToken();
-        log.info("第二次获取的 Token: {}", secondToken);
 
-        assertEquals(firstToken, secondToken, "两次获取的 Token 应相同（从缓存）");
+        SensitiveTestAssertions.assertSameSensitiveValue(firstToken, secondToken, "两次获取的 Token 应相同（从缓存）");
 
         log.info("======================================");
     }
@@ -123,7 +121,6 @@ class RedisTokenManagerTest {
         log.info("========== 测试清除 Token ==========");
 
         String firstToken = tokenManager.getToken();
-        log.info("第一次获取的 Token: {}", firstToken);
         assertNotNull(firstToken, "第一次 Token 不应为 null");
 
         tokenManager.clearToken();
@@ -141,7 +138,6 @@ class RedisTokenManagerTest {
         log.info("L2 已清除");
 
         String secondToken = tokenManager.getToken();
-        log.info("第二次获取的 Token: {}", secondToken);
         assertNotNull(secondToken, "第二次 Token 不应为 null");
         assertTrue(secondToken.length() > 0, "第二次 Token 不应为空");
 
@@ -156,7 +152,7 @@ class RedisTokenManagerTest {
         String securityContext = securityContextProvider.getSecurityContext();
         String cacheKey = generateCacheKey(securityContext);
 
-        log.info("securityContext={}, cacheKey={}", securityContext, cacheKey);
+        log.info("安全上下文缓存键已生成");
         assertNotNull(securityContext, "securityContext 不应为 null");
         assertEquals(CacheKeyHelper.generate(securityContext), cacheKey,
                 "有 security_context 时 cacheKey 应由 CacheKeyHelper 生成");
@@ -174,7 +170,6 @@ class RedisTokenManagerTest {
         log.info("========== 测试 Token 是非空字符串 ==========");
 
         String token = tokenManager.getToken();
-        log.info("获取的 Token: {}", token);
 
         assertNotNull(token, "Token 不应为 null");
         assertTrue(token.length() > 0, "Token 不应为空字符串");

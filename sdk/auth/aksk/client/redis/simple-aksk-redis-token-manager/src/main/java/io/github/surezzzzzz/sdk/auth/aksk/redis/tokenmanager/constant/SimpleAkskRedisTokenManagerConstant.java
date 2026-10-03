@@ -26,6 +26,11 @@ public final class SimpleAkskRedisTokenManagerConstant {
      */
     public static final String DEFAULT_TOKEN_CACHE_NAME = "aksk-client-token";
 
+    /**
+     * Token 缓存提前失效窗口（秒）
+     */
+    public static final int TOKEN_CACHE_EXPIRY_BUFFER_SECONDS = 30;
+
     // ==================== Token 缓存相关 ====================
     /**
      * L2 轮询间隔（毫秒）
@@ -37,6 +42,11 @@ public final class SimpleAkskRedisTokenManagerConstant {
      * 分布式锁超时 fallback 值（秒），当 SmartCacheProperties.getLock() 为 null 时使用
      */
     public static final int DEFAULT_LOCK_TIMEOUT_SECONDS = 30;
+
+    /**
+     * 本地锁固定分片数
+     */
+    public static final int LOCAL_LOCK_STRIPE_COUNT = 64;
 
     private SimpleAkskRedisTokenManagerConstant() {
         throw new UnsupportedOperationException("Utility class");

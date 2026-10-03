@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextPr
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L1Cache;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
@@ -106,7 +107,7 @@ class RedisTokenManagerEndToEndTest {
         // 第一次获取，写入 L1 + L2
         String token1 = tokenManager.getToken();
         assertNotNull(token1, "Token 不应为 null");
-        log.info("第一次获取 Token: {}...", token1.substring(0, Math.min(20, token1.length())));
+        log.info("第一次获取 Token 成功");
 
         // 验证 L1 有值
         Object l1Value = l1Cache.get(cacheName, cacheKey);
@@ -116,7 +117,7 @@ class RedisTokenManagerEndToEndTest {
         // 立即第二次获取，走 L1
         String token2 = tokenManager.getToken();
         assertNotNull(token2, "第二次 Token 不应为 null");
-        assertEquals(token1, token2, "L1 命中时应返回相同 token");
+        SensitiveTestAssertions.assertSameSensitiveValue(token1, token2, "L1 命中时应返回相同 token");
 
         log.info("✓ L1 缓存命中，两次获取 token 相同");
     }
@@ -131,7 +132,7 @@ class RedisTokenManagerEndToEndTest {
         // 第一次获取，写入 L1 + L2
         String token1 = tokenManager.getToken();
         assertNotNull(token1, "Token 不应为 null");
-        log.info("第一次获取 Token: {}...", token1.substring(0, Math.min(20, token1.length())));
+        log.info("第一次获取 Token 成功");
 
         // 等待 L1 过期（2s）
         log.info("等待 L1 过期（2s）...");
@@ -140,7 +141,7 @@ class RedisTokenManagerEndToEndTest {
         // 第二次获取，L1 miss，走 L2
         String token2 = tokenManager.getToken();
         assertNotNull(token2, "第二次 Token 不应为 null");
-        assertEquals(token1, token2, "L2 命中时应返回相同 token");
+        SensitiveTestAssertions.assertSameSensitiveValue(token1, token2, "L2 命中时应返回相同 token");
 
         log.info("✓ L2 缓存命中，token 相同");
     }
@@ -162,12 +163,12 @@ class RedisTokenManagerEndToEndTest {
         // 第一次获取，cache miss，抢锁，从 server 拿
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");
-        log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
+        log.info("获取 Token 成功");
 
         // 验证写入 L2
         TokenWithExpiry l2Value = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
         assertNotNull(l2Value, "L2 应有值");
-        assertEquals(token, l2Value.getToken(), "L2 存储的 token 应一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(token, l2Value.getToken(), "L2 存储的 token 应一致");
         assertTrue(l2Value.getExpiresAt() > System.currentTimeMillis() / 1000, "expiresAt 应为未来时间");
 
         // 验证 Redis TTL
@@ -190,7 +191,7 @@ class RedisTokenManagerEndToEndTest {
         long fakeExpiresAt = System.currentTimeMillis() / 1000 + 3600;
         TokenWithExpiry tokenWithExpiry = new TokenWithExpiry(expectedToken, fakeExpiresAt, null);
         l2Cache.put(cacheName, cacheKey, tokenWithExpiry, 3600);
-        log.info("手动写入 L2: {}", expectedToken);
+        log.info("已向 L2 写入预置 Token");
 
         // 清除 L1，确保走 L2
         l1Cache.evict(cacheName, cacheKey);
@@ -198,7 +199,7 @@ class RedisTokenManagerEndToEndTest {
         // 获取 token，应从 L2 读取
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");
-        assertEquals(expectedToken, token, "应从 L2 读取到 token");
+        SensitiveTestAssertions.assertSameSensitiveValue(expectedToken, token, "应从 L2 读取到 token");
 
         log.info("✓ 没抢到锁时轮询 L2 获取 token");
     }
@@ -213,7 +214,7 @@ class RedisTokenManagerEndToEndTest {
         // 第一次获取
         String token1 = tokenManager.getToken();
         assertNotNull(token1, "Token 不应为 null");
-        log.info("第一次获取 Token: {}...", token1.substring(0, Math.min(20, token1.length())));
+        log.info("第一次获取 Token 成功");
 
         // clearToken
         tokenManager.clearToken();
@@ -231,7 +232,7 @@ class RedisTokenManagerEndToEndTest {
         // 第二次获取，应从 server 重新获取
         String token2 = tokenManager.getToken();
         assertNotNull(token2, "第二次 Token 不应为 null");
-        log.info("第二次获取 Token: {}...", token2.substring(0, Math.min(20, token2.length())));
+        log.info("第二次获取 Token 成功");
 
         // 注意：server 可能返回相同的 token（只要原 token 仍有效）
         // 但关键是 L1+L2 已被清除，会重新走 fetch 流程
@@ -256,7 +257,7 @@ class RedisTokenManagerEndToEndTest {
         // 获取 token
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");
-        log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
+        log.info("获取 Token 成功");
 
         // 验证 L2 有值
         TokenWithExpiry l2Value = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
@@ -281,7 +282,7 @@ class RedisTokenManagerEndToEndTest {
         // 获取 token
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");
-        log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
+        log.info("获取 Token 成功");
 
         // 从 L2 直接读取（模拟 Redis 反序列化）
         TokenWithExpiry fromL2 = l2Cache.get(cacheName, cacheKey, TokenWithExpiry.class);
@@ -289,13 +290,10 @@ class RedisTokenManagerEndToEndTest {
 
         // 验证字段完整
         assertNotNull(fromL2.getToken(), "反序列化后 token 不应为 null");
-        assertEquals(token, fromL2.getToken(), "反序列化后 token 应一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(token, fromL2.getToken(), "反序列化后 token 应一致");
         assertTrue(fromL2.getExpiresAt() > System.currentTimeMillis() / 1000, "反序列化后 expiresAt 应为未来时间");
         // securityContext 可能是 null（默认 provider 返回 null）
-        log.info("TokenWithExpiry 序列化正确: token={}, expiresAt={}, securityContext={}",
-                fromL2.getToken().substring(0, 20) + "...",
-                fromL2.getExpiresAt(),
-                fromL2.getSecurityContext());
+        log.info("TokenWithExpiry 序列化正确");
 
         log.info("✓ TokenWithExpiry 序列化/反序列化正确");
     }
@@ -310,7 +308,7 @@ class RedisTokenManagerEndToEndTest {
         // provider 返回非空 securityContext
         String expectedSecurityContext = securityContextProvider.getSecurityContext();
         assertNotNull(expectedSecurityContext, "securityContext 不应为 null");
-        log.info("Provider securityContext: {}", expectedSecurityContext);
+        log.info("Provider securityContext 已获取");
 
         // 获取 token，写入 L1 + L2
         String token = tokenManager.getToken();
@@ -323,9 +321,9 @@ class RedisTokenManagerEndToEndTest {
         log.info("从 L2 读取 TokenWithExpiry 成功");
 
         // 核心断言：securityContext 读写一致
-        assertEquals(expectedSecurityContext, fromL2.getSecurityContext(),
+        SensitiveTestAssertions.assertSameSensitiveValue(expectedSecurityContext, fromL2.getSecurityContext(),
                 "L2 读回的 securityContext 应与 Provider 返回的一致");
-        assertEquals(token, fromL2.getToken(),
+        SensitiveTestAssertions.assertSameSensitiveValue(token, fromL2.getToken(),
                 "L2 读回的 token 应与 getToken() 返回的一致");
         assertTrue(fromL2.getExpiresAt() > System.currentTimeMillis() / 1000, "expiresAt 应为未来时间");
 
@@ -342,7 +340,7 @@ class RedisTokenManagerEndToEndTest {
         // 第一次获取，写入 L1 + L2
         String token = tokenManager.getToken();
         assertNotNull(token, "Token 不应为 null");
-        log.info("获取 Token: {}...", token.substring(0, Math.min(20, token.length())));
+        log.info("获取 Token 成功");
 
         // 验证 L1 有值
         Object l1Value = l1Cache.get(cacheName, cacheKey);

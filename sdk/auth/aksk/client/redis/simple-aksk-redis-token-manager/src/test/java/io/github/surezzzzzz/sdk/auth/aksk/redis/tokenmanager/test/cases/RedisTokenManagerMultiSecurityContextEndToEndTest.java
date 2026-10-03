@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextPr
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.layer.L2Cache;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -102,8 +103,7 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         String keyB = CacheKeyHelper.generate(scB);
 
         assertNotEquals(keyA, keyB, "不同 securityContext 应生成不同 cacheKey");
-        log.info("scA={} -> cacheKey={}", scA, keyA);
-        log.info("scB={} -> cacheKey={}", scB, keyB);
+        log.info("两个安全上下文已生成独立缓存键");
 
         // 租户 A 获取 token
         mutableProvider.set(scA);
@@ -121,15 +121,15 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
 
         assertNotNull(l2A, "L2 应有 tenant-A 的条目");
         assertNotNull(l2B, "L2 应有 tenant-B 的条目");
-        assertEquals(scA, l2A.getSecurityContext(), "tenant-A 条目的 securityContext 应回写一致");
-        assertEquals(scB, l2B.getSecurityContext(), "tenant-B 条目的 securityContext 应回写一致");
-        assertEquals(tokenA, l2A.getToken(), "L2(A) 的 token 与 getToken() 返回值一致");
-        assertEquals(tokenB, l2B.getToken(), "L2(B) 的 token 与 getToken() 返回值一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(scA, l2A.getSecurityContext(), "tenant-A 条目的 securityContext 应回写一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(scB, l2B.getSecurityContext(), "tenant-B 条目的 securityContext 应回写一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(tokenA, l2A.getToken(), "L2(A) 的 token 与 getToken() 返回值一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(tokenB, l2B.getToken(), "L2(B) 的 token 与 getToken() 返回值一致");
 
         // 关键：切回 scA 再调一次，必须命中 keyA 自己的缓存，不能拿到 tokenB
         mutableProvider.set(scA);
         String tokenAAgain = tokenManager.getToken();
-        assertEquals(tokenA, tokenAAgain, "切回 scA 时应命中 keyA 缓存，绝不能串到 tokenB");
+        SensitiveTestAssertions.assertSameSensitiveValue(tokenA, tokenAAgain, "切回 scA 时应命中 keyA 缓存，绝不能串到 tokenB");
 
         log.info("✓ 两个 securityContext 各自独立缓存，互不污染");
     }
@@ -161,8 +161,8 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         assertNull(l2Cache.get(cacheName, keyA, TokenWithExpiry.class), "clearToken(scA) 后 L2(A) 应为空");
         TokenWithExpiry l2BAfter = l2Cache.get(cacheName, keyB, TokenWithExpiry.class);
         assertNotNull(l2BAfter, "clearToken(scA) 不应影响 L2(B)");
-        assertEquals(tokenB, l2BAfter.getToken(), "tenant-B 的 token 应仍然存在且不变");
-        assertEquals(scB, l2BAfter.getSecurityContext(), "tenant-B 条目的 securityContext 应仍然是 scB");
+        SensitiveTestAssertions.assertSameSensitiveValue(tokenB, l2BAfter.getToken(), "tenant-B 的 token 应仍然存在且不变");
+        SensitiveTestAssertions.assertSameSensitiveValue(scB, l2BAfter.getSecurityContext(), "tenant-B 条目的 securityContext 应仍然是 scB");
 
         log.info("✓ clearToken 严格按 cacheKey 隔离，多租户互不打扰");
     }
@@ -184,8 +184,7 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         String keyB = CacheKeyHelper.generate(scCollideB);
         assertNotEquals(keyA, keyB,
                 "2.0.1 SHA-256 算法下，hashCode 碰撞的两输入必须映射到不同 cacheKey");
-        log.info("Aa -> {}", keyA);
-        log.info("BB -> {}", keyB);
+        log.info("碰撞输入已生成独立缓存键");
 
         // 用 Aa 拉 token
         mutableProvider.set(scCollideA);
@@ -205,15 +204,15 @@ class RedisTokenManagerMultiSecurityContextEndToEndTest {
         assertNotNull(l2B, "L2(BB) 应有独立条目");
 
         // 核心断言：L2 里 securityContext 回写字段必须正确归属，没有串台
-        assertEquals(scCollideA, l2A.getSecurityContext(),
+        SensitiveTestAssertions.assertSameSensitiveValue(scCollideA, l2A.getSecurityContext(),
                 "L2(Aa) 的 securityContext 必须是 'Aa'，绝不能是 'BB'（防 hashCode 碰撞串 Token）");
-        assertEquals(scCollideB, l2B.getSecurityContext(),
+        SensitiveTestAssertions.assertSameSensitiveValue(scCollideB, l2B.getSecurityContext(),
                 "L2(BB) 的 securityContext 必须是 'BB'，绝不能是 'Aa'");
 
         // 切回 Aa 再调 getToken，必须命中 keyA 的缓存，不能拿到 BB 那条
         mutableProvider.set(scCollideA);
         String tokenAAgain = tokenManager.getToken();
-        assertEquals(tokenA, tokenAAgain,
+        SensitiveTestAssertions.assertSameSensitiveValue(tokenA, tokenAAgain,
                 "切回 Aa 必须命中 keyA 自己的缓存（老 hashCode 时代会错命中 BB 的 token）");
 
         log.info("✓ hashCode 碰撞输入在 2.0.1 中被 SHA-256 严格隔离，跨上下文串 Token 问题根除");

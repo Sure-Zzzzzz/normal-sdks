@@ -4,9 +4,9 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecu
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.TokenCacheTtlHelper;
 import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 
@@ -28,7 +28,6 @@ import java.util.Optional;
  * @author surezzzzzz
  */
 @SimpleAkskRedisTokenManagerComponent
-@Slf4j
 public class TokenCachePreloadHandler implements CachePreloadHandler {
 
     /**
@@ -93,8 +92,8 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
             return 0;
         }
         RELOAD_EXPIRES_AT.remove();
-        int ttl = (int) (expiresAt - System.currentTimeMillis() / 1000);
-        // clamp 到 1：expiresAt 刚获取不可能已过期，防御性下限，避免 0 触发全局 TTL 回退
+        int ttl = TokenCacheTtlHelper.calculate(expiresAt, System.currentTimeMillis() / 1000);
+        // 预刷新刚完成却已过期时返回 1，避免框架回退到全局 TTL 并把失效 Token 缓存更久。
         return Math.max(ttl, 1);
     }
 
@@ -116,8 +115,6 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
         TokenWithExpiry current = cacheManager.get(cacheName, key, TokenWithExpiry.class);
         String securityContext = current != null ? current.getSecurityContext() : null;
 
-        log.info("Preloading token: key={}", key);
-
         long fetchTime = System.currentTimeMillis() / 1000;
         TokenWithExpiry[] holder = new TokenWithExpiry[1];
         tokenRefreshExecutor.fetchTokenFromServer(securityContext, (token, expiresIn) -> {
@@ -130,6 +127,9 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
             RELOAD_EXPIRES_AT.set(holder[0].getExpiresAt());
             return holder[0];
         }
-        return null;
+        throw new io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenFetchException(
+                io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode.TOKEN_FETCH_FAILED,
+                String.format(io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage.TOKEN_FETCH_FAILED,
+                        io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.ErrorMessage.TOKEN_CACHE_PROCESSING_FAILED));
     }
 }

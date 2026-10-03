@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -121,7 +122,7 @@ class RedisTokenManagerConcurrencyTest {
         String firstToken = tokenMap.get(0);
         assertNotNull(firstToken, "第一个线程应获取到 Token");
         for (int i = 1; i < threadCount; i++) {
-            assertEquals(firstToken, tokenMap.get(i), "所有线程获取的 Token 应相同");
+            SensitiveTestAssertions.assertSameSensitiveValue(firstToken, tokenMap.get(i), "所有线程获取的 Token 应相同");
         }
 
         log.info("✓ 10线程并发获取 Token 一致");
@@ -178,7 +179,7 @@ class RedisTokenManagerConcurrencyTest {
 
         String initialToken = tokenManager.getToken();
         assertNotNull(initialToken, "初始 Token 不应为 null");
-        log.info("初始 Token: {}", initialToken);
+        log.info("初始 Token 获取成功");
 
         int threadCount = 20;
         CountDownLatch startLatch = new CountDownLatch(1);
@@ -279,6 +280,6 @@ class RedisTokenManagerConcurrencyTest {
                 .collect(Collectors.toSet());
         assertEquals(1, allTokens.size(), "所有线程应获取同一个 Token");
 
-        log.info("✓ 并发安全性验证通过，cacheKey={}", actualCacheKey);
+        log.info("并发安全性验证通过");
     }
 }

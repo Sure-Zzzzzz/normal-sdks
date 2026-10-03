@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenM
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.preload.TokenCachePreloadHandler;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import lombok.extern.slf4j.Slf4j;
@@ -137,10 +138,9 @@ class TokenPreloadTest {
         assertTrue(result instanceof TokenWithExpiry);
         TokenWithExpiry tokenWithExpiry = (TokenWithExpiry) result;
         assertNotNull(tokenWithExpiry.getToken(), "reload() 返回的 token 不应为 null");
-        assertEquals(expectedSecurityContext, tokenWithExpiry.getSecurityContext(),
+        SensitiveTestAssertions.assertSameSensitiveValue(expectedSecurityContext, tokenWithExpiry.getSecurityContext(),
                 "reload() 应使用与 getToken() 相同的 securityContext");
-        log.info("reload() 成功，expiresIn={}, securityContext={}",
-                tokenWithExpiry.getExpiresAt(), tokenWithExpiry.getSecurityContext());
+        log.info("预刷新成功");
     }
 
     @Test
@@ -149,7 +149,7 @@ class TokenPreloadTest {
         // 先获取 token 写入 L1+L2
         String firstToken = tokenManager.getToken();
         assertNotNull(firstToken, "第一次 Token 不应为 null");
-        log.info("第一次获取 Token 成功: {}...", firstToken.substring(0, Math.min(20, firstToken.length())));
+        log.info("第一次获取 Token 成功");
 
         // 等待 L1 过期（2s），强制走 L2
         log.info("等待 L1 过期（2s）...");
@@ -159,7 +159,7 @@ class TokenPreloadTest {
         // 若 TTL 在 preload 窗口内，框架会触发异步 reload
         String secondToken = tokenManager.getToken();
         assertNotNull(secondToken, "第二次 Token 不应为 null");
-        log.info("第二次获取 Token（可能触发 preload）: {}...", secondToken.substring(0, Math.min(20, secondToken.length())));
+        log.info("第二次获取 Token 成功");
 
         // 等待异步 preload 完成（如果触发了）
         Thread.sleep(2000);
@@ -167,7 +167,7 @@ class TokenPreloadTest {
         // 第三次获取
         String thirdToken = tokenManager.getToken();
         assertNotNull(thirdToken, "第三次 Token 不应为 null");
-        log.info("第三次获取 Token: {}...", thirdToken.substring(0, Math.min(20, thirdToken.length())));
+        log.info("第三次获取 Token 成功");
 
         // 验证返回的 token 有效（非空）
         assertTrue(thirdToken.length() > 0, "preload 完成后应返回有效 token");

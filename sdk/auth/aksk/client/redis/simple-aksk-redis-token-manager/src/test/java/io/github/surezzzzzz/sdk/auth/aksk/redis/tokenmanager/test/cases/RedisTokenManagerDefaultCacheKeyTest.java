@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -20,7 +21,8 @@ import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * RedisTokenManager 空 securityContext 测试
@@ -84,7 +86,7 @@ class RedisTokenManagerDefaultCacheKeyTest {
         // 直接读取，验证写入了 "default" key（类型化读取，绕过 trusted-packages 白名单）
         TokenWithExpiry fromL2 = cacheManager.get(cacheName, "default", TokenWithExpiry.class);
         assertNotNull(fromL2, "无 securityContext 时应写入 'default' key");
-        assertEquals(token, fromL2.getToken(), "'default' key 存储的 token 应与 getToken() 返回值一致");
+        SensitiveTestAssertions.assertSameSensitiveValue(token, fromL2.getToken(), "'default' key 存储的 token 应与 getToken() 返回值一致");
 
         log.info("✓ 无 security_context 时正确使用 'default' cache key");
     }

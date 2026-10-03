@@ -1,6 +1,6 @@
 # Simple AKSK Redis Token Manager
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.1**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -10,7 +10,7 @@
 - **L2 缓存（Redis）**：分布式缓存，多实例共享 token
 - **分布式锁**：防止多实例并发打 OAuth2 Server
 - **多实例 L1 一致性**：`clearToken()` 通过 Pub/Sub 广播 L1 失效，各实例同步清除
-- **L2 预刷新**：Redis TTL <= 60s 时触发，异步换 token，当前请求返回旧值不阻塞
+- **L2 预刷新**：Redis TTL 进入配置的预刷新窗口时异步换 Token，当前请求不阻塞
 
 ---
 
@@ -19,9 +19,10 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.1'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.2'
 
 // 必须自行引入（compileOnly，不会传递）
+implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
 implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 implementation 'org.springframework:spring-web'
 implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
@@ -49,9 +50,9 @@ io:
           aksk:
             client:
               enable: true
-              server-url: http://localhost:8280
-              client-id: AKP...
-              client-secret: SK...
+              server-url: https://aksk.example.test
+              client-id: ${AKSK_CLIENT_ID}
+              client-secret: ${AKSK_CLIENT_SECRET}
 
         cache:
           enabled: true
@@ -63,7 +64,7 @@ io:
             max-size: 1000
           l2:
             enabled: true
-            expire-seconds: 3600            # SmartCache 默认 L2 TTL
+            expire-seconds: 3600            # SmartCache 的非 Token 条目默认 TTL
             preload:
               enabled: true                 # 启用 L2 预刷新
               before-expire-seconds: 60      # 预刷新窗口（Redis TTL <= 60s 时触发）
@@ -109,9 +110,9 @@ Token 存储结构包含 `{ token, expiresAt, securityContext }`：
 
 ### TTL 策略
 
-- **Redis TTL**：使用 server 返回的正数 `expiresIn` 秒数，框架通过 Redis `TTL` 命令检测是否进入 preload 窗口
+- **Redis TTL**：不超过服务端 `expiresIn`；正常有效期预留 30 秒提前失效窗口，有效期不足 30 秒时最多缓存 1 秒
 - **无效响应**：缺失或非正 `expiresIn` 由 client-core 拒绝，Token 不会写入缓存
-- **preload 触发**：`TTL(key) <= beforeExpireSeconds` 时框架自动触发 reload，新 token 写回后 TTL 重新从 `expiresIn` 算起
+- **preload 触发**：`TTL(key) <= beforeExpireSeconds` 时框架自动触发 reload，新 Token 写回后仍按同一安全 TTL 规则计算
 
 ---
 
@@ -156,13 +157,23 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 | `smart-cache-starter` | `implementation` | L1+L2 缓存、分布式锁、Pub/Sub，运行时自动传递、开箱即用；直接使用 smart-cache API 需自行引入 |
 | `simple-redis-lock-starter` | `implementation` | `SimpleRedisLock` 供 `RedisTokenManager` 构造（main 源码直接使用，cache 2.2.0 起不再编译期传递，按自闭环原则显式声明），运行时自动传递 |
 | `task-retry-starter` | `implementation` | `TaskRetryExecutor` 供 `TokenRefreshExecutor` 自动装配注入（同上），运行时自动传递 |
-| `simple-redis-route-starter` | `testImplementation` | 仅测试源码 import `RedisRouteTemplate` 断言 route 接管形态；main 零 route 类型引用 |
+| `simple-redis-route-starter` | `testImplementation` | main 源码零 route 类型引用；但使用方启用 L2 或强一致模式时必须自行引入并配置，提供 `RedisRouteTemplate` |
 | `spring-boot-starter-data-redis` | `compileOnly` | Redis 操作，**使用方必须自行引入** |
 | `spring-web` | `compileOnly` | RestTemplate，**使用方必须自行引入** |
 
 ---
 
 ## 版本历史
+
+### 3.0.2
+
+- 统一 Token 首次写入与 L2 预刷新的有效期计算：服务端 Token 已过期时不再回退使用全局 L2 TTL 缓存；正常 Token 保留 30 秒提前失效窗口。
+- 本地刷新收敛由按缓存键建锁改为固定分片锁，避免多安全上下文持续增长时本地锁容器无界增长；跨实例仍使用分布式锁。
+- Redis 缓存读写和清理失败统一关闭为 `TokenFetchException`，避免调用方继续携带不可靠 Token 请求下游服务。
+- 本模块不主动将 Token、安全上下文或缓存键写入日志；测试断言失败报告不回显这些值。
+- Spring Boot 2.7.9 真实 Redis 与 AKSK Server E2E 回归 44 项全绿。
+
+详见 [CHANGELOG.3.0.2.md](CHANGELOG.3.0.2.md)。
 
 ### 3.0.1
 
