@@ -7,7 +7,7 @@ import io.github.surezzzzzz.sdk.kms.client.model.KmsSigningResult;
  *
  * <p>不暴露完整 HTTP 签名结果中的逻辑密钥标识，也不负责重试或幂等处理。</p>
  */
-public interface TenantSignerPort {
+public interface OwnerSignerPort {
     /**
      * 使用指定或当前活动版本对输入字节签名。
      *

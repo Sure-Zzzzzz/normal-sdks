@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * 面向业务调用方的租户公钥读取端口。
  */
-public interface TenantPublicKeyPort {
+public interface OwnerPublicKeyPort {
     /**
      * 读取指定或当前活动版本的可发布公钥。
      *

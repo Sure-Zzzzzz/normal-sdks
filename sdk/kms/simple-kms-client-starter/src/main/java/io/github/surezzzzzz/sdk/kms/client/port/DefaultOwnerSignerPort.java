@@ -12,7 +12,7 @@ import io.github.surezzzzzz.sdk.kms.client.model.KmsSigningResult;
  *
  * @author surezzzzzz
  */
-public class DefaultTenantSignerPort implements TenantSignerPort {
+public class DefaultOwnerSignerPort implements OwnerSignerPort {
 
     private final KmsClient kmsClient;
 
@@ -21,7 +21,7 @@ public class DefaultTenantSignerPort implements TenantSignerPort {
      *
      * @param kmsClient 完整 KMS Client
      */
-    public DefaultTenantSignerPort(KmsClient kmsClient) {
+    public DefaultOwnerSignerPort(KmsClient kmsClient) {
         this.kmsClient = kmsClient;
     }
 

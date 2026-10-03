@@ -1,12 +1,12 @@
 # simple-kms-client-starter
 
-面向 Java 8、Spring Boot 2.2.13.RELEASE / 2.3.12 / 2.4.5 / 2.7.9 业务服务的 KMS HTTP Client。它只调用已发布 KMS Server 的 `/api/v1/kms` 接口，不连接 KMS MySQL，也不会获取、缓存或导出私钥、对称密钥或其他密钥材料。
+面向 Java 8、Spring Boot 2.2.13.RELEASE / 2.3.12 / 2.4.5 / 2.7.9 业务服务的 KMS HTTP Client。它只调用已发布 KMS Server 的 `/api/kms` 接口，不连接 KMS MySQL，也不会获取、缓存或导出私钥、对称密钥或其他密钥材料。
 
 ## 接入
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kms-client-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-kms-client-starter:2.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents:httpclient:4.5.13'
 }
@@ -25,11 +25,11 @@ io:
             base-url: https://kms.example.internal
 ```
 
-`base-url` 只能是 `http` 或 `https` origin：必须包含主机，可包含端口；不能包含路径、query、fragment 或 user-info。Client 固定追加 `/api/v1/kms`，并禁用 HTTP 重定向。
+`base-url` 只能是 `http` 或 `https` origin：必须包含主机，可包含端口；不能包含路径、query、fragment 或 user-info。Client 固定追加 `/api/kms`，并禁用 HTTP 重定向。
 
 ## 调用身份
 
-Client 不保存认证凭据、不构造 tenant，也不继承宿主全局 `RestTemplate` 拦截器。业务服务必须提供唯一的 `KmsClientAuthenticationInterceptor`，由它写入 Server 认可的调用身份；未提供时由 Server 返回 `401`。
+Client 不保存认证凭据、不构造 owner 身份，也不继承宿主全局 `RestTemplate` 拦截器。推荐宿主装配 AKSK `TokenManager`（SDK 自动提供 `AkskTokenManagerKmsAuthenticationInterceptor` 写入 Bearer）；或业务提供唯一的 `KmsClientAuthenticationInterceptor`；两者皆无时由 Server 返回 `401`。自动装配依赖 AKSK client 的自动配置先行注册 `TokenManager`；若顺序不满足，显式声明 `@Bean AkskTokenManagerKmsAuthenticationInterceptor(tokenManager)` 即可。
 
 ```java
 @Bean
@@ -41,22 +41,22 @@ public KmsClientAuthenticationInterceptor kmsClientAuthenticationInterceptor() {
 }
 ```
 
-认证步骤较多时组合为一个 interceptor；定义多个 `KmsClientAuthenticationInterceptor` 会在启动时以 `KmsClientConfigurationException` 失败。认证头、token、tenant、明文、密文、签名、AAD、envelope 和请求响应原文均不应写入日志。
+认证步骤较多时组合为一个 interceptor；定义多个 `KmsClientAuthenticationInterceptor` 会在启动时以 `KmsClientConfigurationException` 失败。认证头、token、owner、明文、密文、签名、AAD、envelope 和请求响应原文均不应写入日志。
 
 ## 推荐：注入最小端口
 
 业务代码优先依赖最小端口，而不是完整的 KMS 管理 API。默认端口委托 `KmsClient`，调用方也可以直接提供同类型 Bean 替换任一端口。
 
 ```java
-private final TenantSignerPort tenantSignerPort;
-private final TenantPublicKeyPort tenantPublicKeyPort;
+private final OwnerSignerPort ownerSignerPort;
+private final OwnerPublicKeyPort ownerPublicKeyPort;
 private final KeyEncryptionPort keyEncryptionPort;
 ```
 
 签名时传入逻辑密钥引用和期望版本；`version` 为 `null` 时由 KMS 选择当前活动版本。调用方应保存自己的业务对象到 `(kmsKeyRef, kmsKeyVersion)` 的映射，并校验响应实际版本。
 
 ```java
-KmsSigningResult result = tenantSignerPort.sign(keyRef, expectedVersion, signingInput);
+KmsSigningResult result = ownerSignerPort.sign(keyRef, expectedVersion, signingInput);
 if (expectedVersion != null && !expectedVersion.equals(result.getVersion())) {
     rejectIssuance();
 }
@@ -65,8 +65,8 @@ if (expectedVersion != null && !expectedVersion.equals(result.getVersion())) {
 公钥读取可用于验证方按版本获取可发布公钥：
 
 ```java
-KmsPublicKey publicKey = tenantPublicKeyPort.read(keyRef, version);
-List<KmsPublicKey> publicKeys = tenantPublicKeyPort.list(keyRef);
+KmsPublicKey publicKey = ownerPublicKeyPort.read(keyRef, version);
+List<KmsPublicKey> publicKeys = ownerPublicKeyPort.list(keyRef);
 ```
 
 加密端口返回 KMS 的完整版本化 envelope。解密时必须原样传回该 envelope；调用方不得拆分或重组逻辑密钥、版本或 envelope。`aad` 可以为 `null`，但传入时解密必须提供完全相同的字节。
@@ -130,6 +130,6 @@ Client 将 HTTP 状态转换为稳定异常类型：
 | `2.4.5` | `src/test` 的自动装配、HTTP 契约、边界、安全行为和远程真实 Server E2E |
 | `2.7.9` | `src/test` 的自动装配、HTTP 契约、边界、安全行为和远程真实 Server E2E |
 
-真实 Server 固定以 Spring Boot 2.7.9 的本地 `e2eServer` fixture 启动已发布 `smart-kms-server-starter:1.0.0` 与 MySQL。每档 Client 的 `src/test` 都通过 HTTP 调用同一 Server；`e2eServer` 独占 Server、Core、JDBC、MySQL 与 schema 依赖，Client 的 `main` 和 `test` 均不解析这些类型。因此这只证明 Client 的跨版本调用能力，不表示 Server 支持其他 Spring Boot 版本。
+真实 Server 固定以 Spring Boot 2.7.9 的本地 `e2eServer` fixture 启动已发布 `smart-kms-server-starter:2.0.0`（`/api/kms` 基路径；1.x 的 `/api/v1/kms` 已移除） 与 MySQL。每档 Client 的 `src/test` 都通过 HTTP 调用同一 Server；`e2eServer` 独占 Server、Core、JDBC、MySQL 与 schema 依赖，Client 的 `main` 和 `test` 均不解析这些类型。因此这只证明 Client 的跨版本调用能力，不表示 Server 支持其他 Spring Boot 版本。
 
 `spring.factories` 与 `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 是同一个自动配置的 Spring Boot 2.x 双入口，不是两套 Client 实现：前者覆盖 2.2.x、2.3.12、2.4.5，后者供 2.7.9 读取；二者只注册 `SimpleKmsClientAutoConfiguration`，启动时只会创建一套默认 Client Bean。

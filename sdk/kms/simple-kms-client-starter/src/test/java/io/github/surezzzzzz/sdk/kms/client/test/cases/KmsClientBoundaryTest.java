@@ -40,7 +40,7 @@ class KmsClientBoundaryTest {
     void shouldOnlyAcceptOriginAndAppendFixedApiBasePath() {
         URI apiBaseUri = KmsClientUriHelper.apiBaseUri("https://kms.example.internal:9443/");
         log.info("规范化 KMS API 路径: {}", apiBaseUri.getPath());
-        assertEquals("https://kms.example.internal:9443/api/v1/kms", apiBaseUri.toString(),
+        assertEquals("https://kms.example.internal:9443/api/kms", apiBaseUri.toString(),
                 "合法 origin 必须只能追加固定 KMS API 根路径");
 
         List<String> invalidUrls = Arrays.asList(
@@ -75,7 +75,7 @@ class KmsClientBoundaryTest {
         KmsHttpExecutor responseExecutor = new KmsHttpExecutor(new RestTemplate(new SingleResponseRequestFactory(response)),
                 new KmsJsonCodec(), new KmsHttpErrorMapper(), 1024, 4);
         assertThrows(io.github.surezzzzzz.sdk.kms.client.exception.KmsResponseTooLargeException.class,
-                () -> responseExecutor.execute(URI.create("https://kms.example.internal/api/v1/kms/keys/key-1"),
+                () -> responseExecutor.execute(URI.create("https://kms.example.internal/api/kms/keys/key-1"),
                         HttpMethod.GET, null, null),
                 "未知长度响应实际超过上限时必须拒绝");
         assertTrue(response.closed, "chunked 响应超限后必须关闭 response");

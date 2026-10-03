@@ -10,7 +10,7 @@ import java.util.List;
  *
  * @author surezzzzzz
  */
-public class DefaultTenantPublicKeyPort implements TenantPublicKeyPort {
+public class DefaultOwnerPublicKeyPort implements OwnerPublicKeyPort {
 
     private final KmsClient kmsClient;
 
@@ -19,7 +19,7 @@ public class DefaultTenantPublicKeyPort implements TenantPublicKeyPort {
      *
      * @param kmsClient 完整 KMS Client
      */
-    public DefaultTenantPublicKeyPort(KmsClient kmsClient) {
+    public DefaultOwnerPublicKeyPort(KmsClient kmsClient) {
         this.kmsClient = kmsClient;
     }
 

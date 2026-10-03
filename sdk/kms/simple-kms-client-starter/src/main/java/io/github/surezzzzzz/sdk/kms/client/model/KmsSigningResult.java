@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Value;
 
 /**
- * 面向 {@code TenantSignerPort} 的最小签名结果投影。
+ * 面向 {@code OwnerSignerPort} 的最小签名结果投影。
  *
  * <p>与 {@link KmsSignature} 分离，避免将完整 HTTP 结果中的逻辑密钥标识泄露到业务端口；
  * 固定算法语义由端口适配器写入，签名字节在出入模型时均复制。</p>

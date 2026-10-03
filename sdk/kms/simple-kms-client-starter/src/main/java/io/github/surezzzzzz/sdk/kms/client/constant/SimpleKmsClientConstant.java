@@ -10,7 +10,7 @@ public final class SimpleKmsClientConstant {
     // ==================== 配置与默认 传输 边界 ====================
 
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.kms.client";
-    public static final String API_BASE_PATH = "/api/v1/kms";
+    public static final String API_BASE_PATH = "/api/kms";
     public static final String HTTP_CLIENT_BEAN_NAME = "simpleKmsClientHttpClient";
     public static final String REST_TEMPLATE_BEAN_NAME = "simpleKmsClientRestTemplate";
     public static final boolean DEFAULT_ENABLED = false;
@@ -73,6 +73,8 @@ public final class SimpleKmsClientConstant {
     public static final String RESOURCE_VERSIONS = "versions";
     public static final String RESOURCE_DESTRUCTION = "destruction";
     public static final String RESOURCE_POLICIES = "policies";
+    public static final String RESOURCE_ME = "me";
+    public static final String RESOURCE_DESTRUCTION_POLICY = "destruction-policy";
     public static final String RESOURCE_PUBLIC_KEY = "public-key";
     public static final String RESOURCE_PUBLIC_KEYS = "public-keys";
 
@@ -92,7 +94,7 @@ public final class SimpleKmsClientConstant {
     public static final String FIELD_CREATED_AT = "createdAt";
     public static final String FIELD_UPDATED_AT = "updatedAt";
     public static final String FIELD_EXPECTED_ROW_VERSION = "expectedRowVersion";
-    public static final String FIELD_DESTROY_AFTER = "destroyAfter";
+    public static final String FIELD_DUE_AT = "dueAt";
     public static final String FIELD_POLICY_ID = "policyId";
     public static final String FIELD_PRINCIPAL_ID = "principalId";
     /**

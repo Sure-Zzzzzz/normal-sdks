@@ -37,7 +37,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 @Slf4j
 class RestTemplateKmsClientTest {
 
-    private static final String API_BASE = "https://kms.example.internal/api/v1/kms";
+    private static final String API_BASE = "https://kms.example.internal/api/kms";
     private static final String FIXED_TIME = "2026-07-27T01:02:03.004Z";
     private static final String KEY_REF = "key-1";
     private static final String IDEMPOTENCY_KEY = "operation-1";
@@ -109,7 +109,7 @@ class RestTemplateKmsClientTest {
                 .andExpect(header("Idempotency-Key", IDEMPOTENCY_KEY))
                 .andExpect(content().json("{\"keyAlias\":\"alias\",\"purpose\":\"SIGN\",\"algorithm\":\"ES256\"}"))
                 .andRespond(withStatus(HttpStatus.CREATED)
-                        .location(URI.create("/api/v1/kms/keys/key-1"))
+                        .location(URI.create("/api/kms/keys/key-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(keyJson()));
         assertEquals(KEY_REF, client.createKey(IDEMPOTENCY_KEY, "alias", "SIGN", "ES256").getKeyRef(),
@@ -159,7 +159,7 @@ class RestTemplateKmsClientTest {
         server.expect(once(), requestTo(API_BASE + "/keys/key-1/destruction"))
                 .andExpect(method(HttpMethod.PUT))
                 .andExpect(header("Idempotency-Key", IDEMPOTENCY_KEY))
-                .andExpect(content().json("{\"destroyAfter\":\"2026-07-27T01:02:03.004Z\",\"expectedRowVersion\":4}"))
+                .andExpect(content().json("{\"dueAt\":\"2026-07-27T01:02:03.004Z\",\"expectedRowVersion\":4}"))
                 .andRespond(withSuccess(keyJson(), MediaType.APPLICATION_JSON));
         assertEquals(KEY_REF, client.scheduleDestruction(IDEMPOTENCY_KEY, KEY_REF,
                 Instant.parse(FIXED_TIME), 4L).getKeyRef(), "销毁安排必须返回当前资源");
@@ -188,7 +188,7 @@ class RestTemplateKmsClientTest {
                 .andExpect(header("Idempotency-Key", IDEMPOTENCY_KEY))
                 .andExpect(content().json("{\"principalId\":\"service-a\",\"operation\":\"SIGN\",\"keyVersion\":2,\"expiresAt\":\"2026-07-27T01:02:03.004Z\"}"))
                 .andRespond(withStatus(HttpStatus.CREATED)
-                        .location(URI.create("/api/v1/kms/keys/key-1/policies/policy-1"))
+                        .location(URI.create("/api/kms/keys/key-1/policies/policy-1"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(policyJson));
         KmsPolicy created = client.createPolicy(IDEMPOTENCY_KEY, KEY_REF, "service-a", Integer.valueOf(2), "SIGN",

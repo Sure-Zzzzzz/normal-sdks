@@ -3,8 +3,8 @@ package io.github.surezzzzzz.sdk.kms.client.test.cases;
 import io.github.surezzzzzz.sdk.kms.client.client.KmsClient;
 import io.github.surezzzzzz.sdk.kms.client.configuration.SimpleKmsClientAutoConfiguration;
 import io.github.surezzzzzz.sdk.kms.client.port.KeyEncryptionPort;
-import io.github.surezzzzzz.sdk.kms.client.port.TenantPublicKeyPort;
-import io.github.surezzzzzz.sdk.kms.client.port.TenantSignerPort;
+import io.github.surezzzzzz.sdk.kms.client.port.OwnerPublicKeyPort;
+import io.github.surezzzzzz.sdk.kms.client.port.OwnerSignerPort;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,10 +49,10 @@ class KmsClientAutoConfigurationDiscoveryTest {
     private KmsClient kmsClient;
 
     @Autowired
-    private TenantSignerPort tenantSignerPort;
+    private OwnerSignerPort ownerSignerPort;
 
     @Autowired
-    private TenantPublicKeyPort tenantPublicKeyPort;
+    private OwnerPublicKeyPort ownerPublicKeyPort;
 
     @Autowired
     private KeyEncryptionPort keyEncryptionPort;
@@ -72,8 +72,8 @@ class KmsClientAutoConfigurationDiscoveryTest {
     @Test
     void shouldCreateClientAndMinimalPortsFromAutoConfigurationDiscovery() {
         assertNotNull(kmsClient, "自动发现必须创建默认 KmsClient");
-        assertNotNull(tenantSignerPort, "自动发现必须创建默认签名端口");
-        assertNotNull(tenantPublicKeyPort, "自动发现必须创建默认公钥端口");
+        assertNotNull(ownerSignerPort, "自动发现必须创建默认签名端口");
+        assertNotNull(ownerPublicKeyPort, "自动发现必须创建默认公钥端口");
         assertNotNull(keyEncryptionPort, "自动发现必须创建默认加解密端口");
         assertEquals(Integer.valueOf(1), Integer.valueOf(applicationContext
                 .getBeansOfType(SimpleKmsClientAutoConfiguration.class).size()), "双入口不能重复导入自动配置");

@@ -5,8 +5,8 @@ import io.github.surezzzzzz.sdk.kms.client.client.RestTemplateKmsClient;
 import io.github.surezzzzzz.sdk.kms.client.model.KmsKey;
 import io.github.surezzzzzz.sdk.kms.client.model.KmsPublicKey;
 import io.github.surezzzzzz.sdk.kms.client.model.KmsSigningResult;
-import io.github.surezzzzzz.sdk.kms.client.port.DefaultTenantSignerPort;
-import io.github.surezzzzzz.sdk.kms.client.port.TenantSignerPort;
+import io.github.surezzzzzz.sdk.kms.client.port.DefaultOwnerSignerPort;
+import io.github.surezzzzzz.sdk.kms.client.port.OwnerSignerPort;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsHttpErrorMapper;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsHttpExecutor;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsJsonCodec;
@@ -42,7 +42,7 @@ class RestTemplateKmsClientE2eTest {
     private static final String SERVER_FILE_PROPERTY = "kms.e2e.server.file";
     private static final String BASE_URL_PROPERTY = "baseUrl";
 
-    private String tenantId;
+    private String ownerPrincipalId;
     private String principalId;
     private String requestId;
     private URI apiBaseUri;
@@ -55,10 +55,10 @@ class RestTemplateKmsClientE2eTest {
     @BeforeEach
     void setUp() throws IOException {
         String unique = UUID.randomUUID().toString().replace("-", "");
-        tenantId = "client-e2e-" + unique;
+        ownerPrincipalId = "iam:client-e2e-" + unique;
         principalId = "client-e2e-principal-" + unique;
         requestId = "client-e2e-request-" + unique;
-        apiBaseUri = URI.create(readBaseUrl() + "/api/v1/kms");
+        apiBaseUri = URI.create(readBaseUrl() + "/api/kms");
     }
 
     @Test
@@ -81,7 +81,7 @@ class RestTemplateKmsClientE2eTest {
                     "READ_PUBLIC_KEY", null);
 
             byte[] signingInput = "license-payload".getBytes(StandardCharsets.UTF_8);
-            TenantSignerPort signerPort = new DefaultTenantSignerPort(client);
+            OwnerSignerPort signerPort = new DefaultOwnerSignerPort(client);
             KmsSigningResult signing = signerPort.sign(created.getKeyRef(), Integer.valueOf(1), signingInput);
             assertEquals(Integer.valueOf(1), signing.getVersion(), "端口必须返回 KMS 实际签名版本");
             assertEquals("ES256", signing.getAlgorithm(), "端口必须返回固定 JOSE 算法");
@@ -145,7 +145,7 @@ class RestTemplateKmsClientE2eTest {
      */
     private KmsClientAuthenticationInterceptor authenticationInterceptor() {
         return (request, body, execution) -> {
-            request.getHeaders().set("X-Test-Tenant", tenantId);
+            request.getHeaders().set("X-Test-Owner-Principal", ownerPrincipalId);
             request.getHeaders().set("X-Test-Principal", principalId);
             request.getHeaders().set("X-Test-Request-Id", requestId);
             return execution.execute(request, body);
@@ -155,7 +155,8 @@ class RestTemplateKmsClientE2eTest {
     private String readBaseUrl() throws IOException {
         String filePath = System.getProperty(SERVER_FILE_PROPERTY);
         if (filePath == null || filePath.trim().isEmpty()) {
-            fail("缺少固定 KMS E2E Server 临时清单路径");
+            // 外部 E2E：需要 -Dkms.server.file 指向在跑的 KMS Server 清单才执行；常规回归跳过
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "未配置 KMS E2E Server 清单（-Dkms.server.file），跳过外部 E2E");
         }
         File serverFile = new File(filePath);
         if (!serverFile.isFile()) {

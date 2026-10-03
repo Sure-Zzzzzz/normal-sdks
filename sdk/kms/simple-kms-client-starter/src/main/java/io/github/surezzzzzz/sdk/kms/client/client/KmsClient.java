@@ -59,6 +59,22 @@ public interface KmsClient {
     KmsKey changeKeyState(String idempotencyKey, String keyRef, String state, Long expectedRowVersion);
 
     /**
+     * 读取当前凭证身份自身的销毁窗口政策（无行 = 不限制）。
+     *
+     * @return 政策快照
+     */
+    KmsOwnerDestructionPolicy getMyDestructionPolicy();
+
+    /**
+     * 写当前凭证身份自身的销毁窗口政策（幂等 upsert；两侧传 null = 显式不限制）。
+     *
+     * @param minScheduleAheadSeconds 最短提前量（秒）；null = 不设下限
+     * @param maxScheduleAheadSeconds 最长提前量（秒）；null = 不设上限
+     * @return 写入后的政策快照
+     */
+    KmsOwnerDestructionPolicy saveMyDestructionPolicy(Long minScheduleAheadSeconds, Long maxScheduleAheadSeconds);
+
+    /**
      * 轮换逻辑密钥版本。
      *
      * @param idempotencyKey     调用方提供的幂等键

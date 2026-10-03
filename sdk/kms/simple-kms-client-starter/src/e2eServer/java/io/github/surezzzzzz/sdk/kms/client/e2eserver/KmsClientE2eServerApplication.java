@@ -34,9 +34,9 @@ import java.util.Properties;
 public class KmsClientE2eServerApplication {
 
     private static final String SERVER_FILE_PROPERTY = "kms.e2e.server.file";
-    private static final String SCHEMA_RESOURCE = "smart-kms-server-1.0.0-schema.sql";
+    private static final String SCHEMA_RESOURCE = "smart-kms-server-2.0.0-schema.sql";
     private static final String BASE_URL_PROPERTY = "baseUrl";
-    private static final String TENANT_HEADER = "X-Test-Tenant";
+    private static final String OWNER_HEADER = "X-Test-Owner-Principal";
     private static final String PRINCIPAL_HEADER = "X-Test-Principal";
     private static final String REQUEST_ID_HEADER = "X-Test-Request-Id";
 
@@ -70,14 +70,17 @@ public class KmsClientE2eServerApplication {
         return new KmsPrincipalResolver() {
             @Override
             public KmsRequestContext resolve(HttpServletRequest request) {
-                String tenantId = request.getHeader(TENANT_HEADER);
+                String ownerPrincipalId = request.getHeader(OWNER_HEADER);
                 String principalId = request.getHeader(PRINCIPAL_HEADER);
                 String requestId = request.getHeader(REQUEST_ID_HEADER);
-                if (tenantId == null || principalId == null || requestId == null) {
+                if (ownerPrincipalId == null || principalId == null || requestId == null) {
                     return null;
                 }
-                return new KmsRequestContext(new KmsPrincipal(principalId, tenantId,
-                        new HashSet<String>(Arrays.asList(SmartKmsServerConstant.SCOPE_MANAGE,
+                return new KmsRequestContext(new KmsPrincipal(principalId, ownerPrincipalId,
+                        new HashSet<String>(Arrays.asList(SmartKmsServerConstant.API_PERMISSION_ME_READ,
+                                SmartKmsServerConstant.API_PERMISSION_KEY_READ, SmartKmsServerConstant.SCOPE_MANAGE,
+                                SmartKmsServerConstant.API_PERMISSION_KEY_POLICY,
+                                SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY,
                                 SmartKmsServerConstant.SCOPE_SIGN, SmartKmsServerConstant.SCOPE_VERIFY,
                                 SmartKmsServerConstant.SCOPE_ENCRYPT, SmartKmsServerConstant.SCOPE_DECRYPT,
                                 SmartKmsServerConstant.SCOPE_READ_PUBLIC_KEY))), requestId);

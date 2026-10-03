@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.kms.client.configuration;
 
 import io.github.surezzzzzz.sdk.kms.client.client.KmsClient;
 import io.github.surezzzzzz.sdk.kms.client.client.KmsClientAuthenticationInterceptor;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+import io.github.surezzzzzz.sdk.kms.client.auth.AkskTokenManagerKmsAuthenticationInterceptor;
 import io.github.surezzzzzz.sdk.kms.client.client.RestTemplateKmsClient;
 import io.github.surezzzzzz.sdk.kms.client.constant.SimpleKmsClientConstant;
 import io.github.surezzzzzz.sdk.kms.client.exception.KmsClientConfigurationException;
@@ -45,6 +47,19 @@ public class SimpleKmsClientAutoConfiguration {
      *
      * @return 可由调用方替换的独立编解码器
      */
+    /**
+     * 宿主装配了 AKSK Token Manager 时自动提供 KMS 认证拦截器（复用 AKSK 令牌链）；
+     * 业务自定义的专用拦截器优先。
+     */
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnClass(TokenManager.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(TokenManager.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(KmsClientAuthenticationInterceptor.class)
+    public AkskTokenManagerKmsAuthenticationInterceptor akskTokenManagerKmsAuthenticationInterceptor(
+            TokenManager tokenManager) {
+        return new AkskTokenManagerKmsAuthenticationInterceptor(tokenManager);
+    }
+
     @Bean
     @ConditionalOnMissingBean
     public KmsJsonCodec kmsJsonCodec() {
@@ -169,9 +184,9 @@ public class SimpleKmsClientAutoConfiguration {
      */
     @Bean
     @ConditionalOnBean(KmsClient.class)
-    @ConditionalOnMissingBean(TenantSignerPort.class)
-    public TenantSignerPort tenantSignerPort(KmsClient kmsClient) {
-        return new DefaultTenantSignerPort(kmsClient);
+    @ConditionalOnMissingBean(OwnerSignerPort.class)
+    public OwnerSignerPort ownerSignerPort(KmsClient kmsClient) {
+        return new DefaultOwnerSignerPort(kmsClient);
     }
 
     /**
@@ -182,9 +197,9 @@ public class SimpleKmsClientAutoConfiguration {
      */
     @Bean
     @ConditionalOnBean(KmsClient.class)
-    @ConditionalOnMissingBean(TenantPublicKeyPort.class)
-    public TenantPublicKeyPort tenantPublicKeyPort(KmsClient kmsClient) {
-        return new DefaultTenantPublicKeyPort(kmsClient);
+    @ConditionalOnMissingBean(OwnerPublicKeyPort.class)
+    public OwnerPublicKeyPort ownerPublicKeyPort(KmsClient kmsClient) {
+        return new DefaultOwnerPublicKeyPort(kmsClient);
     }
 
     /**

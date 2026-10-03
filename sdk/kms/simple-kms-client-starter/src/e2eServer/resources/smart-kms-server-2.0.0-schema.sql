@@ -10,6 +10,7 @@ SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS `smart_kms_destruction_worker_state`;
+DROP TABLE IF EXISTS `smart_kms_owner_destruction_policy`;
 DROP TABLE IF EXISTS `smart_kms_destruction_job`;
 DROP TABLE IF EXISTS `smart_kms_idempotency_record`;
 DROP TABLE IF EXISTS `smart_kms_key_policy`;
@@ -18,9 +19,9 @@ DROP TABLE IF EXISTS `smart_kms_key`;
 
 CREATE TABLE `smart_kms_key` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '逻辑密钥主键ID',
-    `tenant_id` VARCHAR(64) NOT NULL COMMENT '逻辑密钥所属租户标识',
+    `owner_principal_id` VARCHAR(64) NOT NULL COMMENT '逻辑密钥所属 owner 标识',
     `key_ref` VARCHAR(64) NOT NULL COMMENT '服务端生成的逻辑密钥稳定标识',
-    `key_alias` VARCHAR(128) NOT NULL COMMENT '租户内可读的逻辑密钥别名',
+    `key_alias` VARCHAR(128) NOT NULL COMMENT 'owner 内可读的逻辑密钥别名',
     `purpose` VARCHAR(16) NOT NULL COMMENT '密钥用途：SIGN-签名，ENCRYPT-加密',
     `algorithm` VARCHAR(32) NOT NULL COMMENT '密码算法：ES256，AES_256_GCM',
     `state` VARCHAR(32) NOT NULL COMMENT '逻辑密钥状态：ACTIVE，DISABLED，PENDING_DESTRUCTION，DESTROYED',
@@ -30,15 +31,15 @@ CREATE TABLE `smart_kms_key` (
     `created_at` DATETIME(3) NOT NULL COMMENT '逻辑密钥创建UTC时间',
     `updated_at` DATETIME(3) NOT NULL COMMENT '逻辑密钥最近更新UTC时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_smart_kms_key_tenant_id_id` (`tenant_id`, `id`),
-    UNIQUE KEY `uk_smart_kms_key_tenant_id_key_ref` (`tenant_id`, `key_ref`),
-    UNIQUE KEY `uk_smart_kms_key_tenant_id_key_alias` (`tenant_id`, `key_alias`),
-    KEY `idx_smart_kms_key_tenant_id_state_updated_at_id` (`tenant_id`, `state`, `updated_at`, `id`)
+    UNIQUE KEY `uk_smart_kms_key_owner_principal_id_id` (`owner_principal_id`, `id`),
+    UNIQUE KEY `uk_smart_kms_key_owner_principal_id_key_ref` (`owner_principal_id`, `key_ref`),
+    UNIQUE KEY `uk_smart_kms_key_owner_principal_id_key_alias` (`owner_principal_id`, `key_alias`),
+    KEY `idx_smart_kms_key_owner_principal_id_state_updated_at_id` (`owner_principal_id`, `state`, `updated_at`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS逻辑密钥元数据表';
 
 CREATE TABLE `smart_kms_key_version` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '密钥版本主键ID',
-    `tenant_id` VARCHAR(64) NOT NULL COMMENT '密钥版本所属租户标识',
+    `owner_principal_id` VARCHAR(64) NOT NULL COMMENT '密钥版本所属 owner 标识',
     `key_id` BIGINT NOT NULL COMMENT '所属逻辑密钥主键ID',
     `version` INT UNSIGNED NOT NULL COMMENT '逻辑密钥内严格递增的版本号',
     `state` VARCHAR(32) NOT NULL COMMENT '版本状态：ACTIVE，RETIRED，PENDING_DESTRUCTION，DESTROYED',
@@ -54,15 +55,15 @@ CREATE TABLE `smart_kms_key_version` (
     `created_at` DATETIME(3) NOT NULL COMMENT '密钥版本创建UTC时间',
     `updated_at` DATETIME(3) NOT NULL COMMENT '密钥版本最近更新UTC时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_smart_kms_key_version_tenant_id_key_id_version` (`tenant_id`, `key_id`, `version`),
-    KEY `idx_smart_kms_key_version_tenant_id_key_id_state_version` (`tenant_id`, `key_id`, `state`, `version`),
+    UNIQUE KEY `uk_smart_kms_key_version_owner_principal_id_key_id_version` (`owner_principal_id`, `key_id`, `version`),
+    KEY `idx_kms_key_ver_owner_key_state_ver` (`owner_principal_id`, `key_id`, `state`, `version`),
     CONSTRAINT `fk_smart_kms_key_version_key`
-        FOREIGN KEY (`tenant_id`, `key_id`) REFERENCES `smart_kms_key` (`tenant_id`, `id`)
+        FOREIGN KEY (`owner_principal_id`, `key_id`) REFERENCES `smart_kms_key` (`owner_principal_id`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS密钥版本与材料表';
 
 CREATE TABLE `smart_kms_key_policy` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '密钥策略主键ID',
-    `tenant_id` VARCHAR(64) NOT NULL COMMENT '策略所属租户标识',
+    `owner_principal_id` VARCHAR(64) NOT NULL COMMENT '策略所属 owner 标识',
     `key_id` BIGINT NOT NULL COMMENT '所属逻辑密钥主键ID',
     `key_ref` VARCHAR(64) NOT NULL COMMENT '所属逻辑密钥稳定标识',
     `policy_id` VARCHAR(64) NOT NULL COMMENT '服务端生成的密钥策略稳定标识',
@@ -75,16 +76,16 @@ CREATE TABLE `smart_kms_key_policy` (
     `created_at` DATETIME(3) NOT NULL COMMENT '策略创建UTC时间',
     `updated_at` DATETIME(3) NOT NULL COMMENT '策略最近更新UTC时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_smart_kms_key_policy_tenant_id_policy_id` (`tenant_id`, `policy_id`),
-    UNIQUE KEY `uk_smart_kms_key_policy_scope` (`tenant_id`, `key_id`, `principal_id`, `key_version_scope`, `operation`),
-    KEY `idx_smart_kms_key_policy_tenant_id_key_id` (`tenant_id`, `key_id`),
+    UNIQUE KEY `uk_smart_kms_key_policy_owner_principal_id_policy_id` (`owner_principal_id`, `policy_id`),
+    UNIQUE KEY `uk_smart_kms_key_policy_scope` (`owner_principal_id`, `key_id`, `principal_id`, `key_version_scope`, `operation`),
+    KEY `idx_smart_kms_key_policy_owner_principal_id_key_id` (`owner_principal_id`, `key_id`),
     CONSTRAINT `fk_smart_kms_key_policy_key`
-        FOREIGN KEY (`tenant_id`, `key_id`) REFERENCES `smart_kms_key` (`tenant_id`, `id`)
+        FOREIGN KEY (`owner_principal_id`, `key_id`) REFERENCES `smart_kms_key` (`owner_principal_id`, `id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS精确允许密钥策略表';
 
 CREATE TABLE `smart_kms_idempotency_record` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '幂等记录主键ID',
-    `tenant_id` VARCHAR(64) NOT NULL COMMENT '发起管理操作的租户标识',
+    `owner_principal_id` VARCHAR(64) NOT NULL COMMENT '发起管理操作的 owner 标识',
     `principal_id` VARCHAR(128) NOT NULL COMMENT '发起管理操作的认证主体标识',
     `endpoint` VARCHAR(256) NOT NULL COMMENT '包含具体资源标识的规范化管理端点路径',
     `idempotency_key` VARCHAR(128) NOT NULL COMMENT '调用方提供的幂等键',
@@ -95,13 +96,13 @@ CREATE TABLE `smart_kms_idempotency_record` (
     `created_at` DATETIME(3) NOT NULL COMMENT '幂等记录创建UTC时间',
     `expires_at` DATETIME(3) NOT NULL COMMENT '幂等记录失效UTC时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_smart_kms_idempotency_record_scope` (`tenant_id`, `principal_id`, `endpoint`, `idempotency_key`),
+    UNIQUE KEY `uk_smart_kms_idempotency_record_scope` (`owner_principal_id`, `principal_id`, `endpoint`, `idempotency_key`),
     KEY `idx_smart_kms_idempotency_record_expires_at` (`expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS管理操作幂等记录表';
 
 CREATE TABLE `smart_kms_destruction_job` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '销毁任务主键ID',
-    `tenant_id` VARCHAR(64) NOT NULL COMMENT '待销毁版本所属租户标识',
+    `owner_principal_id` VARCHAR(64) NOT NULL COMMENT '待销毁版本所属 owner 标识',
     `key_id` BIGINT NOT NULL COMMENT '待销毁版本所属逻辑密钥主键ID',
     `key_version` INT UNSIGNED NOT NULL COMMENT '待销毁的精确密钥版本号',
     `state` VARCHAR(32) NOT NULL COMMENT '任务状态：PENDING，CLAIMED，COMPLETED',
@@ -111,17 +112,17 @@ CREATE TABLE `smart_kms_destruction_job` (
     `first_claimed_at` DATETIME(3) DEFAULT NULL COMMENT '首次成功领取UTC时间，一经写入永不清除',
     `attempt_count` INT UNSIGNED NOT NULL COMMENT '已尝试执行销毁的次数',
     `completed_at` DATETIME(3) DEFAULT NULL COMMENT '任务成功完成UTC时间',
-    `created_at` DATETIME(3) NOT NULL COMMENT '任务创建UTC时间',
-    `updated_at` DATETIME(3) NOT NULL COMMENT '任务最近更新UTC时间',
+    `created_at` DATETIME(3) NOT NULL COMMENT '销毁任务创建UTC时间',
+    `updated_at` DATETIME(3) NOT NULL COMMENT '销毁任务最近更新UTC时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_smart_kms_destruction_job_version` (`tenant_id`, `key_id`, `key_version`),
+    UNIQUE KEY `uk_smart_kms_destruction_job_version` (`owner_principal_id`, `key_id`, `key_version`),
     KEY `idx_smart_kms_destruction_job_state_due_at_claim_until_id` (`state`, `due_at`, `claim_until`, `id`),
-    KEY `idx_smart_kms_destruction_job_tenant_id_key_id_key_version_state` (`tenant_id`, `key_id`, `key_version`, `state`),
+    KEY `idx_kms_destroy_owner_key_ver_state` (`owner_principal_id`, `key_id`, `key_version`, `state`),
     CONSTRAINT `fk_smart_kms_destruction_job_key`
-        FOREIGN KEY (`tenant_id`, `key_id`) REFERENCES `smart_kms_key` (`tenant_id`, `id`),
+        FOREIGN KEY (`owner_principal_id`, `key_id`) REFERENCES `smart_kms_key` (`owner_principal_id`, `id`),
     CONSTRAINT `fk_smart_kms_destruction_job_version`
-        FOREIGN KEY (`tenant_id`, `key_id`, `key_version`)
-        REFERENCES `smart_kms_key_version` (`tenant_id`, `key_id`, `version`)
+        FOREIGN KEY (`owner_principal_id`, `key_id`, `key_version`)
+        REFERENCES `smart_kms_key_version` (`owner_principal_id`, `key_id`, `version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS密钥版本销毁任务表';
 
 CREATE TABLE `smart_kms_destruction_worker_state` (
@@ -132,5 +133,14 @@ CREATE TABLE `smart_kms_destruction_worker_state` (
     `updated_at` DATETIME(3) NOT NULL COMMENT 'worker状态最近更新UTC时间',
     PRIMARY KEY (`instance_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS销毁worker实例运行状态表';
+
+CREATE TABLE `smart_kms_owner_destruction_policy` (
+    `owner_principal_id` VARCHAR(160) NOT NULL COMMENT '政策归属owner主体标识(iam:/app:/aksk:前缀形态)',
+    `min_schedule_ahead_seconds` BIGINT UNSIGNED DEFAULT NULL COMMENT '销毁最短提前量秒数(NULL=不设下限)',
+    `max_schedule_ahead_seconds` BIGINT UNSIGNED DEFAULT NULL COMMENT '销毁最长提前量秒数(NULL=不设上限)',
+    `updated_at` DATETIME(3) NOT NULL COMMENT '政策最近写入UTC时间',
+    `row_version` BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
+    PRIMARY KEY (`owner_principal_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='KMS owner级销毁窗口政策表(无行=不限制)';
 
 SET FOREIGN_KEY_CHECKS = 1;

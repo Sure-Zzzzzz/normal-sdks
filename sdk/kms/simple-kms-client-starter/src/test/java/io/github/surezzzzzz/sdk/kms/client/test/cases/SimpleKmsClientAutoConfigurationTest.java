@@ -6,8 +6,8 @@ import io.github.surezzzzzz.sdk.kms.client.configuration.SimpleKmsClientAutoConf
 import io.github.surezzzzzz.sdk.kms.client.exception.KmsClientConfigurationException;
 import io.github.surezzzzzz.sdk.kms.client.model.*;
 import io.github.surezzzzzz.sdk.kms.client.port.KeyEncryptionPort;
-import io.github.surezzzzzz.sdk.kms.client.port.TenantPublicKeyPort;
-import io.github.surezzzzzz.sdk.kms.client.port.TenantSignerPort;
+import io.github.surezzzzzz.sdk.kms.client.port.OwnerPublicKeyPort;
+import io.github.surezzzzzz.sdk.kms.client.port.OwnerSignerPort;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsHttpErrorMapper;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsHttpExecutor;
 import io.github.surezzzzzz.sdk.kms.client.support.KmsJsonCodec;
@@ -73,8 +73,8 @@ class SimpleKmsClientAutoConfigurationTest {
                     assertNotNull(context.getBean(KmsClient.class), "启用后必须创建默认 KmsClient");
                     assertNotNull(context.getBean("simpleKmsClientRestTemplate", RestTemplate.class), "必须创建专属 RestTemplate");
                     assertNotNull(context.getBean(KmsHttpExecutor.class), "必须创建限长执行器");
-                    assertNotNull(context.getBean(TenantSignerPort.class), "默认签名端口必须可注入");
-                    assertNotNull(context.getBean(TenantPublicKeyPort.class), "默认公钥端口必须可注入");
+                    assertNotNull(context.getBean(OwnerSignerPort.class), "默认签名端口必须可注入");
+                    assertNotNull(context.getBean(OwnerPublicKeyPort.class), "默认公钥端口必须可注入");
                     assertNotNull(context.getBean(KeyEncryptionPort.class), "默认加解密端口必须可注入");
                 });
     }
@@ -96,11 +96,11 @@ class SimpleKmsClientAutoConfigurationTest {
     void shouldExposeMinimalPortsForCustomClientWithoutHttpConfiguration() {
         contextRunner.withBean(KmsClient.class, StubKmsClient::new).run(context -> {
             log.info("自定义 Client 时 HTTP transport 是否存在: {}", context.containsBean("simpleKmsClientRestTemplate"));
-            assertTrue(context.containsBean("tenantSignerPort"), "自定义 Client 必须获得默认签名端口");
-            assertTrue(context.containsBean("tenantPublicKeyPort"), "自定义 Client 必须获得默认公钥端口");
+            assertTrue(context.containsBean("ownerSignerPort"), "自定义 Client 必须获得默认签名端口");
+            assertTrue(context.containsBean("ownerPublicKeyPort"), "自定义 Client 必须获得默认公钥端口");
             assertTrue(context.containsBean("keyEncryptionPort"), "自定义 Client 必须获得默认加解密端口");
-            assertNotNull(context.getBean(TenantSignerPort.class), "签名端口必须可注入");
-            assertNotNull(context.getBean(TenantPublicKeyPort.class), "公钥端口必须可注入");
+            assertNotNull(context.getBean(OwnerSignerPort.class), "签名端口必须可注入");
+            assertNotNull(context.getBean(OwnerPublicKeyPort.class), "公钥端口必须可注入");
             assertNotNull(context.getBean(KeyEncryptionPort.class), "加解密端口必须可注入");
             assertFalse(context.containsBean("simpleKmsClientRestTemplate"), "自定义 Client 时不得创建默认 transport");
             assertFalse(context.containsBean("simpleKmsClientHttpClient"), "自定义 Client 时不得创建默认 HTTP 连接池");
@@ -109,13 +109,13 @@ class SimpleKmsClientAutoConfigurationTest {
 
     @Test
     void shouldOnlyReplaceExplicitMinimalPort() {
-        TenantSignerPort customSignerPort = (keyRef, version, signingInput) -> null;
+        OwnerSignerPort customSignerPort = (keyRef, version, signingInput) -> null;
         contextRunner.withBean(KmsClient.class, StubKmsClient::new)
-                .withBean(TenantSignerPort.class, () -> customSignerPort)
+                .withBean(OwnerSignerPort.class, () -> customSignerPort)
                 .run(context -> {
-                    log.info("自定义最小端口后签名端口类型: {}", context.getBean(TenantSignerPort.class).getClass().getName());
-                    assertEquals(customSignerPort, context.getBean(TenantSignerPort.class), "自定义签名端口必须保持优先级");
-                    assertNotNull(context.getBean(TenantPublicKeyPort.class), "其他默认端口不得被自定义签名端口影响");
+                    log.info("自定义最小端口后签名端口类型: {}", context.getBean(OwnerSignerPort.class).getClass().getName());
+                    assertEquals(customSignerPort, context.getBean(OwnerSignerPort.class), "自定义签名端口必须保持优先级");
+                    assertNotNull(context.getBean(OwnerPublicKeyPort.class), "其他默认端口不得被自定义签名端口影响");
                     assertNotNull(context.getBean(KeyEncryptionPort.class), "其他默认端口不得被自定义签名端口影响");
                 });
     }
@@ -195,6 +195,17 @@ class SimpleKmsClientAutoConfigurationTest {
     private static class StubKmsClient implements KmsClient {
         private static UnsupportedOperationException unsupported() {
             return new UnsupportedOperationException();
+        }
+
+        @Override
+        public io.github.surezzzzzz.sdk.kms.client.model.KmsOwnerDestructionPolicy getMyDestructionPolicy() {
+            return io.github.surezzzzzz.sdk.kms.client.model.KmsOwnerDestructionPolicy.builder().build();
+        }
+
+        @Override
+        public io.github.surezzzzzz.sdk.kms.client.model.KmsOwnerDestructionPolicy saveMyDestructionPolicy(
+                Long minScheduleAheadSeconds, Long maxScheduleAheadSeconds) {
+            return io.github.surezzzzzz.sdk.kms.client.model.KmsOwnerDestructionPolicy.builder().build();
         }
 
         @Override

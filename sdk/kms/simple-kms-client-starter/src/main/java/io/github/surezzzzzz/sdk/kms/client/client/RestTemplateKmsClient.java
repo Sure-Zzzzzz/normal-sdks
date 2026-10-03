@@ -301,10 +301,35 @@ public class RestTemplateKmsClient implements KmsClient {
     }
 
     @Override
+    public KmsOwnerDestructionPolicy getMyDestructionPolicy() {
+        return ownerPolicy(executor.execute(uri(path(SimpleKmsClientConstant.RESOURCE_ME,
+                SimpleKmsClientConstant.RESOURCE_DESTRUCTION_POLICY)), HttpMethod.GET, null, null));
+    }
+
+    @Override
+    public KmsOwnerDestructionPolicy saveMyDestructionPolicy(Long minScheduleAheadSeconds, Long maxScheduleAheadSeconds) {
+        Map<String, Object> body = new LinkedHashMap<String, Object>();
+        body.put("minScheduleAheadSeconds", minScheduleAheadSeconds);
+        body.put("maxScheduleAheadSeconds", maxScheduleAheadSeconds);
+        return ownerPolicy(executor.execute(uri(path(SimpleKmsClientConstant.RESOURCE_ME,
+                SimpleKmsClientConstant.RESOURCE_DESTRUCTION_POLICY)), HttpMethod.PUT, null, body));
+    }
+
+    private KmsOwnerDestructionPolicy ownerPolicy(JsonNode node) {
+        return KmsOwnerDestructionPolicy.builder()
+                .exists(node.path("exists").asBoolean(false))
+                .minScheduleAheadSeconds(node.hasNonNull("minScheduleAheadSeconds")
+                        ? Long.valueOf(node.path("minScheduleAheadSeconds").asLong()) : null)
+                .maxScheduleAheadSeconds(node.hasNonNull("maxScheduleAheadSeconds")
+                        ? Long.valueOf(node.path("maxScheduleAheadSeconds").asLong()) : null)
+                .build();
+    }
+
+    @Override
     public KmsKey scheduleDestruction(String idempotencyKey, String keyRef, Instant destroyAfter, Long expectedRowVersion) {
         return key(executePath(SimpleKmsClientConstant.RESOURCE_KEYS, keyRef,
                 SimpleKmsClientConstant.RESOURCE_DESTRUCTION, HttpMethod.PUT, idempotency(idempotencyKey), map(
-                        SimpleKmsClientConstant.FIELD_DESTROY_AFTER, utcMillis(destroyAfter),
+                        SimpleKmsClientConstant.FIELD_DUE_AT, utcMillis(destroyAfter),
                         SimpleKmsClientConstant.FIELD_EXPECTED_ROW_VERSION, value(expectedRowVersion))));
     }
 
