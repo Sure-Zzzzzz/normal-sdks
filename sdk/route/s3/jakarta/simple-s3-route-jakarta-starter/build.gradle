@@ -1,0 +1,7 @@
+dependencies {
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly 'com.amazonaws:aws-java-sdk-s3:1.12.797'
+
+    testImplementation 'com.amazonaws:aws-java-sdk-s3:1.12.797'
+}
