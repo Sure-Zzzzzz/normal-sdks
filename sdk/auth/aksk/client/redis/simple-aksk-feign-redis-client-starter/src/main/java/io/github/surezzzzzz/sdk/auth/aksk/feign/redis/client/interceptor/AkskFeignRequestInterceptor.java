@@ -51,21 +51,21 @@ public class AkskFeignRequestInterceptor implements RequestInterceptor {
 
     @Override
     public void apply(RequestTemplate template) {
-        // debug 埋点：入口记录方法与目标地址，用于排查请求是否被本拦截器处理
-        log.debug("[AKSK-Feign] 拦截请求: {} {}", template.method(), template.url());
+        // DEBUG 埋点仅记录方法，避免 URL Query 进入日志。
+        log.debug("[AKSK-Feign] 拦截请求: {}", template.method());
 
         String token = tokenManager.getToken();
         if (token == null || token.isEmpty()) {
-            log.warn("[AKSK-Feign] TokenManager 未返回可用 Token，本次请求不带 Authorization 头: {}", template.url());
+            log.warn("[AKSK-Feign] TokenManager 未返回可用 Token，本次请求不带 Authorization 头");
         } else {
             // 覆盖 Authorization 头（先移除旧值再写入，避免重复）
             boolean overwritten = template.headers().containsKey(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
             String authorizationValue = String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE, token);
             template.removeHeader(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
             template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION, authorizationValue);
-            // debug 埋点：不记录 Token 值，只记录长度与是否覆盖调用方已有凭证头
-            log.debug("[AKSK-Feign] 已添加 Authorization 头（token 长度={}, 覆盖已有头={}）: {}",
-                    token.length(), overwritten, template.url());
+            // DEBUG 埋点不记录 Token 值或 URL，只记录最小定位事实。
+            log.debug("[AKSK-Feign] 已添加 Authorization 头（token 长度={}, 覆盖已有头={}）",
+                    token.length(), overwritten);
         }
     }
 }

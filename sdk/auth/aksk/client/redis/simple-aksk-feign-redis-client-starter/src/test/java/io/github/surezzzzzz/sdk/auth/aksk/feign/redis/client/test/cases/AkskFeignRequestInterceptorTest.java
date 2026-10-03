@@ -7,14 +7,13 @@ import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.test.SimpleAkskFeig
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.Collection;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -27,7 +26,6 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(classes = SimpleAkskFeignRedisClientTestApplication.class)
 class AkskFeignRequestInterceptorTest {
 
-    @Mock
     private TokenManager tokenManager;
 
     private AkskFeignRequestInterceptor interceptor;
@@ -35,8 +33,7 @@ class AkskFeignRequestInterceptorTest {
     @BeforeEach
     void setUp() {
         log.info("初始化测试环境...");
-        // initMocks（非 3.4+ 的 openMocks）：Spring Boot 2.2/2.3 变体自带 Mockito 3.1/3.3 无 openMocks
-        MockitoAnnotations.initMocks(this);
+        tokenManager = mock(TokenManager.class);
         interceptor = new AkskFeignRequestInterceptor(tokenManager);
         log.info("测试环境初始化完成");
     }

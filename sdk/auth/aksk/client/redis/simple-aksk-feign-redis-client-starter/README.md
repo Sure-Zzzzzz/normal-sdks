@@ -1,8 +1,8 @@
 # Simple AKSK Feign Redis Client Starter
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.1**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
 
-[![Version](https://img.shields.io/badge/version-3.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter,集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
@@ -56,7 +56,7 @@
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-aksk-redis-token-manager:3.0.1` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
+| `simple-aksk-redis-token-manager:3.0.2` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
 | `smart-cache-starter:2.2.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
 | Spring Cloud OpenFeign | `compileOnly`，**使用方必须自行引入** | 声明式 HTTP 客户端 |
 | Spring Boot / Spring Data Redis | `compileOnly`，**使用方必须自行引入** | 自动配置与 Redis 操作 |
@@ -68,11 +68,11 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
 }
 ```
 
-**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.1`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.2`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -93,9 +93,10 @@ dependencies {
 
 | Spring Boot 版本 | Spring Cloud OpenFeign | Feign HttpClient | 说明 |
 |-----------------|----------------------|------------------|------|
-| 2.7.x | 3.1.8 | 11.10 | 推荐，测试通过 |
-| 2.4.x - 2.6.x | 3.0.3 | 10.12 | 兼容 |
-| 2.2.x - 2.3.x | 2.2.9.RELEASE | 10.12 | 兼容 |
+| 2.7.9 | 3.1.8 | 11.10 | 推荐 |
+| 2.4.5 | 3.0.3 | 10.12 | 兼容 |
+| 2.3.12.RELEASE | 2.2.9.RELEASE | 10.12 | 兼容 |
+| 2.2.13.RELEASE | 2.2.9.RELEASE | 10.12 | 兼容 |
 
 **版本说明**：
 - 本 starter 使用 `compileOnly` 声明依赖，不会强制版本
@@ -120,7 +121,7 @@ io:
             sources:
               default:
                 mode: standalone          # 部署模式：standalone 单机 / sentinel 哨兵 / cluster 集群
-                host: localhost
+                host: cache.example.test
                 port: 6379
                 database: 0
                 timeout-ms: 3000          # 命令超时（毫秒）
@@ -130,9 +131,9 @@ io:
           aksk:
             client:
               enable: true                # 本 starter 自动配置开关；false 时不注册认证拦截器
-              client-id: AKP1234567890abcdefgh           # AKSK Client ID（AKSK Server Admin 页面创建）
-              client-secret: SK1234567890abcdefghijklmnopqrstuvwxyz1234   # Client Secret（创建时一次性展示，妥善保存）
-              server-url: http://localhost:8280           # AKSK Server 地址
+              client-id: example-client-id                 # AKSK Client ID
+              client-secret: ${AKSK_CLIENT_SECRET}          # 通过部署环境注入
+              server-url: https://aksk.example.test         # AKSK Server 地址
               token-endpoint: /oauth2/token              # token 端点路径（默认值，一般不改）
               redis:
                 token:
@@ -177,7 +178,7 @@ public class MyApplication {
 最简单的使用方式，开箱即用：
 
 ```java
-@AkskClientFeignClient(name = "my-service", url = "http://localhost:8280")
+@AkskClientFeignClient(name = "resource-service", url = "https://resource.example.test")
 public interface MyServiceClient {
 
     @GetMapping("/api/resource")
@@ -217,8 +218,8 @@ public class MyService {
 
 ```java
 @FeignClient(
-    name = "my-service",
-    url = "http://localhost:8280",
+    name = "resource-service",
+    url = "https://resource.example.test",
     configuration = AkskFeignConfiguration.class
 )
 public interface MyServiceClient {
@@ -306,7 +307,13 @@ AkskFeignRequestInterceptor 拦截请求
 - **Token 缓存**：Token 由 `RedisTokenManager` 缓存在 Redis 中
 - **Token 刷新**：`RedisTokenManager` 会在 Token 过期前自动刷新
 - **无 Token 处理**：如果 Token 为空，拦截器会记录警告并继续请求（不添加 Authorization 头）
-- **调试日志**：`DEBUG` 级别输出两类埋点——请求入口（HTTP 方法 + 目标地址）、加头结果（Token 长度、是否覆盖调用方已有 Authorization 头，不记录 Token 值）。Feign 的 `RequestInterceptor` 只参与请求构建、拿不到响应，因此没有"请求完成"段埋点
+- **调试日志**：`DEBUG` 级别输出两类埋点——请求入口（HTTP 方法）和加头结果（Token 长度、是否覆盖调用方已有 Authorization 头）。Feign 的 `RequestInterceptor` 只参与请求构建、拿不到响应，因此没有“请求完成”段埋点；日志不记录 Token、Client Secret、安全上下文、Authorization、Cookie、完整 URL、URL Query、请求体或响应体。
+
+## 日志与审计边界
+
+- 调用端 DEBUG 用于诊断认证头注入，Token 不可用时输出不含敏感数据的 WARN。
+- 调用端不为每次出站 HTTP 请求发布审计事件。该路径高频，且客户端无法确认目标资源是否实际执行成功。
+- 认证服务负责凭证签发、撤销和生命周期审计；目标资源启用 AKSK 安全上下文后，在认证成功时发布 `AkskAccessEvent`，这是资源访问审计的权威事件。
 
 ## 测试覆盖
 
@@ -340,15 +347,15 @@ AkskFeignRequestInterceptor 拦截请求
 
 ```java
 // 使用 @AkskClientFeignClient（推荐）
-@AkskClientFeignClient(name = "my-service", url = "http://localhost:8280")
+@AkskClientFeignClient(name = "resource-service", url = "https://resource.example.test")
 public interface MyServiceClient {
     // ...
 }
 
 // 等价于
 @FeignClient(
-    name = "my-service",
-    url = "http://localhost:8280",
+    name = "resource-service",
+    url = "https://resource.example.test",
     configuration = AkskFeignConfiguration.class
 )
 public interface MyServiceClient {
@@ -450,6 +457,15 @@ feign:
 - 两个版本可以同时使用，互不冲突
 
 ## 版本历史
+
+### 3.0.2
+
+- 升级运行时传递的 `simple-aksk-redis-token-manager` 3.0.1 → 3.0.2，默认获得 Token 有效期提前失效、Redis 缓存故障失败关闭和固定分片本地锁的修复。
+- 收紧拦截器诊断日志，并完成 Mockito 初始化方式维护；公开 API、请求认证行为和配置键不变。
+- 已完成 Token 获取与受保护接口调用验证（14 项测试，零失败）。
+- 拦截器公开 API、配置键和认证注入逻辑不变，业务代码无需修改。
+
+详见 [CHANGELOG.3.0.2.md](CHANGELOG.3.0.2.md)。
 
 ### 3.0.1
 
