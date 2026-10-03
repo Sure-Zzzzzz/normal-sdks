@@ -1,0 +1,17 @@
+dependencies {
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'com.amazonaws:aws-java-sdk-s3:1.12.797'
+    compileOnly 'com.amazonaws:aws-java-sdk-sts:1.12.797'
+
+    api project(':sdk:route:s3:jakarta:simple-s3-route-jakarta-starter')
+    api project(':sdk:retry:jakarta:task-retry-jakarta-starter')
+
+    testImplementation 'com.amazonaws:aws-java-sdk-s3:1.12.797'
+    testImplementation 'com.amazonaws:aws-java-sdk-sts:1.12.797'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
