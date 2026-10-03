@@ -1,0 +1,295 @@
+package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
+
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.NonNullSecurityContextTestConfiguration;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SensitiveTestAssertions;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.SimpleAkskRedisTokenManagerTestApplication;
+import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
+import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.util.Set;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * RedisTokenManager 并发测试
+ *
+ * <p>验证 SmartCacheManager 内置分布式锁在并发场景下的表现
+ *
+ * @author surezzzzzz
+ */
+@Slf4j
+@SpringBootTest(classes = {
+        SimpleAkskRedisTokenManagerTestApplication.class,
+        NonNullSecurityContextTestConfiguration.class
+})
+class RedisTokenManagerConcurrencyTest {
+
+    @Autowired
+    private RedisTokenManager tokenManager;
+
+    @Autowired
+    private SmartCacheManager cacheManager;
+
+    @Autowired
+    private RedisRouteTemplate redisRouteTemplate;
+
+    @Autowired
+    private SecurityContextProvider securityContextProvider;
+
+    @Value("${io.github.surezzzzzz.sdk.auth.aksk.client.redis.token.cache-name:aksk-client-token}")
+    private String cacheName;
+
+    @BeforeEach
+    void setUp() {
+        cacheManager.clear(cacheName);
+        cleanupTestKeys();
+        verifyTokenEndpointAvailable();
+        cacheManager.clear(cacheName);
+        cleanupTestKeys();
+    }
+
+    @AfterEach
+    void tearDown() {
+        cacheManager.clear(cacheName);
+        cleanupTestKeys();
+    }
+
+    private void cleanupTestKeys() {
+        // 走 Route 数据源（与缓存同库）删键；Boot 自动装配的 StringRedisTemplate 连默认 db，删不到缓存键
+        redisRouteTemplate.execute("sure-auth-aksk-client:", template -> {
+            Set<String> keys = template.keys("sure-auth-aksk-client:*");
+            if (keys != null && !keys.isEmpty()) {
+                template.delete(keys);
+            }
+            return null;
+        });
+    }
+
+    /**
+     * 并发场景依赖真实 Token 端点。先以单请求验证本地凭据，避免凭据失效时 50 个线程把错误放大为超时。
+     */
+    private void verifyTokenEndpointAvailable() {
+        String token = tokenManager.getToken();
+        assertNotNull(token, "本地 AKSK Token 端点及测试凭据必须可用");
+        log.info("Token 端点预检通过");
+    }
+
+    @Test
+    @DisplayName("测试并发获取 Token - 10个线程同时获取")
+    void testConcurrentGetToken() throws InterruptedException {
+        log.info("========== 测试并发获取 Token - 10个线程同时获取 ==========");
+
+        int threadCount = 10;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+        ConcurrentHashMap<Integer, String> tokenMap = new ConcurrentHashMap<>();
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    String token = tokenManager.getToken();
+                    tokenMap.put(threadId, token);
+                    successCount.incrementAndGet();
+                    log.info("线程 {} 获取 Token 成功", threadId);
+                } catch (Exception e) {
+                    log.error("并发 Token 获取失败，线程: {}", threadId);
+                    errorCount.incrementAndGet();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertTrue(endLatch.await(90, TimeUnit.SECONDS), "并发 Token 获取必须在限定时间内结束");
+        executorService.shutdownNow();
+
+        log.info("成功: {}, 失败: {}", successCount.get(), errorCount.get());
+
+        assertEquals(threadCount, successCount.get(), "所有线程都应成功获取 Token");
+        assertEquals(0, errorCount.get(), "不应有失败的线程");
+
+        String firstToken = tokenMap.get(0);
+        assertNotNull(firstToken, "第一个线程应获取到 Token");
+        for (int i = 1; i < threadCount; i++) {
+            SensitiveTestAssertions.assertSameToken(firstToken, tokenMap.get(i), "所有线程获取的 Token 应相同");
+        }
+
+        log.info("✓ 10线程并发获取 Token 一致");
+    }
+
+    @Test
+    @DisplayName("测试并发获取 Token - 50个线程高并发")
+    void testHighConcurrentGetToken() throws InterruptedException {
+        log.info("========== 测试并发获取 Token - 50个线程高并发 ==========");
+
+        int threadCount = 50;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger errorCount = new AtomicInteger(0);
+        ConcurrentHashMap<String, Integer> tokenCountMap = new ConcurrentHashMap<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    String token = tokenManager.getToken();
+                    tokenCountMap.merge(token, 1, Integer::sum);
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    log.error("并发 Token 获取失败，线程: {}", threadId);
+                    errorCount.incrementAndGet();
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertTrue(endLatch.await(90, TimeUnit.SECONDS), "高并发 Token 获取必须在限定时间内结束");
+        executorService.shutdownNow();
+
+        log.info("成功: {}, 失败: {}, 不同 Token 数: {}", successCount.get(), errorCount.get(), tokenCountMap.size());
+
+        assertEquals(threadCount, successCount.get(), "所有线程都应成功获取 Token");
+        assertEquals(0, errorCount.get(), "不应有失败的线程");
+        assertEquals(1, tokenCountMap.size(), "所有线程应获取同一个 Token（分布式锁生效）");
+
+        log.info("✓ 50线程高并发获取 Token 一致");
+    }
+
+    @Test
+    @DisplayName("测试并发清除和获取 Token")
+    void testConcurrentClearAndGetToken() throws InterruptedException {
+        log.info("========== 测试并发清除和获取 Token ==========");
+
+        String initialToken = tokenManager.getToken();
+        assertNotNull(initialToken, "初始 Token 不应为 null");
+        log.info("初始 Token 获取成功");
+
+        int threadCount = 20;
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(threadCount);
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        ConcurrentHashMap<Integer, String> tokenMap = new ConcurrentHashMap<>();
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            final boolean isClearThread = i < 10;
+            executorService.submit(() -> {
+                try {
+                    startLatch.await();
+                    if (isClearThread) {
+                        tokenManager.clearToken();
+                    } else {
+                        String token = tokenManager.getToken();
+                        tokenMap.put(threadId, token);
+                    }
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    log.error("线程 {} 执行失败", threadId, e);
+                } finally {
+                    endLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        assertTrue(endLatch.await(90, TimeUnit.SECONDS), "并发清理和获取必须在限定时间内结束");
+        executorService.shutdownNow();
+
+        log.info("成功操作数: {}, 获取 Token 线程数: {}", successCount.get(), tokenMap.size());
+
+        assertEquals(threadCount, successCount.get(), "所有 20 个操作（10 clear + 10 get）都应成功");
+        assertEquals(10, tokenMap.size(), "10 个 get 线程都应成功获取 Token");
+        for (String token : tokenMap.values()) {
+            assertNotNull(token, "获取的 Token 不应为 null");
+            assertTrue(token.length() > 0, "获取的 Token 不应为空");
+        }
+
+        log.info("✓ 并发清除和获取场景下没有异常");
+    }
+
+    @Test
+    @DisplayName("测试并发安全性 - 所有线程共享同一 SecurityContext 时获取相同 Token")
+    void testConcurrentGetTokenWithSameSecurityContext() throws InterruptedException {
+        log.info("========== 测试并发安全性 ==========");
+
+        int userCount = 3;
+        int threadsPerUser = 10;
+        int totalThreads = userCount * threadsPerUser;
+
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch endLatch = new CountDownLatch(totalThreads);
+        ExecutorService executorService = Executors.newFixedThreadPool(totalThreads);
+
+        ConcurrentHashMap<Integer, Set<String>> userTokensMap = new ConcurrentHashMap<>();
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        for (int userId = 0; userId < userCount; userId++) {
+            final int currentUserId = userId;
+            userTokensMap.put(currentUserId, ConcurrentHashMap.newKeySet());
+
+            for (int threadId = 0; threadId < threadsPerUser; threadId++) {
+                executorService.submit(() -> {
+                    try {
+                        startLatch.await();
+                        String token = tokenManager.getToken();
+                        userTokensMap.get(currentUserId).add(token);
+                        successCount.incrementAndGet();
+                    } catch (Exception e) {
+                        log.error("安全上下文 Token 获取失败");
+                    } finally {
+                        endLatch.countDown();
+                    }
+                });
+            }
+        }
+
+        startLatch.countDown();
+        assertTrue(endLatch.await(90, TimeUnit.SECONDS), "多安全上下文并发获取必须在限定时间内结束");
+        executorService.shutdownNow();
+
+        assertEquals(totalThreads, successCount.get(), "所有线程都应成功获取 Token");
+
+        // nonNullSecurityContext profile 下 SecurityContextProvider 返回 TEST_SECURITY_CONTEXT
+        String expectedSecurityContext = securityContextProvider.getSecurityContext();
+        assertNotNull(expectedSecurityContext, "nonNullSecurityContext profile 应返回非 null securityContext");
+        String expectedCacheKey = CacheKeyHelper.generate(expectedSecurityContext);
+        String actualCacheKey = CacheKeyHelper.generate(expectedSecurityContext);
+        assertEquals(expectedCacheKey, actualCacheKey, "cacheKey 应由 CacheKeyHelper 确定性生成");
+
+        Set<String> allTokens = userTokensMap.values().stream()
+                .flatMap(Set::stream)
+                .collect(Collectors.toSet());
+        assertEquals(1, allTokens.size(), "所有线程应获取同一个 Token");
+
+        log.info("✓ 并发安全性验证通过，安全上下文缓存键保持确定性");
+    }
+}

@@ -1,0 +1,66 @@
+spring:
+  profiles:
+    # local profile 加载 application-local.yml（凭据）；SB 2.4 前没有 spring.config.import，
+    # 四版本矩阵统一走 profile 机制，带 @ActiveProfiles 的测试类需显式附带 "local"
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 4
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+
+        # lock 1.2.2 起模板让位：容器存在 route 接管的标准 stringRedisTemplate 时不再自建
+        # simpleRedisLockRedisTemplate，无需显式 lock.redis.route 开关
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://localhost:8280
+              token-endpoint: /oauth2/token
+              # client-id 和 client-secret 请在 application-local.yml 中配置
+              redis:
+                token:
+                  cache-name: aksk-client-token
+
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: redis-token-manager-test
+          lock:
+            # 并发测试在锁未命中时只验证短暂 L2 等待，避免继承生产长超时拖慢失败定位。
+            timeout-seconds: 5
+          route:
+            # 测试隔离依赖 cacheManager.clear 扫删 L2；不开启时 clear 对 L2 是 no-op
+            scan-enabled: true
+          l1:
+            enabled: true
+            expire-seconds: 2
+            max-size: 1000
+          l2:
+            enabled: true
+            expire-seconds: 3600
+            preload:
+              enabled: true
+              before-expire-seconds: 60
+          consistency:
+            mode: strong
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
+    io.github.surezzzzzz.sdk.cache: DEBUG
+
+# 本地测试配置: 请复制 application-local.yml.example 为 application-local.yml 并填入真实配置
+# Spring Boot 会自动加载 application-local.yml (如果存在)
