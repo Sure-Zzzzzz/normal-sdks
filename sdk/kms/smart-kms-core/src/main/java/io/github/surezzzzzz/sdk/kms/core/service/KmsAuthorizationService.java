@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal;
 /**
  * KMS 授权服务。
  *
- * <p>实现必须同时检查 scope 与未过期的精确 allow-only policy；tenant 只允许从
+ * <p>实现必须同时检查 scope 与未过期的精确 allow-only policy；ownerPrincipalId 只允许从
  * {@link KmsPrincipal} 派生，不能由请求体、查询参数或 HTTP Header 覆盖。</p>
  *
  * @author surezzzzzz

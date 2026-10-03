@@ -1,12 +1,12 @@
 # smart-kms-core
 
-`smart-kms-core` 定义 KMS 1.0 的纯 Java 8 领域契约：密钥及版本状态、精确授权、幂等、销毁任务、审计安全边界、ES256 JOSE 编码和
+`smart-kms-core` 定义 KMS 2.0 的纯 Java 8 领域契约：密钥及版本状态、精确授权、幂等、销毁任务、审计安全边界、ES256 JOSE 编码和
 AES-GCM `SKMS` v1 封装。
 
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:smart-kms-core:1.0.1'
+implementation 'io.github.sure-zzzzzz:smart-kms-core:2.0.0'
 ```
 
 公开 Java API 根包为 `io.github.surezzzzzz.sdk.kms.core`。
@@ -20,13 +20,16 @@ KMS 服务及其专属 MySQL 是可信边界。本模块不实现 KEK、DEK、�
 
 ## 关键约束
 
-- 所有 tenant 身份仅从 `KmsPrincipal` 派生。
+- 所有归属身份仅从 `KmsPrincipal` 的 `ownerPrincipalId`（`sourceId:subjectId` 形态）派生，core 不感知 IAM/AKSK。
 - 授权同时要求服务 scope 与精确 allow-only policy。
 - 密钥材料、明文、密文、签名、AAD、凭据和异常链不得出现在对外模型、审计或日志中。
-- `KmsAuditEvent` 必须包含有效 tenant、主体、操作、结果、请求标识和发生时间；仅创建密钥在分配 `keyRef` 前被拒绝或失败时可同时省略
+- `KmsAuditEvent` 必须包含有效 owner、主体、操作、结果、请求标识和发生时间；仅创建密钥在分配 `keyRef` 前被拒绝或失败时可同时省略
   `keyRef` 与版本，其他事件均必须关联资源。`PROCESS_KEY_DESTRUCTION` 必须关联正版本号。事件仅接受固定操作与安全 metadata：资源类型、密钥或版本状态、输入或
   输出长度、失败类别和幂等重放标记；任意其他 metadata 均会被 Core 拒绝。
-- `PROCESS_KEY_DESTRUCTION` 只能使用固定 `KMS_SYSTEM` 主体；其他操作不得冒用该主体。精确 key policy 必须具备有效 policyId、tenant、keyRef 与主体标识；可选版本存在时必须为正整数；仅可授权密码学或公钥读取操作，管理与 worker 操作不进入 policy。
+- `PROCESS_KEY_DESTRUCTION` 只能使用固定 `KMS_SYSTEM` 主体；其他操作不得冒用该主体。精确 key policy 必须具备有效 policyId、ownerPrincipalId、keyRef 与主体标识；可选版本存在时必须为正整数；仅可授权密码学或公钥读取操作，管理与 worker 操作不进入 policy。
 - `KmsAuditOutcome.ALLOWED` 表示操作已正常完成，验签结果为 `false` 时同样使用该结果，且不得携带 `failureCategory`；`REJECTED` 与
   `FAILED` 分别表示拒绝和未完成失败，均必须携带固定 `failureCategory`。
 - `SKMS` v1 仅描述 AES-256-GCM 密文封装；实际加解密由 server 适配器完成。
+- **owner 级销毁窗口政策**（2.0 新增）：`KmsOwnerDestructionPolicy` 模型与 `KmsOwnerDestructionPolicyRepository`
+  接口——min/max 提前量均可空（空=不限制），无行=能力态默认；窗口强校验（闭区间 `now+min ≤ dueAt ≤ now+max`）
+  与审计由 server 侧执行，core 只定义模型契约。

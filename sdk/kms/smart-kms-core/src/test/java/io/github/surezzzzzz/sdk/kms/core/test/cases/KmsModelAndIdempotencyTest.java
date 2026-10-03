@@ -25,7 +25,7 @@ import java.util.Map;
 @Slf4j
 class KmsModelAndIdempotencyTest {
 
-    private static final String TENANT_ID = "tenant-a";
+    private static final String OWNER_PRINCIPAL_ID = "iam:10001";
     private static final String PRINCIPAL_ID = "principal-a";
     private static final String KEY_REF = "key-ref-a";
     private static final String ENDPOINT = "key-create";
@@ -42,13 +42,13 @@ class KmsModelAndIdempotencyTest {
         metadata.put(SmartKmsCoreConstant.AUDIT_METADATA_KEY_RESOURCE_TYPE,
                 SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY);
 
-        KmsKeyVersion keyVersion = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion keyVersion = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.ES256, KmsKeyVersionState.ACTIVE,
                 null, privateMaterial, null, publicMaterial, null);
         KmsPublicKey publicKey = new KmsPublicKey(KEY_REF, SmartKmsCoreConstant.ONE,
                 KmsAlgorithm.ES256, KmsKeyVersionState.ACTIVE, publicMaterial);
         KmsAuditEvent auditEvent = KmsAuditEvent.builder()
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.SIGN)
@@ -103,7 +103,7 @@ class KmsModelAndIdempotencyTest {
         validMetadata.put(SmartKmsCoreConstant.AUDIT_METADATA_KEY_IDEMPOTENCY_REPLAY,
                 SmartKmsCoreConstant.AUDIT_BOOLEAN_FALSE);
 
-        KmsAuditEvent event = createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID,
+        KmsAuditEvent event = createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID,
                 KmsOperation.SIGN, KmsAuditOutcome.FAILED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z"), validMetadata);
         Assertions.assertEquals(SmartKmsCoreConstant.AUDIT_METADATA_MAX_ENTRIES,
@@ -149,31 +149,31 @@ class KmsModelAndIdempotencyTest {
                 SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY)));
         assertAuditEventRejected(null, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, null, PRINCIPAL_ID, KmsOperation.SIGN,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, null, PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, null, PRINCIPAL_ID,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, null, PRINCIPAL_ID,
                 KmsOperation.CREATE_KEY, KmsAuditOutcome.REJECTED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z")));
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, null, PRINCIPAL_ID,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, null, PRINCIPAL_ID,
                 KmsOperation.CREATE_KEY, KmsAuditOutcome.FAILED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z")));
-        assertAuditEventRejected(TENANT_ID, null, PRINCIPAL_ID, KmsOperation.CREATE_KEY,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, null, PRINCIPAL_ID, KmsOperation.CREATE_KEY,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID,
                 KmsOperation.CREATE_KEY, KmsAuditOutcome.ALLOWED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z")));
-        assertAuditEventRejected(TENANT_ID, KEY_REF, null, KmsOperation.SIGN,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, null, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF, PRINCIPAL_ID, null,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, null,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
                 null, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, null, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, null);
         Assertions.assertThrows(KmsValidationException.class, () -> KmsAuditEvent.builder()
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .keyVersion(SmartKmsCoreConstant.ZERO)
                 .principalId(PRINCIPAL_ID)
@@ -182,22 +182,22 @@ class KmsModelAndIdempotencyTest {
                 .requestId(REQUEST_ID)
                 .occurredAt(Instant.parse("2026-07-23T00:00:00Z"))
                 .build(), "审计版本必须为正整数");
-        assertAuditEventRejected(TENANT_ID, KEY_REF, PRINCIPAL_ID,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID,
                 KmsOperation.PROCESS_KEY_DESTRUCTION, KmsAuditOutcome.ALLOWED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.AUDIT_SYSTEM_PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        assertAuditEventRejected(TENANT_ID, KEY_REF,
+        assertAuditEventRejected(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.AUDIT_SYSTEM_PRINCIPAL_ID, KmsOperation.PROCESS_KEY_DESTRUCTION,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"));
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, KEY_REF,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, SmartKmsCoreConstant.AUDIT_SYSTEM_PRINCIPAL_ID,
                 KmsOperation.PROCESS_KEY_DESTRUCTION, KmsAuditOutcome.ALLOWED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z"), singleMetadata(
                         SmartKmsCoreConstant.AUDIT_METADATA_KEY_RESOURCE_TYPE,
                         SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY_VERSION)));
-        Assertions.assertThrows(KmsValidationException.class, () -> createAuditEvent(TENANT_ID, null,
+        Assertions.assertThrows(KmsValidationException.class, () -> createAuditEvent(OWNER_PRINCIPAL_ID, null,
                         SmartKmsCoreConstant.ONE, PRINCIPAL_ID, KmsOperation.CREATE_KEY,
                         KmsAuditOutcome.REJECTED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"),
                         singleMetadata(SmartKmsCoreConstant.AUDIT_METADATA_KEY_FAILURE_CATEGORY,
@@ -208,10 +208,10 @@ class KmsModelAndIdempotencyTest {
     @Test
     void shouldRequireFailureCategoryOnlyForNonAllowedAuditEvent() {
         log.info("校验审计结果与失败类别一致性");
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID,
                 KmsOperation.SIGN, KmsAuditOutcome.REJECTED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z")));
-        Assertions.assertDoesNotThrow(() -> createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID,
+        Assertions.assertDoesNotThrow(() -> createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID,
                 KmsOperation.SIGN, KmsAuditOutcome.FAILED, REQUEST_ID,
                 Instant.parse("2026-07-23T00:00:00Z")));
         assertAuditEventMetadataRejected(KmsAuditOutcome.REJECTED, null);
@@ -224,18 +224,18 @@ class KmsModelAndIdempotencyTest {
     @Test
     void shouldValidateAlgorithmSpecificKeyMaterial() {
         log.info("校验 ES256 和 AES-256-GCM 材料规则");
-        KmsKeyVersion es256 = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion es256 = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.ES256, KmsKeyVersionState.ACTIVE,
                 null, new byte[]{SmartKmsCoreConstant.ONE}, null,
                 new byte[]{SmartKmsCoreConstant.ASN1_INTEGER_TAG}, null);
-        KmsKeyVersion aes = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion aes = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.AES_256_GCM,
                 KmsKeyVersionState.ACTIVE, null, null,
                 new byte[SmartKmsCoreConstant.AES_256_KEY_LENGTH], null, null);
-        KmsKeyVersion invalidEs256 = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion invalidEs256 = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.ES256, KmsKeyVersionState.ACTIVE,
                 null, null, null, new byte[]{SmartKmsCoreConstant.ONE}, null);
-        KmsKeyVersion invalidAes = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion invalidAes = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.AES_256_GCM,
                 KmsKeyVersionState.ACTIVE, null, null,
                 new byte[SmartKmsCoreConstant.AES_256_KEY_LENGTH - SmartKmsCoreConstant.ONE], null, null);
@@ -252,13 +252,13 @@ class KmsModelAndIdempotencyTest {
     void shouldAllowOnlyMaterialFreeDestroyedVersionWithDestructionTime() {
         log.info("校验已销毁版本材料和时间边界");
         Instant destroyedAt = Instant.parse("2026-07-23T00:00:00Z");
-        KmsKeyVersion destroyed = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion destroyed = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.ES256, KmsKeyVersionState.DESTROYED,
                 KmsKeyVersionState.ACTIVE, null, null, null, destroyedAt);
-        KmsKeyVersion missingDestroyedAt = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion missingDestroyedAt = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.ES256, KmsKeyVersionState.DESTROYED,
                 KmsKeyVersionState.ACTIVE, null, null, null, null);
-        KmsKeyVersion destroyedWithMaterial = new KmsKeyVersion(TENANT_ID, KEY_REF,
+        KmsKeyVersion destroyedWithMaterial = new KmsKeyVersion(OWNER_PRINCIPAL_ID, KEY_REF,
                 SmartKmsCoreConstant.ONE, KmsAlgorithm.AES_256_GCM, KmsKeyVersionState.DESTROYED,
                 KmsKeyVersionState.ACTIVE, null, new byte[SmartKmsCoreConstant.AES_256_KEY_LENGTH],
                 null, destroyedAt);
@@ -275,37 +275,37 @@ class KmsModelAndIdempotencyTest {
     void shouldReplayOnlyExactIdempotencyRecordAndRejectHashConflict() {
         log.info("校验幂等重放和摘要冲突");
         KmsIdempotencyRecord record = KmsIdempotencyRecord.builder()
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .principalId(PRINCIPAL_ID)
                 .endpoint(ENDPOINT)
                 .idempotencyKey(IDEMPOTENCY_KEY)
                 .requestHash(REQUEST_HASH)
                 .build();
 
-        Assertions.assertTrue(KmsIdempotencyHelper.isReplayable(record, TENANT_ID,
+        Assertions.assertTrue(KmsIdempotencyHelper.isReplayable(record, OWNER_PRINCIPAL_ID,
                 PRINCIPAL_ID, ENDPOINT, IDEMPOTENCY_KEY, REQUEST_HASH));
-        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, "tenant-b",
+        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, "iam:10002",
                 PRINCIPAL_ID, ENDPOINT, IDEMPOTENCY_KEY, REQUEST_HASH));
-        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, TENANT_ID,
+        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, OWNER_PRINCIPAL_ID,
                 "principal-b", ENDPOINT, IDEMPOTENCY_KEY, REQUEST_HASH));
-        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, TENANT_ID,
+        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(record, OWNER_PRINCIPAL_ID,
                 PRINCIPAL_ID, "key-rotate", IDEMPOTENCY_KEY, REQUEST_HASH));
-        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(null, TENANT_ID,
+        Assertions.assertFalse(KmsIdempotencyHelper.isReplayable(null, OWNER_PRINCIPAL_ID,
                 PRINCIPAL_ID, ENDPOINT, IDEMPOTENCY_KEY, REQUEST_HASH));
         Assertions.assertThrows(KmsIdempotencyConflictException.class,
-                () -> KmsIdempotencyHelper.isReplayable(record, TENANT_ID, PRINCIPAL_ID,
+                () -> KmsIdempotencyHelper.isReplayable(record, OWNER_PRINCIPAL_ID, PRINCIPAL_ID,
                         ENDPOINT, IDEMPOTENCY_KEY, "request-hash-b"));
     }
 
     private KmsAuditEvent createAuditEvent(Map<String, String> metadata) {
-        return createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
+        return createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN,
                 KmsAuditOutcome.ALLOWED, REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"), metadata);
     }
 
-    private KmsAuditEvent createAuditEvent(String tenantId, String keyRef, String principalId,
+    private KmsAuditEvent createAuditEvent(String ownerPrincipalId, String keyRef, String principalId,
                                            KmsOperation operation, KmsAuditOutcome outcome,
                                            String requestId, Instant occurredAt) {
-        return createAuditEvent(tenantId, keyRef, principalId, operation, outcome, requestId, occurredAt,
+        return createAuditEvent(ownerPrincipalId, keyRef, principalId, operation, outcome, requestId, occurredAt,
                 defaultAuditMetadata(outcome));
     }
 
@@ -318,20 +318,20 @@ class KmsModelAndIdempotencyTest {
                 SmartKmsCoreConstant.AUDIT_FAILURE_CATEGORY_VALIDATION);
     }
 
-    private KmsAuditEvent createAuditEvent(String tenantId, String keyRef, String principalId,
+    private KmsAuditEvent createAuditEvent(String ownerPrincipalId, String keyRef, String principalId,
                                            KmsOperation operation, KmsAuditOutcome outcome,
                                            String requestId, Instant occurredAt,
                                            Map<String, String> metadata) {
-        return createAuditEvent(tenantId, keyRef, null, principalId, operation, outcome, requestId,
+        return createAuditEvent(ownerPrincipalId, keyRef, null, principalId, operation, outcome, requestId,
                 occurredAt, metadata);
     }
 
-    private KmsAuditEvent createAuditEvent(String tenantId, String keyRef, Integer keyVersion,
+    private KmsAuditEvent createAuditEvent(String ownerPrincipalId, String keyRef, Integer keyVersion,
                                            String principalId, KmsOperation operation,
                                            KmsAuditOutcome outcome, String requestId, Instant occurredAt,
                                            Map<String, String> metadata) {
         return KmsAuditEvent.builder()
-                .tenantId(tenantId)
+                .ownerPrincipalId(ownerPrincipalId)
                 .keyRef(keyRef)
                 .keyVersion(keyVersion)
                 .principalId(principalId)
@@ -343,11 +343,11 @@ class KmsModelAndIdempotencyTest {
                 .build();
     }
 
-    private void assertAuditEventRejected(String tenantId, String keyRef, String principalId,
+    private void assertAuditEventRejected(String ownerPrincipalId, String keyRef, String principalId,
                                           KmsOperation operation, KmsAuditOutcome outcome,
                                           String requestId, Instant occurredAt) {
         KmsValidationException exception = Assertions.assertThrows(KmsValidationException.class,
-                () -> createAuditEvent(tenantId, keyRef, principalId, operation, outcome, requestId,
+                () -> createAuditEvent(ownerPrincipalId, keyRef, principalId, operation, outcome, requestId,
                         occurredAt), "缺失或伪造审计骨架字段必须被拒绝");
         Assertions.assertEquals(ErrorCode.VALIDATION_FAILED, exception.getErrorCode());
     }
@@ -367,7 +367,7 @@ class KmsModelAndIdempotencyTest {
 
     private void assertAuditEventMetadataRejected(KmsAuditOutcome outcome, Map<String, String> metadata) {
         KmsValidationException exception = Assertions.assertThrows(KmsValidationException.class,
-                () -> createAuditEvent(TENANT_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN, outcome,
+                () -> createAuditEvent(OWNER_PRINCIPAL_ID, KEY_REF, PRINCIPAL_ID, KmsOperation.SIGN, outcome,
                         REQUEST_ID, Instant.parse("2026-07-23T00:00:00Z"), metadata),
                 "审计结果与失败类别不一致时必须被拒绝");
         Assertions.assertEquals(ErrorCode.VALIDATION_FAILED, exception.getErrorCode(),

@@ -14,7 +14,7 @@ import java.util.Map;
 /**
  * 安全审计事件。
  *
- * <p>该模型只能携带审计红线允许的主体、tenant、资源、操作、结果、时间、请求标识和安全元数据。
+ * <p>该模型只能携带审计红线允许的主体、ownerPrincipalId、资源、操作、结果、时间、请求标识和安全元数据。
  * metadata 仅接受固定白名单和值格式；密码材料、明文、密文、签名、AAD、请求正文、凭据、SQL、
  * Provider 细节和异常链均不能通过本模型边界。</p>
  *
@@ -24,9 +24,9 @@ import java.util.Map;
 public final class KmsAuditEvent {
 
     /**
-     * 发生操作的 tenant。
+     * 发生操作的 ownerPrincipalId。
      */
-    private final String tenantId;
+    private final String ownerPrincipalId;
     /**
      * 操作关联的逻辑密钥标识；创建密钥在分配标识前被拒绝或失败时为 {@code null}。
      */
@@ -63,21 +63,21 @@ public final class KmsAuditEvent {
     /**
      * 创建安全审计事件并防御性复制元数据。
      *
-     * @param tenantId    操作 tenant
-     * @param keyRef      逻辑密钥标识；仅创建密钥在分配标识前被拒绝或失败时可与版本一同为 {@code null}
-     * @param keyVersion  密钥版本；最终销毁必须为正整数，未关联具体版本时为 {@code null}
-     * @param principalId 认证主体标识
-     * @param operation   KMS 操作
-     * @param outcome     审计结果
-     * @param requestId   请求标识
-     * @param occurredAt  发生时间
-     * @param metadata    已按审计红线筛选的安全元数据，可为 {@code null}
+     * @param ownerPrincipalId 操作所属 ownerPrincipalId
+     * @param keyRef           逻辑密钥标识；仅创建密钥在分配标识前被拒绝或失败时可与版本一同为 {@code null}
+     * @param keyVersion       密钥版本；最终销毁必须为正整数，未关联具体版本时为 {@code null}
+     * @param principalId      认证主体标识
+     * @param operation        KMS 操作
+     * @param outcome          审计结果
+     * @param requestId        请求标识
+     * @param occurredAt       发生时间
+     * @param metadata         已按审计红线筛选的安全元数据，可为 {@code null}
      */
     @Builder
-    public KmsAuditEvent(String tenantId, String keyRef, Integer keyVersion, String principalId,
+    public KmsAuditEvent(String ownerPrincipalId, String keyRef, Integer keyVersion, String principalId,
                          KmsOperation operation, KmsAuditOutcome outcome, String requestId,
                          Instant occurredAt, Map<String, String> metadata) {
-        this.tenantId = KmsValidationHelper.requireTenantId(tenantId);
+        this.ownerPrincipalId = KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId);
         this.keyRef = keyRef == null ? null : KmsValidationHelper.requireKeyRef(keyRef);
         if (keyVersion != null && keyVersion.intValue() <= SmartKmsCoreConstant.ZERO) {
             throw new KmsValidationException();

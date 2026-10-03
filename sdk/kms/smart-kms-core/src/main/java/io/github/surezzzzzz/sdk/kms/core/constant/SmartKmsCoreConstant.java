@@ -103,10 +103,6 @@ public final class SmartKmsCoreConstant {
      */
     public static final int ES256_COORDINATE_MAX_DER_LENGTH = ES256_COORDINATE_LENGTH + 1;
     /**
-     * tenantId 最大长度。
-     */
-    public static final int TENANT_ID_MAX_LENGTH = 64;
-    /**
      * principalId 最大长度。
      */
     public static final int PRINCIPAL_ID_MAX_LENGTH = 128;

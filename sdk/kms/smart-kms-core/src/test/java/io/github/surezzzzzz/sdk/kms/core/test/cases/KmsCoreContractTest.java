@@ -25,7 +25,7 @@ import java.util.Collections;
 @Slf4j
 class KmsCoreContractTest {
 
-    private static final String TENANT_ID = "tenant-a";
+    private static final String OWNER_PRINCIPAL_ID = "iam:10001";
     private static final String PRINCIPAL_ID = "principal-a";
     private static final String KEY_REF = "key-ref-a";
     private static final String POLICY_ID = "policy-a";
@@ -143,12 +143,12 @@ class KmsCoreContractTest {
     @Test
     void shouldMatchOnlyExactUnexpiredPolicy() {
         log.info("校验 allow-only 策略精确匹配");
-        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, TENANT_ID,
+        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, OWNER_PRINCIPAL_ID,
                 Collections.<String>emptySet());
         Instant now = Instant.parse("2026-07-23T00:00:00Z");
         KmsKeyPolicy policy = KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .keyVersion(VERSION)
@@ -165,27 +165,27 @@ class KmsCoreContractTest {
         Assertions.assertFalse(KmsAuthorizationHelper.matches(policy, principal, "key-ref-b",
                 VERSION, KmsOperation.SIGN, now));
         Assertions.assertFalse(KmsAuthorizationHelper.matches(policy, new KmsPrincipal("principal-b",
-                TENANT_ID, Collections.<String>emptySet()), KEY_REF, VERSION, KmsOperation.SIGN, now));
+                OWNER_PRINCIPAL_ID, Collections.<String>emptySet()), KEY_REF, VERSION, KmsOperation.SIGN, now));
         Assertions.assertFalse(KmsAuthorizationHelper.matches(policy, principal, KEY_REF,
                 VERSION, KmsOperation.SIGN, now.plusSeconds(SmartKmsCoreConstant.ONE)));
         Assertions.assertFalse(KmsAuthorizationHelper.matches(policy, principal, KEY_REF,
                 VERSION, null, now));
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.CREATE_KEY)
                 .build(), "管理操作不得进入精确密钥策略");
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.PROCESS_KEY_DESTRUCTION)
                 .build(), "销毁 worker 操作不得进入精确密钥策略");
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.SIGN)
@@ -195,22 +195,22 @@ class KmsCoreContractTest {
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.SIGN)
-                .build(), "策略必须具备 tenant");
+                .build(), "策略必须具备 ownerPrincipalId");
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .principalId(PRINCIPAL_ID)
                 .operation(KmsOperation.SIGN)
                 .build(), "策略必须关联逻辑密钥");
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .operation(KmsOperation.SIGN)
                 .build(), "策略必须关联主体");
         Assertions.assertThrows(KmsValidationException.class, () -> KmsKeyPolicy.builder()
                 .policyId(POLICY_ID)
-                .tenantId(TENANT_ID)
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID)
                 .keyRef(KEY_REF)
                 .principalId(PRINCIPAL_ID)
                 .keyVersion(SmartKmsCoreConstant.ZERO)
@@ -222,13 +222,13 @@ class KmsCoreContractTest {
     void shouldValidateIdentifiersAtBoundary() {
         log.info("校验领域标识输入边界");
 
-        Assertions.assertEquals(TENANT_ID, KmsValidationHelper.requireTenantId(TENANT_ID));
+        Assertions.assertEquals(OWNER_PRINCIPAL_ID, KmsValidationHelper.requireOwnerPrincipalId(OWNER_PRINCIPAL_ID));
         Assertions.assertThrows(KmsValidationException.class,
-                () -> KmsValidationHelper.requireTenantId(null));
+                () -> KmsValidationHelper.requireOwnerPrincipalId(null));
         Assertions.assertThrows(KmsValidationException.class,
                 () -> KmsValidationHelper.requirePrincipalId(""));
         Assertions.assertThrows(KmsValidationException.class,
-                () -> KmsValidationHelper.requireTenantId(" \t"));
+                () -> KmsValidationHelper.requireOwnerPrincipalId(" \t"));
         Assertions.assertThrows(KmsValidationException.class,
                 () -> KmsValidationHelper.requireKeyRef("key\nref"));
         Assertions.assertThrows(KmsValidationException.class,

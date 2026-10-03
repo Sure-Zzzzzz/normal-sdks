@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal;
 /**
  * KMS 密码学操作服务。
  *
- * <p>所有方法以已认证主体和 requestId 作为输入，tenant 只从主体派生。实现必须先完成状态、scope、
+ * <p>所有方法以已认证主体和 requestId 作为输入，ownerPrincipalId 只从主体派生。实现必须先完成状态、scope、
  * 精确 policy 和审计约束，再调用密码学引擎；不得将失败原因或密码学材料回传给调用方。</p>
  *
  * @author surezzzzzz

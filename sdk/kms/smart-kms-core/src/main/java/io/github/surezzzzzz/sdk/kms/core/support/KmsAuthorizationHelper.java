@@ -27,7 +27,7 @@ public final class KmsAuthorizationHelper {
      * <p>未指定版本表示匹配当前逻辑密钥的任意非销毁版本；到期瞬间及之后均不再匹配。</p>
      *
      * @param policy    待判定策略
-     * @param principal 已认证主体，tenant 只能从此对象获得
+     * @param principal 已认证主体
      * @param keyRef    目标逻辑密钥标识
      * @param version   目标版本号
      * @param operation 目标操作
@@ -42,7 +42,6 @@ public final class KmsAuthorizationHelper {
                 && now != null
                 && isPolicyOperation(operation)
                 && isPolicyOperation(policy.getOperation())
-                && policy.getTenantId().equals(principal.getTenantId())
                 && policy.getPrincipalId().equals(principal.getPrincipalId())
                 && policy.getKeyRef().equals(keyRef)
                 && policy.getOperation() == operation

@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * 密钥管理服务。
  *
- * <p>所有管理变更均从 {@link KmsPrincipal} 派生 tenant，必须携带幂等键并以行版本控制并发更新。
+ * <p>所有管理变更均记录 {@link KmsPrincipal} 作为操作主体，必须携带幂等键并以行版本控制并发更新。
  * 状态迁移必须由服务端依据领域状态机校验；销毁排程和取消排程仍通过独立接口承载任务语义。</p>
  *
  * @author surezzzzzz
@@ -29,7 +29,7 @@ public interface KeyManagementService {
     KmsKey create(KmsPrincipal principal, KmsKey key, String idempotencyKey, String requestId);
 
     /**
-     * 查询当前 tenant 下的逻辑密钥。
+     * 查询指定逻辑密钥。
      *
      * @param principal 已认证管理主体
      * @param keyRef    逻辑密钥标识
@@ -39,7 +39,7 @@ public interface KeyManagementService {
     KmsKey find(KmsPrincipal principal, String keyRef, String requestId);
 
     /**
-     * 查询当前 tenant 下的逻辑密钥集合。
+     * 查询已授权范围内的逻辑密钥集合。
      *
      * @param principal 已认证管理主体
      * @param requestId 用于安全审计的请求标识

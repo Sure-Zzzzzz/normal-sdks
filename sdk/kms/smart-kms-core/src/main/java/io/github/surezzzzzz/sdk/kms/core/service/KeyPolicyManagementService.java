@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * 密钥策略管理服务。
  *
- * <p>策略只表达当前 tenant 下某主体、密钥、可选单版本和操作的精确 allow 授权；创建与撤销均为
+ * <p>策略只表达某主体、密钥、可选单版本和操作的精确 allow 授权；创建与撤销均为
  * 管理变更，必须在状态、幂等和审计提交后才可返回成功。</p>
  *
  * @author surezzzzzz
@@ -22,7 +22,7 @@ public interface KeyPolicyManagementService {
                         String requestId);
 
     /**
-     * 查询当前 tenant 和逻辑密钥下的全部策略。
+     * 查询逻辑密钥下的全部策略。
      */
     List<KmsKeyPolicy> list(KmsPrincipal principal, String keyRef, String requestId);
 

@@ -58,6 +58,7 @@ public enum KmsOperation {
      * 撤销密钥精确授权策略。
      */
     REVOKE_KEY_POLICY("REVOKE_KEY_POLICY", "撤销密钥策略"),
+    SET_OWNER_DESTRUCTION_POLICY("SET_OWNER_DESTRUCTION_POLICY", "设置销毁窗口政策"),
     /**
      * 销毁 worker 处理到期密钥版本。
      */

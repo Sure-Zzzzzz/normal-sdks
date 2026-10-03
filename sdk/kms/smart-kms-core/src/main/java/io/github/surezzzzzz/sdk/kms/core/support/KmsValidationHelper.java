@@ -18,16 +18,6 @@ public final class KmsValidationHelper {
     }
 
     /**
-     * 校验 tenant 标识。
-     *
-     * @param value tenant 标识
-     * @return 原始 tenant 标识
-     */
-    public static String requireTenantId(String value) {
-        return requireText(value, SmartKmsCoreConstant.TENANT_ID_MAX_LENGTH);
-    }
-
-    /**
      * 校验认证主体标识。
      *
      * @param value 主体标识
@@ -35,6 +25,16 @@ public final class KmsValidationHelper {
      */
     public static String requirePrincipalId(String value) {
         return requireText(value, SmartKmsCoreConstant.PRINCIPAL_ID_MAX_LENGTH);
+    }
+
+    /**
+     * 校验资源归属主体标识。
+     *
+     * @param value namespaced owner 主体标识
+     * @return 原始 owner 主体标识
+     */
+    public static String requireOwnerPrincipalId(String value) {
+        return requirePrincipalId(value);
     }
 
     /**
