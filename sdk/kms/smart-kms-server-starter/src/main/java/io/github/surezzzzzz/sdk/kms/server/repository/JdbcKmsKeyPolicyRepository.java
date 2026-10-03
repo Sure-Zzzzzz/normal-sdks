@@ -30,38 +30,38 @@ public class JdbcKmsKeyPolicyRepository implements KmsKeyPolicyRepository {
      */
     private static final RowMapper<KmsKeyPolicy> KEY_POLICY_ROW_MAPPER = new KmsKeyPolicyRowMapper();
     /**
-     * 执行 tenant 隔离 SQL 的 JDBC 模板。
+     * 执行 owner 隔离 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建密钥策略 JDBC 仓储。
      *
-     * @param jdbcTemplate 执行 tenant 隔离 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
      */
     public JdbcKmsKeyPolicyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
-     * 创建 tenant 与 keyRef 查询参数。
+     * 创建 owner 与 keyRef 查询参数。
      */
-    private static MapSqlParameterSource createKeyParameters(String tenantId, String keyRef) {
+    private static MapSqlParameterSource createKeyParameters(String ownerPrincipalId, String keyRef) {
         return new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
     }
 
     /**
      * 查询逻辑密钥下的全部精确策略。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 策略集合
      */
     @Override
-    public List<KmsKeyPolicy> findByKeyRef(String tenantId, String keyRef) {
-        MapSqlParameterSource parameters = createKeyParameters(tenantId, keyRef);
+    public List<KmsKeyPolicy> findByKeyRef(String ownerPrincipalId, String keyRef) {
+        MapSqlParameterSource parameters = createKeyParameters(ownerPrincipalId, keyRef);
         try {
             return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_KEY_POLICY_BY_KEY_REF,
                     parameters, KEY_POLICY_ROW_MAPPER);
@@ -73,17 +73,17 @@ public class JdbcKmsKeyPolicyRepository implements KmsKeyPolicyRepository {
     /**
      * 保存精确 allow-only 策略。
      *
-     * @param tenantId 资源所属 tenant
-     * @param policy   待保存的策略
+     * @param ownerPrincipalId 资源所属 owner
+     * @param policy           待保存的策略
      * @return 已持久化的策略快照
      */
     @Override
-    public KmsKeyPolicy save(String tenantId, KmsKeyPolicy policy) {
-        if (policy == null || !KmsValidationHelper.requireTenantId(tenantId).equals(policy.getTenantId())) {
+    public KmsKeyPolicy save(String ownerPrincipalId, KmsKeyPolicy policy) {
+        if (policy == null || !KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId).equals(policy.getOwnerPrincipalId())) {
             throw new KmsValidationException();
         }
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", policy.getTenantId())
+                .addValue("ownerPrincipalId", policy.getOwnerPrincipalId())
                 .addValue("keyRef", policy.getKeyRef())
                 .addValue("policyId", policy.getPolicyId())
                 .addValue("principalId", policy.getPrincipalId())
@@ -102,7 +102,7 @@ public class JdbcKmsKeyPolicyRepository implements KmsKeyPolicyRepository {
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
-        for (KmsKeyPolicy savedPolicy : findByKeyRef(tenantId, policy.getKeyRef())) {
+        for (KmsKeyPolicy savedPolicy : findByKeyRef(ownerPrincipalId, policy.getKeyRef())) {
             if (policy.getPolicyId().equals(savedPolicy.getPolicyId())) {
                 return savedPolicy;
             }
@@ -113,17 +113,17 @@ public class JdbcKmsKeyPolicyRepository implements KmsKeyPolicyRepository {
     /**
      * 按乐观锁版本撤销策略。
      *
-     * @param tenantId           资源所属 tenant
+     * @param ownerPrincipalId   资源所属 owner
      * @param keyRef             逻辑密钥标识
      * @param policyId           策略标识
      * @param expectedRowVersion 预期乐观锁版本
      */
     @Override
-    public void revoke(String tenantId, String keyRef, String policyId, long expectedRowVersion) {
+    public void revoke(String ownerPrincipalId, String keyRef, String policyId, long expectedRowVersion) {
         if (expectedRowVersion < SmartKmsCoreConstant.ZERO) {
             throw new KmsValidationException();
         }
-        MapSqlParameterSource parameters = createKeyParameters(tenantId, keyRef)
+        MapSqlParameterSource parameters = createKeyParameters(ownerPrincipalId, keyRef)
                 .addValue("policyId", KmsValidationHelper.requirePolicyId(policyId))
                 .addValue("rowVersion", expectedRowVersion);
         try {
@@ -157,7 +157,7 @@ public class JdbcKmsKeyPolicyRepository implements KmsKeyPolicyRepository {
             try {
                 return KmsKeyPolicy.builder()
                         .policyId(resultSet.getString("policy_id"))
-                        .tenantId(resultSet.getString("tenant_id"))
+                        .ownerPrincipalId(resultSet.getString("owner_principal_id"))
                         .keyRef(resultSet.getString("key_ref"))
                         .principalId(resultSet.getString("principal_id"))
                         .keyVersion(nullableKeyVersion)

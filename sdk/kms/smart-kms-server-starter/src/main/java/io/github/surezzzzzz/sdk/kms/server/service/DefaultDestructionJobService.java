@@ -69,7 +69,7 @@ public class DefaultDestructionJobService implements DestructionJobService {
     private static io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal systemPrincipal(KmsDestructionJob job) {
         return new io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal(
                 io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant.AUDIT_SYSTEM_PRINCIPAL_ID,
-                job.getTenantId(), null);
+                job.getOwnerPrincipalId(), null);
     }
 
     /**
@@ -101,7 +101,7 @@ public class DefaultDestructionJobService implements DestructionJobService {
         String claimToken = UUID.randomUUID().toString();
         Instant claimUntil = now.plusSeconds(properties.getWorker().getLeaseSeconds().longValue());
         try {
-            if (destructionJobRepository.claim(job.getTenantId(), job.getKeyRef(), job.getKeyVersion(), claimToken,
+            if (destructionJobRepository.claim(job.getOwnerPrincipalId(), job.getKeyRef(), job.getKeyVersion(), claimToken,
                     claimUntil, now)) {
                 transactionTemplate.executeWithoutResult(status -> destroyClaimed(job, claimToken));
             }
@@ -148,12 +148,12 @@ public class DefaultDestructionJobService implements DestructionJobService {
      * 在同一 key 锁和领取令牌边界内销毁材料并完成任务。
      */
     private void destroyClaimed(KmsDestructionJob job, String claimToken) {
-        if (!keyLock.lock(job.getTenantId(), job.getKeyRef())) {
+        if (!keyLock.lock(job.getOwnerPrincipalId(), job.getKeyRef())) {
             release(job, claimToken);
             return;
         }
-        KmsKey key = keyRepository.findByKeyRef(job.getTenantId(), job.getKeyRef()).orElse(null);
-        KmsKeyVersion version = keyVersionRepository.findByVersion(job.getTenantId(), job.getKeyRef(),
+        KmsKey key = keyRepository.findByKeyRef(job.getOwnerPrincipalId(), job.getKeyRef()).orElse(null);
+        KmsKeyVersion version = keyVersionRepository.findByVersion(job.getOwnerPrincipalId(), job.getKeyRef(),
                 job.getKeyVersion()).orElse(null);
         if (key == null || version == null || key.getState() != KmsKeyState.PENDING_DESTRUCTION
                 || version.getState() != KmsKeyVersionState.PENDING_DESTRUCTION) {
@@ -161,10 +161,10 @@ public class DefaultDestructionJobService implements DestructionJobService {
             return;
         }
         Instant completedAt = clock.now();
-        KmsKeyVersion destroyed = new KmsKeyVersion(version.getTenantId(), version.getKeyRef(), version.getVersion(),
+        KmsKeyVersion destroyed = new KmsKeyVersion(version.getOwnerPrincipalId(), version.getKeyRef(), version.getVersion(),
                 version.getAlgorithm(), KmsKeyVersionState.DESTROYED, null, null, null, null, completedAt);
-        keyVersionRepository.save(job.getTenantId(), destroyed);
-        if (!destructionJobRepository.complete(job.getTenantId(), job.getKeyRef(), job.getKeyVersion(), claimToken,
+        keyVersionRepository.save(job.getOwnerPrincipalId(), destroyed);
+        if (!destructionJobRepository.complete(job.getOwnerPrincipalId(), job.getKeyRef(), job.getKeyVersion(), claimToken,
                 completedAt)) {
             throw new KmsPersistenceException();
         }
@@ -173,8 +173,8 @@ public class DefaultDestructionJobService implements DestructionJobService {
                 io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant.AUDIT_SYSTEM_PRINCIPAL_ID,
                 io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_DESTRUCTION_JOB,
                 key.getState(), KmsKeyVersionState.DESTROYED, null, null);
-        if (allVersionsDestroyed(job.getTenantId(), job.getKeyRef())) {
-            keyRepository.save(job.getTenantId(), KmsKey.builder().tenantId(key.getTenantId()).keyRef(key.getKeyRef())
+        if (allVersionsDestroyed(job.getOwnerPrincipalId(), job.getKeyRef())) {
+            keyRepository.save(job.getOwnerPrincipalId(), KmsKey.builder().ownerPrincipalId(key.getOwnerPrincipalId()).keyRef(key.getKeyRef())
                     .keyAlias(key.getKeyAlias()).purpose(key.getPurpose()).algorithm(key.getAlgorithm())
                     .state(KmsKeyState.DESTROYED).activeVersion(null).rowVersion(key.getRowVersion()).build());
         }
@@ -184,14 +184,14 @@ public class DefaultDestructionJobService implements DestructionJobService {
      * 未完成任务不作失败或取消标记，只释放当前令牌。
      */
     private void release(KmsDestructionJob job, String claimToken) {
-        destructionJobRepository.release(job.getTenantId(), job.getKeyRef(), job.getKeyVersion(), claimToken);
+        destructionJobRepository.release(job.getOwnerPrincipalId(), job.getKeyRef(), job.getKeyVersion(), claimToken);
     }
 
     /**
      * 判断逻辑密钥的材料版本是否均已销毁。
      */
-    private boolean allVersionsDestroyed(String tenantId, String keyRef) {
-        for (KmsKeyVersion version : keyVersionRepository.findByKeyRef(tenantId, keyRef)) {
+    private boolean allVersionsDestroyed(String ownerPrincipalId, String keyRef) {
+        for (KmsKeyVersion version : keyVersionRepository.findByKeyRef(ownerPrincipalId, keyRef)) {
             if (version.getState() != KmsKeyVersionState.DESTROYED) {
                 return false;
             }

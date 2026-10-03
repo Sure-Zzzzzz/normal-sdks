@@ -11,21 +11,21 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import java.util.List;
 
 /**
- * 基于 JDBC 的 tenant 内逻辑密钥事务锁。
+ * 基于 JDBC 的 owner 内逻辑密钥事务锁。
  *
  * @author surezzzzzz
  */
 public class JdbcKmsKeyLock implements KmsKeyLock {
 
     /**
-     * 执行 tenant 隔离行锁 SQL 的 JDBC 模板。
+     * 执行 owner 隔离行锁 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建逻辑密钥 JDBC 锁端口。
      *
-     * @param jdbcTemplate 执行 tenant 隔离行锁 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离行锁 SQL 的 JDBC 模板
      */
     public JdbcKmsKeyLock(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -34,14 +34,14 @@ public class JdbcKmsKeyLock implements KmsKeyLock {
     /**
      * 锁定当前事务内逻辑密钥。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 密钥存在并已锁定时返回 {@code true}
      */
     @Override
-    public boolean lock(String tenantId, String keyRef) {
+    public boolean lock(String ownerPrincipalId, String keyRef) {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
         try {
             List<Long> rows = jdbcTemplate.query(SmartKmsServerConstant.SQL_LOCK_KEY_BY_KEY_REF, parameters,

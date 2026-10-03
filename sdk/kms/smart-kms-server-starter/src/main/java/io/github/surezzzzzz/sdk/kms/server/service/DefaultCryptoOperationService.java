@@ -255,10 +255,10 @@ public class DefaultCryptoOperationService implements CryptoOperationService {
             }
             return version.intValue();
         }
-        if (!keyLock.lock(principal.getTenantId(), keyRef)) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), keyRef)) {
             throw new KmsAuthorizationException();
         }
-        KmsKey key = keyRepository.findByKeyRef(principal.getTenantId(), keyRef)
+        KmsKey key = keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef)
                 .orElseThrow(KmsAuthorizationException::new);
         if (key.getActiveVersion() == null) {
             throw new KmsCryptoException();
@@ -267,10 +267,10 @@ public class DefaultCryptoOperationService implements CryptoOperationService {
     }
 
     /**
-     * 查询当前 tenant 内精确密钥版本。
+     * 查询当前 owner 内精确密钥版本。
      */
     private KmsKeyVersion keyVersion(KmsPrincipal principal, String keyRef, int version) {
-        return keyVersionRepository.findByVersion(principal.getTenantId(), keyRef, version)
+        return keyVersionRepository.findByVersion(principal.getOwnerPrincipalId(), keyRef, version)
                 .orElseThrow(KmsCryptoException::new);
     }
 }

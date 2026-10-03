@@ -34,14 +34,14 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
      */
     private static final RowMapper<KmsDestructionJob> DESTRUCTION_JOB_ROW_MAPPER = new KmsDestructionJobRowMapper();
     /**
-     * 执行 tenant 隔离 SQL 的 JDBC 模板。
+     * 执行 owner 隔离 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建销毁任务 JDBC 仓储。
      *
-     * @param jdbcTemplate 执行 tenant 隔离 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
      */
     public JdbcKmsDestructionJobRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -51,7 +51,7 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
      * 创建销毁任务插入参数。
      */
     private static MapSqlParameterSource jobParameters(KmsDestructionJob job) {
-        return keyParameters(job.getTenantId(), job.getKeyRef()).addValue("keyVersion", job.getKeyVersion())
+        return keyParameters(job.getOwnerPrincipalId(), job.getKeyRef()).addValue("keyVersion", job.getKeyVersion())
                 .addValue("state", job.getState().getCode()).addValue("dueAt", Timestamp.from(job.getDueAt()))
                 .addValue("claimToken", job.getClaimToken())
                 .addValue("claimUntil", job.getClaimUntil() == null ? null : Timestamp.from(job.getClaimUntil()))
@@ -70,22 +70,22 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     }
 
     /**
-     * 创建 tenant 和逻辑密钥参数。
+     * 创建 owner 和逻辑密钥参数。
      */
-    private static MapSqlParameterSource keyParameters(String tenantId, String keyRef) {
-        return new MapSqlParameterSource().addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+    private static MapSqlParameterSource keyParameters(String ownerPrincipalId, String keyRef) {
+        return new MapSqlParameterSource().addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
     }
 
     /**
      * 创建需要领取令牌的任务参数。
      */
-    private static MapSqlParameterSource jobTokenParameters(String tenantId, String keyRef, int keyVersion,
+    private static MapSqlParameterSource jobTokenParameters(String ownerPrincipalId, String keyRef, int keyVersion,
                                                             String claimToken) {
         if (keyVersion < SmartKmsCoreConstant.ONE) {
             throw new KmsValidationException();
         }
-        return keyParameters(tenantId, keyRef).addValue("keyVersion", keyVersion)
+        return keyParameters(ownerPrincipalId, keyRef).addValue("keyVersion", keyVersion)
                 .addValue("claimToken", KmsValidationHelper.requireText(claimToken,
                         SmartKmsCoreConstant.IDEMPOTENCY_KEY_MAX_LENGTH))
                 .addValue("pendingState", KmsDestructionJobState.PENDING.getCode())
@@ -96,8 +96,8 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 校验新建任务的状态组合。
      */
-    private static void validateNewJob(String tenantId, KmsDestructionJob job) {
-        if (job == null || !KmsValidationHelper.requireTenantId(tenantId).equals(job.getTenantId())
+    private static void validateNewJob(String ownerPrincipalId, KmsDestructionJob job) {
+        if (job == null || !KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId).equals(job.getOwnerPrincipalId())
                 || job.getKeyVersion() < SmartKmsCoreConstant.ONE || job.getDueAt() == null
                 || job.getState() != KmsDestructionJobState.PENDING || job.getClaimToken() != null
                 || job.getClaimUntil() != null || job.getAttemptCount() != SmartKmsCoreConstant.ZERO
@@ -110,9 +110,9 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 校验领取或续租参数。
      */
-    private static void validateClaimArguments(String tenantId, String keyRef, int keyVersion, String claimToken,
+    private static void validateClaimArguments(String ownerPrincipalId, String keyRef, int keyVersion, String claimToken,
                                                Instant claimUntil, Instant now) {
-        jobTokenParameters(tenantId, keyRef, keyVersion, claimToken);
+        jobTokenParameters(ownerPrincipalId, keyRef, keyVersion, claimToken);
         if (claimUntil == null || now == null || !claimUntil.isAfter(now)) {
             throw new KmsValidationException();
         }
@@ -121,13 +121,13 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 保存新的销毁任务。
      *
-     * @param tenantId 资源所属 tenant
-     * @param job      待保存的无材料任务
+     * @param ownerPrincipalId 资源所属 owner
+     * @param job              待保存的无材料任务
      * @return 已持久化的任务快照
      */
     @Override
-    public KmsDestructionJob save(String tenantId, KmsDestructionJob job) {
-        validateNewJob(tenantId, job);
+    public KmsDestructionJob save(String ownerPrincipalId, KmsDestructionJob job) {
+        validateNewJob(ownerPrincipalId, job);
         try {
             int inserted = jdbcTemplate.update(SmartKmsServerConstant.SQL_INSERT_DESTRUCTION_JOB,
                     jobParameters(job));
@@ -137,7 +137,7 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
-        for (KmsDestructionJob savedJob : findByKeyRef(tenantId, job.getKeyRef())) {
+        for (KmsDestructionJob savedJob : findByKeyRef(ownerPrincipalId, job.getKeyRef())) {
             if (savedJob.getKeyVersion() == job.getKeyVersion()) {
                 return savedJob;
             }
@@ -148,15 +148,15 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 查询逻辑密钥下全部销毁任务。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 已排序的销毁任务集合
      */
     @Override
-    public List<KmsDestructionJob> findByKeyRef(String tenantId, String keyRef) {
+    public List<KmsDestructionJob> findByKeyRef(String ownerPrincipalId, String keyRef) {
         try {
             return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_DESTRUCTION_JOB_BY_KEY_REF,
-                    keyParameters(tenantId, keyRef), DESTRUCTION_JOB_ROW_MAPPER);
+                    keyParameters(ownerPrincipalId, keyRef), DESTRUCTION_JOB_ROW_MAPPER);
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
@@ -184,19 +184,19 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 以 compare-and-set 领取任务。
      *
-     * @param tenantId   资源所属 tenant
-     * @param keyRef     逻辑密钥标识
-     * @param keyVersion 密钥版本号
-     * @param claimToken 本次随机领取令牌
-     * @param claimUntil 新租约到期时间
-     * @param now        权威数据库当前时间
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
+     * @param keyVersion       密钥版本号
+     * @param claimToken       本次随机领取令牌
+     * @param claimUntil       新租约到期时间
+     * @param now              权威数据库当前时间
      * @return 成功取得租约时返回 {@code true}
      */
     @Override
-    public boolean claim(String tenantId, String keyRef, int keyVersion, String claimToken,
+    public boolean claim(String ownerPrincipalId, String keyRef, int keyVersion, String claimToken,
                          Instant claimUntil, Instant now) {
-        validateClaimArguments(tenantId, keyRef, keyVersion, claimToken, claimUntil, now);
-        MapSqlParameterSource parameters = stateParameters(now).addValues(keyParameters(tenantId, keyRef).getValues())
+        validateClaimArguments(ownerPrincipalId, keyRef, keyVersion, claimToken, claimUntil, now);
+        MapSqlParameterSource parameters = stateParameters(now).addValues(keyParameters(ownerPrincipalId, keyRef).getValues())
                 .addValue("keyVersion", keyVersion).addValue("claimToken", claimToken)
                 .addValue("claimUntil", Timestamp.from(claimUntil));
         return update(SmartKmsServerConstant.SQL_CLAIM_DESTRUCTION_JOB, parameters);
@@ -205,19 +205,19 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 使用原领取令牌续租任务。
      *
-     * @param tenantId   资源所属 tenant
-     * @param keyRef     逻辑密钥标识
-     * @param keyVersion 密钥版本号
-     * @param claimToken 当前领取令牌
-     * @param claimUntil 新租约到期时间
-     * @param now        权威数据库当前时间
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
+     * @param keyVersion       密钥版本号
+     * @param claimToken       当前领取令牌
+     * @param claimUntil       新租约到期时间
+     * @param now              权威数据库当前时间
      * @return 租约仍属当前 worker 时返回 {@code true}
      */
     @Override
-    public boolean renewClaim(String tenantId, String keyRef, int keyVersion, String claimToken,
+    public boolean renewClaim(String ownerPrincipalId, String keyRef, int keyVersion, String claimToken,
                               Instant claimUntil, Instant now) {
-        validateClaimArguments(tenantId, keyRef, keyVersion, claimToken, claimUntil, now);
-        MapSqlParameterSource parameters = stateParameters(now).addValues(keyParameters(tenantId, keyRef).getValues())
+        validateClaimArguments(ownerPrincipalId, keyRef, keyVersion, claimToken, claimUntil, now);
+        MapSqlParameterSource parameters = stateParameters(now).addValues(keyParameters(ownerPrincipalId, keyRef).getValues())
                 .addValue("keyVersion", keyVersion).addValue("claimToken", claimToken)
                 .addValue("claimUntil", Timestamp.from(claimUntil));
         return update(SmartKmsServerConstant.SQL_RENEW_DESTRUCTION_JOB_CLAIM, parameters);
@@ -226,35 +226,35 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 使用领取令牌释放任务。
      *
-     * @param tenantId   资源所属 tenant
-     * @param keyRef     逻辑密钥标识
-     * @param keyVersion 密钥版本号
-     * @param claimToken 当前领取令牌
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
+     * @param keyVersion       密钥版本号
+     * @param claimToken       当前领取令牌
      * @return 成功释放时返回 {@code true}
      */
     @Override
-    public boolean release(String tenantId, String keyRef, int keyVersion, String claimToken) {
-        MapSqlParameterSource parameters = jobTokenParameters(tenantId, keyRef, keyVersion, claimToken);
+    public boolean release(String ownerPrincipalId, String keyRef, int keyVersion, String claimToken) {
+        MapSqlParameterSource parameters = jobTokenParameters(ownerPrincipalId, keyRef, keyVersion, claimToken);
         return update(SmartKmsServerConstant.SQL_RELEASE_DESTRUCTION_JOB_CLAIM, parameters);
     }
 
     /**
      * 使用领取令牌完成任务。
      *
-     * @param tenantId    资源所属 tenant
-     * @param keyRef      逻辑密钥标识
-     * @param keyVersion  密钥版本号
-     * @param claimToken  当前领取令牌
-     * @param completedAt 成功完成时间
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
+     * @param keyVersion       密钥版本号
+     * @param claimToken       当前领取令牌
+     * @param completedAt      成功完成时间
      * @return 成功完成时返回 {@code true}
      */
     @Override
-    public boolean complete(String tenantId, String keyRef, int keyVersion, String claimToken,
+    public boolean complete(String ownerPrincipalId, String keyRef, int keyVersion, String claimToken,
                             Instant completedAt) {
         if (completedAt == null) {
             throw new KmsValidationException();
         }
-        MapSqlParameterSource parameters = jobTokenParameters(tenantId, keyRef, keyVersion, claimToken)
+        MapSqlParameterSource parameters = jobTokenParameters(ownerPrincipalId, keyRef, keyVersion, claimToken)
                 .addValue("completedAt", Timestamp.from(completedAt));
         return update(SmartKmsServerConstant.SQL_COMPLETE_DESTRUCTION_JOB, parameters);
     }
@@ -287,15 +287,15 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 在调用方已锁定逻辑密钥的事务中检查全部任务的历史领取事实。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 从未被领取时返回 {@code true}
      */
     @Override
-    public boolean areAllJobsUnclaimed(String tenantId, String keyRef) {
+    public boolean areAllJobsUnclaimed(String ownerPrincipalId, String keyRef) {
         try {
             List<Long> claimedJobs = jdbcTemplate.query(SmartKmsServerConstant.SQL_LOCK_UNCLAIMED_DESTRUCTION_JOB,
-                    keyParameters(tenantId, keyRef), new RowMapper<Long>() {
+                    keyParameters(ownerPrincipalId, keyRef), new RowMapper<Long>() {
                         @Override
                         public Long mapRow(ResultSet resultSet, int rowNumber) throws SQLException {
                             return resultSet.getLong("id");
@@ -310,14 +310,14 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
     /**
      * 删除已经确认从未领取的逻辑密钥全部销毁任务。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      */
     @Override
-    public void deleteUnclaimedJobs(String tenantId, String keyRef) {
+    public void deleteUnclaimedJobs(String ownerPrincipalId, String keyRef) {
         try {
             jdbcTemplate.update(SmartKmsServerConstant.SQL_DELETE_UNCLAIMED_DESTRUCTION_JOB,
-                    keyParameters(tenantId, keyRef));
+                    keyParameters(ownerPrincipalId, keyRef));
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
@@ -357,7 +357,7 @@ public class JdbcKmsDestructionJobRepository implements KmsDestructionJobReposit
                     || resultSet.getInt("attempt_count") < SmartKmsCoreConstant.ZERO) {
                 throw new KmsPersistenceException();
             }
-            return KmsDestructionJob.builder().tenantId(resultSet.getString("tenant_id"))
+            return KmsDestructionJob.builder().ownerPrincipalId(resultSet.getString("owner_principal_id"))
                     .keyRef(resultSet.getString("key_ref")).keyVersion(resultSet.getInt("key_version"))
                     .state(state).dueAt(dueAt.toInstant()).claimToken(resultSet.getString("claim_token"))
                     .claimUntil(claimUntil == null ? null : claimUntil.toInstant())

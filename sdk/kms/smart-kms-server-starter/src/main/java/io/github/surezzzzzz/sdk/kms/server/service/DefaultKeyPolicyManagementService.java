@@ -51,14 +51,14 @@ public class DefaultKeyPolicyManagementService implements KeyPolicyManagementSer
     }
 
     /**
-     * 校验管理主体和请求标识。
+     * 校验策略管理主体和请求标识。
      */
-    private static void requireManage(KmsPrincipal principal, String requestId) {
+    private static void requirePolicy(KmsPrincipal principal, String requestId) {
         if (principal == null) {
             throw new KmsValidationException();
         }
         KmsValidationHelper.requireRequestId(requestId);
-        if (!principal.hasScope(SmartKmsServerConstant.SCOPE_MANAGE)) {
+        if (!principal.hasScope(SmartKmsServerConstant.API_PERMISSION_KEY_POLICY)) {
             throw new KmsAuthorizationException();
         }
     }
@@ -69,28 +69,28 @@ public class DefaultKeyPolicyManagementService implements KeyPolicyManagementSer
     @Override
     @Transactional
     public KmsKeyPolicy create(KmsPrincipal principal, KmsKeyPolicy policy, String idempotencyKey, String requestId) {
-        requireManage(principal, requestId);
-        if (policy == null || !principal.getTenantId().equals(policy.getTenantId())) {
+        requirePolicy(principal, requestId);
+        if (policy == null || !principal.getOwnerPrincipalId().equals(policy.getOwnerPrincipalId())) {
             throw new KmsValidationException();
         }
         KmsValidationHelper.requireIdempotencyKey(idempotencyKey);
         if (policy.getExpiresAt() != null && !policy.getExpiresAt().isAfter(clock.now())) {
             throw new KmsValidationException();
         }
-        if (!keyLock.lock(principal.getTenantId(), policy.getKeyRef())) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), policy.getKeyRef())) {
             throw new KmsNotFoundException();
         }
-        if (!keyRepository.findByKeyRef(principal.getTenantId(), policy.getKeyRef()).isPresent()
-                || (policy.getKeyVersion() != null && !keyVersionRepository.findByVersion(principal.getTenantId(),
+        if (!keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), policy.getKeyRef()).isPresent()
+                || (policy.getKeyVersion() != null && !keyVersionRepository.findByVersion(principal.getOwnerPrincipalId(),
                 policy.getKeyRef(), policy.getKeyVersion().intValue()).isPresent())) {
             throw new KmsNotFoundException();
         }
         KmsKeyPolicy generatedPolicy = KmsKeyPolicy.builder().policyId(UUID.randomUUID().toString())
-                .tenantId(principal.getTenantId()).keyRef(policy.getKeyRef()).principalId(policy.getPrincipalId())
+                .ownerPrincipalId(principal.getOwnerPrincipalId()).keyRef(policy.getKeyRef()).principalId(policy.getPrincipalId())
                 .keyVersion(policy.getKeyVersion()).operation(policy.getOperation()).expiresAt(policy.getExpiresAt())
                 .rowVersion(0L).build();
         try {
-            KmsKeyPolicy savedPolicy = keyPolicyRepository.save(principal.getTenantId(), generatedPolicy);
+            KmsKeyPolicy savedPolicy = keyPolicyRepository.save(principal.getOwnerPrincipalId(), generatedPolicy);
             auditPublisher.allowed(principal, savedPolicy.getKeyRef(), savedPolicy.getKeyVersion(),
                     io.github.surezzzzzz.sdk.kms.core.constant.KmsOperation.CREATE_KEY_POLICY, requestId,
                     io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY_POLICY,
@@ -102,17 +102,17 @@ public class DefaultKeyPolicyManagementService implements KeyPolicyManagementSer
     }
 
     /**
-     * 查询当前 tenant 下的全部策略。
+     * 查询当前归属下的全部策略。
      */
     @Override
     @Transactional(readOnly = true)
     public List<KmsKeyPolicy> list(KmsPrincipal principal, String keyRef, String requestId) {
-        requireManage(principal, requestId);
+        requirePolicy(principal, requestId);
         KmsValidationHelper.requireKeyRef(keyRef);
-        if (!keyRepository.findByKeyRef(principal.getTenantId(), keyRef).isPresent()) {
+        if (!keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef).isPresent()) {
             throw new KmsNotFoundException();
         }
-        return keyPolicyRepository.findByKeyRef(principal.getTenantId(), keyRef);
+        return keyPolicyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef);
     }
 
     /**
@@ -122,15 +122,15 @@ public class DefaultKeyPolicyManagementService implements KeyPolicyManagementSer
     @Transactional
     public void revoke(KmsPrincipal principal, String keyRef, String policyId, long expectedRowVersion,
                        String idempotencyKey, String requestId) {
-        requireManage(principal, requestId);
+        requirePolicy(principal, requestId);
         KmsValidationHelper.requireKeyRef(keyRef);
         KmsValidationHelper.requirePolicyId(policyId);
         KmsValidationHelper.requireIdempotencyKey(idempotencyKey);
-        if (!keyLock.lock(principal.getTenantId(), keyRef)) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), keyRef)) {
             throw new KmsNotFoundException();
         }
         try {
-            keyPolicyRepository.revoke(principal.getTenantId(), keyRef, policyId, expectedRowVersion);
+            keyPolicyRepository.revoke(principal.getOwnerPrincipalId(), keyRef, policyId, expectedRowVersion);
             auditPublisher.allowed(principal, keyRef, null,
                     io.github.surezzzzzz.sdk.kms.core.constant.KmsOperation.REVOKE_KEY_POLICY, requestId,
                     io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY_POLICY,

@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * tenant 限定逻辑密钥分页查询结果。
+ * owner 限定逻辑密钥分页查询结果。
  *
  * @author surezzzzzz
  */

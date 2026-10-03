@@ -14,10 +14,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class SmartKmsServerProperties {
 
     /**
-     * 是否启用 Server 默认链路。
-     */
-    private Boolean enable = SmartKmsServerConstant.DEFAULT_ENABLED;
-    /**
      * 分页配置。
      */
     private Page page = new Page();

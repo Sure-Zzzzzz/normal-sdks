@@ -95,7 +95,7 @@ public class KmsAuditPublisher {
     private void publish(KmsPrincipal principal, String keyRef, Integer keyVersion, KmsOperation operation,
                          String requestId, KmsAuditOutcome outcome, Map<String, String> metadata) {
         try {
-            eventPublisher.publish(KmsAuditEvent.builder().tenantId(principal.getTenantId()).keyRef(keyRef)
+            eventPublisher.publish(KmsAuditEvent.builder().ownerPrincipalId(principal.getOwnerPrincipalId()).keyRef(keyRef)
                     .keyVersion(keyVersion).principalId(principal.getPrincipalId()).operation(operation)
                     .outcome(outcome).requestId(requestId).occurredAt(clock.now()).metadata(metadata).build());
         } catch (RuntimeException exception) {

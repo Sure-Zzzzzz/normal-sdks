@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.kms.server.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.surezzzzzz.sdk.kms.core.exception.KmsAuthorizationException;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException;
 import io.github.surezzzzzz.sdk.kms.server.configuration.SmartKmsServerProperties;
 import io.github.surezzzzzz.sdk.kms.server.exception.KmsPayloadTooLargeException;
@@ -51,6 +52,20 @@ abstract class KmsHttpControllerSupport {
             throw new KmsUnauthenticatedException();
         }
         request.setAttribute(REQUEST_CONTEXT_ATTRIBUTE, context);
+        return context;
+    }
+
+    /**
+     * 在宿主自定义主体解析器场景下复核精确 API 权限。
+     *
+     * <p>Resource Server 会在控制器前执行同一权限码；此处保留领域边界的独立校验，避免宿主
+     * 仅提供主体解析器时端点权限退化为“已认证即可访问”。</p>
+     */
+    KmsRequestContext requireApiPermission(KmsRequestContext context, String permission) {
+        if (context == null || context.getPrincipal() == null || permission == null
+                || !context.getPrincipal().hasScope(permission)) {
+            throw new KmsAuthorizationException();
+        }
         return context;
     }
 

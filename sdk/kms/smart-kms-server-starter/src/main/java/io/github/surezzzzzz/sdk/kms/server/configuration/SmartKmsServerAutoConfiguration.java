@@ -4,15 +4,11 @@ import io.github.surezzzzzz.sdk.kms.core.repository.*;
 import io.github.surezzzzzz.sdk.kms.core.service.*;
 import io.github.surezzzzzz.sdk.kms.server.SmartKmsServerPackage;
 import io.github.surezzzzzz.sdk.kms.server.annotation.SmartKmsServerComponent;
-import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsCryptoController;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsHttpExceptionHandler;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsKeyController;
+import io.github.surezzzzzz.sdk.kms.server.controller.*;
 import io.github.surezzzzzz.sdk.kms.server.repository.*;
 import io.github.surezzzzzz.sdk.kms.server.service.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -33,8 +29,6 @@ import java.security.SecureRandom;
  */
 @Configuration
 @EnableConfigurationProperties(SmartKmsServerProperties.class)
-@ConditionalOnProperty(prefix = SmartKmsServerConstant.CONFIG_PREFIX, name = "enable",
-        havingValue = "true", matchIfMissing = true)
 @ConditionalOnMissingBean(KmsServerEngine.class)
 @ConditionalOnBean(KmsPrincipalResolver.class)
 @ComponentScan(basePackageClasses = SmartKmsServerPackage.class, useDefaultFilters = false,
@@ -111,7 +105,7 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
-     * 注册 tenant 内逻辑密钥事务锁。
+     * 注册 owner 内逻辑密钥事务锁。
      *
      * @param jdbcTemplate 执行命名参数 SQL 的 JDBC 模板
      * @return 默认逻辑密钥事务锁
@@ -123,7 +117,7 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
-     * 注册 tenant 强隔离的默认逻辑密钥仓储。
+     * 注册 owner 强隔离的默认逻辑密钥仓储。
      *
      * @param jdbcTemplate 执行命名参数 SQL 的 JDBC 模板
      * @return 默认逻辑密钥仓储
@@ -160,7 +154,7 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
-     * 注册 tenant 强隔离的默认密钥策略仓储。
+     * 注册 owner 强隔离的默认密钥策略仓储。
      *
      * @param jdbcTemplate 执行命名参数 SQL 的 JDBC 模板
      * @return 默认密钥策略仓储
@@ -207,6 +201,20 @@ public class SmartKmsServerAutoConfiguration {
     @ConditionalOnMissingBean(KmsDestructionJobRepository.class)
     public JdbcKmsDestructionJobRepository kmsDestructionJobRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         return new JdbcKmsDestructionJobRepository(jdbcTemplate);
+    }
+
+    /**
+     * 注册销毁任务管理页使用的 owner 隔离查询端口。
+     *
+     * <p>该端口只暴露无材料任务投影，不向已发布的 worker 核心仓储添加管理页专用方法。</p>
+     *
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
+     * @return 默认销毁任务查询端口
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsDestructionJobQueryRepository.class)
+    public KmsDestructionJobQueryRepository kmsDestructionJobQueryRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+        return new JdbcKmsDestructionJobQueryRepository(jdbcTemplate);
     }
 
     /**
@@ -272,15 +280,6 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
-     * 注册管理列表专用的读取授权端口。
-     */
-    @Bean
-    @ConditionalOnMissingBean(KmsManagementReadAuthorizer.class)
-    public KmsManagementReadAuthorizer kmsManagementReadAuthorizer() {
-        return new DefaultKmsManagementReadAuthorizer();
-    }
-
-    /**
      * 注册逻辑密钥管理 REST 控制器。
      */
     @Bean
@@ -289,12 +288,57 @@ public class SmartKmsServerAutoConfiguration {
                                              SmartKmsServerProperties properties,
                                              KeyManagementService keyManagementService,
                                              KmsKeyQueryRepository keyQueryRepository,
-                                             KmsManagementReadAuthorizer managementReadAuthorizer,
                                              KeyPolicyManagementService keyPolicyManagementService,
                                              PublicKeyService publicKeyService,
                                              KmsManagementIdempotencyService idempotencyService) {
         return new KmsKeyController(principalResolver, properties, keyManagementService, keyQueryRepository,
-                managementReadAuthorizer, keyPolicyManagementService, publicKeyService, idempotencyService);
+                keyPolicyManagementService, publicKeyService, idempotencyService);
+    }
+
+    /**
+     * 注册以 DataPlan 执行归属范围的管理密钥查询控制器。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsAdminKeyQueryController.class)
+    public KmsAdminKeyQueryController kmsAdminKeyQueryController(KmsPrincipalResolver principalResolver,
+                                                                 SmartKmsServerProperties properties,
+                                                                 KmsKeyQueryRepository keyQueryRepository) {
+        return new KmsAdminKeyQueryController(principalResolver, properties, keyQueryRepository);
+    }
+
+    /**
+     * 注册销毁任务与当前 worker 健康 REST 控制器。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsDestructionController.class)
+    public KmsDestructionController kmsDestructionController(KmsPrincipalResolver principalResolver,
+                                                             SmartKmsServerProperties properties,
+                                                             KmsDestructionJobQueryRepository jobQueryRepository,
+                                                             DestructionWorkerHealthService workerHealthService,
+                                                             KmsDestructionWorkerLifecycle workerLifecycle) {
+        return new KmsDestructionController(principalResolver, properties, jobQueryRepository,
+                workerHealthService, workerLifecycle);
+    }
+
+    /**
+     * 注册门户主体自省端点。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMeController.class)
+    public KmsMeController kmsMeController(KmsPrincipalResolver principalResolver,
+                                           SmartKmsServerProperties properties) {
+        return new KmsMeController(principalResolver, properties);
+    }
+
+    /**
+     * 注册个人工作区密钥端点（/me/keys，只读固定当前主体 owner）。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyKeyQueryController.class)
+    public KmsMyKeyQueryController kmsMyKeyQueryController(KmsPrincipalResolver principalResolver,
+                                                           SmartKmsServerProperties properties,
+                                                           io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyQueryRepository keyQueryRepository) {
+        return new KmsMyKeyQueryController(principalResolver, properties, keyQueryRepository);
     }
 
     /**
@@ -394,10 +438,33 @@ public class SmartKmsServerAutoConfiguration {
                                                      KmsDestructionJobRepository destructionJobRepository,
                                                      KmsDestructionCancellationGuard destructionCancellationGuard,
                                                      KmsKeyMaterialGenerator keyMaterialGenerator,
-                                                     KmsAuditPublisher auditPublisher) {
+                                                     KmsAuditPublisher auditPublisher,
+                                                     KmsOwnerDestructionPolicyRepository ownerDestructionPolicyRepository) {
         return new DefaultKeyManagementService(keyLock, clock, keyRepository, keyQueryRepository,
                 keyVersionRepository, destructionJobRepository, destructionCancellationGuard, keyMaterialGenerator,
-                auditPublisher);
+                auditPublisher, ownerDestructionPolicyRepository);
+    }
+
+    /**
+     * 注册 owner 级销毁窗口政策 JDBC 仓储。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsOwnerDestructionPolicyRepository.class)
+    public JdbcKmsOwnerDestructionPolicyRepository kmsOwnerDestructionPolicyRepository(
+            NamedParameterJdbcTemplate jdbcTemplate) {
+        return new JdbcKmsOwnerDestructionPolicyRepository(jdbcTemplate);
+    }
+
+    /**
+     * 注册销毁窗口政策控制器。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsOwnerDestructionPolicyController.class)
+    public KmsOwnerDestructionPolicyController kmsOwnerDestructionPolicyController(KmsPrincipalResolver principalResolver,
+                                                                                   SmartKmsServerProperties properties, KmsOwnerDestructionPolicyRepository policyRepository,
+                                                                                   KmsAuditPublisher auditPublisher, KmsClock clock) {
+        return new KmsOwnerDestructionPolicyController(principalResolver, properties, policyRepository,
+                auditPublisher, clock);
     }
 
     /**

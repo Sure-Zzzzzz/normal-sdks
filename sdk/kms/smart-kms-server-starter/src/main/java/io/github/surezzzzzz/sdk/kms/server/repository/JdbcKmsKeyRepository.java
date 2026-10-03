@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.kms.core.model.KmsKey;
 import io.github.surezzzzzz.sdk.kms.core.repository.KmsKeyRepository;
 import io.github.surezzzzzz.sdk.kms.core.support.KmsValidationHelper;
 import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
+import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -35,14 +36,14 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
      */
     private static final RowMapper<KmsKeyMetadata> KEY_METADATA_ROW_MAPPER = new KmsKeyMetadataRowMapper();
     /**
-     * 执行 tenant 隔离 SQL 的 JDBC 模板。
+     * 执行 owner 隔离 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建逻辑密钥 JDBC 仓储。
      *
-     * @param jdbcTemplate 执行 tenant 隔离 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
      */
     public JdbcKmsKeyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -56,10 +57,10 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     }
 
     /**
-     * 校验待保存逻辑密钥的租户、标识和状态组合。
+     * 校验待保存逻辑密钥的 owner、标识和状态组合。
      */
-    private static void validateKey(String tenantId, KmsKey key) {
-        if (key == null || !KmsValidationHelper.requireTenantId(tenantId).equals(key.getTenantId())) {
+    private static void validateKey(String ownerPrincipalId, KmsKey key) {
+        if (key == null || !KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId).equals(key.getOwnerPrincipalId())) {
             throw new KmsValidationException();
         }
         KmsValidationHelper.requireKeyRef(key.getKeyRef());
@@ -102,7 +103,7 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
      */
     private static MapSqlParameterSource createParameters(KmsKey key) {
         return new MapSqlParameterSource()
-                .addValue("tenantId", key.getTenantId())
+                .addValue("ownerPrincipalId", key.getOwnerPrincipalId())
                 .addValue("keyRef", key.getKeyRef())
                 .addValue("keyAlias", key.getKeyAlias())
                 .addValue("purpose", key.getPurpose().getCode())
@@ -114,17 +115,32 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
                 .addValue("rowVersion", key.getRowVersion());
     }
 
+    private static MapSqlParameterSource pageParameters(String alias, String purpose, String algorithm, String state,
+                                                        long offset, int size) {
+        return new MapSqlParameterSource().addValue("alias", alias == null ? null : "%" + escapeLike(alias) + "%")
+                .addValue("purpose", purpose).addValue("algorithm", algorithm).addValue("state", state)
+                .addValue("offset", Long.valueOf(offset)).addValue("size", Integer.valueOf(size));
+    }
+
+    private static void appendOwnerPredicate(StringBuilder sql, MapSqlParameterSource parameters,
+                                             KmsOwnerAccessScope scope) {
+        if (!scope.isAll()) {
+            sql.append(" AND owner_principal_id IN (:ownerPrincipalIds)");
+            parameters.addValue("ownerPrincipalIds", scope.getOwnerPrincipalIds());
+        }
+    }
+
     /**
-     * 按 tenant 和 keyRef 查询逻辑密钥。
+     * 按 owner 和 keyRef 查询逻辑密钥。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 匹配的逻辑密钥；不存在时为空
      */
     @Override
-    public Optional<KmsKey> findByKeyRef(String tenantId, String keyRef) {
+    public Optional<KmsKey> findByKeyRef(String ownerPrincipalId, String keyRef) {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
         try {
             List<KmsKey> keys = jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_KEY_BY_KEY_REF,
@@ -136,16 +152,16 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     }
 
     /**
-     * 查询当前 tenant 下单个无材料逻辑密钥元数据。
+     * 查询当前 owner 下单个无材料逻辑密钥元数据。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 无材料密钥元数据；不存在时为空
      */
     @Override
-    public Optional<KmsKeyMetadata> findMetadata(String tenantId, String keyRef) {
+    public Optional<KmsKeyMetadata> findMetadata(String ownerPrincipalId, String keyRef) {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
         try {
             List<KmsKeyMetadata> keys = jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_KEY_BY_KEY_REF,
@@ -157,17 +173,39 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     }
 
     /**
-     * 查询当前 tenant 下全部无材料逻辑密钥元数据。
+     * 使用完整 DataPlan 归属范围查询单个密钥，隐藏无权与不存在的差异。
+     */
+    @Override
+    public Optional<KmsKeyMetadata> findMetadata(KmsOwnerAccessScope scope, String keyRef) {
+        if (scope == null) {
+            throw new KmsValidationException();
+        }
+        StringBuilder sql = new StringBuilder("SELECT owner_principal_id, key_ref, key_alias, purpose, algorithm, state, ")
+                .append("state_before_destruction, active_version, row_version, created_at, updated_at FROM smart_kms_key ")
+                .append("WHERE key_ref = :keyRef");
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
+        appendOwnerPredicate(sql, parameters, scope);
+        try {
+            List<KmsKeyMetadata> keys = jdbcTemplate.query(sql.toString(), parameters, KEY_METADATA_ROW_MAPPER);
+            return keys.isEmpty() ? Optional.<KmsKeyMetadata>empty() : Optional.of(keys.get(SmartKmsCoreConstant.ZERO));
+        } catch (DataAccessException exception) {
+            throw new KmsPersistenceException();
+        }
+    }
+
+    /**
+     * 查询当前 owner 下全部无材料逻辑密钥元数据。
      *
-     * @param tenantId 资源所属 tenant
+     * @param ownerPrincipalId 资源所属 owner
      * @return 稳定排序的逻辑密钥元数据集合
      */
     @Override
-    public List<KmsKeyMetadata> findAllMetadata(String tenantId) {
+    public List<KmsKeyMetadata> findAllMetadata(String ownerPrincipalId) {
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId));
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId));
         try {
-            return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_ALL_KEY_BY_TENANT, parameters,
+            return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_ALL_KEY_BY_OWNER, parameters,
                     KEY_METADATA_ROW_MAPPER);
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
@@ -175,16 +213,16 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     }
 
     /**
-     * 按 tenant 和筛选条件读取稳定排序的逻辑密钥分页投影。
+     * 按 owner 和筛选条件读取稳定排序的逻辑密钥分页投影。
      */
     @Override
-    public KmsKeyPage findPage(String tenantId, String alias, String purpose, String algorithm, String state,
+    public KmsKeyPage findPage(String ownerPrincipalId, String alias, String purpose, String algorithm, String state,
                                long offset, int size) {
         if (offset < 0L || size < 1) {
             throw new KmsValidationException();
         }
         MapSqlParameterSource parameters = new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("alias", alias == null ? null : "%" + escapeLike(alias) + "%")
                 .addValue("purpose", purpose).addValue("algorithm", algorithm).addValue("state", state)
                 .addValue("offset", Long.valueOf(offset)).addValue("size", Integer.valueOf(size));
@@ -202,16 +240,48 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     }
 
     /**
+     * 使用完整 DataPlan 归属范围执行同一列表与 count 谓词。
+     */
+    @Override
+    public KmsKeyPage findPage(KmsOwnerAccessScope scope, String alias, String purpose, String algorithm, String state,
+                               long offset, int size) {
+        if (scope == null || offset < 0L || size < 1) {
+            throw new KmsValidationException();
+        }
+        String filters = " WHERE (:alias IS NULL OR key_alias LIKE :alias ESCAPE '\\\\') "
+                + "AND (:purpose IS NULL OR purpose = :purpose) AND (:algorithm IS NULL OR algorithm = :algorithm) "
+                + "AND (:state IS NULL OR state = :state)";
+        StringBuilder itemsSql = new StringBuilder("SELECT owner_principal_id, key_ref, key_alias, purpose, algorithm, state, ")
+                .append("state_before_destruction, active_version, row_version, created_at, updated_at FROM smart_kms_key")
+                .append(filters);
+        StringBuilder countSql = new StringBuilder("SELECT COUNT(*) FROM smart_kms_key").append(filters);
+        MapSqlParameterSource parameters = pageParameters(alias, purpose, algorithm, state, offset, size);
+        appendOwnerPredicate(itemsSql, parameters, scope);
+        appendOwnerPredicate(countSql, parameters, scope);
+        itemsSql.append(" ORDER BY updated_at DESC, key_ref ASC LIMIT :size OFFSET :offset");
+        try {
+            List<KmsKeyMetadata> items = jdbcTemplate.query(itemsSql.toString(), parameters, KEY_METADATA_ROW_MAPPER);
+            Long total = jdbcTemplate.queryForObject(countSql.toString(), parameters, Long.class);
+            if (total == null) {
+                throw new KmsPersistenceException();
+            }
+            return new KmsKeyPage(items, total.longValue());
+        } catch (DataAccessException exception) {
+            throw new KmsPersistenceException();
+        }
+    }
+
+    /**
      * 保存逻辑密钥元数据。
      *
-     * @param tenantId 资源所属 tenant
-     * @param key      待保存的逻辑密钥
+     * @param ownerPrincipalId 资源所属 owner
+     * @param key              待保存的逻辑密钥
      * @return 已持久化的逻辑密钥快照
      */
     @Override
-    public KmsKey save(String tenantId, KmsKey key) {
-        validateKey(tenantId, key);
-        Optional<KmsKey> existing = findByKeyRef(tenantId, key.getKeyRef());
+    public KmsKey save(String ownerPrincipalId, KmsKey key) {
+        validateKey(ownerPrincipalId, key);
+        Optional<KmsKey> existing = findByKeyRef(ownerPrincipalId, key.getKeyRef());
         MapSqlParameterSource parameters = createParameters(key);
         try {
             if (existing.isPresent()) {
@@ -226,7 +296,7 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
-        return findByKeyRef(tenantId, key.getKeyRef()).orElseThrow(KmsPersistenceException::new);
+        return findByKeyRef(ownerPrincipalId, key.getKeyRef()).orElseThrow(KmsPersistenceException::new);
     }
 
     /**
@@ -268,7 +338,7 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
             int activeVersion = resultSet.getInt("active_version");
             Integer nullableActiveVersion = resultSet.wasNull() ? null : Integer.valueOf(activeVersion);
             KmsKey key = KmsKey.builder()
-                    .tenantId(resultSet.getString("tenant_id"))
+                    .ownerPrincipalId(resultSet.getString("owner_principal_id"))
                     .keyRef(resultSet.getString("key_ref"))
                     .keyAlias(resultSet.getString("key_alias"))
                     .purpose(io.github.surezzzzzz.sdk.kms.core.constant.KmsKeyPurpose
@@ -282,7 +352,7 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
                     .rowVersion(resultSet.getLong("row_version"))
                     .build();
             try {
-                validateKey(key.getTenantId(), key);
+                validateKey(key.getOwnerPrincipalId(), key);
                 return key;
             } catch (KmsValidationException exception) {
                 throw new KmsPersistenceException();

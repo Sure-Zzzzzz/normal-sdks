@@ -37,7 +37,7 @@ class DefaultDestructionJobServiceTest {
      * 构造待处理销毁任务。
      */
     private static KmsDestructionJob job(Instant now) {
-        return KmsDestructionJob.builder().tenantId("test-tenant").keyRef("test-key-ref").keyVersion(1)
+        return KmsDestructionJob.builder().ownerPrincipalId("test-owner").keyRef("test-key-ref").keyVersion(1)
                 .state(KmsDestructionJobState.PENDING).dueAt(now).attemptCount(0).build();
     }
 
@@ -84,7 +84,7 @@ class DefaultDestructionJobServiceTest {
         when(workerStateRepository.findByInstanceId("test-kms-worker")).thenReturn(Optional.of(
                 KmsDestructionWorkerState.builder().instanceId("test-kms-worker").consecutiveFailureCount(3).build()));
         when(jobRepository.findDueOrExpiredClaim(now)).thenReturn(Collections.singletonList(KmsDestructionJob.builder()
-                .tenantId("test-tenant").keyRef("test-key-ref").keyVersion(1)
+                .ownerPrincipalId("test-owner").keyRef("test-key-ref").keyVersion(1)
                 .state(KmsDestructionJobState.PENDING).dueAt(now).attemptCount(0).build()));
         DefaultDestructionJobService service = service(clock, jobRepository, workerStateRepository);
 
@@ -110,7 +110,7 @@ class DefaultDestructionJobServiceTest {
         KmsDestructionJob job = job(now);
         when(clock.now()).thenReturn(now);
         when(jobRepository.findDueOrExpiredClaim(now)).thenReturn(Collections.singletonList(job));
-        when(jobRepository.claim(eq("test-tenant"), eq("test-key-ref"), eq(1), anyString(), any(Instant.class),
+        when(jobRepository.claim(eq("test-owner"), eq("test-key-ref"), eq(1), anyString(), any(Instant.class),
                 eq(now))).thenThrow(new KmsStateConflictException());
         DefaultDestructionJobService service = service(clock, jobRepository, workerStateRepository, auditPublisher);
 
@@ -136,7 +136,7 @@ class DefaultDestructionJobServiceTest {
         KmsDestructionJob job = job(now);
         when(clock.now()).thenReturn(now);
         when(jobRepository.findDueOrExpiredClaim(now)).thenReturn(Collections.singletonList(job));
-        when(jobRepository.claim(eq("test-tenant"), eq("test-key-ref"), eq(1), anyString(), any(Instant.class),
+        when(jobRepository.claim(eq("test-owner"), eq("test-key-ref"), eq(1), anyString(), any(Instant.class),
                 eq(now))).thenThrow(new KmsPersistenceException());
         DefaultDestructionJobService service = service(clock, jobRepository, workerStateRepository, auditPublisher);
 

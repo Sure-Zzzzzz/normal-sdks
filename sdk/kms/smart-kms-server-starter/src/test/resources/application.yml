@@ -1,20 +1,31 @@
 spring:
   profiles:
     active: local
-  datasource:
-    url: ${SMART_KMS_TEST_JDBC_URL:jdbc:mysql://localhost:3306/smart_kms_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
-    username: ${SMART_KMS_TEST_JDBC_USERNAME:root}
-    password: ${SMART_KMS_TEST_JDBC_PASSWORD:}
 
 io:
   github:
     surezzzzzz:
       sdk:
-        kms:
-          server:
+        mysql:
+          route:
             enable: true
-            worker:
-              enable: false
+            primary-datasource: kms
+            datasources:
+              kms:
+                url: ${SMART_KMS_TEST_JDBC_URL:jdbc:mysql://localhost:3306/smart_kms_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+                username: ${SMART_KMS_TEST_JDBC_USERNAME:root}
+                password: ${SMART_KMS_TEST_JDBC_PASSWORD:}
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 8
+                  minimum-idle: 2
+                  connection-timeout: 3000
+                  validation-timeout: 3000
+
+    kms:
+      server:
+        worker:
+          enable: false
 
 logging:
   level:

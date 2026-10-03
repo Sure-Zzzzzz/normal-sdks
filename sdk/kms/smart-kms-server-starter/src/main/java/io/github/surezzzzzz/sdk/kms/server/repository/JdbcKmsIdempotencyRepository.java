@@ -29,14 +29,14 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
      */
     private static final RowMapper<KmsIdempotencyRecord> IDEMPOTENCY_ROW_MAPPER = new KmsIdempotencyRowMapper();
     /**
-     * 执行 tenant 隔离 SQL 的 JDBC 模板。
+     * 执行 owner 隔离 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建幂等 JDBC 仓储。
      *
-     * @param jdbcTemplate 执行 tenant 隔离 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
      */
     public JdbcKmsIdempotencyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -45,9 +45,9 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
     /**
      * 创建幂等作用域参数。
      */
-    private static MapSqlParameterSource parameters(String tenantId, String principalId, String endpoint,
+    private static MapSqlParameterSource parameters(String ownerPrincipalId, String principalId, String endpoint,
                                                     String idempotencyKey) {
-        return new MapSqlParameterSource().addValue("tenantId", tenantId).addValue("principalId", principalId)
+        return new MapSqlParameterSource().addValue("ownerPrincipalId", ownerPrincipalId).addValue("principalId", principalId)
                 .addValue("endpoint", endpoint).addValue("idempotencyKey", idempotencyKey);
     }
 
@@ -55,7 +55,7 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
      * 将 Core 幂等模型转换为 SQL 参数。
      */
     private static MapSqlParameterSource parameters(KmsIdempotencyRecord record) {
-        return parameters(record.getTenantId(), record.getPrincipalId(), record.getEndpoint(),
+        return parameters(record.getOwnerPrincipalId(), record.getPrincipalId(), record.getEndpoint(),
                 record.getIdempotencyKey()).addValue("requestHash", record.getRequestHash())
                 .addValue("resourceRef", record.getResourceRef()).addValue("httpStatus", record.getHttpStatus())
                 .addValue("expiresAt", Timestamp.from(record.getExpiresAt()));
@@ -64,16 +64,16 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
     /**
      * 按完整幂等作用域查询已有记录。
      *
-     * @param tenantId       发起操作的 tenant
-     * @param principalId    发起操作的主体标识
-     * @param endpoint       管理操作稳定端点标识
-     * @param idempotencyKey 客户端提供的幂等键
+     * @param ownerPrincipalId 发起操作的 owner
+     * @param principalId      发起操作的主体标识
+     * @param endpoint         管理操作稳定端点标识
+     * @param idempotencyKey   客户端提供的幂等键
      * @return 匹配的记录；不存在时为空
      */
     @Override
-    public Optional<KmsIdempotencyRecord> find(String tenantId, String principalId, String endpoint,
+    public Optional<KmsIdempotencyRecord> find(String ownerPrincipalId, String principalId, String endpoint,
                                                String idempotencyKey) {
-        List<KmsIdempotencyRecord> records = query(tenantId, principalId, endpoint, idempotencyKey);
+        List<KmsIdempotencyRecord> records = query(ownerPrincipalId, principalId, endpoint, idempotencyKey);
         return records.isEmpty() ? Optional.<KmsIdempotencyRecord>empty() : Optional.of(records.get(0));
     }
 
@@ -94,7 +94,7 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
-        return find(record.getTenantId(), record.getPrincipalId(), record.getEndpoint(), record.getIdempotencyKey())
+        return find(record.getOwnerPrincipalId(), record.getPrincipalId(), record.getEndpoint(), record.getIdempotencyKey())
                 .orElseThrow(KmsPersistenceException::new);
     }
 
@@ -127,18 +127,18 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
     /**
      * 查询完整幂等作用域的响应快照。
      *
-     * @param tenantId       发起操作的租户标识
-     * @param principalId    发起操作的认证主体标识
-     * @param endpoint       规范化具体端点路径
-     * @param idempotencyKey 客户端幂等键
+     * @param ownerPrincipalId 发起操作的 owner 标识
+     * @param principalId      发起操作的认证主体标识
+     * @param endpoint         规范化具体端点路径
+     * @param idempotencyKey   客户端幂等键
      * @return 已保存的无敏感响应快照；不存在时为空
      */
     @Override
-    public Optional<byte[]> findResponseSnapshot(String tenantId, String principalId, String endpoint,
+    public Optional<byte[]> findResponseSnapshot(String ownerPrincipalId, String principalId, String endpoint,
                                                  String idempotencyKey) {
         try {
             List<byte[]> snapshots = jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_IDEMPOTENCY_SNAPSHOT,
-                    parameters(tenantId, principalId, endpoint, idempotencyKey),
+                    parameters(ownerPrincipalId, principalId, endpoint, idempotencyKey),
                     new org.springframework.jdbc.core.RowMapper<byte[]>() {
                         @Override
                         public byte[] mapRow(ResultSet resultSet, int rowNumber) throws SQLException {
@@ -155,13 +155,13 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
      * 删除当前完整作用域内已到期的记录。
      */
     @Override
-    public void deleteExpired(String tenantId, String principalId, String endpoint, String idempotencyKey, Instant now) {
+    public void deleteExpired(String ownerPrincipalId, String principalId, String endpoint, String idempotencyKey, Instant now) {
         if (now == null) {
             throw new KmsPersistenceException();
         }
         try {
             jdbcTemplate.update(SmartKmsServerConstant.SQL_DELETE_EXPIRED_IDEMPOTENCY_RECORD,
-                    parameters(tenantId, principalId, endpoint, idempotencyKey).addValue("now", Timestamp.from(now)));
+                    parameters(ownerPrincipalId, principalId, endpoint, idempotencyKey).addValue("now", Timestamp.from(now)));
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
@@ -170,11 +170,11 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
     /**
      * 查询完整幂等作用域的记录。
      */
-    private List<KmsIdempotencyRecord> query(String tenantId, String principalId, String endpoint,
+    private List<KmsIdempotencyRecord> query(String ownerPrincipalId, String principalId, String endpoint,
                                              String idempotencyKey) {
         try {
             return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_IDEMPOTENCY_RECORD,
-                    parameters(tenantId, principalId, endpoint, idempotencyKey), IDEMPOTENCY_ROW_MAPPER);
+                    parameters(ownerPrincipalId, principalId, endpoint, idempotencyKey), IDEMPOTENCY_ROW_MAPPER);
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
@@ -196,7 +196,7 @@ public class JdbcKmsIdempotencyRepository implements KmsIdempotencyRepository,
         @Override
         public KmsIdempotencyRecord mapRow(ResultSet resultSet, int rowNumber) throws SQLException {
             Timestamp expiresAt = resultSet.getTimestamp("expires_at");
-            return KmsIdempotencyRecord.builder().tenantId(resultSet.getString("tenant_id"))
+            return KmsIdempotencyRecord.builder().ownerPrincipalId(resultSet.getString("owner_principal_id"))
                     .principalId(resultSet.getString("principal_id")).endpoint(resultSet.getString("endpoint"))
                     .idempotencyKey(resultSet.getString("idempotency_key"))
                     .requestHash(resultSet.getString("request_hash")).resourceRef(resultSet.getString("resource_ref"))

@@ -1,24 +1,34 @@
 package io.github.surezzzzzz.sdk.kms.server.controller;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.annotation.RequireApiPermission;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
+import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsAlgorithm;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsKeyPurpose;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsKeyState;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsOperation;
+import io.github.surezzzzzz.sdk.kms.core.exception.KmsNotFoundException;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsPersistenceException;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsKey;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsKeyPolicy;
+import io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsPublicKey;
 import io.github.surezzzzzz.sdk.kms.core.service.KeyManagementService;
 import io.github.surezzzzzz.sdk.kms.core.service.KeyPolicyManagementService;
 import io.github.surezzzzzz.sdk.kms.core.service.PublicKeyService;
 import io.github.surezzzzzz.sdk.kms.server.configuration.SmartKmsServerProperties;
 import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
+import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyMetadata;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyPage;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyQueryRepository;
-import io.github.surezzzzzz.sdk.kms.server.service.*;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyResult;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyService;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsRequestContext;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -41,7 +51,6 @@ public class KmsKeyController extends KmsHttpControllerSupport {
 
     private final KeyManagementService keyManagementService;
     private final KmsKeyQueryRepository keyQueryRepository;
-    private final KmsManagementReadAuthorizer managementReadAuthorizer;
     private final KeyPolicyManagementService keyPolicyManagementService;
     private final PublicKeyService publicKeyService;
     private final KmsManagementIdempotencyService idempotencyService;
@@ -52,14 +61,12 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     public KmsKeyController(KmsPrincipalResolver principalResolver, SmartKmsServerProperties properties,
                             KeyManagementService keyManagementService,
                             KmsKeyQueryRepository keyQueryRepository,
-                            KmsManagementReadAuthorizer managementReadAuthorizer,
                             KeyPolicyManagementService keyPolicyManagementService,
                             PublicKeyService publicKeyService,
                             KmsManagementIdempotencyService idempotencyService) {
         super(principalResolver, properties);
         this.keyManagementService = keyManagementService;
         this.keyQueryRepository = keyQueryRepository;
-        this.managementReadAuthorizer = managementReadAuthorizer;
         this.keyPolicyManagementService = keyPolicyManagementService;
         this.publicKeyService = publicKeyService;
         this.idempotencyService = idempotencyService;
@@ -117,15 +124,32 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     }
 
     /**
-     * 创建逻辑密钥资源。
+     * 从已评估 DataPlan 中定位目标密钥，并保留实际操作者身份构造领域调用主体。
+     *
+     * <p>目标归属只能由受控查询结果派生，不能接收 HTTP 传入的 ownerPrincipalId。这样管理员的
+     * ALLOW_ALL 与受限管理员的 IN 约束经过同一条路径生效，审计主体仍保留实际调用者。</p>
+     */
+    private KmsRequestContext scopedContext(HttpServletRequest request, DataAccessPlan plan, String keyRef) {
+        KmsRequestContext requestContext = context(request);
+        KmsKeyMetadata metadata = keyQueryRepository.findMetadata(KmsOwnerAccessScope.from(plan), keyRef)
+                .orElseThrow(KmsNotFoundException::new);
+        KmsPrincipal principal = requestContext.getPrincipal();
+        return new KmsRequestContext(new KmsPrincipal(principal.getPrincipalId(),
+                metadata.getKey().getOwnerPrincipalId(), principal.getScopes()), requestContext.getRequestId());
+    }
+
+    /**
+     * 创建逻辑密钥资源；豁免 DataPlan：归属由服务端固定为认证主体本人（不接收 owner 参数，
+     * 无跨 owner 面），自建自用不涉及访问他人数据。管理面端点照旧全量 DATA 校验。
      */
     @PostMapping(consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE)
     public ResponseEntity<String> create(@RequestBody String body,
                                          @RequestHeader("Idempotency-Key") String idempotencyKey,
                                          HttpServletRequest request) {
         ObjectNode input = object(body, "keyAlias", "purpose", "algorithm");
-        KmsRequestContext context = context(request);
-        KmsKey key = KmsKey.builder().tenantId(context.getPrincipal().getTenantId())
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE);
+        KmsKey key = KmsKey.builder().ownerPrincipalId(context.getPrincipal().getOwnerPrincipalId())
                 .keyRef("pending").keyAlias(text(input, "keyAlias", true))
                 .purpose(keyPurpose(text(input, "purpose", true))).algorithm(algorithm(text(input, "algorithm", true)))
                 .state(KmsKeyState.ACTIVE).activeVersion(1).rowVersion(0L).build();
@@ -134,7 +158,7 @@ public class KmsKeyController extends KmsHttpControllerSupport {
                 idempotencyKey, context.getRequestId(), canonicalRequest(endpoint, input), () -> {
                     KmsKey created = keyManagementService.create(context.getPrincipal(), key, idempotencyKey,
                             context.getRequestId());
-                    KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getTenantId(),
+                    KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getOwnerPrincipalId(),
                             created.getKeyRef()).orElseThrow(KmsPersistenceException::new);
                     String location = SmartKmsServerConstant.API_BASE_PATH + "/keys/" + created.getKeyRef();
                     return new KmsManagementIdempotencyResult(201, KmsHttpJson.write(key(metadata)),
@@ -144,21 +168,23 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     }
 
     /**
-     * 查询当前 tenant 的单个逻辑密钥资源。
+     * 查询当前主体归属的单个逻辑密钥资源。
      */
     @GetMapping(value = "/{keyRef}", produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_READ)
     public ResponseEntity<String> get(@PathVariable String keyRef, HttpServletRequest request) {
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_READ);
         keyManagementService.find(context.getPrincipal(), keyRef, context.getRequestId());
-        KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getTenantId(), keyRef)
+        KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getOwnerPrincipalId(), keyRef)
                 .orElseThrow(KmsPersistenceException::new);
         return json(200, key(metadata));
     }
 
     /**
-     * 查询当前 tenant 的逻辑密钥集合。
+     * 查询当前主体归属的逻辑密钥集合。
      */
     @GetMapping(produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_READ)
     public ResponseEntity<String> list(@RequestParam(defaultValue = "1") int page,
                                        @RequestParam(required = false) Integer size,
                                        @RequestParam(required = false) String alias,
@@ -166,17 +192,16 @@ public class KmsKeyController extends KmsHttpControllerSupport {
                                        @RequestParam(required = false) String algorithm,
                                        @RequestParam(required = false) String state,
                                        HttpServletRequest request) {
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_READ);
         int defaultSize = pageDefaultSize();
         int maxSize = pageMaxSize(defaultSize);
         int resolvedSize = size == null ? defaultSize : size.intValue();
         if (page < 1 || resolvedSize < 1 || resolvedSize > maxSize) {
             throw new KmsValidationException();
         }
-        managementReadAuthorizer.authorize(context.getPrincipal(), context.getRequestId());
         validateFilterCodes(purpose, algorithm, state);
         long requestedOffset = ((long) page - 1L) * (long) resolvedSize;
-        KmsKeyPage keys = keyQueryRepository.findPage(context.getPrincipal().getTenantId(), alias, purpose, algorithm,
+        KmsKeyPage keys = keyQueryRepository.findPage(context.getPrincipal().getOwnerPrincipalId(), alias, purpose, algorithm,
                 state, requestedOffset, resolvedSize);
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (KmsKeyMetadata key : keys.getItems()) {
@@ -194,11 +219,15 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 修改逻辑密钥状态。
      */
     @PatchMapping(value = "/{keyRef}/state", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_MANAGE)
     public ResponseEntity<String> changeState(@PathVariable String keyRef, @RequestBody String body,
                                               @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                              @CurrentDataAccessPlan DataAccessPlan plan,
                                               HttpServletRequest request) {
         ObjectNode input = object(body, "state", "expectedRowVersion");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE);
         String endpoint = "PATCH:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/state";
         KmsManagementIdempotencyResult result = idempotencyService.execute(context.getPrincipal(), endpoint,
                 idempotencyKey, context.getRequestId(), canonicalRequest(endpoint, input), () -> {
@@ -215,11 +244,15 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 创建下一个活动密钥版本。
      */
     @PostMapping(value = "/{keyRef}/versions", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_MANAGE)
     public ResponseEntity<String> rotate(@PathVariable String keyRef, @RequestBody String body,
                                          @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                         @CurrentDataAccessPlan DataAccessPlan plan,
                                          HttpServletRequest request) {
         ObjectNode input = object(body, "expectedRowVersion");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_MANAGE);
         String endpoint = "POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/versions";
         KmsManagementIdempotencyResult result = idempotencyService.execute(context.getPrincipal(), endpoint,
                 idempotencyKey, context.getRequestId(), canonicalRequest(endpoint, input), () -> {
@@ -235,16 +268,20 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 安排整个逻辑密钥销毁。
      */
     @PutMapping(value = "/{keyRef}/destruction", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_DESTROY)
     public ResponseEntity<String> scheduleDestruction(@PathVariable String keyRef, @RequestBody String body,
                                                       @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                                      @CurrentDataAccessPlan DataAccessPlan plan,
                                                       HttpServletRequest request) {
-        ObjectNode input = object(body, "destroyAfter", "expectedRowVersion");
-        KmsRequestContext context = context(request);
-        Instant destroyAfter = instant(input, "destroyAfter", true);
+        ObjectNode input = object(body, "dueAt", "expectedRowVersion");
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY);
+        Instant dueAt = instant(input, "dueAt", true);
         String endpoint = "PUT:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/destruction";
         KmsManagementIdempotencyResult result = idempotencyService.execute(context.getPrincipal(), endpoint,
                 idempotencyKey, context.getRequestId(), canonicalRequest(endpoint, input), () -> {
-                    KmsKey key = keyManagementService.scheduleDestruction(context.getPrincipal(), keyRef, destroyAfter,
+                    KmsKey key = keyManagementService.scheduleDestruction(context.getPrincipal(), keyRef, dueAt,
                             longValue(input, "expectedRowVersion", true).longValue(), idempotencyKey,
                             context.getRequestId());
                     return managementResponse(200, key(context, key), key.getKeyRef());
@@ -256,11 +293,15 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 取消未被领取的逻辑密钥销毁任务。
      */
     @DeleteMapping(value = "/{keyRef}/destruction", consumes = JSON)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_DESTROY)
     public ResponseEntity<String> cancelDestruction(@PathVariable String keyRef, @RequestBody String body,
                                                     @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                                    @CurrentDataAccessPlan DataAccessPlan plan,
                                                     HttpServletRequest request) {
         ObjectNode input = object(body, "expectedRowVersion");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY);
         String endpoint = "DELETE:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/destruction";
         KmsManagementIdempotencyResult result = idempotencyService.execute(context.getPrincipal(), endpoint,
                 idempotencyKey, context.getRequestId(), canonicalRequest(endpoint, input), () -> {
@@ -276,10 +317,11 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 查询可分发的单个 ES256 公钥资源。
      */
     @GetMapping(value = "/{keyRef}/public-key", produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_READ_PUBLIC_KEY)
     public ResponseEntity<String> publicKey(@PathVariable String keyRef,
                                             @RequestParam(required = false) Integer version,
                                             HttpServletRequest request) {
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_READ_PUBLIC_KEY);
         return jsonWithHeader(200, publicKey(publicKeyService.read(context.getPrincipal(), keyRef, version,
                 context.getRequestId())), HttpHeaders.CACHE_CONTROL, "no-store");
     }
@@ -288,8 +330,9 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 查询当前逻辑密钥的全部可分发 ES256 公钥资源。
      */
     @GetMapping(value = "/{keyRef}/public-keys", produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_READ_PUBLIC_KEY)
     public ResponseEntity<String> publicKeys(@PathVariable String keyRef, HttpServletRequest request) {
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_READ_PUBLIC_KEY);
         List<Map<String, Object>> keys = new ArrayList<Map<String, Object>>();
         for (KmsPublicKey publicKey : publicKeyService.list(context.getPrincipal(), keyRef, context.getRequestId())) {
             keys.add(publicKey(publicKey));
@@ -301,12 +344,16 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 创建精确 allow-only 策略资源。
      */
     @PostMapping(value = "/{keyRef}/policies", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_POLICY)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_POLICY)
     public ResponseEntity<String> createPolicy(@PathVariable String keyRef, @RequestBody String body,
                                                @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                               @CurrentDataAccessPlan DataAccessPlan plan,
                                                HttpServletRequest request) {
         ObjectNode input = object(body, "principalId", "keyVersion", "operation", "expiresAt");
-        KmsRequestContext context = context(request);
-        KmsKeyPolicy policy = KmsKeyPolicy.builder().policyId("pending").tenantId(context.getPrincipal().getTenantId())
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_POLICY);
+        KmsKeyPolicy policy = KmsKeyPolicy.builder().policyId("pending").ownerPrincipalId(context.getPrincipal().getOwnerPrincipalId())
                 .keyRef(keyRef).principalId(text(input, "principalId", true)).keyVersion(integer(input, "keyVersion", false))
                 .operation(operation(text(input, "operation", true))).expiresAt(instant(input, "expiresAt", false))
                 .rowVersion(0L).build();
@@ -324,11 +371,15 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     }
 
     /**
-     * 查询当前 tenant 的逻辑密钥策略资源。
+     * 查询当前 DataPlan 范围内的逻辑密钥策略资源。
      */
     @GetMapping(value = "/{keyRef}/policies", produces = JSON_UTF8)
-    public ResponseEntity<String> policies(@PathVariable String keyRef, HttpServletRequest request) {
-        KmsRequestContext context = context(request);
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_POLICY)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_POLICY)
+    public ResponseEntity<String> policies(@PathVariable String keyRef, @CurrentDataAccessPlan DataAccessPlan plan,
+                                           HttpServletRequest request) {
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_POLICY);
         List<Map<String, Object>> policies = new ArrayList<Map<String, Object>>();
         for (KmsKeyPolicy policy : keyPolicyManagementService.list(context.getPrincipal(), keyRef,
                 context.getRequestId())) {
@@ -343,12 +394,16 @@ public class KmsKeyController extends KmsHttpControllerSupport {
      * 撤销精确策略资源。
      */
     @DeleteMapping(value = "/{keyRef}/policies/{policyId}", consumes = JSON)
+    @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_POLICY)
+    @DataPermissionOperation(resource = SmartKmsServerConstant.DATA_RESOURCE_KEY,
+            action = SmartKmsServerConstant.DATA_ACTION_KEY_POLICY)
     public ResponseEntity<String> revokePolicy(@PathVariable String keyRef, @PathVariable String policyId,
                                                @RequestBody String body,
                                                @RequestHeader("Idempotency-Key") String idempotencyKey,
+                                               @CurrentDataAccessPlan DataAccessPlan plan,
                                                HttpServletRequest request) {
         ObjectNode input = object(body, "expectedRowVersion");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_POLICY);
         String endpoint = "DELETE:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/policies/"
                 + policyId;
         KmsManagementIdempotencyResult result = idempotencyService.execute(context.getPrincipal(), endpoint,
@@ -362,7 +417,7 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     }
 
     private Map<String, Object> key(KmsRequestContext context, KmsKey source) {
-        KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getTenantId(), source.getKeyRef())
+        KmsKeyMetadata metadata = keyQueryRepository.findMetadata(context.getPrincipal().getOwnerPrincipalId(), source.getKeyRef())
                 .orElseThrow(KmsPersistenceException::new);
         return key(metadata);
     }

@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.kms.server.repository;
 
+import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -11,34 +13,58 @@ import java.util.Optional;
 public interface KmsKeyQueryRepository {
 
     /**
-     * 查询当前 tenant 下单个逻辑密钥元数据。
+     * 查询当前 owner 下单个逻辑密钥元数据。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 无材料密钥元数据；不存在时为空
      */
-    Optional<KmsKeyMetadata> findMetadata(String tenantId, String keyRef);
+    Optional<KmsKeyMetadata> findMetadata(String ownerPrincipalId, String keyRef);
 
     /**
-     * 查询当前 tenant 下全部逻辑密钥元数据。
+     * 按完整的已验证归属范围查询单个逻辑密钥元数据。
      *
-     * @param tenantId 资源所属 tenant
+     * @param scope  已评估 DataPlan 的 KMS 归属投影
+     * @param keyRef 逻辑密钥标识
+     * @return 命中且在范围内的密钥；无权与不存在均为空
+     */
+    Optional<KmsKeyMetadata> findMetadata(KmsOwnerAccessScope scope, String keyRef);
+
+    /**
+     * 查询当前 owner 下全部逻辑密钥元数据。
+     *
+     * @param ownerPrincipalId 资源所属 owner
      * @return 按更新时间倒序和标识升序稳定排序的无材料密钥元数据
      */
-    List<KmsKeyMetadata> findAllMetadata(String tenantId);
+    List<KmsKeyMetadata> findAllMetadata(String ownerPrincipalId);
 
     /**
-     * 按 tenant、筛选条件和稳定排序读取一页无材料密钥元数据。
+     * 按 owner、筛选条件和稳定排序读取一页无材料密钥元数据。
      *
-     * @param tenantId  资源所属 tenant
+     * @param ownerPrincipalId 资源所属 owner
+     * @param alias            可选别名片段
+     * @param purpose          可选用途编码
+     * @param algorithm        可选算法编码
+     * @param state            可选状态编码
+     * @param offset           从零开始的结果偏移量
+     * @param size             当前页最大记录数
+     * @return 当前页与筛选后总数
+     */
+    KmsKeyPage findPage(String ownerPrincipalId, String alias, String purpose, String algorithm, String state, long offset,
+                        int size);
+
+    /**
+     * 按完整的已验证归属范围分页查询逻辑密钥。
+     *
+     * @param scope     已评估 DataPlan 的 KMS 归属投影
      * @param alias     可选别名片段
      * @param purpose   可选用途编码
      * @param algorithm 可选算法编码
      * @param state     可选状态编码
      * @param offset    从零开始的结果偏移量
      * @param size      当前页最大记录数
-     * @return 当前页与筛选后总数
+     * @return 当前页与同一范围内的总数
      */
-    KmsKeyPage findPage(String tenantId, String alias, String purpose, String algorithm, String state, long offset,
-                        int size);
+    KmsKeyPage findPage(KmsOwnerAccessScope scope, String alias, String purpose, String algorithm, String state,
+                        long offset, int size);
 }

@@ -113,10 +113,10 @@ public class DefaultKmsSignatureOperationService implements KmsSignatureOperatio
      * 在当前事务的逻辑密钥锁内读取活动版本。
      */
     private int activeVersion(KmsPrincipal principal, String keyRef) {
-        if (!keyLock.lock(principal.getTenantId(), keyRef)) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), keyRef)) {
             throw new KmsAuthorizationException();
         }
-        KmsKey key = keyRepository.findByKeyRef(principal.getTenantId(), keyRef)
+        KmsKey key = keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef)
                 .orElseThrow(KmsAuthorizationException::new);
         if (key.getActiveVersion() == null) {
             throw new KmsCryptoException();

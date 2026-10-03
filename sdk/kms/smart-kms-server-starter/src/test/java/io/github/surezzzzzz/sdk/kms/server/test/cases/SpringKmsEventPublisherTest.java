@@ -39,7 +39,7 @@ class SpringKmsEventPublisherTest {
                 SmartKmsCoreConstant.AUDIT_RESOURCE_TYPE_KEY)
                 : Collections.singletonMap(SmartKmsCoreConstant.AUDIT_METADATA_KEY_FAILURE_CATEGORY,
                 SmartKmsCoreConstant.AUDIT_FAILURE_CATEGORY_VALIDATION);
-        return KmsAuditEvent.builder().tenantId("test-tenant").keyRef("test-key-ref")
+        return KmsAuditEvent.builder().ownerPrincipalId("test-tenant").keyRef("test-key-ref")
                 .principalId("test-principal").operation(KmsOperation.CREATE_KEY).outcome(outcome)
                 .requestId("test-request-id-000000000001").occurredAt(Instant.parse("2026-01-01T00:00:00Z"))
                 .metadata(metadata).build();

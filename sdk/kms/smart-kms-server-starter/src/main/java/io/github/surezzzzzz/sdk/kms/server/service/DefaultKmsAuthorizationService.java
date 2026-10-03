@@ -108,17 +108,17 @@ public class DefaultKmsAuthorizationService implements KmsAuthorizationService {
         if (!principal.hasScope(scopeFor(operation))) {
             throw new KmsAuthorizationException();
         }
-        if (!keyLock.lock(principal.getTenantId(), keyRef)) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), keyRef)) {
             throw new KmsAuthorizationException();
         }
-        KmsKey key = keyRepository.findByKeyRef(principal.getTenantId(), keyRef).orElseThrow(KmsAuthorizationException::new);
-        KmsKeyVersion keyVersion = keyVersionRepository.findByVersion(principal.getTenantId(), keyRef, version)
+        KmsKey key = keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef).orElseThrow(KmsAuthorizationException::new);
+        KmsKeyVersion keyVersion = keyVersionRepository.findByVersion(principal.getOwnerPrincipalId(), keyRef, version)
                 .orElseThrow(KmsAuthorizationException::new);
         if (!KmsStateHelper.canExecute(key.getState(), keyVersion.getState(), operation)) {
             throw new KmsStateConflictException();
         }
         Instant now = clock.now();
-        for (KmsKeyPolicy policy : keyPolicyRepository.findByKeyRef(principal.getTenantId(), keyRef)) {
+        for (KmsKeyPolicy policy : keyPolicyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef)) {
             if (KmsAuthorizationHelper.matches(policy, principal, keyRef, version, operation, now)) {
                 return;
             }

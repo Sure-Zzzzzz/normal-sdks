@@ -74,3 +74,5 @@ changelog.md
 *.keystore
 # AKSK e2e 双身份起服凭据（gitignored）
 **/application-e2e.yml
+**/application-owner-e2e.yml
+*.pen

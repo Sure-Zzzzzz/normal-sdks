@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.kms.core.repository.KmsIdempotencyRepository;
 import io.github.surezzzzzz.sdk.kms.core.support.KmsIdempotencyHelper;
 import io.github.surezzzzzz.sdk.kms.core.support.KmsValidationHelper;
 import io.github.surezzzzzz.sdk.kms.server.configuration.SmartKmsServerProperties;
+import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsIdempotencyResponseSnapshotRepository;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsIdempotencyScopeLock;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
@@ -62,7 +63,7 @@ public class KmsManagementIdempotencyService {
      * 生成不包含任何原始作用域字段的固定长度锁标识。
      */
     private static String scopeHash(KmsPrincipal principal, String endpoint, String idempotencyKey) {
-        return sha256(principal.getTenantId() + "\n" + principal.getPrincipalId() + "\n" + endpoint + "\n"
+        return sha256(principal.getOwnerPrincipalId() + "\n" + principal.getPrincipalId() + "\n" + endpoint + "\n"
                 + idempotencyKey);
     }
 
@@ -70,25 +71,25 @@ public class KmsManagementIdempotencyService {
      * 将内部稳定端点映射为唯一的管理审计操作。
      */
     private static KmsOperation operation(String endpoint) {
-        if (endpoint.startsWith("POST:/api/v1/kms/keys/") && endpoint.endsWith("/versions")) {
+        if (endpoint.startsWith("POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/versions")) {
             return KmsOperation.ROTATE_KEY;
         }
-        if (endpoint.startsWith("PATCH:/api/v1/kms/keys/") && endpoint.endsWith("/state")) {
+        if (endpoint.startsWith("PATCH:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/state")) {
             return KmsOperation.CHANGE_KEY_STATE;
         }
-        if (endpoint.startsWith("PUT:/api/v1/kms/keys/") && endpoint.endsWith("/destruction")) {
+        if (endpoint.startsWith("PUT:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/destruction")) {
             return KmsOperation.SCHEDULE_KEY_DESTRUCTION;
         }
-        if (endpoint.startsWith("DELETE:/api/v1/kms/keys/") && endpoint.endsWith("/destruction")) {
+        if (endpoint.startsWith("DELETE:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/destruction")) {
             return KmsOperation.CANCEL_KEY_DESTRUCTION;
         }
-        if (endpoint.startsWith("POST:/api/v1/kms/keys/") && endpoint.endsWith("/policies")) {
+        if (endpoint.startsWith("POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/policies")) {
             return KmsOperation.CREATE_KEY_POLICY;
         }
-        if (endpoint.startsWith("DELETE:/api/v1/kms/keys/") && endpoint.contains("/policies/")) {
+        if (endpoint.startsWith("DELETE:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.contains("/policies/")) {
             return KmsOperation.REVOKE_KEY_POLICY;
         }
-        if ("POST:/api/v1/kms/keys".equals(endpoint)) {
+        if (("POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys").equals(endpoint)) {
             return KmsOperation.CREATE_KEY;
         }
         throw new KmsPersistenceException();
@@ -111,7 +112,7 @@ public class KmsManagementIdempotencyService {
      * 从内部稳定端点提取可审计的逻辑密钥标识。
      */
     private static String keyRef(String endpoint) {
-        String prefix = "/api/v1/kms/keys/";
+        String prefix = SmartKmsServerConstant.API_BASE_PATH + "/keys/";
         int start = endpoint.indexOf(prefix);
         if (start < 0) {
             return null;
@@ -213,15 +214,15 @@ public class KmsManagementIdempotencyService {
             String requestHash = sha256(canonicalRequest);
             lockScope(scopeHash(principal, endpoint, idempotencyKey));
             Instant now = clock.now();
-            KmsIdempotencyRecord existing = idempotencyRepository.find(principal.getTenantId(),
+            KmsIdempotencyRecord existing = idempotencyRepository.find(principal.getOwnerPrincipalId(),
                     principal.getPrincipalId(), endpoint, idempotencyKey).orElse(null);
             if (existing != null) {
                 if (existing.getExpiresAt() == null || !existing.getExpiresAt().isAfter(now)) {
-                    snapshotRepository.deleteExpired(principal.getTenantId(), principal.getPrincipalId(), endpoint,
+                    snapshotRepository.deleteExpired(principal.getOwnerPrincipalId(), principal.getPrincipalId(), endpoint,
                             idempotencyKey, now);
-                } else if (KmsIdempotencyHelper.isReplayable(existing, principal.getTenantId(),
+                } else if (KmsIdempotencyHelper.isReplayable(existing, principal.getOwnerPrincipalId(),
                         principal.getPrincipalId(), endpoint, idempotencyKey, requestHash)) {
-                    byte[] snapshot = snapshotRepository.findResponseSnapshot(principal.getTenantId(),
+                    byte[] snapshot = snapshotRepository.findResponseSnapshot(principal.getOwnerPrincipalId(),
                                     principal.getPrincipalId(), endpoint, idempotencyKey)
                             .orElseThrow(KmsPersistenceException::new);
                     KmsManagementIdempotencyResult replayed = readSnapshot(snapshot);
@@ -232,7 +233,7 @@ public class KmsManagementIdempotencyService {
             }
             KmsManagementIdempotencyResult result = action.execute();
             validateResult(result);
-            KmsIdempotencyRecord record = KmsIdempotencyRecord.builder().tenantId(principal.getTenantId())
+            KmsIdempotencyRecord record = KmsIdempotencyRecord.builder().ownerPrincipalId(principal.getOwnerPrincipalId())
                     .principalId(principal.getPrincipalId()).endpoint(endpoint).idempotencyKey(idempotencyKey)
                     .requestHash(requestHash).resourceRef(result.getResourceRef()).httpStatus(result.getStatus())
                     .expiresAt(now.plusSeconds(retentionSeconds())).build();

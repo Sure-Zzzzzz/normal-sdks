@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.kms.server.controller;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.github.surezzzzzz.sdk.auth.authorization.application.core.annotation.RequireApiPermission;
 import io.github.surezzzzzz.sdk.kms.core.service.CryptoOperationService;
 import io.github.surezzzzzz.sdk.kms.server.configuration.SmartKmsServerProperties;
 import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
@@ -44,9 +45,10 @@ public class KmsCryptoController extends KmsHttpControllerSupport {
      * 创建 ES256 签名结果资源。
      */
     @PostMapping(value = "/signatures", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_SIGN)
     public ResponseEntity<String> sign(@RequestBody String body, HttpServletRequest request) {
         ObjectNode input = object(body, "keyRef", "version", "input");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_SIGN);
         String keyRef = text(input, "keyRef", true);
         KmsSignatureOperationResult result = signatureOperationService.sign(context.getPrincipal(), keyRef,
                 integer(input, "version", false), signingInput(input, "input", true), context.getRequestId());
@@ -61,9 +63,10 @@ public class KmsCryptoController extends KmsHttpControllerSupport {
      * 创建 ES256 验签结果资源。
      */
     @PostMapping(value = "/verifications", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_VERIFY)
     public ResponseEntity<String> verify(@RequestBody String body, HttpServletRequest request) {
         ObjectNode input = object(body, "keyRef", "version", "input", "signature");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_VERIFY);
         boolean valid = cryptoOperationService.verify(context.getPrincipal(), text(input, "keyRef", true),
                 integer(input, "version", false), signingInput(input, "input", true),
                 signature(input, "signature", true), context.getRequestId());
@@ -76,9 +79,10 @@ public class KmsCryptoController extends KmsHttpControllerSupport {
      * 创建 AES-GCM 密文封装资源。
      */
     @PostMapping(value = "/envelopes", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_ENCRYPT)
     public ResponseEntity<String> encrypt(@RequestBody String body, HttpServletRequest request) {
         ObjectNode input = object(body, "keyRef", "plaintext", "aad");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_ENCRYPT);
         byte[] envelope = cryptoOperationService.encrypt(context.getPrincipal(), text(input, "keyRef", true),
                 plaintext(input, "plaintext", true), aad(input, "aad", false), context.getRequestId());
         Map<String, Object> response = map();
@@ -90,9 +94,10 @@ public class KmsCryptoController extends KmsHttpControllerSupport {
      * 创建 AES-GCM 解密结果资源。
      */
     @PostMapping(value = "/decryptions", consumes = JSON, produces = JSON_UTF8)
+    @RequireApiPermission(SmartKmsServerConstant.SCOPE_DECRYPT)
     public ResponseEntity<String> decrypt(@RequestBody String body, HttpServletRequest request) {
         ObjectNode input = object(body, "envelope", "aad");
-        KmsRequestContext context = context(request);
+        KmsRequestContext context = requireApiPermission(context(request), SmartKmsServerConstant.SCOPE_DECRYPT);
         byte[] plaintext = cryptoOperationService.decrypt(context.getPrincipal(), envelope(input, "envelope", true),
                 aad(input, "aad", false), context.getRequestId());
         Map<String, Object> response = map();

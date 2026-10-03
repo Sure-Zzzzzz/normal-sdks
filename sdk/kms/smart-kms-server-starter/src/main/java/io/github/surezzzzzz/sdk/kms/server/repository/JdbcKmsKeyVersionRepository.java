@@ -34,33 +34,33 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
      */
     private static final RowMapper<StoredKmsKeyVersion> KEY_VERSION_ROW_MAPPER = new KmsKeyVersionRowMapper();
     /**
-     * 执行 tenant 隔离 SQL 的 JDBC 模板。
+     * 执行 owner 隔离 SQL 的 JDBC 模板。
      */
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     /**
      * 创建密钥版本 JDBC 仓储。
      *
-     * @param jdbcTemplate 执行 tenant 隔离 SQL 的 JDBC 模板
+     * @param jdbcTemplate 执行 owner 隔离 SQL 的 JDBC 模板
      */
     public JdbcKmsKeyVersionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
-     * 创建 tenant 与逻辑密钥查询参数。
+     * 创建 owner 与逻辑密钥查询参数。
      */
-    private static MapSqlParameterSource createKeyParameters(String tenantId, String keyRef) {
+    private static MapSqlParameterSource createKeyParameters(String ownerPrincipalId, String keyRef) {
         return new MapSqlParameterSource()
-                .addValue("tenantId", KmsValidationHelper.requireTenantId(tenantId))
+                .addValue("ownerPrincipalId", KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId))
                 .addValue("keyRef", KmsValidationHelper.requireKeyRef(keyRef));
     }
 
     /**
-     * 校验待保存版本的租户、标识、状态与材料组合。
+     * 校验待保存版本的 owner、标识、状态与材料组合。
      */
-    private static void validateKeyVersion(String tenantId, KmsKeyVersion keyVersion) {
-        if (keyVersion == null || !KmsValidationHelper.requireTenantId(tenantId).equals(keyVersion.getTenantId())) {
+    private static void validateKeyVersion(String ownerPrincipalId, KmsKeyVersion keyVersion) {
+        if (keyVersion == null || !KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId).equals(keyVersion.getOwnerPrincipalId())) {
             throw new KmsValidationException();
         }
         KmsValidationHelper.requireKeyRef(keyVersion.getKeyRef());
@@ -84,7 +84,7 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
      */
     private static MapSqlParameterSource createVersionParameters(KmsKeyVersion keyVersion) {
         return new MapSqlParameterSource()
-                .addValue("tenantId", keyVersion.getTenantId())
+                .addValue("ownerPrincipalId", keyVersion.getOwnerPrincipalId())
                 .addValue("keyRef", keyVersion.getKeyRef())
                 .addValue("version", keyVersion.getVersion())
                 .addValue("state", keyVersion.getState().getCode())
@@ -102,30 +102,30 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
     }
 
     /**
-     * 按 tenant、keyRef 与版本查询密钥版本。
+     * 按 owner、keyRef 与版本查询密钥版本。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
-     * @param version  版本号
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
+     * @param version          版本号
      * @return 匹配的密钥版本；不存在时为空
      */
     @Override
-    public Optional<KmsKeyVersion> findByVersion(String tenantId, String keyRef, int version) {
-        List<StoredKmsKeyVersion> versions = queryByVersion(tenantId, keyRef, version);
+    public Optional<KmsKeyVersion> findByVersion(String ownerPrincipalId, String keyRef, int version) {
+        List<StoredKmsKeyVersion> versions = queryByVersion(ownerPrincipalId, keyRef, version);
         return versions.isEmpty() ? Optional.<KmsKeyVersion>empty() : Optional.of(versions.get(
                 SmartKmsCoreConstant.ZERO).getKeyVersion());
     }
 
     /**
-     * 按 tenant 和 keyRef 查询全部密钥版本。
+     * 按 owner 和 keyRef 查询全部密钥版本。
      *
-     * @param tenantId 资源所属 tenant
-     * @param keyRef   逻辑密钥标识
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyRef           逻辑密钥标识
      * @return 已排序的密钥版本集合
      */
     @Override
-    public List<KmsKeyVersion> findByKeyRef(String tenantId, String keyRef) {
-        MapSqlParameterSource parameters = createKeyParameters(tenantId, keyRef);
+    public List<KmsKeyVersion> findByKeyRef(String ownerPrincipalId, String keyRef) {
+        MapSqlParameterSource parameters = createKeyParameters(ownerPrincipalId, keyRef);
         try {
             List<StoredKmsKeyVersion> storedVersions = jdbcTemplate.query(
                     SmartKmsServerConstant.SQL_SELECT_KEY_VERSION_BY_KEY_REF, parameters, KEY_VERSION_ROW_MAPPER);
@@ -142,14 +142,14 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
     /**
      * 保存密钥版本快照。
      *
-     * @param tenantId   资源所属 tenant
-     * @param keyVersion 待保存的版本
+     * @param ownerPrincipalId 资源所属 owner
+     * @param keyVersion       待保存的版本
      * @return 已持久化的密钥版本快照
      */
     @Override
-    public KmsKeyVersion save(String tenantId, KmsKeyVersion keyVersion) {
-        validateKeyVersion(tenantId, keyVersion);
-        List<StoredKmsKeyVersion> existing = queryByVersion(tenantId, keyVersion.getKeyRef(),
+    public KmsKeyVersion save(String ownerPrincipalId, KmsKeyVersion keyVersion) {
+        validateKeyVersion(ownerPrincipalId, keyVersion);
+        List<StoredKmsKeyVersion> existing = queryByVersion(ownerPrincipalId, keyVersion.getKeyRef(),
                 keyVersion.getVersion());
         MapSqlParameterSource parameters = createVersionParameters(keyVersion);
         try {
@@ -170,18 +170,18 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
         } catch (DataAccessException exception) {
             throw new KmsPersistenceException();
         }
-        return findByVersion(tenantId, keyVersion.getKeyRef(), keyVersion.getVersion())
+        return findByVersion(ownerPrincipalId, keyVersion.getKeyRef(), keyVersion.getVersion())
                 .orElseThrow(KmsPersistenceException::new);
     }
 
     /**
-     * 按完整 tenant、keyRef 和版本读取内部行版本。
+     * 按完整 owner、keyRef 和版本读取内部行版本。
      */
-    private List<StoredKmsKeyVersion> queryByVersion(String tenantId, String keyRef, int version) {
+    private List<StoredKmsKeyVersion> queryByVersion(String ownerPrincipalId, String keyRef, int version) {
         if (version < SmartKmsCoreConstant.ONE) {
             throw new KmsValidationException();
         }
-        MapSqlParameterSource parameters = createKeyParameters(tenantId, keyRef).addValue("version", version);
+        MapSqlParameterSource parameters = createKeyParameters(ownerPrincipalId, keyRef).addValue("version", version);
         try {
             return jdbcTemplate.query(SmartKmsServerConstant.SQL_SELECT_KEY_VERSION_BY_VERSION,
                     parameters, KEY_VERSION_ROW_MAPPER);
@@ -206,7 +206,7 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
         @Override
         public StoredKmsKeyVersion mapRow(ResultSet resultSet, int rowNumber) throws SQLException {
             Timestamp destroyedAt = resultSet.getTimestamp("destroyed_at");
-            KmsKeyVersion keyVersion = new KmsKeyVersion(resultSet.getString("tenant_id"),
+            KmsKeyVersion keyVersion = new KmsKeyVersion(resultSet.getString("owner_principal_id"),
                     resultSet.getString("key_ref"), resultSet.getInt("version"),
                     KmsAlgorithm.fromCode(resultSet.getString("algorithm")),
                     KmsKeyVersionState.fromCode(resultSet.getString("state")),
@@ -214,7 +214,7 @@ public class JdbcKmsKeyVersionRepository implements KmsKeyVersionRepository {
                     resultSet.getBytes("private_material"), resultSet.getBytes("symmetric_material"),
                     resultSet.getBytes("public_material"), destroyedAt == null ? null : destroyedAt.toInstant());
             try {
-                validateKeyVersion(keyVersion.getTenantId(), keyVersion);
+                validateKeyVersion(keyVersion.getOwnerPrincipalId(), keyVersion);
                 return new StoredKmsKeyVersion(keyVersion, resultSet.getLong("row_version"));
             } catch (KmsValidationException exception) {
                 throw new KmsPersistenceException();

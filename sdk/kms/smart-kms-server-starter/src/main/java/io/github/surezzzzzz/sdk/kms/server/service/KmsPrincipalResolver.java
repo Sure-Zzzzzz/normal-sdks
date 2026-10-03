@@ -5,7 +5,7 @@ import javax.servlet.http.HttpServletRequest;
 /**
  * 已认证 HTTP 请求的 KMS 主体解析端口。
  *
- * <p>实现只能从已验证的认证上下文派生主体、tenant、scope 与 requestId，不能信任请求业务字段。
+ * <p>实现只能从已验证的认证上下文派生主体、owner、scope 与 requestId，不能信任请求业务字段。
  * 没有可用实现时，KMS 敏感 HTTP API 不得启动。</p>
  *
  * @author surezzzzzz

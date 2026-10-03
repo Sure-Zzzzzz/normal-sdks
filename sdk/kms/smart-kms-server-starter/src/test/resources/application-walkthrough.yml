@@ -1,0 +1,77 @@
+# 走查形态（gitignored 凭据经环境变量注入）：完整协作链 + test 库（smart_kms_test）+ 8380
+# 起服：--spring.profiles.active=local,walkthrough；环境变量 KMS_VC_ID/KMS_VC_SECRET/KMS_AKSK_INTROSPECT_ID/KMS_AKSK_INTROSPECT_SECRET
+server:
+  port: 8390
+
+spring:
+  application:
+    name: kms-walkthrough
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: kms
+            datasources:
+              kms:
+                url: ${SMART_KMS_TEST_JDBC_URL:jdbc:mysql://localhost:3306/smart_kms_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+        redis:
+          route:
+            enable: true
+            sources:
+              default:
+                host: ${KMS_REDIS_HOST:localhost}
+                port: ${KMS_REDIS_PORT:6379}
+                database: ${KMS_REDIS_DATABASE:3}
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: kms-walkthrough
+              mode: annotation
+        auth:
+          aksk:
+            resource:
+              server:
+                introspect:
+                  owner-inherited:
+                    strict-online: ${KMS_OWNER_INHERITED:true}
+                    target-application-id: ${KMS_TARGET_APPLICATION_ID:3}
+                  endpoint: ${KMS_AKSK_INTROSPECT_ENDPOINT:http://127.0.0.1:8280/oauth2/introspect}
+                  client-id: ${KMS_AKSK_INTROSPECT_ID:}
+                  client-secret: ${KMS_AKSK_INTROSPECT_SECRET:}
+          iam:
+            resource:
+              server:
+                verification-endpoint: ${KMS_VC_VERIFY_ENDPOINT:http://127.0.0.1:8180/iam/resource/tokens/verify}
+                client-id: ${KMS_VC_ID:}
+                client-secret: ${KMS_VC_SECRET:}
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/kms/**
+                api-permission-rules:
+                  # keys 族零规则：拦截器对未匹配路径回退控制器 @RequireApiPermission（精确码即规则）。
+                  # 通配粗码会覆盖精码，把只有 read-public-key/policy 码的最小权限主体在规则层错拦。
+                  # 其余族（me/admin/crypto/destruction）配粗族通配，注解仍逐端点终判
+                  - { method: GET,   pathPattern: /api/kms/me,                        apiPermission: kms.me.read }
+                  - { method: GET,   pathPattern: /api/kms/me/keys/**,                 apiPermission: kms.key.read }
+                  - { method: GET,   pathPattern: /api/kms/admin/keys/**,              apiPermission: kms.key.read }
+                  - { method: GET,   pathPattern: /api/kms/me/destruction-policy,        apiPermission: kms.key.destroy }
+                  - { method: GET,   pathPattern: /api/kms/admin/owners/**,               apiPermission: kms.key.destroy }
+                  - { method: GET,   pathPattern: /api/kms/destruction-jobs,            apiPermission: kms.key.destroy }
+                  - { method: GET,   pathPattern: /api/kms/destruction-worker/**,       apiPermission: kms.key.destroy }
+                  - { method: POST,  pathPattern: /api/kms/crypto/signatures,            apiPermission: kms.sign }
+                  - { method: POST,  pathPattern: /api/kms/crypto/verifications,          apiPermission: kms.verify }
+                  - { method: POST,  pathPattern: /api/kms/crypto/envelopes,              apiPermission: kms.encrypt }
+                  - { method: POST,  pathPattern: /api/kms/crypto/decryptions,            apiPermission: kms.decrypt }
+                  - { method: PUT,   pathPattern: /api/kms/me/destruction-policy,        apiPermission: kms.key.destroy }
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.kms.server: DEBUG
+    io.github.surezzzzzz.sdk.auth.resource: DEBUG

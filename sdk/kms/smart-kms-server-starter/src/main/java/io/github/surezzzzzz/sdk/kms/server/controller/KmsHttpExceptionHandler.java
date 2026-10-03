@@ -77,7 +77,7 @@ public class KmsHttpExceptionHandler {
     }
 
     /**
-     * 返回当前 tenant 可见管理资源不存在。
+     * 返回当前 owner 可见管理资源不存在。
      */
     @ExceptionHandler(KmsNotFoundException.class)
     public ResponseEntity<String> handleNotFound(KmsNotFoundException exception, HttpServletRequest request) {

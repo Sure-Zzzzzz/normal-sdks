@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.kms.server.test.cases;
 
-import io.github.surezzzzzz.sdk.kms.core.constant.KmsOperation;
-import io.github.surezzzzzz.sdk.kms.core.constant.SmartKmsCoreConstant;
+import io.github.surezzzzzz.sdk.kms.core.constant.*;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsAuthorizationException;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsKey;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal;
@@ -29,7 +28,7 @@ import static org.mockito.Mockito.*;
 @Slf4j
 class DefaultKmsSignatureOperationServiceTest {
 
-    private static final String TENANT_ID = "test-tenant";
+    private static final String OWNER_PRINCIPAL_ID = "test-tenant";
     private static final String PRINCIPAL_ID = "test-principal";
     private static final String KEY_REF = "test-key-ref";
     private static final String REQUEST_ID = "test-request-id-000000000001";
@@ -43,12 +42,14 @@ class DefaultKmsSignatureOperationServiceTest {
         KmsKeyRepository keyRepository = mock(KmsKeyRepository.class);
         CryptoOperationService cryptoOperationService = mock(CryptoOperationService.class);
         KmsAuditPublisher auditPublisher = mock(KmsAuditPublisher.class);
-        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, TENANT_ID, Collections.<String>emptySet());
+        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, OWNER_PRINCIPAL_ID, Collections.<String>emptySet());
         byte[] input = new byte[]{1, 2, 3};
         byte[] signature = new byte[]{4, 5, 6};
-        when(keyLock.lock(TENANT_ID, KEY_REF)).thenReturn(true);
-        when(keyRepository.findByKeyRef(TENANT_ID, KEY_REF)).thenReturn(Optional.of(KmsKey.builder()
-                .tenantId(TENANT_ID).keyRef(KEY_REF).activeVersion(2).build()));
+        when(keyLock.lock(OWNER_PRINCIPAL_ID, KEY_REF)).thenReturn(true);
+        when(keyRepository.findByKeyRef(OWNER_PRINCIPAL_ID, KEY_REF)).thenReturn(Optional.of(KmsKey.builder()
+                .ownerPrincipalId(OWNER_PRINCIPAL_ID).keyRef(KEY_REF).keyAlias("test-key")
+                .purpose(KmsKeyPurpose.SIGN).algorithm(KmsAlgorithm.ES256).state(KmsKeyState.ACTIVE)
+                .activeVersion(2).rowVersion(0L).build()));
         when(cryptoOperationService.sign(principal, KEY_REF, Integer.valueOf(2), input, REQUEST_ID))
                 .thenReturn(signature);
 
@@ -58,13 +59,13 @@ class DefaultKmsSignatureOperationServiceTest {
         log.info("缺省签名版本在锁定视图内解析为: {}", result.getVersion());
         assertEquals(2, result.getVersion(), "响应版本必须是实际签名版本");
         assertArrayEquals(signature, result.getSignature(), "签名结果必须原样返回");
-        verify(keyLock).lock(TENANT_ID, KEY_REF);
-        verify(keyRepository).findByKeyRef(TENANT_ID, KEY_REF);
+        verify(keyLock).lock(OWNER_PRINCIPAL_ID, KEY_REF);
+        verify(keyRepository).findByKeyRef(OWNER_PRINCIPAL_ID, KEY_REF);
         verify(cryptoOperationService).sign(principal, KEY_REF, Integer.valueOf(2), input, REQUEST_ID);
     }
 
     /**
-     * 验证缺省版本在当前 tenant 不可见时记录授权拒绝审计。
+     * 验证缺省版本在当前 owner 不可见时记录授权拒绝审计。
      */
     @Test
     void shouldAuditUnauthorizedDefaultVersionSelection() {
@@ -72,8 +73,8 @@ class DefaultKmsSignatureOperationServiceTest {
         KmsKeyRepository keyRepository = mock(KmsKeyRepository.class);
         CryptoOperationService cryptoOperationService = mock(CryptoOperationService.class);
         KmsAuditPublisher auditPublisher = mock(KmsAuditPublisher.class);
-        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, TENANT_ID, Collections.<String>emptySet());
-        when(keyLock.lock(TENANT_ID, KEY_REF)).thenReturn(false);
+        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, OWNER_PRINCIPAL_ID, Collections.<String>emptySet());
+        when(keyLock.lock(OWNER_PRINCIPAL_ID, KEY_REF)).thenReturn(false);
 
         assertThrows(KmsAuthorizationException.class, () -> new DefaultKmsSignatureOperationService(keyLock,
                 keyRepository, cryptoOperationService, auditPublisher).sign(principal, KEY_REF, null,
@@ -94,7 +95,7 @@ class DefaultKmsSignatureOperationServiceTest {
         KmsKeyRepository keyRepository = mock(KmsKeyRepository.class);
         CryptoOperationService cryptoOperationService = mock(CryptoOperationService.class);
         KmsAuditPublisher auditPublisher = mock(KmsAuditPublisher.class);
-        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, TENANT_ID, Collections.<String>emptySet());
+        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, OWNER_PRINCIPAL_ID, Collections.<String>emptySet());
 
         assertThrows(io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException.class,
                 () -> new DefaultKmsSignatureOperationService(keyLock, keyRepository, cryptoOperationService,
@@ -130,7 +131,7 @@ class DefaultKmsSignatureOperationServiceTest {
         KmsKeyRepository keyRepository = mock(KmsKeyRepository.class);
         CryptoOperationService cryptoOperationService = mock(CryptoOperationService.class);
         KmsAuditPublisher auditPublisher = mock(KmsAuditPublisher.class);
-        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, TENANT_ID, Collections.<String>emptySet());
+        KmsPrincipal principal = new KmsPrincipal(PRINCIPAL_ID, OWNER_PRINCIPAL_ID, Collections.<String>emptySet());
         byte[] input = new byte[]{1};
         byte[] signature = new byte[]{2};
         when(cryptoOperationService.sign(principal, KEY_REF, Integer.valueOf(3), input, REQUEST_ID))

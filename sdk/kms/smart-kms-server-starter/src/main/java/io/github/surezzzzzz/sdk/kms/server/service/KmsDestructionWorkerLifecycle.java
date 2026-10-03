@@ -103,6 +103,18 @@ public class KmsDestructionWorkerLifecycle implements SmartLifecycle {
     }
 
     /**
+     * 获取当前进程已解析的 worker 实例标识。
+     *
+     * <p>worker 未启用或尚未启动时返回 {@code null}；调用方只能将其作为当前实例健康事实的
+     * 查询条件，不能把该值用作跨实例调度或权限依据。</p>
+     *
+     * @return 当前生命周期内固定的实例标识，或 {@code null}
+     */
+    public String getResolvedInstanceId() {
+        return resolvedInstanceId;
+    }
+
+    /**
      * 将 worker 放在容器停止前尽早关闭。
      */
     @Override

@@ -65,7 +65,7 @@ public class DefaultPublicKeyService implements PublicKeyService {
         try {
             int resolvedVersion = resolveVersion(principal, keyRef, version);
             authorizationService.authorize(principal, keyRef, resolvedVersion, KmsOperation.READ_PUBLIC_KEY, requestId);
-            KmsKeyVersion keyVersion = keyVersionRepository.findByVersion(principal.getTenantId(), keyRef, resolvedVersion)
+            KmsKeyVersion keyVersion = keyVersionRepository.findByVersion(principal.getOwnerPrincipalId(), keyRef, resolvedVersion)
                     .orElseThrow(KmsCryptoException::new);
             KmsPublicKey publicKey = publicKey(keyVersion);
             auditPublisher.allowed(principal, keyRef, Integer.valueOf(resolvedVersion), KmsOperation.READ_PUBLIC_KEY,
@@ -92,7 +92,7 @@ public class DefaultPublicKeyService implements PublicKeyService {
             KmsValidationHelper.requireRequestId(requestId);
             KmsKey key = lockedKey(principal, keyRef);
             List<KmsPublicKey> result = new ArrayList<KmsPublicKey>();
-            for (KmsKeyVersion version : keyVersionRepository.findByKeyRef(principal.getTenantId(), keyRef)) {
+            for (KmsKeyVersion version : keyVersionRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef)) {
                 if (KmsStateHelper.isPublishablePublicKey(key.getState(), version.getState())
                         && version.getAlgorithm() == KmsAlgorithm.ES256) {
                     authorizationService.authorize(principal, keyRef, version.getVersion(), KmsOperation.READ_PUBLIC_KEY,
@@ -163,10 +163,10 @@ public class DefaultPublicKeyService implements PublicKeyService {
      * 在当前事务的逻辑密钥锁内读取密钥元数据。
      */
     private KmsKey lockedKey(KmsPrincipal principal, String keyRef) {
-        if (!keyLock.lock(principal.getTenantId(), keyRef)) {
+        if (!keyLock.lock(principal.getOwnerPrincipalId(), keyRef)) {
             throw new KmsAuthorizationException();
         }
-        return keyRepository.findByKeyRef(principal.getTenantId(), keyRef)
+        return keyRepository.findByKeyRef(principal.getOwnerPrincipalId(), keyRef)
                 .orElseThrow(KmsAuthorizationException::new);
     }
 }
