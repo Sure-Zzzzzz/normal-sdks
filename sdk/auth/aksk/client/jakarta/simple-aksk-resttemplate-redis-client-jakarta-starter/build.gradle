@@ -1,0 +1,23 @@
+dependencies {
+    // Token Manager 已发布，使用精确坐标保证发布 POM 与本地解析一致。
+    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager-jakarta-starter:1.0.0'
+
+    // Spring Boot Web（compileOnly，用户自行引入）
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    // HttpClient 5 仅为本模块内部连接池实现，调用方按需提供运行时实现。
+    compileOnly 'org.apache.httpcomponents.client5:httpclient5'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'com.github.ben-manes.caffeine:caffeine'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+
+}
