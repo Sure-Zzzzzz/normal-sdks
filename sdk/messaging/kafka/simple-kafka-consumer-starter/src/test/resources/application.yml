@@ -61,7 +61,7 @@ io:
               enable: true
               startup-check: true
               fail-fast: true
-              timeout-ms: 5000
+              timeout-ms: 15000
         redis:
           route:
             enable: true

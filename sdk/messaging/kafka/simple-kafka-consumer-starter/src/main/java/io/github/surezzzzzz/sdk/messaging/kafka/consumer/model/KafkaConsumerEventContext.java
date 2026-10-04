@@ -49,7 +49,7 @@ public class KafkaConsumerEventContext {
     private final String errorCode;
 
     /**
-     * 错误摘要（已脱敏，最长 512）
+     * 脱敏异常类别，不包含异常消息
      */
     private final String errorSummary;
 

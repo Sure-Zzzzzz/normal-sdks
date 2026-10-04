@@ -39,6 +39,10 @@ public final class SimpleKafkaConsumerConstant {
      */
     public static final String UTILITY_CLASS_MESSAGE = "Utility class";
     /**
+     * 无法识别具体类型时使用的脱敏异常类别
+     */
+    public static final String DEFAULT_EXCEPTION_TYPE = "Exception";
+    /**
      * 零
      */
     public static final int ZERO = 0;
@@ -164,7 +168,7 @@ public final class SimpleKafkaConsumerConstant {
      */
     public static final String DEAD_LETTER_HEADER_ERROR_CODE = "x-error-code";
     /**
-     * 死信 header：错误摘要
+     * 死信 header：脱敏异常类别
      */
     public static final String DEAD_LETTER_HEADER_ERROR_SUMMARY = "x-error-summary";
     /**
@@ -220,16 +224,6 @@ public final class SimpleKafkaConsumerConstant {
      * 参数: topic, partition, offset
      */
     public static final String MESSAGE_ID_FALLBACK_TEMPLATE = "%s:%d:%d";
-    /**
-     * 错误摘要最大长度
-     */
-    public static final int ERROR_SUMMARY_MAX_LENGTH = 512;
-
-    // ==================== 错误摘要 ====================
-    /**
-     * 错误摘要截断后缀
-     */
-    public static final String ERROR_SUMMARY_TRUNCATE_SUFFIX = "...";
     /**
      * 失败原因：route 注册表缺失
      */

@@ -130,8 +130,10 @@ public class KafkaConsumerHandlerAdapter {
         try {
             published = deadLetterPublisher.publish(record, cause, attempt, decision.getErrorCode());
         } catch (RuntimeException e) {
-            log.error("死信投递抛异常：topic=[{}]，messageId=[{}]", record.getTopic(),
-                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("死信投递异常，消息不 ack 等待重投：topic=[{}]，messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
         }
         if (published) {
             completeAndAcknowledge(record, lease, ConsumerEventType.DEAD_LETTER, attempt,
@@ -162,7 +164,9 @@ public class KafkaConsumerHandlerAdapter {
                 return decision;
             }
         } catch (RuntimeException e) {
-            log.error("消费错误处理器异常，转入死信：topic=[{}]", record.getTopic(), e);
+            log.warn("消费错误处理器异常，转入死信：topic=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
         }
         return ErrorHandlerDecision.builder()
                 .outcome(ErrorHandlerOutcome.DEAD_LETTER)
@@ -176,8 +180,9 @@ public class KafkaConsumerHandlerAdapter {
         try {
             return idempotencyChecker.acquire(record.getMessageId(), datasourceKey, groupId);
         } catch (RuntimeException e) {
-            log.warn("幂等领取异常，按未启用幂等放行：messageId=[{}]",
-                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("幂等领取异常，按未启用幂等放行：messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return KafkaConsumerIdempotencyAcquireResult.acquired(NoOpLease.INSTANCE);
         }
     }
@@ -186,8 +191,9 @@ public class KafkaConsumerHandlerAdapter {
         try {
             return lease.complete();
         } catch (RuntimeException e) {
-            log.warn("幂等完成标记异常，消息不 ack：messageId=[{}]",
-                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("幂等完成标记异常，消息不 ack：messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return false;
         }
     }
@@ -199,33 +205,39 @@ public class KafkaConsumerHandlerAdapter {
                         KafkaConsumerStringHelper.safeDisplay(record.getMessageId()));
             }
         } catch (RuntimeException e) {
-            log.warn("幂等租约释放异常，等待租约过期后重投：messageId=[{}]",
-                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("幂等租约释放异常，等待租约过期后重投：messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
         }
     }
 
     private KafkaConsumerException idempotencyInProgress(KafkaConsumerRecord<String, String> record) {
-        String message = String.format(ErrorMessage.IDEMPOTENCY_IN_PROGRESS, record.getTopic(),
+        String message = String.format(ErrorMessage.IDEMPOTENCY_IN_PROGRESS,
+                KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
                 KafkaConsumerStringHelper.safeDisplay(record.getMessageId()));
         return new KafkaConsumerException(ErrorCode.IDEMPOTENCY_IN_PROGRESS, message);
     }
 
     private KafkaConsumerException idempotencyCheckFailed(KafkaConsumerRecord<String, String> record) {
-        String message = String.format(ErrorMessage.IDEMPOTENCY_CHECK_FAILED, record.getTopic(),
+        String message = String.format(ErrorMessage.IDEMPOTENCY_CHECK_FAILED,
+                KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
                 KafkaConsumerStringHelper.safeDisplay(record.getMessageId()));
         return new KafkaConsumerException(ErrorCode.IDEMPOTENCY_CHECK_FAILED, message);
     }
 
     private KafkaConsumerException deadLetterPublishFailed(KafkaConsumerRecord<String, String> record,
                                                            Exception cause) {
-        String message = String.format(ErrorMessage.DEAD_LETTER_PUBLISH_FAILED, record.getTopic(),
-                KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), record.getTopic());
+        String message = String.format(ErrorMessage.DEAD_LETTER_PUBLISH_FAILED,
+                KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                KafkaConsumerStringHelper.safeDisplay(record.getTopic()));
         return new KafkaConsumerException(ErrorCode.DEAD_LETTER_PUBLISH_FAILED, message, cause);
     }
 
     private KafkaConsumerException retryInterrupted(KafkaConsumerRecord<String, String> record, Exception cause,
                                                     int attempt) {
-        String message = String.format(ErrorMessage.CONSUME_RETRYABLE, record.getTopic(),
+        String message = String.format(ErrorMessage.CONSUME_RETRYABLE,
+                KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
                 KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), attempt);
         return new KafkaConsumerException(ErrorCode.CONSUME_RETRYABLE, message, cause);
     }
@@ -240,7 +252,8 @@ public class KafkaConsumerHandlerAdapter {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("重试退避被中断，停止重试，消息不 ack 等待重投：topic=[{}]，messageId=[{}]",
-                    record.getTopic(), KafkaConsumerStringHelper.safeDisplay(record.getMessageId()));
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()));
             return false;
         }
     }
@@ -253,7 +266,8 @@ public class KafkaConsumerHandlerAdapter {
         try {
             eventListener.onEvent(record.toEventContext(type, attempt, errorCode, errorSummary));
         } catch (RuntimeException e) {
-            log.warn("事件监听器回调异常，忽略：type=[{}]", type, e);
+            log.warn("事件监听器回调异常，忽略：type=[{}]，exceptionType=[{}]", type,
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
         }
     }
 
@@ -273,7 +287,7 @@ public class KafkaConsumerHandlerAdapter {
     }
 
     private String summary(Exception cause) {
-        return cause == null ? null : KafkaConsumerStringHelper.safeForErrorMessage(cause.getMessage());
+        return KafkaConsumerStringHelper.safeExceptionSummary(cause);
     }
 
     private enum NoOpLease implements KafkaConsumerIdempotencyLease {

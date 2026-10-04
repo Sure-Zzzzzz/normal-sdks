@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.listener;
 
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.model.KafkaConsumerEventContext;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.support.KafkaConsumerStringHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 
@@ -28,7 +29,8 @@ public class CompositeKafkaConsumerEventListener implements KafkaConsumerEventLi
             try {
                 delegate.onEvent(context);
             } catch (RuntimeException e) {
-                log.warn("消费事件监听器回调异常，忽略：listener=[{}]", delegate.getClass().getName(), e);
+                log.warn("消费事件监听器回调异常，忽略：listener=[{}]，exceptionType=[{}]",
+                        delegate.getClass().getName(), KafkaConsumerStringHelper.safeExceptionSummary(e));
             }
         }
     }

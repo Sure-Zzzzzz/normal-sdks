@@ -116,6 +116,28 @@ public class KafkaConsumerHandlerAdapterTest {
     }
 
     @Test
+    public void testEventErrorSummaryUsesExceptionTypeWithoutOriginalMessage() throws Exception {
+        KafkaConsumerIdempotencyLease lease = mock(KafkaConsumerIdempotencyLease.class);
+        when(lease.complete()).thenReturn(true);
+        DeadLetterPublisher publisher = mock(DeadLetterPublisher.class);
+        when(publisher.publish(any(KafkaConsumerRecord.class), any(Exception.class), anyInt(), anyString())).thenReturn(true);
+        List<KafkaConsumerEventContext> events = new ArrayList<>();
+        String sensitiveMessage = "Authorization=mock-secret";
+        KafkaConsumerHandler<String, String> handler = record -> {
+            throw new IllegalArgumentException(sensitiveMessage);
+        };
+
+        adapter(handler, acquiredChecker(lease), deadLetterErrorHandler(), publisher, events::add)
+                .onManualCommitMessage(record(), mock(Acknowledgment.class));
+        KafkaConsumerEventContext event = events.get(0);
+        log.info("消费事件错误类别：type={}，errorSummary={}", event.getEventType(), event.getErrorSummary());
+
+        assertEquals(ConsumerEventType.DEAD_LETTER, event.getEventType());
+        assertEquals("IllegalArgumentException", event.getErrorSummary());
+        assertFalse(event.getErrorSummary().contains(sensitiveMessage), "消费事件不得写入异常原始消息");
+    }
+
+    @Test
     public void testDeadLetterFailureReleasesLeaseWithoutAcknowledging() {
         KafkaConsumerIdempotencyLease lease = mock(KafkaConsumerIdempotencyLease.class);
         when(lease.release()).thenReturn(false);

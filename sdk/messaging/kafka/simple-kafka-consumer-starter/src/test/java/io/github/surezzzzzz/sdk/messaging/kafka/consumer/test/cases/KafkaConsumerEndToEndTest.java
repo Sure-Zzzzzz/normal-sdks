@@ -178,6 +178,7 @@ public class KafkaConsumerEndToEndTest {
         KafkaConsumerRecord<String, String> consumed = awaitOneRecord(messageId);
         assertRecord(consumed, messageId, KafkaConsumerEndToEndHelper.DATASOURCE_V37,
                 KafkaConsumerEndToEndHelper.TOPIC_IDEMPOTENCY, "first");
+        assertConsumed(messageId, KafkaConsumerEndToEndHelper.DATASOURCE_V37);
         String key = idempotencyKey(messageId);
         assertCompletedIdempotencyMarker(key, "成功消费后 Redis 应保留 COMPLETED 幂等标记");
 
@@ -299,6 +300,7 @@ public class KafkaConsumerEndToEndTest {
         String messageId = beginMessage();
         String groupId = "mock-consumer-processing-lease-e2e";
         String key = idempotencyKey(messageId, KafkaConsumerEndToEndHelper.DATASOURCE_V37, groupId);
+        awaitConsumerPartitionAssignment(groupId, KafkaConsumerEndToEndHelper.TOPIC_PROCESSING_LEASE, 0);
         redis().opsForValue().set(key, SimpleKafkaConsumerConstant.IDEMPOTENCY_PROCESSING_VALUE_PREFIX
                 + "mock-stale-owner", 5000L, TimeUnit.MILLISECONDS);
         Long committedBeforeSend = committedOffset(groupId, KafkaConsumerEndToEndHelper.TOPIC_PROCESSING_LEASE, 0);
@@ -331,7 +333,7 @@ public class KafkaConsumerEndToEndTest {
         assertConsumed(messageId, KafkaConsumerEndToEndHelper.DATASOURCE_V37,
                 KafkaConsumerEndToEndHelper.TOPIC_PROCESSING_LEASE, "consumeProcessingLease");
         assertCompletedIdempotencyMarker(key, "租约到期后的重投成功必须写入 COMPLETED 标记");
-        assertEquals(sourceOffset + 1L, committedOffset(groupId, KafkaConsumerEndToEndHelper.TOPIC_PROCESSING_LEASE, 0),
+        assertCommittedOffset(groupId, KafkaConsumerEndToEndHelper.TOPIC_PROCESSING_LEASE, 0, sourceOffset + 1L,
                 "租约到期后的重投成功才可提交 source offset");
     }
 
@@ -495,13 +497,38 @@ public class KafkaConsumerEndToEndTest {
         return redisRouteRegistry.getStringRedisTemplate("e2e");
     }
 
-    private void assertCompletedIdempotencyMarker(String key, String message) {
-        String value = redis().opsForValue().get(key);
-        Long expireMs = redis().getExpire(key, TimeUnit.MILLISECONDS);
+    private void assertCompletedIdempotencyMarker(String key, String message) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + KafkaConsumerEndToEndHelper.WAIT_TIMEOUT_MS;
+        String value;
+        Long expireMs;
+        do {
+            value = redis().opsForValue().get(key);
+            expireMs = redis().getExpire(key, TimeUnit.MILLISECONDS);
+            if (SimpleKafkaConsumerConstant.IDEMPOTENCY_COMPLETED_VALUE.equals(value)
+                    && expireMs != null && expireMs > 0L) {
+                log.info("Redis 幂等终态：key={}，value={}，expireMs={}", key, value, expireMs);
+                return;
+            }
+            Thread.sleep(50L);
+        } while (System.currentTimeMillis() < deadline);
         log.info("Redis 幂等终态：key={}，value={}，expireMs={}", key, value, expireMs);
         assertEquals(SimpleKafkaConsumerConstant.IDEMPOTENCY_COMPLETED_VALUE, value, message);
         assertNotNull(expireMs, "完成标记必须存在过期时间");
         assertTrue(expireMs > 0L, "完成标记必须保留正剩余 TTL");
+    }
+
+    private void assertCommittedOffset(String groupId, String topic, int partition, long expectedOffset,
+                                       String message) throws Exception {
+        long deadline = System.currentTimeMillis() + KafkaConsumerEndToEndHelper.WAIT_TIMEOUT_MS;
+        Long committedOffset;
+        do {
+            committedOffset = committedOffset(groupId, topic, partition);
+            if (Long.valueOf(expectedOffset).equals(committedOffset)) {
+                return;
+            }
+            Thread.sleep(50L);
+        } while (System.currentTimeMillis() < deadline);
+        assertEquals(Long.valueOf(expectedOffset), committedOffset, message);
     }
 
     private void awaitRedisKeyAbsent(String key, long timeoutMs) throws InterruptedException {
@@ -513,10 +540,8 @@ public class KafkaConsumerEndToEndTest {
     }
 
     private Long committedOffset(String groupId, String topic, int partition) throws Exception {
-        Properties properties = new Properties();
-        properties.put(SimpleKafkaRouteConstant.PROPERTY_BOOTSTRAP_SERVERS, KafkaConsumerEndToEndHelper.BOOTSTRAP_V37);
         TopicPartition topicPartition = new TopicPartition(topic, partition);
-        try (AdminClient client = AdminClient.create(properties)) {
+        try (AdminClient client = AdminClient.create(adminClientProperties())) {
             Map<TopicPartition, OffsetAndMetadata> offsets = client.listConsumerGroupOffsets(groupId)
                     .partitionsToOffsetAndMetadata().get(30L, TimeUnit.SECONDS);
             OffsetAndMetadata offset = offsets.get(topicPartition);
@@ -525,6 +550,40 @@ public class KafkaConsumerEndToEndTest {
                     committed);
             return committed;
         }
+    }
+
+    private void awaitConsumerPartitionAssignment(String groupId, String topic, int partition) throws Exception {
+        TopicPartition target = new TopicPartition(topic, partition);
+        long deadline = System.currentTimeMillis() + KafkaConsumerEndToEndHelper.WAIT_TIMEOUT_MS;
+        Exception lastFailure = null;
+        try (AdminClient client = AdminClient.create(adminClientProperties())) {
+            while (System.currentTimeMillis() < deadline) {
+                try {
+                    Map<String, org.apache.kafka.clients.admin.ConsumerGroupDescription> descriptions = client
+                            .describeConsumerGroups(java.util.Collections.singletonList(groupId)).all()
+                            .get(30L, TimeUnit.SECONDS);
+                    org.apache.kafka.clients.admin.ConsumerGroupDescription description = descriptions.get(groupId);
+                    if (description != null && description.members().stream().anyMatch(member -> member.assignment()
+                            .topicPartitions().contains(target))) {
+                        log.info("Kafka 消费组已分配目标分区：groupId={}，topic={}，partition={}", groupId, topic,
+                                partition);
+                        return;
+                    }
+                } catch (Exception e) {
+                    lastFailure = e;
+                }
+                Thread.sleep(50L);
+            }
+        }
+        String exceptionType = lastFailure == null ? null : lastFailure.getClass().getSimpleName();
+        fail("消费组未在超时窗口内分配目标分区：groupId=" + groupId + "，topic=" + topic
+                + "，partition=" + partition + "，exceptionType=" + exceptionType);
+    }
+
+    private Properties adminClientProperties() {
+        Properties properties = new Properties();
+        properties.put(SimpleKafkaRouteConstant.PROPERTY_BOOTSTRAP_SERVERS, KafkaConsumerEndToEndHelper.BOOTSTRAP_V37);
+        return properties;
     }
 
     private String idempotencyKey(String messageId) {

@@ -65,28 +65,6 @@ public final class KafkaConsumerStringHelper {
     }
 
     /**
-     * 截断错误摘要到最大长度，超出加省略号
-     *
-     * @param value 原始摘要
-     * @return 截断后的摘要
-     */
-    public static String truncateErrorSummary(String value) {
-        if (value == null) {
-            return null;
-        }
-        int max = SimpleKafkaConsumerConstant.ERROR_SUMMARY_MAX_LENGTH;
-        if (value.length() <= max) {
-            return value;
-        }
-        int suffixLength = SimpleKafkaConsumerConstant.ERROR_SUMMARY_TRUNCATE_SUFFIX.length();
-        int cut = max - suffixLength;
-        if (cut <= SimpleKafkaConsumerConstant.ZERO) {
-            return SimpleKafkaConsumerConstant.ERROR_SUMMARY_TRUNCATE_SUFFIX;
-        }
-        return value.substring(0, cut) + SimpleKafkaConsumerConstant.ERROR_SUMMARY_TRUNCATE_SUFFIX;
-    }
-
-    /**
      * 转换为可安全写入日志/事件展示的字符串，移除控制字符（不遮蔽内容）
      *
      * @param value 原始字符串
@@ -115,13 +93,16 @@ public final class KafkaConsumerStringHelper {
     }
 
     /**
-     * 用于错误消息的安全字符串：移除控制字符并截断
+     * 返回可写入事件、死信 header 和受控日志的异常类别。
      *
-     * @param value 原始字符串
-     * @return 安全展示值
+     * @param throwable 原始异常
+     * @return 脱敏异常类别
      */
-    public static String safeForErrorMessage(String value) {
-        String safe = safeDisplay(value);
-        return truncateErrorSummary(safe);
+    public static String safeExceptionSummary(Throwable throwable) {
+        if (throwable == null) {
+            return SimpleKafkaConsumerConstant.DEFAULT_EXCEPTION_TYPE;
+        }
+        String exceptionType = throwable.getClass().getSimpleName();
+        return hasText(exceptionType) ? exceptionType : SimpleKafkaConsumerConstant.DEFAULT_EXCEPTION_TYPE;
     }
 }

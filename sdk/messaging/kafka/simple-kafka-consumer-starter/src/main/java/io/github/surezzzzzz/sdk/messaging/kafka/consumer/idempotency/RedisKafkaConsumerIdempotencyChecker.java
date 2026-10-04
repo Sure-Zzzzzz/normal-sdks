@@ -1,7 +1,10 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency;
 
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.configuration.SimpleKafkaConsumerProperties;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.SimpleKafkaConsumerConstant;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.support.KafkaConsumerStringHelper;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -55,7 +58,7 @@ public class RedisKafkaConsumerIdempotencyChecker implements KafkaConsumerIdempo
         }
         String ownerValue = PROCESSING_PREFIX + UUID.randomUUID().toString();
         String key = buildKey(messageId, datasourceKey, groupId);
-        Long result = template().execute(ACQUIRE_SCRIPT, Collections.singletonList(key), ownerValue,
+        Long result = execute(ACQUIRE_SCRIPT, key, ownerValue,
                 String.valueOf(properties.getIdempotency().getLeaseMs()), COMPLETED_VALUE);
         if (Long.valueOf(ACQUIRED).equals(result)) {
             return KafkaConsumerIdempotencyAcquireResult.acquired(new RedisLease(key, ownerValue));
@@ -68,11 +71,26 @@ public class RedisKafkaConsumerIdempotencyChecker implements KafkaConsumerIdempo
                     KafkaConsumerStringHelper.safeDisplay(messageId));
             return KafkaConsumerIdempotencyAcquireResult.inProgress();
         }
-        throw new IllegalStateException("Redis 幂等领取脚本返回非法结果");
+        log.debug("Redis 幂等领取脚本返回未定义状态：messageId=[{}]",
+                KafkaConsumerStringHelper.safeDisplay(messageId));
+        throw new KafkaConsumerException(ErrorCode.IDEMPOTENCY_CHECK_FAILED,
+                ErrorMessage.IDEMPOTENCY_ACQUIRE_RESULT_INVALID);
     }
 
     private StringRedisTemplate template() {
         return registry.getStringRedisTemplate(properties.getIdempotency().getRedisRouteKey());
+    }
+
+    private Long execute(DefaultRedisScript<Long> script, String key, Object... arguments) {
+        try {
+            return template().execute(script, Collections.singletonList(key), arguments);
+        } catch (RuntimeException e) {
+            log.debug("Redis 幂等脚本调用失败：redisRouteKey=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(properties.getIdempotency().getRedisRouteKey()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
+            throw new KafkaConsumerException(ErrorCode.IDEMPOTENCY_CHECK_FAILED,
+                    ErrorMessage.IDEMPOTENCY_REDIS_OPERATION_FAILED, e);
+        }
     }
 
     private String buildKey(String messageId, String datasourceKey, String groupId) {
@@ -110,14 +128,14 @@ public class RedisKafkaConsumerIdempotencyChecker implements KafkaConsumerIdempo
 
         @Override
         public boolean complete() {
-            Long result = template().execute(COMPLETE_SCRIPT, Collections.singletonList(key), ownerValue,
+            Long result = execute(COMPLETE_SCRIPT, key, ownerValue,
                     COMPLETED_VALUE, String.valueOf(properties.getIdempotency().getTtlMs()));
             return Long.valueOf(SCRIPT_SUCCESS).equals(result);
         }
 
         @Override
         public boolean release() {
-            Long result = template().execute(RELEASE_SCRIPT, Collections.singletonList(key), ownerValue);
+            Long result = execute(RELEASE_SCRIPT, key, ownerValue);
             return Long.valueOf(SCRIPT_SUCCESS).equals(result);
         }
     }

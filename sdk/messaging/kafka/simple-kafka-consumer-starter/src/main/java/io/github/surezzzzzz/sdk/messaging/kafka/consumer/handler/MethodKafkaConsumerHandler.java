@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.handler;
 
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.model.KafkaConsumerRecord;
 
 import java.lang.reflect.InvocationTargetException;
@@ -32,7 +34,8 @@ public class MethodKafkaConsumerHandler implements KafkaConsumerHandler<String, 
         try {
             method.invoke(bean, record);
         } catch (IllegalAccessException e) {
-            throw new IllegalStateException(ErrorMessage.ANNOTATED_HANDLER_INACCESSIBLE, e);
+            throw new KafkaConsumerException(ErrorCode.CONSUME_FATAL,
+                    ErrorMessage.ANNOTATED_HANDLER_INACCESSIBLE, e);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
             if (cause instanceof Exception) {
@@ -41,7 +44,8 @@ public class MethodKafkaConsumerHandler implements KafkaConsumerHandler<String, 
             if (cause instanceof Error) {
                 throw (Error) cause;
             }
-            throw new IllegalStateException(ErrorMessage.ANNOTATED_HANDLER_INVOCATION_FAILED, cause);
+            throw new KafkaConsumerException(ErrorCode.CONSUME_FATAL,
+                    ErrorMessage.ANNOTATED_HANDLER_INVOCATION_FAILED, cause);
         }
     }
 }

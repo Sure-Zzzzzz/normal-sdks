@@ -1,7 +1,10 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.handler;
 
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.model.KafkaConsumerRecord;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.support.KafkaConsumerStringHelper;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -33,7 +36,9 @@ public class TopicDispatchingKafkaConsumerHandler implements KafkaConsumerHandle
     public void handle(KafkaConsumerRecord<String, String> record) throws Exception {
         KafkaConsumerHandler<String, String> handler = handlers.get(record.getTopic());
         if (handler == null) {
-            throw new IllegalStateException(String.format(ErrorMessage.HANDLER_NOT_FOUND, record.getTopic()));
+            throw new KafkaConsumerException(ErrorCode.CONSUME_FATAL,
+                    String.format(ErrorMessage.HANDLER_NOT_FOUND,
+                            KafkaConsumerStringHelper.safeDisplay(record.getTopic())));
         }
         handler.handle(record);
     }

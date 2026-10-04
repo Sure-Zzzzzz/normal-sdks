@@ -16,7 +16,8 @@ public final class KafkaConsumerE2eRecorder {
 
     private static final List<KafkaConsumerRecord<String, String>> RECORDS = new ArrayList<>();
     private static final List<KafkaConsumerEventContext> EVENTS = new ArrayList<>();
-    private static final Map<String, KafkaConsumerIdempotencyAcquireStatus> IDEMPOTENCY_STATUSES = new HashMap<>();
+    private static final Map<String, List<KafkaConsumerIdempotencyAcquireStatus>> IDEMPOTENCY_STATUS_HISTORY =
+            new HashMap<>();
 
     private KafkaConsumerE2eRecorder() {
         throw new UnsupportedOperationException("Utility class");
@@ -34,15 +35,15 @@ public final class KafkaConsumerE2eRecorder {
 
     public static synchronized void recordIdempotencyStatus(String messageId,
                                                             KafkaConsumerIdempotencyAcquireStatus status) {
-        IDEMPOTENCY_STATUSES.put(messageId, status);
+        IDEMPOTENCY_STATUS_HISTORY.computeIfAbsent(messageId, key -> new ArrayList<>()).add(status);
         KafkaConsumerE2eRecorder.class.notifyAll();
     }
 
     public static synchronized boolean awaitIdempotencyStatus(String messageId,
                                                               KafkaConsumerIdempotencyAcquireStatus expected,
                                                               long timeoutMs) {
-        await(timeoutMs, () -> expected.equals(IDEMPOTENCY_STATUSES.get(messageId)));
-        return expected.equals(IDEMPOTENCY_STATUSES.get(messageId));
+        await(timeoutMs, () -> hasIdempotencyStatus(messageId, expected));
+        return hasIdempotencyStatus(messageId, expected);
     }
 
     public static synchronized List<KafkaConsumerRecord<String, String>> awaitRecords(
@@ -80,7 +81,7 @@ public final class KafkaConsumerE2eRecorder {
     public static synchronized void clear(String messageId) {
         RECORDS.removeIf(record -> messageId.equals(record.getMessageId()));
         EVENTS.removeIf(event -> messageId.equals(event.getMessageId()));
-        IDEMPOTENCY_STATUSES.remove(messageId);
+        IDEMPOTENCY_STATUS_HISTORY.remove(messageId);
     }
 
     /**
@@ -124,6 +125,11 @@ public final class KafkaConsumerE2eRecorder {
 
     private static int countEvents(String messageId) {
         return events(messageId).size();
+    }
+
+    private static boolean hasIdempotencyStatus(String messageId, KafkaConsumerIdempotencyAcquireStatus expected) {
+        List<KafkaConsumerIdempotencyAcquireStatus> statuses = IDEMPOTENCY_STATUS_HISTORY.get(messageId);
+        return statuses != null && statuses.contains(expected);
     }
 
     private interface Condition {

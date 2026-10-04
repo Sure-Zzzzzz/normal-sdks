@@ -11,11 +11,11 @@
 ### 1. 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-kafka-consumer-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-kafka-consumer-starter:1.0.1'
 implementation 'org.springframework.kafka:spring-kafka'
 ```
 
-Consumer 固定依赖 `simple-kafka-route-starter:1.0.3`。Kafka 的 datasource、topic 路由规则和基础 consumer 参数由 route starter 配置。
+Consumer 固定依赖 `simple-kafka-route-starter:1.0.5`。Kafka 的 datasource、topic 路由规则和基础 consumer 参数由 route starter 配置。
 
 如需使用内置 Redis 幂等，再额外引入：
 
@@ -42,7 +42,7 @@ io:
             sources:
               default:
                 bootstrap-servers:
-                  - localhost:9092
+                  - kafka.example.test:9092
                 consumer:
                   group-id: sample-event-consumer
                   enable-auto-commit: false
@@ -181,7 +181,7 @@ public class SampleInvalidMessageException extends RuntimeException {
 
 ### DLT 行为
 
-达到最大尝试次数或遇到不可重试异常后，原消息默认投递到 `<源 topic>.DLT`。死信消息保留原始 key、value、headers，并追加原 topic、partition、offset、错误码、错误摘要和尝试次数等溯源 header。
+达到最大尝试次数或遇到不可重试异常后，原消息默认投递到 `<源 topic>.DLT`。死信消息保留原始 key、value、headers，并追加原 topic、partition、offset、错误码、脱敏异常类别和尝试次数等溯源 header；异常原始消息不会写入死信 header。
 
 - DLT 发布成功后，才确认源消息 offset。
 - DLT 发布失败时，不确认源消息 offset，并停止当前 listener container；后续刷新或重启后可重新投递。
@@ -206,7 +206,7 @@ io:
             sources:
               idempotency:
                 mode: standalone
-                host: localhost
+                host: redis.example.test
                 port: 6379
                 database: 0
         messaging:
@@ -290,7 +290,7 @@ public KafkaConsumerEventListener kafkaConsumerEventListener() {
 }
 ```
 
-事件包括：`CONSUMED`、`RETRY`、`DEAD_LETTER`、`IDEMPOTENT_REJECT` 和 `ERROR`。可以注册多个 listener，按 Spring `Ordered` 或 `@Order` 排序执行；某个 listener 自身异常不会影响消费主流程。
+事件包括：`CONSUMED`、`RETRY`、`DEAD_LETTER`、`IDEMPOTENT_REJECT` 和 `ERROR`。失败事件的 `errorSummary` 与死信 `x-error-summary` 只提供异常简单类名，不包含异常消息、消息 value 或 header value。可以注册多个 listener，按 Spring `Ordered` 或 `@Order` 排序执行；某个 listener 自身异常不会影响消费主流程。
 
 如需替换默认策略，可注册自定义 `KafkaConsumerIdempotencyChecker`、`KafkaConsumerErrorHandler`、`KafkaConsumerBackoffPolicy`、`DeadLetterPublisher` 或 `KafkaConsumerContainerFactory` Bean。
 
@@ -338,8 +338,8 @@ public KafkaConsumerEventListener kafkaConsumerEventListener() {
 
 | 组件 | 版本 |
 |------|------|
-| simple-kafka-consumer-starter | 1.0.0 |
-| simple-kafka-route-starter | 1.0.3 |
+| simple-kafka-consumer-starter | 1.0.1 |
+| simple-kafka-route-starter | 1.0.5 |
 | Java 编译 API | 8 |
 | Kafka Broker | 1.1.0 / 2.8.1 / 3.7.1 |
 
@@ -347,7 +347,7 @@ public KafkaConsumerEventListener kafkaConsumerEventListener() {
 
 | Spring Boot | Spring Kafka | Java 运行时 | Kafka Broker |
 |-------------|-------------|-------------|--------------|
-| 2.2.13 | 2.3.13.RELEASE | 8 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |
-| 2.3.12 | 2.5.14.RELEASE | 8 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |
+| 2.2.13.RELEASE | 2.3.13.RELEASE | 8 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |
+| 2.3.12.RELEASE | 2.5.14.RELEASE | 8 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |
 | 2.4.5 | 2.6.7 | 8 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |
 | 2.7.9 | 2.8.11 | 11 | 1.1.0 单节点、2.8.1 单节点、3.7.1 单节点、3.7.1 三节点集群 |

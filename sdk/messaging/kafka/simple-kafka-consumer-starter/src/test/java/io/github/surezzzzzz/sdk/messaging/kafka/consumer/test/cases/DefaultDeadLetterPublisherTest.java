@@ -70,7 +70,9 @@ public class DefaultDeadLetterPublisherTest {
         assertEquals("2", header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ORIGINAL_PARTITION));
         assertEquals("7", header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ORIGINAL_OFFSET));
         assertEquals("MOCK_001", header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ERROR_CODE));
-        assertEquals("mock failure", header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ERROR_SUMMARY));
+        String errorSummary = header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ERROR_SUMMARY);
+        assertEquals("IllegalArgumentException", errorSummary);
+        assertFalse(errorSummary.contains("mock failure"), "死信 header 不得写入异常原始消息");
         assertEquals("3", header(actual, SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ATTEMPT));
         assertEquals("original", header(actual, "mock-header"));
     }

@@ -38,12 +38,15 @@ public class DefaultDeadLetterPublisher implements DeadLetterPublisher {
     @Override
     public boolean publish(KafkaConsumerRecord<?, ?> record, Exception cause, int attempt, String errorCode) {
         if (!properties.getError().getDeadLetter().isEnable()) {
-            log.debug("死信投递未启用，跳过：topic=[{}]", record.getTopic());
+            log.debug("死信投递未启用，跳过：topic=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()));
             return true;
         }
         String datasourceKey = resolveDatasourceKey(record);
         if (!KafkaConsumerStringHelper.hasText(datasourceKey) || !registry.containsDatasource(datasourceKey)) {
-            log.warn("死信投递 datasource 不存在或为空：datasource=[{}]，topic=[{}]", datasourceKey, record.getTopic());
+            log.warn("死信投递 datasource 不存在或为空：datasource=[{}]，topic=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(datasourceKey),
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()));
             return false;
         }
         String deadLetterTopic = record.getTopic() + properties.getError().getDeadLetter().getSuffix();
@@ -52,25 +55,37 @@ public class DefaultDeadLetterPublisher implements DeadLetterPublisher {
             KafkaTemplate<Object, Object> template = registry.getKafkaTemplate(datasourceKey);
             template.send(producerRecord).get(
                     SimpleKafkaConsumerConstant.DEFAULT_DEAD_LETTER_SEND_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            log.info("死信投递成功：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]，attempt=[{}]",
-                    record.getTopic(), deadLetterTopic, KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+            log.debug("死信投递成功：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]，attempt=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(deadLetterTopic),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
                     attempt);
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("死信投递被中断：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]",
-                    record.getTopic(), deadLetterTopic, KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("死信投递被中断：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(deadLetterTopic),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return false;
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof InterruptedException) {
+            Throwable executionCause = e.getCause();
+            if (executionCause instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.warn("死信投递失败：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]",
-                    record.getTopic(), deadLetterTopic, KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("死信投递失败：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(deadLetterTopic),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(executionCause));
             return false;
         } catch (Exception e) {
-            log.warn("死信投递失败：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]",
-                    record.getTopic(), deadLetterTopic, KafkaConsumerStringHelper.safeDisplay(record.getMessageId()), e);
+            log.warn("死信投递失败：origTopic=[{}]，deadLetterTopic=[{}]，messageId=[{}]，exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeDisplay(record.getTopic()),
+                    KafkaConsumerStringHelper.safeDisplay(deadLetterTopic),
+                    KafkaConsumerStringHelper.safeDisplay(record.getMessageId()),
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return false;
         }
     }
@@ -101,7 +116,7 @@ public class DefaultDeadLetterPublisher implements DeadLetterPublisher {
         headers.add(new RecordHeader(SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ERROR_CODE,
                 bytes(errorCode)));
         headers.add(new RecordHeader(SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ERROR_SUMMARY,
-                bytes(KafkaConsumerStringHelper.safeForErrorMessage(cause == null ? null : cause.getMessage()))));
+                bytes(KafkaConsumerStringHelper.safeExceptionSummary(cause))));
         headers.add(new RecordHeader(SimpleKafkaConsumerConstant.DEAD_LETTER_HEADER_ATTEMPT,
                 bytes(String.valueOf(attempt))));
         return new ProducerRecord<>(deadLetterTopic, null, null, record.getKey(), record.getValue(), headers);

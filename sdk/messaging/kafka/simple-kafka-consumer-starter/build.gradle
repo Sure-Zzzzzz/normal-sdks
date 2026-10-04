@@ -1,10 +1,10 @@
 dependencies {
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
-    compileOnly 'org.springframework.kafka:spring-kafka'
+    compileOnlyApi 'org.springframework.kafka:spring-kafka'
     compileOnly 'org.springframework.data:spring-data-redis'
-    compileOnly 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
-    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.3'
+    compileOnlyApi 'io.github.sure-zzzzzz:simple-redis-route-starter:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.5'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'

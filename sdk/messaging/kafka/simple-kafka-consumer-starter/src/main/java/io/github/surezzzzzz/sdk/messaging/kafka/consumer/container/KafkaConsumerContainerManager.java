@@ -337,7 +337,8 @@ public class KafkaConsumerContainerManager implements SmartLifecycle {
                 container.stop();
                 return true;
             } catch (RuntimeException e) {
-                log.warn("停止未运行消费容器异常，保留派生 ConsumerFactory：container=[{}]", container, e);
+                log.warn("停止未运行消费容器异常，保留派生 ConsumerFactory：exceptionType=[{}]",
+                        KafkaConsumerStringHelper.safeExceptionSummary(e));
                 return false;
             }
         }
@@ -345,22 +346,23 @@ public class KafkaConsumerContainerManager implements SmartLifecycle {
         try {
             container.stop(stopped::countDown);
         } catch (RuntimeException e) {
-            log.warn("停止消费容器异常，保留派生 ConsumerFactory：container=[{}]", container, e);
+            log.warn("停止消费容器异常，保留派生 ConsumerFactory：exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return false;
         }
         try {
             if (!stopped.await(shutdownAwaitMs, TimeUnit.MILLISECONDS)) {
-                log.warn("消费容器停止超时，保留派生 ConsumerFactory：container=[{}]，timeoutMs=[{}]",
-                        container, shutdownAwaitMs);
+                log.warn("消费容器停止超时，保留派生 ConsumerFactory：timeoutMs=[{}]", shutdownAwaitMs);
                 return false;
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.warn("等待消费容器停止被中断，保留派生 ConsumerFactory：container=[{}]", container, e);
+            log.warn("等待消费容器停止被中断，保留派生 ConsumerFactory：exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
             return false;
         }
         if (container.isRunning()) {
-            log.warn("消费容器停止回调后仍在运行，保留派生 ConsumerFactory：container=[{}]", container);
+            log.warn("消费容器停止回调后仍在运行，保留派生 ConsumerFactory");
             return false;
         }
         return true;
@@ -383,7 +385,8 @@ public class KafkaConsumerContainerManager implements SmartLifecycle {
         try {
             KafkaConfigurationCompatibilityHelper.destroyConsumerFactory(consumerFactory);
         } catch (RuntimeException e) {
-            log.warn("关闭消费 ConsumerFactory 异常", e);
+            log.warn("关闭消费 ConsumerFactory 异常：exceptionType=[{}]",
+                    KafkaConsumerStringHelper.safeExceptionSummary(e));
         }
     }
 

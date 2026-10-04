@@ -73,6 +73,18 @@ public final class ErrorMessage {
      */
     public static final String IDEMPOTENCY_CHECK_FAILED = "幂等检查器异常：topic=[%s]，messageId=[%s]";
     /**
+     * 幂等领取结果缺少当前 owner 的处理租约
+     */
+    public static final String IDEMPOTENCY_LEASE_REQUIRED = "幂等领取结果缺少处理租约";
+    /**
+     * Redis 幂等领取脚本返回了约定外的结果
+     */
+    public static final String IDEMPOTENCY_ACQUIRE_RESULT_INVALID = "Redis 幂等领取结果非法";
+    /**
+     * Redis 幂等脚本调用失败。
+     */
+    public static final String IDEMPOTENCY_REDIS_OPERATION_FAILED = "Redis 幂等操作失败";
+    /**
      * 幂等处理租约未到期
      * 参数: topic, messageId
      */

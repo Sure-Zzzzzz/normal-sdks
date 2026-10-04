@@ -110,7 +110,7 @@ public class KafkaConsumerRecord<K, V> {
      * @param eventType    事件类型
      * @param attempt      尝试次数
      * @param errorCode    错误码，无则传 null
-     * @param errorSummary 错误摘要（已脱敏），无则传 null
+     * @param errorSummary 脱敏异常类别，无则传 null
      * @return 事件上下文
      */
     public KafkaConsumerEventContext toEventContext(ConsumerEventType eventType, int attempt,

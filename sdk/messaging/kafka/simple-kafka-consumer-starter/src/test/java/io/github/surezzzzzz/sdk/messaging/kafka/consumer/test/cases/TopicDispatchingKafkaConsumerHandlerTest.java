@@ -1,12 +1,15 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.test.cases;
 
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ConsumerEventType;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.handler.KafkaConsumerHandler;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.handler.KafkaConsumerHandlerAdapter;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.handler.TopicDispatchingKafkaConsumerHandler;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency.NoOpKafkaConsumerIdempotencyChecker;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.listener.KafkaConsumerEventListener;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.model.KafkaConsumerEventContext;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.model.KafkaConsumerRecord;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * topic 分派消费处理器测试。
@@ -25,6 +29,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 @Slf4j
 public class TopicDispatchingKafkaConsumerHandlerTest {
+
+    @Test
+    public void testMissingTopicHandlerUsesConsumerException() {
+        TopicDispatchingKafkaConsumerHandler dispatcher = new TopicDispatchingKafkaConsumerHandler(
+                new LinkedHashMap<>(), new LinkedHashMap<>());
+        KafkaConsumerException exception = assertThrows(KafkaConsumerException.class,
+                () -> dispatcher.handle(KafkaConsumerRecord.of(
+                        new ConsumerRecord<>("missing.topic", 0, 0L, "mock-key", "mock-value"),
+                        "mock-message", "mock-datasource", null)));
+        log.info("缺失 topic 处理器错误码：{}", exception.getErrorCode());
+
+        assertEquals(ErrorCode.CONSUME_FATAL, exception.getErrorCode());
+    }
 
     @Test
     public void testRegistrationIdFlowsToHandlerAndEventContext() {

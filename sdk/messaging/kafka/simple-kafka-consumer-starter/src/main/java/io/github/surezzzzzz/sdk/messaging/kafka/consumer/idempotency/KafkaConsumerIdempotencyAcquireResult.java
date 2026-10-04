@@ -1,5 +1,8 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency;
 
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import lombok.Getter;
 
 /**
@@ -27,7 +30,8 @@ public class KafkaConsumerIdempotencyAcquireResult {
      */
     public static KafkaConsumerIdempotencyAcquireResult acquired(KafkaConsumerIdempotencyLease lease) {
         if (lease == null) {
-            throw new IllegalArgumentException("lease must not be null");
+            throw new KafkaConsumerException(ErrorCode.IDEMPOTENCY_CHECK_FAILED,
+                    ErrorMessage.IDEMPOTENCY_LEASE_REQUIRED);
         }
         return new KafkaConsumerIdempotencyAcquireResult(KafkaConsumerIdempotencyAcquireStatus.ACQUIRED, lease);
     }

@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.consumer.test.cases;
 
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.configuration.SimpleKafkaConsumerProperties;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.messaging.kafka.consumer.exception.KafkaConsumerException;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency.KafkaConsumerIdempotencyAcquireResult;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency.KafkaConsumerIdempotencyAcquireStatus;
 import io.github.surezzzzzz.sdk.messaging.kafka.consumer.idempotency.RedisKafkaConsumerIdempotencyChecker;
@@ -26,6 +28,15 @@ import static org.mockito.Mockito.*;
  */
 @Slf4j
 public class RedisKafkaConsumerIdempotencyCheckerTest {
+
+    @Test
+    public void testAcquiredRequiresLeaseThroughConsumerException() {
+        KafkaConsumerException exception = assertThrows(KafkaConsumerException.class,
+                () -> KafkaConsumerIdempotencyAcquireResult.acquired(null));
+        log.info("空租约错误码：{}", exception.getErrorCode());
+
+        assertEquals(ErrorCode.IDEMPOTENCY_CHECK_FAILED, exception.getErrorCode());
+    }
 
     @Test
     public void testAcquireUsesScopedKeyAndProcessingLease() {
@@ -86,10 +97,27 @@ public class RedisKafkaConsumerIdempotencyCheckerTest {
                 .thenThrow(new IllegalStateException("mock redis unavailable"));
         RedisKafkaConsumerIdempotencyChecker checker = checker(template);
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class,
+        KafkaConsumerException exception = assertThrows(KafkaConsumerException.class,
                 () -> checker.acquire("mock-message", "source-a", "group-a"),
                 "Redis 状态未知时 checker 不能伪造 COMPLETED 或 IN_PROGRESS");
-        log.info("Redis 异常：{}", exception.getMessage());
+        log.info("Redis 异常错误码：{}", exception.getErrorCode());
+
+        assertEquals(ErrorCode.IDEMPOTENCY_CHECK_FAILED, exception.getErrorCode());
+        assertTrue(exception.getCause() instanceof IllegalStateException,
+                "Redis 原始异常必须作为原因保留");
+        assertFalse(exception.getMessage().contains("mock redis unavailable"));
+    }
+
+    @Test
+    public void testUnexpectedAcquireResultUsesConsumerException() {
+        RedisKafkaConsumerIdempotencyChecker checker = checker(templateReturning(0L));
+
+        KafkaConsumerException exception = assertThrows(KafkaConsumerException.class,
+                () -> checker.acquire("mock-message", "source-a", "group-a"),
+                "Redis 返回约定外状态时必须给出模块错误码");
+        log.info("Redis 非法领取结果错误码：{}", exception.getErrorCode());
+
+        assertEquals(ErrorCode.IDEMPOTENCY_CHECK_FAILED, exception.getErrorCode());
     }
 
     private StringRedisTemplate templateReturning(Long... values) {
