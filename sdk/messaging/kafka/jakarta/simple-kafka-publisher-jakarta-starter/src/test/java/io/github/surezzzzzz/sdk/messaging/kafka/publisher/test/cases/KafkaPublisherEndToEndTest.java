@@ -1,0 +1,421 @@
+package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.kafka.route.configuration.SimpleKafkaRouteProperties;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.SimpleKafkaPublisherConstant;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishMessage;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishResult;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.SimpleKafkaPublisherTestApplication;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPublisherEndToEndHelper;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Kafka Publisher 大而全端到端测试
+ *
+ * @author surezzzzzz
+ */
+@Slf4j
+@SpringBootTest(classes = SimpleKafkaPublisherTestApplication.class)
+public class KafkaPublisherEndToEndTest {
+
+    @Autowired
+    private KafkaPublisher publisher;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private SimpleKafkaRouteProperties routeProperties;
+
+    @AfterEach
+    public void clearMdc() {
+        MDC.clear();
+    }
+
+    @Test
+    public void testPublishAcrossKafkaVersionsAndCluster() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topicV110 = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V110_PREFIX, suffix);
+        String topicV28 = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V28_PREFIX, suffix);
+        String topicV37Route = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V37_ROUTE_PREFIX, suffix);
+        String topicCluster = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_CLUSTER_PREFIX, suffix);
+        createTopics(topicV110, topicV28, topicV37Route, topicCluster);
+
+        assertTopicPublisherEnvelopeAndHeaders(suffix, topicV110);
+        assertExplicitDatasourceIsolation(suffix, topicV28);
+        assertRouteKeyIsolation(suffix, topicV37Route);
+        assertClusterPartitions(suffix, topicCluster);
+    }
+
+    @Test
+    public void testPublisherCanSwitchAcrossRoutesAndClustersWithoutStickyState() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_SWITCH_PREFIX, suffix);
+        createSharedTopicOnAllClusters(topic);
+        String keyV110First = KafkaPublisherEndToEndHelper.key(suffix + "-v110-first");
+        String keyV28 = KafkaPublisherEndToEndHelper.key(suffix + "-v28");
+        String keyV37 = KafkaPublisherEndToEndHelper.key(suffix + "-v37");
+        String keyCluster = KafkaPublisherEndToEndHelper.key(suffix + "-cluster");
+        String keyV110Return = KafkaPublisherEndToEndHelper.key(suffix + "-v110-return");
+        Set<String> allKeys = new LinkedHashSet<>();
+        Collections.addAll(allKeys, keyV110First, keyV28, keyV37, keyCluster, keyV110Return);
+
+        publisher.publish(message(topic, keyV110First, "message-switch-v110-first-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishOn(KafkaPublisherEndToEndHelper.DATASOURCE_V28,
+                        message(topic, keyV28, "message-switch-v28-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishByRouteKey(KafkaPublisherEndToEndHelper.ROUTE_KEY_V37,
+                        message(topic, keyV37, "message-switch-v37-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publishOn(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER,
+                        message(topic, keyCluster, "message-switch-cluster-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        publisher.publish(message(topic, keyV110Return, "message-switch-v110-return-" + suffix))
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        Set<String> v110Keys = consumeCandidateKeys(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, allKeys);
+        Set<String> v28Keys = consumeCandidateKeys(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28), topic, allKeys);
+        Set<String> v37Keys = consumeCandidateKeys(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, allKeys);
+        Set<String> clusterKeys = consumeCandidateKeys(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER), topic, allKeys);
+
+        log.info("多路由往返切换结果: v110={}, v28={}, v37={}, cluster={}",
+                v110Keys, v28Keys, v37Keys, clusterKeys);
+        assertEquals(new LinkedHashSet<>(java.util.Arrays.asList(keyV110First, keyV110Return)),
+                v110Keys, "默认路由切回 v110 后，两条消息都应且只能落在 v110");
+        assertEquals(Collections.singleton(keyV28), v28Keys,
+                "显式 v28 路由消息应且只能落在 v28");
+        assertEquals(Collections.singleton(keyV37), v37Keys,
+                "routeKey 路由消息应且只能落在 v37");
+        assertEquals(Collections.singleton(keyCluster), clusterKeys,
+                "显式 cluster 路由消息应且只能落在三 Broker 集群");
+    }
+
+    @Test
+    public void testPublishAndWaitAgainstRealBroker() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V110_PREFIX, suffix);
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-wait");
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublishMessage<String> message = message(topic, key, "message-wait-" + suffix);
+
+        KafkaPublishResult result = publisher.publishAndWait(message);
+
+        ConsumerRecord<String, String> record = assertRecord(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, key);
+        log.info("publishAndWait 真实 broker 结果: {}", result);
+        assertEquals(topic, result.getTopic(), "同步结果 topic 应来自 broker metadata");
+        assertEquals(key, record.key(), "消费记录 key 应精确一致");
+        assertEquals(key, result.getKey(), "结果 key 应回填");
+        assertEquals(KafkaPublisherEndToEndHelper.PARTITION_ZERO, result.getPartition(),
+                "单分区 topic 结果 partition 应为 0");
+        assertEquals(record.partition(), result.getPartition(),
+                "结果 partition 应与消费记录一致");
+        assertNotNull(result.getOffset(), "同步结果 offset 应非空");
+        assertNotNull(result.getTimestamp(), "同步结果 timestamp 应非空");
+    }
+
+    @Test
+    public void testObjectPayloadEnvelopeConsumedAndReconstructed() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V28_PREFIX, suffix);
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-obj");
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        MockE2ePayload payload = new MockE2ePayload("mock-field-value", 42);
+        KafkaPublishMessage<MockE2ePayload> message = KafkaPublishMessage.<MockE2ePayload>builder()
+                .topic(topic)
+                .key(key)
+                .messageId("message-obj-" + suffix)
+                .messageType(KafkaPublisherEndToEndHelper.MESSAGE_TYPE)
+                .payload(payload)
+                .build();
+
+        publisher.publish(message).get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        ConsumerRecord<String, String> record = assertRecord(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28), topic, key);
+        JsonNode envelope = objectMapper.readTree(record.value());
+
+        log.info("对象 payload envelope: {}", record.value());
+        assertEquals("mock-field-value", envelope.get("payload").get("mockField").asText(),
+                "对象 payload 字段应精确序列化进 envelope");
+        assertEquals(42, envelope.get("payload").get("mockCount").asInt(),
+                "对象 payload 数值字段应精确序列化进 envelope");
+        MockE2ePayload reconstructed = objectMapper.treeToValue(envelope.get("payload"),
+                MockE2ePayload.class);
+        assertEquals(payload, reconstructed, "消费端应能从 envelope 还原对象 payload");
+    }
+
+    @Test
+    public void testStringPassthroughConsumedExactly() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V37_ROUTE_PREFIX, suffix);
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-raw");
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        String rawPayload = "raw-string-payload-模拟-✓";
+        KafkaPublishMessage<String> message = message(topic, key, "message-raw-" + suffix);
+        message.setPayload(rawPayload);
+        message.setEnvelopeEnabled(false);
+
+        publisher.publish(message).get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        ConsumerRecord<String, String> record = assertRecord(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, key);
+
+        log.info("String passthrough 消费值: {}", record.value());
+        assertEquals(rawPayload, record.value(),
+                "envelope 关闭时 String payload 应原样到达消费端，不额外 JSON quote");
+    }
+
+    @Test
+    public void testTimestampPreservedThroughBroker() throws Exception {
+        String suffix = KafkaPublisherEndToEndHelper.suffix();
+        String topic = KafkaPublisherEndToEndHelper.topic(
+                KafkaPublisherEndToEndHelper.TOPIC_V110_PREFIX, suffix);
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-ts");
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        long expectedTimestamp = 1700000000000L;
+        KafkaPublishMessage<String> message = message(topic, key, "message-ts-" + suffix);
+        message.setTimestamp(expectedTimestamp);
+
+        publisher.publish(message).get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        ConsumerRecord<String, String> record = assertRecord(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, key);
+
+        log.info("broker 消费 timestamp: {}", record.timestamp());
+        assertEquals(expectedTimestamp, record.timestamp(),
+                "ProducerRecord timestamp 应作为 CREATE_TIME 保留到消费端");
+    }
+
+    private void assertTopicPublisherEnvelopeAndHeaders(String suffix, String topic) throws Exception {
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-v110");
+        String traceId = "trace-v110-" + suffix;
+        MDC.put(SimpleKafkaPublisherConstant.MDC_TRACE_ID, traceId);
+        KafkaPublishMessage<String> message = message(topic, key, "message-v110-" + suffix);
+        message.setHeaders(Collections.singletonMap(KafkaPublisherEndToEndHelper.CUSTOM_HEADER,
+                KafkaPublisherEndToEndHelper.CUSTOM_HEADER_VALUE));
+
+        KafkaPublishResult result = publisher.publish(message)
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        ConsumerRecord<String, String> record = assertRecord(
+                bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, key);
+        JsonNode envelope = objectMapper.readTree(record.value());
+
+        log.info("topic 发布结果: {}", result);
+        assertEquals(topic, result.getTopic(), "结果 topic 应与 broker metadata 一致");
+        assertEquals(key, record.key(), "消费记录 key 应精确一致");
+        assertEquals(message.getMessageId(), result.getMessageId(), "结果 messageId 应精确一致");
+        assertEquals(message.getMessageId(), envelope.get("messageId").asText(),
+                "envelope messageId 应精确一致");
+        assertEquals(KafkaPublisherEndToEndHelper.MESSAGE_TYPE, envelope.get("messageType").asText(),
+                "envelope messageType 应精确一致");
+        assertEquals(KafkaPublisherEndToEndHelper.APP_NAME, envelope.get("source").asText(),
+                "envelope source 应精确一致");
+        assertEquals(KafkaPublisherEndToEndHelper.PAYLOAD, envelope.get("payload").asText(),
+                "envelope payload 应精确一致");
+        assertEquals(traceId, envelope.get("traceId").asText(),
+                "envelope traceId 应与发布线程 MDC 一致");
+        assertEquals(message.getMessageId(), headerText(record,
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_ID),
+                "messageId header 应与 envelope 一致");
+        assertEquals(KafkaPublisherEndToEndHelper.MESSAGE_TYPE, headerText(record,
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_TYPE),
+                "messageType header 应与 envelope 一致");
+        assertEquals(traceId, headerText(record,
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_TRACE_ID),
+                "traceId header 应与 envelope 一致");
+        assertEquals(KafkaPublisherEndToEndHelper.APP_NAME, headerText(record,
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_SOURCE),
+                "source header 应与 envelope 一致");
+        assertEquals(envelope.get("timestamp").asText(), headerText(record,
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_PUBLISHED_AT),
+                "publishedAt header 应与 envelope timestamp 一致");
+        assertArrayEquals(KafkaPublisherEndToEndHelper.CUSTOM_HEADER_VALUE.getBytes(StandardCharsets.UTF_8),
+                record.headers().lastHeader(KafkaPublisherEndToEndHelper.CUSTOM_HEADER).value(),
+                "自定义 Unicode header 应按 UTF-8 原样消费");
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28), topic, key);
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, key);
+        MDC.remove(SimpleKafkaPublisherConstant.MDC_TRACE_ID);
+    }
+
+    private void assertExplicitDatasourceIsolation(String suffix, String topic) throws Exception {
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-v28");
+        KafkaPublishMessage<String> message = message(topic, key, "message-v28-" + suffix);
+
+        KafkaPublishResult result = publisher.publishOn(KafkaPublisherEndToEndHelper.DATASOURCE_V28, message)
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        log.info("显式 datasource 发布结果: {}", result);
+        assertEquals(KafkaPublisherEndToEndHelper.DATASOURCE_V28, result.getDatasourceKey(),
+                "publishOn 应回填显式 datasourceKey");
+        assertRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28), topic, key);
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, key);
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, key);
+    }
+
+    private void assertRouteKeyIsolation(String suffix, String topic) throws Exception {
+        String key = KafkaPublisherEndToEndHelper.key(suffix + "-route-v37");
+        KafkaPublishMessage<String> message = message(topic, key, "message-route-v37-" + suffix);
+
+        KafkaPublishResult result = publisher.publishByRouteKey(
+                        KafkaPublisherEndToEndHelper.ROUTE_KEY_V37, message)
+                .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+        log.info("routeKey 发布结果: {}", result);
+        assertNull(result.getDatasourceKey(), "routeKey 模式不应伪造 datasourceKey");
+        assertRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37), topic, key);
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110), topic, key);
+        assertNoRecord(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28), topic, key);
+    }
+
+    private void assertClusterPartitions(String suffix, String topic) throws Exception {
+        for (int partition = KafkaPublisherEndToEndHelper.PARTITION_ZERO;
+             partition <= KafkaPublisherEndToEndHelper.PARTITION_TWO; partition++) {
+            String key = KafkaPublisherEndToEndHelper.key(suffix + "-cluster-" + partition);
+            KafkaPublishMessage<String> message = message(topic, key,
+                    "message-cluster-" + partition + "-" + suffix);
+            message.setPartition(partition);
+
+            KafkaPublishResult result = publisher.publishOn(
+                            KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER, message)
+                    .get(KafkaPublisherEndToEndHelper.SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            ConsumerRecord<String, String> record = assertRecord(
+                    bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER), topic, key);
+
+            log.info("cluster 分区 {} 发布结果: {}", partition, result);
+            assertEquals(partition, result.getPartition(), "结果 partition 应精确一致");
+            assertEquals(partition, record.partition(), "消费记录 partition 应精确一致");
+        }
+    }
+
+    private void createSharedTopicOnAllClusters(String topic) {
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37),
+                topic, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER),
+                topic, KafkaPublisherEndToEndHelper.CLUSTER_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.CLUSTER_REPLICATION_FACTOR);
+    }
+
+    private Set<String> consumeCandidateKeys(String bootstrapServers, String topic,
+                                             Set<String> candidateKeys) {
+        return KafkaPublisherEndToEndHelper.consumeKeys(bootstrapServers, topic, candidateKeys,
+                KafkaPublisherEndToEndHelper.CONSUME_TIMEOUT_MS);
+    }
+
+    private void createTopics(String topicV110, String topicV28, String topicV37Route,
+                              String topicCluster) {
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V110),
+                topicV110, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V28),
+                topicV28, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_V37),
+                topicV37Route, KafkaPublisherEndToEndHelper.SINGLE_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.SINGLE_REPLICATION_FACTOR);
+        KafkaPublisherEndToEndHelper.createTopic(bootstrapServers(KafkaPublisherEndToEndHelper.DATASOURCE_CLUSTER),
+                topicCluster, KafkaPublisherEndToEndHelper.CLUSTER_PARTITION_COUNT,
+                KafkaPublisherEndToEndHelper.CLUSTER_REPLICATION_FACTOR);
+    }
+
+    private KafkaPublishMessage<String> message(String topic, String key, String messageId) {
+        return KafkaPublishMessage.<String>builder()
+                .topic(topic)
+                .key(key)
+                .messageId(messageId)
+                .messageType(KafkaPublisherEndToEndHelper.MESSAGE_TYPE)
+                .payload(KafkaPublisherEndToEndHelper.PAYLOAD)
+                .build();
+    }
+
+    private ConsumerRecord<String, String> assertRecord(String bootstrapServers, String topic,
+                                                        String expectedKey) {
+        ConsumerRecord<String, String> record = KafkaPublisherEndToEndHelper.consumeRecord(
+                bootstrapServers, topic, expectedKey, KafkaPublisherEndToEndHelper.CONSUME_TIMEOUT_MS);
+        assertNotNull(record, String.format(KafkaPublisherEndToEndHelper.ASSERT_RECORD_MISSING,
+                bootstrapServers, topic));
+        return record;
+    }
+
+    private void assertNoRecord(String bootstrapServers, String topic, String expectedKey) {
+        ConsumerRecord<String, String> record = KafkaPublisherEndToEndHelper.consumeRecord(
+                bootstrapServers, topic, expectedKey, KafkaPublisherEndToEndHelper.NO_MESSAGE_TIMEOUT_MS);
+        assertNull(record, String.format(KafkaPublisherEndToEndHelper.ASSERT_RECORD_UNEXPECTED,
+                bootstrapServers, topic));
+    }
+
+    private String headerText(ConsumerRecord<String, String> record, String headerName) {
+        Header header = record.headers().lastHeader(headerName);
+        assertNotNull(header, "默认 header 应存在: " + headerName);
+        return new String(header.value(), StandardCharsets.UTF_8);
+    }
+
+    private String bootstrapServers(String datasourceKey) {
+        SimpleKafkaRouteProperties.DataSourceConfig source = routeProperties.getSources().get(datasourceKey);
+        if (source == null) {
+            throw new RuntimeException("缺少 Kafka Route datasource 配置: " + datasourceKey);
+        }
+        List<String> servers = source.getBootstrapServers();
+        if (servers == null || servers.isEmpty()) {
+            throw new RuntimeException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
+        }
+        return String.join(",", servers);
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @EqualsAndHashCode
+    static class MockE2ePayload {
+
+        private String mockField;
+        private int mockCount;
+    }
+}

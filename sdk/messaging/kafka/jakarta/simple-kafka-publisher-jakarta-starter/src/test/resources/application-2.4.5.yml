@@ -1,0 +1,26 @@
+# Spring Boot 2.4.5 / Spring Kafka 2.6.x 兼容矩阵配置。
+# 对真实 Kafka 数据源显式固定请求与投递超时，避免客户端默认值参与矩阵结论。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            sources:
+              v110:
+                producer:
+                  request-timeout-ms: 6000
+                  delivery-timeout-ms: 30000
+              v28:
+                producer:
+                  request-timeout-ms: 6000
+                  delivery-timeout-ms: 30000
+              v37:
+                producer:
+                  request-timeout-ms: 6000
+                  delivery-timeout-ms: 30000
+              cluster:
+                producer:
+                  request-timeout-ms: 6000
+                  delivery-timeout-ms: 30000

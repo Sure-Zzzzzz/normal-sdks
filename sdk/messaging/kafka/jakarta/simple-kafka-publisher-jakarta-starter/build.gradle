@@ -1,0 +1,23 @@
+configurations.testRuntimeClasspath {
+    exclude group: 'ch.qos.logback', module: 'logback-classic'
+}
+
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.kafka:spring-kafka'
+
+    api 'io.github.sure-zzzzzz:simple-kafka-route-jakarta-starter:1.0.0'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    testImplementation('org.springframework.boot:spring-boot-starter-web') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+}

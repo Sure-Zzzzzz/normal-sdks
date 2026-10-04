@@ -1,0 +1,27 @@
+# Spring Boot 2.2.x / Spring Kafka 2.3.x 兼容矩阵配置。
+# 旧版客户端连接 Kafka 2.8.1、3.7.1 和三 Broker 集群时显式放宽请求超时，
+# 避免不同客户端默认值影响 publisher 路由与发布链路的兼容性结论。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            sources:
+              v110:
+                producer:
+                  request-timeout-ms: 7000
+                  delivery-timeout-ms: 30000
+              v28:
+                producer:
+                  request-timeout-ms: 7000
+                  delivery-timeout-ms: 30000
+              v37:
+                producer:
+                  request-timeout-ms: 7000
+                  delivery-timeout-ms: 30000
+              cluster:
+                producer:
+                  request-timeout-ms: 7000
+                  delivery-timeout-ms: 30000

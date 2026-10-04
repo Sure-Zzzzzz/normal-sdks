@@ -1,0 +1,26 @@
+# Spring Boot 2.7.9 / Spring Kafka 2.8.x 基线矩阵配置。
+# 对真实 Kafka 数据源显式固定请求与投递超时，作为其余兼容版本的对照基线。
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            sources:
+              v110:
+                producer:
+                  request-timeout-ms: 5000
+                  delivery-timeout-ms: 30000
+              v28:
+                producer:
+                  request-timeout-ms: 5000
+                  delivery-timeout-ms: 30000
+              v37:
+                producer:
+                  request-timeout-ms: 5000
+                  delivery-timeout-ms: 30000
+              cluster:
+                producer:
+                  request-timeout-ms: 5000
+                  delivery-timeout-ms: 30000
