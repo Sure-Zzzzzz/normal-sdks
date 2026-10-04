@@ -1,0 +1,51 @@
+# 测试配置：结构与非敏感值直接可跑端到端（Redis Route → smart-cache → AKSK 令牌链 → 底座
+# akskClientRestTemplate → KmsRestTemplateClient）；仅凭据两键由 application-local.yml 覆盖
+# （模板见 application-local.yml.example）。
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: 127.0.0.1
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://127.0.0.1:8280
+              token-endpoint: /oauth2/token
+              # client-id 和 client-secret 请在 application-local.yml 中配置
+              client-id: test-client-id
+              client-secret: test-client-secret
+              resttemplate:
+                enable: true
+        cache:
+          enabled: true
+          key-prefix: sure-auth-aksk-client
+          me: kms-client-e2e
+          l1:
+            enabled: true
+          l2:
+            enabled: true
+        kms:
+          client:
+            enable: true
+            base-url: http://127.0.0.1:8390
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.kms: DEBUG
+    io.github.surezzzzzz.sdk.auth.aksk: DEBUG
