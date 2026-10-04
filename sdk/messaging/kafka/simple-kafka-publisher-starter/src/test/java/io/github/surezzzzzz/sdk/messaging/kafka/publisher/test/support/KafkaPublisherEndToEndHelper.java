@@ -10,11 +10,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.TopicExistsException;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -79,11 +75,11 @@ public final class KafkaPublisherEndToEndHelper {
                         new NewTopic(topic, partitions, replicationFactor))).all().get();
             } catch (ExecutionException e) {
                 if (!(e.getCause() instanceof TopicExistsException)) {
-                    throw new IllegalStateException(String.format(CREATE_TOPIC_FAILED, topic), e);
+                    throw new AssertionError(String.format(CREATE_TOPIC_FAILED, topic), e);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new IllegalStateException(String.format(CREATE_TOPIC_INTERRUPTED, topic), e);
+                throw new AssertionError(String.format(CREATE_TOPIC_INTERRUPTED, topic), e);
             }
         }
     }
@@ -92,7 +88,9 @@ public final class KafkaPublisherEndToEndHelper {
                                                                String expectedKey, long timeoutMs) {
         Properties properties = consumerProperties(bootstrapServers, GROUP_PREFIX + suffix());
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties)) {
-            consumer.subscribe(Collections.singletonList(topic));
+            if (!awaitTopicAssignment(consumer, topic, timeoutMs)) {
+                return null;
+            }
             long deadline = System.currentTimeMillis() + timeoutMs;
             while (System.currentTimeMillis() < deadline) {
                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
@@ -120,7 +118,9 @@ public final class KafkaPublisherEndToEndHelper {
         Set<String> foundKeys = new LinkedHashSet<>();
         Properties properties = consumerProperties(bootstrapServers, GROUP_PREFIX + suffix());
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties)) {
-            consumer.subscribe(Collections.singletonList(topic));
+            if (!awaitTopicAssignment(consumer, topic, timeoutMs)) {
+                return foundKeys;
+            }
             long deadline = System.currentTimeMillis() + timeoutMs;
             Long settleDeadline = null;
             while (System.currentTimeMillis() < deadline
@@ -150,6 +150,28 @@ public final class KafkaPublisherEndToEndHelper {
 
     public static String key(String suffix) {
         return String.format(KEY_TEMPLATE, suffix);
+    }
+
+    /**
+     * 单独等待 consumer group 完成分区分配，避免协调时延吞掉消息读取窗口。
+     *
+     * @param consumer  Kafka consumer
+     * @param topic     待读取的 topic
+     * @param timeoutMs 等待分区分配的最长时间
+     * @return 是否完成分区分配
+     */
+    private static boolean awaitTopicAssignment(KafkaConsumer<String, String> consumer, String topic,
+                                                long timeoutMs) {
+        consumer.subscribe(Collections.singletonList(topic));
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            consumer.poll(Duration.ofMillis(POLL_INTERVAL_MS));
+            if (!consumer.assignment().isEmpty()) {
+                consumer.seekToBeginning(consumer.assignment());
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Properties consumerProperties(String bootstrapServers, String groupId) {

@@ -4,7 +4,6 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishMessage;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishResult;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.SimpleKafkaPublisherTestApplication;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPublisherEndToEndHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Kafka Publisher 真实 broker 失败传播测试

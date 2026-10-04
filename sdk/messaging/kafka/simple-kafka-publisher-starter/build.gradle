@@ -3,7 +3,7 @@ dependencies {
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.kafka:spring-kafka'
 
-    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-kafka-route-starter:1.0.5'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 

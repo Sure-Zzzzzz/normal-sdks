@@ -1,12 +1,12 @@
 package io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.cases;
 
 import io.github.surezzzzzz.sdk.kafka.route.template.KafkaRouteTemplate;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPublisherTestHelper;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.DefaultKafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.exception.KafkaPublishException;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishMessage;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.model.KafkaPublishResult;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPublisherTestHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
@@ -326,7 +326,7 @@ public class DefaultKafkaPublisherTest {
 
     @Test
     public void testSerializerRuntimeExceptionWrappedWithoutMessageLeak() {
-        RuntimeException cause = new IllegalStateException("secret-payload-value");
+        RuntimeException cause = new RuntimeException("secret-payload-value");
         DefaultKafkaPublisher exceptionPublisher = publisherWithSerializer(context -> {
             throw cause;
         });

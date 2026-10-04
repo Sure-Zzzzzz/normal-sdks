@@ -23,15 +23,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 /**
  * Kafka Publisher 错误消息安全测试
@@ -46,6 +40,14 @@ public class KafkaPublishErrorMessageSafetyTest {
             "mock" + (char) 0x2028 + "forged-type";
     private static final String UNSAFE_MESSAGE_ID = repeat('a',
             SimpleKafkaPublisherConstant.MAX_ERROR_DISPLAY_LENGTH + 1);
+
+    private static String repeat(char value, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int i = 0; i < count; i++) {
+            builder.append(value);
+        }
+        return builder.toString();
+    }
 
     @Test
     public void testSerializeFailureSanitizesDynamicMetadata() {
@@ -66,7 +68,7 @@ public class KafkaPublishErrorMessageSafetyTest {
     public void testSendFailureSanitizesDynamicMetadata() throws Exception {
         KafkaRouteTemplate routeTemplate = mock(KafkaRouteTemplate.class);
         when(routeTemplate.send(any(ProducerRecord.class)))
-                .thenThrow(new IllegalStateException("mock-send-failure"));
+                .thenThrow(new RuntimeException("mock-send-failure"));
         DefaultKafkaPublisher publisher = publisher(routeTemplate,
                 context -> KafkaPublisherTestHelper.PAYLOAD, 3000L);
 
@@ -141,8 +143,8 @@ public class KafkaPublishErrorMessageSafetyTest {
     }
 
     private DefaultKafkaPublisher publisher(KafkaRouteTemplate routeTemplate,
-                                             KafkaPublishSerializer serializer,
-                                             long timeoutMs) {
+                                            KafkaPublishSerializer serializer,
+                                            long timeoutMs) {
         SimpleKafkaPublisherProperties properties = KafkaPublisherTestHelper.properties();
         properties.getSend().setTimeoutMs(timeoutMs);
         return new DefaultKafkaPublisher(routeTemplate, properties, serializer,
@@ -181,13 +183,5 @@ public class KafkaPublishErrorMessageSafetyTest {
             index += target.length();
         }
         return count;
-    }
-
-    private static String repeat(char value, int count) {
-        StringBuilder builder = new StringBuilder(count);
-        for (int i = 0; i < count; i++) {
-            builder.append(value);
-        }
-        return builder.toString();
     }
 }

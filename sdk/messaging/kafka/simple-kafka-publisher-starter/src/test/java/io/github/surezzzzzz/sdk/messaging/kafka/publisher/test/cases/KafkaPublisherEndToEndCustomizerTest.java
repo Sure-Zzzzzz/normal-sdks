@@ -12,19 +12,17 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.test.support.KafkaPubl
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Kafka Publisher customizer 端到端测试
@@ -81,11 +79,11 @@ public class KafkaPublisherEndToEndCustomizerTest {
     private String bootstrapServers(String datasourceKey) {
         SimpleKafkaRouteProperties.DataSourceConfig source = routeProperties.getSources().get(datasourceKey);
         if (source == null) {
-            throw new IllegalStateException("缺少 Kafka Route datasource 配置: " + datasourceKey);
+            throw new RuntimeException("缺少 Kafka Route datasource 配置: " + datasourceKey);
         }
         List<String> servers = source.getBootstrapServers();
         if (servers == null || servers.isEmpty()) {
-            throw new IllegalStateException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
+            throw new RuntimeException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
         }
         return String.join(",", servers);
     }

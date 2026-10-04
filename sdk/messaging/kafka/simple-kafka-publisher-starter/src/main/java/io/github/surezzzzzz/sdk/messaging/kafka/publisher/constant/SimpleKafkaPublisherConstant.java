@@ -10,58 +10,47 @@ import java.nio.charset.StandardCharsets;
  */
 public final class SimpleKafkaPublisherConstant {
 
-    private SimpleKafkaPublisherConstant() {
-        throw new UnsupportedOperationException(UTILITY_CLASS_MESSAGE);
-    }
+    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.messaging.kafka.publisher";
 
     // ==================== 配置相关常量 ====================
-
-    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.messaging.kafka.publisher";
     public static final String CONFIG_PROPERTY_ENABLE = "enable";
     public static final String BOOLEAN_TRUE = "true";
+    public static final boolean DEFAULT_ENABLE = false;
 
     // ==================== 默认值常量 ====================
-
-    public static final boolean DEFAULT_ENABLE = false;
     public static final boolean DEFAULT_ENVELOPE_ENABLE = true;
     public static final boolean DEFAULT_INCLUDE_NULL_PAYLOAD = false;
     public static final boolean DEFAULT_ENABLE_DEFAULT_HEADERS = true;
     public static final boolean DEFAULT_ALLOW_HEADER_OVERRIDE = false;
     public static final String DEFAULT_APP_NAME = "default";
     public static final long DEFAULT_SEND_TIMEOUT_MS = 3000L;
+    public static final String DEFAULT_HEADER_MESSAGE_ID = "x-message-id";
 
     // ==================== Header 常量 ====================
-
-    public static final String DEFAULT_HEADER_MESSAGE_ID = "x-message-id";
     public static final String DEFAULT_HEADER_MESSAGE_TYPE = "x-message-type";
     public static final String DEFAULT_HEADER_TRACE_ID = "x-trace-id";
     public static final String DEFAULT_HEADER_SOURCE = "x-source";
     public static final String DEFAULT_HEADER_PUBLISHED_AT = "x-published-at";
     public static final String HEADER_VALUE_EMPTY = "";
+    public static final String ERROR_VALUE_UNSAFE_DISPLAY = "<unsafe>";
 
     // ==================== 错误展示常量 ====================
-
-    public static final String ERROR_VALUE_UNSAFE_DISPLAY = "<unsafe>";
     public static final int MAX_ERROR_DISPLAY_LENGTH = 256;
+    public static final String UTF_8 = "UTF-8";
 
     // ==================== 字符集常量 ====================
-
-    public static final String UTF_8 = "UTF-8";
     public static final Charset CHARSET_UTF_8 = StandardCharsets.UTF_8;
+    public static final String MDC_TRACE_ID = "traceId";
 
     // ==================== MDC 常量 ====================
-
-    public static final String MDC_TRACE_ID = "traceId";
     public static final String MDC_TRACE_ID_WITH_HYPHEN = "trace-id";
     public static final String MDC_X_TRACE_ID = "X-B3-TraceId";
-
-    // ==================== 工具类常量 ====================
-
     public static final String UTILITY_CLASS_MESSAGE = "Utility class";
 
-    // ==================== 校验原因常量 ====================
-
+    // ==================== 工具类常量 ====================
     public static final String REASON_MESSAGE_EMPTY = "message 不能为空";
+
+    // ==================== 校验原因常量 ====================
     public static final String REASON_PAYLOAD_EMPTY = "payload 不能为空";
     public static final String REASON_ROUTE_KEY_EMPTY = "routeKey 不能为空";
     public static final String REASON_DATASOURCE_KEY_EMPTY = "datasourceKey 不能为空";
@@ -85,8 +74,11 @@ public final class SimpleKafkaPublisherConstant {
     public static final String REASON_SEND_FUTURE_EMPTY = "底层发送 Future 不能为空";
     public static final String REASON_SEND_RESULT_EMPTY = "底层发送结果或 metadata 不能为空";
     public static final String REASON_SEND_INTERRUPTED = "同步等待被中断，发送状态未知，不应盲目重试以免重复投递";
+    public static final int ZERO = 0;
 
     // ==================== 数字常量 ====================
 
-    public static final int ZERO = 0;
+    private SimpleKafkaPublisherConstant() {
+        throw new UnsupportedOperationException(UTILITY_CLASS_MESSAGE);
+    }
 }

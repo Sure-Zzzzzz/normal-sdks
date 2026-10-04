@@ -19,6 +19,7 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.KafkaPublis
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishClock;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishHeaderHelper;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishStringHelper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeoutException;
  *
  * @author surezzzzzz
  */
+@Slf4j
 public class DefaultKafkaPublisher implements KafkaPublisher {
 
     private final KafkaRouteTemplate kafkaRouteTemplate;
@@ -252,15 +254,12 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
                 sendFuture = kafkaRouteTemplate.send(context.record);
             }
         } catch (RuntimeException e) {
-            SettableListenableFuture<KafkaPublishResult> failedFuture = new SettableListenableFuture<>();
-            failedFuture.setException(sendFailed(context, e));
-            return failedFuture;
+            log.debug("Kafka 发布委托 Route 失败，原因类型: {}", e.getClass().getSimpleName());
+            return failedFuture(sendFailed(context, e));
         }
         if (sendFuture == null) {
-            SettableListenableFuture<KafkaPublishResult> failedFuture = new SettableListenableFuture<>();
-            failedFuture.setException(sendFailed(context,
-                    new IllegalStateException(SimpleKafkaPublisherConstant.REASON_SEND_FUTURE_EMPTY)));
-            return failedFuture;
+            log.debug("Kafka 发布委托 Route 未返回 Future");
+            return failedFuture(sendFailed(context, null));
         }
         final SettableListenableFuture<KafkaPublishResult> resultFuture =
                 new SettableListenableFuture<KafkaPublishResult>() {
@@ -276,20 +275,27 @@ public class DefaultKafkaPublisher implements KafkaPublisher {
         sendFuture.addCallback(new ListenableFutureCallback<SendResult<String, String>>() {
             @Override
             public void onFailure(Throwable ex) {
+                log.debug("Kafka 发布异步发送失败，原因类型: {}", ex.getClass().getSimpleName());
                 resultFuture.setException(sendFailed(context, ex));
             }
 
             @Override
             public void onSuccess(SendResult<String, String> result) {
                 if (result == null || result.getRecordMetadata() == null) {
-                    resultFuture.setException(sendFailed(context,
-                            new IllegalStateException(SimpleKafkaPublisherConstant.REASON_SEND_RESULT_EMPTY)));
+                    log.debug("Kafka 发布异步发送未返回有效元数据");
+                    resultFuture.setException(sendFailed(context, null));
                     return;
                 }
                 resultFuture.set(buildResult(context, result));
             }
         });
         return resultFuture;
+    }
+
+    private ListenableFuture<KafkaPublishResult> failedFuture(KafkaPublishException exception) {
+        SettableListenableFuture<KafkaPublishResult> future = new SettableListenableFuture<>();
+        future.setException(exception);
+        return future;
     }
 
     private <T> KafkaPublishResult buildResult(PublishContext<T> context, SendResult<String, String> result) {

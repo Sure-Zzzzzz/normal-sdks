@@ -29,10 +29,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Kafka Publisher 大而全端到端测试
@@ -259,19 +256,19 @@ public class KafkaPublisherEndToEndTest {
         assertEquals(traceId, envelope.get("traceId").asText(),
                 "envelope traceId 应与发布线程 MDC 一致");
         assertEquals(message.getMessageId(), headerText(record,
-                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_ID),
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_ID),
                 "messageId header 应与 envelope 一致");
         assertEquals(KafkaPublisherEndToEndHelper.MESSAGE_TYPE, headerText(record,
-                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_TYPE),
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_MESSAGE_TYPE),
                 "messageType header 应与 envelope 一致");
         assertEquals(traceId, headerText(record,
-                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_TRACE_ID),
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_TRACE_ID),
                 "traceId header 应与 envelope 一致");
         assertEquals(KafkaPublisherEndToEndHelper.APP_NAME, headerText(record,
-                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_SOURCE),
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_SOURCE),
                 "source header 应与 envelope 一致");
         assertEquals(envelope.get("timestamp").asText(), headerText(record,
-                KafkaPublisherEndToEndHelper.DEFAULT_HEADER_PUBLISHED_AT),
+                        KafkaPublisherEndToEndHelper.DEFAULT_HEADER_PUBLISHED_AT),
                 "publishedAt header 应与 envelope timestamp 一致");
         assertArrayEquals(KafkaPublisherEndToEndHelper.CUSTOM_HEADER_VALUE.getBytes(StandardCharsets.UTF_8),
                 record.headers().lastHeader(KafkaPublisherEndToEndHelper.CUSTOM_HEADER).value(),
@@ -403,11 +400,11 @@ public class KafkaPublisherEndToEndTest {
     private String bootstrapServers(String datasourceKey) {
         SimpleKafkaRouteProperties.DataSourceConfig source = routeProperties.getSources().get(datasourceKey);
         if (source == null) {
-            throw new IllegalStateException("缺少 Kafka Route datasource 配置: " + datasourceKey);
+            throw new RuntimeException("缺少 Kafka Route datasource 配置: " + datasourceKey);
         }
         List<String> servers = source.getBootstrapServers();
         if (servers == null || servers.isEmpty()) {
-            throw new IllegalStateException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
+            throw new RuntimeException("Kafka Route datasource 未配置 bootstrap servers: " + datasourceKey);
         }
         return String.join(",", servers);
     }

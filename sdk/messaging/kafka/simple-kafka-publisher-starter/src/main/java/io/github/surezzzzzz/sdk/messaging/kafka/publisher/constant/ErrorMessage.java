@@ -7,10 +7,6 @@ package io.github.surezzzzzz.sdk.messaging.kafka.publisher.constant;
  */
 public final class ErrorMessage {
 
-    private ErrorMessage() {
-        throw new UnsupportedOperationException(SimpleKafkaPublisherConstant.UTILITY_CLASS_MESSAGE);
-    }
-
     public static final String CONFIG_INVALID = "Kafka publisher 配置非法：%s";
     public static final String MESSAGE_INVALID = "Kafka publish message 非法：%s";
     public static final String PAYLOAD_INVALID = "Kafka publish payload 非法，messageType=[%s]，messageId=[%s]，reason=[%s]";
@@ -22,4 +18,8 @@ public final class ErrorMessage {
     public static final String SEND_TIMEOUT = "Kafka publish message 同步等待超时，发送状态未知，不应盲目重试，topic=[%s]，messageType=[%s]，messageId=[%s]，timeoutMs=[%d]";
     public static final String HEADER_INVALID = "Kafka publish header 非法，headerKey=[%s]，reason=[%s]";
     public static final String ROUTE_INPUT_INVALID = "Kafka publish 路由参数非法：%s";
+
+    private ErrorMessage() {
+        throw new UnsupportedOperationException(SimpleKafkaPublisherConstant.UTILITY_CLASS_MESSAGE);
+    }
 }

@@ -11,14 +11,7 @@ import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.DefaultKafkaPub
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.engine.KafkaPublisher;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator.DefaultKafkaPublishMessageIdGenerator;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.generator.KafkaPublishMessageIdGenerator;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishKeyResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishRouteKeyResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTopicResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.DefaultKafkaPublishTraceResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishKeyResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishRouteKeyResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTopicResolver;
-import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.KafkaPublishTraceResolver;
+import io.github.surezzzzzz.sdk.messaging.kafka.publisher.resolver.*;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.JacksonKafkaPublishSerializer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.serializer.KafkaPublishSerializer;
 import io.github.surezzzzzz.sdk.messaging.kafka.publisher.support.KafkaPublishClock;
@@ -74,14 +67,14 @@ public class SimpleKafkaPublisherConfiguration {
         /**
          * 创建 KafkaPublisher
          *
-         * @param kafkaRouteTemplate  route 模板
-         * @param properties          publisher 配置
-         * @param serializer          序列化器
-         * @param topicResolver       topic 解析器
-         * @param keyResolver         key 解析器
-         * @param routeKeyResolver    routeKey 解析器
-         * @param messageIdGenerator  messageId 生成器
-         * @param traceResolver       traceId 解析器
+         * @param kafkaRouteTemplate         route 模板
+         * @param properties                 publisher 配置
+         * @param serializer                 序列化器
+         * @param topicResolver              topic 解析器
+         * @param keyResolver                key 解析器
+         * @param routeKeyResolver           routeKey 解析器
+         * @param messageIdGenerator         messageId 生成器
+         * @param traceResolver              traceId 解析器
          * @param clock                      发布时钟
          * @param headerCustomizerProvider   消息头自定义器 Provider
          * @param envelopeCustomizerProvider 消息封装自定义器 Provider

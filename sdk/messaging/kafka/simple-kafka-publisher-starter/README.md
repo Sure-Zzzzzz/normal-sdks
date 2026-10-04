@@ -35,22 +35,22 @@ Kafka 集群连接仍由 `simple-kafka-route-starter` 创建和管理。publishe
 
 | 组件 | 版本 |
 |------|------|
-| simple-kafka-publisher-starter | 1.1.0 |
-| simple-kafka-route-starter | 1.0.1 |
-| Spring Boot | 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 |
+| simple-kafka-publisher-starter | 1.1.1 |
+| simple-kafka-route-starter | 1.0.5 |
+| Spring Boot | 2.2.13.RELEASE / 2.3.12.RELEASE / 2.4.5 / 2.7.9 |
 | Spring Kafka | 2.x（随 Spring Boot 依赖管理） |
 | Java | 8+ |
 
-1.1.0 已在上述四套 Spring Boot 版本下完成全量测试，并使用 Kafka 1.1.0、2.8.1、3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群完成真实发送、消费、隔离及同一 Publisher 多路由往返切换验证。
+1.1.1 已在上述四套 Spring Boot 版本下完成全量测试，并使用 Kafka 1.1.0、2.8.1、3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群完成真实发送、消费、隔离及同一 Publisher 多路由往返切换验证。
 
 ## 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-kafka-publisher-starter:1.1.0'
+implementation 'io.github.sure-zzzzzz:simple-kafka-publisher-starter:1.1.1'
 implementation 'org.springframework.kafka:spring-kafka'
 ```
 
-publisher 已固定依赖 `simple-kafka-route-starter:1.0.1`。调用方仍需引入 Spring Kafka 运行时依赖，并按 route starter 的方式配置 Kafka datasource 和路由规则。
+publisher 已固定依赖 `simple-kafka-route-starter:1.0.5`。调用方仍需引入 Spring Kafka 运行时依赖，并按 route starter 的方式配置 Kafka datasource 和路由规则。
 
 ## 配置示例
 
@@ -409,11 +409,11 @@ Envelope customizer 只能修改 attributes；上下文不暴露 payload。publi
 
 ## 测试基线
 
-1.1.0 封版前完成：
+1.1.1 封版前完成：
 
 - 16 个测试类、96 个测试。
 - 0 skipped、0 failures、0 errors。
-- Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9 四套全量矩阵通过。
+- Spring Boot 2.2.13.RELEASE / 2.3.12.RELEASE / 2.4.5 / 2.7.9 四套全量矩阵通过。
 - Kafka 1.1.0 / 2.8.1 / 3.7.1 单节点和 Kafka 3.7.1 三 Broker 集群真实 E2E 通过。
 - 同一 `KafkaPublisher` 按 Kafka 1.1.0 → 2.8.1 → 3.7.1 → 三 Broker 集群 → Kafka 1.1.0 往返切换，使用同名 topic 精确验证消息只落入目标 datasource。
 - E2E 直接复用 `simple-kafka-route-starter/docker-compose.kafka-e2e.yml`，publisher 不维护重复 Kafka compose。
