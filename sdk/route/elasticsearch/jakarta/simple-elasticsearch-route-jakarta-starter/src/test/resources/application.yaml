@@ -1,0 +1,93 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            enable: true
+            default-source: primary
+
+            sources:
+              primary:
+                urls: http://localhost:19204
+                server-version: 7.17.16
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+
+              secondary:
+                urls: http://localhost:19214
+                server-version: 8.17.0
+                connect-timeout: 5000
+                socket-timeout: 60000
+                keep-alive-strategy: 300
+                max-conn-total: 100
+                max-conn-per-route: 10
+                enable-connection-reuse: true
+
+            rules:
+              - pattern: "test_index_b.secondary"
+                datasource: secondary
+                type: exact
+                priority: 10
+              - pattern: "test_index.history"
+                datasource: secondary
+                type: exact
+                priority: 10
+              - pattern: "write_test_secondary"
+                datasource: secondary
+                type: exact
+                priority: 10
+              - pattern: "*.secondary"
+                datasource: secondary
+                type: wildcard
+                priority: 20
+              # 异步写 + 日期分片测试规则
+              - pattern: "async_write.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                async-write: true
+                write-index-template: "async_write-{yyyy.MM.dd}"
+              # 同步写日期分片测试规则
+              - pattern: "date_shard.year.*"
+                datasource: secondary
+                type: wildcard
+                priority: 28
+                write-index-template: "date_shard_year-{yyyy}"
+                read-index-pattern: "date_shard_year-*"
+              - pattern: "date_shard.month.*"
+                datasource: secondary
+                type: wildcard
+                priority: 29
+                write-index-template: "date_shard_month-{yyyy.MM}"
+                read-index-pattern: "date_shard_month-*"
+              - pattern: "date_shard.*"
+                datasource: secondary
+                type: wildcard
+                priority: 30
+                write-index-template: "date_shard-{yyyy.MM.dd}"
+                read-index-pattern: "date_shard-*"
+                write-index-zone-id: "Asia/Shanghai"
+              - pattern: "tz_rule.test"
+                datasource: secondary
+                type: exact
+                priority: 31
+                write-index-template: "tz_rule-{yyyy.MM.dd}"
+                read-index-pattern: "tz_rule-*"
+                write-index-zone-id: "Etc/GMT+12"
+              - pattern: "tz_global.test"
+                datasource: secondary
+                type: exact
+                priority: 32
+                write-index-template: "tz_global-{yyyy.MM.dd}"
+                read-index-pattern: "tz_global-*"
+
+            write-index-zone-id: "Pacific/Kiritimati"
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch.route: DEBUG

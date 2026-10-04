@@ -1,0 +1,32 @@
+services:
+  es7:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.16
+    container_name: simple-elasticsearch-route-jakarta-es7
+    ports:
+      - "19204:9200"
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      xpack.security.enabled: "false"
+      xpack.ml.enabled: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow\\&timeout=1s"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  es8:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    container_name: simple-elasticsearch-route-jakarta-es8
+    ports:
+      - "19214:9200"
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+      xpack.security.enabled: "false"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.ml.enabled: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow\\&timeout=1s"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

@@ -1,0 +1,13 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        elasticsearch:
+          route:
+            sources:
+              primary:
+                urls: http://localhost:19204
+                server-version: 7.17.16
+              secondary:
+                urls: http://localhost:19214
+                server-version: 8.17.0

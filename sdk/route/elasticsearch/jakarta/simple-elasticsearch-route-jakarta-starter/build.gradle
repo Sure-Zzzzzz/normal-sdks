@@ -1,0 +1,9 @@
+dependencies {
+    compileOnly "org.springframework.boot:spring-boot-configuration-processor"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+    compileOnly "org.apache.httpcomponents:httpclient"
+    compileOnly "org.apache.httpcomponents:httpcore"
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+}
