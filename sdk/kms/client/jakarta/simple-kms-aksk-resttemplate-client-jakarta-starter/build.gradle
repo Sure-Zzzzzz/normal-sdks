@@ -1,0 +1,25 @@
+dependencies {
+    // 契约层：接口/模型/常量/异常族（公开 API 含 core 类型，收 api）
+    api 'io.github.sure-zzzzzz:simple-kms-client-core:2.0.0'
+
+    // aksk 底座（jakarta 线）：提供 akskClientRestTemplate（认证+连接池+超时），本模块代码不 import 底座类型
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+
+    // Spring Boot 3（compileOnly，宿主自行引入）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    // 底座 akskClientRestTemplate 的连接池实现（hc5，宿主自引）
+    compileOnly 'org.apache.httpcomponents.client5:httpclient5'
+
+    // 测试依赖（aop 对齐底座测试链；httpclient5 供端到端联调真实连接池）
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5'
+    // 端到端宿主直接使用 TokenManager API（底座自闭环原则：不向使用方编译期传递，自行引入）
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    // Redis 连接池实现（jakarta 线 redis route 运行时需要，形态对齐 aksk jakarta 底座）
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}
