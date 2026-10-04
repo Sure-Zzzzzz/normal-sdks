@@ -1,0 +1,26 @@
+configurations.testRuntimeClasspath {
+    exclude group: 'ch.qos.logback', module: 'logback-classic'
+}
+
+dependencies {
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnlyApi 'org.springframework.kafka:spring-kafka'
+    compileOnly 'org.springframework.data:spring-data-redis'
+    compileOnlyApi 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+
+    api 'io.github.sure-zzzzzz:simple-kafka-route-jakarta-starter:1.0.0'
+
+    testImplementation('org.springframework.boot:spring-boot-starter-web') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.apache.commons:commons-pool2'
+    testImplementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+}
