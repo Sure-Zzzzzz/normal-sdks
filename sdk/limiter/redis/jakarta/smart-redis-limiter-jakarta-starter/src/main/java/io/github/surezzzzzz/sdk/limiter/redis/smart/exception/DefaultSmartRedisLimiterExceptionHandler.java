@@ -1,0 +1,62 @@
+package io.github.surezzzzzz.sdk.limiter.redis.smart.exception;
+
+import io.github.surezzzzzz.sdk.limiter.redis.smart.annotation.SmartRedisLimiterComponent;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * @author: Sure.
+ * @description 默认限流异常处理器（可选，需要显式开启）
+ * @Date: 2026-05-08
+ */
+@RestControllerAdvice
+@SmartRedisLimiterComponent
+@ConditionalOnWebApplication
+@ConditionalOnClass(name = "org.springframework.web.bind.annotation.RestControllerAdvice")
+@ConditionalOnProperty(
+        prefix = "io.github.surezzzzzz.sdk.limiter.redis.smart.management",
+        name = "enable-default-exception-handler",
+        havingValue = "true",
+        matchIfMissing = true
+)
+@Slf4j
+public class DefaultSmartRedisLimiterExceptionHandler implements SmartRedisLimiterExceptionHandler {
+
+    @ExceptionHandler(SmartRedisLimitExceededException.class)
+    @Override
+    public ResponseEntity<?> handle(SmartRedisLimitExceededException ex) {
+        log.debug("SmartRedisLimiter 限流触发: retryAfter={}", ex.getRetryAfter());
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("code", SmartRedisLimiterConstant.HTTP_STATUS_TOO_MANY_REQUESTS);
+        body.put("message", SmartRedisLimiterConstant.HTTP_MESSAGE_TOO_MANY_REQUESTS);
+        body.put("retryAfter", ex.getRetryAfter());
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity
+                .status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(SmartRedisLimiterConstant.HEADER_RETRY_AFTER, String.valueOf(ex.getRetryAfter()));
+
+        // 写入限流详情响应头（异常中携带了详情时）
+        if (ex.getLimit() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_LIMIT, String.valueOf(ex.getLimit()));
+        }
+        if (ex.getRemaining() >= 0 && ex.getLimit() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_REMAINING, String.valueOf(ex.getRemaining()));
+        }
+        if (ex.getResetAt() > 0) {
+            builder.header(SmartRedisLimiterConstant.HEADER_X_RATELIMIT_RESET, String.valueOf(ex.getResetAt()));
+        }
+
+        return builder.body(body);
+    }
+}

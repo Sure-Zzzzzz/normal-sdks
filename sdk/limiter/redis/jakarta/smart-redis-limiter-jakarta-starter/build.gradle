@@ -1,0 +1,14 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+    api 'org.springframework.boot:spring-boot-starter-data-redis'
+    compileOnly 'org.springframework.boot:spring-boot-starter-aop'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}

@@ -1,0 +1,371 @@
+spring:
+  application:
+    name: smart-limiter-test
+
+
+# 智能限流器配置
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            resource:
+              server:
+                enabled: false
+        limiter:
+          redis:
+            smart:
+              enable: true
+              me: jakarta-limiter-test
+              mode: both  # 同时支持注解和拦截器
+              redis:
+                command-timeout: 3000         # 命令超时：3秒
+
+              # 注解模式配置（SmartLimiterTest使用）
+              annotation:
+                default-key-strategy: method
+                default-fallback: allow  # ✅ 新增：注解模式默认降级策略
+                default-limits:
+                  - count: 100
+                    window: 1
+                    unit: seconds
+
+              # 拦截器模式配置（SmartLimiterWebTest使用）
+              interceptor:
+                default-key-strategy: path
+                default-fallback: allow  # ✅ 新增：拦截器模式默认降级策略
+                default-limits:
+                  - count: 50
+                    window: 10
+                    unit: seconds
+
+                exclude-patterns:
+                  - /swagger-ui/**
+                  - /v3/api-docs/**
+                  - /api/health
+
+                rules:
+                  # Redis 版本矩阵：相同限流规则通过 path key 路由到六套 Redis 数据源
+                  - path-pattern: /api/matrix/**
+                    method: GET
+                    key-strategy: path
+                    algorithm: fixed
+                    fallback: deny
+                    limits:
+                      - count: 2
+                        window: 30
+                        unit: seconds
+                      - count: 3
+                        window: 60
+                        unit: seconds
+
+                  - path-pattern: /api/matrix/**
+                    method: POST
+                    key-strategy: path
+                    algorithm: sliding
+                    fallback: deny
+                    limits:
+                      - count: 2
+                        window: 30
+                        unit: seconds
+                      - count: 3
+                        window: 60
+                        unit: seconds
+
+                  # 降级测试：专用路径由 Redis Route 路由到不可用数据源
+                  - path-pattern: /api/fallback/allow
+                    method: GET
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  - path-pattern: /api/fallback/deny
+                    method: POST
+                    key-strategy: path
+                    fallback: deny
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  - path-pattern: /api/fallback/default
+                    method: GET
+                    key-strategy: path
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  # 规则0：滑动窗口测试接口，路径模式共享限流
+                  - path-pattern: /api/sliding/**
+                    method: GET
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 1
+                        unit: seconds
+
+                  # 规则0b：滑动窗口写操作，Redis异常时拒绝
+                  - path-pattern: /api/sliding/**
+                    method: POST
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 1
+                        unit: seconds
+
+                  # 规则0c：混用算法测试接口，GET用滑动窗口，POST用固定窗口
+                  - path-pattern: /api/mixed/**
+                    method: GET
+                    key-strategy: path-pattern
+                    algorithm: sliding
+                    fallback: allow
+                    limits:
+                      - count: 5
+                        window: 1
+                        unit: seconds
+
+                  - path-pattern: /api/mixed/**
+                    method: POST
+                    key-strategy: path-pattern
+                    algorithm: fixed
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 1
+                        unit: seconds
+
+                  # 规则1：/api/public/** GET请求，每个路径独立限流
+                  - path-pattern: /api/public/**
+                    method: GET
+                    key-strategy: path
+                    fallback: allow  # ✅ 新增：查询接口Redis异常时放行
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  # 规则2：/api/user/** GET请求，每个用户ID独立限流
+                  - path-pattern: /api/user/**
+                    method: GET
+                    key-strategy: path
+                    fallback: allow  # ✅ 新增：查询接口Redis异常时放行
+                    limits:
+                      - count: 10
+                        window: 10
+                        unit: seconds
+
+                  # 规则3：/api/user/** POST请求，所有用户共享限流
+                  - path-pattern: /api/user/**
+                    method: POST
+                    key-strategy: path-pattern
+                    fallback: deny  # ✅ 新增：写操作Redis异常时拒绝
+                    limits:
+                      - count: 5
+                        window: 10
+                        unit: seconds
+
+                  # 规则4：精确路径 /api/user/123，优先级最高
+                  - path-pattern: /api/user/123
+                    method: GET
+                    key-strategy: path
+                    # ✅ 不设置fallback，使用拦截器默认降级策略（allow）
+                    limits:
+                      - count: 15
+                        window: 10
+                        unit: seconds
+
+                  # === KeyProvider 测试规则（1.1.4 新增） ===
+
+                  # 规则5：自定义 KeyProvider 从 header 提取 clientId
+                  - path-pattern: /api/limiter/by-header
+                    method: GET
+                    key-provider: testHeaderKeyProvider
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则6：KeyProvider 返回 null → 回退到 keyStrategy=path
+                  - path-pattern: /api/limiter/null-fallback/**
+                    method: GET
+                    key-provider: testNullingKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则7：同时配置 keyProvider + keyStrategy，验证 keyProvider 优先级更高
+                  - path-pattern: /api/limiter/provider-priority/**
+                    method: GET
+                    key-provider: testHeaderKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则8：KeyProvider 返回空字符串 → 回退到 keyStrategy=path
+                  - path-pattern: /api/limiter/empty-fallback/**
+                    method: GET
+                    key-provider: testEmptyKeyProvider
+                    key-strategy: path
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则9：KeyProvider 抛异常 + fallback=allow → 放行
+                  - path-pattern: /api/limiter/throwing-allow
+                    method: GET
+                    key-provider: testThrowingKeyProvider
+                    fallback: allow
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+                  # 规则10：KeyProvider 抛异常 + fallback=deny → 拒绝（429）
+                  - path-pattern: /api/limiter/throwing-deny
+                    method: GET
+                    key-provider: testThrowingKeyProvider
+                    fallback: deny
+                    limits:
+                      - count: 3
+                        window: 10
+                        unit: seconds
+
+              # 降级策略
+              fallback:
+                on-redis-error: deny  # 全局降级策略：Redis异常时拒绝请求
+
+              # 异常处理
+              management:
+                enable-default-exception-handler: true
+
+              # 限流通过时是否发布事件
+              log-on-pass: false
+        redis:
+          route:
+            enable: true
+            default-source: redis7Standalone
+            sources:
+              unavailable:
+                mode: standalone
+                host: localhost
+                port: 16399
+              redis3Standalone:
+                mode: standalone
+                host: localhost
+                port: 16379
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis5Standalone:
+                mode: standalone
+                host: localhost
+                port: 16380
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis7Standalone:
+                mode: standalone
+                host: localhost
+                port: 16381
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+              redis3Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17000
+                  - localhost:17001
+                  - localhost:17002
+                  - localhost:17003
+                  - localhost:17004
+                  - localhost:17005
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis5Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17010
+                  - localhost:17011
+                  - localhost:17012
+                  - localhost:17013
+                  - localhost:17014
+                  - localhost:17015
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+              redis7Cluster:
+                mode: cluster
+                nodes:
+                  - localhost:17020
+                  - localhost:17021
+                  - localhost:17022
+                  - localhost:17023
+                  - localhost:17024
+                  - localhost:17025
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+                lettuce:
+                  cluster-adaptive-refresh: true
+                  cluster-periodic-refresh: true
+                  cluster-refresh-period-ms: 30000
+            rules:
+              - pattern: "*/api/fallback/*"
+                type: wildcard
+                datasource: unavailable
+                priority: 1
+              - pattern: "*method:TestService.fallback*Method"
+                type: wildcard
+                datasource: unavailable
+                priority: 2
+              - pattern: "*/api/matrix/redis3-standalone/*"
+                type: wildcard
+                datasource: redis3Standalone
+                priority: 10
+              - pattern: "*/api/matrix/redis5-standalone/*"
+                type: wildcard
+                datasource: redis5Standalone
+                priority: 11
+              - pattern: "*/api/matrix/redis7-standalone/*"
+                type: wildcard
+                datasource: redis7Standalone
+                priority: 12
+              - pattern: "*/api/matrix/redis3-cluster/*"
+                type: wildcard
+                datasource: redis3Cluster
+                priority: 20
+              - pattern: "*/api/matrix/redis5-cluster/*"
+                type: wildcard
+                datasource: redis5Cluster
+                priority: 21
+              - pattern: "*/api/matrix/redis7-cluster/*"
+                type: wildcard
+                datasource: redis7Cluster
+                priority: 22
+
+# 日志配置
+logging:
+  level:
+    io.github.surezzzzzz.sdk.limiter.redis.smart: DEBUG
+    org.springframework: WARN
