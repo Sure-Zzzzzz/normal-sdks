@@ -24,6 +24,7 @@ rootProject.name = 'normal-sdks'
 
 include(
         ':sdk:expression:condition:condition-expression-parser-starter',
+        ':sdk:expression:condition:jakarta:condition-expression-parser-jakarta-starter',
         ':sdk:natural-language:parser:natural-language-parser-starter',
         ':sdk:retry:redis-retry-starter',
         ':sdk:retry:task-retry-starter',

@@ -1,0 +1,39 @@
+// 沿用旧线：语法生成只配置在本模块，不扩展根构建。
+apply plugin: 'antlr'
+
+// Gradle 8.5 的 ANTLR 插件将工具挂到 api，必须在本模块解除该继承。
+configurations.api.setExtendsFrom(
+        configurations.api.extendsFrom.findAll { it != configurations.antlr })
+
+dependencies {
+    antlr 'org.antlr:antlr4:4.10.1'
+    api 'org.antlr:antlr4-runtime:4.10.1'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+}
+
+// 本模块成对生成与运行；不强制改变宿主的其他依赖版本。
+dependencyManagement {
+    dependencies {
+        dependency 'org.antlr:antlr4-runtime:4.10.1'
+    }
+}
+
+generateGrammarSource {
+    arguments += ['-visitor', '-no-listener',
+                  '-package', 'io.github.surezzzzzz.sdk.expression.condition.parser.antlr']
+    outputDirectory = file("${project.buildDir}/generated-src/antlr/main")
+}
+
+compileJava {
+    source "${project.buildDir}/generated-src/antlr/main"
+    dependsOn generateGrammarSource
+}
+
+tasks.matching { it.name == 'sourcesJar' }.configureEach {
+    dependsOn generateGrammarSource
+}
+
+tasks.javadoc {
+    dependsOn generateGrammarSource
+    failOnError = true
+}

@@ -1,0 +1,17 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        expression:
+          condition:
+            parser:
+              enabled: true
+
+logging:
+  level:
+    root: info
+    io.github.surezzzzzz.sdk.expression.condition.parser.parser: debug
