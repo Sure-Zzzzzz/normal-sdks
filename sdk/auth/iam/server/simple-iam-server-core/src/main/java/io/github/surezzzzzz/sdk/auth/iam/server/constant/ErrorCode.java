@@ -114,6 +114,21 @@ public final class ErrorCode {
     public static final String APPLICATION_AUTHORIZATION_CONFLICT = "APPLICATION_AUTHORIZATION_003";
     public static final String APPLICATION_AUTHORIZATION_CHANGE_PAYLOAD_INVALID = "APPLICATION_AUTHORIZATION_004";
 
+    // ==================== 受委托角色错误 ====================
+    public static final String OPEN_ROLE_INVALID = "OPEN_ROLE_001";
+    public static final String OPEN_ROLE_AUTHENTICATION_REQUIRED = "OPEN_ROLE_002";
+    public static final String OPEN_ROLE_FORBIDDEN = "OPEN_ROLE_003";
+    public static final String OPEN_ROLE_NOT_FOUND = "OPEN_ROLE_004";
+    public static final String OPEN_ROLE_CONFLICT = "OPEN_ROLE_005";
+    public static final String OPEN_ROLE_PRECONDITION_REQUIRED = "OPEN_ROLE_006";
+    public static final String OPEN_ROLE_PRECONDITION_FAILED = "OPEN_ROLE_007";
+    public static final String OPEN_DIRECTORY_BUDGET_EXCEEDED = "OPEN_ROLE_008";
+    public static final String OPEN_ROLE_UNAVAILABLE = "OPEN_ROLE_009";
+    /**
+     * 开放角色请求内容超过固定执行预算。
+     */
+    public static final String OPEN_ROLE_BODY_TOO_LARGE = "OPEN_ROLE_010";
+
     private ErrorCode() {
         throw new UnsupportedOperationException("Utility class cannot be instantiated");
     }

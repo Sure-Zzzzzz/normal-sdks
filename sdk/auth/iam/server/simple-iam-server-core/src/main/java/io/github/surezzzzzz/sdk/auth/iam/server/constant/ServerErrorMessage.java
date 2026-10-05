@@ -194,6 +194,21 @@ public final class ServerErrorMessage {
     public static final String APPLICATION_AUTHORIZATION_CONFLICT = "应用授权并发冲突，请重试：userId=%s, applicationId=%s";
     public static final String APPLICATION_AUTHORIZATION_CHANGE_PAYLOAD_INVALID = "应用授权变更日志载荷无效";
 
+    // ==================== 受委托角色消息 ====================
+    public static final String OPEN_ROLE_INVALID = "受委托角色请求格式或字段无效";
+    public static final String OPEN_ROLE_AUTHENTICATION_REQUIRED = "需要可信服务身份";
+    public static final String OPEN_ROLE_FORBIDDEN = "操作超出角色委托范围";
+    public static final String OPEN_ROLE_NOT_FOUND = "目标资源不存在";
+    public static final String OPEN_ROLE_CONFLICT = "目标状态冲突，请重新核对当前事实";
+    public static final String OPEN_ROLE_PRECONDITION_REQUIRED = "修改必须携带 If-Match";
+    public static final String OPEN_ROLE_PRECONDITION_FAILED = "角色版本已变化，请重新读取并计算修改";
+    public static final String OPEN_DIRECTORY_BUDGET_EXCEEDED = "组织目录超过完整读取预算";
+    public static final String OPEN_ROLE_UNAVAILABLE = "安全执行所需服务暂时不可用";
+    public static final String OPEN_ROLE_HTTP_INTERNAL_ERROR = "服务器内部错误";
+    public static final String OPEN_ROLE_HTTP_METHOD_INVALID = "请求方法不受支持";
+    public static final String OPEN_ROLE_HTTP_MEDIA_INVALID = "请求媒体类型不受支持";
+    public static final String OPEN_ROLE_BODY_TOO_LARGE = "请求内容超过预算";
+
     private ServerErrorMessage() {
         throw new UnsupportedOperationException("Utility class cannot be instantiated");
     }

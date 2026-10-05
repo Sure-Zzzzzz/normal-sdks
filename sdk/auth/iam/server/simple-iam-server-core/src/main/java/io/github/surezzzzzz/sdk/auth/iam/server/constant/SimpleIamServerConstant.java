@@ -661,6 +661,200 @@ public final class SimpleIamServerConstant {
      * DATA 资源维度：部门
      */
     public static final String DATA_RESOURCE_DIMENSION_DEPARTMENT_ID = "departmentId";
+
+    // ==================== 受委托角色开放契约 ====================
+    /**
+     * 创建自己的普通角色。
+     */
+    public static final String OPEN_ROLE_CREATE_API = "iam:open-role:create:api";
+    /**
+     * 查询自己的角色及幂等事实。
+     */
+    public static final String OPEN_ROLE_READ_API = "iam:open-role:read:api";
+    /**
+     * 读取固定应用规则。
+     */
+    public static final String OPEN_ROLE_RULE_READ_API = "iam:open-role-rule:read:api";
+    /**
+     * 治理固定应用规则。
+     */
+    public static final String OPEN_ROLE_RULE_WRITE_API = "iam:open-role-rule:write:api";
+    /**
+     * 查询受委托角色的部门关系。
+     */
+    public static final String OPEN_DEPARTMENT_ROLE_READ_API = "iam:open-department-role:read:api";
+    /**
+     * 在批准组织范围内管理单条部门关系。
+     */
+    public static final String OPEN_DEPARTMENT_ROLE_WRITE_API = "iam:open-department-role:write:api";
+    /**
+     * 读取最小组织目录和指定成员事实。
+     */
+    public static final String OPEN_DIRECTORY_READ_API = "iam:open-directory:read:api";
+    /**
+     * 读取目标应用及权限清单。
+     */
+    public static final String OPEN_APPLICATION_READ_API = "iam:open-application:read:api";
+    /**
+     * 角色创建与查询的数据资源。
+     */
+    public static final String DATA_RESOURCE_OPEN_ROLE = "iam:open-role";
+    /**
+     * 固定应用规则的数据资源。
+     */
+    public static final String DATA_RESOURCE_OPEN_ROLE_RULE = "iam:open-role-rule";
+    /**
+     * 单条部门关系的数据资源。
+     */
+    public static final String DATA_RESOURCE_OPEN_DEPARTMENT_ROLE = "iam:open-department-role";
+    /**
+     * 组织目录的数据资源。
+     */
+    public static final String DATA_RESOURCE_OPEN_DIRECTORY = "iam:open-directory";
+    /**
+     * 目标应用的数据资源。
+     */
+    public static final String DATA_RESOURCE_OPEN_APPLICATION = "iam:open-application";
+    /**
+     * 创建动作，独立于 read/write 批准。
+     */
+    public static final String DATA_RESOURCE_ACTION_CREATE = "create";
+    /**
+     * 固定目标应用维度。
+     */
+    public static final String DATA_RESOURCE_DIMENSION_APPLICATION_ID = "applicationId";
+    /**
+     * 固定组织根维度。
+     */
+    public static final String DATA_RESOURCE_DIMENSION_ROOT_DEPARTMENT_ID = "rootDepartmentId";
+    /**
+     * 对外稳定角色维度。
+     */
+    public static final String DATA_RESOURCE_DIMENSION_OPEN_ROLE_ID = "openRoleId";
+    /**
+     * 仅比较已验证的来源，不根据令牌或 AccessKey 的外形猜测身份。
+     */
+    public static final String OPEN_ROLE_SERVICE_SOURCE_ID = "aksk";
+    /**
+     * 本批内部错误码族，仅用于状态映射，不向 HTTP 输出。
+     */
+    public static final String OPEN_ROLE_ERROR_PREFIX = "OPEN_ROLE_";
+    /**
+     * 规范化权限字段名称。
+     */
+    public static final String OPEN_ROLE_FIELD_ROLES = "roles";
+    /**
+     * 页面权限数组字段名。
+     */
+    public static final String OPEN_ROLE_FIELD_PAGE_PERMISSIONS = "pagePermissions";
+    /**
+     * API 权限数组字段名。
+     */
+    public static final String OPEN_ROLE_FIELD_API_PERMISSIONS = "apiPermissions";
+    /**
+     * 完整主体三元组的实体属性名。
+     */
+    public static final String OPEN_ROLE_FIELD_OWNER_SOURCE_ID = "ownerSourceId";
+    /**
+     * 主体类型实体属性名。
+     */
+    public static final String OPEN_ROLE_FIELD_OWNER_SUBJECT_TYPE = "ownerSubjectType";
+    /**
+     * 主体标识实体属性名。
+     */
+    public static final String OPEN_ROLE_FIELD_OWNER_SUBJECT_ID = "ownerSubjectId";
+    /**
+     * 创建键实体属性名。
+     */
+    public static final String OPEN_ROLE_FIELD_EXTERNAL_ID = "externalId";
+    /**
+     * 普通角色编号实体属性名。
+     */
+    public static final String OPEN_ROLE_FIELD_ROLE_ID = "roleId";
+    /**
+     * 内置管理员规则升级审计仅记录版本用途，不包含授权集合。
+     */
+    public static final String OPEN_ROLE_UPGRADE_AUDIT_DETAIL = "IAM 1.3.2 委托治理权限增量升级";
+    /**
+     * 有效委托状态。
+     */
+    public static final String OPEN_ROLE_STATE_ACTIVE = "ACTIVE";
+    /**
+     * 删除墓碑状态，创建键不可复用。
+     */
+    public static final String OPEN_ROLE_STATE_DELETED = "DELETED";
+    /**
+     * 服务端派生编码前缀，不作为归属证明。
+     */
+    public static final String OPEN_ROLE_CODE_PREFIX = "open_";
+    /**
+     * UUID 与单调版本组成的强标记。
+     */
+    public static final String OPEN_ROLE_ETAG_TEMPLATE = "\"open-role:%s:%d\"";
+    /**
+     * 版本值前的协议分隔符。
+     */
+    public static final char OPEN_ROLE_ETAG_REVISION_SEPARATOR = ':';
+    /**
+     * 严格标准 UUID 语法。
+     */
+    public static final String OPEN_ROLE_UUID_PATTERN = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+    /**
+     * 强版本标记的语法，不接受弱标记、列表或通配符。
+     */
+    public static final String OPEN_ROLE_ETAG_PATTERN = "\"open-role:" + OPEN_ROLE_UUID_PATTERN + ":[1-9][0-9]*\"";
+    /**
+     * UUID 派生编码分隔符。
+     */
+    public static final String OPEN_ROLE_UUID_SEPARATOR = "-";
+    /**
+     * 开放角色资源定位模板。
+     */
+    public static final String OPEN_ROLE_LOCATION_TEMPLATE = "/iam/api/roles/%s";
+    /**
+     * 清单及创建摘要的十六进制语法。
+     */
+    public static final String OPEN_ROLE_DIGEST_PATTERN = "[0-9a-fA-F]{64}";
+    /**
+     * 主体来源存储上限。
+     */
+    public static final int OPEN_ROLE_SOURCE_MAX_LENGTH = 128;
+    /**
+     * 主体标识及权限码上限。
+     */
+    public static final int OPEN_ROLE_SUBJECT_MAX_LENGTH = 256;
+    /**
+     * 角色名称上限。
+     */
+    public static final int OPEN_ROLE_NAME_MAX_LENGTH = 128;
+    /**
+     * 角色描述上限。
+     */
+    public static final int OPEN_ROLE_DESCRIPTION_MAX_LENGTH = 255;
+    /**
+     * 完整目录节点预算。
+     */
+    public static final int OPEN_DIRECTORY_NODE_BUDGET = 4096;
+    /**
+     * 目录及挂载链的层数预算。
+     */
+    public static final int OPEN_DIRECTORY_DEPTH_BUDGET = 64;
+    /**
+     * 每个规则权限数组的条目预算。
+     */
+    public static final int OPEN_ROLE_PERMISSION_BUDGET = 4096;
+    /**
+     * 解码前的 JSON 字节预算。
+     */
+    public static final int OPEN_ROLE_REQUEST_BYTE_BUDGET = 1048576;
+    /**
+     * 有界请求体读取缓冲区。
+     */
+    public static final int OPEN_ROLE_REQUEST_READ_BUFFER = 4096;
+    /**
+     * 创建时的初始修改版本。
+     */
+    public static final long OPEN_ROLE_INITIAL_REVISION = 1L;
     /**
      * 管理台入口门禁权限集合：iam_admin 角色 + 全部页面权限码。
      * 持任一者可进入 /iam/admin/** 管理台，方法级 @PreAuthorize 仍逐端点强制；
