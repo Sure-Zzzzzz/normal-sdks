@@ -1,0 +1,54 @@
+spring:
+  profiles:
+    active: local
+io.github.surezzzzzz.sdk.elasticsearch:
+  route:
+    enable: true
+    default-source: primary
+    version-detect:
+      fail-fast-on-detect-error: true
+    sources:
+      primary:
+        urls: http://localhost:19217
+        server-version: 7.17.16
+      secondary:
+        urls: http://localhost:19280
+        server-version: 8.17.0
+    rules:
+      - pattern: "test-js7-*"
+        datasource: primary
+        type: wildcard
+      - pattern: "test-js8-*"
+        datasource: secondary
+        type: wildcard
+  search:
+    enable: true
+    api:
+      enabled: true
+    indices:
+      - name: "test-js7-*"
+        alias: sample7
+        date-field: occurredAt
+        tiebreaker-field: rank
+        field-mapping:
+          amount: [ 金额 ]
+        sensitive-fields:
+          - field: secret
+            strategy: forbidden
+          - field: contact
+            strategy: mask
+      - name: "test-js8-*"
+        alias: sample8
+        date-field: occurredAt
+        tiebreaker-field: rank
+        field-mapping:
+          amount: [ 金额 ]
+        sensitive-fields:
+          - field: secret
+            strategy: forbidden
+          - field: contact
+            strategy: mask
+logging:
+  level:
+    io.github.surezzzzzz.sdk.elasticsearch.search: DEBUG
+    io.github.surezzzzzz.sdk.expression.condition.parser: DEBUG

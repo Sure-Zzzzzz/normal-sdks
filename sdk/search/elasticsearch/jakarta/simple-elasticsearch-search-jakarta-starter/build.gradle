@@ -1,0 +1,11 @@
+dependencies {
+    api "${group}:simple-elasticsearch-search-core:1.0.12"
+    api "${group}:simple-elasticsearch-route-jakarta-starter:1.0.0"
+    api "${group}:condition-expression-parser-jakarta-starter:1.0.0"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+    compileOnly "org.springframework.boot:spring-boot-starter-web"
+    compileOnly "com.fasterxml.jackson.core:jackson-databind"
+    api "com.fasterxml.jackson.datatype:jackson-datatype-jsr310"
+    testImplementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+}
