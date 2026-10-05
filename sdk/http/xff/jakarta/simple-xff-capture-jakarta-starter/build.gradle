@@ -1,0 +1,25 @@
+configurations.testRuntimeClasspath {
+    exclude group: 'ch.qos.logback', module: 'logback-classic'
+}
+
+dependencies {
+    api "io.github.sure-zzzzzz:simple-xff-capture-core:1.1.1"
+
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-context'
+    compileOnly 'org.springframework:spring-web'
+    compileOnlyApi 'jakarta.servlet:jakarta.servlet-api'
+
+    testImplementation('org.springframework.boot:spring-boot-starter-web') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation('org.springframework.boot:spring-boot-starter-security') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
