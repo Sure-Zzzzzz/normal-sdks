@@ -498,7 +498,7 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [smart-kms-core](sdk/kms/smart-kms-core) | 1.0.1 | KMS 核心模型与审计契约（审计操作标识、metadata 白名单及格式校验） | [README](sdk/kms/smart-kms-core/README.md) |
-| [smart-kms-server-starter](sdk/kms/smart-kms-server-starter) | 1.0.0 | KMS Server | [README](sdk/kms/smart-kms-server-starter/README.md) |
+| [smart-kms-server-starter](sdk/kms/smart-kms-server-starter) | 2.0.1 | KMS Server（本人密钥生命周期、数据范围治理与销毁窗口政策） | [README](sdk/kms/smart-kms-server-starter/README.md) |
 | [simple-kms-client-starter](sdk/kms/simple-kms-client-starter) | 1.0.1 | KMS HTTP Client（策略响应解析与四档 Spring Boot 客户端矩阵） | [README](sdk/kms/simple-kms-client-starter/README.md) |
 
 ---

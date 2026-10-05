@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.kms.server.annotation.SmartKmsServerComponent;
 import io.github.surezzzzzz.sdk.kms.server.controller.*;
 import io.github.surezzzzzz.sdk.kms.server.repository.*;
 import io.github.surezzzzzz.sdk.kms.server.service.*;
+import io.github.surezzzzzz.sdk.kms.server.support.KmsMyKeyHttpMessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -339,6 +340,36 @@ public class SmartKmsServerAutoConfiguration {
                                                            SmartKmsServerProperties properties,
                                                            io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyQueryRepository keyQueryRepository) {
         return new KmsMyKeyQueryController(principalResolver, properties, keyQueryRepository);
+    }
+
+    /**
+     * 注册固定本人归属的生命周期写接口。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyKeyManagementController.class)
+    public KmsMyKeyManagementController kmsMyKeyManagementController(KmsPrincipalResolver principalResolver,
+                                                                     SmartKmsServerProperties properties, KeyManagementService keyManagementService,
+                                                                     KmsKeyQueryRepository keyQueryRepository, KmsManagementIdempotencyService idempotencyService) {
+        return new KmsMyKeyManagementController(principalResolver, properties, keyManagementService,
+                keyQueryRepository, idempotencyService);
+    }
+
+    /**
+     * 注册仅支持本人写 DTO 的私有 JSON 转换器。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyKeyHttpMessageConverter.class)
+    public KmsMyKeyHttpMessageConverter kmsMyKeyHttpMessageConverter() {
+        return new KmsMyKeyHttpMessageConverter();
+    }
+
+    /**
+     * 仅在默认路由生效时装配私有类型的 MVC 转换顺序。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyKeyWebMvcConfigurer.class)
+    public KmsMyKeyWebMvcConfigurer kmsMyKeyWebMvcConfigurer(KmsMyKeyHttpMessageConverter converter) {
+        return new KmsMyKeyWebMvcConfigurer(converter);
     }
 
     /**

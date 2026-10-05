@@ -44,24 +44,42 @@ public final class KmsHttpJson {
     public static ObjectNode parseObject(String body, String... allowedFields) {
         try {
             JsonNode node = OBJECT_MAPPER.readTree(body);
-            if (!(node instanceof ObjectNode)) {
-                throw new KmsValidationException();
-            }
-            ObjectNode objectNode = (ObjectNode) node;
-            Set<String> allowed = new HashSet<String>();
-            for (String allowedField : allowedFields) {
-                allowed.add(allowedField);
-            }
-            Iterator<String> fields = objectNode.fieldNames();
-            while (fields.hasNext()) {
-                if (!allowed.contains(fields.next())) {
-                    throw new KmsValidationException();
-                }
-            }
-            return objectNode;
+            return requireFields(node, allowedFields);
         } catch (JsonProcessingException exception) {
             throw new KmsValidationException();
         }
+    }
+
+    /**
+     * 为新 DTO 拒绝重复字段、尾随 JSON 和白名单外字段，不改变旧接口的解析行为。
+     *
+     * @param body          原始 JSON 文本
+     * @param allowedFields 允许字段
+     * @return 严格校验后的对象
+     */
+    public static ObjectNode parseStrictObject(String body, String... allowedFields) {
+        try {
+            JsonNode node = OBJECT_MAPPER.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                    .with(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY).readTree(body);
+            return requireFields(node, allowedFields);
+        } catch (JsonProcessingException exception) {
+            throw new KmsValidationException();
+        }
+    }
+
+    private static ObjectNode requireFields(JsonNode node, String... allowedFields) {
+        if (!(node instanceof ObjectNode)) {
+            throw new KmsValidationException();
+        }
+        ObjectNode object = (ObjectNode) node;
+        Set<String> allowed = new HashSet<String>(Arrays.asList(allowedFields));
+        Iterator<String> fields = object.fieldNames();
+        while (fields.hasNext()) {
+            if (!allowed.contains(fields.next())) {
+                throw new KmsValidationException();
+            }
+        }
+        return object;
     }
 
     /**

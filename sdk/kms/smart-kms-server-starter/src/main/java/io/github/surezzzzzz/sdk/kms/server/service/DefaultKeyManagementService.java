@@ -9,7 +9,6 @@ import io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException;
 import io.github.surezzzzzz.sdk.kms.core.model.*;
 import io.github.surezzzzzz.sdk.kms.core.repository.*;
 import io.github.surezzzzzz.sdk.kms.core.service.KeyManagementService;
-import io.github.surezzzzzz.sdk.kms.core.support.KmsStateHelper;
 import io.github.surezzzzzz.sdk.kms.core.support.KmsValidationHelper;
 import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsDestructionCancellationGuard;
@@ -209,8 +208,10 @@ public class DefaultKeyManagementService implements KeyManagementService {
                               long expectedRowVersion, String idempotencyKey, String requestId) {
         requireManage(principal, idempotencyKey, requestId);
         KmsKey key = lockAndLoad(principal, keyRef, expectedRowVersion);
-        if (targetState == null || !KmsStateHelper.canTransition(key.getState(), targetState)
-                || targetState == KmsKeyState.PENDING_DESTRUCTION) {
+        // 通用状态机还服务于取消和 Worker；启停命令不能绕过销毁任务的专属入口。
+        if ((key.getState() != KmsKeyState.ACTIVE && key.getState() != KmsKeyState.DISABLED)
+                || (targetState != KmsKeyState.ACTIVE && targetState != KmsKeyState.DISABLED)
+                || key.getState() == targetState) {
             throw new KmsStateConflictException();
         }
         KmsKey changed = keyRepository.save(principal.getOwnerPrincipalId(),

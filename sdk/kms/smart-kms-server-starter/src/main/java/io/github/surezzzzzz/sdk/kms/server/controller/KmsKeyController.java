@@ -109,7 +109,7 @@ public class KmsKeyController extends KmsHttpControllerSupport {
 
     private static KmsKeyState keyState(String value) {
         KmsKeyState state = KmsKeyState.fromCode(value);
-        if (state == null) {
+        if (state != KmsKeyState.ACTIVE && state != KmsKeyState.DISABLED) {
             throw new KmsValidationException();
         }
         return state;

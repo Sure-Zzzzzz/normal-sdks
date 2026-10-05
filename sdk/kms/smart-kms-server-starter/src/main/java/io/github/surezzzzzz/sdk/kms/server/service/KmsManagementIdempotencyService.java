@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.kms.server.constant.SmartKmsServerConstant;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsIdempotencyResponseSnapshotRepository;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsIdempotencyScopeLock;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -71,16 +72,16 @@ public class KmsManagementIdempotencyService {
      * 将内部稳定端点映射为唯一的管理审计操作。
      */
     private static KmsOperation operation(String endpoint) {
-        if (endpoint.startsWith("POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/versions")) {
+        if (managementEndpoint(endpoint, "POST", "/versions")) {
             return KmsOperation.ROTATE_KEY;
         }
-        if (endpoint.startsWith("PATCH:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/state")) {
+        if (managementEndpoint(endpoint, "PATCH", "/state")) {
             return KmsOperation.CHANGE_KEY_STATE;
         }
-        if (endpoint.startsWith("PUT:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/destruction")) {
+        if (managementEndpoint(endpoint, "PUT", "/destruction")) {
             return KmsOperation.SCHEDULE_KEY_DESTRUCTION;
         }
-        if (endpoint.startsWith("DELETE:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/destruction")) {
+        if (managementEndpoint(endpoint, "DELETE", "/destruction")) {
             return KmsOperation.CANCEL_KEY_DESTRUCTION;
         }
         if (endpoint.startsWith("POST:" + SmartKmsServerConstant.API_BASE_PATH + "/keys/") && endpoint.endsWith("/policies")) {
@@ -93,6 +94,22 @@ public class KmsManagementIdempotencyService {
             return KmsOperation.CREATE_KEY;
         }
         throw new KmsPersistenceException();
+    }
+
+    /**
+     * 保留旧端点识别，只为四种精确本人资源方法增加分类。
+     */
+    private static boolean managementEndpoint(String endpoint, String method, String suffix) {
+        if (endpoint.startsWith(method + ":" + SmartKmsServerConstant.API_BASE_PATH + "/keys/")
+                && endpoint.endsWith(suffix)) {
+            return true;
+        }
+        String prefix = method + ":" + SmartKmsServerConstant.API_BASE_PATH + "/me/keys/";
+        if (!endpoint.startsWith(prefix) || !endpoint.endsWith(suffix)) {
+            return false;
+        }
+        int end = endpoint.length() - suffix.length();
+        return end > prefix.length() && endpoint.substring(prefix.length(), end).indexOf('/') < 0;
     }
 
     /**
@@ -115,7 +132,11 @@ public class KmsManagementIdempotencyService {
         String prefix = SmartKmsServerConstant.API_BASE_PATH + "/keys/";
         int start = endpoint.indexOf(prefix);
         if (start < 0) {
-            return null;
+            prefix = SmartKmsServerConstant.API_BASE_PATH + "/me/keys/";
+            start = endpoint.indexOf(prefix);
+            if (start < 0) {
+                return null;
+            }
         }
         int valueStart = start + prefix.length();
         int valueEnd = endpoint.indexOf('/', valueStart);
@@ -200,7 +221,8 @@ public class KmsManagementIdempotencyService {
     /**
      * 在单一事务中判定重放、执行首次写入并保存无敏感响应快照。
      */
-    @Transactional
+    // 幂等查询早于密钥锁；避免可重复读快照在拿到锁后仍看到竞争请求提交前的旧版本。
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public KmsManagementIdempotencyResult execute(KmsPrincipal principal, String endpoint, String idempotencyKey,
                                                   String requestId, String canonicalRequest,
                                                   KmsManagementWriteAction action) {

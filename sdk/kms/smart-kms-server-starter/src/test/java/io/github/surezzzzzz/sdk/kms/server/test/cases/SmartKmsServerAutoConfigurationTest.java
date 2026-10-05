@@ -3,8 +3,10 @@ package io.github.surezzzzzz.sdk.kms.server.test.cases;
 import io.github.surezzzzzz.sdk.kms.server.configuration.SmartKmsServerAutoConfiguration;
 import io.github.surezzzzzz.sdk.kms.server.controller.KmsCryptoController;
 import io.github.surezzzzzz.sdk.kms.server.controller.KmsKeyController;
+import io.github.surezzzzzz.sdk.kms.server.controller.KmsMyKeyManagementController;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsServerEngine;
+import io.github.surezzzzzz.sdk.kms.server.support.KmsMyKeyHttpMessageConverter;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -40,7 +42,24 @@ class SmartKmsServerAutoConfigurationTest {
                     "完整替换时不得保留默认管理控制器类型");
             assertFalse(context.getBeansOfType(KmsCryptoController.class).size() > 0,
                     "完整替换时不得保留默认密码学控制器类型");
+            assertFalse(context.getBeansOfType(KmsMyKeyManagementController.class).size() > 0,
+                    "完整替换时不得遗留本人生命周期路由");
+            assertFalse(context.getBeansOfType(KmsMyKeyHttpMessageConverter.class).size() > 0,
+                    "完整替换时不得遗留本人类型转换器");
         });
+    }
+
+    /**
+     * 没有主体解析器时不开放孤立的默认本人路由。
+     */
+    @Test
+    void shouldNotRegisterMyKeyRoutesWithoutPrincipalResolver() {
+        new ApplicationContextRunner().withConfiguration(AutoConfigurations.of(SmartKmsServerAutoConfiguration.class))
+                .run(context -> {
+                    assertFalse(context.containsBean("kmsMyKeyManagementController"));
+                    assertFalse(context.containsBean("kmsMyKeyHttpMessageConverter"));
+                    assertFalse(context.containsBean("kmsMyKeyWebMvcConfigurer"));
+                });
     }
 
     /**

@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.kms.server.exception.KmsUnauthenticatedException
 import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsRequestContext;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -26,6 +27,7 @@ import java.util.Map;
  *
  * @author surezzzzzz
  */
+@Slf4j
 @RestControllerAdvice
 public class KmsHttpExceptionHandler {
 
@@ -161,7 +163,9 @@ public class KmsHttpExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<String, Object>();
         body.put("message", message);
         body.put("timestamp", KmsHttpJson.utcMillis(Instant.now()));
-        body.put("requestId", requestId(request));
+        String requestId = requestId(request);
+        body.put("requestId", requestId);
+        log.debug("KMS HTTP 拒绝或失败: requestId={}, status={}", requestId, status);
         ResponseEntity.BodyBuilder builder = ResponseEntity.status(status)
                 .contentType(MediaType.parseMediaType(JSON_UTF8));
         if (headerName != null && headerValue != null) {

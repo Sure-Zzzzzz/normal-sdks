@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Smart KMS API
-  version: 2.0.0
+  version: 2.0.1
   description: KMS 管理端与服务调用方使用的主体、密钥、策略、密码学和销毁契约。
 servers:
   - url: /
@@ -24,6 +24,73 @@ paths:
       summary: 查询当前主体归属的单个密钥
       parameters: [{ $ref: '#/components/parameters/KeyRef' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKey' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/kms/me/keys/{keyRef}/state:
+    patch:
+      tags: [self-service]
+      summary: 启用或停用本人密钥
+      description: 要求 kms.key.manage，归属固定为认证主体本人，不消费 DATA。他人 keyRef 为 404。仅 ACTIVE 与 DISABLED 可互相迁移，待销毁密钥必须走取消销毁。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyStateRequest' } } } }
+      responses:
+        '200': { description: 成功或保留期内幂等重放, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyWriteResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/kms/me/keys/{keyRef}/versions:
+    post:
+      tags: [self-service]
+      summary: 轮换本人活动密钥
+      description: 要求 kms.key.manage，归属固定为认证主体本人，不消费 DATA。只允许 ACTIVE 密钥轮换；响应为更新后的逻辑密钥元数据。同一端点与幂等键在保留期内重放首次响应，新旧路径作用域独立。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyVersionRequest' } } } }
+      responses:
+        '200': { description: 成功或保留期内幂等重放, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyWriteResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/kms/me/keys/{keyRef}/destruction:
+    put:
+      tags: [self-service]
+      summary: 安排本人密钥延迟销毁
+      description: 要求 kms.key.destroy，归属固定为认证主体本人，不消费 DATA。按本人销毁窗口政策校验未来时间，规范化为 UTC 毫秒后计算请求摘要。成功后所有未销毁版本进入待销毁；材料由后台任务最终清除。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyDestructionRequest' } } } }
+      responses:
+        '200': { description: 成功或保留期内幂等重放, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyWriteResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    delete:
+      tags: [self-service]
+      summary: 取消本人密钥尚未领取的销毁
+      description: 要求 kms.key.destroy，归属固定为认证主体本人，不消费 DATA。全部任务从未被领取才可取消并恢复安排前状态，历史领取过即使租约过期也返回 409。同键重试重放首次 204，空响应。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MyKeyVersionRequest' } } } }
+      responses:
+        '204': { description: 已取消或保留期内幂等重放，无响应体 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/kms/admin/keys:
     get:
       summary: 分页查询当前 DataPlan 范围内的密钥
@@ -51,7 +118,8 @@ paths:
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKey' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
   /api/kms/keys/{keyRef}/state:
     patch:
-      summary: 修改逻辑密钥状态
+      summary: 修改治理范围内逻辑密钥启停状态
+      description: 要求 kms.key.manage 及覆盖目标归属的 kms-key manage DATA；仅 ACTIVE 与 DISABLED 可互相迁移，待销毁或已销毁密钥为 409，其他目标状态为 400。
       parameters: [{ $ref: '#/components/parameters/KeyRef' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ExpectedVersionState' } } } }
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKey' } } } }, '409': { $ref: '#/components/responses/Conflict' } }
@@ -148,6 +216,10 @@ components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
   responses:
+    BadRequest: { description: 请求字段、类型、必填头或销毁窗口不合法, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    MethodNotAllowed: { description: 资源不支持该方法, headers: { Allow: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    UnsupportedMediaType: { description: 请求媒体类型必须为 application/json, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    ServiceUnavailable: { description: 服务或持久化暂不可用, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Unauthorized: { description: 未认证（Bearer 缺失/无效）, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     Forbidden: { description: 无权限（API 码缺失、DATA 拒绝或 key policy 拒绝）, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     NotFound: { description: 资源不存在或不可见（跨 owner keyRef 一律 404）, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
@@ -190,6 +262,35 @@ components:
       type: object
       required: [items, page, size, total]
       properties: { items: { type: array, items: { $ref: '#/components/schemas/KmsKey' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } }
+    MyKeyWriteResponse:
+      type: object
+      additionalProperties: false
+      required: [keyRef, keyAlias, purpose, algorithm, state, activeVersion, rowVersion, createdAt, updatedAt]
+      properties:
+        keyRef: { type: string }
+        keyAlias: { type: string }
+        purpose: { type: string, enum: [SIGN, ENCRYPT] }
+        algorithm: { type: string, enum: [ES256, AES_256_GCM] }
+        state: { type: string, enum: [ACTIVE, DISABLED, PENDING_DESTRUCTION, DESTROYED] }
+        activeVersion: { type: integer, minimum: 1, nullable: true }
+        rowVersion: { type: integer, format: int64, minimum: 0 }
+        createdAt: { type: string, format: date-time, description: UTC RFC 3339 三位毫秒字符串 }
+        updatedAt: { type: string, format: date-time, description: UTC RFC 3339 三位毫秒字符串 }
+    MyKeyVersionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties: { expectedRowVersion: { type: integer, format: int64, minimum: 0, description: 非负整数，不接受数字字符串或小数 } }
+    MyKeyStateRequest:
+      type: object
+      additionalProperties: false
+      required: [state, expectedRowVersion]
+      properties: { state: { type: string, enum: [ACTIVE, DISABLED] }, expectedRowVersion: { type: integer, format: int64, minimum: 0 } }
+    MyKeyDestructionRequest:
+      type: object
+      additionalProperties: false
+      required: [dueAt, expectedRowVersion]
+      properties: { dueAt: { type: string, format: date-time, description: 带时区的未来 RFC 3339 时间，输入与 UTC 年份均为 1 至 9999，规范化为 UTC 毫秒 }, expectedRowVersion: { type: integer, format: int64, minimum: 0 } }
     CreateKey:
       type: object
       required: [keyAlias, purpose, algorithm]
