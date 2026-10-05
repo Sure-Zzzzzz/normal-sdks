@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: xff-capture-audit-jakarta-test-service
+  profiles:
+    active: local
+
+io.github.surezzzzzz.sdk.http.xff.capture:
+  enable: true
+  request-data:
+    query-parameters:
+      enabled: true
+    body:
+      enabled: true
+      max-bytes: 128
+      allowed-content-types:
+        - application/json
+    whitelist:
+      - method: POST
+        path-pattern: /audit-e2e
+
+io.github.surezzzzzz.sdk.audit.http.xff.capture:
+  listener:
+    enable: true
+    executor:
+      core-size: 1
+      max-size: 2
+      queue-capacity: 100
+  persistence:
+    elasticsearch:
+      enable: true
+
+io.github.surezzzzzz.sdk.elasticsearch:
+  route:
+    enable: true
+    default-source: primary
+    sources:
+      primary:
+        urls: http://localhost:19217
+        server-version: 7.17.16
+    rules:
+      - pattern: xff-capture-audit
+        type: exact
+        datasource: primary
+        write-index:
+          template: ${xff.audit.test.index:xff-capture-audit-jakarta-test-default}
+        async-write: false
+  persistence:
+    enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.http.xff: DEBUG
