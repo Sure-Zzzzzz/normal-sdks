@@ -81,6 +81,12 @@ public final class SmartRedisLimiterLimit {
         this.windowSeconds = unit.toSeconds(window);
     }
 
+    private static SmartRedisLimiterException invalidLimit(String field, String reason) {
+        return new SmartRedisLimiterException(
+                ErrorCode.POLICY_LIMIT_INVALID,
+                String.format(ErrorMessage.POLICY_LIMIT_INVALID, field, reason));
+    }
+
     /**
      * 获取标准化时间窗口秒数
      *
@@ -89,11 +95,5 @@ public final class SmartRedisLimiterLimit {
     @JsonIgnore
     public long getWindowSeconds() {
         return windowSeconds;
-    }
-
-    private static SmartRedisLimiterException invalidLimit(String field, String reason) {
-        return new SmartRedisLimiterException(
-                ErrorCode.POLICY_LIMIT_INVALID,
-                String.format(ErrorMessage.POLICY_LIMIT_INVALID, field, reason));
     }
 }

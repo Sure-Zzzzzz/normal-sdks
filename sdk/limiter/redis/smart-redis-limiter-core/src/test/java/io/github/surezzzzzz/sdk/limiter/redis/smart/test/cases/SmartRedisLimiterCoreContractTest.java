@@ -10,9 +10,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.model.SmartRedisLimiterRecor
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * SmartRedisLimiter core 契约测试

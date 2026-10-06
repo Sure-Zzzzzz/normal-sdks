@@ -203,6 +203,24 @@ public class SmartRedisLimiterRecord {
     private Long policyRevision;
 
     /**
+     * 兼容 2.0.0 全参构造器
+     */
+    public SmartRedisLimiterRecord(String clientId, String clientType, String userId, String username,
+                                   String limitKey, String keyStrategy, String algorithm, String limitRules,
+                                   boolean passed, String routeKey, String datasourceKey, String redisMode,
+                                   boolean routeRequired, boolean routeResolved, String fallbackReason,
+                                   String source, String requestUri, String httpMethod, String clientIp,
+                                   String matchedPathPattern, String methodName, String methodQualifiedName,
+                                   long limit, long remaining, long resetAt, long durationNanos,
+                                   Long timestamp, String traceId, Map<String, String> extra) {
+        this(clientId, clientType, userId, username, limitKey, keyStrategy, algorithm, limitRules,
+                passed, routeKey, datasourceKey, redisMode, routeRequired, routeResolved, fallbackReason,
+                source, requestUri, httpMethod, clientIp, matchedPathPattern, methodName, methodQualifiedName,
+                limit, remaining, resetAt, durationNanos, timestamp, traceId, extra,
+                null, SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL, null);
+    }
+
+    /**
      * 校验动态策略上下文
      *
      * <p>Record 保持可变 DTO 兼容性，调用方应在交给审计 Handler 前执行本方法。
@@ -220,23 +238,5 @@ public class SmartRedisLimiterRecord {
                 resolvedPolicySource, normalizedResourceCode, policyRevision);
         this.policySource = resolvedPolicySource;
         this.resourceCode = normalizedResourceCode;
-    }
-
-    /**
-     * 兼容 2.0.0 全参构造器
-     */
-    public SmartRedisLimiterRecord(String clientId, String clientType, String userId, String username,
-                                   String limitKey, String keyStrategy, String algorithm, String limitRules,
-                                   boolean passed, String routeKey, String datasourceKey, String redisMode,
-                                   boolean routeRequired, boolean routeResolved, String fallbackReason,
-                                   String source, String requestUri, String httpMethod, String clientIp,
-                                   String matchedPathPattern, String methodName, String methodQualifiedName,
-                                   long limit, long remaining, long resetAt, long durationNanos,
-                                   Long timestamp, String traceId, Map<String, String> extra) {
-        this(clientId, clientType, userId, username, limitKey, keyStrategy, algorithm, limitRules,
-                passed, routeKey, datasourceKey, redisMode, routeRequired, routeResolved, fallbackReason,
-                source, requestUri, httpMethod, clientIp, matchedPathPattern, methodName, methodQualifiedName,
-                limit, remaining, resetAt, durationNanos, timestamp, traceId, extra,
-                null, SmartRedisLimiterConstant.POLICY_SOURCE_LOCAL, null);
     }
 }

@@ -75,8 +75,8 @@ public final class SmartRedisLimiterPolicyValidationHelper {
     /**
      * 校验执行策略上下文
      *
-     * @param policySource  策略来源
-     * @param resourceCode  资源编码
+     * @param policySource   策略来源
+     * @param resourceCode   资源编码
      * @param policyRevision 远程策略快照版本
      * @throws SmartRedisLimiterException 策略上下文非法时抛出
      */
