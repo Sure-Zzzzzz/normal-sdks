@@ -1,0 +1,96 @@
+spring:
+  profiles:
+    include: local
+  datasource:
+    url: ${KAFKA_OUTBOX_TEST_JDBC_URL:jdbc:mysql://localhost:3306/simple_kafka_outbox_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${KAFKA_OUTBOX_TEST_JDBC_USERNAME:root}
+    password: ${KAFKA_OUTBOX_TEST_JDBC_PASSWORD:}
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        kafka:
+          route:
+            enable: true
+            default-source: v110
+            sources:
+              v110:
+                bootstrap-servers:
+                  - localhost:18091
+                producer:
+                  acks: all
+              v28:
+                bootstrap-servers:
+                  - localhost:18092
+                producer:
+                  acks: all
+              v37:
+                bootstrap-servers:
+                  - localhost:18094
+                producer:
+                  acks: all
+              cluster:
+                bootstrap-servers:
+                  - localhost:19192
+                  - localhost:19193
+                  - localhost:19194
+                producer:
+                  acks: all
+              dead:
+                bootstrap-servers:
+                  - localhost:29999
+                producer:
+                  acks: all
+                  retries: 0
+                  request-timeout-ms: 1000
+                  delivery-timeout-ms: 3000
+                  properties:
+                    max.block.ms: 2000
+            diagnostics:
+              enable: false
+            rules:
+              - pattern: "mock.outbox.v28."
+                type: prefix
+                datasource: v28
+                priority: 1
+              - pattern: "mock-outbox-route-v37-*"
+                type: wildcard
+                datasource: v37
+                priority: 2
+              - pattern: "mock.outbox.cluster."
+                type: prefix
+                datasource: cluster
+                priority: 3
+              - pattern: "mock.outbox.dead."
+                type: prefix
+                datasource: dead
+                priority: 4
+        messaging:
+          kafka:
+            publisher:
+              enable: true
+              app-name: mock-outbox-test
+              envelope:
+                enable: true
+                include-null-payload: true
+              send:
+                timeout-ms: 30000
+            outbox:
+              enable: true
+              worker:
+                enable: true
+                concurrency: 4
+                batch-size: 20
+                scan-interval-ms: 100
+                idle-interval-ms: 500
+                lease-ms: 35000
+                shutdown-await-ms: 30000
+              send:
+                timeout-ms: 30000
+              cleanup:
+                enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.messaging.kafka.outbox: DEBUG

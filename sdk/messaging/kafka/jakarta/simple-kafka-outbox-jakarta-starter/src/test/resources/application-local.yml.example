@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    password: your_mysql_password_here
+
+# 也可通过环境变量切换数据库矩阵：
+# KAFKA_OUTBOX_TEST_JDBC_URL=jdbc:mysql://localhost:3306/simple_kafka_outbox_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+# KAFKA_OUTBOX_TEST_JDBC_USERNAME=root
+# KAFKA_OUTBOX_TEST_JDBC_PASSWORD=your_mysql_password_here
