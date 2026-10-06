@@ -1,0 +1,16 @@
+dependencies {
+    // 监听器公开方法使用公共事件类型；认证安全链由宿主按需组装。
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-core:3.0.2'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-context'
+
+    // 消费正式发布的 Jakarta 公共资源层与 AKSK Provider，不引用旧运行线或仓库源码。
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-jakarta-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-jakarta-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+}

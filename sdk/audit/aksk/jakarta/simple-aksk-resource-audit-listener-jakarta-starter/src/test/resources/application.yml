@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: simple-aksk-resource-audit-jakarta-test
+  profiles:
+    active: local
+
+io.github.surezzzzzz.sdk:
+  auth:
+    resource.server.security.protected-paths:
+      - /api/**
+    aksk.resource.server.introspect:
+      endpoint: http://aksk.example.invalid/introspect
+      local-cache.enabled: false
+  audit.aksk.resource.listener:
+    enable: true
+    handler.log.enabled: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.aksk.resource: DEBUG

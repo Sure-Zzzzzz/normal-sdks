@@ -94,6 +94,7 @@ include(
         ':sdk:license:smart-license-core',
         ':sdk:license:smart-license-server-starter',
         ':sdk:audit:aksk:simple-aksk-resource-audit-listener-starter',
+        ':sdk:audit:aksk:jakarta:simple-aksk-resource-audit-listener-jakarta-starter',
         ':sdk:audit:aksk:simple-aksk-server-audit-listener-starter',
         ':sdk:audit:search:elasticsearch:simple-elasticsearch-search-audit-listener-starter',
         ':sdk:audit:persistence:elasticsearch:simple-elasticsearch-persistence-audit-listener-starter',
