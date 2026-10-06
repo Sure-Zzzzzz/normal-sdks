@@ -97,6 +97,8 @@ include(
         ':sdk:audit:aksk:simple-aksk-server-audit-listener-starter',
         ':sdk:audit:search:elasticsearch:simple-elasticsearch-search-audit-listener-starter',
         ':sdk:audit:persistence:elasticsearch:simple-elasticsearch-persistence-audit-listener-starter',
+        ':sdk:audit:persistence:elasticsearch:jakarta:simple-elasticsearch-persistence-audit-listener-jakarta-starter',
+        ':sdk:audit:search:elasticsearch:jakarta:simple-elasticsearch-search-audit-listener-jakarta-starter',
         ':sdk:audit:limiter:smart-redis-limiter-audit-listener-starter',
         ':sdk:audit:iam:simple-iam-audit-listener-starter',
         ':sdk:cache:smart-cache-starter',

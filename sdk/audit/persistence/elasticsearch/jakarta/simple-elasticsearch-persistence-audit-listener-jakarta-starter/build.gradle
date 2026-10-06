@@ -1,0 +1,7 @@
+dependencies {
+    api "${group}:simple-elasticsearch-persistence-core:1.0.3"
+    compileOnly "org.springframework.boot:spring-boot-autoconfigure"
+    compileOnly "org.springframework:spring-context"
+    testImplementation "${group}:simple-elasticsearch-persistence-jakarta-starter:1.0.0"
+    testImplementation "org.springframework.boot:spring-boot-starter-data-elasticsearch"
+}

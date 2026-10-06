@@ -1,0 +1,36 @@
+spring:
+  profiles:
+    active: local
+io.github.surezzzzzz.sdk.elasticsearch:
+  route:
+    enable: true
+    default-source: primary
+    version-detect:
+      fail-fast-on-detect-error: true
+    sources:
+      primary:
+        urls: http://localhost:19217
+        server-version: 7.17.16
+      secondary:
+        urls: http://localhost:19280
+        server-version: 8.17.0
+    rules:
+      - pattern: "test-jsa7-*"
+        datasource: primary
+        type: wildcard
+      - pattern: "test-jsa8-*"
+        datasource: secondary
+        type: wildcard
+  search:
+    enable: true
+    indices:
+      - name: "test-jsa7-*"
+        alias: sample7
+      - name: "test-jsa8-*"
+        alias: sample8
+io.github.surezzzzzz.sdk.audit.search.elasticsearch.listener:
+  enable: true
+logging:
+  level:
+    io.github.surezzzzzz.sdk.audit.search.elasticsearch: DEBUG
+    io.github.surezzzzzz.sdk.elasticsearch.search: DEBUG
