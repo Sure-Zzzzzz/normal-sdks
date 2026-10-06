@@ -1,10 +1,10 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Open API
-  version: 1.3.0
+  version: 1.3.2
   description: >-
     IAM 对外开放 API（`/iam/api/**`），供外部系统持 AKSK 凭证（平台级 AKP
-    或用户级 AKU）调用，做组织与人员同步。浏览器、Portal、Admin 和普通
+    或用户级 AKU）调用，做组织与人员同步及受委托角色治理。浏览器、Portal、Admin 和普通
     OAuth Client 不得调用。
 
     ## 鉴权与权限
@@ -30,7 +30,10 @@ info:
     凭据换 token：AccessKey / Secret 在 AKSK Server 的 token 端点以
     client_credentials 换发，后续请求携带 `Authorization: Bearer <token>`。
 
-    注意：勾选 `iam:user:api` 即信任该凭证全量用户管理能力（含角色绑定）；
+    上表第三、四步的旧权限只用于组织与人员同步，不包含受委托角色治理权。
+    治理端点另要求可信 AKSK SERVICE、IAM 准入、八个精确 API 码及五个 DATA 资源，
+    按需逐项批准；IAM 宿主关闭 introspect 本地缓存及旧结果回退。
+    `iam:user:api` 包含普通用户角色关系管理，但不能绕过受委托角色禁止个人直授的约束；
     只需同步无需绑角色的场景，用 DATA 写动作收窄。
 
     ## DATA 执行语义（用户族，resource=iam:user）
@@ -40,6 +43,21 @@ info:
       越界 403；
     - 有 API 码但无 DATA 授权（或计划不可执行）一律 403（失败关闭）；
     - 部门族第一版纯码控，不评估 DATA。
+
+    ## 受委托角色（1.3.2）
+
+    新角色接口只接收可信 AKSK SERVICE 身份，检查 IAM 准入及独立 API/DATA，
+    不依赖角色编码前缀或客户端提交 owner。创建后应用、根和主体不可更换。
+    规则写是批准范围内的治理权，不是调用方自己运行权限的子集。
+    PUT/DELETE 使用强 If-Match，例如
+    `"open-role:20000000-0000-4000-8000-000000000001:2"`；
+    缺失 428、版本过旧 412，拒绝通配符、弱标记和标记列表。
+    清理角色贡献不保证关闭用户 admitted，商业有效性仍由消费方实时判断。
+    角色归属、revision、目录及成员资格不使用缓存；新 JSON 请求体最大 1 MiB。
+    完整目录包含根，最多 4096 节点、64 层；子树节点或深度超限、关系及成员读取的
+    祖先链深度超限返回 422，不返回截断成功。环、根的悬空父链等结构冲突返回 409。
+    所有端点不支持的方法返回 405，不支持的媒体类型返回 415。
+    清库或恢复环境后，消费方暂停自动联动，重新核对主体、应用、根及三权。
 servers:
   - url: /
 security:
@@ -277,7 +295,308 @@ paths:
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
+  /iam/api/roles:
+    post:
+      summary: 创建受委托角色
+      operationId: createOpenRole
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role:create:api 及 iam:open-role/create 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateOpenRoleRequest'}
+      responses:
+        '201':
+          description: 首次创建；同幂等键同摘要回读为 200。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+            Location: {description: 新角色资源地址, schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRoleResponse'}
+        '200':
+          description: 同主体同创建摘要的当前角色回读，不重置规则或版本。
+          headers:
+            ETag: {schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRoleResponse'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '413': {$ref: '#/components/responses/OpenRole413'}
+        '415': {$ref: '#/components/responses/OpenRole415'}
+    get:
+      summary: 查询自己的受委托角色
+      operationId: listOpenRoles
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role:read:api 及 iam:open-role/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      parameters:
+        - {name: applicationId, in: query, schema: {type: integer, format: int64, minimum: 1}}
+        - {name: rootDepartmentId, in: query, schema: {type: integer, format: int64, minimum: 1}}
+        - {name: externalId, in: query, schema: {type: string, format: uuid}}
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200':
+          description: 成功。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRolePage'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+  /iam/api/roles/{openRoleId}:
+    parameters:
+      - {name: openRoleId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      summary: 读取角色及同版本标记
+      operationId: getOpenRole
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role:read:api 及 iam:open-role/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRoleResponse'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+  /iam/api/roles/{openRoleId}/authorization-rules/{applicationId}:
+    parameters:
+      - {name: openRoleId, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: applicationId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      summary: 读取固定应用规则
+      operationId: getOpenRoleRule
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role-rule:read:api 及 iam:open-role-rule/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRoleRuleResponse'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+    put:
+      summary: 条件整体替换固定应用规则
+      operationId: putOpenRoleRule
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role-rule:write:api 及 iam:open-role-rule/write 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      parameters:
+        - {$ref: '#/components/parameters/OpenRoleIfMatch'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutOpenRoleRuleRequest'}
+      responses:
+        '200':
+          description: 成功。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenRoleRuleResponse'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '412': {$ref: '#/components/responses/OpenRole412'}
+        '428': {$ref: '#/components/responses/OpenRole428'}
+        '413': {$ref: '#/components/responses/OpenRole413'}
+        '415': {$ref: '#/components/responses/OpenRole415'}
+    delete:
+      summary: 条件清除规则
+      operationId: deleteOpenRoleRule
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-role-rule:write:api 及 iam:open-role-rule/write 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      parameters:
+        - {$ref: '#/components/parameters/OpenRoleIfMatch'}
+      responses:
+        '204':
+          description: 已完成；无变化不递增版本。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '412': {$ref: '#/components/responses/OpenRole412'}
+        '428': {$ref: '#/components/responses/OpenRole428'}
+  /iam/api/roles/{openRoleId}/departments:
+    parameters:
+      - {name: openRoleId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      summary: 读取受授权部门关系
+      operationId: listOpenRoleDepartments
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-department-role:read:api 及 iam:open-department-role/read 完整 DATA；all=true 不绕过角色归属或固定范围。组织归属及 DATA 可独立变化，本响应不提供 ETag，不按 If-None-Match 返回 304；每次返回当前完整分页与角色 revision，写入版本标记从角色详情读取。'
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+      responses:
+        '200':
+          description: 成功。
+          headers:
+            Cache-Control: {description: '禁止存储关系查询结果。', schema: {type: string, enum: [no-store]}}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenDepartmentRolePage'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '422': {$ref: '#/components/responses/OpenRole422'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+  /iam/api/departments/{departmentId}/roles/{openRoleId}:
+    parameters:
+      - {name: departmentId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+      - {name: openRoleId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      summary: 条件新增根子树内单条关系（空请求体）
+      operationId: assignOpenDepartmentRole
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-department-role:write:api 及 iam:open-department-role/write 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      parameters:
+        - {$ref: '#/components/parameters/OpenRoleIfMatch'}
+      responses:
+        '204':
+          description: 已完成；无变化不递增版本。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '412': {$ref: '#/components/responses/OpenRole412'}
+        '422': {$ref: '#/components/responses/OpenRole422'}
+        '428': {$ref: '#/components/responses/OpenRole428'}
+    delete:
+      summary: 条件清理本角色关系（允许迁出或消失）
+      operationId: revokeOpenDepartmentRole
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-department-role:write:api 及 iam:open-department-role/write 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      parameters:
+        - {$ref: '#/components/parameters/OpenRoleIfMatch'}
+      responses:
+        '204':
+          description: 已完成；无变化不递增版本。
+          headers:
+            ETag: {description: '同事务强角色版本标记', schema: {type: string}}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '412': {$ref: '#/components/responses/OpenRole412'}
+        '428': {$ref: '#/components/responses/OpenRole428'}
+  /iam/api/organization-directories/{rootDepartmentId}/departments:
+    parameters:
+      - {name: rootDepartmentId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      summary: 完整读取批准子树
+      operationId: getOpenOrganizationDirectory
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-directory:read:api 及 iam:open-directory/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenOrganizationDirectory'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+        '422': {$ref: '#/components/responses/OpenRole422'}
+  /iam/api/organization-directories/{rootDepartmentId}/members/{subjectId}:
+    parameters:
+      - {name: rootDepartmentId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+      - {name: subjectId, in: path, required: true, schema: {type: string}}
+    get:
+      summary: 读取指定成员最小组织事实
+      operationId: getOpenOrganizationMember
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-directory:read:api 及 iam:open-directory/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenOrganizationMember'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '422': {$ref: '#/components/responses/OpenRole422'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+  /iam/api/target-applications/{applicationId}:
+    parameters:
+      - {name: applicationId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      summary: 读取批准的非内置应用
+      operationId: getOpenTargetApplication
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-application:read:api 及 iam:open-application/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenTargetApplication'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
+  /iam/api/target-applications/{applicationId}/permission-manifest:
+    parameters:
+      - {name: applicationId, in: path, required: true, schema: {type: integer, format: int64, minimum: 1}}
+    get:
+      summary: 读取批准应用清单
+      operationId: getOpenTargetManifest
+      description: '要求可信 AKSK SERVICE 主体、IAM 准入、iam:open-application:read:api 及 iam:open-application/read 完整 DATA；all=true 不绕过角色归属或固定范围。'
+      responses:
+        '200':
+          description: 成功。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenTargetManifest'}
+        '400': {$ref: '#/components/responses/OpenRole400'}
+        '401': {$ref: '#/components/responses/OpenRole401'}
+        '403': {$ref: '#/components/responses/OpenRole403'}
+        '404': {$ref: '#/components/responses/OpenRole404'}
+        '409': {$ref: '#/components/responses/OpenRole409'}
+        '503': {$ref: '#/components/responses/OpenRole503'}
 components:
+  parameters:
+    OpenRoleIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: '同一角色当前强版本标记；必须先回读事实，不能取得新版本后盲重发旧内容。'
+      schema: {type: string}
   securitySchemes:
     akskBearer:
       type: http
@@ -286,6 +605,61 @@ components:
         AKSK 客户端凭据（AccessKey / Secret）换发的 Access Token
         （client_credentials）。凭据不得写入日志、代码仓库或响应缓存。
   responses:
+    OpenRole400:
+      description: 请求格式、编号或版本标记语法非法。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole401:
+      description: 缺少可信服务身份，或机器凭据无效。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole403:
+      description: 准入、精确 API、DATA 或固定委托范围不足。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole404:
+      description: 对象不存在或不属于当前主体；成员不在批准根内。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole409:
+      description: 幂等摘要、状态、清单版本或结构冲突。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole412:
+      description: 角色修改版本已变化，须重读并重新计算差异。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole413:
+      description: JSON 请求体超过 1 MiB。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole415:
+      description: 请求媒体类型不支持。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole422:
+      description: 完整子树超过 4096 节点或 64 层预算，或关系 / 成员祖先链超过 64 层预算；不返回截断成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole428:
+      description: 缺少必需 If-Match。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
+    OpenRole503:
+      description: 安全执行所需验证或数据库服务暂时不可用。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpenRoleError'}
     BadRequest:
       description: 请求体非法（参数校验失败）。
     Unauthorized:
@@ -300,6 +674,155 @@ components:
     Conflict:
       description: 唯一性冲突或受保护约束（如最后管理员保护、部门删除阻断）。
   schemas:
+    OpenRoleError:
+      type: object
+      required: [message, timestamp, requestId]
+      additionalProperties: false
+      properties:
+        message: {type: string}
+        timestamp: {type: string, format: date-time}
+        requestId: {type: string}
+    CreateOpenRoleRequest:
+      type: object
+      description: 'applicationId/rootDepartmentId 只接受正数 JSON 整数，范围为 int64；小数、指数形式、字符串、布尔值、null 和溢出均返回 400，不做类型转换或截断。'
+      required: [externalId, applicationId, rootDepartmentId, name]
+      properties:
+        externalId: {type: string, format: uuid}
+        applicationId: {type: integer, format: int64, minimum: 1}
+        rootDepartmentId: {type: integer, format: int64, minimum: 1}
+        name: {type: string, minLength: 1, maxLength: 128}
+        description: {type: string, maxLength: 255, nullable: true}
+    OpenRoleResponse:
+      type: object
+      required: [openRoleId, externalId, applicationId, rootDepartmentId, revision, state]
+      description: DELETED 只返回上述六个字段，不读取已删除角色编号。
+      properties:
+        openRoleId: {type: string, format: uuid}
+        externalId: {type: string, format: uuid}
+        applicationId: {type: integer, format: int64}
+        rootDepartmentId: {type: integer, format: int64}
+        revision: {type: integer, format: int64, minimum: 1}
+        state: {type: string, enum: [ACTIVE, DELETED]}
+        code: {type: string}
+        name: {type: string}
+        description: {type: string}
+        rulePresent: {type: boolean}
+        departmentBindingCount: {type: integer, format: int64}
+    OpenRolePage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/OpenRoleResponse'}}
+        total: {type: integer, format: int64}
+        page: {type: integer}
+        size: {type: integer}
+    PutOpenRoleRuleRequest:
+      type: object
+      description: 'manifestVersion 只接受正数 JSON 整数，范围为 int64；小数、指数形式、字符串、布尔值、null 和溢出均返回 400，不做类型转换或截断。'
+      required: [manifestVersion, manifestDigest, pagePermissions, apiPermissions]
+      properties:
+        manifestVersion: {type: integer, format: int64, minimum: 1}
+        manifestDigest: {type: string, pattern: '^[0-9a-fA-F]{64}$'}
+        pagePermissions: {type: array, maxItems: 4096, items: {type: string, maxLength: 256}}
+        apiPermissions: {type: array, maxItems: 4096, items: {type: string, maxLength: 256}}
+        dataGrantTemplate: {$ref: '#/components/schemas/OpenDataGrantDocument'}
+    OpenDataGrantDocument:
+      type: object
+      nullable: true
+      required: [protocol, version, grants]
+      properties:
+        protocol: {type: string, enum: [simple-data-permission]}
+        version: {type: string, enum: ['1.0']}
+        grants:
+          type: array
+          items:
+            type: object
+            required: [resource, actions, all, constraints]
+            properties:
+              resource: {type: string}
+              actions: {type: array, items: {type: string}}
+              all: {type: boolean}
+              constraints:
+                type: array
+                items:
+                  type: object
+                  required: [dimension, operator, values]
+                  properties:
+                    dimension: {type: string}
+                    operator: {type: string, enum: [IN]}
+                    values: {type: array, items: {type: string}}
+    OpenRoleRuleResponse:
+      type: object
+      properties:
+        openRoleId: {type: string, format: uuid}
+        applicationId: {type: integer, format: int64}
+        revision: {type: integer, format: int64}
+        pagePermissions: {type: array, items: {type: string}}
+        apiPermissions: {type: array, items: {type: string}}
+        dataGrantTemplate: {$ref: '#/components/schemas/OpenDataGrantDocument'}
+    OpenDepartmentRolePage:
+      type: object
+      properties:
+        revision: {type: integer, format: int64}
+        total: {type: integer, format: int64}
+        page: {type: integer}
+        size: {type: integer}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              departmentId: {type: integer, format: int64}
+              inCurrentRoot: {type: boolean}
+              createdAt: {type: string, format: date-time}
+    OpenOrganizationDirectory:
+      type: object
+      properties:
+        rootDepartmentId: {type: integer, format: int64}
+        complete: {type: boolean, enum: [true]}
+        directoryDigest: {type: string}
+        departments:
+          type: array
+          items:
+            type: object
+            properties:
+              departmentId: {type: integer, format: int64}
+              code: {type: string}
+              parentId: {type: integer, format: int64, nullable: true}
+              name: {type: string}
+              status: {type: integer}
+    OpenOrganizationMember:
+      type: object
+      properties:
+        subjectId: {type: string}
+        status: {type: integer}
+        departmentId: {type: integer, format: int64}
+        inCurrentRoot: {type: boolean}
+    OpenTargetApplication:
+      type: object
+      properties:
+        applicationId: {type: integer, format: int64}
+        applicationCode: {type: string}
+        name: {type: string}
+        status: {type: integer}
+        builtIn: {type: boolean, enum: [false]}
+    OpenTargetManifest:
+      type: object
+      properties:
+        applicationId: {type: integer, format: int64}
+        roles: {type: array, items: {type: string}}
+        pagePermissions: {type: array, items: {type: string}}
+        apiPermissions: {type: array, items: {type: string}}
+        dataResources:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: {type: string}
+              actions: {type: array, items: {type: string}}
+              dimensions: {type: array, items: {type: string}}
+        manifestVersion: {type: integer, format: int64}
+        manifestDigest: {type: string}
+        updatedAt: {type: string, format: date-time}
     UserRestResponse:
       type: object
       properties:

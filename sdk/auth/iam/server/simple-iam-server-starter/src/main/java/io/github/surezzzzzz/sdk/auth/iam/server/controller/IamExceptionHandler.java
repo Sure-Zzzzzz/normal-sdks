@@ -3,7 +3,9 @@ package io.github.surezzzzzz.sdk.auth.iam.server.controller;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
+import io.github.surezzzzzz.sdk.auth.iam.server.support.IamOpenRoleHttpHelper;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimitExceededException;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,9 @@ public class IamExceptionHandler {
     }
 
     private HttpStatus resolveStatus(String errorCode) {
+        if (errorCode != null && errorCode.startsWith(SimpleIamServerConstant.OPEN_ROLE_ERROR_PREFIX)) {
+            return IamOpenRoleHttpHelper.status(errorCode);
+        }
         if (ErrorCode.USER_NOT_FOUND.equals(errorCode)
                 || ErrorCode.DEPARTMENT_NOT_FOUND.equals(errorCode)
                 || ErrorCode.USER_GROUP_NOT_FOUND.equals(errorCode)
@@ -76,6 +81,27 @@ public class IamExceptionHandler {
             return HttpStatus.FORBIDDEN;
         }
         return HttpStatus.BAD_REQUEST;
+    }
+
+    /**
+     * 没有选中控制器时也保留方法拒绝状态，不落入泛化 500。
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<io.github.surezzzzzz.sdk.auth.iam.server.dto.openrole.response.OpenRoleErrorResponse> methodNotAllowed(
+            org.springframework.web.HttpRequestMethodNotSupportedException error) {
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        if (error.getSupportedHttpMethods() != null) {
+            response.allow(error.getSupportedHttpMethods().toArray(new org.springframework.http.HttpMethod[0]));
+        }
+        return response.body(IamOpenRoleHttpHelper.error(HttpStatus.METHOD_NOT_ALLOWED));
+    }
+
+    /**
+     * 不受支持的媒体类型以 415 表达。
+     */
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<io.github.surezzzzzz.sdk.auth.iam.server.dto.openrole.response.OpenRoleErrorResponse> unsupportedMedia(Exception error) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(IamOpenRoleHttpHelper.error(HttpStatus.UNSUPPORTED_MEDIA_TYPE));
     }
 
     /**

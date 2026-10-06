@@ -60,7 +60,7 @@ sequenceDiagram
         G->>G: Access Token = JWS RS256
     end
     G->>CZ: JwtEncodingContext
-    CZ->>CZ: 基础 claims：sub=用户ID, sid, auth_time
+    CZ->>CZ: 基础 claims：sub=稳定公开 subjectId, sid, auth_time
     alt Access Token
         CZ->>SS: currentActiveSession（从授权 attribute 取 iamSessionId）
         CZ->>TA: 客户端归属可信应用 + 用户应用授权
@@ -76,11 +76,13 @@ sequenceDiagram
 
 要点：
 
-- `sub` 是稳定的 IAM 用户 ID（不是 username），资源端据此关联用户
+- `sub` 是稳定公开主体 `subjectId`（不是 username，也不是数据库自增 userId），资源端据此关联人员身份
 - `sid` 把 Access Token 与 IAM 会话绑定：会话吊销后资源端验证即失效（即使 token 未到期）
 - `roles` / `permissions` 只写入交互用户的 Access Token；ID Token 和 userinfo 不返回 RBAC 数据
 - Access Token 里有两个角色来源、语义不同：`roles`（`ROLE_` + IAM 全局角色 code，兼容 claim，Spring Security `hasAuthority` 直接可用）与 `iam_authorization`（应用授权投影，其内 `roles` 是应用清单申报的应用局部角色）——前者答"这在 IAM 是什么人"，后者答"这人在我这个应用被准了什么"（应用侧解读见 [权限与授权投影](权限与授权投影.md) 的「业务方上报指引」）
-- 应用授权投影 claim 要求 OAuth 客户端必须归属可信应用，未归属直接拒签（投影是业务准入依据，不容无主客户端）
+- 应用授权投影 claim 要求 OAuth 客户端必须归属可信应用，未归属直接拒签（投影是应用权限准入依据，不容无主客户端）
+
+1.3.2 的受委托角色复用现有角色规则与授权投影链，不增加一种人员 Token。角色挂载、规则变更及删除会影响用户投影，但角色收缩不保证关闭 `admitted`；Token 可签、菜单可见或已有应用准入均不证明商业授权有效。产品有效期、宽限期、组织产品资格和离线机器规则仍由消费方执行。
 
 ## Refresh Token 主动防线（轮换 / 重放族吊销 / 过期清理）
 
@@ -152,6 +154,19 @@ sequenceDiagram
 
 `simple-iam-resource-server-starter` 就是本端点的受控验证客户端封装：经 `IamResourceTokenVerificationClient` SPI（HTTP 实现）调用 verify 端点并映射为资源认证结果，JWE 格式 token 同样可验（解密在 IAM 侧）。业务方也可用标准 Spring Security resource-server 对 JWKS 本地验签（仅自包含 `jwt` 格式；本地验签感知不到会话吊销与用户禁用，实时性弱于受控验证）。
 
+## 人员登录、服务治理与内部读取的身份边界
+
+| 调用场景 | 身份 / 凭证 | 职责 |
+|---|---|---|
+| 浏览器进入业务应用 | IAM 人员会话、授权码 + PKCE（防授权码窃取的校验机制） | 完成人员登录与应用授权，取得人员 Access Token |
+| 资源服务调用 `/iam/resource/tokens/verify` | 应用绑定的资源验证客户端 Basic 凭据 | 验证传入的 IAM 人员 Token；不是业务服务的治理授权 |
+| 服务调用 1.3.2 受委托角色及只读事实 API | AKSK 验证的 `SERVICE` 主体 | IAM 宿主公共资源层在线验证；检查 IAM 准入、精确 API 与完整 DATA |
+| AKSK 读取所属人授权投影 | 固定内部 reader SERVICE | 受控协作读取；不能由普通 OAuth 客户端、浏览器或资源验证 Basic 客户端替代 |
+
+上表凭据不可互换。新机器治理接口不接受 IAM 人员 Token 或管理员 Cookie；管理员维护受委托角色仍走 `/iam/admin/**` 的会话与 CSRF 校验，并遵守共同 If-Match（条件版本）约束。AKSK 服务治理的在线验证由 IAM 宿主装配 AKSK Provider，关闭 introspect 本地缓存及旧结果回退，不是改用 IAM 人员 Token 的本地验签。
+
+即时资格不能从已签发 Token 的本地快照推导。资源端本地验签不提供即时撤权，远程身份验证也不代替产品商业资格检查；业务失效保护由消费方实施。
+
 ## OAuth2 / OIDC 接入规则（业务应用视角）
 
 1. **先在管理台建可信应用 + OAuth 客户端**：客户端授权类型仅允许 `authorization_code`（可伴生 `refresh_token`）；机器凭证不走本服务（用 aksk-server 的 AK/SK）
@@ -161,4 +176,4 @@ sequenceDiagram
 5. **Consent**：客户端 `requireConsent=true` 时首次授权弹确认页；确认结果记入 `iam_consent`，scope 不变不再询问
 6. **token 校验**：推荐 `simple-iam-resource-server-starter`（受控验证客户端，封装 `POST /iam/resource/tokens/verify` 调用，五重校验含会话与用户状态，JWE 同样可验）；业务方也可用标准 resource-server + JWKS 对 `jwt` 格式本地验签（感知不到会话吊销，实时性弱）
 7. **Refresh Token**：默认不签发；客户端显式配置 `refresh_token` 授权类型后签发；全局一次性使用——每次 refresh grant 轮换新值，旧值二次使用触发整族吊销（含当前值，详见上节「Refresh Token 主动防线」）
-8. **1.0.0 无 introspection / revocation 端点**（SAS 0.4.1 未提供）；token 失效以会话联动吊销与短有效期兜底
+8. **验证职责不混用**：人员 Token 按受控资源验证契约使用；AKSK 服务治理与固定内部 reader 按各自契约接入，不能仅因路径同属 IAM 就复用凭据或授权范围

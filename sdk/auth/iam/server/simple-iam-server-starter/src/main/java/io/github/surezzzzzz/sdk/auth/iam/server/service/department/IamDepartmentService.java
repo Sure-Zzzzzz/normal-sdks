@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerExcepti
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -41,6 +42,7 @@ public class IamDepartmentService {
     private final IamDepartmentRepository departmentRepository;
     private final IamUserRepository userRepository;
     private final IamAuditEventPublisher auditEventPublisher;
+    private final IamOpenRoleMutationSupport openRoleSupport;
 
     /**
      * 查询所有部门
@@ -145,6 +147,7 @@ public class IamDepartmentService {
      */
     @Transactional
     public void deleteDepartment(Long departmentId) {
+        openRoleSupport.requireRootUnreferenced(departmentId);
         IamDepartmentEntity department = getById(departmentId);
         if (departmentRepository.existsByParentId(departmentId)) {
             throw new SimpleIamServerException(ErrorCode.DEPARTMENT_DELETE_BLOCKED,

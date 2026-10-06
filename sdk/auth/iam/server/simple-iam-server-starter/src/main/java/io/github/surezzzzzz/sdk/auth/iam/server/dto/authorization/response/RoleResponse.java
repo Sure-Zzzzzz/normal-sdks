@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response;
 
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.openrole.response.OpenRoleBindingResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -43,6 +44,19 @@ public class RoleResponse {
      * 更新时间
      */
     private Instant updatedAt;
+
+    /**
+     * 外部委托只读边界；旧普通角色为 null，不允许通过此字段更改归属。
+     */
+    private OpenRoleBindingResponse openRoleBinding;
+
+    /**
+     * 保留已有调用方的七参数构造。
+     */
+    public RoleResponse(Long id, String code, String name, String description, Integer builtIn,
+                        Instant createdAt, Instant updatedAt) {
+        this(id, code, name, description, builtIn, createdAt, updatedAt, null);
+    }
 
     /**
      * 从角色实体转换响应

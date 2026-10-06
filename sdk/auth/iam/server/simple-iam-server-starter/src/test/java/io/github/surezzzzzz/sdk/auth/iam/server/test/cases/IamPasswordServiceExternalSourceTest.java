@@ -69,7 +69,7 @@ class IamPasswordServiceExternalSourceTest {
                 () -> userService.changePassword(user.getId(), "Admin@1234", "NewPass@1234", null));
 
         assertEquals(ErrorCode.PASSWORD_CHANGE_NOT_ALLOWED, exception.getErrorCode());
-        IamUserEntity after = userRepository.findById(user.getId()).orElseThrow();
+        IamUserEntity after = userRepository.findById(user.getId()).get();
         assertEquals(passwordHashBefore, after.getPasswordHash(), "被拒路径不得改动密码哈希");
         log.info("✓ 外部身份源改密拒绝：username={}", username);
     }
@@ -83,7 +83,7 @@ class IamPasswordServiceExternalSourceTest {
                 () -> userService.resetPassword(user.getId(), "NewPass@1234", "ext-admin"));
 
         assertEquals(ErrorCode.PASSWORD_CHANGE_NOT_ALLOWED, exception.getErrorCode());
-        IamUserEntity after = userRepository.findById(user.getId()).orElseThrow();
+        IamUserEntity after = userRepository.findById(user.getId()).get();
         assertTrue(!Boolean.TRUE.equals(after.getMustChangePassword()),
                 "重置被拒时不得置须改密标记");
         log.info("✓ 外部身份源重置拒绝（死锁防护）：username={}", username);

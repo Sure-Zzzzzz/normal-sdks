@@ -183,7 +183,7 @@ class IamAdminMessageApiTest {
                 .andReturn();
         String batchId = OBJECT_MAPPER.readTree(result.getResponse().getContentAsString()).get("sendBatchId").asText();
         jdbcTemplate.update("UPDATE iam_message SET read_at = NOW() WHERE send_batch_id = ? AND recipient_user_id = ?",
-                batchId, userRepository.findBySubjectId(firstRecipient).orElseThrow().getId());
+                batchId, userRepository.findBySubjectId(firstRecipient).get().getId());
 
         MvcResult page1 = mockMvc.perform(get("/iam/admin/messages/" + batchId + "/recipients")
                         .param("page", "1").param("size", "1").cookie(adminSession))

@@ -4,11 +4,17 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocumen
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.OpenRoleOperation;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleAuthorizationRuleResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOpenRoleBindingEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleAuthorizationRuleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
+import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
+import io.github.surezzzzzz.sdk.auth.iam.server.model.IamOpenRoleActor;
+import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleAuthorizationRuleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
@@ -47,6 +53,8 @@ public class IamRoleAuthorizationRuleService {
     private final IamApplicationPermissionManifestService manifestService;
     private final IamAuthorizationProjectionService projectionService;
     private final IamTrustedApplicationMutationGuard mutationGuard;
+    private final IamOpenRoleMutationSupport openRoleSupport;
+    private final IamAuditEventPublisher auditEventPublisher;
 
     /**
      * 为角色设置在指定应用下的授权规则（upsert，幂等重放安全）。
@@ -65,6 +73,20 @@ public class IamRoleAuthorizationRuleService {
             List<String> pagePermissions,
             List<String> apiPermissions,
             Map<String, Object> dataGrantTemplate) {
+        return putRoleAuthorizationRule(roleId, applicationId, pagePermissions, apiPermissions, dataGrantTemplate, openRoleSupport.actorForRole(roleId));
+    }
+
+    /**
+     * 委托角色规则变化显式携带操作者，并参与共同版本与一次管理事件。
+     */
+    @Transactional
+    public RoleAuthorizationRuleResponse putRoleAuthorizationRule(Long roleId, Long applicationId,
+                                                                  List<String> pagePermissions, List<String> apiPermissions, Map<String, Object> dataGrantTemplate,
+                                                                  IamOpenRoleActor suppliedActor) {
+
+        openRoleSupport.requireRoleApplication(roleId, applicationId);
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = suppliedActor;
 
         requireRole(roleId);
         requireApplication(applicationId);
@@ -81,6 +103,15 @@ public class IamRoleAuthorizationRuleService {
                 .orElse(null);
 
         boolean created = rule == null;
+        String pagesJson = IamApplicationAuthorizationJsonCodec.writeStringList(pagePermissions);
+        String apisJson = IamApplicationAuthorizationJsonCodec.writeStringList(apiPermissions);
+        String dataJson = IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(template);
+        if (binding != null && !created
+                && new java.util.HashSet<>(pagePermissions).equals(new java.util.HashSet<>(
+                IamApplicationAuthorizationJsonCodec.readStringList(rule.getPagePermissionsJson(), io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant.OPEN_ROLE_FIELD_PAGE_PERMISSIONS)))
+                && new java.util.HashSet<>(apiPermissions).equals(new java.util.HashSet<>(
+                IamApplicationAuthorizationJsonCodec.readStringList(rule.getApiPermissionsJson(), io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant.OPEN_ROLE_FIELD_API_PERMISSIONS)))
+                && java.util.Objects.equals(dataJson, rule.getDataGrantTemplateJson())) return toResponse(rule);
         if (created) {
             rule = new IamRoleAuthorizationRuleEntity();
             rule.setRoleId(roleId);
@@ -88,9 +119,9 @@ public class IamRoleAuthorizationRuleService {
             rule.setCreatedAt(Instant.now());
         }
 
-        rule.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(pagePermissions));
-        rule.setApiPermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(apiPermissions));
-        rule.setDataGrantTemplateJson(IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(template));
+        rule.setPagePermissionsJson(pagesJson);
+        rule.setApiPermissionsJson(apisJson);
+        rule.setDataGrantTemplateJson(dataJson);
         rule.setUpdatedAt(Instant.now());
 
         rule = ruleRepository.save(rule);
@@ -99,6 +130,11 @@ public class IamRoleAuthorizationRuleService {
                 pagePermissions.size(), apiPermissions.size(), template != null);
 
         projectionService.onRoleAuthorizationRuleChanged(roleId, applicationId);
+        openRoleSupport.changed(binding);
+        if (binding != null)
+            auditEventPublisher.publishAdminAction(created ? AdminActionType.CREATED : AdminActionType.UPDATED,
+                    AdminSubjectType.ROLE, String.valueOf(roleId), null,
+                    openRoleSupport.detail(binding, actor, OpenRoleOperation.PUT_RULE, null));
         return toResponse(rule);
     }
 
@@ -111,6 +147,17 @@ public class IamRoleAuthorizationRuleService {
      */
     @Transactional
     public void deleteRoleAuthorizationRule(Long roleId, Long applicationId) {
+        deleteRoleAuthorizationRule(roleId, applicationId, openRoleSupport.actorForRole(roleId));
+    }
+
+    /**
+     * 清除委托规则时保持固定应用边界，并只在实际变化时更新版本。
+     */
+    @Transactional
+    public void deleteRoleAuthorizationRule(Long roleId, Long applicationId, IamOpenRoleActor suppliedActor) {
+        openRoleSupport.requireRoleApplication(roleId, applicationId);
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = suppliedActor;
         mutationGuard.requireMutable(applicationId);
         IamRoleAuthorizationRuleEntity rule = ruleRepository
                 .findByRoleIdAndApplicationId(roleId, applicationId)
@@ -121,6 +168,9 @@ public class IamRoleAuthorizationRuleService {
         ruleRepository.delete(rule);
         log.info("角色授权规则已删除：roleId={}, applicationId={}", roleId, applicationId);
         projectionService.onRoleAuthorizationRuleChanged(roleId, applicationId);
+        openRoleSupport.changed(binding);
+        if (binding != null) auditEventPublisher.publishAdminAction(AdminActionType.DELETED, AdminSubjectType.ROLE,
+                String.valueOf(roleId), null, openRoleSupport.detail(binding, actor, OpenRoleOperation.DELETE_RULE, null));
     }
 
     /**

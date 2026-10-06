@@ -152,7 +152,7 @@ public class IamRefreshTokenFamilyAuthorizationService implements OAuth2Authoriz
     private boolean isFamilyActive(String token) {
         Optional<IamRefreshTokenFamilyEntity> family = refreshTokenFamilyRepository
                 .findByCurrentTokenHash(TokenHashHelper.sha256Hex(token));
-        if (family.isEmpty()) {
+        if (!family.isPresent()) {
             log.warn("refresh token 无族记录，按失效处理（token 哈希前 8 位={}）",
                     TokenHashHelper.sha256Hex(token).substring(0, 8));
             return false;

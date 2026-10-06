@@ -169,19 +169,19 @@ class RuntimeServiceTest {
             deploymentPasswordRecoveryService.recoverBootstrapAdministratorIfRequested(null);
 
             IamPasswordResetEntity credential = passwordResetRepository.findById(
-                    SimpleIamServerConstant.DEPLOYMENT_RECOVERY_CREDENTIAL_ID).orElseThrow();
+                    SimpleIamServerConstant.DEPLOYMENT_RECOVERY_CREDENTIAL_ID).get();
             assertEquals(SimpleIamServerConstant.STATUS_INACTIVE, credential.getStatus());
             assertNotNull(credential.getUsedAt());
             assertEquals(SimpleIamServerConstant.DEPLOYMENT_RECOVERY_REQUESTED_BY, credential.getRequestedBy());
             assertEquals(SimpleIamServerConstant.STATUS_INACTIVE,
-                    sessionRepository.findById(session.getId()).orElseThrow().getStatus());
+                    sessionRepository.findById(session.getId()).get().getStatus());
             assertNull(redisTokenRepository.getSession(session.getId()));
-            String passwordHash = userRepository.findById(user.getId()).orElseThrow().getPasswordHash();
+            String passwordHash = userRepository.findById(user.getId()).get().getPasswordHash();
             assertTrue(passwordEncoder.matches(recoveryPassword, passwordHash));
 
             deploymentPasswordRecoveryService.recoverBootstrapAdministratorIfRequested(null);
 
-            assertEquals(passwordHash, userRepository.findById(user.getId()).orElseThrow().getPasswordHash());
+            assertEquals(passwordHash, userRepository.findById(user.getId()).get().getPasswordHash());
         } finally {
             passwordResetRepository.findById(SimpleIamServerConstant.DEPLOYMENT_RECOVERY_CREDENTIAL_ID)
                     .ifPresent(passwordResetRepository::delete);

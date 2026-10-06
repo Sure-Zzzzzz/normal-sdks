@@ -1,24 +1,21 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service.authorization;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.RoleSource;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.CreateRoleRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.UpdateRoleRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.PermissionSummaryResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleSummaryResponse;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamPermissionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRolePermissionEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamUserRoleEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.openrole.response.OpenRoleBindingResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentRoleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
+import io.github.surezzzzzz.sdk.auth.iam.server.model.IamOpenRoleActor;
 import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRoleRepository;
@@ -27,6 +24,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartment
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -58,12 +56,14 @@ public class IamRoleService {
     private final IamAuthorizationProjectionService projectionService;
     private final IamEffectiveRoleResolver effectiveRoleResolver;
     private final IamDepartmentService departmentService;
+    private final IamOpenRoleMutationSupport openRoleSupport;
 
     /**
      * 给用户分配角色
      */
     @Transactional
     public void assignRole(Long userId, Long roleId) {
+        openRoleSupport.requireUnmanaged(roleId);
         List<IamUserRoleEntity> existing = userRoleRepository.findByUserId(userId);
         boolean alreadyAssigned = existing.stream().anyMatch(r -> r.getRoleId().equals(roleId));
         if (alreadyAssigned) {
@@ -300,6 +300,29 @@ public class IamRoleService {
     }
 
     /**
+     * 管理列表统一补齐委托边界，保留原顺序和普通角色的 null 摘要。
+     * 列表只用于展示；修改前仍须读取带锁的角色详情取得当前版本。
+     */
+    @Transactional(readOnly = true)
+    public List<RoleResponse> toResponses(List<IamRoleEntity> roles) {
+        Map<Long, OpenRoleBindingResponse> summaries = openRoleSupport.summaries(roles.stream()
+                .map(IamRoleEntity::getId).collect(Collectors.toList()));
+        return roles.stream().map(role -> {
+            RoleResponse response = RoleResponse.from(role);
+            response.setOpenRoleBinding(summaries.get(role.getId()));
+            return response;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 分页响应复用批量摘要，保持原分页元数据。
+     */
+    @Transactional(readOnly = true)
+    public Page<RoleResponse> toResponses(Page<IamRoleEntity> roles) {
+        return new PageImpl<>(toResponses(roles.getContent()), roles.getPageable(), roles.getTotalElements());
+    }
+
+    /**
      * 管理台分页查询角色
      */
     public Page<IamRoleEntity> listRoles(String keyword, int page, int size) {
@@ -336,6 +359,14 @@ public class IamRoleService {
      */
     @Transactional
     public IamRoleEntity createRole(CreateRoleRequest request) {
+        return createRole(request, null, null);
+    }
+
+    /**
+     * 创建委托角色时复用角色业务，并在同一事务事件中携带真实操作元数据。
+     */
+    @Transactional
+    public IamRoleEntity createRole(CreateRoleRequest request, IamOpenRoleBindingEntity binding, IamOpenRoleActor actor) {
         String code = normalizeRequired(request.getCode(), "角色编码不能为空");
         if (roleRepository.existsByCode(code)) {
             throw new SimpleIamServerException("角色编码已存在：" + code);
@@ -350,7 +381,8 @@ public class IamRoleService {
         IamRoleEntity saved = roleRepository.save(role);
         log.info("角色创建成功：code={}, id={}", saved.getCode(), saved.getId());
         auditEventPublisher.publishAdminAction(AdminActionType.CREATED, AdminSubjectType.ROLE,
-                String.valueOf(saved.getId()), saved.getCode(), null);
+                String.valueOf(saved.getId()), binding == null ? saved.getCode() : null,
+                binding == null ? null : openRoleSupport.detail(binding, actor, OpenRoleOperation.CREATE_ROLE, null));
         return saved;
     }
 
@@ -359,13 +391,25 @@ public class IamRoleService {
      */
     @Transactional
     public IamRoleEntity updateRole(Long roleId, UpdateRoleRequest request) {
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = binding == null ? null : openRoleSupport.actor();
         IamRoleEntity role = getById(roleId);
-        role.setName(normalizeRequired(request.getName(), "角色名称不能为空"));
-        role.setDescription(normalizeOptional(request.getDescription()));
+        String name = binding == null ? normalizeRequired(request.getName(), "角色名称不能为空")
+                : io.github.surezzzzzz.sdk.auth.iam.server.support.IamOpenRoleProtocolHelper.text(
+                request.getName(), SimpleIamServerConstant.OPEN_ROLE_NAME_MAX_LENGTH, true);
+        String description = binding == null ? normalizeOptional(request.getDescription())
+                : io.github.surezzzzzz.sdk.auth.iam.server.support.IamOpenRoleProtocolHelper.text(
+                request.getDescription(), SimpleIamServerConstant.OPEN_ROLE_DESCRIPTION_MAX_LENGTH, false);
+        if (binding != null && Objects.equals(name, role.getName()) && Objects.equals(description, role.getDescription()))
+            return role;
+        role.setName(name);
+        role.setDescription(description);
         role.setUpdatedAt(Instant.now());
         IamRoleEntity saved = roleRepository.save(role);
+        openRoleSupport.changed(binding);
         auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.ROLE,
-                String.valueOf(roleId), saved.getCode(), null);
+                String.valueOf(roleId), binding == null ? saved.getCode() : null,
+                binding == null ? null : openRoleSupport.detail(binding, actor, OpenRoleOperation.UPDATE_ROLE, null));
         return saved;
     }
 
@@ -377,6 +421,8 @@ public class IamRoleService {
      */
     @Transactional
     public void deleteRole(Long roleId) {
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = binding == null ? null : openRoleSupport.actor();
         IamRoleEntity role = getById(roleId);
         if (SimpleIamServerConstant.STATUS_ACTIVE == role.getBuiltIn()) {
             throw new SimpleIamServerException("内置角色不可删除：" + role.getCode());
@@ -392,9 +438,14 @@ public class IamRoleService {
         for (Long memberUserId : memberUserIds) {
             projectionService.onUserRoleAssigned(memberUserId);
         }
+        if (binding != null) {
+            binding.setState(SimpleIamServerConstant.OPEN_ROLE_STATE_DELETED);
+            openRoleSupport.changed(binding);
+        }
         log.info("角色删除成功：code={}, id={}", role.getCode(), roleId);
         auditEventPublisher.publishAdminAction(AdminActionType.DELETED, AdminSubjectType.ROLE,
-                String.valueOf(roleId), role.getCode(), null);
+                String.valueOf(roleId), binding == null ? role.getCode() : null,
+                binding == null ? null : openRoleSupport.detail(binding, actor, OpenRoleOperation.DELETE_ROLE, null));
     }
 
     /**
@@ -428,6 +479,17 @@ public class IamRoleService {
      */
     @Transactional
     public void assignDepartmentRole(Long departmentId, Long roleId) {
+        assignDepartmentRole(departmentId, roleId, openRoleSupport.actorForRole(roleId));
+    }
+
+    /**
+     * 显式传递机器操作者；管理面沿用可信会话快照。
+     */
+    @Transactional
+    public void assignDepartmentRole(Long departmentId, Long roleId, IamOpenRoleActor suppliedActor) {
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = suppliedActor;
+        openRoleSupport.requireDepartment(binding, departmentId);
         departmentService.getById(departmentId);
         getById(roleId);
         if (departmentRoleRepository.existsByDepartmentIdAndRoleId(departmentId, roleId)) {
@@ -439,8 +501,10 @@ public class IamRoleService {
         entity.setCreatedAt(Instant.now());
         departmentRoleRepository.save(entity);
         bumpAndRecomputeDepartmentMembers(departmentId);
+        openRoleSupport.changed(binding);
         auditEventPublisher.publishAdminAction(AdminActionType.ASSIGNED, AdminSubjectType.DEPARTMENT,
-                String.valueOf(departmentId), departmentService.getDepartmentName(departmentId), "roleId=" + roleId);
+                String.valueOf(departmentId), binding == null ? departmentService.getDepartmentName(departmentId) : null,
+                binding == null ? "roleId=" + roleId : openRoleSupport.detail(binding, actor, OpenRoleOperation.ASSIGN_DEPARTMENT, departmentId));
     }
 
     /**
@@ -451,7 +515,17 @@ public class IamRoleService {
      */
     @Transactional
     public void revokeDepartmentRole(Long departmentId, Long roleId) {
-        departmentService.getById(departmentId);
+        revokeDepartmentRole(departmentId, roleId, openRoleSupport.actorForRole(roleId));
+    }
+
+    /**
+     * 委托关系迁出或目标消失后仍允许清理，但不允许借清理新增授权。
+     */
+    @Transactional
+    public void revokeDepartmentRole(Long departmentId, Long roleId, IamOpenRoleActor suppliedActor) {
+        IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
+        IamOpenRoleActor actor = suppliedActor;
+        if (binding == null) departmentService.getById(departmentId);
         IamRoleEntity role = getById(roleId);
         if (SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN.equals(role.getCode())) {
             assertDepartmentRevokeNotLastActiveAdmin(departmentId, role.getId());
@@ -460,9 +534,12 @@ public class IamRoleService {
         departmentRoleRepository.deleteByDepartmentIdAndRoleId(departmentId, roleId);
         if (assigned) {
             bumpAndRecomputeDepartmentMembers(departmentId);
+            openRoleSupport.changed(binding);
         }
+        if (binding != null && !assigned) return;
         auditEventPublisher.publishAdminAction(AdminActionType.UNASSIGNED, AdminSubjectType.DEPARTMENT,
-                String.valueOf(departmentId), departmentService.getDepartmentName(departmentId), "roleId=" + roleId);
+                String.valueOf(departmentId), binding == null ? departmentService.getDepartmentName(departmentId) : null,
+                binding == null ? "roleId=" + roleId : openRoleSupport.detail(binding, actor, OpenRoleOperation.REVOKE_DEPARTMENT, departmentId));
     }
 
     /**
@@ -568,6 +645,7 @@ public class IamRoleService {
      */
     @Transactional
     public void assignPermission(Long roleId, Long permissionId) {
+        openRoleSupport.requireUnmanaged(roleId);
         getById(roleId);
         getPermissionById(permissionId);
         boolean alreadyAssigned = rolePermissionRepository.findByRoleId(roleId).stream()
@@ -590,6 +668,7 @@ public class IamRoleService {
      */
     @Transactional
     public void revokePermission(Long roleId, Long permissionId) {
+        openRoleSupport.requireUnmanaged(roleId);
         boolean assigned = rolePermissionRepository.findByRoleId(roleId).stream()
                 .anyMatch(rolePermission -> rolePermission.getPermissionId().equals(permissionId));
         rolePermissionRepository.deleteByRoleIdAndPermissionId(roleId, permissionId);
@@ -615,6 +694,17 @@ public class IamRoleService {
     public IamRoleEntity getById(Long roleId) {
         return roleRepository.findById(roleId)
                 .orElseThrow(() -> new SimpleIamServerException("角色不存在：" + roleId));
+    }
+
+    /**
+     * 管理详情返回同事务角色内容和委托边界，普通角色契约保持兼容。
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public RoleResponse getDetail(Long roleId) {
+        openRoleSupport.readLock(roleId);
+        RoleResponse response = RoleResponse.from(getById(roleId));
+        response.setOpenRoleBinding(openRoleSupport.summary(roleId));
+        return response;
     }
 
     /**

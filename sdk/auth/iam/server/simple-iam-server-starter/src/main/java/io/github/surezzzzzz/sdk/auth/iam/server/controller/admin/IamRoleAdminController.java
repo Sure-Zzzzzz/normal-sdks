@@ -9,9 +9,11 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleR
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.response.DepartmentResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.AdminUserResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,6 +37,7 @@ public class IamRoleAdminController {
 
     private final IamRoleService roleService;
     private final IamDepartmentService departmentService;
+    private final IamOpenRoleMutationSupport openRoleSupport;
 
     /**
      * 角色列表
@@ -42,9 +45,7 @@ public class IamRoleAdminController {
     @GetMapping("/roles")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API + "')")
     public ResponseEntity<List<RoleResponse>> listRoles() {
-        return ResponseEntity.ok(roleService.getAllRoles().stream()
-                .map(RoleResponse::from)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(roleService.toResponses(roleService.getAllRoles()));
     }
 
     /**
@@ -56,8 +57,7 @@ public class IamRoleAdminController {
             @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = SimpleIamServerConstant.DEFAULT_ADMIN_PAGE_VALUE) int page,
             @RequestParam(defaultValue = SimpleIamServerConstant.DEFAULT_ADMIN_PAGE_SIZE_VALUE) int size) {
-        return ResponseEntity.ok(AdminPageResponse.from(roleService.listRoles(keyword, page, size)
-                .map(RoleResponse::from)));
+        return ResponseEntity.ok(AdminPageResponse.from(roleService.toResponses(roleService.listRoles(keyword, page, size))));
     }
 
     /**
@@ -76,7 +76,7 @@ public class IamRoleAdminController {
     @GetMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API + "')")
     public ResponseEntity<RoleResponse> getRole(@PathVariable Long roleId) {
-        return ResponseEntity.ok(RoleResponse.from(roleService.getById(roleId)));
+        return ResponseEntity.ok(roleService.getDetail(roleId));
     }
 
     /**
@@ -85,8 +85,12 @@ public class IamRoleAdminController {
     @PutMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API + "')")
     public ResponseEntity<RoleResponse> updateRole(@PathVariable Long roleId,
+                                                   @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
                                                    @RequestBody UpdateRoleRequest request) {
-        return ResponseEntity.ok(RoleResponse.from(roleService.updateRole(roleId, request)));
+        return ResponseEntity.ok(openRoleSupport.adminMutation(roleId, ifMatch, () -> {
+            roleService.updateRole(roleId, request);
+            return roleService.getDetail(roleId);
+        }));
     }
 
     /**
@@ -94,8 +98,12 @@ public class IamRoleAdminController {
      */
     @DeleteMapping("/roles/{roleId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_ROLE_API + "')")
-    public ResponseEntity<Void> deleteRole(@PathVariable Long roleId) {
-        roleService.deleteRole(roleId);
+    public ResponseEntity<Void> deleteRole(@PathVariable Long roleId,
+                                           @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        openRoleSupport.adminMutation(roleId, ifMatch, () -> {
+            roleService.deleteRole(roleId);
+            return null;
+        });
         return ResponseEntity.noContent().build();
     }
 

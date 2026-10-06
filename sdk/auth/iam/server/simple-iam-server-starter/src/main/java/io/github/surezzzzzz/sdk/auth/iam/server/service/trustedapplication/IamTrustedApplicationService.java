@@ -34,6 +34,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedAppl
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalMenuTreeService;
@@ -73,7 +74,6 @@ import java.util.Optional;
 @SimpleIamServerComponent
 @RequiredArgsConstructor
 public class IamTrustedApplicationService {
-
     private static final String SQL_LIST_CLIENT_IDS_BY_APP =
             "SELECT client_id FROM oauth2_registered_client WHERE application_id = ?";
     private static final String SQL_LIST_REGISTERED_CLIENT_IDS_BY_APP =
@@ -88,7 +88,7 @@ public class IamTrustedApplicationService {
             "DELETE FROM iam_consent WHERE client_id = ?";
     private static final String SQL_DELETE_REGISTERED_CLIENT_BY_APP =
             "DELETE FROM oauth2_registered_client WHERE application_id = ?";
-
+    private final IamOpenRoleMutationSupport openRoleSupport;
     private final IamTrustedApplicationRepository trustedApplicationRepository;
     private final IamTrustedApplicationPortalRepository trustedApplicationPortalRepository;
     private final IamPortalSettingRepository portalSettingRepository;
@@ -216,6 +216,10 @@ public class IamTrustedApplicationService {
     public TrustedApplicationResponse updateApplication(Long applicationId, UpdateTrustedApplicationRequest request) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
         lifecycleService.requireMutable(applicationId);
+        // 活跃委托固定为非内置应用；应用升级为内置前必须先清理委托。
+        if (Boolean.TRUE.equals(request.getBuiltIn())) {
+            openRoleSupport.requireApplicationUnreferenced(applicationId);
+        }
         if (StringUtils.hasText(request.getApplicationName())) {
             app.setApplicationName(request.getApplicationName().trim());
         }
@@ -256,6 +260,7 @@ public class IamTrustedApplicationService {
     @Transactional
     public io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.response.TrustedApplicationCleanupOperationResponse
     deleteApplication(Long applicationId) {
+        openRoleSupport.requireApplicationUnreferenced(applicationId);
         IamTrustedApplicationEntity app = requireApplication(applicationId);
         if (builtInResolver.isBuiltIn(app)) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_DELETE_BLOCKED,

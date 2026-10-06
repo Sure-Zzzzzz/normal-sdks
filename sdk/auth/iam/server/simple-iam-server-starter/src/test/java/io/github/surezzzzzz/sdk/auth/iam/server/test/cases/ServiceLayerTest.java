@@ -58,7 +58,7 @@ class ServiceLayerTest {
     @AfterEach
     void cleanup() {
         userRepository.findByUsername(testUsername)
-                .ifPresent(user -> userRepository.delete(user));
+                .ifPresent(user -> userService.deleteUser(user.getId()));
     }
 
     // ==================== IamUserService ====================

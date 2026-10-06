@@ -93,7 +93,8 @@ class IamAdminDashboardApiTest {
             sessionRepository.findById(sessionId).ifPresent(sessionRepository::delete);
         }
         for (Long userId : userIds) {
-            userRepository.findById(userId).ifPresent(userRepository::delete);
+            // 通过业务删除同步清理权限投影，避免污染后续清单升级测试。
+            userRepository.findById(userId).ifPresent(user -> userService.deleteUser(user.getId()));
         }
         for (Long departmentId : departmentIds) {
             departmentRepository.findById(departmentId).ifPresent(departmentRepository::delete);

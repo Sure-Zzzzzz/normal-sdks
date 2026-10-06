@@ -122,7 +122,7 @@ class IamTokenEventPublishTest {
         userRequest.setDisplayName(username);
         userRequest.setEmail(username + "@example.test");
         userId = userService.createUser(userRequest).getId();
-        subjectId = userRepository.findById(userId).orElseThrow().getSubjectId();
+        subjectId = userRepository.findById(userId).get().getSubjectId();
 
         CreateTrustedApplicationClientRequest client = new CreateTrustedApplicationClientRequest();
         client.setClientId(oauthClientId);

@@ -137,7 +137,7 @@ class IamWebMessageSseTest {
                 .andExpect(status().isNoContent());
 
         assertEquals(0, messageService.countUnreadMessages(recipient.getId()));
-        assertNotNull(messageRepository.findById(message.getId()).orElseThrow().getReadAt());
+        assertNotNull(messageRepository.findById(message.getId()).get().getReadAt());
     }
 
     @Test

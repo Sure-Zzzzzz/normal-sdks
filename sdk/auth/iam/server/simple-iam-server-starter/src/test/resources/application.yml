@@ -1,3 +1,7 @@
+# AKSK Resource 组件默认启用（matchIfMissing），普通测试不外插正式 Provider，必须显式关闭；
+# 真实 AKP 组合验收测试用动态属性按需覆盖为 true。
+io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled: false
+
 spring:
   # 模块测试默认叠加 local-test（开发测试库，物理隔离联调库）；联调起服命令行显式传
   # --spring.profiles.active=local,manual 覆盖本值，不受影响

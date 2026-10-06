@@ -98,7 +98,7 @@ class IamPortalAccessibleApplicationApiTest {
         userRequest.setPassword("Admin@1234");
         userRequest.setDisplayName(username);
         targetUserId = userService.createUser(userRequest).getId();
-        targetSubjectId = userRepository.findById(targetUserId).orElseThrow().getSubjectId();
+        targetSubjectId = userRepository.findById(targetUserId).get().getSubjectId();
         userSession = loginSession(username);
 
         applicationXId = createPortalApplication(applicationXCode);

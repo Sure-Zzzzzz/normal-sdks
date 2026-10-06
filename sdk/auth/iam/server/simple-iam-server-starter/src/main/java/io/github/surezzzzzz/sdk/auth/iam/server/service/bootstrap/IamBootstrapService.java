@@ -86,6 +86,7 @@ public class IamBootstrapService implements ApplicationRunner {
     private final RedisKeyHelper redisKeyHelper;
     private final TransactionTemplate transactionTemplate;
     private final IamDeploymentPasswordRecoveryService deploymentPasswordRecoveryService;
+    private final IamOpenRoleManifestUpgradeService openRoleManifestUpgradeService;
 
     private static BuiltInPermission[] builtInPermissions() {
         return new BuiltInPermission[]{
@@ -122,6 +123,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 SimpleIamServerConstant.BOOTSTRAP_LOCK_LEASE_SECONDS, TimeUnit.SECONDS);
         if (!lease.isPresent()) {
             log.info(ServerErrorMessage.BOOTSTRAP_LOCK_UNAVAILABLE);
+            openRoleManifestUpgradeService.upgrade();
             return;
         }
         try {
@@ -139,6 +141,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 String bootstrapInitialPassword = ensureAdminUser();
                 ensureAdminApplicationAuthorizations();
                 deploymentPasswordRecoveryService.recoverBootstrapAdministratorIfRequested(bootstrapInitialPassword);
+                openRoleManifestUpgradeService.upgrade();
             });
         } finally {
             lease.get().close();

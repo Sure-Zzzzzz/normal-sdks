@@ -73,7 +73,7 @@ class IamWebAuthApiTest {
 
     @AfterEach
     void cleanup() {
-        userRepository.findByUsername(adminUsername).ifPresent(user -> userRepository.delete(user));
+        userRepository.findByUsername(adminUsername).ifPresent(user -> userService.deleteUser(user.getId()));
     }
 
     @Test
@@ -150,7 +150,7 @@ class IamWebAuthApiTest {
         mockMvc.perform(get("/iam/web/auth/me").cookie(session))
                 .andExpect(status().isOk());
 
-        IamSessionEntity reloaded = iamSessionRepository.findById(iamSession.getId()).orElseThrow();
+        IamSessionEntity reloaded = iamSessionRepository.findById(iamSession.getId()).get();
         assertTrue(reloaded.getExpiresAt().isAfter(now.plusSeconds(1500)),
                 "节流窗外的活跃请求应把 expiresAt 续到约 now+1800s");
     }

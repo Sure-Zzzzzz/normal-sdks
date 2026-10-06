@@ -109,7 +109,7 @@ class IamAdminUserApplicationAuthorizationApiTest {
         adminRequest.setPassword("Admin@1234");
         adminRequest.setDisplayName(adminUsername);
         adminUserId = userService.createUser(adminRequest).getId();
-        adminSubjectId = userRepository.findById(adminUserId).orElseThrow().getSubjectId();
+        adminSubjectId = userRepository.findById(adminUserId).get().getSubjectId();
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         roleService.assignRole(adminUserId, adminRole.getId());
         adminSession = loginSession(adminUsername);

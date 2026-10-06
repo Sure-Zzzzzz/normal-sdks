@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.1`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.2`，变更与升级要求见 [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md)。
+
+`1.3.2` 增加服务主体受委托角色 API：外部系统通过 AKSK 身份维护自己创建的普通角色、固定应用规则和批准根子树内的部门挂载；商业授权、期限和产品资格仍由外部系统管理。既有身份协议、事件类型和普通角色行为保持兼容。
 
 > **1.3.1 要点**：平台管理员特权域收窄至内置应用（模块默认仅 `iam`，部署方可经引导配置追加）——非内置（业务）应用不再走 iam_admin 特权兜底（门户可见性、令牌投影、资源校验一律要求真实授权行）；无清单应用的"仅准入"隐性通道同步收窄；内置应用行为不变。详见 [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)。
 
@@ -23,6 +25,45 @@
 权威 API Contract 位于 `sdk/auth/iam/server/contract/`；各前端仓库的 release 必须声明兼容的 Server 与 Contract 版本范围。
 
 ## 特性总览
+
+### 受委托角色接入
+
+适用于外部服务自动维护某个产品应用的部门角色。受委托角色仍是普通 IAM 角色，但管理权固定授予创建它的服务主体，并限定在一个非内置应用和一个部门根内；IAM 不存放商业授权、有效期或机器绑定规则，也不直接判断产品资格。
+
+调用方使用可信 AKSK `SERVICE` 主体（推荐 AKP），由宿主在公共资源链接管 `/iam/api/**` 并在线回源验证。管理员在 AKSK 配置该主体对 `applicationCode=iam` 的准入、下表 API 及完整 DATA 授权；升级不会自动给旧 AKP 新权限。新端点不接收管理员 Cookie、IAM 登录令牌或 HUMAN 主体。
+
+| API 码 | DATA resource / actions / dimensions |
+| --- | --- |
+| `iam:open-role:create:api`、`iam:open-role:read:api` | `iam:open-role` / `create,read` / `applicationId,rootDepartmentId` |
+| `iam:open-role-rule:read:api`、`iam:open-role-rule:write:api` | `iam:open-role-rule` / `read,write` / `applicationId,rootDepartmentId,openRoleId` |
+| `iam:open-department-role:read:api`、`iam:open-department-role:write:api` | `iam:open-department-role` / `read,write` / `applicationId,rootDepartmentId,openRoleId,departmentId` |
+| `iam:open-directory:read:api` | `iam:open-directory` / `read` / `rootDepartmentId` |
+| `iam:open-application:read:api` | `iam:open-application` / `read` / `applicationId` |
+
+按批准应用和根配置 `IN` 条件。同一 grant 内所有条件同时满足，不同 grant 为或；未指定合法维度表示该项不额外约束，`all=true` 也不绕过所有权、非内置应用或固定范围。规则写是批准范围内的权限治理权，不会自动限制为调用方运行权限的子集。这里的 DATA 授权决定服务可以管理哪些 IAM 对象；规则中的 `dataGrantTemplate` 则是目标产品应用授予用户的数据权限，两者不能互相替代。
+
+1. GET `/iam/api/target-applications/{applicationId}` 与 `/permission-manifest` 核对非内置目标及当前清单；GET `/iam/api/organization-directories/{rootDepartmentId}/departments` 获取完整根子树。目录最大 4096 节点、64 层，超过预算 422，不返回截断成功。
+2. POST `/iam/api/roles` 提交 `externalId` UUID、正数 JSON 整数 `applicationId/rootDepartmentId`、1 至 128 字符 `name`、最大 255 字符 `description`。服务生成 `openRoleId` 和角色 code，固定主体、应用和根；首次 201，同键同内容回读当前角色 200，不重置规则。不同内容或删除墓碑 409。
+3. GET `/iam/api/roles`（可按应用、根或 externalId 分页）或 `/{openRoleId}` 回读事实；详情提供强 ETag（HTTP 版本标记），例如 `"open-role:20000000-0000-4000-8000-000000000001:2"`。
+4. PUT `/iam/api/roles/{openRoleId}/authorization-rules/{applicationId}` 携带 If-Match 及 `manifestVersion/manifestDigest/pagePermissions/apiPermissions/dataGrantTemplate`。DELETE 同地址清规则。数组必传，可为空；DATA null 表示无数据授权。
+5. PUT/DELETE `/iam/api/departments/{departmentId}/roles/{openRoleId}` 携带 If-Match 操作单条关系（PUT 空请求体）；GET `/iam/api/roles/{openRoleId}/departments` 查询关系和同事务 revision，响应为 `Cache-Control: no-store`、不提供 ETag，每次返回当前完整分页，不按 If-None-Match 返回 304。写入版本标记从角色详情读取。成员仅继承直属部门角色，整棵子树需要逐部门挂载。移出或消失的部门仍可清理本角色残留关系。
+6. GET `/iam/api/organization-directories/{rootDepartmentId}/members/{subjectId}` 查询最小成员事实。不存在或不在批准根内统一 404，应视为没有资格证据。
+
+创建编号及 `manifestVersion` 只接受正数 JSON 整数，范围为有符号 64 位整数；小数、指数形式、数字字符串、布尔值、null 和溢出均返回 400，不做截断或类型转换，也不改变宿主其他接口的 JSON 解析规则。
+
+修改缺 If-Match 返回 428，旧版本 412，非法标记 400；不接受通配符、弱标记或列表。清单变化返回 409。发生超时先回读效果并重新计算差异，不能换新 ETag 后盲重发旧内容。无实际变化不递增 revision、不重复投影或发变更事件。角色版本用于防止并发写覆盖，不代表组织或调用方 DATA 授权的版本；部门关系需要读取当前完整响应，不能仅凭角色版本认定组织范围未变化。新 JSON 请求预算 1 MiB；拒绝以 HTTP 状态表达，错误体只有安全 `message/timestamp/requestId`。
+
+管理角色详情、总列表、分页、部门角色及用户有效角色均包含只读 `openRoleBinding`（UUID、固定应用/根、revision、state），普通角色为 null。列表用于识别委托边界，修改前读取当前角色详情取得版本。管理台修改这类角色也必须携带同一强 If-Match，并遵守固定范围；禁止个人直授、传统全局权限及跨应用规则。删除由管理台完成并保留委托墓碑，机器不提供角色硬删除。应用/根仍有 ACTIVE 委托引用时删除返回 409；有 ACTIVE 引用的目标应用也不能改为内置应用。
+
+归属、revision、目录、成员资格及分页不使用缓存。既有 OAuth2 缓存不改变；在线治理宿主关闭 AKSK introspect 本地缓存及 fallback，资源端不读缓存不代表 AKSK Server 本身零撤权延迟。角色收缩不保证关闭用户 admitted，产品资格和商业有效期仍由消费方实时判断。数据库清理、恢复或环境替换后，消费方须暂停自动联动，重新核对主体、应用、根及三权，不能依据数字编号重绑。
+
+### 受委托角色审计
+
+本版复用 `AdminActionEvent` 与既有动作类型，不新增事件族。角色创建、改名、规则替换或清除、部门挂载或撤销、管理员删除复用已有审计发布入口。`detail` 为 JSON，按操作携带 `operation/requestId/openRoleId/applicationId/rootDepartmentId/revision/actorSourceId/actorSubjectType/actorSubjectId`，部门关系变化另带 `departmentId`；不含角色展示资料、完整权限文档或认证材料。操作者来自已验证服务身份或管理员会话，不以角色所有者冒充实际操作者。
+
+宿主需要消费审计时，显式引入 `simple-iam-server-audit-listener-starter:1.0.0`。该已发布监听器可继续接收事件并把 `detail` 交给 `ServerIamAuditHandler`，无需为本版升级监听器；它不是版本检测或自动升级机制。事务内的变更在提交后消费，回滚、创建重放及无变化写入不产生新的成功变更审计。
+
+默认日志不输出 `detail`，因此默认日志不等于完整审计留存。需要落库或转发时，由宿主提供 Handler；提交后消费为尽力执行，不承诺可靠投递、失败重试或恰好一次处理。
 
 ### 身份认证
 
@@ -74,14 +115,15 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.1"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.2"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
 }
 ```
 
-- Spring Boot **2.7.x**（验证档 2.7.9）、Spring Security 5.7.x、Spring Authorization Server 0.4.1；源码兼容 Java 8；不支持 Spring Boot 3.x
+- 固定运行时基线为 Spring Boot **2.7.9**、Spring Authorization Server **0.4.1**、Java **8**；不支持 Spring Boot 3.x，不声明其他 Spring Boot 版本的 Server 运行时兼容性
+- Starter 通过 `api` 传递正式制品 `simple-iam-server-core:1.3.2`，身份协议基座仍为 `simple-iam-core:1.1.0`；不要将 Server Core 强制降回旧版
 - 独立 MySQL 数据库（`mysql-connector-java` 已随模块 runtimeOnly 引入），字符集 `utf8mb4`
 - Redis 6+（会话 / 缓存 / 限流 / 锁 / SSE 广播 / OAuth2 授权缓存共用）
 - RSA 公私钥对；JWE 模式另需 AES-256 加密密钥
@@ -89,7 +131,18 @@ dependencies {
 
 数据库初始化：在**全新环境**执行 [schema.sql](docs/schema.sql)。该脚本包含建表前置清理，不能直接用于已有数据环境。
 
-### 数据表清单（27 张 = 3 张 SAS 标准表 + 24 张 `iam_*` 业务表）
+### 从 1.3.1 升级
+
+1. 暂停写请求并完成可恢复备份，确认目标 InnoDB 支持 3072 字节索引预算及 `DYNAMIC` 行格式。
+2. 在目标库执行一次 [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql)。脚本仅创建 `iam_open_role_binding`，不修改旧角色或授权，不按名称接管人工角色；不是可反复执行的初始化脚本。已有数据环境不得执行 `schema.sql`。
+3. 将 Starter 升至 `1.3.2`，由其消费 Server Core `1.3.2`。开启启动引导时，增量合并 IAM 应用清单中的八个新 API 码和五个 DATA 资源，并补齐受管内置 `iam_admin` 的已有规则；数据库锁协调多实例，保留定制声明，重复核对不持续递增版本。同名 DATA 动作或维度不兼容时启动失败，不覆盖。
+4. 引导关闭时，先确认内置 `iam` 应用、权限清单和管理员规则已存在，再由宿主显式调用 `IamOpenRoleManifestUpgradeService.upgrade()`；该服务不会创建缺失的应用或清单。无论采用哪种方式，都须核对实际清单及规则后再配置调用方。
+5. 在 AKSK 管理侧显式授予服务主体准入、精确 API 与 DATA 范围。原 `iam:user:api`、`iam:department:api` 不包含新管理权，旧 AKP 不自动扩权。受委托角色治理宿主关闭 introspect 本地缓存和 fallback（旧结果回退）。AKSK 验证组件默认自动装配且三件套缺一即启动失败；暂不接管的宿主须显式 `io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled: false`。
+6. 管理端消费 `openRoleBinding`，对受委托角色改名、改规则、挂载或删除提交强 If-Match；普通角色仍按原方式调用。消费方回读角色、规则、目录和成员事实后再开启自动联动。
+
+角色删除保留 `DELETED` 墓碑，防止同一创建键重新生成授权；不能通过删除委托表进行降版。需要回退时，停写并恢复完整升级前备份。数据库清理、恢复或环境替换后，消费方重新确认身份、目标应用、部门根和三权，不凭复用的数字编号自动续接旧状态。
+
+### 数据表清单（31 张 = 3 张 SAS 标准表 + 28 张 `iam_*` 业务表）
 
 | 表 | 用途 |
 |---|---|
@@ -98,6 +151,7 @@ dependencies {
 | `oauth2_authorization_consent` | SAS 标准：scope 确认记录 |
 | `iam_user` | 用户（含 `identity_source` / `external_id` 外部身份绑定、`must_change_password` 须改密标记） |
 | `iam_role` / `iam_permission` | 角色 / 权限（内置项受保护） |
+| `iam_open_role_binding` | 服务主体的角色委托边界：稳定角色 UUID、归属三元组、创建幂等键、固定应用与部门根、修改版本和删除墓碑；不是商业授权表 |
 | `iam_user_role` / `iam_role_permission` | 用户-角色、角色-权限关系 |
 | `iam_department` / `iam_department_role` / `iam_user_group` / `iam_user_group_member` | 部门、部门-角色、协作组及成员 |
 | `iam_session` | IAM 会话（双时钟、状态） |
@@ -106,9 +160,12 @@ dependencies {
 | `iam_authorize_context` | 授权交易状态机（state / PKCE 哈希、会话绑定） |
 | `iam_consent` | Consent 投影 |
 | `iam_trusted_application` | 可信应用 |
+| `iam_trusted_application_cleanup_operation` | 可信应用异步删除操作、租约、清理进度及失败状态 |
 | `iam_application_permission_manifest` | 可信应用权限清单（申报制，投影与规则的码空间事实源） |
 | `iam_role_authorization_rule` | 角色-应用授权规则（投影的计算源） |
 | `iam_application_authorization` | 用户-应用授权投影 |
+| `iam_application_authorization_state` | 应用授权纪元、所属人授权继承状态及投影重算屏障 |
+| `iam_owner_authorization_change_log` | 所属人授权变更顺序及最终状态快照，供协作方增量读取 |
 | `iam_resource_verification_client` | 资源验证客户端 |
 | `iam_trusted_application_portal` / `iam_trusted_application_menu` / `iam_portal_setting` | Portal 集成、应用菜单与全局登录首页单例 |
 | `iam_message` | 站内信 |
@@ -225,7 +282,7 @@ dependencies {
 
 ### 开放 API 端点（`/iam/api/**`，公共资源层链）
 
-主体为 AKSK 凭证（外部业务系统组织与人员同步），Bearer 鉴权 + 端点级 API 码 + DATA 范围双闸。接入契约与 AKSK 侧三权配置见 [开放 API 契约](../contract/openapi/simple-iam-open-api.openapi.yaml)。
+主体为 AKSK 凭证（外部业务系统组织与人员同步、受委托角色治理），Bearer 鉴权 + 端点级 API 码 + 适用的数据权限检查。新受委托角色端点额外要求来源为 AKSK 的 `SERVICE` 主体并完整评估 DATA；既有用户、部门接口保持原行为。接入契约与 AKSK 侧三权配置见 [开放 API 契约](../contract/openapi/simple-iam-open-api.openapi.yaml)。
 
 用户族（API 码 `iam:user:api`，DATA resource=`iam:user`——读=部门范围与请求条件求交、写=目标部门完整落在授权范围，失败关闭 403）：
 
@@ -243,6 +300,21 @@ dependencies {
 |---|---|
 | `GET /iam/api/departments` | 全量平铺列表（含 `fullPath`，外部自行重建树） |
 | `GET / POST /iam/api/departments`、`GET / PUT / DELETE /iam/api/departments/{departmentId}` | 部门详情 / CRUD（删除走既有级联规则） |
+
+受委托角色与只读事实（八个精确 API 码、五个 DATA 资源，权限表见上文「受委托角色接入」）：
+
+| 端点 | 说明 |
+|---|---|
+| `POST /iam/api/roles` | 创建自有受委托角色；首次 201，同键同内容重放 200，均返回 Location 与 ETag |
+| `GET /iam/api/roles`、`GET /iam/api/roles/{openRoleId}` | 自有且在 DATA 范围内的角色分页 / 详情；详情返回 ETag |
+| `GET / PUT / DELETE /iam/api/roles/{openRoleId}/authorization-rules/{applicationId}` | 固定应用规则读取 / 整体替换 / 清除；PUT 返回 200，DELETE 返回 204，写操作须带 If-Match |
+| `GET /iam/api/roles/{openRoleId}/departments` | 当前批准范围内的角色-部门关系分页及角色版本 |
+| `PUT / DELETE /iam/api/departments/{departmentId}/roles/{openRoleId}` | 单条部门挂载 / 撤销，返回 204；须带 If-Match，PUT 请求体必须为空 |
+| `GET /iam/api/organization-directories/{rootDepartmentId}/departments` | 完整部门根子树，超过节点 / 深度预算返回 422，环或根的悬空父链等结构冲突返回 409，不返回截断成功 |
+| `GET /iam/api/organization-directories/{rootDepartmentId}/members/{subjectId}` | 最小成员资格事实；不存在或不在根内统一 404 |
+| `GET /iam/api/target-applications/{applicationId}`、`GET /iam/api/target-applications/{applicationId}/permission-manifest` | 批准的非内置应用事实及当前权限清单版本 / 摘要 |
+
+服务主体没有角色删除、改名、个人直授或传统全局权限管理入口。管理员仍在管理面处理受委托角色，但必须遵守同一固定范围和条件版本，不能借旧接口跨应用授权。
 
 ### 资源验证端点（Order 2 链，验证客户端 Basic）
 
@@ -299,6 +371,8 @@ AKSK 管理台作为统一应用门户中的业务应用时，IAM 侧登记一�
 | 5 | 资源层 protected-paths 覆盖 `/iam/api/**` | IAM 宿主 | 403（落会话链被拒） |
 | 6 | introspect 回源 AKSK Server + 验证客户端凭据 | IAM 宿主 | 401 |
 
+上述表中的旧 API 码及 `iam:user` DATA 用于组织与人员同步。受委托角色治理须改为逐项配置上文的八个精确 API 码及五个 DATA 资源，不可用旧码替代；`SERVICE` 主体的身份和目标授权范围均须核对。
+
 IAM 宿主侧两步的配置：
 
 1. **配置公共资源层接管**（宿主 application.yml）：
@@ -331,7 +405,7 @@ io:
                   client-id: ${AKSK_INTROSPECT_CLIENT_ID:}      # 普通AKSK客户端的 AKP/AKS
                   client-secret: ${AKSK_INTROSPECT_CLIENT_SECRET:}
                   local-cache:
-                    enabled: true          # 同步场景可开，吊销延迟=缓存 TTL 窗口
+                    enabled: false         # 受委托角色治理关闭；仅普通同步场景可按吊销延迟要求开启
                     fallback:
                       enabled: false       # 用户与组织管理属高敏：禁 stale fallback
 ```
@@ -353,9 +427,9 @@ io:
 
 Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/application-order` 维护。更新必须提交读取时的 `version` 和全部 Portal 集成 ID；冲突返回 `409` 后重读再调整。服务端按该顺序返回当前用户可访问的应用，前端不得按编码或名称二次排序。OAuth2 Consent 页面会同时展示可信应用名称与内置图标；没有归属的历史客户端回退为客户端名称和默认图标。
 
-## 当前交付边界
+## 能力边界
 
-后端能力已完成实现与真实 MySQL/Redis 模块测试验证；Vue 登录页、Consent 页、代理路由、浏览器回调、Token 换取和 `/userinfo` 已完成双实例真链路端到端验收（登录、首登强制改密、授权码 + PKCE、refresh 轮换与重放族吊销全链走通）。
+本模块提供身份、角色、授权投影及 JSON API；浏览器页面和代理由 Web 与宿主承载，业务应用负责消费授权结果。受委托角色 API 不替代产品资格判断、商业有效期检查或离线授权验证，模块测试也不替代消费方的真实 AKSK 通信与部署联调。
 
 **预留骨架（开关或表结构在、实现未完全接线）**：
 
@@ -371,9 +445,13 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 
 | 文档 | 内容 |
 |---|---|
-| [登录认证与会话](docs/领域文档/登录认证与会话.md) | 本地登录、验证码与失败锁定、LDAP / OIDC 外部身份、身份归一、会话生命周期、登出与全端吊销 |
-| [OAuth2与令牌验证](docs/领域文档/OAuth2与令牌验证.md) | 授权码 + PKCE + Consent 完整流程、Token 签发与 claims、资源端验证、业务应用接入规则 |
-| [权限与授权投影](docs/领域文档/权限与授权投影.md) | 权限清单 → 角色规则 → 用户投影三层结构、触发事件、三种 JSON 形态、级联与手工授权语义 |
-| [管理台与站内信](docs/领域文档/管理台与站内信.md) | 管理面统一操作模式、可信应用族特殊点、SSE 站内信实时推送 |
-| [配置与多实例部署](docs/领域文档/配置与多实例部署.md) | 全量配置参考、配套组件接线、多实例部署、启动引导恢复码、审计事件流、敏感信息边界 |
+| [登录认证与会话](docs/领域文档/登录认证与会话.md) | 人员 / 服务认证边界、本地与外部登录、会话生命周期、登出与全端吊销 |
+| [OAuth2与令牌验证](docs/领域文档/OAuth2与令牌验证.md) | 授权码与 Token 签发、人员资源验证、AKSK 服务治理及内部 reader 职责区分 |
+| [权限与授权投影](docs/领域文档/权限与授权投影.md) | 清单 → 规则 → 投影、受委托角色归属与版本、直属部门继承、完整 DATA 及商业资格边界 |
+| [管理台与站内信](docs/领域文档/管理台与站内信.md) | 委托摘要与共同条件写、应用异步删除、管理审计及 SSE 站内信 |
+| [配置与多实例部署](docs/领域文档/配置与多实例部署.md) | 服务治理部署、增量引导核验、缓存边界、全量配置、多实例与审计消费 |
+| [Portal默认入口与沉浸页路由](docs/领域文档/Portal默认入口与沉浸页路由.md) | 默认入口、登录首页、服务端应用顺序、沉浸展示与权限边界 |
+| [升级说明](docs/migration/README.md) | 各版本数据库前提、增量迁移及回退要求 |
 | [schema.sql](docs/schema.sql) | 全新环境数据库初始化脚本 |
+| [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql) | 从 1.3.1 升级的增量建表脚本，不重置旧数据 |
+| [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |

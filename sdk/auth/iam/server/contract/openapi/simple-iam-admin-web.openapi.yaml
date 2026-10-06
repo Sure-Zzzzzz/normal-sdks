@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Admin API
-  version: 1.3.0
+  version: 1.3.2
   description: IAM 管理端 API。所有接口要求已认证用户具备 ROLE_iam_admin；写操作还要求当前浏览器会话的 CSRF Token。
 servers:
   - url: /
@@ -233,19 +233,19 @@ paths:
       operationId: listDepartmentRoles
       responses: { '200': { $ref: '#/components/responses/RoleList' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
   /iam/admin/departments/{departmentId}/roles/{roleId}:
-    parameters: [ { $ref: '#/components/parameters/DepartmentId' }, { $ref: '#/components/parameters/RoleId' } ]
+    parameters: [ { $ref: '#/components/parameters/DepartmentId' }, { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/OpenRoleIfMatch' } ]
     post:
       summary: 给部门挂载角色
       description: 部门下全体成员（个人直接角色之外）自动获得该角色；重复挂载幂等。departmentId 不存在返回 404；roleId 不存在返回 400（与其余角色类接口的 404 语义不一致，属已知历史遗留）。
       operationId: assignDepartmentRole
       security: [ { iamSession: [], csrfToken: [] } ]
-      responses: { '200': { description: 已挂载 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '200': { description: 已挂载 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
     delete:
       summary: 撤销部门挂载的角色
       description: 撤销 iam_admin 角色受部门级最后管理员保护：撤销后若系统再无任何 active 状态的有效管理员（个人直接绑定 ∪ 其余部门挂载），返回 409。
       operationId: revokeDepartmentRole
       security: [ { iamSession: [], csrfToken: [] } ]
-      responses: { '204': { description: 已撤销 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' } }
+      responses: { '204': { description: 已撤销 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
   /iam/admin/user-groups:
     get:
       summary: 获取全部协作组
@@ -344,22 +344,24 @@ paths:
       parameters: [ { $ref: '#/components/parameters/Keyword' }, { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
       responses: { '200': { $ref: '#/components/responses/RolePage' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
   /iam/admin/roles/{roleId}:
-    parameters: [ { $ref: '#/components/parameters/RoleId' } ]
+    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/OpenRoleIfMatch' } ]
     get:
       summary: 获取角色
       operationId: getRole
       responses: { '200': { $ref: '#/components/responses/Role' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
     put:
       summary: 更新角色
+      description: 受委托角色必须携带同 UUID/revision 强 If-Match，缺失 428、过旧 412、语法非法 400；无变化不递增。旧普通角色不新增条件要求。
       operationId: updateRole
       security: [ { iamSession: [], csrfToken: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateRoleRequest' } } } }
-      responses: { '200': { $ref: '#/components/responses/Role' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '200': { $ref: '#/components/responses/Role' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
     delete:
       summary: 删除角色
+      description: 受委托角色必须携带同 UUID/revision 强 If-Match，缺失 428、过旧 412；删除留 DELETED 委托墓碑。旧普通角色不新增条件要求。
       operationId: deleteRole
       security: [ { iamSession: [], csrfToken: [] } ]
-      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '204': { description: 已删除 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
   /iam/admin/roles/{roleId}/permissions:
     parameters: [ { $ref: '#/components/parameters/RoleId' } ]
     get:
@@ -393,7 +395,7 @@ paths:
       operationId: listRoleDepartments
       responses: { '200': { $ref: '#/components/responses/DepartmentList' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
   /iam/admin/roles/{roleId}/authorization-rules/{applicationId}:
-    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/ApplicationId' } ]
+    parameters: [ { $ref: '#/components/parameters/RoleId' }, { $ref: '#/components/parameters/ApplicationId' }, { $ref: '#/components/parameters/OpenRoleIfMatch' } ]
     get:
       summary: 获取角色对应用的应用授权规则
       description: 尚未配置规则返回 404，属合法空态，调用方按空规则呈现编辑器。
@@ -401,17 +403,17 @@ paths:
       responses: { '200': { $ref: '#/components/responses/RoleAuthorizationRule' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
     put:
       summary: 保存角色对应用的应用授权规则
-      description: 两个数组必传（可为空数组，缺字段 400）；权限码须在应用权限清单范围内（越界 400）；保存后触发持有该角色全部用户的授权投影重算。
+      description: 两个数组必传（可为空数组，缺字段 400）；权限码须在应用权限清单范围内（越界 400）。受委托角色只能操作固定应用，必须携带同 UUID/revision 强 If-Match，缺失 428、过旧 412、跨应用 403；实际变化才重算投影和递增版本。
       operationId: putRoleAuthorizationRule
       security: [ { iamSession: [], csrfToken: [] } ]
       requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PutRoleAuthorizationRuleRequest' } } } }
-      responses: { '200': { $ref: '#/components/responses/RoleAuthorizationRule' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '200': { $ref: '#/components/responses/RoleAuthorizationRule' }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
     delete:
       summary: 删除角色对应用的应用授权规则
-      description: 幂等，规则不存在也返回 204；删除后触发持有该角色全部用户的授权投影重算。
+      description: 幂等，规则不存在也返回 204；受委托角色仍检查固定应用及强 If-Match（缺失 428、过旧 412），无变化不重算或递增。
       operationId: deleteRoleAuthorizationRule
       security: [ { iamSession: [], csrfToken: [] } ]
-      responses: { '204': { description: 已删除 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+      responses: { '204': { description: 已删除 }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '409': { $ref: '#/components/responses/Conflict' }, '412': { $ref: '#/components/responses/PreconditionFailed' }, '428': { $ref: '#/components/responses/PreconditionRequired' } }
   /iam/admin/permissions:
     get:
       summary: 获取全部权限
@@ -667,6 +669,12 @@ components:
       name: X-CSRF-TOKEN
       description: 先调用 /iam/web/auth/csrf 获取实际 headerName 与 token。
   parameters:
+    OpenRoleIfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: '只对受委托角色写操作必需。先读角色详情 openRoleBinding，构造强标记 "open-role:<openRoleId>:<revision>"；不允许 *、弱标记或列表。缺失 428、旧版本 412。挂载还校验固定根子树；清理允许目标迁出或消失。普通角色和 GET 不要求此头。'
+      schema: { type: string }
     SubjectId: { name: subjectId, in: path, required: true, description: 公开主体 ID, schema: { type: string, maxLength: 64 } }
     DepartmentId: { name: departmentId, in: path, required: true, schema: { type: integer, format: int64 } }
     DepartmentIdQuery: { name: departmentId, in: query, required: false, schema: { type: integer, format: int64 } }
@@ -691,6 +699,8 @@ components:
     BadRequest: { description: 请求无效 }
     NotFound: { description: 资源不存在 }
     Conflict: { description: 资源状态或唯一约束冲突 }
+    PreconditionFailed: { description: 受委托角色的强条件版本已经变化 }
+    PreconditionRequired: { description: 受委托角色写操作必须提供 If-Match }
     AdminUser: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminUserResponse' } } } }
     AdminUserList: { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/AdminUserResponse' } } } } }
     AdminUserPage: { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/AdminUserPage' } } } }
@@ -797,7 +807,18 @@ components:
       properties: { name: { type: string }, description: { type: string, nullable: true } }
     RoleResponse:
       type: object
-      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, builtIn: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, builtIn: { type: integer }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time }, openRoleBinding: { $ref: '#/components/schemas/OpenRoleBinding' } }
+    OpenRoleBinding:
+      type: object
+      nullable: true
+      readOnly: true
+      description: 角色详情、总列表、分页、部门角色及用户有效角色均返回固定委托边界；普通角色为 null。列表用于识别边界，写入前读取当前详情版本。不能通过请求更换归属、应用或根。
+      properties:
+        openRoleId: { type: string, format: uuid }
+        applicationId: { type: integer, format: int64 }
+        rootDepartmentId: { type: integer, format: int64 }
+        revision: { type: integer, format: int64 }
+        state: { type: string, enum: [ACTIVE, DELETED] }
     RoleSummaryResponse:
       type: object
       properties: { id: { type: integer, format: int64 }, code: { type: string }, name: { type: string }, description: { type: string, nullable: true }, builtIn: { type: integer }, source: { type: string, enum: [direct, department_inherited], description: '角色来源：direct 个人直接 / department_inherited 部门继承' } }

@@ -188,7 +188,7 @@ class IamMustChangePasswordEnforcementTest {
         IamUserEntity user = createUserWithClient();
 
         userService.resetPassword(user.getId(), FINAL_PASSWORD, "must-change-admin");
-        IamUserEntity afterReset = userRepository.findByUsername(username).orElseThrow();
+        IamUserEntity afterReset = userRepository.findByUsername(username).get();
         assertTrue(Boolean.TRUE.equals(afterReset.getMustChangePassword()), "管理员重置后必须重新置须改密标记（临时密码）");
         loginSessionCookie(FINAL_PASSWORD);
 

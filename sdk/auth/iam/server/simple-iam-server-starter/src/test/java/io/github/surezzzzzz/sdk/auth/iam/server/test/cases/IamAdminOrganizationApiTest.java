@@ -111,9 +111,8 @@ class IamAdminOrganizationApiTest {
     void cleanup() {
         for (Long userId : userIds) {
             messageRepository.findByRecipientUserIdOrderByCreatedAtDesc(userId).forEach(messageRepository::delete);
-            memberRepository.findByUserId(userId).forEach(memberRepository::delete);
-            userRoleRepository.findByUserId(userId).forEach(userRoleRepository::delete);
-            userRepository.deleteById(userId);
+            // 复用业务级联删除，不能仅清用户行和部分关系而遗漏应用投影。
+            userRepository.findById(userId).ifPresent(user -> userService.deleteUser(user.getId()));
         }
         for (Long groupId : groupIds) {
             memberRepository.findByGroupId(groupId).forEach(memberRepository::delete);

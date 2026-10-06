@@ -64,7 +64,7 @@ class IamExternalIdentityProvisionSubjectIdTest {
                 "JIT 开号必须当场分配主体ID");
         assertEquals("oidc", provisioned.getIdentitySource());
 
-        IamUserEntity reloaded = userRepository.findById(provisioned.getId()).orElseThrow();
+        IamUserEntity reloaded = userRepository.findById(provisioned.getId()).get();
         assertEquals(provisioned.getSubjectId(), reloaded.getSubjectId(), "主体ID必须已落库");
         log.info("✓ JIT 开号即有号：username={}, subjectId={}", username, provisioned.getSubjectId());
     }

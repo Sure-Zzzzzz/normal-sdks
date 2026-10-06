@@ -157,7 +157,7 @@ class IamAuthorizationProjectionScenarioTest {
     void roleAssignmentProjectsUnionAndShrinksOnRevoke() {
         putRule(roleAId, Collections.singletonList("proj:p1"), Collections.singletonList("proj:a1"));
 
-        assertTrue(authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isEmpty(),
+        assertFalse(authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isPresent(),
                 "分配角色前不应有投影行");
 
         roleService.assignRole(userId, roleAId);
@@ -192,7 +192,7 @@ class IamAuthorizationProjectionScenarioTest {
     @DisplayName("场景3：规则变更重算持有者投影，为无投影持有人新建，删除后收缩为空集")
     void ruleChangeRecomputesAndCreatesProjection() {
         roleService.assignRole(viewerId, roleCId);
-        assertTrue(authorizationRepository.findByUserIdAndApplicationId(viewerId, applicationId).isEmpty(),
+        assertFalse(authorizationRepository.findByUserIdAndApplicationId(viewerId, applicationId).isPresent(),
                 "角色无规则时分配角色不应创建投影");
 
         putRule(roleCId, Collections.singletonList("proj:p2"), Collections.<String>emptyList());
@@ -277,7 +277,7 @@ class IamAuthorizationProjectionScenarioTest {
         assertEquals(Long.valueOf(3L), projection.getAuthorizationVersion());
 
         projectionService.revokeApplicationAdmission(noRoleId, applicationId);
-        assertTrue(authorizationRepository.findByUserIdAndApplicationId(noRoleId, applicationId).isEmpty(),
+        assertFalse(authorizationRepository.findByUserIdAndApplicationId(noRoleId, applicationId).isPresent(),
                 "无投影时撤销为幂等无操作");
 
         log.info("场景1+5 准入授予 / 撤销语义断言完成：userId={}", userId);
@@ -317,7 +317,7 @@ class IamAuthorizationProjectionScenarioTest {
 
         assertTrue(ruleRepository.findByRoleIdIn(Collections.singletonList(roleAId)).isEmpty(),
                 "应用删除必须级联删除其授权规则");
-        assertTrue(authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isEmpty(),
+        assertFalse(authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isPresent(),
                 "应用删除必须级联删除授权投影行");
 
         log.info("应用删除级联断言完成：applicationId={}", applicationId);

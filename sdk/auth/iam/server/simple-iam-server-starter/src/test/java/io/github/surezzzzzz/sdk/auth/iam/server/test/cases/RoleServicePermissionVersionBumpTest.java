@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartm
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamEffectiveRoleResolver;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.extern.slf4j.Slf4j;
@@ -89,6 +90,9 @@ class RoleServicePermissionVersionBumpTest {
     @Mock
     private IamAuthorizationProjectionService projectionService;
 
+    @Mock
+    private IamOpenRoleMutationSupport openRoleSupport;
+
     @InjectMocks
     private IamRoleService roleService;
 
@@ -98,12 +102,12 @@ class RoleServicePermissionVersionBumpTest {
 
         roleService.assignRole(USER_ID, ROLE_ID);
 
-        verify(userRepository).bumpPermissionVersion(List.of(USER_ID));
+        verify(userRepository).bumpPermissionVersion(java.util.Arrays.asList(USER_ID));
     }
 
     @Test
     void shouldNotBumpOnIdempotentRoleAssignment() {
-        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of(binding(USER_ID)));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(java.util.Arrays.asList(binding(USER_ID)));
 
         roleService.assignRole(USER_ID, ROLE_ID);
 
@@ -113,11 +117,11 @@ class RoleServicePermissionVersionBumpTest {
     @Test
     void shouldBumpUserOnActualRoleRevocation() {
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(customRole()));
-        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(List.of(binding(USER_ID)));
+        when(userRoleRepository.findByUserId(USER_ID)).thenReturn(java.util.Arrays.asList(binding(USER_ID)));
 
         roleService.revokeRole(USER_ID, ROLE_ID);
 
-        verify(userRepository).bumpPermissionVersion(List.of(USER_ID));
+        verify(userRepository).bumpPermissionVersion(java.util.Arrays.asList(USER_ID));
     }
 
     @Test
@@ -139,14 +143,14 @@ class RoleServicePermissionVersionBumpTest {
 
         roleService.assignPermission(ROLE_ID, PERMISSION_ID);
 
-        verify(userRepository).bumpPermissionVersion(List.of(MEMBER_ONE, MEMBER_TWO));
+        verify(userRepository).bumpPermissionVersion(java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO));
     }
 
     @Test
     void shouldNotBumpOnIdempotentPermissionAssignment() {
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(customRole()));
         when(permissionRepository.findById(PERMISSION_ID)).thenReturn(Optional.of(permission()));
-        when(rolePermissionRepository.findByRoleId(ROLE_ID)).thenReturn(List.of(rolePermission()));
+        when(rolePermissionRepository.findByRoleId(ROLE_ID)).thenReturn(java.util.Arrays.asList(rolePermission()));
 
         roleService.assignPermission(ROLE_ID, PERMISSION_ID);
 
@@ -155,12 +159,12 @@ class RoleServicePermissionVersionBumpTest {
 
     @Test
     void shouldBumpAllRoleMembersOnActualPermissionRevocation() {
-        when(rolePermissionRepository.findByRoleId(ROLE_ID)).thenReturn(List.of(rolePermission()));
+        when(rolePermissionRepository.findByRoleId(ROLE_ID)).thenReturn(java.util.Arrays.asList(rolePermission()));
         mockRoleHolders();
 
         roleService.revokePermission(ROLE_ID, PERMISSION_ID);
 
-        verify(userRepository).bumpPermissionVersion(List.of(MEMBER_ONE, MEMBER_TWO));
+        verify(userRepository).bumpPermissionVersion(java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO));
     }
 
     @Test
@@ -177,12 +181,12 @@ class RoleServicePermissionVersionBumpTest {
         IamRoleEntity role = customRole();
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
         // 个人直接绑定仍走 iam_user_role 逐条清理；bump 目标集合以有效角色持有者（含部门继承）为准
-        when(userRoleRepository.findByRoleId(ROLE_ID)).thenReturn(List.of(binding(MEMBER_ONE), binding(MEMBER_TWO)));
+        when(userRoleRepository.findByRoleId(ROLE_ID)).thenReturn(java.util.Arrays.asList(binding(MEMBER_ONE), binding(MEMBER_TWO)));
         mockRoleHolders();
 
         roleService.deleteRole(ROLE_ID);
 
-        verify(userRepository).bumpPermissionVersion(List.of(MEMBER_ONE, MEMBER_TWO));
+        verify(userRepository).bumpPermissionVersion(java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO));
     }
 
     @Test
@@ -199,17 +203,17 @@ class RoleServicePermissionVersionBumpTest {
     @Test
     void shouldPageRoleMembersWithUserDetails() {
         when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(customRole()));
-        List<IamUserRoleEntity> bindings = List.of(binding(MEMBER_ONE), binding(MEMBER_TWO));
+        List<IamUserRoleEntity> bindings = java.util.Arrays.asList(binding(MEMBER_ONE), binding(MEMBER_TWO));
         Pageable pageable = PageRequest.of(0, 20);
         when(userRoleRepository.findByRoleId(eq(ROLE_ID), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(bindings, pageable, 2));
         when(userRepository.findAllById(anyCollection()))
-                .thenReturn(List.of(user(MEMBER_ONE, "member-one"), user(MEMBER_TWO, "member-two")));
+                .thenReturn(java.util.Arrays.asList(user(MEMBER_ONE, "member-one"), user(MEMBER_TWO, "member-two")));
 
         Page<IamUserEntity> members = roleService.listRoleMembers(ROLE_ID, 1, 20);
 
         assertEquals(2, members.getTotalElements());
-        assertEquals(List.of(MEMBER_ONE, MEMBER_TWO),
+        assertEquals(java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO),
                 members.getContent().stream().map(IamUserEntity::getId).collect(Collectors.toList()));
     }
 
@@ -228,11 +232,11 @@ class RoleServicePermissionVersionBumpTest {
 
     /**
      * stub 有效角色持有者（个人直接 ∪ 部门继承）为两位成员；LinkedHashSet 保序，
-     * 使 bump 目标集合 new ArrayList<>(set) 与 verify 的 List.of(MEMBER_ONE, MEMBER_TWO) 顺序一致
+     * 使 bump 目标集合 new ArrayList<>(set) 与 verify 的 java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO) 顺序一致
      */
     private void mockRoleHolders() {
         when(effectiveRoleResolver.resolveUserIdsByRoleId(ROLE_ID))
-                .thenReturn(new LinkedHashSet<>(List.of(MEMBER_ONE, MEMBER_TWO)));
+                .thenReturn(new LinkedHashSet<>(java.util.Arrays.asList(MEMBER_ONE, MEMBER_TWO)));
     }
 
     private IamRoleEntity customRole() {

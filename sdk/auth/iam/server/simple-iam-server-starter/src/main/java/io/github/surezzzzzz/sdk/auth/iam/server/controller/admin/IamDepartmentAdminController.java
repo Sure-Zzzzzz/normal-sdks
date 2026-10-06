@@ -8,9 +8,11 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.UpdateDep
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.response.DepartmentResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.response.AdminPageResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -31,6 +33,7 @@ import java.util.stream.Collectors;
 @RequestMapping("/iam/admin")
 @RequiredArgsConstructor
 public class IamDepartmentAdminController {
+    private final IamOpenRoleMutationSupport openRoleSupport;
 
     private final IamDepartmentService departmentService;
     private final IamRoleService roleService;
@@ -105,9 +108,7 @@ public class IamDepartmentAdminController {
     @GetMapping("/departments/{departmentId}/roles")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_API + "')")
     public ResponseEntity<List<RoleResponse>> listDepartmentRoles(@PathVariable Long departmentId) {
-        return ResponseEntity.ok(roleService.getDepartmentRoles(departmentId).stream()
-                .map(RoleResponse::from)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(roleService.toResponses(roleService.getDepartmentRoles(departmentId)));
     }
 
     /**
@@ -116,8 +117,12 @@ public class IamDepartmentAdminController {
     @PostMapping("/departments/{departmentId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_API + "')")
     public ResponseEntity<Void> assignDepartmentRole(@PathVariable Long departmentId,
-                                                     @PathVariable Long roleId) {
-        roleService.assignDepartmentRole(departmentId, roleId);
+                                                     @PathVariable Long roleId,
+                                                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        openRoleSupport.adminMutation(roleId, ifMatch, () -> {
+            roleService.assignDepartmentRole(departmentId, roleId);
+            return null;
+        });
         return ResponseEntity.ok().build();
     }
 
@@ -127,8 +132,12 @@ public class IamDepartmentAdminController {
     @DeleteMapping("/departments/{departmentId}/roles/{roleId}")
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_DEPARTMENT_API + "')")
     public ResponseEntity<Void> revokeDepartmentRole(@PathVariable Long departmentId,
-                                                     @PathVariable Long roleId) {
-        roleService.revokeDepartmentRole(departmentId, roleId);
+                                                     @PathVariable Long roleId,
+                                                     @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        openRoleSupport.adminMutation(roleId, ifMatch, () -> {
+            roleService.revokeDepartmentRole(departmentId, roleId);
+            return null;
+        });
         return ResponseEntity.noContent().build();
     }
 

@@ -663,7 +663,7 @@ class IamPortalApplicationServiceTest {
         client.setClientType("PUBLIC");
         client.setRequireConsent(false);
         client.setRedirectUris(Collections.singletonList("https://" + code + ".example.test/callback"));
-        client.setScopes(List.of("openid", "profile"));
+        client.setScopes(java.util.Arrays.asList("openid", "profile"));
         client.setGrantTypes(Collections.singletonList(AuthorizationGrantType.AUTHORIZATION_CODE.getValue()));
         client.setAuthenticationMethods(Collections.singletonList("none"));
 

@@ -5,8 +5,8 @@ dependencies {
     api 'io.github.sure-zzzzzz:simple-iam-core:1.1.0'
     // 中立协作协议（owner-authorization）：reader 出入口的响应模型单一事实源。
     api 'io.github.sure-zzzzzz:simple-owner-authorization-collaboration-core:1.0.0'
-    // IAM Server 域契约：内部路径常量中性化与 subjectId 契约。
-    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.3.1'
+    // IAM Server 域契约：使用正式制品消费受委托角色常量与既有事件契约。
+    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.3.2'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     // 验证码适配器运行时装配生效即可，桥接类型不出现在公开 API
     implementation 'io.github.sure-zzzzzz:simple-iam-captcha-adapter-starter:1.0.0'
@@ -51,6 +51,10 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    // 真实 AKP 回源只由测试宿主外插正式 Provider，不改变生产模块的聚散依赖。
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
+    // 旧已发布监听制品与本版事件组合，不引用审计模块的在途源码。
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-server-audit-listener-starter:1.0.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'

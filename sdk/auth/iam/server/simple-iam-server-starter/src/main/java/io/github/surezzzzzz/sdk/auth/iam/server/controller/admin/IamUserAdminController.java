@@ -36,7 +36,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 管理台用户域 API：用户 CRUD、启禁用、密码重置、外部身份预绑定与角色分配
@@ -234,9 +233,7 @@ public class IamUserAdminController {
     @PreAuthorize("hasAuthority('" + SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API + "')")
     public ResponseEntity<List<RoleResponse>> getUserRoles(@PathVariable String subjectId) {
         Long userId = userService.getBySubjectId(subjectId).getId();
-        return ResponseEntity.ok(roleService.getUserRoles(userId).stream()
-                .map(RoleResponse::from)
-                .collect(Collectors.toList()));
+        return ResponseEntity.ok(roleService.toResponses(roleService.getUserRoles(userId)));
     }
 
     /**

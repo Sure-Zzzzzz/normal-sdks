@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartm
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamEffectiveRoleResolver;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import lombok.extern.slf4j.Slf4j;
@@ -79,6 +80,9 @@ class RoleServiceLastAdminProtectionTest {
     @Mock
     private IamAuthorizationProjectionService projectionService;
 
+    @Mock
+    private IamOpenRoleMutationSupport openRoleSupport;
+
     @InjectMocks
     private IamRoleService roleService;
 
@@ -134,7 +138,7 @@ class RoleServiceLastAdminProtectionTest {
         normalRole.setId(NORMAL_ROLE_ID);
         normalRole.setCode("viewer");
         when(roleRepository.findById(NORMAL_ROLE_ID)).thenReturn(Optional.of(normalRole));
-        when(userRoleRepository.findByUserId(TARGET_USER_ID)).thenReturn(List.of(binding(TARGET_USER_ID)));
+        when(userRoleRepository.findByUserId(TARGET_USER_ID)).thenReturn(java.util.Arrays.asList(binding(TARGET_USER_ID)));
 
         assertDoesNotThrow(() -> roleService.revokeRole(TARGET_USER_ID, NORMAL_ROLE_ID));
         verify(userRoleRepository).deleteByUserIdAndRoleId(TARGET_USER_ID, NORMAL_ROLE_ID);
@@ -157,7 +161,7 @@ class RoleServiceLastAdminProtectionTest {
     }
 
     private void mockTargetHoldingAdminRole() {
-        when(userRoleRepository.findByUserId(TARGET_USER_ID)).thenReturn(List.of(binding(TARGET_USER_ID)));
+        when(userRoleRepository.findByUserId(TARGET_USER_ID)).thenReturn(java.util.Arrays.asList(binding(TARGET_USER_ID)));
     }
 
     private IamUserRoleEntity binding(Long userId) {

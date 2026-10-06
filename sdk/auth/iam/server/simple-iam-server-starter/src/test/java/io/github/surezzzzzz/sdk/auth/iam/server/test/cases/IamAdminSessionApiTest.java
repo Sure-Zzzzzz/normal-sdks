@@ -83,7 +83,8 @@ class IamAdminSessionApiTest {
             sessionRepository.findById(sessionId).ifPresent(sessionRepository::delete);
         }
         for (Long userId : userIds) {
-            userRepository.findById(userId).ifPresent(userRepository::delete);
+            // 用户行、角色关系和应用投影必须在同一业务删除中收口。
+            userRepository.findById(userId).ifPresent(user -> userService.deleteUser(user.getId()));
         }
     }
 

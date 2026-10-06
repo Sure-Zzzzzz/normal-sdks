@@ -4,8 +4,10 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.request.PutRoleAuthorizationRuleRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.authorization.response.RoleAuthorizationRuleResponse;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleAuthorizationRuleService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -29,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 public class IamRoleAuthorizationRuleAdminController {
 
     private final IamRoleAuthorizationRuleService ruleService;
+    private final IamOpenRoleMutationSupport openRoleSupport;
 
     /**
      * 查询角色在指定应用下的授权规则。
@@ -55,13 +58,14 @@ public class IamRoleAuthorizationRuleAdminController {
     public ResponseEntity<RoleAuthorizationRuleResponse> putRoleAuthorizationRule(
             @PathVariable Long roleId,
             @PathVariable Long applicationId,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
             @RequestBody PutRoleAuthorizationRuleRequest request) {
-        return ResponseEntity.ok(ruleService.putRoleAuthorizationRule(
+        return ResponseEntity.ok(openRoleSupport.adminMutation(roleId, ifMatch, () -> ruleService.putRoleAuthorizationRule(
                 roleId,
                 applicationId,
                 request.getPagePermissions(),
                 request.getApiPermissions(),
-                request.getDataGrantTemplate()));
+                request.getDataGrantTemplate())));
     }
 
     /**
@@ -72,8 +76,12 @@ public class IamRoleAuthorizationRuleAdminController {
     @DeleteMapping("/{applicationId}")
     public ResponseEntity<Void> deleteRoleAuthorizationRule(
             @PathVariable Long roleId,
-            @PathVariable Long applicationId) {
-        ruleService.deleteRoleAuthorizationRule(roleId, applicationId);
+            @PathVariable Long applicationId,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        openRoleSupport.adminMutation(roleId, ifMatch, () -> {
+            ruleService.deleteRoleAuthorizationRule(roleId, applicationId);
+            return null;
+        });
         return ResponseEntity.noContent().build();
     }
 }

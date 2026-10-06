@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.repository.department;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.department.IamDepartmentRoleEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,7 +17,12 @@ import java.util.List;
  * @author surezzzzzz
  */
 @Repository
-public interface IamDepartmentRoleRepository extends JpaRepository<IamDepartmentRoleEntity, Long> {
+public interface IamDepartmentRoleRepository extends JpaRepository<IamDepartmentRoleEntity, Long>,
+        JpaSpecificationExecutor<IamDepartmentRoleEntity> {
+    /**
+     * 读取当前角色关系数量。
+     */
+    long countByRoleId(Long roleId);
 
     /**
      * 根据部门ID查询所有关联
