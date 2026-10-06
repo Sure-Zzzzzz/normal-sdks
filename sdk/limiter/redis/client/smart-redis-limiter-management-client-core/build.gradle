@@ -1,0 +1,12 @@
+dependencies {
+    // 契约层依赖 Core 中立契约（模型/校验/事件）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+    // 契约层仅 jackson；零 Spring、零 HTTP 客户端（传输由各认证传输 starter 装配）
+    // jackson 仅 JacksonSmartRedisLimiterManagementJsonCodec 内部使用；公开接口零 jackson 类型——
+    // compileOnly 使 POM 零传递，消费者（传输 starter 经 Spring Boot）自带 jackson，不被钉版本
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
