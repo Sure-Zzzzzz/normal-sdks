@@ -1,14 +1,11 @@
 package io.github.surezzzzzz.sdk.audit.iam.resource.listener;
 
-import io.github.surezzzzzz.sdk.audit.iam.resource.annotation.SimpleIamResourceAuditListenerComponent;
 import io.github.surezzzzzz.sdk.audit.iam.resource.handler.IamResourceAuditHandler;
 import io.github.surezzzzzz.sdk.audit.iam.resource.model.IamResourceAuditRecord;
 import io.github.surezzzzzz.sdk.audit.iam.resource.provider.IamResourceAuditTraceIdProvider;
 import io.github.surezzzzzz.sdk.auth.iam.core.constant.SimpleIamCoreConstant;
 import io.github.surezzzzzz.sdk.auth.resource.core.event.ResourceAccessEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 
@@ -24,8 +21,6 @@ import java.util.List;
  * @author surezzzzzz
  */
 @Slf4j
-@SimpleIamResourceAuditListenerComponent
-@ConditionalOnBean(IamResourceAuditHandler.class)
 public class IamResourceAuditEventListener {
 
     private final List<IamResourceAuditHandler> auditHandlers;
@@ -39,7 +34,7 @@ public class IamResourceAuditEventListener {
      */
     public IamResourceAuditEventListener(
             List<IamResourceAuditHandler> auditHandlers,
-            @Autowired(required = false) IamResourceAuditTraceIdProvider traceIdProvider) {
+            IamResourceAuditTraceIdProvider traceIdProvider) {
         this.auditHandlers = auditHandlers;
         this.traceIdProvider = traceIdProvider;
         log.info("IAM资源访问审计监听器已初始化，共{}个处理器", auditHandlers.size());

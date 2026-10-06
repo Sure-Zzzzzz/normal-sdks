@@ -3,11 +3,20 @@ package io.github.surezzzzzz.sdk.audit.iam.resource.configuration;
 import io.github.surezzzzzz.sdk.audit.iam.resource.SimpleIamResourceAuditListenerPackage;
 import io.github.surezzzzzz.sdk.audit.iam.resource.annotation.SimpleIamResourceAuditListenerComponent;
 import io.github.surezzzzzz.sdk.audit.iam.resource.constant.SimpleIamResourceAuditListenerConstant;
+import io.github.surezzzzzz.sdk.audit.iam.resource.handler.IamResourceAuditHandler;
+import io.github.surezzzzzz.sdk.audit.iam.resource.listener.IamResourceAuditEventListener;
+import io.github.surezzzzzz.sdk.audit.iam.resource.provider.IamResourceAuditTraceIdProvider;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
+
+import java.util.List;
 
 /**
  * Simple IAM Resource Audit Listener 自动配置。
@@ -30,4 +39,20 @@ import org.springframework.scheduling.annotation.EnableAsync;
         useDefaultFilters = false
 )
 public class SimpleIamResourceAuditListenerAutoConfiguration {
+
+    /**
+     * 在宿主和扫描组件的 Bean 定义注册后装配监听器，避免扫描阶段提前判断 Handler 条件。
+     *
+     * @param auditHandlers   全部审计处理器
+     * @param traceIdProvider 可选追踪标识提供者
+     * @return 审计事件监听器；宿主已有监听器时让位
+     */
+    @Bean
+    @ConditionalOnBean(IamResourceAuditHandler.class)
+    @ConditionalOnMissingBean(IamResourceAuditEventListener.class)
+    public IamResourceAuditEventListener iamResourceAuditEventListener(
+            List<IamResourceAuditHandler> auditHandlers,
+            ObjectProvider<IamResourceAuditTraceIdProvider> traceIdProvider) {
+        return new IamResourceAuditEventListener(auditHandlers, traceIdProvider.getIfAvailable());
+    }
 }

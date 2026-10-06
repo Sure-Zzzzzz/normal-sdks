@@ -20,13 +20,17 @@ IAM 资源访问审计监听器（jakarta 线）。
 ```gradle
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-jakarta-starter:1.0.0'
-    implementation 'io.github.sure-zzzzzz:simple-iam-resource-audit-listener-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-resource-audit-listener-jakarta-starter:1.0.1'
 }
 ```
 
 引入即装配。监听器仅在容器中存在 `IamResourceAuditHandler` 时注册；默认提供 `LogIamResourceAuditHandler`
 （结构化日志），业务方可自建 handler 落库或转发（与默认日志 handler 并存）。可选
 `IamResourceAuditTraceIdProvider` 透传调用链追踪标识。
+
+业务 Handler 支持通过 `@Component` 或宿主配置类的 `@Bean` 注册。监听器由自动配置的
+`@Bean` 方法在 Bean 定义注册阶段装配，不在组件扫描阶段提前判断 Handler 是否存在。
+宿主自行提供 `IamResourceAuditEventListener` Bean 时，自动配置让位，不重复注册监听器。
 
 ## 边界
 
@@ -36,4 +40,7 @@ dependencies {
 
 ## 验证
 
-1.0.0 含 2 个测试类（3 项断言用例）：端到端类（2 项）与总开关反证类（`enable=false` 时模块组件零装配、业务 Bean 不受影响，1 项）：MockMvc 走公共资源安全链 + IAM Provider stub 验证，覆盖 IAM 来源访问的审计记录生成（含 TraceId 透传）与非 IAM 来源过滤。
+测试覆盖 MockMvc 公共资源安全链与 IAM Provider 的受控验证、宿主 `@Bean` Handler 的真实异步事件消费、
+默认日志 Handler 并存、默认和显式启用、显式关闭、TraceId 缺失与提供者异常、其他认证来源过滤、
+多个 Handler 的异常隔离，以及宿主监听器让位。装配用例同时断言 Handler 与官方监听器存在，
+事件用例通过 Spring 事件发布验证消费结果，不以直接调用 Handler 代替事件链验收。
