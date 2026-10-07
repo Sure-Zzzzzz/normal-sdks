@@ -13,15 +13,12 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.executor.RouteSmartRedisLimi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.executor.SmartRedisLimiterRedisExecutor;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.executor.SmartRedisLimiterTimeoutExecutor;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.*;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.HttpSmartRedisLimiterPolicyClient;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyClient;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.json.JacksonSmartRedisLimiterPolicyJsonCodec;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.json.SmartRedisLimiterPolicyJsonCodec;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -113,12 +110,28 @@ public class SmartRedisLimiterAutoConfiguration {
             SmartRedisLimiterProperties properties,
             SmartRedisLimiterAlgorithmFactory algorithmFactory,
             ObjectProvider<SmartRedisLimiterPolicySnapshotStore> snapshotStore,
-            ObjectProvider<SmartRedisLimiterPolicyResolver> policyResolver) {
+            ObjectProvider<SmartRedisLimiterPolicyResolver> policyResolver,
+            ObjectProvider<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedExecutionEngine> typedEngine,
+            ObjectProvider<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedFactProvider> typedFactProviders,
+            ObjectProvider<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicySnapshotStore> typedSnapshotStore,
+            ObjectProvider<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration> typedGateDeclarations) {
+        boolean typedEnabled = properties.getTyped() != null
+                && Boolean.TRUE.equals(properties.getTyped().getEnabled());
+        if (!typedEnabled) {
+            return new SmartRedisLimiterExecutionCoordinator(
+                    properties, algorithmFactory, snapshotStore, policyResolver);
+        }
         return new SmartRedisLimiterExecutionCoordinator(
                 properties,
                 algorithmFactory,
                 snapshotStore,
-                policyResolver);
+                policyResolver,
+                typedEngine.getIfAvailable(),
+                typedFactProviders.orderedStream()
+                        .collect(java.util.stream.Collectors.toList()),
+                typedSnapshotStore.getIfAvailable(),
+                typedGateDeclarations.orderedStream()
+                        .collect(java.util.stream.Collectors.toList()));
     }
 
     private SmartRedisLimiterConfigurationException routeDependencyException(Throwable cause) {
@@ -134,6 +147,87 @@ public class SmartRedisLimiterAutoConfiguration {
     }
 
     /**
+     * 类型化多维门禁装配：typed.enabled=true 时生效。
+     * 门禁声明由配置构建（已过 PostConstruct 校验）；身份维度（USER/SERVICE/CREDENTIAL/CUSTOMER/CUSTOM）
+     * 缺事实提供方 Bean 时启动响亮失败（缺 SPI 启动失败，不静默跳过）。
+     */
+    @Configuration
+    @ConditionalOnProperty(
+            prefix = io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant.CONFIG_PREFIX + ".typed",
+            name = "enabled",
+            havingValue = "true"
+    )
+    public static class TypedGateConfiguration {
+
+        /**
+         * 创建门禁声明列表（配置驱动，维度查重在配置校验完成）
+         *
+         * @param properties 限流器配置
+         * @return 门禁声明列表
+         */
+        @Bean
+        @ConditionalOnMissingBean(io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration.class)
+        public java.util.List<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration> smartRedisLimiterTypedGateDeclarations(
+                SmartRedisLimiterProperties properties) {
+            java.util.List<io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration> declarations =
+                    new java.util.ArrayList<>();
+            for (SmartRedisLimiterProperties.TypedGateConfig gate : properties.getTyped().getGates()) {
+                declarations.add(new io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration(
+                        io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterDataDimension
+                                .fromCode(gate.getDimension()),
+                        gate.getNamespace(), gate.getCustomType(), gate.getLimits()));
+            }
+            return declarations;
+        }
+
+        /**
+         * 创建类型化快照存储
+         *
+         * @return 类型化快照存储
+         */
+        @Bean
+        @ConditionalOnMissingBean(io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicySnapshotStore.class)
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicySnapshotStore smartRedisLimiterTypedPolicySnapshotStore() {
+            return new io.github.surezzzzzz.sdk.limiter.redis.smart.typed.AtomicSmartRedisLimiterTypedPolicySnapshotStore();
+        }
+
+        /**
+         * 创建类型化执行引擎
+         *
+         * @param properties       限流器配置
+         * @param algorithmFactory 算法工厂
+         * @return 类型化执行引擎
+         */
+        @Bean
+        @ConditionalOnMissingBean(io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedExecutionEngine.class)
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedExecutionEngine smartRedisLimiterTypedExecutionEngine(
+                SmartRedisLimiterProperties properties,
+                SmartRedisLimiterAlgorithmFactory algorithmFactory) {
+            return new io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedExecutionEngine(
+                    properties, algorithmFactory);
+        }
+
+        /**
+         * 创建类型化刷新管理器（有策略客户端时；散形态无 client 制品则不装配，走本地声明）
+         *
+         * @param properties         限流器配置
+         * @param managementClient   策略客户端（可选）
+         * @param typedSnapshotStore 类型化快照存储
+         * @return 类型化刷新管理器
+         */
+        @Bean
+        @ConditionalOnMissingBean(io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicyRefreshManager.class)
+        @ConditionalOnBean(io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient.class)
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicyRefreshManager smartRedisLimiterTypedPolicyRefreshManager(
+                SmartRedisLimiterProperties properties,
+                io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient managementClient,
+                io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedPolicySnapshotStore typedSnapshotStore) {
+            return new io.github.surezzzzzz.sdk.limiter.redis.smart.typed.DefaultSmartRedisLimiterTypedPolicyRefreshManager(
+                    properties, managementClient, typedSnapshotStore);
+        }
+    }
+
+    /**
      * 远程动态策略配置，仅在远程策略开关开启时创建网络与调度资源
      */
     @Configuration
@@ -143,32 +237,6 @@ public class SmartRedisLimiterAutoConfiguration {
             havingValue = "true"
     )
     public static class RemotePolicyConfiguration {
-
-        /**
-         * 创建 SDK 独立 JSON 编解码器
-         *
-         * @return JSON 编解码器
-         */
-        @Bean
-        @ConditionalOnMissingBean(SmartRedisLimiterPolicyJsonCodec.class)
-        public SmartRedisLimiterPolicyJsonCodec smartRedisLimiterPolicyJsonCodec() {
-            return new JacksonSmartRedisLimiterPolicyJsonCodec();
-        }
-
-        /**
-         * 创建远程策略 HTTP 客户端
-         *
-         * @param properties 限流器配置
-         * @param jsonCodec  JSON 编解码器
-         * @return 远程策略客户端
-         */
-        @Bean
-        @ConditionalOnMissingBean(SmartRedisLimiterPolicyClient.class)
-        public SmartRedisLimiterPolicyClient smartRedisLimiterPolicyClient(
-                SmartRedisLimiterProperties properties,
-                SmartRedisLimiterPolicyJsonCodec jsonCodec) {
-            return new HttpSmartRedisLimiterPolicyClient(properties, jsonCodec);
-        }
 
         /**
          * 创建快照校验器
@@ -206,10 +274,11 @@ public class SmartRedisLimiterAutoConfiguration {
         }
 
         /**
-         * 创建远程策略刷新管理器
+         * 创建远程策略刷新管理器（策略客户端由 management client 传输件提供；
+         * 类路径无 client 制品的散形态在此响亮失败，不静默退回本地）
          *
          * @param properties        限流器配置
-         * @param policyClient      远程策略客户端
+         * @param policyClient      策略客户端（ObjectProvider：由 client 传输件装配）
          * @param snapshotValidator 快照校验器
          * @param snapshotStore     快照存储
          * @return 刷新管理器
@@ -218,11 +287,20 @@ public class SmartRedisLimiterAutoConfiguration {
         @ConditionalOnMissingBean(SmartRedisLimiterPolicyRefreshManager.class)
         public SmartRedisLimiterPolicyRefreshManager smartRedisLimiterPolicyRefreshManager(
                 SmartRedisLimiterProperties properties,
-                SmartRedisLimiterPolicyClient policyClient,
+                ObjectProvider<io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient> policyClient,
                 SmartRedisLimiterPolicySnapshotValidator snapshotValidator,
                 SmartRedisLimiterPolicySnapshotStore snapshotStore) {
+            io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient client =
+                    policyClient.getIfAvailable();
+            if (client == null) {
+                throw new io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterConfigurationException(
+                        io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorCode.CONFIG_VALIDATION_FAILED,
+                        String.format(io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorMessage.CONFIG_VALIDATION_FAILED,
+                                "remote-policy.enable=true 需要 management client 传输制品提供策略客户端；"
+                                        + "散形态请关闭 remote-policy 并仅使用本地限额"));
+            }
             return new DefaultSmartRedisLimiterPolicyRefreshManager(
-                    properties, policyClient, snapshotValidator, snapshotStore);
+                    properties, client, snapshotValidator, snapshotStore);
         }
 
         /**

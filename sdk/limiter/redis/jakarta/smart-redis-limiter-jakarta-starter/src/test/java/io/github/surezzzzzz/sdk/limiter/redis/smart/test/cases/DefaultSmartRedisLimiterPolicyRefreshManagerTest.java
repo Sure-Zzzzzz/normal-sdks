@@ -4,6 +4,8 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterTimeUnit;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorCode;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.SmartRedisLimiterPolicyFetchResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimiterLimit;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimiterPolicy;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimiterPolicyKey;
@@ -11,8 +13,6 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimit
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.AtomicSmartRedisLimiterPolicySnapshotStore;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.DefaultSmartRedisLimiterPolicyRefreshManager;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.DefaultSmartRedisLimiterPolicySnapshotValidator;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyClient;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyFetchResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.model.SmartRedisLimiterAcceptedPolicySnapshot;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.model.SmartRedisLimiterPolicyRefreshState;
 import org.junit.jupiter.api.Test;
@@ -130,7 +130,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManagerTest {
     }
 
     private DefaultSmartRedisLimiterPolicyRefreshManager manager(
-            SmartRedisLimiterPolicyClient client,
+            SmartRedisLimiterManagementClient client,
             AtomicSmartRedisLimiterPolicySnapshotStore store) {
         SmartRedisLimiterProperties properties = properties();
         return new DefaultSmartRedisLimiterPolicyRefreshManager(
@@ -146,7 +146,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManagerTest {
 
     private SmartRedisLimiterProperties properties() {
         SmartRedisLimiterProperties properties = new SmartRedisLimiterProperties();
-        properties.setMe("jakarta-limiter-test");
+        properties.setMe("test-service");
         properties.getRemotePolicy().setEnable(true);
         properties.getRemotePolicy().setSnapshotUrl("http://management.internal/api/v1/policy/snapshot");
         return properties;
@@ -154,20 +154,20 @@ public class DefaultSmartRedisLimiterPolicyRefreshManagerTest {
 
     private SmartRedisLimiterPolicySnapshot snapshot(long revision, long count) {
         SmartRedisLimiterPolicyKey key = new SmartRedisLimiterPolicyKey(
-                "jakarta-limiter-test", "test-resource", "test-subject");
+                "test-service", "test-resource", "test-subject");
         SmartRedisLimiterPolicy policy = new SmartRedisLimiterPolicy(
                 key,
                 Collections.singletonList(new SmartRedisLimiterLimit(
                         count, 1L, SmartRedisLimiterTimeUnit.SECONDS)));
         return new SmartRedisLimiterPolicySnapshot(
                 SmartRedisLimiterConstant.POLICY_SCHEMA_VERSION,
-                "jakarta-limiter-test",
+                "test-service",
                 revision,
                 Instant.parse("2026-07-22T00:00:00Z"),
                 Collections.singletonList(policy));
     }
 
-    private static final class QueuePolicyClient implements SmartRedisLimiterPolicyClient {
+    private static final class QueuePolicyClient implements SmartRedisLimiterManagementClient {
 
         private final Object[] results;
         private int index;
@@ -179,7 +179,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManagerTest {
         }
 
         @Override
-        public SmartRedisLimiterPolicyFetchResult fetch(String serviceCode, String currentEtag) {
+        public SmartRedisLimiterPolicyFetchResult fetchPolicy(String serviceCode, String currentEtag) {
             fetchCount++;
             lastEtag = currentEtag;
             Object result = results[Math.min(index++, results.length - 1)];
@@ -187,6 +187,12 @@ public class DefaultSmartRedisLimiterPolicyRefreshManagerTest {
                 throw (RuntimeException) result;
             }
             return (SmartRedisLimiterPolicyFetchResult) result;
+        }
+
+        @Override
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.SmartRedisLimiterTypedPolicyFetchResult fetchTypedPolicy(
+                String serviceCode, String currentEtag) {
+            throw new UnsupportedOperationException("v1 刷新链不使用类型化拉取");
         }
 
         private int getFetchCount() {

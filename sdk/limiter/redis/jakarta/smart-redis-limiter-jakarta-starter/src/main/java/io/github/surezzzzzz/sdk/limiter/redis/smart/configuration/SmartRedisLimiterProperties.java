@@ -74,6 +74,11 @@ public class SmartRedisLimiterProperties {
     private RemotePolicyConfig remotePolicy = new RemotePolicyConfig();
 
     /**
+     * 类型化多维门禁配置（默认关闭，显式选择后启用）
+     */
+    private TypedConfig typed = new TypedConfig();
+
+    /**
      * 限流通过时是否发布事件
      */
     private Boolean logOnPass = SmartRedisLimiterConstant.DEFAULT_LOG_ON_PASS;
@@ -109,6 +114,7 @@ public class SmartRedisLimiterProperties {
         validateRedisConfig();
         validateFallbackConfig();
         validateRemotePolicyConfig();
+        validateTypedConfig();
     }
 
     private void validateBasicConfig() {
@@ -280,6 +286,38 @@ public class SmartRedisLimiterProperties {
                     configPath, SmartRedisLimiterStarterConstant.LUA_MAX_SAFE_INTEGER,
                     currentEpochMicros + windowMicros));
         }
+    }
+
+    private void validateTypedConfig() {
+        TypedConfig typedConfig = typed;
+        if (typedConfig == null || !Boolean.TRUE.equals(typedConfig.getEnabled())) {
+            return;
+        }
+        if (typedConfig.getExpectedPolicyEpoch() == null
+                || typedConfig.getExpectedPolicyEpoch() < 1L) {
+            throw configException("typed.expected-policy-epoch 必须为不小于 1 的整数");
+        }
+        if (typedConfig.getGates() == null || typedConfig.getGates().isEmpty()) {
+            throw configException("typed.gates 至少声明一个门禁");
+        }
+        Set<String> dimensions = new HashSet<>();
+        for (TypedGateConfig gate : typedConfig.getGates()) {
+            if (gate == null || !SmartRedisLimiterDataDimension.isValid(gate.getDimension())) {
+                throw configException("typed.gates.dimension 缺失或非法");
+            }
+            if (!dimensions.add(gate.getDimension())) {
+                throw configException("typed.gates 存在重复维度: " + gate.getDimension());
+            }
+            try {
+                new io.github.surezzzzzz.sdk.limiter.redis.smart.typed.SmartRedisLimiterTypedGateDeclaration(
+                        SmartRedisLimiterDataDimension.fromCode(gate.getDimension()),
+                        gate.getNamespace(), gate.getCustomType(), gate.getLimits());
+            } catch (SmartRedisLimiterException ex) {
+                throw configException("typed.gates[" + gate.getDimension() + "] 声明非法: " + ex.getMessage());
+            }
+        }
+        validateAlgorithm(typedConfig.getAlgorithm(), "typed.algorithm");
+        validateFallbackStrategy(typedConfig.getRedisDegradation(), "typed.redis-degradation");
     }
 
     private void validateAlgorithm(String algorithm, String configPath) {
@@ -701,5 +739,61 @@ public class SmartRedisLimiterProperties {
          * 最大响应字节数
          */
         private Long maxResponseBytes = SmartRedisLimiterStarterConstant.DEFAULT_REMOTE_POLICY_MAX_RESPONSE_BYTES;
+    }
+
+    @Data
+    public static class TypedConfig {
+
+        /**
+         * 是否启用类型化多维门禁
+         */
+        private Boolean enabled = false;
+
+        /**
+         * 部署时明确预期的策略代次
+         */
+        private Long expectedPolicyEpoch;
+
+        /**
+         * 门禁算法（fixed / sliding）
+         */
+        private String algorithm = SmartRedisLimiterConstant.ALGORITHM_FIXED;
+
+        /**
+         * Redis 降级策略（allow / deny），deny 返回 503 语义不冒充额度耗尽
+         */
+        private String redisDegradation = SmartRedisLimiterStarterConstant.TYPED_DEFAULT_REDIS_DEGRADATION;
+
+        /**
+         * 门禁声明列表
+         */
+        private List<TypedGateConfig> gates = new ArrayList<>();
+    }
+
+    /**
+     * 类型化门禁声明配置
+     */
+    @Data
+    public static class TypedGateConfig {
+
+        /**
+         * 计数维度编码（RESOURCE/IP/USER/SERVICE/CREDENTIAL/CUSTOMER/CUSTOM）
+         */
+        private String dimension;
+
+        /**
+         * 固定命名空间
+         */
+        private String namespace;
+
+        /**
+         * 自定义类型（仅 CUSTOM 维度）
+         */
+        private String customType;
+
+        /**
+         * 完整本地限额窗口
+         */
+        private List<SmartLimitRule> limits = new ArrayList<>();
     }
 }

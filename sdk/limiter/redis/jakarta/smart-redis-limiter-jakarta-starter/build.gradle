@@ -1,5 +1,9 @@
+// 测试类路径传递的已发布 core/starter 坐标统一替换回本仓源码（源码组合期；发布后随 api project 一并还原）
 dependencies {
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    // 源码组合阶段临时引用本仓 Core 2.2.0；两制品收口发布后切回精确 Maven 坐标
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+    // 策略客户端契约（公开编程面暴露 Client 类型；散形态零远程负担，认证传输件由宿主另行引入）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-management-client-core:1.0.0'
     implementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
     api 'org.springframework.boot:spring-boot-starter-data-redis'
     compileOnly 'org.springframework.boot:spring-boot-starter-aop'

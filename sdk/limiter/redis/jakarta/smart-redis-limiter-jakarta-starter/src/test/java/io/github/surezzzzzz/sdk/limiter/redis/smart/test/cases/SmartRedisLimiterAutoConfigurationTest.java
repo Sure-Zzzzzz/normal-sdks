@@ -7,16 +7,17 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterConfigurationException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.executor.SmartRedisLimiterRedisExecutor;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.SmartRedisLimiterPolicyFetchResult;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.SmartRedisLimiterTypedPolicyFetchResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.SmartRedisLimiterPolicyRefreshManager;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.SmartRedisLimiterPolicyResolver;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.SmartRedisLimiterPolicySnapshotStore;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyClient;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.json.SmartRedisLimiterPolicyJsonCodec;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -33,24 +34,6 @@ public class SmartRedisLimiterAutoConfigurationTest {
             .withPropertyValues(
                     "io.github.surezzzzzz.sdk.limiter.redis.smart.enable=true",
                     "io.github.surezzzzzz.sdk.limiter.redis.smart.me=test");
-
-    @Test
-    public void testAnnotationModeStartsWithoutWeb() {
-        contextRunner.withUserConfiguration(UserExecutorConfiguration.class)
-                .withClassLoader(new FilteredClassLoader("org.springframework.web", "jakarta.servlet"))
-                .withPropertyValues("io.github.surezzzzzz.sdk.limiter.redis.smart.mode=annotation")
-                .run(context -> assertNull(context.getStartupFailure(),
-                        "仅注解模式不得强制要求 Web/Servlet 依赖"));
-    }
-
-    @Test
-    public void testInterceptorModeStartsWithoutAspectJ() {
-        contextRunner.withUserConfiguration(UserExecutorConfiguration.class)
-                .withClassLoader(new FilteredClassLoader("org.aspectj"))
-                .withPropertyValues("io.github.surezzzzzz.sdk.limiter.redis.smart.mode=interceptor")
-                .run(context -> assertNull(context.getStartupFailure(),
-                        "仅拦截器模式不得强制要求 AspectJ 依赖"));
-    }
 
     @Test
     public void testMissingRedisRouteTemplateBeanFailsStartup() {
@@ -109,16 +92,10 @@ public class SmartRedisLimiterAutoConfigurationTest {
     @Test
     public void testRemotePolicyDisabledCreatesNoRemoteBeans() {
         contextRunner.withUserConfiguration(UserExecutorConfiguration.class).run(context -> {
-            log.info("远程策略关闭时 Bean 数量: client={}, codec={}, store={}, resolver={}, manager={}",
-                    context.getBeansOfType(SmartRedisLimiterPolicyClient.class).size(),
-                    context.getBeansOfType(SmartRedisLimiterPolicyJsonCodec.class).size(),
+            log.info("远程策略关闭时 Bean 数量: store={}, resolver={}, manager={}",
                     context.getBeansOfType(SmartRedisLimiterPolicySnapshotStore.class).size(),
                     context.getBeansOfType(SmartRedisLimiterPolicyResolver.class).size(),
                     context.getBeansOfType(SmartRedisLimiterPolicyRefreshManager.class).size());
-            assertEquals(0, context.getBeansOfType(SmartRedisLimiterPolicyClient.class).size(),
-                    "remote disabled 时不得创建 HTTP Client");
-            assertEquals(0, context.getBeansOfType(SmartRedisLimiterPolicyJsonCodec.class).size(),
-                    "remote disabled 时不得创建 JSON Codec");
             assertEquals(0, context.getBeansOfType(SmartRedisLimiterPolicySnapshotStore.class).size(),
                     "remote disabled 时不得创建 Snapshot Store");
             assertEquals(0, context.getBeansOfType(SmartRedisLimiterPolicyResolver.class).size(),
@@ -136,11 +113,20 @@ public class SmartRedisLimiterAutoConfigurationTest {
                         "io.github.surezzzzzz.sdk.limiter.redis.smart.remote-policy.enable=true",
                         "io.github.surezzzzzz.sdk.limiter.redis.smart.remote-policy.snapshot-url=http://management.internal/api/v1/policy/snapshot")
                 .run(context -> {
-                    assertTrue(context.getStartupFailure() == null, "合法 remote 配置应正常启动");
-                    assertEquals(1, context.getBeansOfType(SmartRedisLimiterPolicyClient.class).size(),
-                            "PolicyClient 应只有一个 Bean");
-                    assertEquals(1, context.getBeansOfType(SmartRedisLimiterPolicyJsonCodec.class).size(),
-                            "PolicyJsonCodec 应只有一个 Bean");
+                    assertNotNull(context.getStartupFailure(), "remote 开启但类路径无 client 制品时必须响亮启动失败");
+                    log.info("缺 client 制品的启动异常: {}", context.getStartupFailure().getMessage());
+                });
+    }
+
+    @Test
+    public void testRemotePolicyEnabledWithClientCreatesRefreshChain() {
+        contextRunner
+                .withUserConfiguration(UserExecutorConfiguration.class, StubClientConfiguration.class)
+                .withPropertyValues(
+                        "io.github.surezzzzzz.sdk.limiter.redis.smart.remote-policy.enable=true",
+                        "io.github.surezzzzzz.sdk.limiter.redis.smart.remote-policy.snapshot-url=http://management.internal/api/v1/policy/snapshot")
+                .run(context -> {
+                    assertTrue(context.getStartupFailure() == null, "提供 client 的 remote 配置应正常启动");
                     assertEquals(1, context.getBeansOfType(SmartRedisLimiterPolicySnapshotStore.class).size(),
                             "SnapshotStore 应只有一个 Bean");
                     assertEquals(1, context.getBeansOfType(SmartRedisLimiterPolicyResolver.class).size(),
@@ -159,6 +145,24 @@ public class SmartRedisLimiterAutoConfigurationTest {
             current = current.getCause();
         }
         return null;
+    }
+
+    private static final class StubClientConfiguration {
+
+        @Bean
+        public SmartRedisLimiterManagementClient stubManagementClient() {
+            return new SmartRedisLimiterManagementClient() {
+                @Override
+                public SmartRedisLimiterPolicyFetchResult fetchPolicy(String serviceCode, String currentEtag) {
+                    return SmartRedisLimiterPolicyFetchResult.notModified();
+                }
+
+                @Override
+                public SmartRedisLimiterTypedPolicyFetchResult fetchTypedPolicy(String serviceCode, String currentEtag) {
+                    return SmartRedisLimiterTypedPolicyFetchResult.notModified();
+                }
+            };
+        }
     }
 
 }

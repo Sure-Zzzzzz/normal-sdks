@@ -4,8 +4,8 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.configuration.SmartRedisLimi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterStarterConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.starter.ErrorMessage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.exception.SmartRedisLimiterException;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyClient;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.client.SmartRedisLimiterPolicyFetchResult;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.SmartRedisLimiterManagementClient;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.SmartRedisLimiterPolicyFetchResult;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.model.SmartRedisLimiterAcceptedPolicySnapshot;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.policy.model.SmartRedisLimiterPolicyRefreshState;
 import jakarta.annotation.PreDestroy;
@@ -29,7 +29,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManager
         implements SmartRedisLimiterPolicyRefreshManager, ApplicationListener<ApplicationReadyEvent> {
 
     private final SmartRedisLimiterProperties properties;
-    private final SmartRedisLimiterPolicyClient policyClient;
+    private final SmartRedisLimiterManagementClient policyClient;
     private final SmartRedisLimiterPolicySnapshotValidator snapshotValidator;
     private final SmartRedisLimiterPolicySnapshotStore snapshotStore;
     private final ScheduledExecutorService scheduler;
@@ -44,13 +44,13 @@ public class DefaultSmartRedisLimiterPolicyRefreshManager
      * 构造默认刷新管理器
      *
      * @param properties        限流器配置
-     * @param policyClient      远程策略客户端
+     * @param policyClient      策略客户端（由 management client 传输件提供）
      * @param snapshotValidator 快照校验器
      * @param snapshotStore     快照存储
      */
     public DefaultSmartRedisLimiterPolicyRefreshManager(
             SmartRedisLimiterProperties properties,
-            SmartRedisLimiterPolicyClient policyClient,
+            SmartRedisLimiterManagementClient policyClient,
             SmartRedisLimiterPolicySnapshotValidator snapshotValidator,
             SmartRedisLimiterPolicySnapshotStore snapshotStore) {
         this.properties = properties;
@@ -94,7 +94,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManager
         Instant attemptAt = Instant.now();
         try {
             SmartRedisLimiterAcceptedPolicySnapshot current = snapshotStore.getCurrent();
-            SmartRedisLimiterPolicyFetchResult fetchResult = policyClient.fetch(
+            SmartRedisLimiterPolicyFetchResult fetchResult = policyClient.fetchPolicy(
                     properties.getMe(), current == null ? null : current.getEtag());
             if (closed.get()) {
                 return true;
@@ -121,8 +121,7 @@ public class DefaultSmartRedisLimiterPolicyRefreshManager
         } catch (Exception ex) {
             if (!closed.get()) {
                 updateFailureState(attemptAt, ex);
-                log.warn("SmartRedisLimiter 远程策略刷新失败，继续使用 last-known-good: reason={}",
-                        refreshState.get().getLastFailureReason());
+                log.warn("SmartRedisLimiter 远程策略刷新失败，继续使用 last-known-good", ex);
             }
         } finally {
             refreshing.set(false);
