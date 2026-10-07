@@ -1,13 +1,19 @@
 dependencies {
     // 依赖 core（提供 Event、Record、Provider 接口）
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
 
     // Spring Boot（仅编译时依赖）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
 
     // 测试依赖
-    testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.0.0'
+    testImplementation project(':sdk:limiter:redis:smart-redis-limiter-starter')
+    // 集成测试直接装配 RedisRouteTemplate（运行端 2.2.0 起 route 为 implementation 不再传递，测试侧显式自备）
+    testImplementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
+    // 注解模式 AOP 同理：运行端 2.2.0 起 compileOnly，测试宿主自备
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    // route 连接池实现（原由旧版 starter 传递，2.2.0 收紧后测试自备）
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
 }
