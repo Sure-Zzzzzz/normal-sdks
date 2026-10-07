@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Smart KMS API
-  version: 2.0.1
+  version: 2.0.2
   description: KMS 管理端与服务调用方使用的主体、密钥、策略、密码学和销毁契约。
 servers:
   - url: /
@@ -17,13 +17,30 @@ paths:
   /api/kms/me/keys:
     get:
       summary: 分页查询当前主体归属的密钥
-      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }]
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Owner' } ], { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKeyPage' } } } } }
   /api/kms/me/keys/{keyRef}:
     get:
       summary: 查询当前主体归属的单个密钥
       parameters: [{ $ref: '#/components/parameters/KeyRef' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKey' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/kms/me/keys/{keyRef}/public-keys:
+    get:
+      tags: [self-service]
+      summary: 读取本人签名密钥全部可分发公钥
+      description: 要求可信 HUMAN 人员身份、kms.read-public-key 和本人归属，不要求 kms.key.read、治理 DATA 或 READ_PUBLIC_KEY 使用策略。仅 SIGN/ES256 的 ACTIVE、DISABLED 密钥及 ACTIVE、RETIRED 版本可分发，按版本升序。SERVICE 或未证明人员身份为 403，他人和不存在的 keyRef 为 404。AES、待销毁或已销毁为 409，材料缺失或持久化状态异常为 503。原公钥及密码学接口仍要求精确使用策略。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }]
+      responses:
+        '200':
+          description: 全部合法可分发版本
+          headers: { Cache-Control: { schema: { type: string, enum: [no-store] }, description: 不允许缓存响应 } }
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/KmsPublicKey' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/kms/me/keys/{keyRef}/state:
     patch:
       tags: [self-service]
@@ -59,6 +76,21 @@ paths:
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/kms/me/keys/{keyRef}/destruction:
+    get:
+      tags: [self-service]
+      summary: 读取本人密钥销毁明细
+      description: 要求 kms.key.read，归属固定为认证主体本人，不消费 DATA，无需销毁权限。未排程或取消后 items 为空。cancelEligible 只表示读取时的业务资格，不包含销毁授权；历史领取后即使释放或租约过期也为 false。任务及密钥来自同一次已提交快照；不可能组合或查询失败为 503，不能伪装成无任务。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }]
+      responses:
+        '200':
+          description: 当前排程及已完成版本的安全快照
+          headers: { Cache-Control: { schema: { type: string, enum: [no-store] }, description: 不允许缓存响应 } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KeyDestructionDetails' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
     put:
       tags: [self-service]
       summary: 安排本人密钥延迟销毁
@@ -91,20 +123,40 @@ paths:
         '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /api/kms/admin/policies:
+    get:
+      summary: 分页查询当前 DataPlan 范围内的跨钥策略
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { name: principalId, in: query, schema: { type: string, maxLength: 128 } }, { name: operation, in: query, schema: { type: string, enum: [SIGN, VERIFY, ENCRYPT, DECRYPT, READ_PUBLIC_KEY] } }]
+      responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPolicyPage' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
   /api/kms/admin/keys:
     get:
       summary: 分页查询当前 DataPlan 范围内的密钥
-      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }]
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }, { $ref: '#/components/parameters/Owner' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKeyPage' } } } }, '403': { $ref: '#/components/responses/Forbidden' } }
   /api/kms/admin/keys/{keyRef}:
     get:
       summary: 查询当前 DataPlan 范围内的单个密钥
       parameters: [{ $ref: '#/components/parameters/KeyRef' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKey' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/kms/admin/keys/{keyRef}/destruction:
+    get:
+      summary: 读取治理范围内密钥销毁明细
+      description: 要求 kms.key.read 和完整 kms-key read DATA，先在授权归属范围内确定密钥再读取安全任务快照。范围外或不存在的目标统一 404，拒绝 DATA 计划为 403。取消须另行通过原治理命令检查 destroy DATA，读取资格不代替授权。快照、历史领取与故障行为同本人销毁明细。
+      parameters: [{ $ref: '#/components/parameters/KeyRef' }]
+      responses:
+        '200':
+          description: 授权目标的当前排程及已完成版本快照
+          headers: { Cache-Control: { schema: { type: string, enum: [no-store] }, description: 不允许缓存响应 } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/KeyDestructionDetails' } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/kms/keys:
     get:
       summary: 兼容查询当前主体归属的密钥
-      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }]
+      parameters: [{ $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { $ref: '#/components/parameters/Alias' }, { $ref: '#/components/parameters/Purpose' }, { $ref: '#/components/parameters/Algorithm' }, { $ref: '#/components/parameters/State' }, { $ref: '#/components/parameters/Owner' }]
       responses: { '200': { description: 成功, content: { application/json: { schema: { $ref: '#/components/schemas/KmsKeyPage' } } } } }
     post:
       summary: 创建归属当前主体的逻辑密钥
@@ -231,6 +283,7 @@ components:
     Purpose: { name: purpose, in: query, schema: { type: string, enum: [SIGN, ENCRYPT] } }
     Algorithm: { name: algorithm, in: query, schema: { type: string, enum: [ES256, AES_256_GCM] } }
     State: { name: state, in: query, schema: { type: string, enum: [ACTIVE, DISABLED, PENDING_DESTRUCTION, DESTROYED] } }
+    Owner: { name: ownerPrincipalId, in: query, schema: { type: string, minLength: 1, maxLength: 64 }, description: 精确归属主体，仅在已验证 DataPlan 范围内收窄 }
     KeyRef: { name: keyRef, in: path, required: true, schema: { type: string } }
     PolicyId: { name: policyId, in: path, required: true, schema: { type: string } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 1, maxLength: 128 } }
@@ -249,6 +302,7 @@ components:
       required: [keyRef, keyAlias, purpose, algorithm, state, rowVersion, createdAt, updatedAt]
       properties:
         ownerPrincipalId: { type: string, description: 仅管理员范围查询返回 }
+        ownerDisplayName: { type: string, nullable: true, description: 仅管理员范围查询返回；宿主未提供目录解析时为空 }
         keyRef: { type: string }
         keyAlias: { type: string }
         purpose: { type: string, enum: [SIGN, ENCRYPT] }
@@ -304,9 +358,30 @@ components:
       type: object
       required: [principalId, operation]
       properties: { principalId: { type: string }, keyVersion: { type: integer, minimum: 1, nullable: true }, operation: { type: string, enum: [SIGN, VERIFY, ENCRYPT, DECRYPT, READ_PUBLIC_KEY] }, expiresAt: { type: string, format: date-time, nullable: true } }
-    KmsPolicy: { type: object, properties: { policyId: { type: string }, keyRef: { type: string }, principalId: { type: string }, keyVersion: { type: integer, nullable: true }, operation: { type: string }, expiresAt: { type: string, format: date-time, nullable: true }, rowVersion: { type: integer, format: int64 } } }
+    AdminPolicyPage: { type: object, required: [items, page, size, total], properties: { items: { type: array, items: { $ref: '#/components/schemas/AdminPolicySummary' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } } }
+    AdminPolicySummary: { type: object, required: [policyId, keyRef, keyAlias, ownerPrincipalId, principalId, operation, rowVersion, createdAt], properties: { policyId: { type: string }, keyRef: { type: string }, keyAlias: { type: string }, ownerPrincipalId: { type: string }, ownerDisplayName: { type: string, nullable: true, description: 可选显示名，宿主未提供目录解析时为空 }, principalId: { type: string }, principalDisplayName: { type: string, nullable: true, description: 可选显示名，宿主未提供目录解析时为空 }, keyVersion: { type: integer, minimum: 1, nullable: true, description: 为空表示全部版本含后续轮换 }, operation: { type: string }, expiresAt: { type: string, format: date-time, nullable: true }, rowVersion: { type: integer, format: int64 }, createdAt: { type: string, format: date-time } } }
+    KmsPolicy: { type: object, properties: { policyId: { type: string }, keyRef: { type: string }, principalId: { type: string }, principalDisplayName: { type: string, nullable: true, description: 可选显示名，宿主未提供目录解析时为空 }, keyVersion: { type: integer, nullable: true }, operation: { type: string }, expiresAt: { type: string, format: date-time, nullable: true }, rowVersion: { type: integer, format: int64 } } }
     KmsPolicyList: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/KmsPolicy' } } } }
-    KmsPublicKey: { type: object, required: [keyRef, version, algorithm, state, publicKey], properties: { keyRef: { type: string }, version: { type: integer }, algorithm: { type: string, enum: [ES256] }, state: { type: string }, publicKey: { type: string, description: Base64url 编码的公钥材料 } } }
+    KmsPublicKey: { type: object, additionalProperties: false, required: [keyRef, version, algorithm, state, publicKey], properties: { keyRef: { type: string }, version: { type: integer, minimum: 1 }, algorithm: { type: string, enum: [ES256] }, state: { type: string, enum: [ACTIVE, RETIRED] }, publicKey: { type: string, description: 无填充 Base64url 编码的 X.509 SPKI DER 公钥材料 } } }
+    KeyDestructionDetails:
+      type: object
+      additionalProperties: false
+      required: [keyRef, keyState, rowVersion, cancelEligible, items]
+      properties:
+        keyRef: { type: string }
+        keyState: { type: string, enum: [ACTIVE, DISABLED, PENDING_DESTRUCTION, DESTROYED] }
+        rowVersion: { type: integer, format: int64, minimum: 0, description: 密钥修改版本，与密钥详情配对使用 }
+        cancelEligible: { type: boolean, description: 读取时全部任务从未领取且可恢复的业务资格，不包含调用者的销毁授权；提交时仍会复核 }
+        items: { type: array, description: 当前排程及已完成版本，按 keyVersion 升序；未排程或取消后为空，不代表历次取消审计, items: { $ref: '#/components/schemas/KeyDestructionItem' } }
+    KeyDestructionItem:
+      type: object
+      additionalProperties: false
+      required: [keyVersion, state, dueAt, completedAt]
+      properties:
+        keyVersion: { type: integer, minimum: 1 }
+        state: { type: string, enum: [PENDING, CLAIMED, COMPLETED] }
+        dueAt: { type: string, format: date-time, description: UTC 三位毫秒的最早允许开始时间，不等于实际完成时间 }
+        completedAt: { type: string, format: date-time, nullable: true, description: 实际完成的 UTC 三位毫秒时间，未完成为 null }
     SignRequest: { type: object, required: [keyRef, input], properties: { keyRef: { type: string }, version: { type: integer, minimum: 1, nullable: true }, input: { type: string, description: Base64url 编码的待签名数据 } } }
     SignatureResult: { type: object, required: [keyRef, version, signature], properties: { keyRef: { type: string }, version: { type: integer }, signature: { type: string, description: Base64url 编码的 ES256 签名 } } }
     VerifyRequest: { type: object, required: [keyRef, input, signature], properties: { keyRef: { type: string }, version: { type: integer, minimum: 1, nullable: true }, input: { type: string, description: Base64url 编码的原始数据 }, signature: { type: string, description: Base64url 编码的 ES256 签名 } } }
@@ -315,6 +390,6 @@ components:
     EnvelopeResult: { type: object, required: [envelope], properties: { envelope: { type: string, description: Base64url 编码的 AES-GCM 密文封装 } } }
     DecryptRequest: { type: object, required: [envelope], properties: { envelope: { type: string, description: Base64url 编码的 AES-GCM 密文封装 }, aad: { type: string, nullable: true, description: Base64url 编码的附加认证数据 } } }
     PlaintextResult: { type: object, required: [plaintext], properties: { plaintext: { type: string, description: Base64url 编码的明文 } } }
-    DestructionJob: { type: object, properties: { keyRef: { type: string }, keyVersion: { type: integer }, state: { type: string, enum: [PENDING, CLAIMED, COMPLETED] }, dueAt: { type: string, format: date-time }, claimUntil: { type: string, format: date-time, nullable: true }, attemptCount: { type: integer }, completedAt: { type: string, format: date-time, nullable: true } } }
+    DestructionJob: { type: object, properties: { ownerPrincipalId: { type: string }, ownerDisplayName: { type: string, nullable: true, description: 可选显示名，宿主未提供目录解析时为空 }, keyRef: { type: string }, keyVersion: { type: integer }, state: { type: string, enum: [PENDING, CLAIMED, COMPLETED] }, dueAt: { type: string, format: date-time }, claimUntil: { type: string, format: date-time, nullable: true }, attemptCount: { type: integer }, completedAt: { type: string, format: date-time, nullable: true } } }
     DestructionPage: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/DestructionJob' } }, page: { type: integer }, size: { type: integer }, total: { type: integer, format: int64 } } }
     WorkerHealth: { type: object, properties: { running: { type: boolean }, instanceId: { type: string, nullable: true }, claimable: { type: boolean }, lastSuccessfulScanAt: { type: string, format: date-time, nullable: true }, consecutiveFailureCount: { type: integer }, oldestOverdueDelayMillis: { type: integer, format: int64, nullable: true } } }
