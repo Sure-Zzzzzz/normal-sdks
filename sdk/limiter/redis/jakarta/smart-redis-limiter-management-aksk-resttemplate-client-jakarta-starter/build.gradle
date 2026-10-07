@@ -1,0 +1,20 @@
+dependencies {
+    // 契约层：Client 接口/结果模型/codec（公开 API 含 Core 类型，收 api）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-management-client-core:1.0.0'
+
+    // aksk 底座 jakarta 线：提供 akskClientRestTemplate（认证+连接池+超时），本模块代码不 import 底座类型
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+
+    // Spring Boot 3（compileOnly，宿主自行引入）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    // 底座 akskClientRestTemplate 的连接池实现（hc5，宿主自引）
+    compileOnly 'org.apache.httpcomponents.client5:httpclient5'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5'
+}
