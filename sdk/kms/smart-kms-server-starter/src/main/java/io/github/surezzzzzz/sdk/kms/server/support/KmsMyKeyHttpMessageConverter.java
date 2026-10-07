@@ -4,10 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsKeyState;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsMyKeyDestructionRequest;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsMyKeyResponse;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsMyKeyStateRequest;
-import io.github.surezzzzzz.sdk.kms.server.controller.KmsMyKeyVersionRequest;
+import io.github.surezzzzzz.sdk.kms.server.controller.*;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
 import org.springframework.http.MediaType;
@@ -20,7 +17,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
 /**
- * 仅处理本人写接口 DTO 的私有 JSON 转换器，宿主宽松配置不能改变该契约。
+ * 仅处理 KMS 明确 DTO 的私有 JSON 转换器，宿主宽松配置不能改变该契约。
  *
  * @author surezzzzzz
  */
@@ -55,7 +52,8 @@ public class KmsMyKeyHttpMessageConverter extends AbstractHttpMessageConverter<O
     @Override
     protected boolean supports(Class<?> type) {
         return type == KmsMyKeyStateRequest.class || type == KmsMyKeyVersionRequest.class
-                || type == KmsMyKeyDestructionRequest.class || type == KmsMyKeyResponse.class;
+                || type == KmsMyKeyDestructionRequest.class || type == KmsMyKeyResponse.class
+                || type == KmsKeyDestructionDetailsResponse.class || type == KmsPublicKeyListResponse.class;
     }
 
     /**
@@ -63,7 +61,8 @@ public class KmsMyKeyHttpMessageConverter extends AbstractHttpMessageConverter<O
      */
     @Override
     public boolean canRead(Class<?> type, MediaType mediaType) {
-        return type != KmsMyKeyResponse.class && super.canRead(type, mediaType);
+        return (type == KmsMyKeyStateRequest.class || type == KmsMyKeyVersionRequest.class
+                || type == KmsMyKeyDestructionRequest.class) && super.canRead(type, mediaType);
     }
 
     /**
@@ -71,7 +70,8 @@ public class KmsMyKeyHttpMessageConverter extends AbstractHttpMessageConverter<O
      */
     @Override
     public boolean canWrite(Class<?> type, MediaType mediaType) {
-        return type == KmsMyKeyResponse.class && super.canWrite(type, mediaType);
+        return (type == KmsMyKeyResponse.class || type == KmsKeyDestructionDetailsResponse.class
+                || type == KmsPublicKeyListResponse.class) && super.canWrite(type, mediaType);
     }
 
     @Override
@@ -107,6 +107,14 @@ public class KmsMyKeyHttpMessageConverter extends AbstractHttpMessageConverter<O
 
     @Override
     protected void writeInternal(Object response, HttpOutputMessage output) throws IOException {
+        if (response instanceof KmsPublicKeyListResponse) {
+            output.getBody().write(KmsHttpJson.write(((KmsPublicKeyListResponse) response).getItems()).getBytes(StandardCharsets.UTF_8));
+            return;
+        }
+        if (response instanceof KmsKeyDestructionDetailsResponse) {
+            output.getBody().write(KmsHttpJson.write(response).getBytes(StandardCharsets.UTF_8));
+            return;
+        }
         KmsMyKeyResponse value = (KmsMyKeyResponse) response;
         String snapshot = value.getResponseSnapshot();
         if (snapshot == null) {

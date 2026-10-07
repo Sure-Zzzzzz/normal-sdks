@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.resource.core.model.ResourceAuthenticationS
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourcePrincipal;
 import io.github.surezzzzzz.sdk.auth.resource.server.support.VerifiedResourceAuthentication;
+import io.github.surezzzzzz.sdk.kms.server.test.support.KmsTestSchemaHelper;
 import io.github.surezzzzzz.sdk.kms.server.testapp.bridge.KmsResourceServerBridgeTestApplication;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
@@ -22,9 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -65,7 +64,7 @@ class KmsResourceServerBridgeHttpTest {
     @BeforeEach
     void resetSchema() {
         SecurityContextHolder.clearContext();
-        new ResourceDatabasePopulator(new FileSystemResource("docs/schema.sql")).execute(dataSource);
+        KmsTestSchemaHelper.reset(dataSource);
     }
 
     /**

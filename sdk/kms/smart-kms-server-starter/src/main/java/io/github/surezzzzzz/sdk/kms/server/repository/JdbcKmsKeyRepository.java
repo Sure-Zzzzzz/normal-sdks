@@ -245,6 +245,25 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
     @Override
     public KmsKeyPage findPage(KmsOwnerAccessScope scope, String alias, String purpose, String algorithm, String state,
                                long offset, int size) {
+        return findPageInternal(scope, alias, purpose, algorithm, state, null, offset, size);
+    }
+
+    /**
+     * 使用完整 DataPlan 归属范围和精确归属主体执行同一列表与 count 谓词；归属筛选只能在范围内收窄。
+     */
+    @Override
+    public KmsKeyPage findPage(KmsOwnerAccessScope scope, String alias, String purpose, String algorithm, String state,
+                               String ownerPrincipalId, long offset, int size) {
+        String filterOwner = ownerPrincipalId == null || ownerPrincipalId.isEmpty() ? null
+                : KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId);
+        return findPageInternal(scope, alias, purpose, algorithm, state, filterOwner, offset, size);
+    }
+
+    /**
+     * 组装并执行归属范围、可选筛选与可选精确归属主体的分页查询。
+     */
+    private KmsKeyPage findPageInternal(KmsOwnerAccessScope scope, String alias, String purpose, String algorithm,
+                                        String state, String filterOwnerPrincipalId, long offset, int size) {
         if (scope == null || offset < 0L || size < 1) {
             throw new KmsValidationException();
         }
@@ -256,6 +275,12 @@ public class JdbcKmsKeyRepository implements KmsKeyRepository, KmsKeyQueryReposi
                 .append(filters);
         StringBuilder countSql = new StringBuilder("SELECT COUNT(*) FROM smart_kms_key").append(filters);
         MapSqlParameterSource parameters = pageParameters(alias, purpose, algorithm, state, offset, size);
+        if (filterOwnerPrincipalId != null) {
+            String filterPredicate = " AND owner_principal_id = :filterOwnerPrincipalId";
+            itemsSql.append(filterPredicate);
+            countSql.append(filterPredicate);
+            parameters.addValue("filterOwnerPrincipalId", filterOwnerPrincipalId);
+        }
         appendOwnerPredicate(itemsSql, parameters, scope);
         appendOwnerPredicate(countSql, parameters, scope);
         itemsSql.append(" ORDER BY updated_at DESC, key_ref ASC LIMIT :size OFFSET :offset");

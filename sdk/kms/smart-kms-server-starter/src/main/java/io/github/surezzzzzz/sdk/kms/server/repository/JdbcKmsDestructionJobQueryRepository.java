@@ -73,6 +73,41 @@ public class JdbcKmsDestructionJobQueryRepository implements KmsDestructionJobQu
     }
 
     /**
+     * 使用完整 DataPlan 归属范围和精确归属主体查询销毁任务；筛选只在范围内收窄。
+     */
+    @Override
+    public KmsDestructionJobPage findPage(KmsOwnerAccessScope scope, String ownerPrincipalId, long offset, int limit) {
+        if (ownerPrincipalId == null || ownerPrincipalId.isEmpty()) {
+            return findPage(scope, offset, limit);
+        }
+        if (scope == null || offset < 0L || limit < SmartKmsCoreConstant.ONE) {
+            throw new KmsValidationException();
+        }
+        String filterOwner = KmsValidationHelper.requireOwnerPrincipalId(ownerPrincipalId);
+        StringBuilder pageSql = new StringBuilder("SELECT job.owner_principal_id, kms_key.key_ref, job.key_version, job.state, ")
+                .append("job.due_at, job.claim_until, job.attempt_count, job.completed_at FROM smart_kms_destruction_job job ")
+                .append("INNER JOIN smart_kms_key kms_key ON job.owner_principal_id = kms_key.owner_principal_id ")
+                .append("AND job.key_id = kms_key.id WHERE job.owner_principal_id = :filterOwnerPrincipalId");
+        StringBuilder countSql = new StringBuilder("SELECT COUNT(1) FROM smart_kms_destruction_job job WHERE job.owner_principal_id = :filterOwnerPrincipalId");
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue("filterOwnerPrincipalId", filterOwner)
+                .addValue("offset", Long.valueOf(offset)).addValue("limit", Integer.valueOf(limit));
+        if (!scope.isAll()) {
+            pageSql.append(" AND job.owner_principal_id IN (:ownerPrincipalIds)");
+            countSql.append(" AND job.owner_principal_id IN (:ownerPrincipalIds)");
+            parameters.addValue("ownerPrincipalIds", scope.getOwnerPrincipalIds());
+        }
+        pageSql.append(" ORDER BY job.due_at DESC, job.id DESC LIMIT :limit OFFSET :offset");
+        try {
+            List<KmsDestructionJob> items = jdbcTemplate.query(pageSql.toString(), parameters, ROW_MAPPER);
+            Long total = jdbcTemplate.queryForObject(countSql.toString(), parameters, Long.class);
+            return new KmsDestructionJobPage(items, total == null ? 0L : total.longValue());
+        } catch (DataAccessException exception) {
+            throw new KmsPersistenceException();
+        }
+    }
+
+    /**
      * 使用完整 DataPlan 归属范围查询销毁任务；列表与计数始终使用同一 owner 谓词。
      */
     @Override

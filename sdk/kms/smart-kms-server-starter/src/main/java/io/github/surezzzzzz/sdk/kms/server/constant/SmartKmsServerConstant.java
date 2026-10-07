@@ -227,6 +227,19 @@ public final class SmartKmsServerConstant {
             + ":claimToken, :claimUntil, :attemptCount, :completedAt, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3) "
             + "FROM smart_kms_key WHERE owner_principal_id = :ownerPrincipalId AND key_ref = :keyRef";
     /**
+     * 单次快照查询密钥级销毁明细；不读取材料或领取令牌。
+     */
+    public static final String SQL_SELECT_KEY_DESTRUCTION_DETAILS = "SELECT kms_key.state AS key_state, "
+            + "kms_key.state_before_destruction AS key_previous_state, kms_key.row_version AS key_row_version, "
+            + "version.version AS version_number, version.state AS version_state, "
+            + "version.state_before_destruction AS version_previous_state, job.id AS job_id, job.state AS job_state, "
+            + "job.due_at, job.completed_at, job.first_claimed_at FROM smart_kms_key kms_key "
+            + "LEFT JOIN smart_kms_key_version version ON version.owner_principal_id = kms_key.owner_principal_id "
+            + "AND version.key_id = kms_key.id LEFT JOIN smart_kms_destruction_job job "
+            + "ON job.owner_principal_id = version.owner_principal_id AND job.key_id = version.key_id "
+            + "AND job.key_version = version.version WHERE kms_key.owner_principal_id = :ownerPrincipalId "
+            + "AND kms_key.key_ref = :keyRef ORDER BY version.version ASC";
+    /**
      * 按 owner 和 keyRef 查询销毁任务的SQL。
      */
     public static final String SQL_SELECT_DESTRUCTION_JOB_BY_KEY_REF = "SELECT job.owner_principal_id, kms_key.key_ref, "
@@ -347,6 +360,10 @@ public final class SmartKmsServerConstant {
      * KMS 公钥读取 scope。
      */
     public static final String SCOPE_READ_PUBLIC_KEY = "kms.read-public-key";
+    /**
+     * 公钥和销毁明细禁止 HTTP 缓存保存。
+     */
+    public static final String HTTP_CACHE_CONTROL_NO_STORE = "no-store";
     /**
      * KMS 门户主体自省 API 权限码。
      */

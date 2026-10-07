@@ -1,19 +1,21 @@
 # smart-kms-server-starter
 
-`2.0.1` 提供 KMS 服务端：逻辑密钥与版本生命周期、精确 key policy、签名验签、AES-GCM
+`2.0.2` 提供 KMS 服务端：逻辑密钥与版本生命周期、精确 key policy、签名验签、AES-GCM
 加解密、公钥分发、延迟销毁和审计事件。KMS 专属 MySQL 与服务进程构成密钥材料可信边界；调用方只能经
 HTTP 使用能力，不能直接读 `smart_kms_*` 表，也不会得到私钥或对称密钥材料。
 
 适用于 License 等业务服务，运行在 Spring Boot `2.7.9` 与 Java 8 字节码兼容环境。
 
-`2.0.1` 补齐普通用户的本人密钥生命周期：在具备对应 API 权限时，无需 DATA（管理数据范围授权）即可启停、
-轮换、安排和取消销毁本人密钥；跨归属人的治理操作继续要求 DATA。服务端仍复用 `smart-kms-core:2.0.0`，
-与 KMS Web `1.0.0` 配套，无数据库迁移。版本变更见 [CHANGELOG.2.0.1.md](CHANGELOG.2.0.1.md)。
+`2.0.2` 补齐本人公钥与密钥级销毁进度：人员具备读取公钥 API 权限时，可直接读取本人签名密钥公钥，
+无需额外使用策略；详情可回读各版本计划时间、进度和取消资格。本人启停、轮换、安排与取消继续按对应
+API 权限执行，无需 DATA（跨归属治理的数据范围授权）；跨归属治理继续要求 DATA。服务端仍复用
+`smart-kms-core:2.0.0`，与 KMS Web `1.0.0`、Contract `2.0.2` 配套，无数据库迁移。
+版本变更见 [CHANGELOG.2.0.2.md](CHANGELOG.2.0.2.md)。
 
 ## 最小接入
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:smart-kms-server-starter:2.0.1'
+implementation 'io.github.sure-zzzzzz:smart-kms-server-starter:2.0.2'
 implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
 ```
 
@@ -58,6 +60,12 @@ principalId = ownerPrincipalId = sourceId + ":" + subjectId
 顺带导出 data-permission/resource-server core）与 mysql-route 数据源路由（部署契约，配置即 `simple.mysql.route` 形态）
 随 POM 发布。
 
+默认桥仅在认证结果为 `HUMAN`（已验证的人员身份）时，为请求上下文保存人员证明；`SERVICE`
+（独立服务身份）继续调用要求使用策略的原公钥接口。自定义解析器的原两参数
+`KmsRequestContext(principal, requestId)` 保持可用，默认没有人员证明，因此不能访问新本人公钥接口。
+宿主须在自己的可信认证器已证明人员身份后使用 `KmsRequestContext.forVerifiedHuman(principal, requestId)`；
+该工厂要求 `principalId == ownerPrincipalId`，不能根据标识前缀或 HTTP 请求字段推断身份。
+
 ## 三权契约
 
 PAGE 只控制 Portal 菜单与路由，API 按端点拦截，DATA 决定管理范围；三者由 IAM 投影分别提供，不能相互推导。
@@ -69,7 +77,7 @@ PAGE 只控制 Portal 菜单与路由，API 按端点拦截，DATA 决定管理�
 | PAGE | `kms.page.policies` | 策略治理工作区 |
 | PAGE | `kms.page.destruction` | 销毁任务工作区 |
 | API | `kms.me.read` | 读取门户所需的最小主体与 PAGE 权限摘要 |
-| API | `kms.key.read` | 读取个人或管理范围内的密钥 |
+| API | `kms.key.read` | 读取个人或管理范围内的密钥和密钥级销毁明细 |
 | API | `kms.key.manage` | 创建、状态变更与轮换 |
 | API | `kms.key.policy` | 创建、读取和撤销精确 key policy |
 | API | `kms.key.destroy` | 安排/取消销毁、查询任务和 worker 健康 |
@@ -90,7 +98,8 @@ PAGE 只控制 Portal 菜单与路由，API 按端点拦截，DATA 决定管理�
 API permission + key policy + key/version state
 ```
 
-DATA、PAGE 或 owner 都不能替代 key policy。
+DATA、PAGE 或 owner 都不能替代原公钥与密码学接口的 key policy。新增人员本人公钥查询按
+API、可信人员身份、本人归属和状态独立授权，不要求额外使用策略。
 
 ## HTTP 契约
 
@@ -102,12 +111,16 @@ DATA、PAGE 或 owner 都不能替代 key policy。
 | `GET` | `/me` | `kms.me.read` | 最小主体、KMS API 权限和 PAGE 权限，不返回 DATA 原文或裸 subjectId |
 | `GET` | `/me/keys` | `kms.key.read` | 当前 owner 的分页密钥 |
 | `GET` | `/me/keys/{keyRef}` | `kms.key.read` | 当前 owner 的单个密钥 |
+| `GET` | `/me/keys/{keyRef}/public-keys` | `kms.read-public-key` + HUMAN + 本人归属 | 全部合法可分发 ES256 公钥，无需使用策略，响应 no-store |
+| `GET` | `/me/keys/{keyRef}/destruction` | `kms.key.read` | 本人密钥的销毁进度与业务取消资格，无 DATA，响应 no-store |
 | `PATCH` | `/me/keys/{keyRef}/state` | `kms.key.manage` | 本人 ACTIVE 与 DISABLED 互相迁移，不要求 DATA |
 | `POST` | `/me/keys/{keyRef}/versions` | `kms.key.manage` | 轮换本人活动密钥，不要求 DATA |
 | `PUT` | `/me/keys/{keyRef}/destruction` | `kms.key.destroy` | 按本人销毁窗口安排，不要求 DATA |
 | `DELETE` | `/me/keys/{keyRef}/destruction` | `kms.key.destroy` | 取消本人从未被领取的销毁任务，不要求 DATA |
-| `GET` | `/admin/keys` | `kms.key.read` / `kms-key:read` | DataPlan 范围内分页密钥，返回 ownerPrincipalId |
-| `GET` | `/admin/keys/{keyRef}` | `kms.key.read` / `kms-key:read` | DataPlan 范围内单个密钥 |
+| `GET` | `/admin/policies` | `kms.key.policy` / `kms-key` DATA | DataPlan 范围内跨钥策略分页，支持别名/主体/操作筛选，返回密钥别名与双方主体显示名 |
+| `GET` | `/admin/keys` | `kms.key.read` / `kms-key:read` | DataPlan 范围内分页密钥，返回 ownerPrincipalId、ownerDisplayName，支持可选 ownerPrincipalId 精确筛选（只在范围内收窄） |
+| `GET` | `/admin/keys/{keyRef}` | `kms.key.read` / `kms-key:read` | DataPlan 范围内单个密钥，返回 ownerDisplayName |
+| `GET` | `/admin/keys/{keyRef}/destruction` | `kms.key.read` / `kms-key:read` | 授权范围内密钥的销毁进度与业务取消资格，响应 no-store |
 | `POST` | `/keys` | `kms.key.manage` | 创建当前 owner 的 ES256 或 AES-256-GCM 密钥，不要求 DATA |
 | `GET` | `/keys`、`/keys/{keyRef}` | `kms.key.read` | 兼容读取当前 owner 的密钥 |
 | `PATCH` | `/keys/{keyRef}/state` | `kms.key.manage` / `kms-key:manage` | `ACTIVE` 与 `DISABLED` 合法迁移 |
@@ -120,7 +133,7 @@ DATA、PAGE 或 owner 都不能替代 key policy。
 | `DELETE` | `/keys/{keyRef}/policies/{policyId}` | `kms.key.policy` / `kms-key:policy` | 撤销策略 |
 | `POST` | `/crypto/signatures`、`/crypto/verifications` | `kms.sign` / `kms.verify` + key policy | ES256 签名或验签 |
 | `POST` | `/crypto/envelopes`、`/crypto/decryptions` | `kms.encrypt` / `kms.decrypt` + key policy | AES-256-GCM 加密或解密 |
-| `GET` | `/destruction-jobs` | `kms.key.destroy` / `kms-key:destroy` | DataPlan 范围内销毁任务分页，无领取令牌 |
+| `GET` | `/destruction-jobs` | `kms.key.destroy` / `kms-key:destroy` | DataPlan 范围内销毁任务分页，无领取令牌，条目含归属主体，支持可选 ownerPrincipalId 精确筛选 |
 | `GET` | `/destruction-worker/health` | `kms.key.destroy` | 当前实例 worker 健康事实 |
 | `GET` | `/me/destruction-policy` | `kms.key.destroy` | 当前 owner 的销毁窗口政策（无行 = 不限制） |
 | `PUT` | `/me/destruction-policy` | `kms.key.destroy` | 写当前 owner 的销毁窗口政策（幂等 upsert + 审计） |
@@ -149,6 +162,19 @@ DATA、PAGE 或 owner 都不能替代 key policy。
 不能根据 `403/404` 回退到另一入口。启停只允许 ACTIVE 与 DISABLED 互相迁移；待销毁密钥必须通过
 取消任务恢复，不能用 PATCH 绕过领取校验或标记为已销毁。
 
+本人公钥接口返回 `keyRef/version/algorithm/state/publicKey` 的数组，按版本升序；公钥是无填充
+Base64url 编码的 X.509 SPKI DER。活动或停用的 SIGN/ES256 密钥可读取活动、退役版本；AES、待销毁、
+已销毁返回 `409`。缺版本、材料或不可能的存储状态返回 `503`，不返回部分列表。接口不额外要求
+`kms.key.read`；Web 打开密钥详情仍要求该读取权限。缺公钥 API 权限、SERVICE 或缺人员证明为 `403`，
+本人归属内不存在及他人目标统一 `404`。原公钥和密码学接口的使用策略校验保持。
+
+密钥级销毁明细返回 `keyRef/keyState/rowVersion/cancelEligible/items`，`items` 按 `keyVersion` 升序，
+每版只有 `keyVersion/state/dueAt/completedAt`。`dueAt` 是最早允许开始时间，未完成的 `completedAt` 为
+null；两者使用 UTC 三位毫秒时间。未排程或取消后 items 为空，完成记录仍保留。查询失败为 `503`。
+`cancelEligible` 表示读取时全部任务从未领取且能恢复的业务资格，不包含调用者的销毁授权。
+任一任务历史领取过，即使释放回等待态或租约过期也不能取消；取消命令仍在提交时最终复核。
+Web 按密钥标识、状态和 rowVersion 配对元数据与明细，回读失败不能伪装为无任务或沿用取消资格。
+
 ## 销毁政策与密钥使用策略
 
 销毁窗口政策按归属人生效，自动约束其名下全部密钥，无需逐把关联。归属人通过
@@ -158,8 +184,9 @@ DATA、PAGE 或 owner 都不能替代 key policy。
 只有后台从未领取过的任务才可取消，取消后恢复安排前状态。
 
 密钥使用策略用于授权某个调用主体访问指定密钥、版本和密码学操作，与销毁窗口政策分开配置。
-ES256 公钥读取仍须具有 `kms.read-public-key`、本人归属和精确 `READ_PUBLIC_KEY` 使用策略；
-管理员或自助角色不自动获得使用策略。私钥与 AES 对称密钥材料不提供查看或导出。
+人员本人公钥查询只需 `kms.read-public-key`、可信 HUMAN、本人归属与合法状态，既有密钥、新建密钥和
+轮换版本均无需补 `READ_PUBLIC_KEY` 使用策略。原公钥接口和密码学调用仍要求精确策略；管理员的
+治理 DATA 不能从本人路径读取他人公钥。私钥与 AES 对称密钥材料不提供查看或导出。
 
 销毁完成会清空私钥和对称材料，不可恢复。当前明确不提供密钥材料导入/导出、归属转移、审计查询、KEK、HSM、TPM
 或外部 KMS 集成；审计查询将在具备独立服务端 API 后再定义页面、API 与 DATA 投影。
@@ -169,7 +196,7 @@ ES256 公钥读取仍须具有 `kms.read-public-key`、本人归属和精确 `RE
 - 全新初始化：`docs/schema.sql`（MySQL 5.7+，删除同名既有 `smart_kms_*` 表）。
 - 版本升级：`docs/migration/`（`V{from}__to__V{to}__{name}.sql`，同库仅执行一次，执行前备份）。
 - 1.x -> 2.0.0 为**全量重建**（tenantId -> ownerPrincipalId 语义不可映射），详见 `docs/migration/README.md`。
-- 2.0.0 -> 2.0.1 复用全部既有表和历史记录，无迁移；已有数据库不得重新执行初始化脚本。
+- 2.0.0/2.0.1 -> 2.0.2 复用全部既有表和历史记录，无迁移；已有数据库不得重新执行初始化脚本。
 
 
 ## Resource Server 路由权限
@@ -194,18 +221,34 @@ KMS 已持久化的 owner 或密钥材料。
 
 注册、菜单、角色、人员准入与资源验证统一见
 [KMS Web 可信应用接入手册](https://github.com/Sure-Zzzzzz/smart-kms-admin-web/blob/main/docs/TRUSTED_APPLICATION_ONBOARDING.md)。
-角色 API 不自动创建密钥使用策略；公钥仍需同 owner 的 READ_PUBLIC_KEY 精确策略。
+角色 API 不自动创建密钥使用策略；标准自助角色已能通过新本人公钥路径读取本人合法公钥。
+
+## 从 2.0.1 升级
+
+1. 升级 Server 到 `2.0.2`，复用原数据库。标准自助角色已有五项 API，无需增权、重新注册或补历史策略。
+2. 自定义主体解析器按前述方法提供可信人员证明；旧构造器只影响新本人公钥入口，原调用保持兼容。
+   使用自定义密钥、版本或任务存储的宿主须提供 `KmsKeyDestructionQueryRepository`，保证同一已提交
+   快照中的状态、任务与历史取消资格。默认 JDBC 明细仅对内置同源存储装配，不读取影子数据；
+   缺该新端口时保留原路由，不装配两个销毁明细路由。
+3. 核验零使用策略的人员仍可读本人合法公钥、旧接口仍拒绝、销毁进度可回读，再部署 Web `1.0.0`。
+   当前 Web 要求 Server/Contract `2.0.2`，不能先部署，也不根据失败回退旧接口。
+4. 治理列表归属筛选与显示名：`/admin/keys`、`/keys` 的 `ownerPrincipalId` 精确筛选只在 DataPlan 范围内收窄；
+   显示名来自可选 `KmsPrincipalDisplayNameResolver`，宿主可用自有目录实现替换，默认未解析时响应字段为空、
+   前端回退原始主体标识。自定义 `KmsKeyQueryRepository` 未覆盖归属筛选重载时，携带筛选返回 400。
+
+回滚先恢复与 Server `2.0.1` 兼容的旧 Web 制品与配置，再回退 Server。没有旧制品时先撤下门户入口；
+不需要数据库回滚、补策略或任务重建。
 
 ## 从 2.0.0 升级
 
 升级前保存与 Server `2.0.0` 兼容的 Web 制品及配置，按以下顺序部署：
 
-1. 升级 Server 到 `2.0.1`，复用原有数据库，不重新执行初始化脚本。
+1. 升级 Server 到 `2.0.2`，复用原有数据库，不重新执行初始化脚本。
 2. 按可信应用接入手册更新 IAM 角色规则并核验用户投影：管理员增加 `kms.read-public-key`，
    自助用户增加 `kms.key.destroy` 和 `kms.read-public-key`；自助 DATA 保持为空，已有治理数据范围按原授权保留。
    原完整权限清单已声明这些权限码，标准升级无需新增权限码。
 3. 部署 Web `1.0.0`，分别验收本人路径和治理路径。Web 本人模式使用新增接口，不能先于 Server 部署，
-   不支持 `Web 1.0.0 + Server 2.0.0` 的组合。只调整角色无法在旧 Server 上补齐这四个本人写接口。
+   当前 Web 要求 Server/Contract `2.0.2`。只调整角色无法在旧 Server 上补齐本人写接口和新增查询。
 
 旧治理写继续校验 DATA，合法调用保持兼容。新旧启停接口只接受 `ACTIVE`、`DISABLED` 目标：非法目标
 返回 `400`，待销毁、已销毁密钥或不发生状态迁移的启停请求返回 `409`；取消与后台销毁继续使用专属流程。
@@ -216,7 +259,7 @@ Core `2.0.0`、现有 Client、IAM 和 AKSK 无需为本次增量升级，也不
 
 ## 安全与运行边界
 
-- 密钥材料不会进入 HTTP 响应、日志、审计事件或幂等响应快照。
+- 私钥与对称密钥材料不会进入 HTTP 响应、日志、审计事件或幂等响应快照；公钥只通过授权公钥接口分发。
 - 数据库 UTC 时间是策略到期、状态迁移、销毁调度和租约判断的权威时间。
 - 验签不匹配返回 `200` 与 `{ "valid": false }`；密码学请求不使用幂等键，网络结果未知时调用方不能盲目重试。
 - 审计事件在成功事务提交后发布；listener 失败不改变 KMS 业务结果。

@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsDestructionJobPage;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsDestructionJobQueryRepository;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsDestructionWorkerLifecycle;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalDisplayNameResolver;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.servlet.http.HttpServletRequest;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,22 +39,32 @@ public class KmsDestructionController extends KmsHttpControllerSupport {
     private final KmsDestructionJobQueryRepository jobQueryRepository;
     private final DestructionWorkerHealthService workerHealthService;
     private final KmsDestructionWorkerLifecycle workerLifecycle;
+    private final KmsPrincipalDisplayNameResolver displayNameResolver;
 
     /**
      * 创建销毁任务管理控制器。
+     *
+     * @param principalResolver   可信认证主体解析器
+     * @param properties          KMS 配置
+     * @param jobQueryRepository  销毁任务分页查询仓储
+     * @param workerHealthService worker 健康查询
+     * @param workerLifecycle     worker 生命周期
+     * @param displayNameResolver 可选的主体显示名解析端口
      */
     public KmsDestructionController(KmsPrincipalResolver principalResolver, SmartKmsServerProperties properties,
                                     KmsDestructionJobQueryRepository jobQueryRepository,
                                     DestructionWorkerHealthService workerHealthService,
-                                    KmsDestructionWorkerLifecycle workerLifecycle) {
+                                    KmsDestructionWorkerLifecycle workerLifecycle,
+                                    KmsPrincipalDisplayNameResolver displayNameResolver) {
         super(principalResolver, properties);
         this.jobQueryRepository = jobQueryRepository;
         this.workerHealthService = workerHealthService;
         this.workerLifecycle = workerLifecycle;
+        this.displayNameResolver = displayNameResolver;
     }
 
     /**
-     * 分页查询当前 owner 的销毁任务。
+     * 按已评估 DataPlan 归属范围分页查询销毁任务，携带归属主体及其可选显示名；归属筛选只在范围内收窄。
      */
     @GetMapping(value = SmartKmsServerConstant.API_BASE_PATH + "/destruction-jobs", produces = JSON_UTF8)
     @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY)
@@ -60,20 +72,29 @@ public class KmsDestructionController extends KmsHttpControllerSupport {
             action = SmartKmsServerConstant.DATA_ACTION_KEY_DESTROY)
     public ResponseEntity<String> jobs(@RequestParam(defaultValue = "1") int page,
                                        @RequestParam(required = false) Integer size,
+                                       @RequestParam(required = false) String ownerPrincipalId,
                                        @CurrentDataAccessPlan DataAccessPlan plan,
                                        HttpServletRequest request) {
         requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_DESTROY);
         int defaultSize = pageDefaultSize();
         int maxSize = pageMaxSize(defaultSize);
         int resolvedSize = size == null ? defaultSize : size.intValue();
+        String filterOwner = ownerPrincipalId == null || ownerPrincipalId.trim().isEmpty() ? null
+                : ownerPrincipalId.trim();
         if (page < 1 || resolvedSize < 1 || resolvedSize > maxSize) {
             throw new io.github.surezzzzzz.sdk.kms.core.exception.KmsValidationException();
         }
-        KmsDestructionJobPage result = jobQueryRepository.findPage(KmsOwnerAccessScope.from(plan),
+        KmsDestructionJobPage result = jobQueryRepository.findPage(KmsOwnerAccessScope.from(plan), filterOwner,
                 ((long) page - 1L) * (long) resolvedSize, resolvedSize);
-        java.util.List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+        List<String> owners = new ArrayList<String>();
         for (KmsDestructionJob job : result.getItems()) {
-            items.add(job(job));
+            owners.add(job.getOwnerPrincipalId());
+        }
+        Map<String, String> displayNames = displayNameResolver.resolveDisplayNames(owners);
+        List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
+        for (KmsDestructionJob job : result.getItems()) {
+            String displayName = displayNames.get(job.getOwnerPrincipalId());
+            items.add(job(job, displayName == null || displayName.isEmpty() ? null : displayName));
         }
         Map<String, Object> response = map();
         response.put("items", items);
@@ -113,10 +134,12 @@ public class KmsDestructionController extends KmsHttpControllerSupport {
     }
 
     /**
-     * 转换不含敏感领取令牌的销毁任务响应。
+     * 转换不含敏感领取令牌的销毁任务响应，附带归属主体及其可选显示名。
      */
-    private Map<String, Object> job(KmsDestructionJob source) {
+    private Map<String, Object> job(KmsDestructionJob source, String ownerDisplayName) {
         Map<String, Object> response = map();
+        response.put("ownerPrincipalId", source.getOwnerPrincipalId());
+        response.put("ownerDisplayName", ownerDisplayName);
         response.put("keyRef", source.getKeyRef());
         response.put("keyVersion", Integer.valueOf(source.getKeyVersion()));
         response.put("state", source.getState().getCode());

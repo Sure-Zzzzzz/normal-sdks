@@ -16,6 +16,7 @@ import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyMetadata;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyPage;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyQueryRepository;
+import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalDisplayNameResolver;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
 import org.springframework.http.ResponseEntity;
@@ -38,18 +39,26 @@ import java.util.Map;
 public class KmsAdminKeyQueryController extends KmsHttpControllerSupport {
 
     private final KmsKeyQueryRepository keyQueryRepository;
+    private final KmsPrincipalDisplayNameResolver displayNameResolver;
 
     /**
      * 创建管理员密钥查询控制器。
+     *
+     * @param principalResolver   可信认证主体解析器
+     * @param properties          KMS 配置
+     * @param keyQueryRepository  受 DataPlan 约束的密钥查询仓储
+     * @param displayNameResolver 可选的主体显示名解析端口
      */
     public KmsAdminKeyQueryController(KmsPrincipalResolver principalResolver, SmartKmsServerProperties properties,
-                                      KmsKeyQueryRepository keyQueryRepository) {
+                                      KmsKeyQueryRepository keyQueryRepository,
+                                      KmsPrincipalDisplayNameResolver displayNameResolver) {
         super(principalResolver, properties);
         this.keyQueryRepository = keyQueryRepository;
+        this.displayNameResolver = displayNameResolver;
     }
 
     /**
-     * 在当前 DataPlan 范围内分页查询密钥。
+     * 在当前 DataPlan 范围内分页查询密钥；归属筛选只能在范围内收窄。
      */
     @GetMapping(produces = JSON_UTF8)
     @RequireApiPermission(SmartKmsServerConstant.API_PERMISSION_KEY_READ)
@@ -61,10 +70,13 @@ public class KmsAdminKeyQueryController extends KmsHttpControllerSupport {
                                        @RequestParam(required = false) String purpose,
                                        @RequestParam(required = false) String algorithm,
                                        @RequestParam(required = false) String state,
+                                       @RequestParam(required = false) String ownerPrincipalId,
                                        @CurrentDataAccessPlan DataAccessPlan plan,
                                        HttpServletRequest request) {
         requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_READ);
         int resolvedSize = size == null ? pageDefaultSize() : size.intValue();
+        String filterOwner = ownerPrincipalId == null || ownerPrincipalId.trim().isEmpty() ? null
+                : ownerPrincipalId.trim();
         if (page < 1 || resolvedSize < 1 || resolvedSize > pageMaxSize(pageDefaultSize())
                 || (purpose != null && KmsKeyPurpose.fromCode(purpose) == null)
                 || (algorithm != null && KmsAlgorithm.fromCode(algorithm) == null)
@@ -72,10 +84,11 @@ public class KmsAdminKeyQueryController extends KmsHttpControllerSupport {
             throw new KmsValidationException();
         }
         KmsKeyPage result = keyQueryRepository.findPage(KmsOwnerAccessScope.from(plan), alias, purpose, algorithm,
-                state, ((long) page - 1L) * (long) resolvedSize, resolvedSize);
+                state, filterOwner, ((long) page - 1L) * (long) resolvedSize, resolvedSize);
+        Map<String, String> displayNames = displayNames(result.getItems());
         List<Map<String, Object>> items = new ArrayList<Map<String, Object>>();
         for (KmsKeyMetadata metadata : result.getItems()) {
-            items.add(key(metadata));
+            items.add(key(metadata, displayNames.get(metadata.getKey().getOwnerPrincipalId())));
         }
         Map<String, Object> response = map();
         response.put("items", items);
@@ -97,13 +110,34 @@ public class KmsAdminKeyQueryController extends KmsHttpControllerSupport {
         requireApiPermission(context(request), SmartKmsServerConstant.API_PERMISSION_KEY_READ);
         KmsKeyMetadata metadata = keyQueryRepository.findMetadata(KmsOwnerAccessScope.from(plan), keyRef)
                 .orElseThrow(KmsNotFoundException::new);
-        return json(200, key(metadata));
+        String owner = metadata.getKey().getOwnerPrincipalId();
+        return json(200, key(metadata, firstResolved(owner)));
     }
 
-    private Map<String, Object> key(KmsKeyMetadata metadata) {
+    /**
+     * 批量解析当前页归属主体的显示名。
+     */
+    private Map<String, String> displayNames(List<KmsKeyMetadata> items) {
+        List<String> owners = new ArrayList<String>();
+        for (KmsKeyMetadata metadata : items) {
+            owners.add(metadata.getKey().getOwnerPrincipalId());
+        }
+        return displayNameResolver.resolveDisplayNames(owners);
+    }
+
+    /**
+     * 解析单个归属主体的显示名。
+     */
+    private String firstResolved(String ownerPrincipalId) {
+        String displayName = displayNameResolver.resolveDisplayName(ownerPrincipalId);
+        return displayName == null || displayName.isEmpty() ? null : displayName;
+    }
+
+    private Map<String, Object> key(KmsKeyMetadata metadata, String ownerDisplayName) {
         KmsKey key = metadata.getKey();
         Map<String, Object> response = map();
         response.put("ownerPrincipalId", key.getOwnerPrincipalId());
+        response.put("ownerDisplayName", ownerDisplayName);
         response.put("keyRef", key.getKeyRef());
         response.put("keyAlias", key.getKeyAlias());
         response.put("purpose", key.getPurpose().getCode());

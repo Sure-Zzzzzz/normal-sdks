@@ -1,4 +1,5 @@
 # 走查形态（gitignored 凭据经环境变量注入）：完整协作链 + test 库（smart_kms_test）+ 8380
+# 走查目录显示名：kms.walkthrough.directory.{iam,aksk}.{url,username,password}，密码按模块惯例放 application-local.yml
 # 起服：--spring.profiles.active=local,walkthrough；环境变量 KMS_VC_ID/KMS_VC_SECRET/KMS_AKSK_INTROSPECT_ID/KMS_AKSK_INTROSPECT_SECRET
 server:
   port: 8390
@@ -57,10 +58,8 @@ io:
                 api-permission-rules:
                   # keys 族零规则：拦截器对未匹配路径回退控制器 @RequireApiPermission（精确码即规则）。
                   # 通配粗码会覆盖精码，把只有 read-public-key/policy 码的最小权限主体在规则层错拦。
-                  # 其余族（me/admin/crypto/destruction）配粗族通配，注解仍逐端点终判
+                  # 本人公钥与销毁明细同样按注解精确授权，不能用读取粗规则覆盖公钥权限。
                   - { method: GET,   pathPattern: /api/kms/me,                        apiPermission: kms.me.read }
-                  - { method: GET,   pathPattern: /api/kms/me/keys/**,                 apiPermission: kms.key.read }
-                  - { method: GET,   pathPattern: /api/kms/admin/keys/**,              apiPermission: kms.key.read }
                   - { method: GET,   pathPattern: /api/kms/me/destruction-policy,        apiPermission: kms.key.destroy }
                   - { method: GET,   pathPattern: /api/kms/admin/owners/**,               apiPermission: kms.key.destroy }
                   - { method: GET,   pathPattern: /api/kms/destruction-jobs,            apiPermission: kms.key.destroy }

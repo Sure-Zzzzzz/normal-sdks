@@ -89,8 +89,10 @@ public class KmsResourceServerPrincipalResolver implements KmsPrincipalResolver 
                 context.getApplicationAuthorization().getApiPermissions().size(), scopes.size(),
                 (System.nanoTime() - startNanos) / 1000L);
 
-        KmsRequestContext requestContext = new KmsRequestContext(
-                new KmsPrincipal(kmsPrincipalId, scopes), context.getRequestId());
+        KmsPrincipal kmsPrincipal = new KmsPrincipal(kmsPrincipalId, scopes);
+        KmsRequestContext requestContext = context.getPrincipal().getSubjectType() == ResourceSubjectType.HUMAN
+                ? KmsRequestContext.forVerifiedHuman(kmsPrincipal, context.getRequestId())
+                : new KmsRequestContext(kmsPrincipal, context.getRequestId());
         log.info("KMS 资源层主体解析成功 requestId={} principalId={} subjectType={} scopes={}",
                 requestContext.getRequestId(), kmsPrincipalId,
                 context.getPrincipal().getSubjectType(), scopes);

@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.kms.core.service.KeyManagementService;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyResult;
 import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyService;
 import io.github.surezzzzzz.sdk.kms.server.test.SmartKmsServerTestApplication;
+import io.github.surezzzzzz.sdk.kms.server.test.support.KmsTestSchemaHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,12 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -132,8 +131,7 @@ class SmartKmsServerHttpIntegrationTest {
      */
     @BeforeEach
     void resetSchema() {
-        new ResourceDatabasePopulator(
-                new FileSystemResource("docs/schema.sql")).execute(dataSource);
+        KmsTestSchemaHelper.reset(dataSource);
     }
 
     /**
@@ -317,6 +315,7 @@ class SmartKmsServerHttpIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.items[0].keyRef").value(keyRef))
+                .andExpect(jsonPath("$.items[0].ownerPrincipalId").value(OWNER_PRINCIPAL_ID))
                 .andExpect(jsonPath("$.items[0].claimToken").doesNotExist());
         mockMvc.perform(get("/api/kms/destruction-jobs")
                         .header("X-Test-Owner-Principal", "other-owner")
@@ -324,6 +323,19 @@ class SmartKmsServerHttpIntegrationTest {
                         .header("X-Test-Request-Id", REQUEST_ID))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(1));
+        mockMvc.perform(get("/api/kms/destruction-jobs").param("ownerPrincipalId", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].ownerPrincipalId").value(OWNER_PRINCIPAL_ID));
+        mockMvc.perform(get("/api/kms/destruction-jobs").param("ownerPrincipalId", "iam:0000000000000000")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(0));
         mockMvc.perform(get("/api/kms/destruction-worker/health")
                         .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
                         .header("X-Test-Principal", PRINCIPAL_ID)
@@ -332,6 +344,136 @@ class SmartKmsServerHttpIntegrationTest {
                 .andExpect(jsonPath("$.running").isBoolean())
                 .andExpect(jsonPath("$.claimable").isBoolean())
                 .andExpect(jsonPath("$.consecutiveFailureCount").isNumber());
+    }
+
+    /**
+     * 验证管理列表按精确归属主体收窄，条目携带归属标识；默认解析器下显示名为空。
+     *
+     * @throws Exception HTTP 调用失败
+     */
+    @Test
+    void shouldFilterAdminKeysByExactOwnerWithinDataPlan() throws Exception {
+        String ownerA = "filter-owner-a";
+        String ownerB = "filter-owner-b";
+        createKeyUnderOwner(ownerA, "filter-a-signing-key");
+        createKeyUnderOwner(ownerB, "filter-b-signing-key");
+        log.info("归属筛选前置完成: ownerA={}, ownerB={}", ownerA, ownerB);
+        mockMvc.perform(get("/api/kms/admin/keys").param("page", "1").param("size", "100")
+                        .param("ownerPrincipalId", ownerA)
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].keyAlias").value("filter-a-signing-key"))
+                .andExpect(jsonPath("$.items[0].ownerPrincipalId").value(ownerA))
+                .andExpect(jsonPath("$.items[0].ownerDisplayName").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.items[0].createdAt").isNotEmpty());
+        mockMvc.perform(get("/api/kms/admin/keys").param("page", "1").param("size", "100")
+                        .param("ownerPrincipalId", ownerB)
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].keyAlias").value("filter-b-signing-key"))
+                .andExpect(jsonPath("$.items[0].ownerPrincipalId").value(ownerB));
+        mockMvc.perform(get("/api/kms/admin/keys").param("page", "1").param("size", "100")
+                        .param("ownerPrincipalId", " ")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2));
+    }
+
+    /**
+     * 在指定 owner 下创建一把 ES256 签名密钥。
+     */
+    private void createKeyUnderOwner(String ownerPrincipalId, String keyAlias) throws Exception {
+        String body = String.format("{\"keyAlias\":\"%s\",\"purpose\":\"SIGN\",\"algorithm\":\"ES256\"}", keyAlias);
+        mockMvc.perform(post("/api/kms/keys")
+                        .header("X-Test-Owner-Principal", ownerPrincipalId)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID)
+                        .header("Idempotency-Key", "test-idempotency-key-" + keyAlias)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
+    }
+
+    /**
+     * 验证治理视角跨钥策略分页：范围收窄、主体与操作筛选、条目附带密钥别名。
+     *
+     * @throws Exception HTTP 调用失败
+     */
+    @Test
+    void shouldPageAdminPoliciesAcrossKeysWithFilters() throws Exception {
+        createKeyUnderOwner("filter-owner-a", "policy-a-signing-key");
+        createKeyUnderOwner("filter-owner-b", "policy-b-signing-key");
+        grantPolicy("policy-a-signing-key", "policy-subject-a", "SIGN");
+        grantPolicy("policy-b-signing-key", "policy-subject-b", "VERIFY");
+        log.info("跨钥策略前置完成：两名 owner 各一条策略");
+        mockMvc.perform(get("/api/kms/admin/policies").param("page", "1").param("size", "20")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.items[0].keyAlias").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].ownerPrincipalId").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].principalId").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].operation").isNotEmpty())
+                .andExpect(jsonPath("$.items[0].policyId").isNotEmpty());
+        mockMvc.perform(get("/api/kms/admin/policies").param("page", "1").param("size", "20")
+                        .param("principalId", "policy-subject-a")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].keyAlias").value("policy-a-signing-key"))
+                .andExpect(jsonPath("$.items[0].principalId").value("policy-subject-a"));
+        mockMvc.perform(get("/api/kms/admin/policies").param("page", "1").param("size", "20")
+                        .param("operation", "VERIFY")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].keyAlias").value("policy-b-signing-key"));
+        mockMvc.perform(get("/api/kms/admin/policies").param("page", "1").param("size", "20")
+                        .param("operation", "NOT_AN_OPERATION")
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * 在指定密钥下授予一条 SIGN 策略。
+     */
+    private void grantPolicy(String keyAlias, String principalId, String operation) throws Exception {
+        MvcResult created = mockMvc.perform(get("/api/kms/admin/keys").param("page", "1").param("size", "100")
+                        .param("alias", keyAlias)
+                        .header("X-Test-Owner-Principal", OWNER_PRINCIPAL_ID)
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID))
+                .andExpect(status().isOk())
+                .andReturn();
+        com.fasterxml.jackson.databind.JsonNode items = OBJECT_MAPPER.readTree(created.getResponse().getContentAsString())
+                .get("items");
+        assertTrue(items != null && items.size() > 0, "别名筛选应命中刚创建的密钥: " + keyAlias
+                + " 响应=" + created.getResponse().getContentAsString());
+        String keyRef = items.get(0).get("keyRef").textValue();
+        mockMvc.perform(post("/api/kms/keys/{keyRef}/policies", keyRef)
+                        .header("X-Test-Owner-Principal", keyAlias.startsWith("policy-a") ? "filter-owner-a" : "filter-owner-b")
+                        .header("X-Test-Principal", PRINCIPAL_ID)
+                        .header("X-Test-Request-Id", REQUEST_ID)
+                        .header("Idempotency-Key", "test-idempotency-key-" + keyAlias + "-policy")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"principalId\":\"%s\",\"operation\":\"%s\"}", principalId, operation)))
+                .andExpect(status().isCreated());
     }
 
     /**

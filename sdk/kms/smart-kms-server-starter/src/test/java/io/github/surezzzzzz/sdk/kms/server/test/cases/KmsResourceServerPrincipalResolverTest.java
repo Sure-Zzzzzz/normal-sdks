@@ -273,6 +273,8 @@ class KmsResourceServerPrincipalResolverTest {
                 documentOf(ownerGrant(OWNER_PRINCIPAL_ID)), "kms.sign"));
         assertNotEquals(aksk.getPrincipal().getPrincipalId(), other.getPrincipal().getPrincipalId(),
                 "SERVICE 主体的相同 subjectId 跨源必须产出不同 principalId");
+        assertFalse(aksk.isVerifiedHumanSubject());
+        assertFalse(other.isVerifiedHumanSubject());
     }
 
     /**
@@ -289,6 +291,8 @@ class KmsResourceServerPrincipalResolverTest {
                 "同人从门户登录与用 inherited AKU 调用必须产出同一 ownerPrincipalId（iam: 前缀归一）");
         assertTrue(portal.getPrincipal().getPrincipalId().startsWith("iam:"),
                 "HUMAN 主体统一 iam: 前缀");
+        assertTrue(portal.isVerifiedHumanSubject());
+        assertTrue(inheritedAku.isVerifiedHumanSubject());
     }
 
     /**

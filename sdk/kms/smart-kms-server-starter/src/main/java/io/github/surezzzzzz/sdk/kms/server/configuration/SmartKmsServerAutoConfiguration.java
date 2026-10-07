@@ -148,9 +148,19 @@ public class SmartKmsServerAutoConfiguration {
      * @param jdbcTemplate 执行命名参数 SQL 的 JDBC 模板
      * @return 默认密钥版本仓储
      */
-    @Bean
-    @ConditionalOnMissingBean(KmsKeyVersionRepository.class)
     public KmsKeyVersionRepository kmsKeyVersionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+        return kmsJdbcKeyVersionRepository(jdbcTemplate);
+    }
+
+    /**
+     * 显式暴露默认 JDBC 类型供同源查询条件识别，保留原工厂方法的二进制签名。
+     *
+     * @param jdbcTemplate 执行命名参数 SQL 的 JDBC 模板
+     * @return 默认密钥版本 JDBC 仓储
+     */
+    @Bean(name = "kmsKeyVersionRepository")
+    @ConditionalOnMissingBean(KmsKeyVersionRepository.class)
+    public JdbcKmsKeyVersionRepository kmsJdbcKeyVersionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         return new JdbcKmsKeyVersionRepository(jdbcTemplate);
     }
 
@@ -233,6 +243,29 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
+     * 只为内置同源密钥、版本和任务存储提供默认销毁明细，自定义存储自行适配。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsKeyDestructionQueryRepository.class)
+    @ConditionalOnBean({JdbcKmsKeyRepository.class, JdbcKmsKeyVersionRepository.class, JdbcKmsDestructionJobRepository.class})
+    public KmsKeyDestructionQueryRepository kmsKeyDestructionQueryRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+        return new JdbcKmsKeyDestructionQueryRepository(jdbcTemplate);
+    }
+
+    /**
+     * 按新增查询端口装配独立路由，不改变旧自定义宿主的控制器构造器。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsKeyDestructionQueryController.class)
+    @ConditionalOnBean(KmsKeyDestructionQueryRepository.class)
+    public KmsKeyDestructionQueryController kmsKeyDestructionQueryController(KmsPrincipalResolver principalResolver,
+                                                                             SmartKmsServerProperties properties,
+                                                                             KmsKeyDestructionQueryRepository destructionQueryRepository,
+                                                                             KmsKeyQueryRepository keyQueryRepository) {
+        return new KmsKeyDestructionQueryController(principalResolver, properties, destructionQueryRepository, keyQueryRepository);
+    }
+
+    /**
      * 注册提交后发布的 KMS 安全审计事件端口。
      *
      * @param applicationEventPublisher Spring 应用事件发布器
@@ -291,9 +324,42 @@ public class SmartKmsServerAutoConfiguration {
                                              KmsKeyQueryRepository keyQueryRepository,
                                              KeyPolicyManagementService keyPolicyManagementService,
                                              PublicKeyService publicKeyService,
-                                             KmsManagementIdempotencyService idempotencyService) {
+                                             KmsManagementIdempotencyService idempotencyService,
+                                             KmsPrincipalDisplayNameResolver displayNameResolver) {
         return new KmsKeyController(principalResolver, properties, keyManagementService, keyQueryRepository,
-                keyPolicyManagementService, publicKeyService, idempotencyService);
+                keyPolicyManagementService, publicKeyService, idempotencyService, displayNameResolver);
+    }
+
+    /**
+     * 注册可选的主体显示名解析端口；宿主可用自有目录实现替换，默认始终返回未解析。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsPrincipalDisplayNameResolver.class)
+    public KmsPrincipalDisplayNameResolver kmsPrincipalDisplayNameResolver() {
+        return new DefaultKmsPrincipalDisplayNameResolver();
+    }
+
+    /**
+     * 只为内置同源密钥与策略存储提供默认跨钥策略分页查询，自定义存储自行适配。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsAdminPolicyQueryRepository.class)
+    @ConditionalOnBean(JdbcKmsKeyRepository.class)
+    public KmsAdminPolicyQueryRepository kmsAdminPolicyQueryRepository(NamedParameterJdbcTemplate jdbcTemplate) {
+        return new JdbcKmsAdminPolicyQueryRepository(jdbcTemplate);
+    }
+
+    /**
+     * 按跨钥策略查询端口装配治理列表路由，缺端口时不装配。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsAdminPolicyQueryController.class)
+    @ConditionalOnBean(KmsAdminPolicyQueryRepository.class)
+    public KmsAdminPolicyQueryController kmsAdminPolicyQueryController(KmsPrincipalResolver principalResolver,
+                                                                       SmartKmsServerProperties properties,
+                                                                       KmsAdminPolicyQueryRepository policyQueryRepository,
+                                                                       KmsPrincipalDisplayNameResolver displayNameResolver) {
+        return new KmsAdminPolicyQueryController(principalResolver, properties, policyQueryRepository, displayNameResolver);
     }
 
     /**
@@ -303,8 +369,9 @@ public class SmartKmsServerAutoConfiguration {
     @ConditionalOnMissingBean(KmsAdminKeyQueryController.class)
     public KmsAdminKeyQueryController kmsAdminKeyQueryController(KmsPrincipalResolver principalResolver,
                                                                  SmartKmsServerProperties properties,
-                                                                 KmsKeyQueryRepository keyQueryRepository) {
-        return new KmsAdminKeyQueryController(principalResolver, properties, keyQueryRepository);
+                                                                 KmsKeyQueryRepository keyQueryRepository,
+                                                                 KmsPrincipalDisplayNameResolver displayNameResolver) {
+        return new KmsAdminKeyQueryController(principalResolver, properties, keyQueryRepository, displayNameResolver);
     }
 
     /**
@@ -316,9 +383,10 @@ public class SmartKmsServerAutoConfiguration {
                                                              SmartKmsServerProperties properties,
                                                              KmsDestructionJobQueryRepository jobQueryRepository,
                                                              DestructionWorkerHealthService workerHealthService,
-                                                             KmsDestructionWorkerLifecycle workerLifecycle) {
+                                                             KmsDestructionWorkerLifecycle workerLifecycle,
+                                                             KmsPrincipalDisplayNameResolver displayNameResolver) {
         return new KmsDestructionController(principalResolver, properties, jobQueryRepository,
-                workerHealthService, workerLifecycle);
+                workerHealthService, workerLifecycle, displayNameResolver);
     }
 
     /**
@@ -355,7 +423,7 @@ public class SmartKmsServerAutoConfiguration {
     }
 
     /**
-     * 注册仅支持本人写 DTO 的私有 JSON 转换器。
+     * 注册仅支持明确 KMS DTO 的私有 JSON 转换器。
      */
     @Bean
     @ConditionalOnMissingBean(KmsMyKeyHttpMessageConverter.class)
@@ -441,6 +509,28 @@ public class SmartKmsServerAutoConfiguration {
                                              KmsAuditPublisher auditPublisher) {
         return new DefaultPublicKeyService(authorizationService, keyLock, keyRepository, keyVersionRepository,
                 auditPublisher);
+    }
+
+    /**
+     * 注册独立的人员本人公钥服务，不替换原使用策略服务。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyPublicKeyService.class)
+    public KmsMyPublicKeyService kmsMyPublicKeyService(KmsKeyLock keyLock, KmsKeyRepository keyRepository,
+                                                       KmsKeyVersionRepository keyVersionRepository,
+                                                       KmsAuditPublisher auditPublisher) {
+        return new DefaultKmsMyPublicKeyService(keyLock, keyRepository, keyVersionRepository, auditPublisher);
+    }
+
+    /**
+     * 注册角色 API 权限约束的人员本人公钥路由。
+     */
+    @Bean
+    @ConditionalOnMissingBean(KmsMyPublicKeyController.class)
+    public KmsMyPublicKeyController kmsMyPublicKeyController(KmsPrincipalResolver principalResolver,
+                                                             SmartKmsServerProperties properties,
+                                                             KmsMyPublicKeyService publicKeyService) {
+        return new KmsMyPublicKeyController(principalResolver, properties, publicKeyService);
     }
 
     /**

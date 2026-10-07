@@ -25,10 +25,7 @@ import io.github.surezzzzzz.sdk.kms.server.model.KmsOwnerAccessScope;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyMetadata;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyPage;
 import io.github.surezzzzzz.sdk.kms.server.repository.KmsKeyQueryRepository;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyResult;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyService;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsRequestContext;
+import io.github.surezzzzzz.sdk.kms.server.service.*;
 import io.github.surezzzzzz.sdk.kms.server.support.KmsHttpJson;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -54,22 +51,34 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     private final KeyPolicyManagementService keyPolicyManagementService;
     private final PublicKeyService publicKeyService;
     private final KmsManagementIdempotencyService idempotencyService;
+    private final KmsPrincipalDisplayNameResolver displayNameResolver;
 
     /**
      * 创建逻辑密钥 REST 控制器。
+     *
+     * @param principalResolver          可信认证主体解析器
+     * @param properties                 KMS 配置
+     * @param keyManagementService       密钥领域服务
+     * @param keyQueryRepository         受 DataPlan 约束的密钥查询仓储
+     * @param keyPolicyManagementService 策略领域服务
+     * @param publicKeyService           公钥领域服务
+     * @param idempotencyService         管理幂等服务
+     * @param displayNameResolver        可选的主体显示名解析端口
      */
     public KmsKeyController(KmsPrincipalResolver principalResolver, SmartKmsServerProperties properties,
                             KeyManagementService keyManagementService,
                             KmsKeyQueryRepository keyQueryRepository,
                             KeyPolicyManagementService keyPolicyManagementService,
                             PublicKeyService publicKeyService,
-                            KmsManagementIdempotencyService idempotencyService) {
+                            KmsManagementIdempotencyService idempotencyService,
+                            KmsPrincipalDisplayNameResolver displayNameResolver) {
         super(principalResolver, properties);
         this.keyManagementService = keyManagementService;
         this.keyQueryRepository = keyQueryRepository;
         this.keyPolicyManagementService = keyPolicyManagementService;
         this.publicKeyService = publicKeyService;
         this.idempotencyService = idempotencyService;
+        this.displayNameResolver = displayNameResolver;
     }
 
     /**
@@ -364,7 +373,9 @@ public class KmsKeyController extends KmsHttpControllerSupport {
                             idempotencyKey, context.getRequestId());
                     String location = SmartKmsServerConstant.API_BASE_PATH + "/keys/" + keyRef + "/policies/"
                             + created.getPolicyId();
-                    return new KmsManagementIdempotencyResult(201, KmsHttpJson.write(policy(created)),
+                    String displayName = displayNameResolver.resolveDisplayName(created.getPrincipalId());
+                    return new KmsManagementIdempotencyResult(201,
+                            KmsHttpJson.write(policy(created, displayName == null || displayName.isEmpty() ? null : displayName)),
                             keyRef + "/" + created.getPolicyId(), location, false);
                 });
         return idempotent(result);
@@ -380,10 +391,17 @@ public class KmsKeyController extends KmsHttpControllerSupport {
     public ResponseEntity<String> policies(@PathVariable String keyRef, @CurrentDataAccessPlan DataAccessPlan plan,
                                            HttpServletRequest request) {
         KmsRequestContext context = requireApiPermission(scopedContext(request, plan, keyRef), SmartKmsServerConstant.API_PERMISSION_KEY_POLICY);
+        List<KmsKeyPolicy> list = keyPolicyManagementService.list(context.getPrincipal(), keyRef,
+                context.getRequestId());
+        List<String> principals = new ArrayList<String>();
+        for (KmsKeyPolicy policy : list) {
+            principals.add(policy.getPrincipalId());
+        }
+        Map<String, String> displayNames = displayNameResolver.resolveDisplayNames(principals);
         List<Map<String, Object>> policies = new ArrayList<Map<String, Object>>();
-        for (KmsKeyPolicy policy : keyPolicyManagementService.list(context.getPrincipal(), keyRef,
-                context.getRequestId())) {
-            policies.add(policy(policy));
+        for (KmsKeyPolicy policy : list) {
+            String displayName = displayNames.get(policy.getPrincipalId());
+            policies.add(policy(policy, displayName == null || displayName.isEmpty() ? null : displayName));
         }
         Map<String, Object> response = map();
         response.put("items", policies);
@@ -437,11 +455,12 @@ public class KmsKeyController extends KmsHttpControllerSupport {
         return response;
     }
 
-    private Map<String, Object> policy(KmsKeyPolicy source) {
+    private Map<String, Object> policy(KmsKeyPolicy source, String principalDisplayName) {
         Map<String, Object> response = map();
         response.put("policyId", source.getPolicyId());
         response.put("keyRef", source.getKeyRef());
         response.put("principalId", source.getPrincipalId());
+        response.put("principalDisplayName", principalDisplayName);
         response.put("keyVersion", source.getKeyVersion());
         response.put("operation", source.getOperation().getCode());
         response.put("expiresAt", KmsHttpJson.utcMillis(source.getExpiresAt()));

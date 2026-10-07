@@ -10,18 +10,18 @@ import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.support.DataPerm
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsAuditOutcome;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsKeyState;
 import io.github.surezzzzzz.sdk.kms.core.constant.KmsOperation;
+import io.github.surezzzzzz.sdk.kms.core.exception.KmsAuthorizationException;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsPersistenceException;
 import io.github.surezzzzzz.sdk.kms.core.exception.KmsStateConflictException;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsAuditEvent;
 import io.github.surezzzzzz.sdk.kms.core.model.KmsPrincipal;
 import io.github.surezzzzzz.sdk.kms.core.repository.KmsClock;
+import io.github.surezzzzzz.sdk.kms.core.repository.KmsDestructionJobRepository;
 import io.github.surezzzzzz.sdk.kms.core.service.DestructionJobService;
 import io.github.surezzzzzz.sdk.kms.core.service.KeyManagementService;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyResult;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsManagementIdempotencyService;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsPrincipalResolver;
-import io.github.surezzzzzz.sdk.kms.server.service.KmsRequestContext;
+import io.github.surezzzzzz.sdk.kms.server.service.*;
 import io.github.surezzzzzz.sdk.kms.server.test.SmartKmsServerTestApplication;
+import io.github.surezzzzzz.sdk.kms.server.test.support.KmsTestSchemaHelper;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,11 +35,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.*;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -84,6 +82,10 @@ class KmsMyKeyHttpIntegrationTest {
     @Autowired
     private DestructionJobService destructionJobs;
     @Autowired
+    private KmsDestructionJobRepository jobRepository;
+    @Autowired
+    private KmsMyPublicKeyService myPublicKeys;
+    @Autowired
     private KmsManagementIdempotencyService idempotency;
     @Autowired
     private AuditCapture audit;
@@ -95,7 +97,7 @@ class KmsMyKeyHttpIntegrationTest {
      */
     @BeforeEach
     void resetSchema() {
-        new ResourceDatabasePopulator(new FileSystemResource("docs/schema.sql")).execute(dataSource);
+        KmsTestSchemaHelper.reset(dataSource);
         http.getRestTemplate().setRequestFactory(new HttpComponentsClientHttpRequestFactory());
         audit.getEvents().clear();
         dataEvaluations.set(0);
@@ -108,6 +110,7 @@ class KmsMyKeyHttpIntegrationTest {
         headers.set("X-Test-Principal", owner);
         headers.set("X-Test-Request-Id", "my-key-request-000000001");
         headers.set("X-Test-Scopes", scopes);
+        headers.set("X-Test-Subject-Type", "HUMAN");
         if (key != null) {
             headers.set("Idempotency-Key", key);
         }
@@ -158,6 +161,270 @@ class KmsMyKeyHttpIntegrationTest {
 
     private int count(String table) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM " + table, Integer.class).intValue();
+    }
+
+    /**
+     * 自助公钥只依赖人员证明和对应 API；旧公钥、签名仍要求使用策略。
+     */
+    @Test
+    void shouldReadOwnPublicKeysWithoutPolicyAndKeepLegacyAuthorization() throws Exception {
+        String ref = create(OWNER);
+        assertEquals(0, count("smart_kms_key_policy"));
+        ResponseEntity<String> response = call(HttpMethod.GET, path(ref, "/public-keys"), null,
+                headers(OWNER, "kms.read-public-key", null, false));
+        JsonNode keys = json(response, 200);
+        assertTrue(keys.isArray());
+        assertEquals(1, keys.size());
+        assertEquals(5, keys.get(0).size(), "宿主宽松 Mapper 不得扩大公钥字段");
+        assertEquals(ref, keys.get(0).get("keyRef").asText());
+        assertEquals(1, keys.get(0).get("version").asInt());
+        assertEquals("ACTIVE", keys.get(0).get("state").asText());
+        assertFalse(keys.get(0).get("publicKey").asText().contains("="));
+        assertTrue(Base64.getUrlDecoder().decode(keys.get(0).get("publicKey").asText()).length > 0);
+        assertEquals("no-store", response.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
+        json(self(HttpMethod.GET, "/keys/" + ref + "/public-keys", null, null), 403);
+        json(call(HttpMethod.POST, "/crypto/signatures", "{\"keyRef\":\"" + ref + "\",\"input\":\"YQ\"}",
+                headers(OWNER, "kms.sign", null, false)), 403);
+        json(call(HttpMethod.GET, path(ref, "/public-keys"), null,
+                headers(OWNER, "kms.key.read", null, false)), 403);
+        assertEquals(0, dataEvaluations.get(), "本人公钥不能消费治理 DATA");
+        assertTrue(audit.getEvents().stream().anyMatch(event -> event.getOperation() == KmsOperation.READ_PUBLIC_KEY
+                && event.getOutcome() == KmsAuditOutcome.ALLOWED && ref.equals(event.getKeyRef())));
+    }
+
+    /**
+     * 不根据人员前缀推断 HUMAN，治理 DATA 也不能扩大本人公钥归属。
+     */
+    @Test
+    void shouldRejectServiceAndLegacyResolverAndHideForeignPublicKeys() throws Exception {
+        String ownRef = create(OWNER);
+        String foreignRef = create(OTHER_OWNER);
+        HttpHeaders service = headers(OWNER, SELF_SCOPES, null, true);
+        service.set("X-Test-Subject-Type", "SERVICE");
+        json(call(HttpMethod.GET, path(ownRef, "/public-keys"), null, service), 403);
+        service.remove("X-Test-Subject-Type");
+        json(call(HttpMethod.GET, path(ownRef, "/public-keys"), null, service), 403);
+        json(call(HttpMethod.GET, path(foreignRef, "/public-keys"), null,
+                headers(OWNER, SELF_SCOPES, null, true)), 404);
+        json(self(HttpMethod.GET, path("missing-key", "/public-keys"), null, null), 404);
+        json(call(HttpMethod.GET, path(ownRef, "/public-keys"), null, new HttpHeaders()), 401);
+        assertEquals(0, dataEvaluations.get());
+    }
+
+    /**
+     * 直接使用可替换服务也必须提供人员证明和对应 API，不能绕过控制器边界。
+     */
+    @Test
+    void shouldRecheckHumanAndApiPermissionInsidePublicKeyService() throws Exception {
+        String ref = create(OWNER);
+        KmsPrincipal principal = new KmsPrincipal(OWNER, OWNER, Collections.singleton("kms.read-public-key"));
+        assertThrows(KmsAuthorizationException.class, () -> myPublicKeys.list(
+                new KmsRequestContext(principal, "direct-public-request-000000001"), ref));
+        KmsPrincipal noRead = new KmsPrincipal(OWNER, OWNER, Collections.singleton("kms.key.read"));
+        assertThrows(KmsAuthorizationException.class, () -> myPublicKeys.list(
+                KmsRequestContext.forVerifiedHuman(noRead, "direct-public-request-000000001"), ref));
+        assertEquals(1, myPublicKeys.list(KmsRequestContext.forVerifiedHuman(principal,
+                "direct-public-request-000000001"), ref).size());
+    }
+
+    /**
+     * 停用与历史版本仍可分发；缺失材料和不可能状态必须失败，不能返回部分结果。
+     */
+    @Test
+    void shouldReadRetiredAndDisabledPublicKeysAndFailClosedOnCorruption() throws Exception {
+        String ref = create(OWNER);
+        json(self(HttpMethod.POST, path(ref, "/versions"), versionBody(0), "public-rotate-000000001"), 200);
+        json(self(HttpMethod.PATCH, path(ref, "/state"), stateBody("DISABLED", 1), "public-disable-000000001"), 200);
+        JsonNode keys = json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 200);
+        assertEquals(2, keys.size());
+        assertEquals(1, keys.get(0).get("version").asInt());
+        assertEquals("RETIRED", keys.get(0).get("state").asText());
+        assertEquals(2, keys.get(1).get("version").asInt());
+        assertEquals("ACTIVE", keys.get(1).get("state").asText());
+        audit.getEvents().clear();
+        jdbc.update("UPDATE smart_kms_key_version SET public_material=NULL WHERE version=1");
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 503);
+        assertFalse(audit.getEvents().stream().anyMatch(event -> event.getOutcome() == KmsAuditOutcome.ALLOWED),
+                "整批校验失败不能先发布部分成功审计");
+        jdbc.update("UPDATE smart_kms_key_version SET state='PENDING_DESTRUCTION' WHERE version=1");
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 503);
+        byte[] activePublic = jdbc.queryForObject("SELECT public_material FROM smart_kms_key_version WHERE version=2", byte[].class);
+        jdbc.update("UPDATE smart_kms_key_version SET state='ACTIVE', public_material=? WHERE version=1", activePublic);
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 503);
+        jdbc.update("UPDATE smart_kms_key SET active_version=99");
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 503);
+    }
+
+    /**
+     * 销毁明细属于读取权限；治理入口独立消费完整读取 DATA，固定本人路径不消费 DATA。
+     */
+    @Test
+    void shouldReadDestructionWithReadPermissionAndEnforceAdminData() throws Exception {
+        String ref = create(OWNER);
+        String foreignRef = create(OTHER_OWNER);
+        ResponseEntity<String> response = call(HttpMethod.GET, path(ref, "/destruction"), null,
+                headers(OWNER, "kms.key.read", null, false));
+        JsonNode empty = json(response, 200);
+        assertEquals(5, empty.size());
+        assertEquals(ref, empty.get("keyRef").asText());
+        assertEquals("ACTIVE", empty.get("keyState").asText());
+        assertEquals(0, empty.get("rowVersion").asLong());
+        assertFalse(empty.get("cancelEligible").asBoolean());
+        assertEquals(0, empty.get("items").size());
+        assertEquals("no-store", response.getHeaders().getFirst(HttpHeaders.CACHE_CONTROL));
+        json(call(HttpMethod.GET, path(ref, "/destruction"), null,
+                headers(OWNER, "kms.key.destroy", null, false)), 403);
+        json(call(HttpMethod.GET, path(foreignRef, "/destruction"), null,
+                headers(OWNER, "kms.key.read", null, true)), 404);
+        assertEquals(0, dataEvaluations.get());
+        json(call(HttpMethod.GET, "/admin/keys/" + foreignRef + "/destruction", null,
+                headers(OWNER, "kms.key.read", null, false)), 403);
+        HttpHeaders restricted = headers(OWNER, "kms.key.read", null, false);
+        restricted.set("X-Test-Data-Owner", OTHER_OWNER);
+        assertEquals(foreignRef, json(call(HttpMethod.GET, "/admin/keys/" + foreignRef + "/destruction", null,
+                restricted), 200).get("keyRef").asText());
+        json(call(HttpMethod.GET, "/admin/keys/" + ref + "/destruction", null, restricted), 404);
+        json(call(HttpMethod.GET, "/admin/keys/" + foreignRef + "/destruction", null,
+                headers(OWNER, "kms.key.destroy", null, true)), 403);
+        json(call(HttpMethod.GET, path(ref, "/destruction"), null, new HttpHeaders()), 401);
+    }
+
+    /**
+     * 排程、取消、真正领取与释放、后台完成均从数据库回读真实任务及历史资格。
+     */
+    @Test
+    void shouldExposeDestructionProgressAndNeverRestoreEligibilityAfterClaim() throws Exception {
+        String ref = create(OWNER);
+        json(self(HttpMethod.POST, path(ref, "/versions"), versionBody(0), "detail-rotate-000000001"), 200);
+        Instant dueAt = clock.now().plusSeconds(86400);
+        json(self(HttpMethod.PUT, path(ref, "/destruction"), scheduleBody(dueAt, 1), "detail-schedule-000000001"), 200);
+        JsonNode pending = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals("PENDING_DESTRUCTION", pending.get("keyState").asText());
+        assertEquals(2, pending.get("rowVersion").asLong());
+        assertTrue(pending.get("cancelEligible").asBoolean());
+        assertEquals(2, pending.get("items").size());
+        for (int index = 0; index < 2; index++) {
+            JsonNode job = pending.get("items").get(index);
+            assertEquals(4, job.size(), "任务仅暴露安全字段");
+            assertEquals(index + 1, job.get("keyVersion").asInt());
+            assertEquals("PENDING", job.get("state").asText());
+            assertEquals(dueAt.toEpochMilli(), Instant.parse(job.get("dueAt").asText()).toEpochMilli());
+            assertTrue(job.get("completedAt").isNull());
+        }
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 409);
+        assertEquals(204, self(HttpMethod.DELETE, path(ref, "/destruction"), versionBody(2), "detail-cancel-000000001").getStatusCodeValue());
+        JsonNode canceled = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals(0, canceled.get("items").size());
+        assertFalse(canceled.get("cancelEligible").asBoolean());
+        json(self(HttpMethod.PUT, path(ref, "/destruction"), scheduleBody(clock.now().plusSeconds(86400), 3),
+                "detail-reschedule-000000001"), 200);
+        jdbc.update("UPDATE smart_kms_destruction_job SET due_at=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND)");
+        Instant now = clock.now();
+        assertTrue(jobRepository.claim(OWNER, ref, 1, "detail-claim-000000001", now.plusSeconds(60), now));
+        JsonNode claimed = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals("CLAIMED", claimed.get("items").get(0).get("state").asText());
+        assertFalse(claimed.get("cancelEligible").asBoolean());
+        assertTrue(jobRepository.release(OWNER, ref, 1, "detail-claim-000000001"));
+        JsonNode released = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals("PENDING", released.get("items").get(0).get("state").asText());
+        assertFalse(released.get("cancelEligible").asBoolean(), "历史领取后释放不能恢复取消资格");
+        json(self(HttpMethod.DELETE, path(ref, "/destruction"), versionBody(4), "detail-claimed-cancel-000000001"), 409);
+        jdbc.update("UPDATE smart_kms_destruction_job SET due_at=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 1 DAY) WHERE key_version=2");
+        destructionJobs.processDueJobs("destruction-detail-http-worker");
+        JsonNode partial = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals("PENDING_DESTRUCTION", partial.get("keyState").asText());
+        assertFalse(partial.get("cancelEligible").asBoolean());
+        assertEquals("COMPLETED", partial.get("items").get(0).get("state").asText());
+        assertFalse(partial.get("items").get(0).get("completedAt").isNull());
+        assertEquals("PENDING", partial.get("items").get(1).get("state").asText());
+        assertTrue(partial.get("items").get(1).get("completedAt").isNull());
+        jdbc.update("UPDATE smart_kms_destruction_job SET due_at=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE key_version=2");
+        destructionJobs.processDueJobs("destruction-detail-http-worker");
+        JsonNode completed = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+        assertEquals("DESTROYED", completed.get("keyState").asText());
+        assertFalse(completed.get("cancelEligible").asBoolean());
+        for (JsonNode job : completed.get("items")) {
+            assertEquals("COMPLETED", job.get("state").asText());
+            assertFalse(job.get("completedAt").isNull());
+            Instant.parse(job.get("completedAt").asText());
+        }
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM smart_kms_key_version WHERE private_material IS NOT NULL OR public_material IS NOT NULL", Integer.class));
+        json(self(HttpMethod.GET, path(ref, "/public-keys"), null, null), 409);
+    }
+
+    /**
+     * 对称密钥明确拒绝公钥；缺失任务、版本或损坏时间不伪装成未排程。
+     */
+    @Test
+    void shouldRejectUnsupportedPublicKeyAndCorruptDestructionSnapshots() throws Exception {
+        String aes = json(call(HttpMethod.POST, "/keys", "{\"keyAlias\":\"对称验收密钥\",\"purpose\":\"ENCRYPT\",\"algorithm\":\"AES_256_GCM\"}",
+                headers(OWNER, SELF_SCOPES, "aes-create-000000001", false)), 201).get("keyRef").asText();
+        json(self(HttpMethod.GET, path(aes, "/public-keys"), null, null), 409);
+        json(self(HttpMethod.GET, path(aes, "/destruction"), null, null), 200);
+        json(self(HttpMethod.PUT, path(aes, "/destruction"), scheduleBody(clock.now().plusSeconds(86400), 0),
+                "corrupt-schedule-000000001"), 200);
+        jdbc.update("UPDATE smart_kms_destruction_job SET state='COMPLETED', completed_at=NULL");
+        json(self(HttpMethod.GET, path(aes, "/destruction"), null, null), 503);
+        jdbc.update("DELETE FROM smart_kms_destruction_job");
+        json(self(HttpMethod.GET, path(aes, "/destruction"), null, null), 503);
+        jdbc.update("DELETE FROM smart_kms_key_version");
+        json(self(HttpMethod.GET, path(aes, "/destruction"), null, null), 503);
+    }
+
+    /**
+     * 真正的持久化读取失败按 503 返回，不能伪装成空任务。
+     */
+    @Test
+    void shouldReportUnavailableWhenDestructionStorageCannotBeRead() throws Exception {
+        String ref = create(OWNER);
+        jdbc.execute("RENAME TABLE smart_kms_destruction_job TO smart_kms_destruction_job_unavailable");
+        try {
+            json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 503);
+        } finally {
+            jdbc.execute("RENAME TABLE smart_kms_destruction_job_unavailable TO smart_kms_destruction_job");
+        }
+    }
+
+    /**
+     * 真正领取与取消同时竞争时只有一种结局，读快照不能组合已领取与可取消。
+     */
+    @Test
+    void shouldKeepDestructionSnapshotConsistentDuringClaimCancelRace() throws Exception {
+        String ref = create(OWNER);
+        json(self(HttpMethod.PUT, path(ref, "/destruction"), scheduleBody(clock.now().plusSeconds(86400), 0),
+                "race-schedule-000000001"), 200);
+        jdbc.update("UPDATE smart_kms_destruction_job SET due_at=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND)");
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            Future<Boolean> claim = executor.submit(() -> {
+                start.await();
+                Instant now = clock.now();
+                return jobRepository.claim(OWNER, ref, 1, "race-claim-000000001", now.plusSeconds(60), now);
+            });
+            Future<ResponseEntity<String>> cancel = executor.submit(() -> {
+                start.await();
+                return self(HttpMethod.DELETE, path(ref, "/destruction"), versionBody(1), "race-cancel-000000001");
+            });
+            start.countDown();
+            for (int index = 0; index < 10; index++) {
+                JsonNode snapshot = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+                if (snapshot.get("cancelEligible").asBoolean()) {
+                    assertEquals("PENDING_DESTRUCTION", snapshot.get("keyState").asText());
+                    assertEquals(1, snapshot.get("items").size());
+                    assertEquals("PENDING", snapshot.get("items").get(0).get("state").asText());
+                }
+            }
+            boolean claimed = claim.get(20, TimeUnit.SECONDS);
+            int canceled = cancel.get(20, TimeUnit.SECONDS).getStatusCodeValue();
+            assertEquals(claimed ? 409 : 204, canceled, "领取成功则取消冲突，取消成功则领取失败");
+            JsonNode finalSnapshot = json(self(HttpMethod.GET, path(ref, "/destruction"), null, null), 200);
+            assertFalse(finalSnapshot.get("cancelEligible").asBoolean());
+            assertEquals(claimed ? "PENDING_DESTRUCTION" : "ACTIVE", finalSnapshot.get("keyState").asText());
+            assertEquals(claimed ? 1 : 0, finalSnapshot.get("items").size());
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     /**
@@ -515,8 +782,10 @@ class KmsMyKeyHttpIntegrationTest {
                 if (owner == null || actor == null || requestId == null || scopes == null) {
                     return null;
                 }
-                return new KmsRequestContext(new KmsPrincipal(actor, owner,
-                        new HashSet<String>(Arrays.asList(scopes.split(",")))), requestId);
+                KmsPrincipal principal = new KmsPrincipal(actor, owner,
+                        new HashSet<String>(Arrays.asList(scopes.split(","))));
+                return "HUMAN".equals(request.getHeader("X-Test-Subject-Type")) && actor.equals(owner)
+                        ? KmsRequestContext.forVerifiedHuman(principal, requestId) : new KmsRequestContext(principal, requestId);
             };
         }
 
