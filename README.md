@@ -16,7 +16,7 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 
 - **javax 线**（Spring Boot 2.2–2.7）与 **jakarta 线**（Spring Boot 3.x）同名平行组件，jakarta 坐标带 `-jakarta-` 段
 - 兼容矩阵：javax 线 Spring Boot 2.2/2.3/2.4/2.7 × Java 8（测试基线）；jakarta 线 Spring Boot 3.2/3.3/3.4 × Java 17/21
-- jakarta 线各模块矩阵深度不同：route/cache/lock/xff/AKSK client 等已跑全 3.2–3.4 双 JDK 矩阵，search/persistence/KMS client 等当前仅实测 3.4.2——逐模块实测组合见各篇文档
+- jakarta 线各模块的支持矩阵以各模块 README 兼容矩阵小节为准（Boot 3.2–3.4 / JDK 17/21，逐模块组合见各篇文档）
 - 每篇文档自带版本映射表，是版本的唯一事实源
 
 ## 中间件（middleware）

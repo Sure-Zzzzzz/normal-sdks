@@ -34,7 +34,7 @@ ES 生态接入：从连接路由（日期分片/代理）到搜索框架、写�
 - search/persistence 均 api 传递 es-route（内置集成，引 starter 即得路由能力）
 - search-starter 另引 [自然语言解析](../tool/自然语言解析.md)、[表达式解析](../tool/表达式解析.md)、[日志截断](../tool/日志.md)（api 传递）
 - metrics/audit 以事件零侵入挂接，SDK 零依赖 listener
-- Jakarta 线（route/search/persistence/audit×2）已发 central；矩阵深度见各模块 README（当前实测 Boot 3.4.2 × JDK 17/21，route 为 3.2/3.3/3.4 全矩阵）
+- Jakarta 线（route/search/persistence/audit×2）已发 central；支持矩阵见各模块 README
 
 ## 版本映射（唯一事实源）
 

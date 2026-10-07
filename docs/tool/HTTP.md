@@ -14,7 +14,7 @@ HTTP 侧审计基础设施：XFF（X-Forwarded-For）事件契约、Servlet 零�
 
 ## 依赖关系
 
-- capture-starter 传递 capture-core；ES 投影经 provider 传递 elasticsearch-persistence-starter（业务方无需重复声明）
+- capture-starter 传递 capture-core；ES 投影经 provider 传递 elasticsearch-persistence-starter（调用方无需重复声明）
 - 接入 ES 审计时，同一行版本组合使用（见下表）
 
 ## 版本映射（唯一事实源）

@@ -31,7 +31,7 @@ dependencies {
 }
 ```
 
-本组件以 `api` 传递 `simple-s3-route-jakarta-starter`（连接治理）与 `task-retry-jakarta-starter`（重试执行器），引入本组件即具备上述能力，无需重复声明；AWS SDK v1（S3 与 STS）与 jackson 由业务方自带（Spring Boot Web/JSON 场景天然具备 jackson），不使用 STS 临时凭证功能时无需引入 STS 客户端。
+本组件以 `api` 传递 `simple-s3-route-jakarta-starter`（连接治理）与 `task-retry-jakarta-starter`（重试执行器），引入本组件即具备上述能力，无需重复声明；AWS SDK v1（S3 与 STS）与 jackson 由调用方自带（Spring Boot Web/JSON 场景天然具备 jackson），不使用 STS 临时凭证功能时无需引入 STS 客户端。
 
 **AWS SDK v1 支持范围**：`1.12.x ≥ 1.12.787`（本组件按 `1.12.797` 验证，S3 与 STS 客户端保持同版本）；`1.12.786` 及以下存在路径遍历漏洞 CVE-2025-25394，`1.11.x` 及更早版本均不在支持范围内。jackson 家族版本治理口径与 `simple-s3-route-jakarta-starter` 一致（提升至 `2.18.6` 及以上并保持同版本对齐）。
 
