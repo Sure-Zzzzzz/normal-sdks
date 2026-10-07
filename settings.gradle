@@ -44,7 +44,6 @@ include(
         ':sdk:metrics:aksk:simple-aksk-resource-server-metrics-starter',
         ':sdk:metrics:aksk:simple-aksk-server-metrics-starter',
         ':sdk:metrics:elasticsearch:simple-elasticsearch-search-metrics-starter',
-//        ':sdk:curl:opsalert:opsalert-client-starter',
         ':sdk:log:truncate:log-truncate-starter',
         ':sdk:route:elasticsearch:simple-elasticsearch-route-starter',
         ':sdk:route:prometheus:jakarta:simple-prometheus-route-jakarta-starter',
