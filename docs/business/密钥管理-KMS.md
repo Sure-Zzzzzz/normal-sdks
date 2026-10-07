@@ -23,7 +23,7 @@
 ## 依赖关系
 
 - Server 依赖 [MySQL 路由](../middleware/MySQL.md)（1.1.1）与 [Redis 路由](../middleware/Redis.md)，身份接入走 IAM/AKSK 协作（见 [AKSK 篇](认证与授权-AKSK.md)）
-- Server 本体固定 Spring Boot 2.7 + Java 8 测试基线；client jakarta 件实测 Boot 3.4.2 × JDK 17/21；resttemplate 双件另过 3.3.13/3.2.12（JDK 17）。feign 件在 Boot 3.2/3.3 需配套 `-PjakartaCloudVersion=2023.0.4`（Spring Cloud 2023.0 线对应 Boot 3.2/3.3，默认 2024.0.0 对应 3.4），配套后 3.3.13/3.2.12 全量通过
+- Server 本体固定 Spring Boot 2.7 + Java 8 测试基线；client jakarta 件支持矩阵见各模块 README（Boot 3.2–3.4 × JDK 17/21）；feign 件在 Boot 3.2/3.3 需配套 `jakartaCloudVersion=2023.0.4`（Spring Cloud 线随 Boot 版本切换）
 - client 对 server 的兼容口径：client 消费的机器端点（`/keys`、`/crypto`、`/me/destruction-policy`）语义稳定；server 2.0.2 新增端点均为治理面增量（可选参数与可空字段），client 无需配套升级
 
 ## 版本映射（唯一事实源）

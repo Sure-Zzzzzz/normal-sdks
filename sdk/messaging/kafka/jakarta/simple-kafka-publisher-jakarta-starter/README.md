@@ -412,3 +412,11 @@ Envelope customizer 只能修改 attributes；上下文不暴露 payload。publi
 1.0.1 已完成 16 个测试类、96 个测试，0 skipped、0 failures、0 errors。测试覆盖消息装配、topic/routeKey/显式 datasource 路由、外包装、默认 header、序列化、同步等待、取消传播、自动配置和错误信息脱敏；真实 E2E 使用已发布的 Jakarta Route 坐标并复用其 Kafka 拓扑，Publisher 不维护独立 Kafka compose。
 
 测试不提供跳过开关，也不使用 `@EnabledIfSystemProperty` 静默跳过 E2E。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 真实 broker 单机与集群（基线） |
+| 3.3.13 | 17 | 真实 broker 单机与集群 |
+| 3.2.12 | 17 | 真实 broker 单机与集群 |

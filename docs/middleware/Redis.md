@@ -7,7 +7,7 @@ Redis 生态的完整接入：从连接路由（多数据源/Cluster）到缓存
 | SDK | javax | jakarta | 说明 | 文档 |
 |-----|-------|---------|------|------|
 | [simple-redis-route-starter](../../sdk/route/redis/simple-redis-route-starter) | 1.2.2 | 1.0.0 | 多数据源路由（default-source 独占物理连接工厂，standalone/Cluster、按 key 路由、可选 Lettuce 连接池） | [README](../../sdk/route/redis/simple-redis-route-starter/README.md) |
-| [simple-redis-route-jakarta-starter](../../sdk/route/redis/jakarta/simple-redis-route-jakarta-starter) | — | 1.0.0 | Jakarta 生态对等件（Boot 3.2/3.3/3.4 × JDK 17/21 全矩阵实测） | [README](../../sdk/route/redis/jakarta/simple-redis-route-jakarta-starter/README.md) |
+| [simple-redis-route-jakarta-starter](../../sdk/route/redis/jakarta/simple-redis-route-jakarta-starter) | — | 1.0.0 | Jakarta 生态对等件（Boot 3.2–3.4 × JDK 17/21） | [README](../../sdk/route/redis/jakarta/simple-redis-route-jakarta-starter/README.md) |
 
 ## 能力层
 

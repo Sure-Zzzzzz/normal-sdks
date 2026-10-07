@@ -154,3 +154,11 @@ Listener 在线程池中异步调用 Provider；Provider 写入失败会交回 L
 本模块面向 Spring Boot 3 / Jakarta Servlet，编译目标 Java 17，依赖 Elasticsearch Persistence Jakarta `1.0.0`；后者支持 Elasticsearch 7.17+ 与 8.x，不支持 6.x。Spring Boot 2 / javax Servlet 应使用 `simple-xff-capture-audit-es-persistence-provider-starter:1.1.1`，两条线不能在同一应用混用。WebFlux 不在范围内。
 
 Spring Boot `3.4.2` 下使用 Java `17`、`21` 分别完成完整模块测试，每轮 8 个用例、零失败零跳过。真实链路分别连接 Elasticsearch `7.17.16` 与 `8.17.0` 两个独立单节点，验证 HTTP 请求、XFF/Query/Body 快照、Listener 分发、Persistence/Route 写入物理索引及精确查询；这不等同于多节点集群、网络故障或生产模板迁移验收。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 事件模拟链全量测试（基线） |
+| 3.3.13 | 17 | 事件模拟链全量测试 |
+| 3.2.12 | 17 | 事件模拟链全量测试 |

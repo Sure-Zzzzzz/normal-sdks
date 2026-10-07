@@ -372,3 +372,11 @@ ByQueryTaskResult progress = engine.getTask(task.getDatasource(), task.getTaskId
 - 不支持 RestHighLevelClient（旧版高层客户端）扩展，与旧 javax Persistence Starter 互斥使用。
 - 旧版 `PersistenceRequestValidator` / `PersistenceRequestValidatorRegistry` 不属于本版扩展接口；实体校验使用 Typed 门面的 `withValidator`，请求级业务校验放在调用前或自定义执行器中，不能直接迁移旧校验器 Bean。
 - 不负责索引授权和脚本授权；请求必须先经过宿主业务的访问控制。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 真实 ES 7.17 / 8.17 双集群（基线） |
+| 3.3.13 | 17 | 真实 ES 7.17 / 8.17 双集群 |
+| 3.2.12 | 17 | 真实 ES 7.17 / 8.17 双集群 |

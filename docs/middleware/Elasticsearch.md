@@ -75,4 +75,4 @@ ES 生态接入：从连接路由（日期分片/代理）到搜索框架、写�
 | search-audit-listener 1.0.0 | search-core 1.0.12 | 测试联调 search-jakarta 1.0.0 |
 | persistence-audit-listener 1.0.0 | persistence-core 1.0.3 | 测试联调 persistence-jakarta 1.0.0 |
 
-> **矩阵实测（2026-10-07，JDK 17）**：search/persistence/search-audit/persistence-audit 四件在 Boot 3.3.13 与 3.2.12 全量测试通过，为完整支持（非侥幸）。es-route-jakarta 内部含两层：**路由核心**（Registry/Resolver，自研类型零 Spring Data 依赖，3.2–3.4 通用）与 **Spring Data 代理层**（`RouteRoutingInterceptor`，供存量应用继续用 `ElasticsearchOperations` API）。代理层引用 Spring Data ES 5.4（Boot 3.4）的 `SqlOperations`，在 3.2/3.3 上：模块自身无法编译（包不存在）；已发布 jar 的核心层仍可正常装配使用（类加载惰性，代理层不触发）。search/persistence 即核心层消费者，故全绿。**使用约束：Boot 3.2/3.3 应用引 es-route-jakarta 时只能用路由核心，不能装配代理层（首次代理调用将 NoClassDefFoundError）；代理层完整支持自 Boot 3.4 起。**
+> es-route-jakarta 分两层：路由核心（Registry/Resolver）Boot 3.2–3.4 通用；Spring Data 代理层自 Boot 3.4 起支持（详见 [es-route README](../../sdk/route/elasticsearch/jakarta/simple-elasticsearch-route-jakarta-starter/README.md) 兼容矩阵）。其余四件 Boot 3.2–3.4 × JDK 17/21 支持矩阵见各模块 README。

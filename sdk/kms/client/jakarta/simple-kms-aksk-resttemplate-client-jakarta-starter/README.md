@@ -90,3 +90,11 @@ public class KeyReader {
 ## 兼容性
 
 以 Spring Boot `3.4.2`、JDK 17 完成编译，JDK 21 完成模块测试及应用级凭据（AKP）经 AKSK、Redis、KMS 的真实六步调用（创建、查询、自授 SIGN/VERIFY、签名、验签、安排销毁）。六步联调不代表全部 16 个方法都经过真实服务验证。自动配置通过 `AutoConfiguration.imports` 注册。Spring Boot 2 / Java 8 应用选用 `simple-kms-aksk-resttemplate-client-starter:2.0.0`。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 全量测试（基线） |
+| 3.3.13 | 17 | 全量测试 |
+| 3.2.12 | 17 | 全量测试 |

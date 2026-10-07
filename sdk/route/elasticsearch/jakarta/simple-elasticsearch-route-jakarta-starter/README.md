@@ -176,3 +176,18 @@ HTTPS 默认使用标准 TLS 证书校验。`skip-ssl-validation` 仅能用于�
 - 路由代理不支持 `reindex`、`submitReindex`、Spring Data SQL 和脚本 API，因为这些调用无法安全解析唯一索引。按数据源拆分后使用受管 `RestClient`。
 - PIT（point in time，查询快照）打开和关闭必须在同一应用实例完成；打开记录丢失时，关闭操作会失败，不会尝试默认数据源。
 - 服务端版本探测只校验兼容性，不会把客户端 API 自动降级为旧版。
+
+## 兼容矩阵
+
+组件内部分两层，兼容范围不同：
+
+- **路由核心**（`SimpleElasticsearchRouteRegistry` / `RouteResolver`，自研类型，零 Spring Data 依赖）：Boot 3.2 – 3.4 通用。
+- **Spring Data 代理层**（`RouteRoutingInterceptor`，供存量应用继续使用 `ElasticsearchOperations` API）：依赖 Spring Data ES 5.4 的 `SqlOperations`，自 Boot 3.4 起支持；本模块源码在 3.2 / 3.3 下无法编译。
+
+Boot 3.2 / 3.3 应用引入本模块时只能使用路由核心（如 search / persistence 组件的用法），装配代理层会在首次代理调用抛 `NoClassDefFoundError`。
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 路由核心 + 代理层全量测试（基线） |
+| 3.3.13 | 17 | 路由核心全量测试 |
+| 3.2.12 | 17 | 路由核心全量测试 |

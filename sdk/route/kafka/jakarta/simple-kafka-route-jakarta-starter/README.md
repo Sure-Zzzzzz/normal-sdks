@@ -105,3 +105,11 @@ public class SampleEventService {
 ## 发布前验证
 
 本版本使用 Kafka 1.1、2.8、3.7 单节点及三节点集群，覆盖路由发送、事务、派生 ConsumerFactory、短生命周期 AdminClient、自动配置、启动诊断和敏感配置脱敏。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 真实 broker 单机与集群（基线） |
+| 3.3.13 | 17 | 真实 broker 单机与集群 |
+| 3.2.12 | 17 | 真实 broker 单机与集群 |

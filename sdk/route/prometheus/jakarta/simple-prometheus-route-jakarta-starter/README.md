@@ -78,3 +78,11 @@ Remote Write 所需的 `Content-Type`、`Content-Encoding`、`User-Agent` 和 `X
 `1.0.0` 已在 Spring Boot `3.4.2`、Java `17`、Gradle `8.5` 下完成模块完整测试；验收覆盖固定 target、认证、请求隔离、连接池、响应上限、关闭生命周期，以及 Prometheus `2.37.0`、`2.45.2` 的 buildinfo 与 query 端到端请求。
 
 `docker-compose.prometheus-e2e-matrix.yml` 提供上述双版本 Prometheus 本地验收 target。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | Prometheus 2.37 / 2.45（基线） |
+| 3.3.13 | 17 | Prometheus 2.37 / 2.45 |
+| 3.2.12 | 17 | Prometheus 2.37 / 2.45 |

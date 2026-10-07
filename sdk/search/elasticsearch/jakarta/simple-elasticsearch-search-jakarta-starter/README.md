@@ -759,3 +759,11 @@ DEBUG 仅记录数据源键、计数、类型、状态和耗时；Core 查询/�
 上述环境均执行完整模块测试；生成的 JAR/POM 已由独立 Spring Boot `3.4.2` / Java `17` 宿主消费，完成 ES 两版本的写入后计数验证。其他 Spring Boot 补丁版本和 ES 补丁组合没有由此自动获得实测结论。
 
 自然语言查询不属于 `1.0.0` 能力，NL 端点不注册；条件表达式使用独立的 Condition Jakarta 解析器并进入既有 Engine。本组件不包含独立分页策略注册表，可替换整体 Engine、ExpressionService 或现有编译/解析接口。与 javax Search Starter 互斥使用，不支持旧 RestHighLevelClient（旧版高层客户端）扩展。
+
+## 兼容矩阵
+
+| Spring Boot | Java | 验证范围 |
+|---|---:|---|
+| 3.4.2 | 17 / 21 | 真实 ES 7.17 / 8.17 双集群（基线） |
+| 3.3.13 | 17 | 真实 ES 7.17 / 8.17 双集群 |
+| 3.2.12 | 17 | 真实 ES 7.17 / 8.17 双集群 |
