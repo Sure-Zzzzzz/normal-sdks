@@ -1,0 +1,17 @@
+dependencies {
+    // 依赖 core（提供 Event、Record、Provider 接口）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+
+    // Spring Boot 3（仅编译时依赖）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    // 测试依赖
+    testImplementation project(':sdk:limiter:redis:jakarta:smart-redis-limiter-jakarta-starter')
+    // 运行端 jakarta 2.2.0 起 route/AOP/连接池为自备依赖，测试侧显式自备
+    testImplementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}
