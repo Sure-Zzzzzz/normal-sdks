@@ -9,7 +9,7 @@ io:
           route:
             datasources:
               default:
-                url: jdbc:mysql://localhost:3306/sure_auth_iam_dev?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                url: jdbc:mysql://localhost:3306/sure_auth_iam_133_phonetest?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
         redis:
           route:
             sources:

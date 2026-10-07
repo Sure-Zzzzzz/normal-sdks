@@ -1,5 +1,11 @@
 # IAM Server 升级
 
+## 1.3.3
+
+从已运行的 1.3.2 升级只需执行同目录 [V1.3.2__to__V1.3.3__phone_profile_cleanup.sql](V1.3.2__to__V1.3.3__phone_profile_cleanup.sql) 一次：纯数据修复，无 DDL，[schema.sql](../schema.sql) 与 1.3.2 完全一致、无需变更。该脚本把修复前经管理台落库的空串/纯空白手机号行连同 `phone_bound_at` 双置 NULL（对齐解绑语义），脚本内置的核查查询必须返回空集。升级前或升级后执行均可：1.3.3 代码只堵新入口，不清历史。
+
+存量未规范化号码（裸号/非法格式资料值）不影响 `uk_phone` 正确性，不做批量改写，登记方按需人工修正。全新库直接用 `schema.sql` 初始化，无需本脚本。
+
 ## 1.3.2
 
 从已运行的 1.3.1 升级，暂停写请求、完成可恢复备份后，只执行同目录 [V1.3.1__to__V1.3.2__open_role_binding.sql](V1.3.1__to__V1.3.2__open_role_binding.sql) 一次。它仅创建 `iam_open_role_binding`，不修改旧角色或授权表，不按名称接管人工角色，不删除任何授权。目标 InnoDB 须支持 3072 字节索引预算及 DYNAMIC 行格式；初始化 [schema.sql](../schema.sql) 含 DROP，只用于全新库。

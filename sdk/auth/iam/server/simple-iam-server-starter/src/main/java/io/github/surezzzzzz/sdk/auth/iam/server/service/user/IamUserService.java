@@ -24,6 +24,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleSer
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamLoginFailurePolicyService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamSessionService;
+import io.github.surezzzzzz.sdk.auth.iam.server.support.PhoneNormalizationHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.validator.PasswordPolicyValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * 用户管理服务
@@ -84,7 +86,8 @@ public class IamUserService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setDisplayName(request.getDisplayName());
         user.setEmail(request.getEmail());
-        user.setPhone(request.getPhone());
+        // 资料面归一：trim 空串=不登记（置 NULL），非空=normalize；防空串落库撞 uk_phone 唯一索引
+        user.setPhone(PhoneNormalizationHelper.normalizeForProfile(request.getPhone()));
         user.setDepartmentId(request.getDepartmentId());
         user.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
         user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
@@ -142,8 +145,12 @@ public class IamUserService {
         if (request.getEmail() != null) {
             user.setEmail(request.getEmail());
         }
+        boolean phoneChanged = false;
         if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
+            // 资料面归一：trim 空串=清空（置 NULL），非空=normalize；详见 normalizeForProfile 三态语义
+            String normalizedPhone = PhoneNormalizationHelper.normalizeForProfile(request.getPhone());
+            phoneChanged = !Objects.equals(normalizedPhone, user.getPhone());
+            user.setPhone(normalizedPhone);
         }
         boolean departmentChanged = false;
         if (request.getDepartmentId() != null) {
@@ -167,7 +174,7 @@ public class IamUserService {
             projectionService.onUserRoleAssigned(userId);
         }
         auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.USER,
-                saved.getSubjectId(), saved.getUsername(), null);
+                saved.getSubjectId(), saved.getUsername(), phoneChanged ? "phoneChanged=true" : null);
         return saved;
     }
 

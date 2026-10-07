@@ -72,6 +72,26 @@ public final class PhoneNormalizationHelper {
                 || (trimmed.startsWith("+") && E164_PHONE.matcher(trimmed).matches());
     }
 
+    /**
+     * 资料面归一：admin 登记/更新用户的手机号属资料而非凭证，三态语义——
+     * null=不动（透传 null）；trim 后空串=清空（归 null，对齐解绑双置 NULL 语义，
+     * 防空串落库撞 uk_phone 唯一索引）；非空=normalize（非法格式 400）。
+     *
+     * @param raw 原始输入
+     * @return null（不动/清空）或 E.164 形态手机号
+     * @throws SimpleIamServerException 非空且格式非法（400 面）
+     */
+    public static String normalizeForProfile(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return normalize(trimmed);
+    }
+
     private static SimpleIamServerException invalidPhone(String raw) {
         return new SimpleIamServerException(ErrorCode.VALIDATION_FAILED,
                 "手机号格式非法：仅接受国内 11 位手机号或完整 +E.164 形态");

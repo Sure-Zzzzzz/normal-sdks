@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.2`，变更与升级要求见 [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md)。
+当前版本为 `1.3.3`，变更与升级要求见 [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md)。
+
+`1.3.3` 修复 admin 手机号登记路径空串撞 `uk_phone` 唯一索引缺陷：admin 手机号按资料面三态语义处理（`null`=不动/不登记、空串=清空置 NULL、非空=规范化），非法格式 400 拒绝；更新实际改变手机号时 UPDATED 审计事件携带 `phoneChanged=true`。API 形状零变化，存量空串行需一次手工清理（见 CHANGELOG 升级指南）。
 
 `1.3.2` 增加服务主体受委托角色 API：外部系统通过 AKSK 身份维护自己创建的普通角色、固定应用规则和批准根子树内的部门挂载；商业授权、期限和产品资格仍由外部系统管理。既有身份协议、事件类型和普通角色行为保持兼容。
 
@@ -437,6 +439,7 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 |---|---|
 | MFA | `mfa.enabled` 开关 + SPI 预留，默认关闭，无实现 |
 | 开放注册 | `registration.open` 占位；开户走管理员建账 |
+| 管理台手机号登记 | admin 创建/更新用户的 `phone` 按资料面三态处理：`null`=不动、空串=清空（置 NULL）、非空=规范化（非法 400）；与本人绑定/解绑（凭证面）互不影响，更新实际改变手机号时 UPDATED 审计事件携带 `phoneChanged=true` |
 | 自助密码重置 | `password-reset.self-service` 默认关闭；开启且装配短信投递能力后，通过手机号挑战和 `POST /iam/web/auth/password-reset` 完成重置，成功即吊销全部会话 |
 
 **明确不做（一期排除）**：机器对机器凭证（凭证签发走 aksk-server，本模块只作被调方）、多因素认证、账号密码找回邮件链路；组织架构与人员同步经开放 API（`/iam/api/**`，AKSK 凭证）。
@@ -454,4 +457,5 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [升级说明](docs/migration/README.md) | 各版本数据库前提、增量迁移及回退要求 |
 | [schema.sql](docs/schema.sql) | 全新环境数据库初始化脚本 |
 | [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql) | 从 1.3.1 升级的增量建表脚本，不重置旧数据 |
+| [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |
