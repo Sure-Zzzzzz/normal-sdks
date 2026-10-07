@@ -113,7 +113,10 @@ class ParserBoundaryTest {
     void runtimeAndWhitespaceLimitsAreVerified() {
         log.info("实际测试运行时 Java={} Boot={}", System.getProperty("java.version"),
                 org.springframework.boot.SpringBootVersion.getVersion());
-        assertEquals("3.4.2", org.springframework.boot.SpringBootVersion.getVersion());
+        // 矩阵轮经 -PjakartaBootVersion 切换基线，允许 3.2/3.3/3.4 已验证版本集合
+        assertTrue(java.util.Arrays.asList("3.4.2", "3.3.13", "3.2.12")
+                .contains(org.springframework.boot.SpringBootVersion.getVersion()),
+                "意外的 Spring Boot 版本: " + org.springframework.boot.SpringBootVersion.getVersion());
         assertTrue(Runtime.version().feature() == 17 || Runtime.version().feature() == 21);
         assertEquals(LENGTH_LIMIT, assertThrows(ConditionExpressionParseException.class,
                 () -> parser.parse(" ".repeat(4), ParseOptions.builder().maxLength(3).build())).getErrorType());

@@ -62,4 +62,4 @@ Redis 生态的完整接入：从连接路由（多数据源/Cluster）到缓存
 ## 兼容矩阵
 
 - javax 线：Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9；2.2.x 不支持 Redis 7 Cluster；management 独立服务仅 Boot 2.7.x
-- jakarta 线：route/cache/lock/limiter 已实测 Boot 3.2.12 / 3.3.13 / 3.4.2 × JDK 17/21
+- jakarta 线：route/cache/lock 已实测 Boot 3.2.12 / 3.3.13 / 3.4.2 × JDK 17/21；limiter-jakarta 1.1.0 已实测 3.2.12 / 3.3.13 × JDK 17 全量通过（3.4.2 基线原有）

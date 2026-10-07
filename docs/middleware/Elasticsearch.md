@@ -75,4 +75,4 @@ ES 生态接入：从连接路由（日期分片/代理）到搜索框架、写�
 | search-audit-listener 1.0.0 | search-core 1.0.12 | 测试联调 search-jakarta 1.0.0 |
 | persistence-audit-listener 1.0.0 | persistence-core 1.0.3 | 测试联调 persistence-jakarta 1.0.0 |
 
-> es-route-jakarta 使用 Spring Data ES 5.4 的 `SqlOperations` API，**兼容下限 Spring Boot 3.4**（3.2/3.3 无此包，编译期即失败）；下游 search/persistence 件随之以下限为准。
+> **矩阵实测（2026-10-07，JDK 17）**：search/persistence/search-audit/persistence-audit 四件在 Boot 3.3.13 与 3.2.12 全量测试通过。es-route-jakarta 本体使用 Spring Data ES 5.4 的 `SqlOperations` API，在 3.2/3.3 编译期即失败（包不存在），**本体兼容下限 Boot 3.4**；下游件以 api 传递引用，实测 3.2/3.3 可用（未触及该路径），按件标注为准。

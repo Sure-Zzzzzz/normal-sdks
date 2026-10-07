@@ -45,3 +45,5 @@ Kafka 生态接入：连接路由 → 消息发布 → Outbox 事务投递 → �
 | kafka-route 1.0.0 | 无（底层） |
 | publisher 1.0.1 | kafka-route-jakarta 1.0.0 |
 | consumer（在途） | kafka-route-jakarta + redis-route-jakarta |
+
+> 矩阵实测（2026-10-07，JDK 17）：route/publisher 在 Boot 3.3.13 与 3.2.12 全量测试通过。

@@ -14,3 +14,5 @@ Prometheus 查询接入：连接路由与客户端。
 |-----|-------|---------|------|------|
 | [prometheus-core](../../sdk/prometheus/prometheus-core) | 1.0.0 | — | 核心库 | [README](../../sdk/prometheus/prometheus-core/README.md) |
 | [prometheus-client-starter](../../sdk/prometheus/prometheus-client-starter) | 1.0.0 | — | 查询客户端 | [README](../../sdk/prometheus/prometheus-client-starter/README.md) |
+
+> 矩阵实测（2026-10-07，JDK 17）：prometheus-route 在 Boot 3.3.13 与 3.2.12 全量测试通过。
