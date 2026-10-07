@@ -1,5 +1,9 @@
+// 测试类路径中 management-starter:1.0.0 传递已发布 core:2.1.0；源码组合期将外部坐标统一替换回本仓 Core
+// （根构建不设 project.version，冲突仲裁默认判外部模块胜出）；core 2.2.0 发布后随 api project 一并还原坐标
 dependencies {
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+    // 策略客户端契约（公开编程面暴露 Client 类型；散形态零远程负担，认证传输件由宿主另行引入）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-management-client-core:1.0.0'
     // route 是实现细节：限流执行通道在内部装配，公开注解与核心接口（core）零暴露 route 类型；
     // 运行时随本模块传递（RedisRouteTemplate 装配与 route 配置键照常生效），
     // 编译期直接使用 route API 的使用方需自行声明

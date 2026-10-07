@@ -383,6 +383,39 @@ public final class SmartRedisLimiterStarterConstant {
      */
     public static final String TEMPLATE_SLIDING_WINDOW_MEMBER = "%s-%d";
 
+    // ==================== 类型化门禁（v2） ====================
+
+    /**
+     * 门禁规则来源：本地声明
+     */
+    public static final String TYPED_SOURCE_LOCAL = "local";
+
+    /**
+     * 门禁规则来源：远程默认规则
+     */
+    public static final String TYPED_SOURCE_DEFAULT = "default";
+
+    /**
+     * 门禁规则来源：远程精确规则
+     */
+    public static final String TYPED_SOURCE_EXACT = "exact";
+
+    /**
+     * 类型化计数桶 Key 模板
+     * 参数：typed-v2 业务类型、服务编码、资源编码、桶片段（Hash Tag 包裹的摘要）
+     */
+    public static final String TEMPLATE_TYPED_BUCKET_KEY = "%s:%s:%s:%s";
+
+    /**
+     * 类型化模式默认 Redis 降级策略：拒绝（503 语义，不冒充额度耗尽）
+     */
+    public static final String TYPED_DEFAULT_REDIS_DEGRADATION = "deny";
+
+    /**
+     * 类型化 Redis 降级策略：允许（只放过当前门禁并继续）
+     */
+    public static final String TYPED_REDIS_DEGRADATION_ALLOW = "allow";
+
     private SmartRedisLimiterStarterConstant() {
         throw new UnsupportedOperationException("Utility class");
     }
