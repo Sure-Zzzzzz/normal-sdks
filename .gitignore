@@ -76,3 +76,8 @@ changelog.md
 **/application-e2e.yml
 **/application-owner-e2e.yml
 *.pen
+
+# IDE / agent 工作目录
+.vscode/
+.trae/
+.claude/
