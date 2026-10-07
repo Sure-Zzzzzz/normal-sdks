@@ -261,8 +261,18 @@
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
 | [simple-iam-core](sdk/auth/iam/simple-iam-core) | 1.0.0 | 协议契约基座（登录 SPI / 人机验证 SPI / 路由键常量） | [README](sdk/auth/iam/simple-iam-core/README.md) |
-| [simple-iam-server-core](sdk/auth/iam/server/simple-iam-server-core) | 1.1.2 | Server 域契约（审计事件 / 错误码 / 常量） | [README](sdk/auth/iam/server/simple-iam-server-core/README.md) |
-| [simple-iam-server-starter](sdk/auth/iam/server/simple-iam-server-starter) | 1.1.1 | IAM Server 应用模块（OAuth 2.1 + PKCE / 会话 / RBAC 投影 / 门户供数 / 站内信 / 开放 API） | [README](sdk/auth/iam/server/simple-iam-server-starter/README.md) |
+| [simple-iam-server-core](sdk/auth/iam/server/simple-iam-server-core) | 1.3.2 | Server 域契约（审计事件 / 错误码 / 常量 / 受委托角色开放 API） | [README](sdk/auth/iam/server/simple-iam-server-core/README.md) |
+| [simple-iam-server-starter](sdk/auth/iam/server/simple-iam-server-starter) | 1.3.2 | IAM Server 应用模块（OAuth 2.1 + PKCE / 会话 / RBAC 投影 / 门户供数 / 站内信 / 开放 API / 受委托角色） | [README](sdk/auth/iam/server/simple-iam-server-starter/README.md) |
+
+**IAM 版本对应**：
+
+| server-starter | server-core | 说明 |
+|----------------|-------------|------|
+| 1.3.2 | 1.3.2 | 受委托角色开放 API（License 等可信应用经 AKP 自助维护角色与固定应用规则） |
+| 1.3.1 | 1.3.1 | 条件请求头贯通（IAM → 公共契约 → Portal → HTTP），主题与协作收口 |
+| 1.3.0 | 1.3.1 | subjectId 统一、手机号短信登录、Excel 导入、dashboard 门禁、审计事件 subjectId 化 |
+| 1.2.x | 1.2.0 | 菜单树契约与门户折叠（2.x Web 兼容线） |
+| 1.1.x | 1.1.2 | 首个门户形态 IAM（OAuth 2.1 + 投影 + 站内信） |
 | [simple-iam-ldap-adapter-starter](sdk/auth/iam/adapter/login/simple-iam-ldap-adapter-starter) | 1.0.0 | LDAP 凭证型登录适配器（引依赖即装配） | [README](sdk/auth/iam/adapter/login/simple-iam-ldap-adapter-starter/README.md) |
 | [simple-iam-oidc-adapter-starter](sdk/auth/iam/adapter/login/simple-iam-oidc-adapter-starter) | 1.0.0 | OIDC 跳转型登录适配器（企业 IdP 单点登录） | [README](sdk/auth/iam/adapter/login/simple-iam-oidc-adapter-starter/README.md) |
 | [simple-iam-captcha-adapter-starter](sdk/auth/iam/adapter/captcha/simple-iam-captcha-adapter-starter) | 1.0.0 | 图片验证码适配器（server-starter 已传递引入） | [README](sdk/auth/iam/adapter/captcha/simple-iam-captcha-adapter-starter/README.md) |
@@ -290,14 +300,16 @@
 
 | SDK | 版本 | 说明 | 文档 |
 |-----|------|------|------|
-| [simple-aksk-core](sdk/auth/aksk/simple-aksk-core) | 3.0.0 | AKSK 核心库 | [README](sdk/auth/aksk/simple-aksk-core/README.md) |
-| [simple-aksk-server-core](sdk/auth/aksk/server/simple-aksk-server-core) | 3.0.2 | Server 核心库 | [README](sdk/auth/aksk/server/simple-aksk-server-core/README.md) |
-| [simple-aksk-server-starter](sdk/auth/aksk/server/simple-aksk-server-starter) | 3.1.1 | 认证服务器（OAuth2 / JWE / Redis 必需 / 应用授权投影 / 精确 API permission + DATA 权限） | [README](sdk/auth/aksk/server/simple-aksk-server-starter/README.md) |
+| [simple-aksk-core](sdk/auth/aksk/simple-aksk-core) | 3.0.2 | AKSK 核心库 | [README](sdk/auth/aksk/simple-aksk-core/README.md) |
+| [simple-aksk-server-core](sdk/auth/aksk/server/simple-aksk-server-core) | 3.0.4 | Server 核心库 | [README](sdk/auth/aksk/server/simple-aksk-server-core/README.md) |
+| [simple-aksk-server-starter](sdk/auth/aksk/server/simple-aksk-server-starter) | 3.2.2 | 认证服务器（OAuth2 / JWE / Redis 必需 / 应用授权投影 / 精确 API permission + DATA 权限 / SQL 范式化） | [README](sdk/auth/aksk/server/simple-aksk-server-starter/README.md) |
 
 **Server 3.x 版本对应**：
 
 | server-starter | server-core | aksk-core | 说明 |
 |----------------|-------------|-----------|------|
+| 3.2.2 | 3.0.4 | 3.0.2 | SQL 范式化（schema 全量 + `V{from}__to__V{to}` 迁移命名）、降级响应头与候选版本策略 |
+| 3.2.1 | 3.0.3 | 3.0.1 | OWNER_INHERITED 归属收口与凭证代办天花板（方案 A：投影是唯一事实源） |
 | 3.1.1 | 3.0.2 | 3.0.0 | 过期 Token 定时清理（分布式锁多实例互斥 + 分批删除），`oauth2_authorization.access_token_expires_at` 索引补齐 |
 | 3.1.0 | 3.0.1 | 3.0.0 | `/api` 管理端点鉴权移交公共资源层 1.1.1（跨资源双层鉴权 + 主体一致性校验，管理 API 零 Set-Cookie）；新增启动期 fail-fast 校验；cache 2.2.0 / limiter 2.1.0 对齐 route 1.2.2 版本线；MySQL 切 mysql-route 接管；依赖口径按自闭环收紧 |
 | 3.0.1 | 3.0.1 | 3.0.0 | starter：内省时间 claim 整秒截断（修签发后立即访问的间歇 403）、授权时效 2 秒时钟容差适配、Illegal 异常清理、移除旧 e2eServer 机制与 Admin 导航归位；server-core：Token 事件新增 `TokenEventCause` 审计原因契约（与可选审计 listener 3.0.0 配套） |
@@ -493,13 +505,35 @@
 
 ---
 
-### 🔑 密钥管理
+### 🔑 密钥管理（KMS）
 
-| SDK | 版本 | 说明 | 文档 |
-|-----|------|------|------|
-| [smart-kms-core](sdk/kms/smart-kms-core) | 1.0.1 | KMS 核心模型与审计契约（审计操作标识、metadata 白名单及格式校验） | [README](sdk/kms/smart-kms-core/README.md) |
-| [smart-kms-server-starter](sdk/kms/smart-kms-server-starter) | 2.0.1 | KMS Server（本人密钥生命周期、数据范围治理与销毁窗口政策） | [README](sdk/kms/smart-kms-server-starter/README.md) |
-| [simple-kms-client-starter](sdk/kms/simple-kms-client-starter) | 1.0.1 | KMS HTTP Client（策略响应解析与四档 Spring Boot 客户端矩阵） | [README](sdk/kms/simple-kms-client-starter/README.md) |
+密钥全生命周期服务：逻辑密钥与版本、精确 allow-only 使用策略、延迟销毁与取消资格、ES256/AES-256 密码学操作。资源归属按稳定主体标识（`iam:` 人员 / `aksk:` 凭证），Server 注册为 IAM 可信应用，治理面走 PAGE/API/DATA 三权；管理端 Web 独立成仓。
+
+#### 分层结构
+
+| 层 | SDK / 仓 | 版本 | 说明 | 文档 |
+|----|----------|------|------|------|
+| 领域契约 | [smart-kms-core](sdk/kms/smart-kms-core) | 2.0.0 | 纯 Java 8 领域模型（密钥/版本状态、精确策略、幂等、销毁任务、审计安全边界、ES256 JOSE 编码） | [README](sdk/kms/smart-kms-core/README.md) |
+| Server | [smart-kms-server-starter](sdk/kms/smart-kms-server-starter) | 2.0.2 | KMS Server（本人公钥零策略读取、销毁明细、治理归属显示名与筛选、跨钥策略分页、延迟销毁 worker） | [README](sdk/kms/smart-kms-server-starter/README.md) |
+| HTTP 契约 | [sdk/kms/server/contract](sdk/kms/server/contract) | 2.0.2 | OpenAPI 与端点契约（纯文档模块，随 Server 同版演进，不构建发布） | [README](sdk/kms/server/contract/README.md) |
+| Client 契约层 | [simple-kms-client-core](sdk/kms/client/simple-kms-client-core) | 2.0.0 | 调用方公开接口、wire 模型、错误族与传输中立认证 SPI | [README](sdk/kms/client/simple-kms-client-core/README.md) |
+| Client 装配（SB2） | [simple-kms-aksk-resttemplate-client-starter](sdk/kms/client/simple-kms-aksk-resttemplate-client-starter) | 2.0.0 | RestTemplate 装配件（AKSK 服务身份认证） | [README](sdk/kms/client/simple-kms-aksk-resttemplate-client-starter/README.md) |
+| Client 装配（SB2） | [simple-kms-aksk-feign-client-starter](sdk/kms/client/simple-kms-aksk-feign-client-starter) | 2.0.0 | OpenFeign 装配件（AKSK 服务身份认证） | [README](sdk/kms/client/simple-kms-aksk-feign-client-starter/README.md) |
+| Client 装配（Jakarta） | [simple-kms-aksk-resttemplate-client-jakarta-starter](sdk/kms/client/jakarta/simple-kms-aksk-resttemplate-client-jakarta-starter) | 1.0.0 | Jakarta 生态 RestTemplate 装配件 | [README](sdk/kms/client/jakarta/simple-kms-aksk-resttemplate-client-jakarta-starter/README.md) |
+| Client 装配（Jakarta） | [simple-kms-aksk-feign-client-jakarta-starter](sdk/kms/client/jakarta/simple-kms-aksk-feign-client-jakarta-starter) | 1.0.0 | Jakarta 生态 Feign 装配件 | [README](sdk/kms/client/jakarta/simple-kms-aksk-feign-client-jakarta-starter/README.md) |
+| 管理端 Web | [smart-kms-admin-web](https://github.com/Sure-Zzzzzz/smart-kms-admin-web) | 1.0.0 | IAM 门户 qiankun 子应用（四页治理：我的密钥/密钥/策略/销毁任务） | [README](https://github.com/Sure-Zzzzzz/smart-kms-admin-web/blob/main/README.md) |
+
+> 旧单体 `simple-kms-client-starter`（1.x）已由上述 client 分层组合替代并从仓库移除；历史版本的消费方式见各 1.x CHANGELOG。
+
+#### 版本映射
+
+| server-starter | core | client-core | SB2 装配件 | jakarta 装配件 | 管理端 Web | 说明 |
+|----------------|------|-------------|------------|----------------|------------|------|
+| 2.0.2 | 2.0.0 | 2.0.0 | 2.0.0 | 1.0.0 | 1.0.0 | 本人公钥零策略、销毁明细、治理归属显示名/筛选、跨钥策略分页；无数据库迁移，Web 需先升 Server |
+| 2.0.1 | 2.0.0 | 2.0.0 | 2.0.0 | 1.0.0 | - | 本人密钥生命周期（启停/轮换/安排/取消）与销毁窗口政策 |
+| 2.0.0 | 2.0.0 | 2.0.0 | 2.0.0 | 1.0.0 | - | 2.0 基线：稳定主体归属、`/api/kms` 基路径、client 分层首发 |
+
+> client 对 server 的兼容口径：client 消费的机器端点（`/keys`、`/crypto`、`/me/destruction-policy` 等）语义稳定；server 2.0.2 新增端点均为治理面增量（可选参数与可空字段），client 无需配套升级。
 
 ---
 
