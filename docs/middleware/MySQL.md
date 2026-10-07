@@ -12,7 +12,7 @@ MySQL 接入底座：数据源路由与事务边界治理。被 [KMS](../busines
 ## 依赖关系
 
 - KMS Server（mysql-route 1.1.1）、AKSK Server 3.x（mysql+redis 双路由）、Kafka outbox 落库、limiter-management 持久化均经本路由接入
-- 吃狗粮：提供方测试配置自身走 `mysql.route.enable=true` 接管模式
+- 提供方自证：本模块自己的测试配置也经 `mysql.route.enable=true` 接管模式接入，而不是绕开路由直连（组件自身先当使用方，验证真实接入形态）
 
 ## 兼容矩阵（jakarta 线实测）
 
@@ -23,3 +23,9 @@ MySQL 接入底座：数据源路由与事务边界治理。被 [KMS](../busines
 | 3.2.12 | 通过 | 通过 |
 
 > MySQL 5.7 / 8.4 双实例实测：四固定目标、账号隔离、CRUD、MyBatis 与事务拒绝切换均实际执行。
+
+## 版本映射（jakarta 线）
+
+| mysql-route-jakarta | 内部依赖 | 说明 |
+|---------------------|----------|------|
+| 1.0.0 | 无（底层） | 与 javax 线 1.1.1 平行，坐标带 `-jakarta-` 段 |

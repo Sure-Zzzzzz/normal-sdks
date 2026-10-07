@@ -51,6 +51,14 @@ Redis 生态的完整接入：从连接路由（多数据源/Cluster）到缓存
 
 > 1.x 已封版不再维护；1.x 不要求 redis-route。`management-starter:1.0.0` 主版本虽为 1.x，但属当前 2.x 架构。metrics 1.0.0 仅对应 1.1.3/core 1.1.6 组合。
 
+## 版本映射（jakarta 线）
+
+| limiter-jakarta | limiter-core（javax 共用） | management-client-core | redis-route-jakarta |
+|-----------------|---------------------------|------------------------|---------------------|
+| 1.1.0 | 2.2.0 | 1.0.0 | 1.0.0 |
+
+> jakarta 装配件复用 javax 线的纯 Java core（无 Spring 依赖，双线共用）；route-jakarta 1.0.0 为底层，无内部依赖。cache/lock/retry 的 jakarta 件当前各自独立 1.0.0，无跨件约束。
+
 ## 兼容矩阵
 
 - javax 线：Spring Boot 2.2.x / 2.3.12 / 2.4.5 / 2.7.9；2.2.x 不支持 Redis 7 Cluster；management 独立服务仅 Boot 2.7.x

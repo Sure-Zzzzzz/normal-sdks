@@ -64,3 +64,15 @@ ES 生态接入：从连接路由（日期分片/代理）到搜索框架、写�
 | 1.1.0 | 1.0.2 | 1.2.0 | 1.0.0 |
 | 1.0.2 | 1.0.2 | 1.1.2 | - |
 | 1.0.1 / 1.0.0 | 1.0.1 | 1.1.2 | - |
+
+## 版本映射（jakarta 线）
+
+| 组件（jakarta） | 共用 javax core | 内部依赖（jakarta） |
+|-----------------|-----------------|---------------------|
+| es-route 1.0.0 | — | 无（底层） |
+| search 1.0.0 | search-core 1.0.12 | es-route-jakarta 1.0.0、[condition-parser-jakarta 1.0.0](../tool/表达式解析.md) |
+| persistence 1.0.0 | persistence-core 1.0.3 | es-route-jakarta 1.0.0 |
+| search-audit-listener 1.0.0 | search-core 1.0.12 | 测试联调 search-jakarta 1.0.0 |
+| persistence-audit-listener 1.0.0 | persistence-core 1.0.3 | 测试联调 persistence-jakarta 1.0.0 |
+
+> es-route-jakarta 使用 Spring Data ES 5.4 的 `SqlOperations` API，**兼容下限 Spring Boot 3.4**（3.2/3.3 无此包，编译期即失败）；下游 search/persistence 件随之以下限为准。

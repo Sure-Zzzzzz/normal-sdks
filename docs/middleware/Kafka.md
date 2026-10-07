@@ -37,3 +37,11 @@ Kafka 生态接入：连接路由 → 消息发布 → Outbox 事务投递 → �
 | outbox-core | outbox-starter | outbox-management | publisher | route |
 |-------------|----------------|-------------------|-----------|-------|
 | 1.0.0 | 1.0.1 | 1.0.0 | 1.1.0 | 1.0.1 |
+
+## 版本映射（jakarta 线）
+
+| 组件（jakarta） | 内部依赖 |
+|-----------------|----------|
+| kafka-route 1.0.0 | 无（底层） |
+| publisher 1.0.1 | kafka-route-jakarta 1.0.0 |
+| consumer（在途） | kafka-route-jakarta + redis-route-jakarta |

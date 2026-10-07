@@ -18,6 +18,8 @@
 
 > 旧单体 `simple-kms-client-starter`（1.x）已由 client 分层组合替代并从仓库移除。
 
+**jakarta 装配件内部配对**（共用 javax 线 client-core 2.0.0）：resttemplate-client-jakarta 1.0.0 → client-core 2.0.0 + aksk-resttemplate-redis-client-jakarta 1.0.0；feign-client-jakarta 1.0.0 → client-core 2.0.0 + aksk-feign-redis-client-jakarta 1.0.0。
+
 ## 依赖关系
 
 - Server 依赖 [MySQL 路由](../middleware/MySQL.md)（1.1.1）与 [Redis 路由](../middleware/Redis.md)，身份接入走 IAM/AKSK 协作（见 [AKSK 篇](认证与授权-AKSK.md)）
