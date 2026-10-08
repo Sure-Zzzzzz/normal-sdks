@@ -4,10 +4,12 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.constant.SmartRedisLimiterTi
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.SmartRedisLimiterManagementConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.exception.SmartRedisLimiterManagementAccessDeniedException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.exception.SmartRedisLimiterManagementException;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.entity.SmartRedisLimiterPolicyEntity;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.entity.SmartRedisLimiterPolicyLimitEntity;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.entity.SmartRedisLimiterPolicyRevisionEntity;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.view.SmartRedisLimiterPolicyDataScope;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.view.SmartRedisLimiterPolicyQuery;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimiterLimit;
 import org.springframework.dao.DataAccessException;
@@ -43,6 +45,11 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
      */
     public JdbcSmartRedisLimiterPolicyRepository(NamedParameterJdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    private static Instant instant(ResultSet resultSet, String column) throws SQLException {
+        Timestamp timestamp = resultSet.getTimestamp(column);
+        return timestamp == null ? null : timestamp.toInstant();
     }
 
     @Override
@@ -84,9 +91,15 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
 
     @Override
     public SmartRedisLimiterPolicyEntity findById(long id) {
+        return findById(id, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public SmartRedisLimiterPolicyEntity findById(long id, SmartRedisLimiterPolicyDataScope scope) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource(SmartRedisLimiterManagementConstant.PARAM_ID, id);
         List<SmartRedisLimiterPolicyEntity> rows = jdbcTemplate.query(
-                SmartRedisLimiterManagementConstant.SQL_SELECT_POLICY_BY_ID,
-                new MapSqlParameterSource(SmartRedisLimiterManagementConstant.PARAM_ID, id),
+                scopedSql(SmartRedisLimiterManagementConstant.SQL_SELECT_POLICY_BY_ID, parameters, scope),
+                parameters,
                 policyRowMapper);
         return loadLimits(rows.isEmpty() ? null : rows.get(0));
     }
@@ -129,13 +142,21 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
     @Override
     public boolean replaceLimits(long id, long expectedRowVersion,
                                  List<SmartRedisLimiterLimit> limits, Instant updatedAt) {
-        int updated = jdbcTemplate.update(SmartRedisLimiterManagementConstant.SQL_UPDATE_POLICY_VERSION,
-                new MapSqlParameterSource()
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
-                                expectedRowVersion)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_UPDATED_AT,
-                                Timestamp.from(updatedAt)));
+        return replaceLimits(id, expectedRowVersion, limits, updatedAt, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public boolean replaceLimits(long id, long expectedRowVersion,
+                                 List<SmartRedisLimiterLimit> limits, Instant updatedAt,
+                                 SmartRedisLimiterPolicyDataScope scope) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
+                        expectedRowVersion)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_UPDATED_AT,
+                        Timestamp.from(updatedAt));
+        int updated = jdbcTemplate.update(scopedSql(
+                SmartRedisLimiterManagementConstant.SQL_UPDATE_POLICY_VERSION, parameters, scope), parameters);
         if (updated == 0) {
             return false;
         }
@@ -147,26 +168,39 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
 
     @Override
     public boolean updateEnabled(long id, long expectedRowVersion, boolean enabled, Instant updatedAt) {
-        int updated = jdbcTemplate.update(SmartRedisLimiterManagementConstant.SQL_UPDATE_POLICY_STATE,
-                new MapSqlParameterSource()
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
-                                expectedRowVersion)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_ENABLED,
-                                enabled ? SmartRedisLimiterManagementConstant.DATABASE_BOOLEAN_TRUE
-                                        : SmartRedisLimiterManagementConstant.DATABASE_BOOLEAN_FALSE)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_UPDATED_AT,
-                                Timestamp.from(updatedAt)));
+        return updateEnabled(id, expectedRowVersion, enabled, updatedAt, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public boolean updateEnabled(long id, long expectedRowVersion, boolean enabled, Instant updatedAt,
+                                 SmartRedisLimiterPolicyDataScope scope) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
+                        expectedRowVersion)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_ENABLED,
+                        enabled ? SmartRedisLimiterManagementConstant.DATABASE_BOOLEAN_TRUE
+                                : SmartRedisLimiterManagementConstant.DATABASE_BOOLEAN_FALSE)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_UPDATED_AT,
+                        Timestamp.from(updatedAt));
+        int updated = jdbcTemplate.update(scopedSql(
+                SmartRedisLimiterManagementConstant.SQL_UPDATE_POLICY_STATE, parameters, scope), parameters);
         return updated > 0;
     }
 
     @Override
     public boolean delete(long id, long expectedRowVersion) {
-        int deleted = jdbcTemplate.update(SmartRedisLimiterManagementConstant.SQL_DELETE_POLICY,
-                new MapSqlParameterSource()
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
-                        .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
-                                expectedRowVersion));
+        return delete(id, expectedRowVersion, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public boolean delete(long id, long expectedRowVersion, SmartRedisLimiterPolicyDataScope scope) {
+        MapSqlParameterSource parameters = new MapSqlParameterSource()
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_ID, id)
+                .addValue(SmartRedisLimiterManagementConstant.PARAM_EXPECTED_ROW_VERSION,
+                        expectedRowVersion);
+        int deleted = jdbcTemplate.update(scopedSql(
+                SmartRedisLimiterManagementConstant.SQL_DELETE_POLICY, parameters, scope), parameters);
         return deleted > 0;
     }
 
@@ -182,7 +216,13 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
 
     @Override
     public List<SmartRedisLimiterPolicyEntity> query(SmartRedisLimiterPolicyQuery query) {
-        QuerySql querySql = buildQuery(query, false);
+        return query(query, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public List<SmartRedisLimiterPolicyEntity> query(SmartRedisLimiterPolicyQuery query,
+                                                     SmartRedisLimiterPolicyDataScope scope) {
+        QuerySql querySql = buildQuery(query, false, scope);
         List<SmartRedisLimiterPolicyEntity> policies = jdbcTemplate.query(
                 querySql.sql, querySql.parameters, policyRowMapper);
         loadLimits(policies);
@@ -191,7 +231,12 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
 
     @Override
     public long count(SmartRedisLimiterPolicyQuery query) {
-        QuerySql querySql = buildQuery(query, true);
+        return count(query, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    public long count(SmartRedisLimiterPolicyQuery query, SmartRedisLimiterPolicyDataScope scope) {
+        QuerySql querySql = buildQuery(query, true, scope);
         Long result = jdbcTemplate.queryForObject(querySql.sql, querySql.parameters, Long.class);
         return result == null ? 0L : result;
     }
@@ -273,11 +318,13 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
                         Timestamp.from(entity.getUpdatedAt()));
     }
 
-    private QuerySql buildQuery(SmartRedisLimiterPolicyQuery query, boolean count) {
+    private QuerySql buildQuery(SmartRedisLimiterPolicyQuery query, boolean count,
+                                SmartRedisLimiterPolicyDataScope scope) {
         StringBuilder sql = new StringBuilder(count
                 ? SmartRedisLimiterManagementConstant.SQL_COUNT_POLICY_BASE
                 : SmartRedisLimiterManagementConstant.SQL_QUERY_POLICY_BASE);
         MapSqlParameterSource parameters = new MapSqlParameterSource();
+        sql = new StringBuilder(scopedSql(sql.toString(), parameters, scope));
         appendTextCondition(sql, parameters, query.getServiceCode(),
                 SmartRedisLimiterManagementConstant.SQL_CONDITION_SERVICE_CODE,
                 SmartRedisLimiterManagementConstant.PARAM_SERVICE_CODE);
@@ -297,7 +344,7 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
             sql.append(SmartRedisLimiterManagementConstant.SQL_POLICY_PAGE_ORDER);
             parameters.addValue(SmartRedisLimiterManagementConstant.PARAM_LIMIT, query.getSize());
             parameters.addValue(SmartRedisLimiterManagementConstant.PARAM_OFFSET,
-                    (query.getPage() - 1) * query.getSize());
+                    (long) (query.getPage() - 1) * query.getSize());
         }
         return new QuerySql(sql.toString(), parameters);
     }
@@ -313,14 +360,21 @@ public class JdbcSmartRedisLimiterPolicyRepository implements SmartRedisLimiterP
         }
     }
 
+    private String scopedSql(String sql, MapSqlParameterSource parameters, SmartRedisLimiterPolicyDataScope scope) {
+        if (scope == null) {
+            throw new SmartRedisLimiterManagementAccessDeniedException();
+        }
+        scope.requireUsable();
+        if (scope.isAll()) {
+            return sql;
+        }
+        parameters.addValue(SmartRedisLimiterManagementConstant.PARAM_ALLOWED_SERVICE_CODES, scope.getServiceCodes());
+        return sql + SmartRedisLimiterManagementConstant.SQL_CONDITION_DATA_SCOPE;
+    }
+
     private SmartRedisLimiterManagementException persistenceException(Throwable cause) {
         return new SmartRedisLimiterManagementException(
                 ErrorCode.PERSISTENCE_FAILED, ErrorMessage.PERSISTENCE_FAILED, cause);
-    }
-
-    private static Instant instant(ResultSet resultSet, String column) throws SQLException {
-        Timestamp timestamp = resultSet.getTimestamp(column);
-        return timestamp == null ? null : timestamp.toInstant();
     }
 
     private static final class PolicyRowMapper implements RowMapper<SmartRedisLimiterPolicyEntity> {

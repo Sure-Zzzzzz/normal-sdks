@@ -1,10 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.management.test.cases;
 
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementApiSecurityConfiguration;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementAutoConfiguration;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementProperties;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementSecurityConfiguration;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementRestSecurityConfiguration;
+import io.github.surezzzzzz.sdk.auth.resource.core.spi.ResourceAuthenticationAdapter;
+import io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerProperties;
+import io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.*;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.SmartRedisLimiterManagementConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.controller.SmartRedisLimiterManagementPageController;
@@ -20,12 +19,18 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedi
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.sql.DataSource;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
@@ -179,6 +184,12 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
 
     @Test
     public void testInvalidManagementConfigurationsFailWithStableConfigurationError() {
+        assertConfigurationFailure(PREFIX + ".enable=true", PREFIX + ".api.enable=true",
+                PREFIX + ".mode=unknown", "未知部署形态必须拒绝启动");
+        assertConfigurationFailure(PREFIX + ".enable=true", PREFIX + ".api.enable=true",
+                PREFIX + ".mode=portal", PREFIX + ".ui.enable=true", "Portal 不得启用旧 UI");
+        assertConfigurationFailure(PREFIX + ".enable=true", PREFIX + ".api.enable=true",
+                PREFIX + ".mode=portal", PREFIX + ".rest.policy-token=mock-token", "Portal 不得固定 token 兜底");
         assertConfigurationFailure(
                 PREFIX + ".enable=true",
                 "根开关开启但 API 与 UI 都关闭时必须拒绝启动");
@@ -207,6 +218,77 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
                 PREFIX + ".page.default-size=101",
                 PREFIX + ".page.max-size=100",
                 "非法分页范围必须拒绝启动");
+    }
+
+    @Test
+    public void testPortalMissingResourceChainFailsClosed() {
+        contextRunner.withUserConfiguration(UserExtensionConfiguration.class)
+                .withPropertyValues(PREFIX + ".enable=true", PREFIX + ".api.enable=true", PREFIX + ".mode=portal")
+                .run(context -> {
+                    log.info("验收 Portal 缺公共资源链的启动门禁");
+                    SmartRedisLimiterManagementConfigurationException exception = findCause(
+                            context.getStartupFailure(), SmartRedisLimiterManagementConfigurationException.class);
+                    assertNotNull(exception);
+                    assertEquals(ErrorCode.CONFIG_VALIDATION_FAILED, exception.getErrorCode());
+                });
+    }
+
+    @Test
+    public void testConsoleDoesNotRequirePublicResourceStarter() {
+        contextRunner.withClassLoader(new FilteredClassLoader("io.github.surezzzzzz.sdk.auth.resource.server"))
+                .withUserConfiguration(UserExtensionConfiguration.class)
+                .withPropertyValues(PREFIX + ".enable=true", PREFIX + ".api.enable=true",
+                        SmartRedisLimiterManagementConstant.RESOURCE_SERVER_CONFIG_PREFIX + ".enabled=true")
+                .run(context -> {
+                    log.info("验收 Console 缺公共 Resource Starter 的可选依赖边界");
+                    assertNull(context.getStartupFailure());
+                    assertEquals(1, context.getBeansOfType(SmartRedisLimiterPolicyController.class).size());
+                });
+    }
+
+    @Test
+    public void testPortalMissingPublicResourceClassesHasConfigurationError() {
+        contextRunner.withClassLoader(new FilteredClassLoader("io.github.surezzzzzz.sdk.auth.resource.server"))
+                .withUserConfiguration(UserExtensionConfiguration.class)
+                .withPropertyValues(PREFIX + ".enable=true", PREFIX + ".api.enable=true", PREFIX + ".mode=portal")
+                .run(context -> {
+                    log.info("验收 Portal 缺公共 Resource 类的明确配置异常");
+                    assertNotNull(findCause(context.getStartupFailure(), SmartRedisLimiterManagementConfigurationException.class));
+                });
+    }
+
+    @Test
+    public void testPortalGuardRejectsIncompleteLocalResourceAssembly() {
+        String[] failures = {"mock.portal.enabled=false", "mock.portal.path=/api/v1/other/**",
+                "mock.portal.permit=/api/v1/policy/**", "mock.portal.second-source=false",
+                "mock.portal.security-chain=false", "mock.portal.mvc=false", "mock.portal.engine=false"};
+        for (String failure : failures) {
+            portalContext().withPropertyValues(failure).run(context -> {
+                log.info("验收 Portal 资源装配拒绝类别={}", failure.substring(0, failure.indexOf('=')));
+                assertNotNull(findCause(context.getStartupFailure(), SmartRedisLimiterManagementConfigurationException.class), failure);
+            });
+        }
+        portalContext().run(context -> {
+            log.info("验收 Portal 完整本地资源装配");
+            assertNull(context.getStartupFailure());
+        });
+    }
+
+    private ApplicationContextRunner portalContext() {
+        return contextRunner.withUserConfiguration(UserExtensionConfiguration.class, ResourceGuardFixture.class)
+                .withPropertyValues(PREFIX + ".enable=true", PREFIX + ".api.enable=true", PREFIX + ".mode=portal");
+    }
+
+    @Test
+    public void testPortalCustomAndRootPathsUseExactCoverage() {
+        for (String base : new String[]{"/internal/limiter", "/"}) {
+            String path = ("/".equals(base) ? "" : base) + "/v1/policy/**";
+            portalContext().withPropertyValues(PREFIX + ".api.base-path=" + base, "mock.portal.path=" + path)
+                    .run(context -> {
+                        log.info("验收 Portal 自定义 API 根路径 base={}", base);
+                        assertNull(context.getStartupFailure());
+                    });
+        }
     }
 
     private void assertConfigurationFailure(String... properties) {
@@ -258,6 +340,54 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
         return null;
     }
 
+    /**
+     * 只验证 Management 启动门禁，真实公共安全链另由 HTTP 测试验证。
+     */
+    @TestConfiguration
+    public static class ResourceGuardFixture {
+        @Bean
+        public ResourceServerProperties resourceProperties(Environment environment) {
+            ResourceServerProperties properties = new ResourceServerProperties();
+            properties.setEnabled(environment.getProperty("mock.portal.enabled", Boolean.class, true));
+            properties.getSecurity().setProtectedPaths(Collections.singletonList(
+                    environment.getProperty("mock.portal.path", "/api/v1/policy/**")));
+            String permit = environment.getProperty("mock.portal.permit");
+            if (permit != null) {
+                properties.getSecurity().setPermitAllPaths(Collections.singletonList(permit));
+            }
+            return properties;
+        }
+
+        @Bean
+        @ConditionalOnProperty(prefix = "mock.portal", name = "engine", matchIfMissing = true)
+        public ResourceServerEngine resourceEngine() {
+            return mock(ResourceServerEngine.class);
+        }
+
+        @Bean(name = SmartRedisLimiterManagementConstant.RESOURCE_SECURITY_CHAIN_BEAN)
+        @ConditionalOnProperty(prefix = "mock.portal", name = "security-chain", matchIfMissing = true)
+        public SecurityFilterChain resourceChain() {
+            return mock(SecurityFilterChain.class);
+        }
+
+        @Bean(name = SmartRedisLimiterManagementConstant.RESOURCE_MVC_BEAN)
+        @ConditionalOnProperty(prefix = "mock.portal", name = "mvc", matchIfMissing = true)
+        public WebMvcConfigurer resourceMvc() {
+            return mock(WebMvcConfigurer.class);
+        }
+
+        @Bean
+        public ResourceAuthenticationAdapter firstResourceAdapter() {
+            return mock(ResourceAuthenticationAdapter.class);
+        }
+
+        @Bean
+        @ConditionalOnProperty(prefix = "mock.portal", name = "second-source", matchIfMissing = true)
+        public ResourceAuthenticationAdapter secondResourceAdapter() {
+            return mock(ResourceAuthenticationAdapter.class);
+        }
+    }
+
     @TestConfiguration
     public static class UserExtensionConfiguration {
 
@@ -287,6 +417,30 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
         public SmartRedisLimiterManagementOperatorProvider smartRedisLimiterManagementOperatorProvider(
                 UserExtensions extensions) {
             return extensions.operatorProvider;
+        }
+
+        @Bean
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository smartRedisLimiterTypedRuleRepository(
+                UserExtensions extensions) {
+            return extensions.typedRepository;
+        }
+
+        @Bean
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider smartRedisLimiterDirectoryProvider(
+                UserExtensions extensions) {
+            return extensions.directoryProvider;
+        }
+
+        @Bean
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher smartRedisLimiterTypedEventPublisher(
+                UserExtensions extensions) {
+            return extensions.typedEventPublisher;
+        }
+
+        @Bean
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterTypedPolicyManagementService smartRedisLimiterTypedPolicyManagementService(
+                UserExtensions extensions) {
+            return extensions.typedManagementService;
         }
 
         @Bean
@@ -320,5 +474,13 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
                 mock(SmartRedisLimiterManagementOperatorProvider.class);
         private final SmartRedisLimiterManagementEventPublisher eventPublisher =
                 mock(SmartRedisLimiterManagementEventPublisher.class);
+        private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository typedRepository =
+                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository.class);
+        private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider directoryProvider =
+                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider.class);
+        private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher typedEventPublisher =
+                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher.class);
+        private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterTypedPolicyManagementService typedManagementService =
+                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterTypedPolicyManagementService.class);
     }
 }

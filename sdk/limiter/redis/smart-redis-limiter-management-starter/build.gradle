@@ -1,16 +1,30 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.1.0'
-    api 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+    api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+    // DataAccessPlan 出现在公开方法签名（DATA 范围编译入口），按公开编程面显式声明
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
+    // Portal DATA 标准注解形态（@DataPermissionOperation/@CurrentDataAccessPlan）由 MVC 装配件提供，宿主与测试需显式引入
+    compileOnly 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+    // 聚散原则：starter 是部署期装配件，只出现在测试与宿主类路径。
+    // 编译期仅依赖 core 契约：API 权限注解与 DATA 范围模型来自各自 core（宿主装配件运行时传递）。
+    compileOnly 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-resource-core:2.0.0'
     api 'org.springframework.boot:spring-boot-starter-jdbc'
     api 'org.springframework.boot:spring-boot-starter-web'
-    api 'org.springframework.boot:spring-boot-starter-thymeleaf'
     api 'org.springframework.boot:spring-boot-starter-security'
-    api 'org.springframework.boot:spring-boot-starter-aop'
-    api 'org.springframework.security:spring-security-oauth2-resource-server'
-    api 'org.springframework.security:spring-security-oauth2-jose'
 
     runtimeOnly 'mysql:mysql-connector-java'
 
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'
+    testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
+    testImplementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    // 走查宿主（walkthrough profile）真实双 Provider：IAM 人员 VC + AKSK 机器内省（同 KMS 走查链）
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
     testRuntimeOnly 'mysql:mysql-connector-java'
 }

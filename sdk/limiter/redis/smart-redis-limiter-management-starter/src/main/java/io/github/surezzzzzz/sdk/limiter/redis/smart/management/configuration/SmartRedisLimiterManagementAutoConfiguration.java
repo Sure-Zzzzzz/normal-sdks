@@ -3,16 +3,18 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.SmartRedisLimiterManagementPackage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.annotation.SmartRedisLimiterManagementComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.SmartRedisLimiterManagementConstant;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.ConfigurationSmartRedisLimiterDirectoryProvider;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.AfterCommitSmartRedisLimiterManagementEventPublisher;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.AfterCommitTypedSmartRedisLimiterManagementEventPublisher;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.SmartRedisLimiterManagementEventPublisher;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.JdbcSmartRedisLimiterPolicyRepository;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.JdbcSmartRedisLimiterTypedRuleRepository;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterPolicyRepository;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.security.SecurityContextSmartRedisLimiterManagementOperatorProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.security.SmartRedisLimiterManagementOperatorProvider;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterPolicyManagementService;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterPolicySnapshotService;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterPolicyManagementService;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterPolicySnapshotService;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -46,7 +48,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
         SmartRedisLimiterManagementApiSecurityConfiguration.class,
         SmartRedisLimiterManagementSecurityConfiguration.class,
         SmartRedisLimiterManagementRestSecurityConfiguration.class,
-        SmartRedisLimiterManagementWebMvcConfiguration.class
+        SmartRedisLimiterManagementWebMvcConfiguration.class,
+        SmartRedisLimiterManagementPortalConfiguration.class
 })
 public class SmartRedisLimiterManagementAutoConfiguration {
 
@@ -98,8 +101,9 @@ public class SmartRedisLimiterManagementAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(SmartRedisLimiterPolicySnapshotService.class)
     public SmartRedisLimiterPolicySnapshotService smartRedisLimiterPolicySnapshotService(
-            SmartRedisLimiterPolicyRepository repository) {
-        return new DefaultSmartRedisLimiterPolicySnapshotService(repository);
+            SmartRedisLimiterPolicyRepository repository,
+            SmartRedisLimiterManagementProperties properties) {
+        return new DefaultSmartRedisLimiterPolicySnapshotService(repository, properties);
     }
 
     /**
@@ -110,5 +114,51 @@ public class SmartRedisLimiterManagementAutoConfiguration {
     public SmartRedisLimiterManagementOperatorProvider smartRedisLimiterManagementOperatorProvider(
             SmartRedisLimiterManagementProperties properties) {
         return new SecurityContextSmartRedisLimiterManagementOperatorProvider(properties);
+    }
+
+    /**
+     * 创建 v2 类型化规则 Repository
+     */
+    @Bean
+    @ConditionalOnMissingBean(SmartRedisLimiterTypedRuleRepository.class)
+    public SmartRedisLimiterTypedRuleRepository smartRedisLimiterTypedRuleRepository(
+            NamedParameterJdbcTemplate jdbcTemplate) {
+        return new JdbcSmartRedisLimiterTypedRuleRepository(jdbcTemplate);
+    }
+
+    /**
+     * 创建配置式目录提供方（宿主自有目录实现时以自有 Bean 覆盖）
+     */
+    @Bean
+    @ConditionalOnMissingBean(SmartRedisLimiterDirectoryProvider.class)
+    public SmartRedisLimiterDirectoryProvider smartRedisLimiterDirectoryProvider(
+            SmartRedisLimiterManagementProperties properties) {
+        return new ConfigurationSmartRedisLimiterDirectoryProvider(properties);
+    }
+
+    /**
+     * 创建类型化事件发布器
+     */
+    @Bean
+    @ConditionalOnMissingBean(DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher.class)
+    public DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher
+    smartRedisLimiterTypedEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+        return new AfterCommitTypedSmartRedisLimiterManagementEventPublisher(applicationEventPublisher);
+    }
+
+    /**
+     * 创建 v2 类型化规则管理服务
+     */
+    @Bean
+    @ConditionalOnMissingBean(SmartRedisLimiterTypedPolicyManagementService.class)
+    public SmartRedisLimiterTypedPolicyManagementService smartRedisLimiterTypedPolicyManagementService(
+            SmartRedisLimiterTypedRuleRepository repository,
+            SmartRedisLimiterPolicyRepository policyRepository,
+            SmartRedisLimiterDirectoryProvider directoryProvider,
+            DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher eventPublisher,
+            SmartRedisLimiterManagementProperties properties) {
+        return new DefaultSmartRedisLimiterTypedPolicyManagementService(
+                repository, policyRepository, directoryProvider, eventPublisher,
+                properties.getPage().getDefaultSize(), properties.getPage().getMaxSize());
     }
 }

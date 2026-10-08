@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:mysql://localhost:3306/test_limiter_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
     username: root
-    # password 请通过 application-local.yml 或环境变量提供
+    # 密码仅在被忽略的 application-local.yml 中配置
 
 io:
   github:

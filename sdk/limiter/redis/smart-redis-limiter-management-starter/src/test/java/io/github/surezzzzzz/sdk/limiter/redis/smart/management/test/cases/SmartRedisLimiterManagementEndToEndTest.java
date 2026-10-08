@@ -99,6 +99,8 @@ public class SmartRedisLimiterManagementEndToEndTest {
         jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy_limit");
         jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy");
         jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy_revision");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_typed_rule_limit");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_typed_rule");
         jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
         executeDdl(resolveDdlPath());
         eventListener.clear();
@@ -1025,7 +1027,7 @@ public class SmartRedisLimiterManagementEndToEndTest {
                 "REST PATCH 缺失 enabled 必须返回 400 说明");
         assertEquals(1L, revision(), "REST 无效 PATCH 不得消耗 revision");
         assertEquals(0L, jdbcTemplate.queryForObject(
-                "SELECT row_version FROM smart_redis_limiter_policy WHERE id = ?", Long.class, id),
+                        "SELECT row_version FROM smart_redis_limiter_policy WHERE id = ?", Long.class, id),
                 "REST 无效 PATCH 不得修改 rowVersion");
     }
 

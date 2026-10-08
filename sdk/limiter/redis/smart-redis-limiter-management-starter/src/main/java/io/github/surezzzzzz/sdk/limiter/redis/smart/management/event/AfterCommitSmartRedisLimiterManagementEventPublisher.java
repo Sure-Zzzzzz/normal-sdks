@@ -46,6 +46,8 @@ public class AfterCommitSmartRedisLimiterManagementEventPublisher
                     @Override
                     public void afterCommit() {
                         try {
+                            log.debug("发布已提交策略管理事件 operation={}, revision={}",
+                                    payload.getOperation(), payload.getRevision());
                             applicationEventPublisher.publishEvent(event);
                         } catch (RuntimeException ex) {
                             log.error("发布限流策略管理事件失败，operation={}, revision={}",

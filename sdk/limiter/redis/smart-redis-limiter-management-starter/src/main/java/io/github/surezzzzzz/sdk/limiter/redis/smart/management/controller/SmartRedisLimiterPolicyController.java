@@ -39,6 +39,8 @@ import org.springframework.web.bind.annotation.*;
         prefix = SmartRedisLimiterManagementConstant.CONFIG_PREFIX + ".api",
         name = SmartRedisLimiterManagementConstant.CONFIG_FIELD_ENABLE,
         havingValue = "true")
+@org.springframework.context.annotation.Conditional(
+        io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration.SmartRedisLimiterManagementConsoleCondition.class)
 public class SmartRedisLimiterPolicyController {
 
     private final SmartRedisLimiterPolicyManagementService managementService;

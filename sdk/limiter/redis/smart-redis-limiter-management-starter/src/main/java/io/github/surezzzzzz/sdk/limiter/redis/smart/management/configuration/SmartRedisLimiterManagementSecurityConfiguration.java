@@ -25,6 +25,8 @@ import org.springframework.security.web.SecurityFilterChain;
         prefix = SmartRedisLimiterManagementConstant.CONFIG_PREFIX + ".ui",
         name = SmartRedisLimiterManagementConstant.CONFIG_FIELD_ENABLE,
         havingValue = "true")
+@org.springframework.context.annotation.Conditional(
+        SmartRedisLimiterManagementConsoleCondition.class)
 public class SmartRedisLimiterManagementSecurityConfiguration {
 
     private final SmartRedisLimiterManagementProperties properties;

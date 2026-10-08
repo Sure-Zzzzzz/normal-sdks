@@ -1,0 +1,786 @@
+openapi: 3.0.3
+info:
+  title: Smart Redis Limiter Management Portal API
+  version: 2.0.0
+  description: |
+    Portal 形态的策略与服务级快照契约。Console 的 Session/scope/固定 token 入口不属于本契约。
+    所有调用要求已准入的 Bearer、精确 API 权限与完整 serviceCode DATA 范围；API 不额外要求 PAGE。
+    除 capabilities 外，HUMAN 与 SERVICE 使用相同业务 API。范围外主键返回 404。
+    业务错误不返回 200。400/404/409/500 为 message/timestamp；资源链 401/403 的正文由宿主资源组件定义。
+servers:
+  - url: /api
+    description: 后端默认 API 根路径，可由宿主 api.base-path 配置
+security:
+  - bearerAuth: []
+paths:
+  /v1/policy:
+    get:
+      operationId: queryPolicies
+      summary: 按完整 DATA 范围分页查询
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      parameters:
+        - $ref: '#/components/parameters/OptionalServiceCode'
+        - name: resourceCode
+          in: query
+          schema: { $ref: '#/components/schemas/StableCode' }
+        - name: subject
+          in: query
+          schema: { type: string, maxLength: 256 }
+          description: 精确匹配，非模糊搜索；星号也是字面策略键
+        - name: enabled
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, default: 20 }
+          description: 不超过宿主 page.max-size，默认最大 100
+      responses:
+        '200':
+          description: items 与 totalElements 使用相同数据范围
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      operationId: createPolicy
+      summary: 创建目标服务内的策略
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePolicy' }
+      responses:
+        '201':
+          description: 创建成功，changed 为 true
+          headers:
+            Location:
+              description: 新策略的详情地址
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mutation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v1/policy/capabilities:
+    get:
+      operationId: getPolicyCapabilities
+      summary: 获取当前人员的页面与目标服务写能力
+      x-api-permission: smartLimiterPolicy:read
+      description: |
+        仅准入的 HUMAN 可调用，SERVICE 返回 403。无 PAGE 时两字段均 false。
+        canWrite 同时要求 PAGE、写 API 和合法写 DATA；未指定 serviceCode 时表示至少一个服务可写。
+        不返回授权集合，不能替代 CRUD 自身的授权检查。
+      parameters:
+        - $ref: '#/components/parameters/OptionalServiceCode'
+      responses:
+        '200':
+          description: 页面展示结论
+          headers:
+            Cache-Control:
+              schema: { type: string, enum: [no-store] }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pageAllowed, canWrite]
+                additionalProperties: false
+                properties:
+                  pageAllowed: { type: boolean }
+                  canWrite: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/policy/{id}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyId'
+    get:
+      operationId: getPolicy
+      summary: 读取数据范围内的策略
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      responses:
+        '200':
+          description: 完整策略
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Policy' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    put:
+      operationId: replacePolicyLimits
+      summary: 按行版本整体替换窗口
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      description: 三元组不可变；提交完整 limits。409 后重新读取再决定是否提交，不能自动覆盖。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePolicy' }
+      responses:
+        '200': { $ref: '#/components/responses/MutationOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    patch:
+      operationId: changePolicyState
+      summary: 按行版本启停策略
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRowVersion, enabled]
+              properties:
+                expectedRowVersion: { $ref: '#/components/schemas/Revision' }
+                enabled: { type: boolean }
+      responses:
+        '200': { $ref: '#/components/responses/MutationOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    delete:
+      operationId: deletePolicy
+      summary: 按行版本删除策略及其窗口
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      parameters:
+        - name: expectedRowVersion
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Revision' }
+      responses:
+        '200': { $ref: '#/components/responses/MutationOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v1/policy/snapshot:
+    get:
+      operationId: getPolicySnapshot
+      summary: 获取目标服务的完整启用策略快照
+      x-api-permission: smartLimiterPolicySnapshot:read
+      x-data-action: read
+      description: 先完成 API 与目标服务 DATA 检查再比较 ETag。未创建策略的合法服务返回 revision=0 空快照。
+      parameters:
+        - name: serviceCode
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/StableCode' }
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+          description: 支持弱标签、多个标签及星号
+      responses:
+        '200':
+          description: 仅启用策略；无分页或增量
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string, enum: [no-cache] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Snapshot' }
+        '304':
+          description: 已鉴权且 ETag 匹配，无响应体
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string, enum: [no-cache] } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v2/policy/capabilities:
+    get:
+      operationId: getTypedCapabilities
+      summary: 门户页面能力（pageAllowed/canWrite，no-store）
+      x-api-permission: smartLimiterPolicy:read
+      description: 与 v1 能力语义一致；服务协议模式从授权目录取得。
+      parameters:
+        - $ref: '#/components/parameters/OptionalServiceCode'
+      responses:
+        '200':
+          description: 页面能力
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pageAllowed, canWrite]
+                properties:
+                  pageAllowed: { type: boolean }
+                  canWrite: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v2/policy/services:
+    get:
+      operationId: listTypedServices
+      summary: 授权目录内的类型化服务列表
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      description: 仅返回目录声明为 TYPED_V2 且落在调用者 DATA 范围内的服务；最小 ID/名称。
+      responses:
+        '200':
+          description: 服务摘要列表，no-store
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ServiceSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v2/policy/services/{serviceCode}/declarations:
+    get:
+      operationId: getTypedDeclarations
+      summary: 服务资源与维度声明
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      description: 目录未声明服务或非 TYPED_V2 返回 404；声明含资源->维度、命名空间、自定义类型与策略代次。
+      parameters:
+        - name: serviceCode
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/StableCode' }
+      responses:
+        '200':
+          description: 服务声明，no-store
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceDeclaration' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v2/policy/services/{serviceCode}/objects:
+    get:
+      operationId: listTypedObjects
+      summary: 对象目录检索（客户/主体等稳定对象）
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      description: 返回最小 ID/名称；CUSTOM 维度须带 customType；limit 上限 100。
+      parameters:
+        - name: serviceCode
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/StableCode' }
+        - name: dimension
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/DataDimension' }
+        - name: customType
+          in: query
+          schema: { type: string, maxLength: 64 }
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, default: 20, maximum: 100 }
+      responses:
+        '200':
+          description: 对象目录条目，no-store
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DirectoryObject' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v2/policy/rule:
+    post:
+      operationId: createTypedRule
+      summary: 创建类型化规则（201）
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      description: 命名空间以宿主目录声明为准（客户端传值仅作对齐参考）；身份七字段组合唯一，协议错配返回 409。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TypedRuleCreate' }
+      responses:
+        '201':
+          description: 创建后的规则与服务 revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedMutation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v2/policy/rules:
+    get:
+      operationId: queryTypedRules
+      summary: 类型化规则分页查询
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      description: dimension 支持逗号分隔多值；objectId 按字面前缀匹配（通配符被转义）。
+      parameters:
+        - $ref: '#/components/parameters/OptionalServiceCode'
+        - name: resourceCode
+          in: query
+          schema: { $ref: '#/components/schemas/StableCode' }
+        - name: dimension
+          in: query
+          schema: { type: string }
+          description: 支持逗号分隔多值（如 USER,SERVICE,CREDENTIAL）
+        - name: selector
+          in: query
+          schema: { $ref: '#/components/schemas/RuleSelector' }
+        - name: objectId
+          in: query
+          schema: { type: string, maxLength: 256 }
+          description: 字面前缀匹配，% 与 _ 不作通配符
+        - name: enabled
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, default: 20 }
+      responses:
+        '200':
+          description: 规则分页；count 由完整 DATA 谓词计算
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedRulePage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /v2/policy/rule/{id}:
+    get:
+      operationId: getTypedRule
+      summary: 类型化规则详情
+      x-api-permission: smartLimiterPolicy:read
+      x-data-action: read
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      responses:
+        '200':
+          description: 规则详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedRule' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: updateTypedRule
+      summary: 整体替换窗口（身份不可改）
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expectedRowVersion, limits]
+              properties:
+                expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+                limits:
+                  type: array
+                  minItems: 1
+                  maxItems: 16
+                  items: { $ref: '#/components/schemas/Limit' }
+      responses:
+        '200':
+          description: 更新后的规则与服务 revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedMutation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    patch:
+      operationId: setTypedRuleState
+      summary: 按行版本局部更新启停
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, expectedRowVersion]
+              properties:
+                enabled: { type: boolean }
+                expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+      responses:
+        '200':
+          description: 更新后的规则与服务 revision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedMutation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      operationId: deleteTypedRule
+      summary: 删除类型化规则
+      x-api-permission: smartLimiterPolicy:write
+      x-data-action: write
+      parameters:
+        - $ref: '#/components/parameters/PolicyId'
+        - name: expectedRowVersion
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 0 }
+      responses:
+        '200':
+          description: 删除结果与服务 revision（rule 为 null）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedMutation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v2/policy/snapshot:
+    get:
+      operationId: getTypedSnapshot
+      summary: 类型化策略快照（schemaVersion=2）
+      x-api-permission: smartLimiterPolicySnapshot:read
+      x-data-action: read
+      description: 先完成 API 与目标服务 DATA 检查再比较 ETag；LEGACY 服务或目录未声明返回 409。快照携带 policyEpoch 与单调 revision。
+      parameters:
+        - name: serviceCode
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/StableCode' }
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: 全部启用规则；无分页或增量
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string, enum: [no-cache] } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TypedSnapshot' }
+        '304':
+          description: 已鉴权且 ETag 匹配，无响应体
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 宿主公共 Resource 验证的人员或机器令牌；不接受 Cookie/Session 或固定 token
+  parameters:
+    PolicyId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    OptionalServiceCode:
+      name: serviceCode
+      in: query
+      schema: { $ref: '#/components/schemas/StableCode' }
+  responses:
+    MutationOk:
+      description: 真实变更递增行版本及服务 revision；no-op 的 changed=false 且不递增
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Mutation' }
+    BadRequest:
+      description: 格式、参数、窗口或行版本非法
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: 缺失或无效 Bearer，响应由宿主资源链生成
+    Forbidden:
+      description: 未准入、缺 API/DATA 或能力接口非 HUMAN；资源链或业务层拒绝
+    NotFound:
+      description: 不存在或不在当前数据范围
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: 重复三元组、行版本并发冲突或服务 revision 已达上限
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnsupportedMedia:
+      description: 请求体不是 application/json
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: 服务内部错误，不暴露 SQL、堆栈或权限集合
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    StableCode:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+      description: 规范化时去除首尾空白，大小写精确匹配
+    Revision:
+      type: integer
+      format: int64
+      minimum: 0
+    PolicyKey:
+      type: object
+      required: [serviceCode, resourceCode, subject]
+      properties:
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        resourceCode: { $ref: '#/components/schemas/StableCode' }
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: 去除首尾空白后非空，不允许 ISO 控制字符；星号是通配策略键，其他主体精确匹配
+    Limit:
+      type: object
+      required: [count, window, unit]
+      description: count/window 为正 int64；window 换算为秒不能溢出 int64
+      properties:
+        count: { type: integer, format: int64, minimum: 1 }
+        window: { type: integer, format: int64, minimum: 1 }
+        unit: { type: string, enum: [SECONDS, MINUTES, HOURS, DAYS] }
+    Limits:
+      type: array
+      minItems: 1
+      maxItems: 16
+      description: 换算后的秒数不得重复；表示完整窗口集合而非增量
+      items: { $ref: '#/components/schemas/Limit' }
+    CreatePolicy:
+      type: object
+      required: [key, limits]
+      properties:
+        key: { $ref: '#/components/schemas/PolicyKey' }
+        limits: { $ref: '#/components/schemas/Limits' }
+        enabled:
+          type: boolean
+          nullable: true
+          default: false
+          description: 缺失或 null 时创建为禁用
+    UpdatePolicy:
+      type: object
+      required: [expectedRowVersion, limits]
+      properties:
+        expectedRowVersion: { $ref: '#/components/schemas/Revision' }
+        limits: { $ref: '#/components/schemas/Limits' }
+    CorePolicy:
+      type: object
+      required: [key, limits]
+      properties:
+        key: { $ref: '#/components/schemas/PolicyKey' }
+        limits: { $ref: '#/components/schemas/Limits' }
+    Policy:
+      type: object
+      required: [id, key, limits, enabled, rowVersion, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        key: { $ref: '#/components/schemas/PolicyKey' }
+        limits: { $ref: '#/components/schemas/Limits' }
+        enabled: { type: boolean }
+        rowVersion: { $ref: '#/components/schemas/Revision' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PolicyPage:
+      type: object
+      required: [items, page, size, totalElements, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Policy' } }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1 }
+        totalElements: { type: integer, format: int64, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+    Mutation:
+      type: object
+      required: [revision, changed]
+      properties:
+        policy:
+          allOf: [{ $ref: '#/components/schemas/Policy' }]
+          nullable: true
+          description: 创建、更新、启停时的完整策略，删除时为 null
+        deletedPolicyKey:
+          allOf: [{ $ref: '#/components/schemas/PolicyKey' }]
+          nullable: true
+          description: 删除时的三元组，其余变更为 null
+        revision: { $ref: '#/components/schemas/Revision' }
+        changed: { type: boolean }
+    Snapshot:
+      type: object
+      required: [schemaVersion, serviceCode, revision, publishedAt, policies]
+      properties:
+        schemaVersion: { type: string, enum: ['1'] }
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        revision: { $ref: '#/components/schemas/Revision' }
+        publishedAt: { type: string, format: date-time }
+        policies: { type: array, items: { $ref: '#/components/schemas/CorePolicy' } }
+    Error:
+      type: object
+      required: [message, timestamp]
+      properties:
+        message: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    ServiceSummary:
+      type: object
+      required: [serviceCode, displayName]
+      properties:
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        displayName: { type: string }
+    ServiceDeclaration:
+      type: object
+      required: [serviceCode, controlMode, resources, namespaces, customTypes]
+      properties:
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        controlMode: { type: string, enum: [TYPED_V2] }
+        displayName: { type: string }
+        policyEpoch: { type: integer, format: int64, minimum: 1 }
+        resources:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/DataDimension' }
+        namespaces:
+          type: object
+          additionalProperties: { type: string, maxLength: 64 }
+        customTypes:
+          type: array
+          items: { type: string, maxLength: 64 }
+    DirectoryObject:
+      type: object
+      required: [dimension, id]
+      properties:
+        dimension: { $ref: '#/components/schemas/DataDimension' }
+        customType: { type: string, nullable: true }
+        id: { type: string, maxLength: 256 }
+        name: { type: string, nullable: true }
+    DataDimension:
+      type: string
+      enum: [RESOURCE, IP, USER, SERVICE, CREDENTIAL, CUSTOMER, CUSTOM]
+    RuleSelector:
+      type: string
+      enum: [DEFAULT, EXACT]
+    TypedRule:
+      type: object
+      required: [id, serviceCode, resourceCode, dimension, selector, namespace, limits, enabled, rowVersion, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        resourceCode: { $ref: '#/components/schemas/StableCode' }
+        dimension: { $ref: '#/components/schemas/DataDimension' }
+        selector: { $ref: '#/components/schemas/RuleSelector' }
+        namespace: { type: string, maxLength: 64 }
+        customType: { type: string, nullable: true }
+        objectId: { type: string, nullable: true, maxLength: 256 }
+        limits:
+          type: array
+          items: { $ref: '#/components/schemas/Limit' }
+        enabled: { type: boolean }
+        rowVersion: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    TypedRuleCreate:
+      type: object
+      required: [serviceCode, resourceCode, dimension, selector, limits]
+      properties:
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        resourceCode: { $ref: '#/components/schemas/StableCode' }
+        dimension: { $ref: '#/components/schemas/DataDimension' }
+        selector: { $ref: '#/components/schemas/RuleSelector' }
+        namespace: { type: string, maxLength: 64 }
+        customType: { type: string, maxLength: 64 }
+        objectId: { type: string, maxLength: 256 }
+        enabled: { type: boolean, default: true }
+        limits:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { $ref: '#/components/schemas/Limit' }
+    TypedRulePage:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TypedRule' }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+    TypedMutation:
+      type: object
+      required: [rule, revision]
+      properties:
+        rule:
+          nullable: true
+          allOf: [{ $ref: '#/components/schemas/TypedRule' }]
+        revision: { type: integer, format: int64 }
+    TypedSnapshot:
+      type: object
+      required: [schemaVersion, serviceCode, policyEpoch, revision, publishedAt, rules]
+      properties:
+        schemaVersion: { type: string, enum: ['2'] }
+        serviceCode: { $ref: '#/components/schemas/StableCode' }
+        policyEpoch: { type: integer, format: int64, minimum: 1 }
+        revision: { type: integer, format: int64, minimum: 0 }
+        publishedAt: { type: string, format: date-time }
+        rules:
+          type: array
+          items:
+            type: object
+            required: [key, enabled, limits]
+            properties:
+              key:
+                type: object
+                required: [serviceCode, resourceCode, dimension, selector, namespace]
+                properties:
+                  serviceCode: { type: string }
+                  resourceCode: { type: string }
+                  dimension: { $ref: '#/components/schemas/DataDimension' }
+                  selector: { $ref: '#/components/schemas/RuleSelector' }
+                  namespace: { type: string }
+                  customType: { type: string, nullable: true }
+                  objectId: { type: string, nullable: true }
+              enabled: { type: boolean }
+              limits:
+                type: array
+                items: { $ref: '#/components/schemas/Limit' }

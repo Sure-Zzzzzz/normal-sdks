@@ -46,7 +46,8 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
  */
 @Configuration
 @RequiredArgsConstructor
-@Conditional(SmartRedisLimiterManagementRestSecurityConfiguration.RestTokenEnabledCondition.class)
+@Conditional({SmartRedisLimiterManagementRestSecurityConfiguration.RestTokenEnabledCondition.class,
+        SmartRedisLimiterManagementConsoleCondition.class})
 public class SmartRedisLimiterManagementRestSecurityConfiguration {
 
     private final SmartRedisLimiterManagementProperties properties;

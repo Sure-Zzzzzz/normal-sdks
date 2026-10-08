@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository;
 
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.entity.SmartRedisLimiterPolicyEntity;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.entity.SmartRedisLimiterPolicyRevisionEntity;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.view.SmartRedisLimiterPolicyDataScope;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.view.SmartRedisLimiterPolicyQuery;
 
 import java.time.Instant;
@@ -80,4 +81,38 @@ public interface SmartRedisLimiterPolicyRepository {
      * 统计查询结果
      */
     long count(SmartRedisLimiterPolicyQuery query);
+
+    /**
+     * 按主键与完整 DATA 范围联合读取。
+     */
+    SmartRedisLimiterPolicyEntity findById(long id, SmartRedisLimiterPolicyDataScope scope);
+
+    /**
+     * 在相同 DATA 范围中替换全部窗口。
+     */
+    boolean replaceLimits(long id, long expectedRowVersion,
+                          List<io.github.surezzzzzz.sdk.limiter.redis.smart.model.policy.SmartRedisLimiterLimit> limits,
+                          Instant updatedAt, SmartRedisLimiterPolicyDataScope scope);
+
+    /**
+     * 按主键、版本与完整 DATA 范围更新状态。
+     */
+    boolean updateEnabled(long id, long expectedRowVersion, boolean enabled, Instant updatedAt,
+                          SmartRedisLimiterPolicyDataScope scope);
+
+    /**
+     * 按主键、版本与完整 DATA 范围删除。
+     */
+    boolean delete(long id, long expectedRowVersion, SmartRedisLimiterPolicyDataScope scope);
+
+    /**
+     * 在完整 DATA 范围中分页查询。
+     */
+    List<SmartRedisLimiterPolicyEntity> query(SmartRedisLimiterPolicyQuery query,
+                                              SmartRedisLimiterPolicyDataScope scope);
+
+    /**
+     * 使用与列表相同的 DATA 谓词统计。
+     */
+    long count(SmartRedisLimiterPolicyQuery query, SmartRedisLimiterPolicyDataScope scope);
 }

@@ -1,0 +1,98 @@
+# 本机验收形态（凭据经环境变量注入）：portal 双来源 + test 库（test_limiter_management）+ 8391
+# 起服：--spring.profiles.active=local,walkthrough；环境变量 LIMITER_VC_ID/LIMITER_VC_SECRET/
+#       LIMITER_AKSK_INTROSPECT_ID/LIMITER_AKSK_INTROSPECT_SECRET
+server:
+  port: 8391
+
+spring:
+  application:
+    name: limiter-management-walkthrough
+  datasource:
+    url: ${LIMITER_TEST_JDBC_URL:jdbc:mysql://localhost:3306/test_limiter_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    username: ${LIMITER_TEST_DB_USERNAME:}
+    password: ${LIMITER_TEST_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        limiter:
+          redis:
+            smart:
+              management:
+                enable: true
+                mode: portal
+                api:
+                  enable: true
+                  base-path: /api
+                ui:
+                  enable: false
+                # 基础 application.yml 若带 console 固定 token，走查显式清空
+                rest:
+                  policy-token: ''
+                # 类型化目录声明（宿主以部署配置维护；值为环境真实端点策略的镜像）
+                typed:
+                  services:
+                    - service-code: iam
+                      display-name: IAM 身份服务
+                      resources:
+                        iam-web-csrf: [ IP ]
+                        iam-web-captcha: [ IP ]
+                      namespaces:
+                        IP: entry
+                    - service-code: aksk
+                      display-name: AKSK 凭据服务
+                      resources:
+                        oauth2-token: [ CREDENTIAL ]
+                        oauth2-introspect: [ CREDENTIAL ]
+                        oauth2-revoke: [ CREDENTIAL ]
+                      namespaces:
+                        CREDENTIAL: credential
+                    - service-code: walkthrough-service
+                      display-name: 演示业务服务
+                      resources:
+                        create-order: [ RESOURCE, IP, USER, SERVICE, CREDENTIAL, CUSTOMER, CUSTOM ]
+                      namespaces:
+                        RESOURCE: shared
+                        IP: entry
+                        USER: user
+                        SERVICE: service
+                        CREDENTIAL: credential
+                        CUSTOMER: customer
+                        CUSTOM: custom
+                      custom-types: [ device, channel ]
+                      objects:
+                        - dimension: CUSTOMER
+                          id: cust-walk-001
+                          name: 演示客户甲
+                        - dimension: CUSTOMER
+                          id: cust-walk-002
+                          name: 演示客户乙
+        auth:
+          aksk:
+            resource:
+              server:
+                # 基础 application.yml 为 console 测试默认关闭，走查双来源显式开启
+                enabled: true
+                introspect:
+                  endpoint: ${LIMITER_AKSK_INTROSPECT_ENDPOINT:http://127.0.0.1:8280/oauth2/introspect}
+                  client-id: ${LIMITER_AKSK_INTROSPECT_ID:}
+                  client-secret: ${LIMITER_AKSK_INTROSPECT_SECRET:}
+          iam:
+            resource:
+              server:
+                verification-endpoint: ${LIMITER_VC_VERIFY_ENDPOINT:http://127.0.0.1:8180/iam/resource/tokens/verify}
+                client-id: ${LIMITER_VC_ID:}
+                client-secret: ${LIMITER_VC_SECRET:}
+          resource:
+            server:
+              enabled: true
+              security:
+                protected-paths:
+                  - /api/v1/policy/**
+                  - /api/v2/policy/**
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.limiter.redis.smart.management: DEBUG

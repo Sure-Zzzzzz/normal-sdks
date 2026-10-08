@@ -7,17 +7,90 @@ package io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant;
  */
 public final class SmartRedisLimiterManagementConstant {
 
-    private SmartRedisLimiterManagementConstant() {
-        throw new UnsupportedOperationException("Utility class");
-    }
-
-    // ==================== 配置 ====================
-
+    // ==================== 部署形态与三权 ====================
+    /**
+     * 保留内嵌页面和旧对外认证的形态。
+     */
+    public static final String MODE_CONSOLE = "console";
+    /**
+     * 独立门户与公共资源认证形态。
+     */
+    public static final String MODE_PORTAL = "portal";
+    /**
+     * 部署形态配置字段。
+     */
+    public static final String CONFIG_FIELD_MODE = "mode";
+    /**
+     * 策略管理页面权限。
+     */
+    public static final String PAGE_POLICY = "smartLimiterPolicy:page";
+    /**
+     * 分页、详情和能力查询 API 权限。
+     */
+    public static final String API_POLICY_READ = "smartLimiterPolicy:read";
+    /**
+     * 策略变更 API 权限。
+     */
+    public static final String API_POLICY_WRITE = "smartLimiterPolicy:write";
+    /**
+     * 运行端快照 API 权限。
+     */
+    public static final String API_SNAPSHOT_READ = "smartLimiterPolicySnapshot:read";
+    /**
+     * 策略 DATA 资源码。
+     */
+    public static final String DATA_POLICY_RESOURCE = "limiter-policy";
+    /**
+     * DATA 读取动作。
+     */
+    public static final String DATA_READ = "read";
+    /**
+     * DATA 写入动作。
+     */
+    public static final String DATA_WRITE = "write";
+    /**
+     * DATA 服务范围维度。
+     */
+    public static final String DATA_SERVICE_DIMENSION = "serviceCode";
+    /**
+     * 公共资源安全链的既有 Bean 名。
+     */
+    public static final String RESOURCE_SECURITY_CHAIN_BEAN = "resourceServerSecurityFilterChain";
+    /**
+     * 公共资源 API 权限拦截器配置 Bean 名。
+     */
+    public static final String RESOURCE_MVC_BEAN = "resourceServerWebMvcConfigurer";
+    /**
+     * 可选公共资源配置类，用于缺依赖的明确失败关闭。
+     */
+    public static final String RESOURCE_PROPERTIES_CLASS = "io.github.surezzzzzz.sdk.auth.resource.server.configuration.ResourceServerProperties";
+    /**
+     * 可选公共资源引擎类。
+     */
+    public static final String RESOURCE_ENGINE_CLASS = "io.github.surezzzzzz.sdk.auth.resource.server.support.ResourceServerEngine";
+    /**
+     * Portal 首版双来源最少适配器数。
+     */
+    public static final int PORTAL_MIN_SOURCE_COUNT = 2;
+    /**
+     * 人员能力结果禁止缓存。
+     */
+    public static final String CACHE_CONTROL_NO_STORE = "no-store";
+    /**
+     * 主键或查询 SQL 的服务范围谓词。
+     */
+    public static final String SQL_CONDITION_DATA_SCOPE = " AND service_code IN (:allowedServiceCodes)";
+    /**
+     * 服务范围命名参数。
+     */
+    public static final String PARAM_ALLOWED_SERVICE_CODES = "allowedServiceCodes";
     /**
      * 配置前缀
      */
     public static final String CONFIG_PREFIX =
             "io.github.surezzzzzz.sdk.limiter.redis.smart.management";
+
+    // ==================== 配置 ====================
     /**
      * 总开关字段名
      */
@@ -69,13 +142,12 @@ public final class SmartRedisLimiterManagementConstant {
      * 最大分页大小
      */
     public static final int DEFAULT_MAX_PAGE_SIZE = 100;
-
-    // ==================== HTTP ====================
-
     /**
      * 策略快照 API 后缀
      */
     public static final String PATH_POLICY_SNAPSHOT = "/v1/policy/snapshot";
+
+    // ==================== HTTP ====================
     /**
      * 策略快照读取权限 scope
      */
@@ -270,13 +342,12 @@ public final class SmartRedisLimiterManagementConstant {
      * 错误页模板
      */
     public static final String VIEW_ERROR = "smart-redis-limiter/management/error";
-
-    // ==================== ETag ====================
-
     /**
      * SHA-256 算法
      */
     public static final String DIGEST_ALGORITHM_SHA_256 = "SHA-256";
+
+    // ==================== ETag ====================
     /**
      * ETag 前缀
      */
@@ -301,13 +372,12 @@ public final class SmartRedisLimiterManagementConstant {
      * 十六进制格式
      */
     public static final String FORMAT_HEX_BYTE = "%02x";
-
-    // ==================== 数据库 ====================
-
     /**
      * revision 初始值
      */
     public static final long INITIAL_REVISION = 0L;
+
+    // ==================== 数据库 ====================
     /**
      * rowVersion 初始值
      */
@@ -324,7 +394,6 @@ public final class SmartRedisLimiterManagementConstant {
      * 布尔假数据库值
      */
     public static final int DATABASE_BOOLEAN_FALSE = 0;
-
     /**
      * 幂等初始化 revision SQL
      */
@@ -353,7 +422,6 @@ public final class SmartRedisLimiterManagementConstant {
             "UPDATE smart_redis_limiter_policy_revision "
                     + "SET revision = :revision, published_at = :publishedAt "
                     + "WHERE service_code = :serviceCode";
-
     /**
      * 策略精确查询 SQL
      */
@@ -456,10 +524,9 @@ public final class SmartRedisLimiterManagementConstant {
      */
     public static final String SQL_POLICY_PAGE_ORDER =
             " ORDER BY service_code, resource_code, subject, id LIMIT :limit OFFSET :offset";
+    public static final String COLUMN_ID = "id";
 
     // ==================== 数据库列 ====================
-
-    public static final String COLUMN_ID = "id";
     public static final String COLUMN_POLICY_ID = "policy_id";
     public static final String COLUMN_SERVICE_CODE = "service_code";
     public static final String COLUMN_RESOURCE_CODE = "resource_code";
@@ -475,10 +542,9 @@ public final class SmartRedisLimiterManagementConstant {
     public static final String COLUMN_LIMIT_WINDOW = "limit_window";
     public static final String COLUMN_LIMIT_UNIT = "limit_unit";
     public static final String COLUMN_WINDOW_SECONDS = "window_seconds";
+    public static final String PARAM_ID = "id";
 
     // ==================== Map 参数 ====================
-
-    public static final String PARAM_ID = "id";
     public static final String PARAM_POLICY_ID = "policyId";
     public static final String PARAM_POLICY_IDS = "policyIds";
     public static final String PARAM_SERVICE_CODE = "serviceCode";
@@ -498,4 +564,165 @@ public final class SmartRedisLimiterManagementConstant {
     public static final String PARAM_WINDOW_SECONDS = "windowSeconds";
     public static final String PARAM_LIMIT = "limit";
     public static final String PARAM_OFFSET = "offset";
+
+    // ==================== v2 类型化规则（smart_redis_limiter_typed_rule） ====================
+    /**
+     * 类型化规则身份字段列表（七字段）
+     */
+    public static final String TYPED_RULE_COLUMNS =
+            "id, service_code, resource_code, dimension, selector, namespace, custom_type, object_id, "
+                    + "enabled, row_version, created_at, updated_at";
+    /**
+     * 按主键查询类型化规则 SQL
+     */
+    public static final String SQL_SELECT_TYPED_RULE_BY_ID =
+            "SELECT " + TYPED_RULE_COLUMNS + " FROM smart_redis_limiter_typed_rule WHERE id = :id";
+    /**
+     * 按七字段身份查询类型化规则 SQL
+     */
+    public static final String SQL_SELECT_TYPED_RULE_BY_KEY =
+            "SELECT " + TYPED_RULE_COLUMNS + " FROM smart_redis_limiter_typed_rule "
+                    + "WHERE service_code = :serviceCode AND resource_code = :resourceCode "
+                    + "AND dimension = :dimension AND selector = :selector AND namespace = :namespace "
+                    + "AND custom_type = :customType AND object_id = :objectId";
+    /**
+     * 新增类型化规则 SQL（身份不适用的字段以空串入库，保证唯一索引判重）
+     */
+    public static final String SQL_INSERT_TYPED_RULE =
+            "INSERT INTO smart_redis_limiter_typed_rule "
+                    + "(service_code, resource_code, dimension, selector, namespace, custom_type, object_id, "
+                    + "enabled, row_version, created_at, updated_at) "
+                    + "VALUES (:serviceCode, :resourceCode, :dimension, :selector, :namespace, :customType, :objectId, "
+                    + ":enabled, :rowVersion, :createdAt, :updatedAt)";
+    /**
+     * 整体替换类型化规则窗口对应版本 SQL
+     */
+    public static final String SQL_UPDATE_TYPED_RULE_VERSION =
+            "UPDATE smart_redis_limiter_typed_rule SET row_version = row_version + 1, updated_at = :updatedAt "
+                    + "WHERE id = :id AND row_version = :expectedRowVersion";
+    /**
+     * 更新类型化规则启停状态 SQL
+     */
+    public static final String SQL_UPDATE_TYPED_RULE_STATE =
+            "UPDATE smart_redis_limiter_typed_rule "
+                    + "SET enabled = :enabled, row_version = row_version + 1, updated_at = :updatedAt "
+                    + "WHERE id = :id AND row_version = :expectedRowVersion";
+    /**
+     * 删除类型化规则 SQL（limits 由外键级联删除）
+     */
+    public static final String SQL_DELETE_TYPED_RULE =
+            "DELETE FROM smart_redis_limiter_typed_rule WHERE id = :id AND row_version = :expectedRowVersion";
+    /**
+     * 删除类型化规则窗口 SQL
+     */
+    public static final String SQL_DELETE_TYPED_LIMITS =
+            "DELETE FROM smart_redis_limiter_typed_rule_limit WHERE rule_id = :ruleId";
+    /**
+     * 新增类型化规则窗口 SQL
+     */
+    public static final String SQL_INSERT_TYPED_LIMIT =
+            "INSERT INTO smart_redis_limiter_typed_rule_limit "
+                    + "(rule_id, sort_order, limit_count, limit_window, limit_unit, window_seconds, created_at, updated_at) "
+                    + "VALUES (:ruleId, :sortOrder, :count, :window, :unit, :windowSeconds, :createdAt, :updatedAt)";
+    /**
+     * 查询单规则窗口 SQL
+     */
+    public static final String SQL_SELECT_TYPED_LIMITS_BY_RULE_ID =
+            "SELECT id, rule_id, sort_order, limit_count, limit_window, limit_unit, window_seconds, created_at, updated_at "
+                    + "FROM smart_redis_limiter_typed_rule_limit WHERE rule_id = :ruleId ORDER BY sort_order";
+    /**
+     * 快照启用规则查询 SQL
+     */
+    public static final String SQL_SELECT_ENABLED_TYPED_RULES =
+            "SELECT " + TYPED_RULE_COLUMNS + " FROM smart_redis_limiter_typed_rule "
+                    + "WHERE service_code = :serviceCode AND enabled = 1 "
+                    + "ORDER BY resource_code, dimension, selector, namespace, custom_type, object_id, id";
+    /**
+     * 批量查询类型化规则窗口 SQL
+     */
+    public static final String SQL_SELECT_TYPED_LIMITS_BY_RULE_IDS =
+            "SELECT id, rule_id, sort_order, limit_count, limit_window, limit_unit, window_seconds, created_at, updated_at "
+                    + "FROM smart_redis_limiter_typed_rule_limit WHERE rule_id IN (:ruleIds) "
+                    + "ORDER BY rule_id, sort_order";
+    /**
+     * 类型化规则分页查询基础 SQL
+     */
+    public static final String SQL_QUERY_TYPED_RULE_BASE =
+            "SELECT " + TYPED_RULE_COLUMNS + " FROM smart_redis_limiter_typed_rule WHERE 1 = 1";
+    /**
+     * 类型化规则统计基础 SQL
+     */
+    public static final String SQL_COUNT_TYPED_RULE_BASE =
+            "SELECT COUNT(*) FROM smart_redis_limiter_typed_rule WHERE 1 = 1";
+    /**
+     * 类型化规则 dimension 条件
+     */
+    public static final String SQL_CONDITION_DIMENSION = " AND dimension IN (:dimensions)";
+    /**
+     * 类型化规则 selector 条件
+     */
+    public static final String SQL_CONDITION_SELECTOR = " AND selector = :selector";
+    /**
+     * 类型化规则 namespace 条件
+     */
+    public static final String SQL_CONDITION_NAMESPACE = " AND namespace = :namespace";
+    /**
+     * 类型化规则 custom_type 条件
+     */
+    public static final String SQL_CONDITION_CUSTOM_TYPE = " AND custom_type = :customType";
+    /**
+     * 类型化规则 object_id 前缀匹配条件（列表筛选按对象检索）
+     */
+    public static final String SQL_CONDITION_TYPED_OBJECT =
+            " AND object_id LIKE :objectId ESCAPE '|'";
+    /**
+     * 类型化规则分页排序
+     */
+    public static final String SQL_TYPED_RULE_PAGE_ORDER =
+            " ORDER BY service_code, resource_code, dimension, selector, namespace, custom_type, object_id, id "
+                    + "LIMIT :limit OFFSET :offset";
+
+    // ==================== v2 数据库列与参数 ====================
+    public static final String COLUMN_DIMENSION = "dimension";
+    public static final String COLUMN_SELECTOR = "selector";
+    public static final String COLUMN_NAMESPACE = "namespace";
+    public static final String COLUMN_CUSTOM_TYPE = "custom_type";
+    public static final String COLUMN_OBJECT_ID = "object_id";
+    public static final String COLUMN_RULE_ID = "rule_id";
+    public static final String PARAM_DIMENSION = "dimension";
+    public static final String PARAM_DIMENSIONS = "dimensions";
+    public static final String PARAM_SELECTOR = "selector";
+    public static final String PARAM_NAMESPACE = "namespace";
+    public static final String PARAM_CUSTOM_TYPE = "customType";
+    public static final String PARAM_OBJECT_ID = "objectId";
+    public static final String PARAM_RULE_ID = "ruleId";
+    public static final String PARAM_RULE_IDS = "ruleIds";
+    /**
+     * v2 类型化快照默认策略代次（协议切换时由宿主显式调整）
+     */
+    public static final long TYPED_POLICY_EPOCH_DEFAULT = 1L;
+    /**
+     * 目录声明的类型化协议模式编码（与 core 枚举一致）
+     */
+    public static final String TYPED_CONTROL_MODE = "TYPED_V2";
+    /**
+     * 类型化管理事件操作人来源标识（83 字符摘要的 sourceId 输入）
+     */
+    public static final String OPERATOR_SOURCE_ID = "management";
+    /**
+     * 类型化管理事件操作人主体类型（Portal 操作人是人员）
+     */
+    public static final String OPERATOR_SUBJECT_TYPE = "HUMAN";
+    /**
+     * 对象目录检索默认返回上限
+     */
+    public static final int DEFAULT_OBJECT_QUERY_LIMIT = 20;
+    /**
+     * 对象目录检索最大返回上限
+     */
+    public static final int MAX_OBJECT_QUERY_LIMIT = 100;
+
+    private SmartRedisLimiterManagementConstant() {
+        throw new UnsupportedOperationException("Utility class");
+    }
 }

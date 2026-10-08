@@ -35,7 +35,7 @@ public class SmartRedisLimiterManagementConfigurationValidator
                         Bindable.of(SmartRedisLimiterManagementProperties.class))
                 .orElseGet(SmartRedisLimiterManagementProperties::new);
         properties.init();
-        if (isApiEnabled(properties) && isResourceServerExplicitlyDisabled()
+        if (!properties.isPortal() && isApiEnabled(properties) && isResourceServerExplicitlyDisabled()
                 && !hasText(properties.getRest().getPolicyToken())) {
             throw new SmartRedisLimiterManagementConfigurationException(
                     ErrorCode.CONFIG_REST_TOKEN_REQUIRED,

@@ -1,210 +1,181 @@
 # smart-redis-limiter-management-starter
 
-将 SmartRedisLimiter 动态策略管理能力接入专用 Spring Boot management 应用的 Starter。策略持久化在 MySQL，提供管理员页面、管理员 API，以及供 limiter 和第三方系统调用的策略快照与 CRUD API。
+将限流策略持久化到 MySQL，提供策略查询、创建、窗口整体替换、启停、删除和服务级快照。支持两类规则形态：三元组精确规则（`/v1/policy/**`）与多维度类型化规则（`/v2/policy/**`，维度为资源/IP/人员/服务主体/凭据/客户/自定义，含默认额度与精确对象覆盖、目录声明与类型化快照）。运行端通过 HTTP 拉取快照，不需要把管理模块装入业务应用，也不需要共享数据库。
 
-它不是可独立执行的应用，不提供应用启动入口、MySQL、Redis、连接池或自动建表；宿主应用负责提供 Web 启动入口、`DataSource` 和事务管理器。
+| Management | Core | 管理宿主 | Java | Portal Web |
+| --- | --- | --- | --- | --- |
+| 2.0.0 | 2.2.0 | Spring Boot 2.7.9 | 8 | 1.0.0 |
+| 1.0.0 | 2.1.0 | Spring Boot 2.7.9 | 8 | 内嵌 Console |
 
-## 运行要求
+## 选择形态
 
-- management：1.0.0
-- core：2.1.0
-- Java：8
-- Spring Boot：2.7.x
-- MySQL：5.7.9+ / 8.0
+`console` 保留内嵌页面、本地管理员会话及旧 scope API。默认仍为 console，仅关闭 UI 不会切成 Portal。
 
-模块不依赖 limiter starter、Redis 或 redis-route。它直接依赖 `simple-aksk-resource-server-starter`，默认使用 AKSK 保护对外策略 API。
+`portal` 由独立 Web 接入统一应用门户。关闭内嵌页面、管理员 Session API 和固定 token 兜底；人员及机器均使用 Bearer（HTTP 认证令牌）调用同一业务 API，完整执行应用准入、API 操作权限与 DATA 数据范围。PAGE 页面权限只控制门户页面，不作为机器 API 的额外门槛，包括主体类型为 HUMAN 的所属人继承凭据。
+
+本模块不提供可执行应用、连接池或自动建表，不依赖限流运行端、Redis、IAM 或 AKSK 的实现。宿主提供 Spring Web、Security、JDBC、数据源与事务管理器；需要 Console 页面时提供 Thymeleaf。资源认证组件由宿主显式组合。
 
 ## 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:2.0.0'
+implementation 'org.springframework.boot:spring-boot-starter-web'
+implementation 'org.springframework.boot:spring-boot-starter-security'
+implementation 'org.springframework.boot:spring-boot-starter-jdbc'
 runtimeOnly 'mysql:mysql-connector-java'
 ```
 
-若宿主应用已提供 MySQL JDBC 驱动，无需重复声明 `runtimeOnly`。
+Portal 双来源宿主另外引入：
 
-## 建表
-
-启动应用前执行模块内的建表脚本：
-
-```text
-docs/mysql-schema.sql
+```gradle
+implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
+implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
 ```
 
-脚本创建策略、策略窗口和服务 revision 三张表。Starter 不执行 DDL，也不创建或配置数据库连接池。
+Provider（身份来源适配器）的验证客户端、目标应用和密钥按各自接入契约配置，不能把浏览器的公共 PKCE 客户端当成资源验证客户端。两来源必须在公共 Resource 中分别注册；本模块不识别来源品牌、不访问身份库。只引依赖不等于完成授权配置。
 
-## 最小配置
-
-下面示例同时启用 API 与管理页面。数据库和管理员凭据必须通过环境变量或 secret manager 注入。
+## Portal 最小配置
 
 ```yaml
 io.github.surezzzzzz.sdk.limiter.redis.smart.management:
   enable: true
+  mode: portal
   api:
     enable: true
     base-path: /api
   ui:
-    enable: true
-    base-path: /admin
-  admin:
-    username: ${SMART_LIMITER_ADMIN_USERNAME}
-    password: ${SMART_LIMITER_ADMIN_PASSWORD}
+    enable: false
   page:
     default-size: 20
     max-size: 100
 
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/limiter_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC
-    username: ${SMART_LIMITER_DB_USERNAME}
-    password: ${SMART_LIMITER_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+io.github.surezzzzzz.sdk.auth.resource.server:
+  enabled: true
+  security:
+    protected-paths:
+      - /api/v1/policy/**
+      - /api/v2/policy/**
 ```
 
-配置默认值与约束：
-
-| 配置 | 默认值 | 说明 |
-| --- | --- | --- |
-| `management.enable` | `false` | 总开关。启用后至少还要开启 API 或 UI。 |
-| `management.api.enable` | `false` | 对外策略 API 开关。 |
-| `management.ui.enable` | `false` | 管理页面开关；开启时必须同时开启 API。 |
-| `management.api.base-path` | `/api` | API 根路径。 |
-| `management.ui.base-path` | `/admin` | 管理页面根路径。 |
-| `management.page.default-size` | `20` | 默认分页大小。 |
-| `management.page.max-size` | `100` | 最大分页大小。 |
-
-`api.base-path` 和 `ui.base-path` 必须以 `/` 开头，不能以 `/` 结尾（根路径除外），不能包含 `*` 或 `?`，且两者不能重叠。开启 UI 时，`admin.username` 和 `admin.password` 均为必填；`admin.password` 配置原始口令，由应用的 `PasswordEncoder` 在内存中编码，不要填写 `{noop}` 或预编码值。
-
-下文的 `management` 均指配置前缀 `io.github.surezzzzzz.sdk.limiter.redis.smart.management`。
-
-## 路径与安全边界
-
-下表以默认根路径为例；修改 `api.base-path` 或 `ui.base-path` 后，所有对应路径随之变化。
-
-| 用途 | 默认路径 | 认证与会话 |
-| --- | --- | --- |
-| 管理员登录 | `/admin/login` | 配置的管理员账号；表单登录、会话与 CSRF。 |
-| 管理页面 | `/admin/policies` | 已登录管理员；登录成功后跳转至此。 |
-| 管理员 API | `/api/admin/v1/policy` | 已登录管理员会话；保留 CSRF；匿名请求返回 `401`，不跳转登录页。 |
-| 对外策略 API | `/api/v1/policy/**` | 默认 AKSK；仅显式关闭 AKSK 时使用固定 header token。 |
-
-UI 安全链只覆盖 `<ui-base-path>/**`，管理员 API 安全链只覆盖 `<api-base-path>/admin/**`。对外策略 API 不使用 UI 会话，也不使用 UI 的 CSRF 模式。
-
-## 对外策略 API 认证
-
-### 默认模式：AKSK resource-server
-
-resource-server 默认开启并接管 `<api-base-path>/v1/policy/**`。接入方需要完成 AKSK introspection 配置，并确保 resource-server 的 `protected-paths` 覆盖该路径；默认 API 根路径为 `/api` 时，默认 `/api/**` 可以覆盖。若改为自定义 `api.base-path`，必须同步配置匹配的 `protected-paths`。
-
-权限要求：
-
-| 接口 | 所需 scope |
-| --- | --- |
-| `GET <api-base-path>/v1/policy/snapshot?serviceCode=...` | `smart-redis-limiter:policy:read` |
-| 对外 CRUD，包括 `GET` 详情和分页查询 | `smart-redis-limiter:policy:write` |
-
-AKSK 主体会作为 operator 记录到策略管理事件。
-
-### 临时模式：固定 header token
-
-仅在临时、受控环境中显式关闭 resource-server 后，Starter 才启用固定 token：
+类型化目录随宿主部署声明（协议模式、资源与维度、命名空间、自定义类型、对象目录与策略代次）：
 
 ```yaml
-io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled: false
-
 io.github.surezzzzzz.sdk.limiter.redis.smart.management:
-  rest:
-    policy-token: ${SMART_LIMITER_POLICY_TOKEN}
+  typed:
+    services:
+      - service-code: order-service          # TYPED_V2 服务：使用类型化规则与快照
+        display-name: 订单服务
+        resources:
+          create-order: [RESOURCE, IP, USER, CUSTOMER]
+        namespaces: { RESOURCE: shared, IP: entry, USER: user, CUSTOMER: customer }
+        objects:
+          - { dimension: CUSTOMER, id: cust-0001, name: 示例客户 }
+      - service-code: legacy-batch            # LEGACY_V1 服务：保留三元组规则与旧快照
+        control-mode: LEGACY_V1
 ```
 
-API 已启用而 token 缺失或空白时，应用以 `CONFIG_002` 启动失败。调用方使用唯一的非空 header：
+所有上述业务路径必须由公共 Resource 安全链保护，并启用精确 API 权限的 MVC 校验。该资源链的 `permit-all-paths` 必须为空，公开入口由宿主另配独立安全链。缺认证链、MVC 校验、路径覆盖或双来源适配器时启动失败。启动门禁仅检查本地装配，远端准入与授权在每次请求中验证。
 
-```http
-X-Smart-Redis-Limiter-Policy-Token: <shared-secret>
-```
+独立前端仓为 `smart-redis-limiter-management-web`。人员可信应用注册、门户菜单与三权模板统一在该仓 `docs/TRUSTED_APPLICATION_ONBOARDING.md` 维护。前端网关可将 `/api/limiter/**` 映射到宿主 `/api/**`；不要让 API 落入 SPA 页面兜底。浏览器请求必须不带 Cookie，403 不重新授权。
 
-缺失、空白、重复或错误 token 均返回 `401`。成功认证的请求无状态、不创建会话，且仅能访问 `<api-base-path>/v1/policy/**`；它不认证 UI 和管理员 API，也不替代 UI 的会话与 CSRF。
+## 权限与 HTTP API
 
-固定 token 是临时共享密钥：持有者可访问快照与全部 CRUD，不区分 read/write 权限；它没有调用方身份、调用方级授权或重叠轮换能力。生产环境应优先使用 AKSK；如确需固定 token，必须通过 TLS 与私网或受控网关传输，并通过环境变量或 secret manager 注入。不得将 token 放入源码、URL、user-info、查询参数、事件或普通访问日志。
+Portal 权限码与身份系统中申报、授予的码必须完全一致：
 
-## 管理策略
-
-一条策略的唯一身份为：
-
-```text
-serviceCode + resourceCode + subject
-```
-
-策略包含 `enabled` 状态和完整的 `limits` 列表；一个策略可以有多个限额窗口。它不保存 HTTP path、method、算法、fallback、key strategy、Redis route 或 datasource。
-
-对外 API 与管理员 API 都支持创建、分页查询、详情查询、整体更新、启停和删除：
-
-| 操作 | 路径（对外 API） | 并发约束 |
+| 类别 | 码值 | 用途 |
 | --- | --- | --- |
-| 创建 | `POST <api-base-path>/v1/policy` | - |
-| 查询 | `GET <api-base-path>/v1/policy` | - |
-| 详情 | `GET <api-base-path>/v1/policy/{id}` | - |
-| 更新全部窗口 | `PUT <api-base-path>/v1/policy/{id}` | `expectedRowVersion` |
-| 更新启停状态 | `PATCH <api-base-path>/v1/policy/{id}` | `expectedRowVersion` |
-| 删除 | `DELETE <api-base-path>/v1/policy/{id}?expectedRowVersion=...` | `expectedRowVersion` |
+| PAGE | `smartLimiterPolicy:page` | 策略列表、新建、详情页面 |
+| API | `smartLimiterPolicy:read` | 分页、详情、能力查询 |
+| API | `smartLimiterPolicy:write` | 创建、整体更新、启停、删除 |
+| API | `smartLimiterPolicySnapshot:read` | 运行端快照 |
+| DATA | `limiter-policy`，动作 `read` / `write` | 服务数据范围；维度 `serviceCode`，操作符 `IN` |
 
-`PUT` 总是整体替换 `limits`，不做窗口级合并。并发修改使用 `rowVersion` 控制；身份冲突或过期版本返回 `409`。
+写权限不自动授予读权限。列表与 count 用同一 DATA 谓词，详情及写入按主键和范围联合定位；创建校验目标服务，更新采用记录的持久化服务编码。完整授权项内部条件按 AND、不同授权项按 OR；未知维度、不能表达的约束、缺计划失败关闭。范围外的记录返回 404，不泄露是否存在；目标服务快照超范围返回 403。
 
-一个多窗口策略的创建请求示例：
+以下路径以默认 `/api` 为根；完整调用契约见 `docs/openapi.yaml`。
+
+| 方法与路径 | 成功响应 |
+| --- | --- |
+| GET `/v1/policy` | 200，`items/page/size/totalElements/totalPages` |
+| GET `/v1/policy/{id}` | 200，完整策略 |
+| GET `/v1/policy/capabilities?serviceCode=...` | 200，`pageAllowed/canWrite`，禁止缓存 |
+| POST `/v1/policy` | 201，变更结果及 Location |
+| PUT `/v1/policy/{id}` | 200，窗口整体替换结果 |
+| PATCH `/v1/policy/{id}` | 200，启停变更结果 |
+| DELETE `/v1/policy/{id}?expectedRowVersion=...` | 200，删除结果及服务 revision |
+| GET `/v1/policy/snapshot?serviceCode=...` | 200 完整快照或带 ETag 的 304 |
+| GET `/v2/policy/services` `/v2/policy/services/{code}/declarations` `/v2/policy/services/{code}/objects` | 授权目录内类型化服务、资源/维度声明、对象目录（DATA 过滤，no-store） |
+| GET/POST/PUT/PATCH/DELETE `/v2/policy/rule(s)` | 类型化规则 CRUD（命名空间以目录声明为准；身份七字段唯一；冲突 409） |
+| GET `/v2/policy/snapshot?serviceCode=...` | 200 类型化快照（schemaVersion=2，policyEpoch+revision）或 304；LEGACY 服务 409 |
+
+能力接口仅对已准入且有查询 API 权限的 HUMAN 返回展示结论，SERVICE 返回 403。无 PAGE 时两个字段都为 false。无服务参数时 canWrite 表示至少可写一个合法服务；带参数时针对该服务判断，非法编码 400。它不能替代业务请求自身的授权。
+
+创建示例：
 
 ```json
 {
-  "key": {
-    "serviceCode": "demo-service",
-    "resourceCode": "demo-resource",
-    "subject": "anonymous"
-  },
-  "limits": [
-    {"count": 10, "window": 1, "unit": "SECONDS"},
-    {"count": 100, "window": 1, "unit": "MINUTES"}
-  ],
-  "enabled": true
+  "key": {"serviceCode": "mock-service", "resourceCode": "mock-resource", "subject": "*"},
+  "enabled": true,
+  "limits": [{"count": 100, "window": 1, "unit": "SECONDS"}]
 }
 ```
 
-API 仅以 HTTP status 表达机器可读结果：参数或协议校验失败为 `400`，不存在为 `404`，身份或版本冲突为 `409`，服务端异常为 `5xx`。错误 body 仅包含 `message` 和 `timestamp`，不包含业务 code。
+类型化规则创建示例（命名空间由目录声明对齐，无需客户端传值）：
 
-## 获取服务策略快照
-
-```http
-GET <api-base-path>/v1/policy/snapshot?serviceCode=<service-code>
-If-None-Match: "<etag>"
+```json
+{
+  "serviceCode": "order-service",
+  "resourceCode": "create-order",
+  "dimension": "CUSTOMER",
+  "selector": "EXACT",
+  "objectId": "cust-0001",
+  "enabled": true,
+  "limits": [{"count": 100, "window": 1, "unit": "MINUTES"}]
+}
 ```
 
-快照仅包含该服务所有已启用的策略及其完整窗口列表。
+规则身份七字段不可原地改写；维度取值 RESOURCE/IP/USER/SERVICE/CREDENTIAL/CUSTOMER/CUSTOM，选择器 DEFAULT（各对象默认额度，不填 objectId）或 EXACT（精确对象覆盖），CUSTOM 维度须携带目录声明的 customType。对象筛选按字面前缀匹配，通配符 `%` 与 `_` 不生效。
 
-- 有更新时返回 `200`、完整 `SmartRedisLimiterPolicySnapshot`、`ETag` 与 `Cache-Control: no-cache`。
-- `If-None-Match` 匹配时返回 `304`，不含 body。
-- 未知服务返回 revision 为 `0` 的有效空快照。
-- 停用或删除某服务最后一个启用策略后，返回更高 revision 的有效空快照。
+策略身份三元组不可更新。PUT 必须携带 `expectedRowVersion` 和完整 `limits`；PATCH 携带行版本和 enabled；DELETE 携带行版本。成功变更递增行版本和服务 revision，no-op 不递增。并发冲突为 409，调用方重新读取后再决定是否重试，不覆盖旧编辑内容。
 
-limiter 默认策略客户端以自身 `smart.me` 作为快照请求的 `serviceCode`，不需要重复配置服务编码。
+未认证 401、未授权 403、格式错误 400、记录不存在 404、冲突 409、媒体类型不支持 415。错误不伪装为 200，不返回异常链、SQL 或授权集合。快照在判断 ETag（条件缓存标识）与 304 前执行所有授权检查。
 
-## revision、事件与扩展
+## Console 接入
 
-每个服务有独立 revision。有效的创建、更新、启用、停用和删除各使对应服务 revision 增加一次；校验失败、冲突、no-op 或事务回滚不会增加 revision。
+```gradle
+implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+// 使用旧 scope 认证时由宿主显式提供旧 Provider：
+implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:2.0.1'
+implementation 'org.springframework.boot:spring-boot-starter-aop'
+implementation 'org.springframework.security:spring-security-oauth2-resource-server'
+implementation 'org.springframework.security:spring-security-oauth2-jose'
+```
 
-策略变更成功提交后发布 `SmartRedisLimiterManagementEvent`。普通 Spring Event 为 best-effort：监听器异常不会回滚已提交策略，也不会让保存请求变为失败。需要可靠审计投递时，应单独设计事务 Outbox。
+```yaml
+io.github.surezzzzzz.sdk.limiter.redis.smart.management:
+  enable: true
+  mode: console
+  api: { enable: true, base-path: /api }
+  ui: { enable: true, base-path: /admin }
+  admin:
+    username: ${LIMITER_ADMIN_USERNAME}
+    password: ${LIMITER_ADMIN_PASSWORD}
+```
 
-以下默认实现都可通过自定义 Bean 替换：
+Console Session 管理 API 位于 `/api/admin/**`，保留 CSRF（跨站请求伪造）保护。旧对外 API 位于 `/api/v1/policy/**`，快照要求 `smart-redis-limiter:policy:read`，CRUD 沿用 `smart-redis-limiter:policy:write`。显式关闭旧 AKSK Resource 时，必须配置独立 `rest.policy-token`，通过 `X-Smart-Redis-Limiter-Policy-Token` 请求头使用。该兜底仅存在于 Console，不进入 Portal。
 
-- `SmartRedisLimiterPolicyRepository`
-- `SmartRedisLimiterPolicyManagementService`
-- `SmartRedisLimiterPolicySnapshotService`
-- `SmartRedisLimiterManagementOperatorProvider`
-- `SmartRedisLimiterManagementEventPublisher`
+## 数据库与升级
 
-默认实现使用 `@ConditionalOnMissingBean` 注册。
+首次部署执行 `docs/mysql-schema.sql`，建立策略、窗口、服务 revision 三表与类型化规则两表（七字段身份唯一 + 窗口表）。从 1.0.0 升级到 2.0.0 的既有部署需补执行同一 DDL 增建类型化规则两表；既有三元组表结构不变。Starter 不执行 DDL。2.0.0 无结构迁移；既有三元组和快照索引以 service_code 开头，可执行 DATA 过滤。既有策略数据不被自动改写。
 
-## 不提供的能力
+从 1.0.0 升级先补齐宿主 Web/Security/Thymeleaf 与认证依赖，再选模式。切 Portal 前配置完整 PAGE/API/DATA 与双来源验证，停止旧入口后再启动新入口；不要让旧 Console 和新 Portal 两套独立部署并行写同一策略库。回滚时停止新入口，恢复 Console 配置和原认证依赖；数据库未发生版本结构变更。
 
-- 可执行应用、容器镜像或自动数据库迁移；
-- Redis 连接、Redis route 或 limiter 侧轮询配置；
-- 策略继承、套餐/等级、审批流、定时生效或 HTTP 路由定义；
-- 窗口级部分合并更新；
-- 固定 token 模式下的调用方身份、细粒度授权或平滑轮换。
+## 扩展、事件与诊断
+
+Repository、管理服务、快照服务、操作人 Provider、事件发布器与目录 Provider（`SmartRedisLimiterDirectoryProvider`）可由宿主 Bean 替换。类型化目录默认来自 `management.typed.services` 部署声明（服务协议模式 TYPED_V2/LEGACY_V1、资源与维度、命名空间、自定义类型、静态对象目录与策略代次 policyEpoch）；宿主自带动态目录（如客户事实）时以自有 Bean 覆盖，无自动注册与心跳。2.0.0 的 Repository/Service 扩展必须实现显式 DATA 范围重载，不能把范围参数忽略。默认 Portal 服务拒绝无范围的 Console 方法。
+
+策略真实变更在事务提交后发布 Core 管理事件；失败、回滚和 no-op 不发布，监听异常不反写已提交事务。需要把策略变更写入审计日志或外部系统时，与 `smart-redis-limiter-audit-listener-starter`（2.2.0+）同进程部署即可，执行/类型化/三元组三条事件链的受控审计开箱即用。三元组规则沿用 Core 2.1.0 的策略事件载荷；类型化规则使用 Core 2.2.0 的类型化事件载荷（含计数对象摘要与操作人摘要）。两种载荷都应只交给受控消费者，不能未经脱敏转发到公开日志。普通 Spring Event 不承诺可靠持久投递。
+
+按 `io.github.surezzzzzz.sdk.limiter.redis.smart.management` 开启 DEBUG 可定位 API 判定、DATA 编译、变更结果、快照生成和提交后发布阶段；不记录 Token、Cookie、完整授权文档或原始限流 subject。运行端读取失败时保留 last-known-good（上次有效策略），不因权限拒绝覆盖有效快照。

@@ -98,6 +98,7 @@ include(
         ':sdk:audit:persistence:elasticsearch:jakarta:simple-elasticsearch-persistence-audit-listener-jakarta-starter',
         ':sdk:audit:search:elasticsearch:jakarta:simple-elasticsearch-search-audit-listener-jakarta-starter',
         ':sdk:audit:limiter:smart-redis-limiter-audit-listener-starter',
+        ':sdk:audit:limiter:smart-redis-limiter-management-audit-listener-starter',
         ':sdk:audit:iam:simple-iam-audit-listener-starter',
         ':sdk:cache:smart-cache-starter',
         ':sdk:template:simple-doc-template-starter',

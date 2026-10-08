@@ -16,6 +16,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
         prefix = SmartRedisLimiterManagementConstant.CONFIG_PREFIX + ".ui",
         name = SmartRedisLimiterManagementConstant.CONFIG_FIELD_ENABLE,
         havingValue = "true")
+@org.springframework.context.annotation.Conditional(
+        SmartRedisLimiterManagementConsoleCondition.class)
 public class SmartRedisLimiterManagementWebMvcConfiguration implements WebMvcConfigurer {
 
     private static final String RESOURCE_LOCATION =

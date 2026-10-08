@@ -23,6 +23,8 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
         prefix = SmartRedisLimiterManagementConstant.CONFIG_PREFIX + ".api",
         name = SmartRedisLimiterManagementConstant.CONFIG_FIELD_ENABLE,
         havingValue = "true")
+@org.springframework.context.annotation.Conditional(
+        SmartRedisLimiterManagementConsoleCondition.class)
 public class SmartRedisLimiterManagementApiSecurityConfiguration {
 
     private final SmartRedisLimiterManagementProperties properties;
