@@ -1,0 +1,8 @@
+dependencies {
+    // jackson 仅 codec 内部使用（json 解析小工具随传输件走 JsonNode 直读，core 零运行时依赖）
+    // 公开接口零 jackson 类型——compileOnly 使 POM 零依赖，消费者经传输件的 Spring Boot 自带
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
