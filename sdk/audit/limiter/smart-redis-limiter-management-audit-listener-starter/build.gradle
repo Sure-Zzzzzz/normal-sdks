@@ -1,0 +1,12 @@
+dependencies {
+    // 依赖 core（管理事件与载荷类型）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+
+    // Spring Boot（仅编译时依赖）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
