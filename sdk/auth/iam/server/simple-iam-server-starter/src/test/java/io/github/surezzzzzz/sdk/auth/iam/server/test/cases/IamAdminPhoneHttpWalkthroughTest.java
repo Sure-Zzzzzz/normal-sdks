@@ -19,7 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -48,6 +49,8 @@ class IamAdminPhoneHttpWalkthroughTest {
 
     private String adminUsername;
     private javax.servlet.http.Cookie adminSession;
+    @Autowired
+    private io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService roleService;
 
     @BeforeEach
     void loginAdmin() throws Exception {
@@ -110,7 +113,4 @@ class IamAdminPhoneHttpWalkthroughTest {
         });
         log.info("[走查3] 落库核验完成：空手机号均落 NULL");
     }
-
-    @Autowired
-    private io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService roleService;
 }

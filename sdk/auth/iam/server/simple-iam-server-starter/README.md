@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.3`，变更与升级要求见 [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md)。
+当前版本为 `1.3.4`，变更与升级要求见 [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md)。
+
+`1.3.4` 修复 `IamWebAccountPhoneController` 漏标 `@SimpleIamServerComponent` 导致 `/iam/web/account/**` 全族 404 的缺陷（1.3.0 引入即漏标，源码起服形态掩盖、容器化后暴露）；补注解一行并新增 web 端点族注册回归测试，API 形状与数据库零变化。
 
 `1.3.3` 修复 admin 手机号登记路径空串撞 `uk_phone` 唯一索引缺陷：admin 手机号按资料面三态语义处理（`null`=不动/不登记、空串=清空置 NULL、非空=规范化），非法格式 400 拒绝；更新实际改变手机号时 UPDATED 审计事件携带 `phoneChanged=true`。API 形状零变化，存量空串行需一次手工清理（见 CHANGELOG 升级指南）。
 
@@ -457,5 +459,6 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [升级说明](docs/migration/README.md) | 各版本数据库前提、增量迁移及回退要求 |
 | [schema.sql](docs/schema.sql) | 全新环境数据库初始化脚本 |
 | [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql) | 从 1.3.1 升级的增量建表脚本，不重置旧数据 |
+| [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md) | web 账号手机号端点注册修复（漏标注解） |
 | [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |

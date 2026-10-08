@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 
+import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.account.request.WebPhoneBindChallengeRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.account.request.WebPhoneBindRequest;
@@ -27,6 +28,7 @@ import javax.servlet.http.HttpServletRequest;
  * @author surezzzzzz
  */
 @Slf4j
+@SimpleIamServerComponent
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/iam/web/account")
