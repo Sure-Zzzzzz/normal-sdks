@@ -1,0 +1,10 @@
+dependencies {
+    // 契约层仅 jackson；零 Spring、零 HTTP 客户端（传输与认证由各形态 starter 装配）
+    // jackson 仅 AkskOpenApiJsonCodec 内部使用；公开接口零 jackson 类型——compileOnly 使 POM 零依赖，
+    // 消费者（传输 starter 经 Spring Boot）自带 jackson，不被钉版本
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
