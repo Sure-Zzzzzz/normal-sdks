@@ -1,0 +1,43 @@
+def jakartaCloudVersion = rootProject.findProperty('jakartaCloudVersion') ?: '2024.0.0'
+// 由 spring-cloud-dependencies:2024.0.0 POM 的 spring-cloud-openfeign.version 定义。
+def jakartaOpenFeignVersion = rootProject.findProperty('jakartaOpenFeignVersion') ?: '4.2.0'
+
+dependencyManagement {
+    imports {
+        // 仅作用于本 jakarta 模块，不继承根工程的 legacy Cloud 约束。
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${jakartaCloudVersion}"
+    }
+}
+
+configurations.configureEach {
+    // 根工程的 legacy 3.1.8 约束会覆盖模块 BOM，须在 jakarta 模块局部纠正。
+    resolutionStrategy.force "org.springframework.cloud:spring-cloud-starter-openfeign:${jakartaOpenFeignVersion}"
+}
+
+dependencies {
+    // 契约层：常量/异常族（接口与 DTO 属本模块，base-url 键常量取自 core，收 api）
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
+
+    // aksk 底座（Feign jakarta 形态）：@AkskClientFeignClient 元注解与拦截器装配
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+
+    // Spring Cloud OpenFeign（compileOnly，版本由上方 BOM 纠偏管理）
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // ==================== 测试依赖 ====================
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // Feign HttpClient5（openfeign 4.x 弃 hc4 client；默认 HttpURLConnection 不支持 PATCH）
+    testImplementation 'io.github.openfeign:feign-hc5'
+    // 底座自闭环原则：直接使用 TokenManager API 需自行引入（jakarta 线）
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    // jakarta 线 redis route 运行时需要
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}
