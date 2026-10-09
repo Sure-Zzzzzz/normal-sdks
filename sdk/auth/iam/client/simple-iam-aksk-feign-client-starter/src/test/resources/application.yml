@@ -1,0 +1,14 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        iam:
+          client:
+            enable: true
+            base-url: https://iam.example.internal
+        cache:
+          enabled: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.iam: DEBUG

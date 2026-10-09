@@ -1,0 +1,25 @@
+dependencies {
+    // 契约层：常量/异常族（接口与 DTO 属本模块，base-url 键常量取自 core，收 api）
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
+
+    // aksk 底座（Feign 形态）：@AkskClientFeignClient 元注解与拦截器装配，本模块不重复装配
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+
+    // Spring Cloud OpenFeign（compileOnly，版本由根构建变体管理，宿主自行引入）
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // Spring Boot
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    // ==================== 测试依赖 ====================
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // Feign HttpClient（默认 HttpURLConnection 不支持 PATCH）
+    testImplementation 'io.github.openfeign:feign-httpclient'
+    // 端到端/装配测试直接使用 TokenManager API（底座自闭环原则：不向使用方编译期传递）
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core:3.0.0'
+}
