@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.feign.client;
 
 /**
- * IAM 用户族 Feign 契约接口（11 方法）。请求体为 Map（可选字段 null 不放入）；响应为 wire DTO；非 2xx 透传 FeignException。分页为 Spring Page wire 形态（页码 0 起）。
+ * IAM 用户族 Feign 契约接口（12 方法）。请求体为 Map（可选字段 null 不放入）；响应为 wire DTO；非 2xx 透传 FeignException。分页为 Spring Page wire 形态（页码 0 起）。
  *
  * @author surezzzzzz
  */
@@ -30,6 +30,13 @@ public interface IamUserFeignClient {
      */
     @org.springframework.web.bind.annotation.GetMapping("/users/{subjectId}/roles")
     java.util.List<String> getUserRoles(
+            @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId);
+
+    /**
+     * 页面准入应用编码裸列表（字符串数组契约）；此端点单独持 iam:portal:api 码。
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/users/{subjectId}/page-admitted-applications")
+    java.util.List<String> listPageAdmittedApplications(
             @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId);
 
     @org.springframework.web.bind.annotation.PostMapping("/users")

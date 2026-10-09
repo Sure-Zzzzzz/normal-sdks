@@ -8,7 +8,7 @@ aksk 底座 `simple-aksk-feign-redis-client-starter:3.0.2`，提供预写好的�
 
 ## 核心能力
 
-### 1. 三契约接口 29 方法
+### 1. 三契约接口 30 方法
 
 与 RestTemplate 形态（`simple-iam-aksk-resttemplate-client-starter`）逐端点一一对应；
 请求体为 `Map<String, Object>`（可选字段 null 不放入），路径注解写契约字面量。
@@ -33,7 +33,7 @@ Feign 自带重试必须显式关闭（幂等语义由调用方负责）。
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.0` | `api` 编译期传递 | 契约常量/异常族 |
+| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-starter:3.0.2` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证拦截器装配 |
 | Spring Cloud OpenFeign 3.x | `compileOnly`，**宿主自行引入** | 版本随宿主 Spring Boot 线 |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
@@ -44,7 +44,7 @@ Feign 自带重试必须显式关闭（幂等语义由调用方负责）。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-starter:1.0.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

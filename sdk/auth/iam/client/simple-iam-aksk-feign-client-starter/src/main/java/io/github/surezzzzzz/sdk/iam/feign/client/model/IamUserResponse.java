@@ -15,6 +15,11 @@ public class IamUserResponse {
     public Long id;
 
     /**
+     * 对外公开主体标识。
+     */
+    public String subjectId;
+
+    /**
      * 登录名。
      */
     public String username;
