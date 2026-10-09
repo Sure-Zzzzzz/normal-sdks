@@ -1,0 +1,27 @@
+# 受管测试配置：普通参数在此；敏感凭据在同目录 application-local.yml（gitignored，由本文件激活 local profile）
+spring:
+  profiles:
+    active: local
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: 127.0.0.1
+                port: 6379
+                database: 15
+        cache:
+          enabled: true
+          key-prefix: openapi-e2e-feign-javax
+          me: openapi-e2e-feign-javax
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://127.0.0.1:8282

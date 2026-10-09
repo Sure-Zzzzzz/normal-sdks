@@ -1,0 +1,15 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-aksk-openapi-client-core:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+    // OpenFeign 由宿主自备（compileOnly，未使用 Feign 的应用不被强带入 Spring Cloud）
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // E2E：底座令牌链宿主件（feign HttpClient/Redis 路由/AOP）
+    testImplementation 'io.github.openfeign:feign-httpclient'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+}
