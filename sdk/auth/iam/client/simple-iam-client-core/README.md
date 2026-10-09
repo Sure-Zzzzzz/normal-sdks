@@ -5,7 +5,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 
 ## 定位
 
-提供与 `simple-iam-server-starter:1.3.2+` openapi 契约对齐的 Java 接口，使调用方与 HTTP 传输
+提供与 `simple-iam-server-starter:1.3.5+` openapi 契约对齐的 Java 接口，使调用方与 HTTP 传输
 细节、JSON 编解码、If-Match 乐观并发头管理解耦。
 
 ## 适用场景
@@ -18,7 +18,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.1'
 ```
 
 - 发布 POM 零依赖；Java 8 字节码，SB2（Java 8+）与 jakarta（Java 17+）宿主均可消费
@@ -28,7 +28,7 @@ implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
 
 | 类别 | 内容 |
 | --- | --- |
-| 接口 | `IamUserClient`（11 方法）、`IamDepartmentClient`（5 方法）、`IamOpenRoleClient`（13 方法）——共 29 方法，逐端点对位 server 三组 rest controller |
+| 接口 | `IamUserClient`（12 方法）、`IamDepartmentClient`（5 方法）、`IamOpenRoleClient`（13 方法）——共 30 方法，逐端点对位 server 三组 rest controller |
 | 分页模型 | `IamSpringPage<T>`（users/departments 族，Spring Page wire 形态：content/totalElements，页码 **0 起**）与 `IamOpenRolePage`/`IamOpenRoleDepartmentPage`（open-roles 族，server 自持形态：items/total，页码 **1 起**）——两种形态是 server 契约事实，不可混用 |
 | 领域模型 | `IamUser` / `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` 等 14 个 |
 | 常量 | `SimpleIamClientConstant`：路径段/协议头（`If-Match`/`ETag`）/wire 字段名/查询参数名，值逐字对位 server 契约 |
@@ -47,7 +47,8 @@ open-roles 族的写操作（putOpenRoleRule / deleteOpenRoleRule / mount / unmo
 
 | 接口族 | API 码 | DATA 资源 |
 | --- | --- | --- |
-| IamUserClient | `iam:user:api` | `iam:user`（部门范围求交） |
+| IamUserClient（除页面准入查询） | `iam:user:api` | `iam:user`（部门范围求交） |
+| IamUserClient#listPageAdmittedApplications | `iam:portal:api`（单码即够，勿授 `iam:user:api`） | —（应用码聚合非用户档案，无 DATA 面） |
 | IamDepartmentClient | `iam:department:api` | — |
 | IamOpenRoleClient 全部方法 | `iam:open-role:create:api` / `iam:open-role:read:api` / `iam:open-role-rule:read:api` / `iam:open-role-rule:write:api` / `iam:open-department-role:read:api` / `iam:open-department-role:write:api` / `iam:open-directory:read:api` / `iam:open-application:read:api`（按方法族分码，值=server 常量逐字） | `iam:open-role` 系列（读/写动作分码） |
 
@@ -58,6 +59,7 @@ open-roles 族的写操作（putOpenRoleRule / deleteOpenRoleRule / mount / unmo
 
 ## 兼容性
 
-- 对应 server 版本：`simple-iam-server-starter:1.3.2+`（`/iam/api` 基路径；open-roles 族
-  契约 1.3.2 引入，phone 三态语义 1.3.3 收紧对 client 透明）
+- 对应 server 版本：`simple-iam-server-starter:1.3.5+`（`/iam/api` 基路径；open-roles 族
+  契约 1.3.2 引入，phone 三态语义 1.3.3 收紧对 client 透明；users 投影 `subjectId`
+  与页面准入清单方法 1.3.5 引入，旧 server 下这两个新增能力不可用，其余方法不受影响）
 - 契约演进 = server 先行、client 跟版走号；本模块无前版

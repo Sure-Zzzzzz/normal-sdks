@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * client-core 契约静态测试：常量值逐字对位 server rest 契约；三接口方法数=29。
+ * client-core 契约静态测试：常量值逐字对位 server rest 契约；三接口方法数=30。
  *
  * @author surezzzzzz
  */
@@ -52,13 +52,13 @@ class IamClientCoreContractTest {
     }
 
     @Test
-    void shouldExposeExactlyTwentyNineMethodsAcrossThreeClients() {
-        assertEquals(11, countMethods(IamUserClient.class), "用户族 11 方法");
+    void shouldExposeExactlyThirtyMethodsAcrossThreeClients() {
+        assertEquals(12, countMethods(IamUserClient.class), "用户族 12 方法");
         assertEquals(5, countMethods(IamDepartmentClient.class), "部门族 5 方法");
         assertEquals(13, countMethods(IamOpenRoleClient.class), "受委托角色族 13 方法");
-        assertEquals(29, countMethods(IamUserClient.class) + countMethods(IamDepartmentClient.class)
-                + countMethods(IamOpenRoleClient.class), "全 openapi 共 29 方法");
-        log.info("三接口 29 方法对位通过");
+        assertEquals(30, countMethods(IamUserClient.class) + countMethods(IamDepartmentClient.class)
+                + countMethods(IamOpenRoleClient.class), "全 openapi 共 30 方法");
+        log.info("三接口 30 方法对位通过");
     }
 
     @Test

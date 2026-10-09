@@ -13,9 +13,14 @@ import lombok.Value;
 public class IamUser {
 
     /**
-     * 用户数字 ID（内部标识，对外定位用 subjectId）。
+     * 用户数字 ID（内部标识，不对外承诺稳定性）。
      */
     Long id;
+
+    /**
+     * 对外公开主体标识（路径参数与消费方关联键）。
+     */
+    String subjectId;
 
     /**
      * 登录名。

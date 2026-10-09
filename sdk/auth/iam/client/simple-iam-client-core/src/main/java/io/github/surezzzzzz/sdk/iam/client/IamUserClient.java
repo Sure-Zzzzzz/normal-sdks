@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamUser;
 import java.util.List;
 
 /**
- * IAM 用户族 openapi 契约（11 方法，对位 server /iam/api/users）。
+ * IAM 用户族 openapi 契约（12 方法，对位 server /iam/api/users）。
  *
  * <p>消费方 AKP 需授 {@code iam:user:api} API 码与 iam:user DATA 范围；非 2xx 透传
  * Spring/Feign 标准异常。分页为 Spring Page wire 形态（content/totalElements，页码 0 起）。</p>
@@ -104,6 +104,18 @@ public interface IamUserClient {
      * @param roleId    角色数字 ID
      */
     void assignRole(String subjectId, Long roleId);
+
+    /**
+     * 用户有页面准入（PAGE 投影非空）的启用应用编码清单。
+     *
+     * <p>此方法单独持 {@code iam:portal:api} API 码（非 {@code iam:user:api}），
+     * 无 DATA 面约束；wire 为字符串数组，顺序未定义。未挂 Portal 集成但有页面准入的
+     * 应用同样在列（与门户侧边栏口径的差异见 IAM DESIGN.1.3.5 §10.1）。</p>
+     *
+     * @param subjectId 公开主体
+     * @return 有页面准入的应用编码列表
+     */
+    List<String> listPageAdmittedApplications(String subjectId);
 
     /**
      * 摘角色（204）。
