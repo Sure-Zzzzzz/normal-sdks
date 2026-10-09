@@ -43,6 +43,18 @@
 | 2.0.1 | 2.0.1 | 2.0.0 | SHA-256 cacheKey 防多租户碰撞（历史 2.x） |
 | 2.0.0 | 2.0.0 | 2.0.0 | Client 2.x 初始链路（历史 2.x） |
 
+## 管理 OpenAPI Client（1.x）
+
+对 AKSK Server 管理 OpenAPI（/api 三组 20 端点）的调用侧契约与传输件，对接 `server-starter:3.2.2`：
+
+| SDK | javax | jakarta | 说明 | 文档 |
+|-----|-------|---------|------|------|
+| [simple-aksk-openapi-client-core](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-client-core) | 1.0.1 | — | 契约内核（21 方法/20 端点、wire DTO、异常族；1.0.1 契约对齐 server wire） | [README](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-client-core/README.md) |
+| [simple-aksk-openapi-feign-client-starter](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-feign-client-starter) | 1.0.0 | — | Feign 传输件（SB2 线，裸 FeignException 口径） | [README](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-feign-client-starter/README.md) |
+| [simple-aksk-openapi-resttemplate-client-starter](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-resttemplate-client-starter) | 1.0.0 | — | RestTemplate 传输件（SB2 线，异常族映射） | [README](../../sdk/auth/aksk/client/openapi/simple-aksk-openapi-resttemplate-client-starter/README.md) |
+| [simple-aksk-openapi-feign-client-jakarta-starter](../../sdk/auth/aksk/client/openapi/jakarta/simple-aksk-openapi-feign-client-jakarta-starter) | — | 1.0.0 | Feign 传输件（jakarta 线） | [README](../../sdk/auth/aksk/client/openapi/jakarta/simple-aksk-openapi-feign-client-jakarta-starter/README.md) |
+| [simple-aksk-openapi-resttemplate-client-jakarta-starter](../../sdk/auth/aksk/client/openapi/jakarta/simple-aksk-openapi-resttemplate-client-jakarta-starter) | — | 1.0.0 | RestTemplate 传输件（jakarta 线） | [README](../../sdk/auth/aksk/client/openapi/jakarta/simple-aksk-openapi-resttemplate-client-jakarta-starter/README.md) |
+
 ## 公共资源层 + Provider（3.x）
 
 | SDK | javax | jakarta | 说明 | 文档 |

@@ -38,6 +38,18 @@
 | 1.2.x | 1.2.0 | 菜单树契约与门户折叠（2.x Web 兼容线） |
 | 1.1.x | 1.1.2 | 首个门户形态 IAM（OAuth 2.1 + 投影 + 站内信） |
 
+## 开放 API Client（1.x）
+
+对 IAM 开放 API 的调用侧契约与传输件（AKP 自助消费），与 Server 线独立演进：
+
+| SDK | javax | jakarta | 说明 | 文档 |
+|-----|-------|---------|------|------|
+| [simple-iam-client-core](../../sdk/auth/iam/client/simple-iam-client-core) | 1.0.1 | — | 开放 API 契约层（三接口 29 方法；1.0.1 页面准入清单方法与 subjectId 回传） | [README](../../sdk/auth/iam/client/simple-iam-client-core/README.md) |
+| [simple-iam-aksk-feign-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter) | 1.0.1 | — | Feign 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter/README.md) |
+| [simple-iam-aksk-resttemplate-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter) | 1.0.1 | — | RestTemplate 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter/README.md) |
+| [simple-iam-aksk-feign-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter) | — | 1.0.1 | Feign 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter/README.md) |
+| [simple-iam-aksk-resttemplate-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter) | — | 1.0.1 | RestTemplate 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter/README.md) |
+
 ## 核心特性
 
 - OAuth 2.1 授权码 + PKCE（公共客户端强制 S256）+ OIDC；Token 双模式（JWS / JWE）

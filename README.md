@@ -29,7 +29,7 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 | smart-cache-starter | 2.1.0 | 1.0.0 | Redis 缓存（L1 本地 + L2 二级） | [Redis](docs/middleware/Redis.md) |
 | simple-redis-lock-starter | 1.2.1 | 1.0.0 | Redis 分布式锁 | [Redis](docs/middleware/Redis.md) |
 | smart-redis-limiter-core / starter | 2.1.0 / 2.0.0 | 1.1.0 | 智能限流（客户/服务/IP 维度） | [Redis](docs/middleware/Redis.md) |
-| smart-redis-limiter-management-starter | 1.0.0 | — | 限流策略管理面（Portal 形态） | [Redis](docs/middleware/Redis.md) |
+| smart-redis-limiter-management-starter（+策略变更审计 1.0.0） | 2.0.0 | — | 限流策略管理面（Portal 形态，多维类型化规则） | [Redis](docs/middleware/Redis.md) |
 | redis-retry / smart-redis-retry-starter | 1.1.0 | — | Redis 操作重试 | [Redis](docs/middleware/Redis.md) |
 | simple-elasticsearch-route-starter | 1.2.1 | 1.0.0 | ES 连接路由（日期分片+代理） | [Elasticsearch](docs/middleware/Elasticsearch.md) |
 | simple-elasticsearch-search-starter | 1.7.2 | 1.0.0 | 结构化/表达式/自然语言查询 | [Elasticsearch](docs/middleware/Elasticsearch.md) |
@@ -49,7 +49,9 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 | 模块 | javax | jakarta | 一句话 | 文档 |
 |------|-------|---------|--------|------|
 | simple-iam-server-starter（+core/adapter/resource/audit 共10件） | 1.3.5 | 资源侧 1.0.0 / 审计 1.0.1 | 统一身份：OAuth 2.1+PKCE / RBAC 投影 / 门户 | [认证与授权-IAM](docs/business/认证与授权-IAM.md) |
+| IAM 开放 API client（client-core + feign/rt × SB2/jakarta 四件） | 1.0.1 | 1.0.1 | IAM 开放 API 契约与传输件（受委托角色/页面准入/subjectId） | [认证与授权-IAM](docs/business/认证与授权-IAM.md) |
 | simple-aksk-server-starter（+client/resource 共12件） | 3.2.2 | 资源侧 1.0.0 | 服务身份：OAuth2 / JWE / 应用授权投影 | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
+| AKSK 管理 OpenAPI client（openapi-client-core + feign/rt × SB2/jakarta 四件） | core 1.0.1 + 1.0.0 | 1.0.0 | AKSK 管理 OpenAPI 契约与传输件（20 端点，listClients 分页/批量双形态） | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
 | 公共资源层 resource-server + data-permission | 1.1.1 / 1.0.1 | 1.0.0 / 1.0.0 | 人+机双身份资源服务协作底座 | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
 | smart-kms-server-starter（+core/contract 共3件） | 2.0.2 | — | 密钥全生命周期 | [密钥管理-KMS](docs/business/密钥管理-KMS.md) |
 | KMS client（core + SB2 双件 + jakarta 双件） | 2.0.0 | 1.0.0 | 服务端调用 KMS 的契约与装配件 | [密钥管理-KMS](docs/business/密钥管理-KMS.md) |

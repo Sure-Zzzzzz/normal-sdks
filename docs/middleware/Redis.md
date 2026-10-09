@@ -18,11 +18,11 @@ Redis 生态的完整接入：从连接路由（多数据源/Cluster）到缓存
 | [simple-redis-limiter-starter](../../sdk/limiter/redis/simple-redis-limiter-starter) | 1.0.1 | — | 令牌桶+Set 去重（配额制/幂等控制：每日 API 配额、支付与消息去重） | [README](../../sdk/limiter/redis/simple-redis-limiter-starter/README.md) |
 | [smart-redis-limiter-core](../../sdk/limiter/redis/smart-redis-limiter-core) | 2.1.0 | — | 滑动/固定窗口限流核心库（事件契约、动态策略模型） | [README](../../sdk/limiter/redis/smart-redis-limiter-core/README.md) |
 | [smart-redis-limiter-starter](../../sdk/limiter/redis/smart-redis-limiter-starter) | 2.0.0 | 1.1.0 | 滑动/固定窗口限流（Lua 原子；2.x 基于 redis-route 原生路由；防短信突刺、支付保护、严格限速） | [README](../../sdk/limiter/redis/smart-redis-limiter-starter/README.md) |
-| [smart-redis-limiter-management-starter](../../sdk/limiter/redis/smart-redis-limiter-management-starter) | 1.0.0 | — | 限流策略管理面（REST+持久化，Portal 形态，身份依赖 IAM，见[认证与授权-IAM](../business/认证与授权-IAM.md)） | [README](../../sdk/limiter/redis/smart-redis-limiter-management-starter/README.md) |
+| [smart-redis-limiter-management-starter](../../sdk/limiter/redis/smart-redis-limiter-management-starter) | 2.0.0 | — | 限流策略管理面（REST+持久化，Portal 形态，2.0 多维类型化规则，身份依赖 IAM，见[认证与授权-IAM](../business/认证与授权-IAM.md)） | [README](../../sdk/limiter/redis/smart-redis-limiter-management-starter/README.md) |
 | [redis-retry-starter](../../sdk/retry/redis-retry-starter) | 1.1.0 | — | Redis 持久化重试（跨实例） | [README](../../sdk/retry/redis-retry-starter/README.md) |
 | [smart-redis-retry-starter](../../sdk/retry/smart-redis-retry-starter) | 1.1.0 | — | 重试决策与状态管理（Hash+Lua，route 多 datasource 路由） | [README](../../sdk/retry/smart-redis-retry-starter/README.md) |
 
-伴生组件：[smart-redis-limiter-metrics-starter](../../sdk/metrics/limiter/smart-redis-limiter-metrics-starter)（1.0.0，指标采集）、[smart-redis-limiter-audit-listener-starter](../../sdk/audit/limiter/smart-redis-limiter-audit-listener-starter)（javax 2.0.0，限流执行审计：Route/fallback/动态策略快照）。
+伴生组件：[smart-redis-limiter-metrics-starter](../../sdk/metrics/limiter/smart-redis-limiter-metrics-starter)（1.0.0，指标采集）、[smart-redis-limiter-audit-listener-starter](../../sdk/audit/limiter/smart-redis-limiter-audit-listener-starter)（javax 2.0.0，限流执行审计：Route/fallback/动态策略快照）、[smart-redis-limiter-management-audit-listener-starter](../../sdk/audit/limiter/smart-redis-limiter-management-audit-listener-starter)（1.0.0，限流策略变更审计）。
 
 ## 依赖关系
 
