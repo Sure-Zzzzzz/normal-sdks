@@ -426,7 +426,7 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
         }
 
         @Bean
-        public io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider smartRedisLimiterDirectoryProvider(
+        public io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryProvider smartRedisLimiterDirectoryProvider(
                 UserExtensions extensions) {
             return extensions.directoryProvider;
         }
@@ -476,8 +476,8 @@ public class SmartRedisLimiterManagementAutoConfigurationTest {
                 mock(SmartRedisLimiterManagementEventPublisher.class);
         private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository typedRepository =
                 mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.repository.SmartRedisLimiterTypedRuleRepository.class);
-        private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider directoryProvider =
-                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider.class);
+        private final io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryProvider directoryProvider =
+                mock(io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryProvider.class);
         private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher typedEventPublisher =
                 mock(io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.DefaultSmartRedisLimiterTypedPolicyManagementService.TypedEventPublisher.class);
         private final io.github.surezzzzzz.sdk.limiter.redis.smart.management.service.SmartRedisLimiterTypedPolicyManagementService typedManagementService =

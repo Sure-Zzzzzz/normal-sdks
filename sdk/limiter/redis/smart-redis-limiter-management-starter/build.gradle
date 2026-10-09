@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.3.0'
     api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
     // DataAccessPlan 出现在公开方法签名（DATA 范围编译入口），按公开编程面显式声明
     api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'

@@ -1,10 +1,10 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.management.configuration;
 
+import io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.SmartRedisLimiterManagementPackage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.annotation.SmartRedisLimiterManagementComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.SmartRedisLimiterManagementConstant;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.ConfigurationSmartRedisLimiterDirectoryProvider;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.directory.SmartRedisLimiterDirectoryProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.AfterCommitSmartRedisLimiterManagementEventPublisher;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.AfterCommitTypedSmartRedisLimiterManagementEventPublisher;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.event.SmartRedisLimiterManagementEventPublisher;

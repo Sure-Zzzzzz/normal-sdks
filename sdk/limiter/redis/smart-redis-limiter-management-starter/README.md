@@ -4,6 +4,7 @@
 
 | Management | Core | 管理宿主 | Java | Portal Web |
 | --- | --- | --- | --- | --- |
+| 2.1.0 | 2.3.0 | Spring Boot 2.7.9 | 8 | 1.0.0 |
 | 2.0.0 | 2.2.0 | Spring Boot 2.7.9 | 8 | 1.0.0 |
 | 1.0.0 | 2.1.0 | Spring Boot 2.7.9 | 8 | 内嵌 Console |
 
@@ -18,7 +19,7 @@
 ## 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:2.1.0'
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -168,13 +169,13 @@ Console Session 管理 API 位于 `/api/admin/**`，保留 CSRF（跨站请求�
 
 ## 数据库与升级
 
-首次部署执行 `docs/mysql-schema.sql`，建立策略、窗口、服务 revision 三表与类型化规则两表（七字段身份唯一 + 窗口表）。从 1.0.0 升级到 2.0.0 的既有部署需补执行同一 DDL 增建类型化规则两表；既有三元组表结构不变。Starter 不执行 DDL。2.0.0 无结构迁移；既有三元组和快照索引以 service_code 开头，可执行 DATA 过滤。既有策略数据不被自动改写。
+首次部署执行 `docs/mysql-schema.sql`，建立策略、窗口、服务 revision 三表与类型化规则两表（七字段身份唯一 + 窗口表）。从 1.0.0 升级到 2.0.0 的既有部署需补执行同一 DDL 增建类型化规则两表；既有三元组表结构不变。Starter 不执行 DDL。2.0.0 无结构迁移；既有三元组和快照索引以 service_code 开头，可执行 DATA 过滤。既有策略数据不被自动改写。2.1.0 无结构迁移，依赖 Core 升至 2.3.0；直接 import 目录三件旧包（`...management.directory`）的自定义代码把 import 改到 `...smart.directory` 即可，配置项与 HTTP 契约不变。
 
 从 1.0.0 升级先补齐宿主 Web/Security/Thymeleaf 与认证依赖，再选模式。切 Portal 前配置完整 PAGE/API/DATA 与双来源验证，停止旧入口后再启动新入口；不要让旧 Console 和新 Portal 两套独立部署并行写同一策略库。回滚时停止新入口，恢复 Console 配置和原认证依赖；数据库未发生版本结构变更。
 
 ## 扩展、事件与诊断
 
-Repository、管理服务、快照服务、操作人 Provider、事件发布器与目录 Provider（`SmartRedisLimiterDirectoryProvider`）可由宿主 Bean 替换。类型化目录默认来自 `management.typed.services` 部署声明（服务协议模式 TYPED_V2/LEGACY_V1、资源与维度、命名空间、自定义类型、静态对象目录与策略代次 policyEpoch）；宿主自带动态目录（如客户事实）时以自有 Bean 覆盖，无自动注册与心跳。2.0.0 的 Repository/Service 扩展必须实现显式 DATA 范围重载，不能把范围参数忽略。默认 Portal 服务拒绝无范围的 Console 方法。
+Repository、管理服务、快照服务、操作人 Provider、事件发布器与目录 Provider（`SmartRedisLimiterDirectoryProvider`）可由宿主 Bean 替换。目录 SPI 自 2.1.0 起由 `smart-redis-limiter-core:2.3.0` 持有（包 `io.github.surezzzzzz.sdk.limiter.redis.smart.directory`），实现方只需依赖 core；本模块继续提供配置式默认实现（`management.typed.services` 部署声明：服务协议模式 TYPED_V2/LEGACY_V1、资源与维度、命名空间、自定义类型、静态对象目录与策略代次 policyEpoch），宿主自带动态目录（如客户事实或 IAM 用户目录适配件）时以自有 Bean 覆盖，无自动注册与心跳。2.0.0 的 Repository/Service 扩展必须实现显式 DATA 范围重载，不能把范围参数忽略。默认 Portal 服务拒绝无范围的 Console 方法。
 
 策略真实变更在事务提交后发布 Core 管理事件；失败、回滚和 no-op 不发布，监听异常不反写已提交事务。需要把策略变更写入审计日志或外部系统时，与 `smart-redis-limiter-audit-listener-starter`（2.2.0+）同进程部署即可，执行/类型化/三元组三条事件链的受控审计开箱即用。三元组规则沿用 Core 2.1.0 的策略事件载荷；类型化规则使用 Core 2.2.0 的类型化事件载荷（含计数对象摘要与操作人摘要）。两种载荷都应只交给受控消费者，不能未经脱敏转发到公开日志。普通 Spring Event 不承诺可靠持久投递。
 
