@@ -6,7 +6,7 @@ dependencies {
     // 中立协作协议（owner-authorization）：reader 出入口的响应模型单一事实源。
     api 'io.github.sure-zzzzzz:simple-owner-authorization-collaboration-core:1.0.0'
     // IAM Server 域契约：使用正式制品消费受委托角色常量与既有事件契约。
-    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.3.3'
+    api 'io.github.sure-zzzzzz:simple-iam-server-core:1.3.4'
     api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
     // 验证码适配器运行时装配生效即可，桥接类型不出现在公开 API
     implementation 'io.github.sure-zzzzzz:simple-iam-captcha-adapter-starter:1.0.0'

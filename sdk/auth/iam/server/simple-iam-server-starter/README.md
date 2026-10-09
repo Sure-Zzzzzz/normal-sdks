@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.5`，变更与升级要求见 [CHANGELOG.1.3.5.md](CHANGELOG.1.3.5.md)。
+当前版本为 `1.3.6`，变更与升级要求见 [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md)。
+
+`1.3.6` 本地账号口令最长生存期策略（默认关闭，等保基线应用层实现）：超期登录置须改密复用受限通道、临期携带剩余天数、须改密原因三态下传（FIRST_LOGIN/PASSWORD_RESET/PASSWORD_EXPIRED）、管理面密码状态只读两字段；同轮行为收紧——三处改密点拒绝新密码=当前密码。数据库 `iam_user` 加两列。
 
 `1.3.5` 平台管理员特权全量分支收口（非内置应用页面权限按授权行裁剪，1.3.1 定案漏网补齐）+ openapi 新增页面准入应用清单查询端点（`GET /iam/api/users/{subjectId}/page-admitted-applications`，AKP 持新码 `iam:portal:api`）+ openapi users 投影回传 `subjectId`。API 形状新增一个只读端点与一个响应字段，数据库零变化。
 
@@ -75,7 +77,8 @@
 
 - **本地账号密码登录**：委托编码器（BCrypt 优先）校验；登录失败计数、渐进人机验证、账号锁定
 - **自助修改密码**：`PUT /iam/web/auth/password`（会话 + CSRF）；错旧密码计入凭据失败计数（与登录同锁定策略）；改密成功踢其他终端、保留当前会话，旧密码签发的全部 OAuth token 与 refresh 族同步失效
-- **首登 / 重置后强制改密**：管理员建号与重置密码置 `must_change_password` 标记，登录响应携带 `mustChangePassword`；标记未清期间 Web / 管理链非白名单端点一律 403 + `AUTH_009`（改密、登出等白名单放行）；外部身份源用户改密 / 重置均拒绝（`AUTH_010`，防置标记后锁死）
+- **首登 / 重置后强制改密**：管理员建号与重置密码置 `must_change_password` 标记，登录响应携带 `mustChangePassword` 与原因 `mustChangePasswordReason`（1.3.6 三态：`FIRST_LOGIN` 建号 / `PASSWORD_RESET` 管理员重置 / `PASSWORD_EXPIRED` 生存期过期，前端按原因出改密页文案；`/me` 在白名单内同样携带，改密页刷新可恢复文案）；标记未清期间 Web / 管理链非白名单端点一律 403 + `AUTH_009`（改密、登出等白名单放行）；外部身份源用户改密 / 重置均拒绝（`AUTH_010`，防置标记后锁死）
+- **口令最长生存期（1.3.6，默认关闭）**：`iam.server.password.max-age-days`（0=关闭）开启后仅本地账号在登录密码验证通过时判定——超期置须改密复用上述受限通道（登录成功但只能改密）；临期（剩余 ≤ `warn-before-days`，默认 7）登录响应与 `/me` 携带 `passwordExpiresInDays` 供前端提示，满额零打扰；改密 / 重置 / 忘记密码刷新 `password_updated_at` 重新起算；存量行首登回填激活基线；配置收紧下次登录即生效、放宽不自动解锁已置位用户；`warn>max` 启动拒绝（`CONFIG_VALIDATION_FAILED`）
 - **渐进人机验证**：失败达到阈值后要求验证码；验证码组件缺失时自动降级放行（不阻断登录）；验证码校验先于凭据校验，验证码失败不计入密码失败次数
 - **外部身份源登录**：凭证型（LDAP bind）与跳转型（OIDC 单点登录）两种形态，经 SPI 接入，本模块不含具体协议实现（适配器为独立模块）
 - **外部身份归一**：已绑定身份直接复用；同名本地账号绝不自动并号（防接管）；未绑定身份按配置开号（JIT）或拒绝（pre-bound-only）
@@ -155,7 +158,7 @@ dependencies {
 | `oauth2_registered_client` | SAS 标准：OAuth 客户端注册 |
 | `oauth2_authorization` | SAS 标准：授权码 / token 状态 |
 | `oauth2_authorization_consent` | SAS 标准：scope 确认记录 |
-| `iam_user` | 用户（含 `identity_source` / `external_id` 外部身份绑定、`must_change_password` 须改密标记） |
+| `iam_user` | 用户（含 `identity_source` / `external_id` 外部身份绑定、`must_change_password` 须改密标记、`must_change_password_reason` 须改密原因、`password_updated_at` 口令最近设置时刻——后两列 1.3.6） |
 | `iam_role` / `iam_permission` | 角色 / 权限（内置项受保护） |
 | `iam_open_role_binding` | 服务主体的角色委托边界：稳定角色 UUID、归属三元组、创建幂等键、固定应用与部门根、修改版本和删除墓碑；不是商业授权表 |
 | `iam_user_role` / `iam_role_permission` | 用户-角色、角色-权限关系 |
@@ -196,12 +199,12 @@ dependencies {
 | `/iam/web/auth/csrf` | GET | 匿名 | 取 CSRF token（登录页用） |
 | `/iam/web/auth/providers` | GET | 匿名 | 登录方式列表（含展示文案） |
 | `/iam/web/auth/captcha` | GET | 匿名 | 验证码挑战 |
-| `/iam/web/auth/login` | POST | 匿名 | 登录（本地或外部凭证型）；响应携带 `mustChangePassword`——管理员建号 / 重置后首登为 `true` |
+| `/iam/web/auth/login` | POST | 匿名 | 登录（本地或外部凭证型）；响应携带 `mustChangePassword`——管理员建号 / 重置后首登 / 口令生存期超期为 `true`，同携 `mustChangePasswordReason` 三态与临期 `passwordExpiresInDays`（1.3.6） |
 | `/iam/web/auth/authorize/{providerCode}` | GET | 匿名 | 外部跳转型登录发起（返回上游跳转地址，由前端跳转） |
 | `/iam/web/auth/callback/{providerCode}` | GET | 匿名 | 外部跳转型登录回调 |
 | `/iam/web/auth/logout` | POST | 已认证 | 登出 |
-| `/iam/web/auth/me` | GET | 已认证 | 当前用户信息 |
-| `/iam/web/auth/password` | PUT | 已认证 | 自助修改密码（body `oldPassword` / `newPassword`；成功 204，踢其他终端保留当前会话；须改密拦截期在白名单内放行） |
+| `/iam/web/auth/me` | GET | 已认证 | 当前用户信息（含 `mustChangePasswordReason` / `passwordExpiresInDays`，1.3.6；受限期在须改密白名单内可读） |
+| `/iam/web/auth/password` | PUT | 已认证 | 自助修改密码（body `oldPassword` / `newPassword`；成功 204，踢其他终端保留当前会话，1.3.6 起刷新口令生存期基线；新密码=当前密码 400 `AUTH_011` 假换密拦截；须改密拦截期在白名单内放行） |
 | `/iam/web/oauth2/consent-info` | GET | 已认证 | Consent 页供数（state 换授权请求详情；授权码流程中用户已登录） |
 | `/iam/web/portal/accessible-applications` | GET | 已认证 | 当前用户可访问且已启用 Portal 集成的应用及菜单；平台管理员直通**内置**应用（1.3.1 起非内置应用同样要求授权行） |
 | `/iam/web/portal/navigation-context` | GET | 已认证 | 当前用户的可访问应用、应用默认入口与无深链登录首页候选；Portal 仅在根路由时使用 |
@@ -359,7 +362,7 @@ AKSK 管理台作为统一应用门户中的业务应用时，IAM 侧登记一�
 ## 错误处理约定
 
 - **Web 匿名端点**：业务错误统一 401 JSON；登录失败响应携带 `captchaRequired=true` 提示前端补验证码；限流触发 429 并携带 `Retry-After`（统一由 IAM 异常处理出口返回）
-- **须改密拦截与改密**：标记未清期间 Web / 管理链非白名单端点 403 JSON 携带 `code=AUTH_009`（前端据此引导改密）；改密端点错旧密码 401（计入锁定计数）、新密码违反策略 400 `AUTH_011`、外部身份源用户改密 / 被重置 400 `AUTH_010`
+- **须改密拦截与改密**：标记未清期间 Web / 管理链非白名单端点 403 JSON 携带 `code=AUTH_009`（前端据此引导改密，1.3.6 起响应含须改密原因三态）；改密端点错旧密码 401（计入锁定计数）、新密码违反策略或与当前密码相同 400 `AUTH_011`（1.3.6 假换密拦截）、外部身份源用户改密 / 被重置 400 `AUTH_010`
 - **外部登录回调**：失败 302 回登录页并附 `error` 查询参数（错误码默认透传前端引导），仅账号锁定降级为 `login-failed`（锁定事实不向未认证方泄露，防回调爆破探测）；上游不可用的 503、登录方式不存在的 404 只发生在凭证型 login 端点（见 [登录认证与会话](docs/领域文档/登录认证与会话.md)）
 - **管理面**：创建主资源 201、删除 204；认证、授权和业务错误以标准 HTTP 状态表达；最后管理员保护返回 `409 Conflict`；内置 `iam_admin` 角色不可删除、编码不可变更
 - **资源验证端点**：校验不过返回带错误码的 401/403，验证客户端认证失败为 401
@@ -464,5 +467,6 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql) | 从 1.3.1 升级的增量建表脚本，不重置旧数据 |
 | [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md) | web 账号手机号端点注册修复（漏标注解） |
 | [CHANGELOG.1.3.5.md](CHANGELOG.1.3.5.md) | 特权全量分支收口 + 页面准入查询端点 + users 投影 subjectId |
+| [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md) | 口令最长生存期（默认关闭）+ 须改密原因下传 + 假换密拦截 |
 | [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |

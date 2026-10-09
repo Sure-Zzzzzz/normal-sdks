@@ -69,7 +69,9 @@ class IamPhoneAuthenticationBoundaryTest {
         when(userRepository.findByPhone("+8613800138000")).thenReturn(Optional.of(user));
 
         IamAuthRestController controller = new IamAuthRestController(
-                mock(IamAuthenticationService.class), mock(IamExternalLoginService.class),
+                mock(IamAuthenticationService.class),
+                new io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamPasswordMaxAgeSupport(new SimpleIamServerProperties()),
+                mock(IamExternalLoginService.class),
                 IamExternalProviderRegistry.create(Collections.emptyList(), Collections.emptyList()),
                 mock(ProviderDisplayHelper.class),
                 mock(IamUserDetailsService.class), userService, mock(IamMessageSseService.class),

@@ -9,6 +9,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.MustChangePasswordReason;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
 import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
@@ -92,6 +93,7 @@ public class IamUserService {
         user.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
         user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
         user.setMustChangePassword(Boolean.TRUE);
+        user.setMustChangePasswordReason(MustChangePasswordReason.FIRST_LOGIN);
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
 
@@ -308,11 +310,14 @@ public class IamUserService {
                     ServerErrorMessage.PASSWORD_CHANGE_NOT_ALLOWED);
         }
         passwordPolicyValidator.validate(newPassword);
+        validateNotSameAsCurrent(user, newPassword);
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
         user.setLockedUntil(null);
         user.setMustChangePassword(Boolean.TRUE);
+        user.setMustChangePasswordReason(MustChangePasswordReason.PASSWORD_RESET);
+        user.setPasswordUpdatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         redisTokenRepository.deleteLoginFailure(user.getUsername());
@@ -350,11 +355,14 @@ public class IamUserService {
                     loginFailurePolicySupport.remainingAttempts(failures)));
         }
         passwordPolicyValidator.validate(newPassword);
+        validateNotSameAsCurrent(user, newPassword);
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
         user.setLockedUntil(null);
         user.setMustChangePassword(Boolean.FALSE);
+        user.setMustChangePasswordReason(null);
+        user.setPasswordUpdatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         redisTokenRepository.deleteLoginFailure(user.getUsername());
@@ -385,13 +393,28 @@ public class IamUserService {
         }
         loginFailurePolicySupport.assertAccountUsable(user);
         passwordPolicyValidator.validate(newPassword);
+        validateNotSameAsCurrent(user, newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setFailedLoginCount(SimpleIamServerConstant.DEFAULT_FAILED_LOGIN_COUNT);
         user.setLockedUntil(null);
         user.setMustChangePassword(Boolean.FALSE);
+        user.setMustChangePasswordReason(null);
+        user.setPasswordUpdatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         userRepository.save(user);
         redisTokenRepository.deleteLoginFailure(user.getUsername());
+    }
+
+    /**
+     * 新密码不得等于当前密码（1.3.6）：否则周期策略可被"重复提交旧密码"假换密绕过，
+     * 与密码策略校验同位执行；策略关闭时同样校验（换密码就该换，正交于生存期）。
+     */
+    private void validateNotSameAsCurrent(IamUserEntity user, String newPassword) {
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            log.debug("改密被拒（新密码与当前密码相同）：username={}", user.getUsername());
+            throw new SimpleIamServerException(ErrorCode.PASSWORD_POLICY_VIOLATION,
+                    ServerErrorMessage.PASSWORD_SAME_AS_CURRENT);
+        }
     }
 
     /**

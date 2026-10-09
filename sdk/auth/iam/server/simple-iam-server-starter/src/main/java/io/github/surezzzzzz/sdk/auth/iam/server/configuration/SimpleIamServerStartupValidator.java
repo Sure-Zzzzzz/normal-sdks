@@ -41,11 +41,18 @@ public class SimpleIamServerStartupValidator {
 
     private final Environment environment;
 
+    private final io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamPasswordMaxAgeSupport passwordMaxAgeSupport;
+
     /**
      * 启动校验与软提示。
      */
     @PostConstruct
     public void validate() {
+        // 1.3.6 口令生存期配置校验：提醒窗口不得大于生存期（仅生存期开启时校验），fail-fast
+        String passwordConfigError = passwordMaxAgeSupport.validateConfiguration();
+        if (passwordConfigError != null) {
+            throw new SimpleIamServerException(ErrorCode.CONFIG_VALIDATION_FAILED, passwordConfigError);
+        }
         ResourceServerProperties resourceServerProperties = Binder
                 .get(environment)
                 .bind(SimpleResourceServerStarterConstant.CONFIG_PREFIX,

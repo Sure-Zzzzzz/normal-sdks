@@ -80,6 +80,21 @@ public class IamUserEntity {
     @Column(name = "must_change_password", nullable = false)
     private Boolean mustChangePassword = Boolean.FALSE;
 
+    /**
+     * 须改密原因（值域见 {@link MustChangePasswordReason}）：与须改密标记同写同清（1.3.6），
+     * 持久化以支撑登录响应与 /me 的文案下传
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "must_change_password_reason", length = 32)
+    private MustChangePasswordReason mustChangePasswordReason;
+
+    /**
+     * 密码最近一次设置时刻：建号为 null（策略未激活），策略开启后首次登录回填为登录时刻（激活基线），
+     * 改密/重置/忘记密码重置刷新；口令最长生存期策略据此判定（1.3.6，默认关闭）
+     */
+    @Column(name = "password_updated_at")
+    private Instant passwordUpdatedAt;
+
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 

@@ -1,5 +1,11 @@
 # IAM Server 升级
 
+## 1.3.6
+
+从已运行的 1.3.5 升级只需执行同目录 [V1.3.5__to__V1.3.6__password_max_age.sql](V1.3.5__to__V1.3.6__password_max_age.sql) 一次：`iam_user` 加 `must_change_password_reason`（须改密原因，与须改密标记同写同清）与 `password_updated_at`（口令生存期基线）两个 nullable 列，[schema.sql](../schema.sql) 已同步含新列。**无数据回填**——存量行两列为 null 属预期：原因 null 时前端兜底通用改密文案；`password_updated_at` null 时生存期策略开启后由用户首次登录回填激活基线（不做迁移期批量回填，避免一刀切全员判过期）。核查查询应返回空。全新库直接用 `schema.sql` 初始化。
+
+默认策略关闭（`max-age-days=0`），升级后行为与 1.3.5 一致；行为收紧项（三处改密点拒绝新密码=当前密码）与数据库无关，见 CHANGELOG.1.3.6 升级指引。
+
 ## 1.3.3
 
 从已运行的 1.3.2 升级只需执行同目录 [V1.3.2__to__V1.3.3__phone_profile_cleanup.sql](V1.3.2__to__V1.3.3__phone_profile_cleanup.sql) 一次：纯数据修复，无 DDL，[schema.sql](../schema.sql) 与 1.3.2 完全一致、无需变更。该脚本把修复前经管理台落库的空串/纯空白手机号行连同 `phone_bound_at` 双置 NULL（对齐解绑语义），脚本内置的核查查询必须返回空集。升级前或升级后执行均可：1.3.3 代码只堵新入口，不清历史。

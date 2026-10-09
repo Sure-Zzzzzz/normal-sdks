@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Admin API
-  version: 1.3.2
+  version: 1.3.6
   description: IAM 管理端 API。所有接口要求已认证用户具备 ROLE_iam_admin；写操作还要求当前浏览器会话的 CSRF Token。
 servers:
   - url: /
@@ -764,6 +764,8 @@ components:
     AdminUserResponse:
       type: object
       properties: { subjectId: { type: string, maxLength: 64, description: 稳定公开主体 ID }, username: { type: string }, displayName: { type: string, nullable: true }, email: { type: string, nullable: true }, phone: { type: string, nullable: true }, departmentId: { type: integer, format: int64, nullable: true }, departmentName: { type: string, nullable: true }, status: { type: integer }, lockedUntil: { type: string, format: date-time, nullable: true }, lastLoginAt: { type: string, format: date-time, nullable: true }, identitySource: { type: string, nullable: true, description: 绑定的外部登录方式编码（本地账号为 null） }, externalId: { type: string, nullable: true, description: 外部体系稳定唯一标识（本地账号为 null） }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+      passwordUpdatedAt: { type: string, format: date-time, nullable: true, description: "密码最近一次设置时刻（1.3.6，null=生存期策略未激活）；正常/临期/过期由前端按本字段与剩余天数渲染" }
+      passwordExpiresInDays: { type: integer, nullable: true, description: "口令剩余天数（1.3.6）：临期 1..N、已过期 0、策略关闭/未激活 null" }
     UserImportResponse:
       type: object
       required: [totalRows, createdRows, rows]

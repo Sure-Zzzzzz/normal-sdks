@@ -69,6 +69,7 @@ public class IamAuthRestController {
      */
     private static final String PORTAL_DEFAULT_TARGET = "/app/";
     private final IamAuthenticationService authenticationService;
+    private final io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamPasswordMaxAgeSupport passwordMaxAgeSupport;
     private final IamExternalLoginService externalLoginService;
     private final IamExternalProviderRegistry providerRegistry;
     private final ProviderDisplayHelper providerDisplayHelper;
@@ -179,7 +180,9 @@ public class IamAuthRestController {
                 "phone", user.getUsername(), user.getId(),
                 servletRequest.getRemoteAddr(), servletRequest.getHeader("User-Agent"), null, null);
         return ResponseEntity.ok(new WebLoginResponse("登录成功", toResponse(userDetails), false,
-                Boolean.TRUE.equals(user.getMustChangePassword())));
+                Boolean.TRUE.equals(user.getMustChangePassword()),
+                user.getMustChangePasswordReason() == null ? null : user.getMustChangePasswordReason().name(),
+                passwordMaxAgeSupport.daysRemaining(user).orElse(null)));
     }
 
     /**
@@ -252,7 +255,9 @@ public class IamAuthRestController {
                 servletRequest.getRemoteAddr(), servletRequest.getHeader("User-Agent"),
                 null, null);
         return ResponseEntity.ok(new WebLoginResponse("登录成功", toResponse(userDetails), false,
-                Boolean.TRUE.equals(user.getMustChangePassword())));
+                Boolean.TRUE.equals(user.getMustChangePassword()),
+                user.getMustChangePasswordReason() == null ? null : user.getMustChangePasswordReason().name(),
+                passwordMaxAgeSupport.daysRemaining(user).orElse(null)));
     }
 
     /**
@@ -404,26 +409,26 @@ public class IamAuthRestController {
     public ResponseEntity<WebLoginResponse> handleLoginFailure(SimpleIamServerException e) {
         if (ErrorCode.EXTERNAL_PROVIDER_UNAVAILABLE.equals(e.getErrorCode())) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new WebLoginResponse(ServerErrorMessage.EXTERNAL_PROVIDER_UNAVAILABLE, null, false, false));
+                    .body(new WebLoginResponse(ServerErrorMessage.EXTERNAL_PROVIDER_UNAVAILABLE, null, false, false, null, null));
         }
         if (ErrorCode.EXTERNAL_PROVIDER_NOT_FOUND.equals(e.getErrorCode())) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new WebLoginResponse(e.getMessage(), null, false, false));
+                    .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
         }
         if (io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.CAPTCHA_PROVIDER_MISSING
                 .equals(e.getErrorCode())) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_PROVIDER_MISSING, null, false, false));
+                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_PROVIDER_MISSING, null, false, false, null, null));
         }
         if (io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.CAPTCHA_REQUIRED
                 .equals(e.getErrorCode())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_REQUIRED, null, true, false));
+                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_REQUIRED, null, true, false, null, null));
         }
         if (io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.CAPTCHA_INVALID
                 .equals(e.getErrorCode())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_INVALID, null, true, false));
+                    .body(new WebLoginResponse(ServerErrorMessage.CAPTCHA_INVALID, null, true, false, null, null));
         }
         // 改密端点专属：请求内容问题回 400（旧密码错仍走兜底 401 凭据语义）
         if (io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.PASSWORD_CHANGE_NOT_ALLOWED
@@ -431,10 +436,10 @@ public class IamAuthRestController {
                 || io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.PASSWORD_POLICY_VIOLATION
                 .equals(e.getErrorCode())) {
             return ResponseEntity.badRequest()
-                    .body(new WebLoginResponse(e.getMessage(), null, false, false));
+                    .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new WebLoginResponse(e.getMessage(), null, false, false));
+                .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
     }
 
     /**
@@ -536,6 +541,9 @@ public class IamAuthRestController {
                 userDetails.getUsername(),
                 user == null ? userDetails.getUsername() : user.getDisplayName(),
                 authorities.contains(SimpleIamServerConstant.ROLE_IAM_ADMIN),
-                authorities);
+                authorities,
+                user == null || user.getMustChangePasswordReason() == null
+                        ? null : user.getMustChangePasswordReason().name(),
+                user == null ? null : passwordMaxAgeSupport.daysRemaining(user).orElse(null));
     }
 }

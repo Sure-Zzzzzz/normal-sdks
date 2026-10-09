@@ -20,6 +20,12 @@ import java.util.List;
 @ConfigurationProperties(prefix = SimpleIamServerConstant.CONFIG_PREFIX)
 public class SimpleIamServerProperties {
 
+    /** 口令最长生存期默认关闭（0=不治理），客户要等保时按部署开启 */
+    public static final int DEFAULT_PASSWORD_MAX_AGE_DAYS = 0;
+
+    /** 到期前提醒窗口默认 7 天（仅生存期开启时生效） */
+    public static final int DEFAULT_PASSWORD_WARN_BEFORE_DAYS = 7;
+
     /**
      * 总开关
      */
@@ -315,6 +321,18 @@ public class SimpleIamServerProperties {
          * 场景可关；生产关闭等于放弃首登强制改密防线，不得关闭
          */
         private Boolean mustChangeEnforcement = SimpleIamServerConstant.DEFAULT_MUST_CHANGE_PASSWORD_ENFORCEMENT;
+
+        /**
+         * 口令最长生存期（天）：0=关闭（默认，行为与 1.3.5 完全一致）；>0 时本地账号密码超期后
+         * 下次登录进入须改密受限会话（1.3.6，等保基线"口令最长生存期"应用层实现）
+         */
+        private Integer maxAgeDays = DEFAULT_PASSWORD_MAX_AGE_DAYS;
+
+        /**
+         * 到期前提醒窗口（天）：登录响应与 /me 携带剩余天数供前端提示；仅 maxAgeDays>0 时生效，
+         * 且启动校验要求不大于 maxAgeDays
+         */
+        private Integer warnBeforeDays = DEFAULT_PASSWORD_WARN_BEFORE_DAYS;
     }
 
     @Data

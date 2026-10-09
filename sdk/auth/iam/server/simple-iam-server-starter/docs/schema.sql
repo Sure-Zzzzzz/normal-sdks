@@ -98,6 +98,8 @@ CREATE TABLE iam_user (
     failed_login_count INT NOT NULL DEFAULT 0 COMMENT '连续登录失败次数',
     locked_until TIMESTAMP NULL DEFAULT NULL COMMENT '锁定到期时间',
     must_change_password TINYINT(1) NOT NULL DEFAULT 0 COMMENT '须改密标记：1=下次登录强制修改密码（管理员建号/重置密码置 1，自助改密成功清 0）',
+    must_change_password_reason VARCHAR(32) NULL COMMENT '须改密原因：FIRST_LOGIN/PASSWORD_RESET/PASSWORD_EXPIRED，与须改密标记同写同清（1.3.6）',
+    password_updated_at TIMESTAMP NULL COMMENT '密码最近一次设置时刻：建号 null，策略开启后首登回填激活基线；改密/重置刷新（1.3.6）',
     last_login_at TIMESTAMP NULL DEFAULT NULL COMMENT '最近登录时间',
     permission_version BIGINT NOT NULL DEFAULT 0 COMMENT '权限版本：角色/权限/绑定任一变更时 +1，会话校验对比后热刷新登录态权限',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

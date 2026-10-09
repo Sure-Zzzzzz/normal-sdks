@@ -25,6 +25,7 @@ public class IamAuthenticationService {
     private final IamUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final IamLoginFailurePolicyService failurePolicySupport;
+    private final IamPasswordMaxAgeSupport passwordMaxAgeSupport;
 
     /**
      * 验证用户名 + 密码，通过则清零失败计数并返回用户实体
@@ -54,6 +55,9 @@ public class IamAuthenticationService {
         }
 
         failurePolicySupport.recordLocalSuccess(user);
+        // 1.3.6 口令生存期判定：过期置须改密（复用既有受限会话通道）；临期天数由调用方
+        // 注入 IamPasswordMaxAgeSupport#daysRemaining 获取，认证语义与提示语义分离
+        passwordMaxAgeSupport.applyOnLocalLogin(user);
         return user;
     }
 

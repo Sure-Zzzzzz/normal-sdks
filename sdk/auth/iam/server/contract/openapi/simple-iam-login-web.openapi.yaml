@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Login API
-  version: 1.3.0
+  version: 1.3.6
   description: Login 与其他 Web 前端共用的浏览器会话、品牌与 OAuth2 Consent 辅助接口。
 servers:
   - url: /
@@ -422,6 +422,8 @@ components:
         user: { $ref: '#/components/schemas/AuthUser', nullable: true }
         captchaRequired: { type: boolean, description: 本次登录是否要求人机验证（true 时前端需取挑战并要求用户输入验证码后重试） }
         mustChangePassword: { type: boolean, description: 首登或管理员重置密码后的须改密标记（true 时前端应跳转改密页，未改密期间非白名单端点 403） }
+        mustChangePasswordReason: { type: string, nullable: true, enum: [FIRST_LOGIN, PASSWORD_RESET, PASSWORD_EXPIRED], description: "须改密原因（1.3.6）：FIRST_LOGIN=建号初始密码 / PASSWORD_RESET=管理员重置 / PASSWORD_EXPIRED=生存期策略过期；与 mustChangePassword 同真，前端按原因出改密页文案" }
+        passwordExpiresInDays: { type: integer, nullable: true, description: "口令剩余天数（1.3.6）：生存期策略开启且临期（≤提醒窗口）为 1..N、已过期为 0；策略关闭或未激活为 null，前端据此提示横幅" }
     CaptchaChallengeResponse:
       type: object
       required: [captchaId, type, content]
@@ -439,6 +441,8 @@ components:
         authorities:
           type: array
           items: { type: string }
+        mustChangePasswordReason: { type: string, nullable: true, enum: [FIRST_LOGIN, PASSWORD_RESET, PASSWORD_EXPIRED], description: "须改密原因（1.3.6，/me 在强制改密白名单内，受限期可读供改密页刷新恢复文案）" }
+        passwordExpiresInDays: { type: integer, nullable: true, description: "口令剩余天数（1.3.6）：策略开启且临期为 1..N、已过期为 0、关闭或未激活为 null" }
     WebBrandingResponse:
       type: object
       properties:

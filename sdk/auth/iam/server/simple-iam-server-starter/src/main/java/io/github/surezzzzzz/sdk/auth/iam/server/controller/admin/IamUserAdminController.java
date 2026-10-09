@@ -56,6 +56,7 @@ public class IamUserAdminController {
     private final IamDepartmentService departmentService;
     private final IamExternalIdentityBindingService externalIdentityBindingService;
     private final IamUserExcelImportService userExcelImportService;
+    private final io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamPasswordMaxAgeSupport passwordMaxAgeSupport;
 
     /**
      * 下载用户导入模板。模板即时生成，不在服务端保存。
@@ -108,7 +109,8 @@ public class IamUserAdminController {
             @RequestParam(defaultValue = SimpleIamServerConstant.DEFAULT_ADMIN_PAGE_SIZE_VALUE) int size) {
         return ResponseEntity.ok(AdminPageResponse.from(
                 userService.listUsers(status, departmentId, keyword, lastLoginAfter, lockedUntilAfter, noDepartment, page, size)
-                        .map(user -> AdminUserResponse.from(user, departmentService.getDepartmentName(user.getDepartmentId())))));
+                        .map(user -> AdminUserResponse.from(user, departmentService.getDepartmentName(user.getDepartmentId()),
+                                passwordMaxAgeSupport.daysRemaining(user).orElse(null)))));
     }
 
     /**
@@ -266,6 +268,7 @@ public class IamUserAdminController {
     }
 
     private AdminUserResponse toAdminUserResponse(IamUserEntity user) {
-        return AdminUserResponse.from(user, departmentService.getDepartmentName(user.getDepartmentId()));
+        return AdminUserResponse.from(user, departmentService.getDepartmentName(user.getDepartmentId()),
+                passwordMaxAgeSupport.daysRemaining(user).orElse(null));
     }
 }

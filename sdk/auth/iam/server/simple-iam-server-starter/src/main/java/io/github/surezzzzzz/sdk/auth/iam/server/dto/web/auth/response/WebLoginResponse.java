@@ -26,4 +26,15 @@ public class WebLoginResponse {
      * 前端跳改密页；改密完成前其余 API 被服务端 403 拦截）
      */
     private boolean mustChangePassword;
+
+    /**
+     * 须改密原因（1.3.6，可空）：FIRST_LOGIN / PASSWORD_RESET / PASSWORD_EXPIRED，
+     * 与 mustChangePassword 同真；前端按原因出改密页文案
+     */
+    private String mustChangePasswordReason;
+
+    /**
+     * 口令剩余天数（1.3.6，可空）：生存期开启且临期时携带供前端提示横幅；其余为 null
+     */
+    private Integer passwordExpiresInDays;
 }

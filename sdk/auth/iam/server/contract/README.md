@@ -4,6 +4,14 @@
 
 ## 版本对应关系
 
+### 1.3.6 服务端契约增量
+
+`simple-iam-login-web.openapi.yaml` 与 `simple-iam-admin-web.openapi.yaml` 的 `info.version` 为 `1.3.6`；`simple-iam-open-api.openapi.yaml` 本轮零变化（维持 1.3.5）。增量均为向后兼容的可空新字段：
+
+- 登录响应与 `/me`（AuthUser）：`mustChangePasswordReason`（FIRST_LOGIN / PASSWORD_RESET / PASSWORD_EXPIRED，与 mustChangePassword 同真）与 `passwordExpiresInDays`（临期 1..N、已过期 0、策略关闭或未激活 null）。
+- 管理面用户响应（AdminUserResponse）：`passwordUpdatedAt` 与 `passwordExpiresInDays`，前端按两字段渲染密码状态（不设状态枚举）。
+- 同轮行为收紧：三处改密/重置点拒绝"新密码=当前密码"（400，与密码策略校验同位）；口令生存期策略默认关闭（`iam.server.password.max-age-days=0`），开启时本地账号超期登录进入既有须改密受限通道。
+
 ### 1.3.5 服务端契约增量
 
 `simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.5`；其他契约不因 Server 版本变化统一改号。增量两件，均为向后兼容新增：
