@@ -8,7 +8,7 @@ Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 4.x，Spring Boot 3.
 
 ## 核心能力
 
-### 1. 三契约接口 29 方法
+### 1. 三契约接口 30 方法
 
 与 RestTemplate 形态逐端点一一对应；请求体为 `Map<String, Object>`（可选字段 null 不放入），
 路径注解写契约字面量。
@@ -31,7 +31,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.0` | `api` 编译期传递 | 契约常量/异常族 |
+| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
 | Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024.0.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
@@ -42,7 +42,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.0.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

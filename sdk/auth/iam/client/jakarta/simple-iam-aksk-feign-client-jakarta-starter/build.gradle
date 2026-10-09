@@ -16,7 +16,7 @@ configurations.configureEach {
 
 dependencies {
     // 契约层：常量/异常族（接口与 DTO 属本模块，base-url 键常量取自 core，收 api）
-    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.1'
 
     // aksk 底座（Feign jakarta 形态）：@AkskClientFeignClient 元注解与拦截器装配
     implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'

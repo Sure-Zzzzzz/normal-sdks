@@ -80,7 +80,7 @@ class IamFeignClientContractTest {
     }
 
     private static String userJson() {
-        return "{\"id\":3,\"username\":\"e2e-user\",\"displayName\":\"成员\",\"departmentId\":1,"
+        return "{\"id\":3,\"subjectId\":\"sid-e2e-1\",\"username\":\"e2e-user\",\"displayName\":\"成员\",\"departmentId\":1,"
                 + "\"departmentName\":\"root\",\"status\":1,\"email\":null,\"phone\":\"+8613800000001\","
                 + "\"roles\":[\"iam_user\"]}";
     }
@@ -120,6 +120,10 @@ class IamFeignClientContractTest {
 
         stub.reply("GET", "/iam/api/users/sub-1/roles", "[\"iam_user\"]");
         assertEquals("iam_user", users.getUserRoles("sub-1").get(0), "角色编码裸列表");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/users/sub-1/page-admitted-applications", "[\"iam\",\"kms\"]");
+        assertEquals("kms", users.listPageAdmittedApplications("sub-1").get(1), "页面准入应用编码裸列表");
         serverVerify();
 
         Map<String, Object> body = new LinkedHashMap<String, Object>();
