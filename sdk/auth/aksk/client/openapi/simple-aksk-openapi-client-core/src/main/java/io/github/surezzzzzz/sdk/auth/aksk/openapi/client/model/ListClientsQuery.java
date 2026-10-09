@@ -1,18 +1,11 @@
 package io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model;
 
-import java.util.List;
-
 /**
- * Client 列表查询条件（可选字段对象；clientIds 上限 100）
+ * Client 分页列表查询条件（可选字段对象；按标识批量查询走 listClientsByClientIds）
  *
  * @author surezzzzzz
  */
 public class ListClientsQuery {
-
-    /**
-     * 按 Client 标识批量查询（上限 100）
-     */
-    private List<String> clientIds;
 
     /**
      * 按归属用户过滤
@@ -34,14 +27,6 @@ public class ListClientsQuery {
      */
     private Integer size;
 
-
-    public List<String> getClientIds() {
-        return clientIds;
-    }
-
-    public void setClientIds(List<String> clientIds) {
-        this.clientIds = clientIds;
-    }
 
     public String getOwnerUserId() {
         return ownerUserId;

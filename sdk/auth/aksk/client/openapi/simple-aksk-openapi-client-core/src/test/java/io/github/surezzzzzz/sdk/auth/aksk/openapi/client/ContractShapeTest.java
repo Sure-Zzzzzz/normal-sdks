@@ -30,8 +30,8 @@ class ContractShapeTest {
         int token = 0;
         for (Method m : AkskOpenApiClient.class.getMethods()) {
             String n = m.getName();
-            if (Arrays.asList("createClient", "listClients", "getClient", "updateClient",
-                    "rotateSecret", "deleteClient", "syncUserScopes").contains(n)) {
+            if (Arrays.asList("createClient", "listClients", "listClientsByClientIds", "getClient",
+                    "updateClient", "rotateSecret", "deleteClient", "syncUserScopes").contains(n)) {
                 client++;
             } else if (Arrays.asList("createAuthorization", "listAuthorizations", "getAuthorization",
                     "replaceAuthorization", "revokeAuthorization").contains(n)) {
@@ -42,10 +42,11 @@ class ContractShapeTest {
                 token++;
             }
         }
-        assertThat(client).as("Client 管理端点").isEqualTo(7);
+        assertThat(client).as("Client 管理方法").isEqualTo(8);
         assertThat(auth).as("应用授权端点").isEqualTo(5);
         assertThat(token).as("Token 管理端点").isEqualTo(8);
-        assertThat(client + auth + token).as("总端点数").isEqualTo(20);
+        // HTTP 端点 20 个：listClients 分页/批量双形态拆为两个方法（21 方法）
+        assertThat(client + auth + token).as("总方法数").isEqualTo(21);
     }
 
     @Test
@@ -55,7 +56,8 @@ class ContractShapeTest {
         assertThat(fieldNames(UpdateClientRequest.class)).containsExactly(
                 "enabled", "scopes", "name", "ownerUserId", "ownerUsername");
         assertThat(fieldNames(ListClientsQuery.class)).containsExactly(
-                "clientIds", "ownerUserId", "type", "page", "size");
+                "ownerUserId", "type", "page", "size");
+        assertThat(fieldNames(BatchClientResponse.class)).containsExactly("clients");
         assertThat(fieldNames(CreateClientResponse.class)).containsExactly(
                 "clientId", "clientSecret", "type", "name");
         assertThat(fieldNames(ClientInfoResponse.class)).containsExactly(
@@ -69,6 +71,10 @@ class ContractShapeTest {
         assertThat(fieldNames(ApplicationAuthorizationRequest.class)).containsExactly(
                 "applicationCode", "admitted", "roles", "pagePermissions", "apiPermissions",
                 "dataGrantDocument", "manifestVersion", "manifestDigest");
+        assertThat(fieldNames(ApplicationAuthorizationResponse.class)).containsExactly(
+                "clientId", "clientType", "ownerUserId", "applicationCode", "admitted", "enabled",
+                "roles", "pagePermissions", "apiPermissions", "dataGrantDocument", "authorizationVersion",
+                "manifestVersion", "manifestDigest", "createdAt", "updatedAt", "revokedAt");
         assertThat(fieldNames(TokenInfoResponse.class)).hasSize(12);
         assertThat(fieldNames(TokenStatisticsResponse.class)).containsExactly(
                 "totalCount", "activeCount", "revokedCount", "expiredCount",
@@ -115,13 +121,20 @@ class ContractShapeTest {
         assertThat(AkskOpenApiClientUriHelper.clientListQuery(null)).isEmpty();
 
         ListClientsQuery full = new ListClientsQuery();
-        full.setClientIds(Arrays.asList("a", "b"));
         full.setOwnerUserId("u1");
         full.setPage(2);
         full.setSize(50);
         String qs = AkskOpenApiClientUriHelper.clientListQuery(full);
-        assertThat(qs).contains("clientIds=a%2Cb").contains("ownerUserId=u1")
-                .contains("page=2").contains("size=50");
+        assertThat(qs).contains("ownerUserId=u1").contains("page=2").contains("size=50");
+    }
+
+    @Test
+    void clientIdsBatchQueryEncodesJoinedValue() {
+        assertThat(AkskOpenApiClientUriHelper.clientIdsBatchQuery(null)).isEmpty();
+        assertThat(AkskOpenApiClientUriHelper.clientIdsBatchQuery(java.util.Collections.emptyList()))
+                .isEmpty();
+        assertThat(AkskOpenApiClientUriHelper.clientIdsBatchQuery(Arrays.asList("a", "b")))
+                .isEqualTo("clientIds=a%2Cb");
     }
 
     @Test

@@ -120,10 +120,6 @@ public final class AkskOpenApiClientUriHelper {
             return "";
         }
         List<String> pairs = new ArrayList<>();
-        if (query.getClientIds() != null && !query.getClientIds().isEmpty()) {
-            pairs.add(SimpleAkskOpenApiClientConstant.PARAM_CLIENT_IDS + "="
-                    + encode(String.join(",", query.getClientIds())));
-        }
         if (query.getOwnerUserId() != null) {
             pairs.add(SimpleAkskOpenApiClientConstant.PARAM_OWNER_USER_ID + "=" + encode(query.getOwnerUserId()));
         }
@@ -137,6 +133,19 @@ public final class AkskOpenApiClientUriHelper {
             pairs.add(SimpleAkskOpenApiClientConstant.PARAM_SIZE + "=" + query.getSize());
         }
         return String.join("&", pairs);
+    }
+
+    /**
+     * 批量查询查询串（clientIds 逗号拼接后整体 URL 编码，与分页形态互斥）。
+     *
+     * @param clientIds Client 标识列表（上限 100）
+     * @return 查询串（空列表返回空串）
+     */
+    public static String clientIdsBatchQuery(java.util.List<String> clientIds) {
+        if (clientIds == null || clientIds.isEmpty()) {
+            return "";
+        }
+        return SimpleAkskOpenApiClientConstant.PARAM_CLIENT_IDS + "=" + encode(String.join(",", clientIds));
     }
 
     private static String encode(String value) {

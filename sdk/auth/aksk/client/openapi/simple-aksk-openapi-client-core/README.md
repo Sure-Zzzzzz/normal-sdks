@@ -55,4 +55,13 @@ RestTemplate 形态经 `AkskOpenApiHttpErrorMapper` 映射；Feign 形态维持�
 本模块及各形态 starter 的日志与异常一律不输出 Secret、Authorization、Token、完整 URL query。
 
 ## 版本
+### 1.0.1（2026-10-09，待发布）
+
+契约补齐：`ApplicationAuthorizationResponse` 补 `dataGrantDocument`；`listClients` 批量形态独立为
+`listClientsByClientIds`（`BatchClientResponse` 信封），`ListClientsQuery` 收窄为分页字段。
+接口 20 → 21 方法（HTTP 端点仍 20）。详见 [CHANGELOG.1.0.1.md](CHANGELOG.1.0.1.md)。
+
+### 1.0.0（2026-10-08）
+
+首发：20 端点契约内核（常量/DTO/接口/异常族/支撑件），javax 与 jakarta 双宿主通用。
 

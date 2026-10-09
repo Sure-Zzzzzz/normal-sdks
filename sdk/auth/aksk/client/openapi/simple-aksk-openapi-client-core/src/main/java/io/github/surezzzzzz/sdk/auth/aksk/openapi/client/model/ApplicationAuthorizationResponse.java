@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 应用授权响应
@@ -53,6 +54,11 @@ public class ApplicationAuthorizationResponse {
      * API permission 码列表
      */
     private List<String> apiPermissions;
+
+    /**
+     * DATA 授权文档（server 原样回显的授权投影）
+     */
+    private Map<String, Object> dataGrantDocument;
 
     /**
      * 授权版本（单调递增）
@@ -155,6 +161,14 @@ public class ApplicationAuthorizationResponse {
 
     public void setApiPermissions(List<String> apiPermissions) {
         this.apiPermissions = apiPermissions;
+    }
+
+    public Map<String, Object> getDataGrantDocument() {
+        return dataGrantDocument;
+    }
+
+    public void setDataGrantDocument(Map<String, Object> dataGrantDocument) {
+        this.dataGrantDocument = dataGrantDocument;
     }
 
     public Long getAuthorizationVersion() {

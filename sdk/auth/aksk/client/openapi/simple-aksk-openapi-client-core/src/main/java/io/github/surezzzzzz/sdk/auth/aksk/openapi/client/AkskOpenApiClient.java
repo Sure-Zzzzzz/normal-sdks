@@ -2,6 +2,8 @@ package io.github.surezzzzzz.sdk.auth.aksk.openapi.client;
 
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.*;
 
+import java.util.List;
+
 /**
  * AKSK Server 管理 OpenAPI 编程式客户端（20 端点全量契约）。
  *
@@ -35,6 +37,14 @@ public interface AkskOpenApiClient {
      * @return 分页结果
      */
     PageResponse<ClientInfoResponse> listClients(ListClientsQuery query);
+
+    /**
+     * 按 Client 标识批量查询（上限 100；返回 clients 键值对信封，非分页形态）。
+     *
+     * @param clientIds Client 标识列表（上限 100）
+     * @return 批量结果（key = clientId）
+     */
+    BatchClientResponse listClientsByClientIds(List<String> clientIds);
 
     /**
      * 查询单个 Client 详情。
