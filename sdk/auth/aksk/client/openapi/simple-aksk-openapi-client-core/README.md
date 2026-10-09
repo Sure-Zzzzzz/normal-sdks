@@ -30,14 +30,16 @@ core 模块由四形态 starter 传递引入，宿主不直接依赖；javax 与
 平台接入自动化（建 Client → 配应用授权 → 准入 → 换 Token 验证）此前只能走 Admin 管理台或手拼
 curl；本家族把它变成可编程调用，适用于运维脚本化、多环境批量初始化与接入流水线。
 
-## 20 端点契约映射
+## 20 端点契约映射（21 方法）
 
 | 分组 | 方法（AkskOpenApiClient） | HTTP |
 | --- | --- | --- |
-| Client 管理 | createClient / listClients / getClient / updateClient / rotateSecret / deleteClient / syncUserScopes | POST·GET·GET·PATCH·PUT·DELETE·PATCH `/api/client**` |
+| Client 管理 | createClient / listClients / listClientsByClientIds / getClient / updateClient / rotateSecret / deleteClient / syncUserScopes | POST·GET·GET·GET·PATCH·PUT·DELETE·PATCH `/api/client**` |
 | 应用授权 | createAuthorization / listAuthorizations / getAuthorization / replaceAuthorization / revokeAuthorization | POST·GET·GET·PUT·POST `/api/application-authorization**` |
 | Token 管理 | listTokens / listRedisTokens / getToken / revokeToken / deleteToken / deleteExpiredTokens / getTokenStatistics / revokeTokensByClientId | GET·GET·GET·POST·DELETE·DELETE·GET·DELETE `/api/token**` |
 
+`listClients` 为分页形态；携带 `clientIds` 时同一端点返回批量信封（`BatchClientResponse`，
+key=clientId），故独立为 `listClientsByClientIds` 方法——接口共 21 方法，HTTP 端点 20 个。
 `replaceAuthorization` 完整替换会事务性撤销该 Client 全部活跃 Token；`admitted=true` 即准入
 （不勾不换得出 Token）。
 
@@ -55,7 +57,7 @@ RestTemplate 形态经 `AkskOpenApiHttpErrorMapper` 映射；Feign 形态维持�
 本模块及各形态 starter 的日志与异常一律不输出 Secret、Authorization、Token、完整 URL query。
 
 ## 版本
-### 1.0.1（2026-10-09，待发布）
+### 1.0.1（2026-10-09）
 
 契约补齐：`ApplicationAuthorizationResponse` 补 `dataGrantDocument`；`listClients` 批量形态独立为
 `listClientsByClientIds`（`BatchClientResponse` 信封），`ListClientsQuery` 收窄为分页字段。
