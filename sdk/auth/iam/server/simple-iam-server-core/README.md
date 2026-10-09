@@ -2,7 +2,9 @@
 
 IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件、错误码、常量和异常，不含任何技术设施实现。
 
-当前版本为 `1.3.3`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.4`。版本沿革见各 `CHANGELOG.*.md`。
+
+`1.3.4` 补两条错误消息常量（口令生存期特性随 starter 1.3.6：新密码不得等于当前密码、提醒窗口大于生存期启动拒绝），其余零变化。
 
 `1.3.3` 新增内置权限编码常量 `iam:portal:api`（页面准入查询，端点随 simple-iam-server-starter 1.3.5 发布）；既有常量、身份协议、公开方法、异常类型、事件与枚举不变。
 
@@ -16,7 +18,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.3"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.4"
 }
 ```
 
@@ -94,6 +96,8 @@ IAM Server 1.3.2 的角色创建、修改、删除、规则设置与清除、部
 
 ## 版本记录
 
+- [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md)：随 starter 1.3.6 口令生存期特性的两条错误消息常量。
+- [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md)：门户准入查询权限码常量 `iam:portal:api`（端点随 starter 1.3.5）。
 - [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md)：受委托角色权限、标识、执行上限与错误契约，复用既有审计事件。
 - [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)：用户导入模板、字段和校验文案的稳定契约。
 - [CHANGELOG.1.3.0.md](CHANGELOG.1.3.0.md)：仪表盘页面权限契约，以及所属人授权内部协作路径的中性化迁移。

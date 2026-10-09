@@ -58,6 +58,10 @@ public final class ServerErrorMessage {
     public static final String PASSWORD_REQUIRED_CHARACTER_TYPES_EXCEED_MAX_LENGTH = "password.max-length不能小于启用的必需字符类型数量";
     public static final String BOOTSTRAP_USERNAME_REQUIRED = "bootstrap.username不能为空";
     public static final String BOOTSTRAP_LOCK_UNAVAILABLE = "管理员引导锁未获取，当前实例不会执行初始化";
+    public static final String PASSWORD_SAME_AS_CURRENT = "新密码不得与当前密码相同";
+    public static final String PASSWORD_WARN_WINDOW_EXCEEDS_MAX_AGE =
+            "iam.server.password.warn-before-days（%d）不得大于 max-age-days（%d）";
+
     public static final String PASSWORD_TOO_SHORT = "密码长度不足，最少 %d 位";
     public static final String PASSWORD_TOO_LONG = "密码长度超限，最多 %d 位";
     public static final String PASSWORD_UPPERCASE_REQUIRED = "密码必须包含大写字母";
