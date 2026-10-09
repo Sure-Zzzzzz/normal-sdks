@@ -1,0 +1,18 @@
+dependencies {
+    // 契约层：接口/模型/常量/异常族（公开 API 含 core 类型，收 api）
+    api 'io.github.sure-zzzzzz:simple-aksk-openapi-client-core:1.0.1'
+    // aksk 底座（jakarta 线）：提供 akskClientRestTemplate（认证+连接池+超时），本模块代码不 import 底座类型
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    // Spring Boot 3（compileOnly，宿主自行引入）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5'
+}
