@@ -1,0 +1,15 @@
+dependencies {
+    // 目录 SPI 与类型化模型来自 core 契约层（api：本件公开装饰该接口，下游可见类型）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.3.0'
+
+    // IAM openapi 用户契约 SB2 线 RT 传输件（宿主引本件即得客户端装配与令牌链）
+    api 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.1'
+
+    // Spring Boot（仅编译时依赖；adaptor 引用即装配，无配置属性类）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+
+    // 测试依赖
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
