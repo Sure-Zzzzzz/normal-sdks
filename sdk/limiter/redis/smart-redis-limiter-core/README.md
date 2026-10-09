@@ -1,11 +1,13 @@
 # SmartRedisLimiter Core
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 `smart-redis-limiter-core` 是限流体系的纯中立契约层，定义限流事件、审计记录模型、动态策略协议（v1 三元组与 v2 类型化）、扩展接口、错误码和统一常量。无 Redis、无 HTTP、无身份系统实现。
 
 ## 版本定位
+
+`2.3.0` 将类型化目录 SPI（提供方接口、服务声明、对象条目）自 management-starter 下沉至本模块（新包 `smart.directory`），实现契约与实现分离：扩展件实现目录提供方只需依赖 core，不再拖入管理面。三件为原样平移，其余契约零改动。
 
 `2.2.0` 在 2.1.0 基础上新增类型化限流契约（v2）：计数维度、规则选择器、服务控制模式三枚举，类型化规则键/规则/快照模型，计数桶身份摘要与操作人短摘要 Helper，以及类型化管理事件。v1 契约零改动，为运行端 2.2.0/1.1.0、management client 线与 Management 2.0.0 提供公共协议。
 
@@ -194,6 +196,28 @@ public interface SmartRedisLimiterTraceIdProvider {
 
 SDK 不提供默认实现，由调用方按需注册。
 
+### 8a. 类型化目录 SPI（2.3.0）
+
+`SmartRedisLimiterDirectoryProvider` 是类型化限流的目录契约（自 management-starter 下沉）：
+
+```java
+public interface SmartRedisLimiterDirectoryProvider {
+    List<SmartRedisLimiterServiceDeclaration> listServices();
+    SmartRedisLimiterServiceDeclaration findService(String serviceCode);
+    List<SmartRedisLimiterDirectoryObject> listObjects(String serviceCode, String dimension,
+                                                       String customType, String keyword, int limit);
+}
+```
+
+目录回答三件事：哪些服务接入了类型化限流（`SmartRedisLimiterServiceDeclaration`，含控制模式
+LEGACY_V1/TYPED_V2、资源与维度声明、命名空间、自定义类型）、单服务声明、以及某维度下的可选
+对象目录（`SmartRedisLimiterDirectoryObject`，稳定 ID + 展示名称）。实现必须线程安全，limit 必须
+遵守；Management 不做自动注册与心跳。
+
+core 只持有契约：配置式默认实现随 management-starter 提供（以部署配置为数据源），第三方实现
+（如 IAM 用户目录适配件 `smart-redis-limiter-management-iam-directory-starter`，USER 维度经 IAM
+openapi 实时检索）只依赖本模块即可接入，自有 Bean 覆盖默认装配。
+
 ### 9. 错误码和错误消息
 
 core 使用标准错误码和错误消息类；2.1.0 追加动态策略校验契约，2.2.0 追加类型化契约（VALIDATION_014 至 VALIDATION_019）：
@@ -241,21 +265,22 @@ implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.2.0'
 implementation 'io.github.sure-zzzzzz:smart-redis-limiter-jakarta-starter:1.1.0'
 ```
 
-如果需要自定义 Provider、直接使用核心事件模型或消费类型化契约（如自建快照消费方），可以直接依赖本模块：
+如果需要自定义 Provider、实现类型化目录 SPI、直接使用核心事件模型或消费类型化契约（如自建快照消费方），可以直接依赖本模块：
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.2.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.3.0'
 ```
 
 ## 架构位置
 
 ```text
-smart-redis-limiter-core               ← Event、Payload、Record、Provider、Exception、常量与枚举、v1/v2 策略契约
+smart-redis-limiter-core               ← Event、Payload、Record、Provider、目录 SPI、Exception、常量与枚举、v1/v2 策略契约
         ↑
         ├── smart-redis-limiter-starter                              (javax 运行端，发布事件)
         ├── smart-redis-limiter-jakarta-starter                      (jakarta 运行端，发布事件)
         ├── smart-redis-limiter-management-client-core               (策略客户端契约层)
-        └── smart-redis-limiter-management-starter                   (策略管理与快照服务端)
+        ├── smart-redis-limiter-management-starter                   (策略管理与快照服务端，含目录配置式默认实现)
+        └── smart-redis-limiter-management-iam-directory-starter     (目录 SPI 扩展件：USER 维度经 IAM openapi)
 ```
 
 ## 测试
@@ -276,6 +301,12 @@ core 2.2.0 覆盖以下单元测试：
 最终验证使用 Gradle 8.5 对本模块执行完整 `test`（`--rerun-tasks` 强制重跑，未过滤），40 用例全部通过。
 
 ## 版本历史
+
+### 2.3.0
+
+- 类型化目录 SPI 三件（`SmartRedisLimiterDirectoryProvider` / `SmartRedisLimiterServiceDeclaration` / `SmartRedisLimiterDirectoryObject`）自 management-starter 迁入，新包 `smart.directory`，原样平移零逻辑改动。
+- 契约与实现分离：扩展件实现目录提供方只依赖 core（首个第三方实现为 IAM 用户目录适配件）；配置式默认实现仍随 management-starter。
+- 其余契约（v1/v2 策略、事件、Helper、常量）零改动；直接 import 旧包的消费方需改 import，HTTP 契约与运行行为不变。
 
 ### 2.2.0
 
