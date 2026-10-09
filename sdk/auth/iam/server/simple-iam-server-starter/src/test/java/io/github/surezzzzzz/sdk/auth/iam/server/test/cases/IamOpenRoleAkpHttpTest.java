@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.SimpleDataPermissionConstant;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.department.request.CreateDepartmentRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
@@ -30,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,15 +36,14 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 发布版 AKSK 独立进程、正式 Provider、随机 HTTP 监听与生产 qiankun 组合验收。
+ * 发布版 AKSK 独立进程、正式 introspect Provider、随机 HTTP 监听的纯后台组合验收。
+ * 不依赖浏览器与门户形态（2026-10-09 改造：原浏览器全链段依赖仓外验收脚本，
+ * 不可再生导致本机永久红；HTTP 全链断言不受影响）。
  *
  * @author surezzzzzz
  */
@@ -80,6 +77,7 @@ class IamOpenRoleAkpHttpTest {
     private IamTrustedApplicationTestCleanupHelper cleanup;
     @Autowired
     private JdbcTemplate jdbc;
+
     @Autowired
     private ApplicationContext context;
 
@@ -122,7 +120,7 @@ class IamOpenRoleAkpHttpTest {
     }
 
     @Test
-    void realAkpAndQiankunPreserveAuthorizationRevisionAndCssBoundaries() throws Exception {
+    void realAkpPreservesAuthorizationRevisionAndConditionalWrites() throws Exception {
         Collection<ResourceAuthenticationAdapter> adapters = context.getBeansOfType(ResourceAuthenticationAdapter.class).values();
         assertEquals(1, adapters.size());
         ResourceAuthenticationAdapter adapter = adapters.iterator().next();
@@ -195,57 +193,10 @@ class IamOpenRoleAkpHttpTest {
                 null, assigned.getHeaders().getETag(), token).getStatusCodeValue());
         assertEquals(200, request(HttpMethod.GET, "/iam/api/organization-directories/" + root + "/departments", null, null, token).getStatusCodeValue());
         assertEquals(1, mapper.readTree(request(HttpMethod.GET, path + "/departments", null, null, token).getBody()).path("total").asInt());
-        // 浏览器种子只含本次随机账号和对象标识；会话、Token、Cookie 从不落盘。
-        String username = "qiankun-" + suffix;
-        String password = "Sample-" + UUID.randomUUID() + "@9!";
-        CreateUserRequest admin = new CreateUserRequest();
-        admin.setUsername(username);
-        admin.setPassword(password);
-        admin.setDisplayName("示例验收管理员");
-        Long user = userService.createUser(admin).getId();
-        users.add(user);
-        roles.assignRole(user, roles.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN).getId());
-        Long iamId = jdbc.queryForObject("SELECT id FROM iam_trusted_application WHERE application_code='iam'", Long.class);
-        String originalEntry = jdbc.queryForObject("SELECT entry FROM iam_trusted_application_portal WHERE application_id=?", String.class, iamId);
-        Path seeds = Files.createTempFile("iam-qiankun-seeds-", ".json");
-        try {
-            jdbc.update("UPDATE iam_trusted_application_portal SET entry='/app/iam/index.html' WHERE application_id=?", iamId);
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("username", username);
-            data.put("password", password);
-            data.put("roleId", bindings.findById(openRoleId).get().getRoleId());
-            data.put("roleCode", roles.getById(bindings.findById(openRoleId).get().getRoleId()).getCode());
-            data.put("memberSubjectId", memberEntity.getSubjectId());
-            data.put("memberUsername", memberEntity.getUsername());
-            data.put("memberPassword", memberPassword);
-            data.put("openRoleId", openRoleId);
-            data.put("applicationId", applicationId);
-            data.put("rootDepartmentId", root);
-            data.put("childDepartmentId", child);
-            data.put("outsideDepartmentId", outside);
-            mapper.writeValue(seeds.toFile(), data);
-            int port = ((WebServerApplicationContext) context).getWebServer().getPort();
-            // 本机默认执行策略禁止直接运行 ps1；Bypass 仅作用于这一次子进程，不改系统策略。
-            Process browser = new ProcessBuilder(required("iam.qiankun.shell"), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-                    required("iam.qiankun.script"), "-IamPort", Integer.toString(port), "-SeedFile", seeds.toString())
-                    .inheritIO().start();
-            try {
-                assertTrue(browser.waitFor(8, TimeUnit.MINUTES), "真实 qiankun 验收超时");
-                assertEquals(0, browser.exitValue(), "真实 qiankun 验收必须全部通过");
-            } finally {
-                if (browser.isAlive()) {
-                    browser.destroy();
-                    browser.waitFor(15, TimeUnit.SECONDS);
-                }
-            }
-        } finally {
-            Files.deleteIfExists(seeds);
-            jdbc.update("UPDATE iam_trusted_application_portal SET entry=? WHERE application_id=?", originalEntry, iamId);
-        }
         assertEquals(200, request(HttpMethod.GET, path, null, null, token).getStatusCodeValue());
         AKSK.revoke(token);
         assertEquals(401, request(HttpMethod.GET, path, null, null, token).getStatusCodeValue(), "必须实时感知真实撤销");
-        log.info("正式 AKP 回源、三权拒绝、版本冲突及生产 qiankun 组合验收通过。");
+        log.info("正式 AKP 回源、三权拒绝、版本冲突纯后台组合验收通过。");
     }
 
     private Long department(Long parent, String name) {

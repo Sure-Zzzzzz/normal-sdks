@@ -1,7 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service.portal;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
-import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleMenuTreeNode;
@@ -51,8 +50,11 @@ public class IamPortalApplicationService {
     private final IamPortalMenuTreeService portalMenuTreeService;
 
     /**
-     * 侧边栏：当前用户被授权（admitted=1 且状态有效）、启用 Portal 集成的应用 + 菜单；
-     * 平台管理员（挂内置 iam_admin）特权全量可达，不按授权行过滤。
+     * 侧边栏：当前用户被授权（admitted=1 且状态有效）、启用 Portal 集成的应用 + 菜单。
+     *
+     * <p>特权域=内置应用：平台管理员对内置应用特权全量可达（不按授权行过滤），
+     * 对非内置（业务）应用与普通用户同权——一律要求真实授权行
+     * （2026-09-30《角色边界定案》，1.3.1 落地准入门，1.3.5 补齐页面解析收口）。</p>
      *
      * @param userId 当前登录用户ID
      * @return 可访问应用列表（菜单 route 已拼成完整路径）
@@ -133,6 +135,64 @@ public class IamPortalApplicationService {
                 .build();
     }
 
+    /**
+     * 页面准入应用码清单（openapi {@code /iam/api/users/{subjectId}/page-admitted-applications} 数据源）。
+     *
+     * <p>口径：准入门放行（授权行 admitted 有效，或平台管理员对内置应用特权直通）
+     * ∧ {@link PagePermissionSource} 取值非空 ∧ 应用启用；<b>不含 Portal 集成启用维度</b>——
+     * 未挂门户壳但已注册且有页面准入的应用同样在列。与门户可达（另含 Portal 集成启用、
+     * 菜单树非空裁剪）是两个口径，差异场景对照见 DESIGN.1.3.5 §10.1 D5。清单顺序未定义，
+     * 消费方不得依赖。</p>
+     *
+     * @param userId 用户ID
+     * @return 有页面准入的应用编码列表
+     */
+    public List<String> listPageAdmittedApplicationCodes(Long userId) {
+        if (userId == null) {
+            return new ArrayList<>();
+        }
+        boolean platformAdmin = platformAdminPrivilegeSupport.isPlatformAdmin(userId);
+        Map<Long, IamApplicationAuthorizationEntity> authorizations = applicationAuthorizationRepository
+                .findByUserId(userId).stream().filter(this::isActiveAndAdmitted)
+                .collect(Collectors.toMap(IamApplicationAuthorizationEntity::getApplicationId, item -> item));
+        List<IamTrustedApplicationEntity> applications = trustedApplicationRepository.findAll().stream()
+                .filter(app -> app.getStatus() != null
+                        && SimpleIamServerConstant.STATUS_ACTIVE == app.getStatus().intValue())
+                .collect(Collectors.toList());
+        // manifest 批量读取仅服务特权直通（内置应用）取值；非特权路径按授权行投影判定
+        boolean anyPrivilegedApp = platformAdmin && applications.stream()
+                .anyMatch(app -> builtInResolver.isBuiltIn(app));
+        Map<Long, IamApplicationPermissionManifestEntity> manifests = anyPrivilegedApp
+                ? manifestRepository.findByApplicationIdIn(applications.stream()
+                        .map(IamTrustedApplicationEntity::getId).collect(Collectors.toList())).stream()
+                .collect(Collectors.toMap(IamApplicationPermissionManifestEntity::getApplicationId, item -> item))
+                : Collections.<Long, IamApplicationPermissionManifestEntity>emptyMap();
+        List<String> applicationCodes = new ArrayList<>();
+        for (IamTrustedApplicationEntity app : applications) {
+            IamApplicationAuthorizationEntity authorization = authorizations.get(app.getId());
+            boolean privilegedApp = platformAdmin && builtInResolver.isBuiltIn(app);
+            if (!privilegedApp && authorization == null) {
+                continue;
+            }
+            Set<String> pagePermissions;
+            try {
+                pagePermissions = PagePermissionSource.resolve(platformAdmin, builtInResolver.isBuiltIn(app),
+                                manifests.get(app.getId()) != null, authorization != null)
+                        .read(authorization, manifests.get(app.getId()));
+            } catch (RuntimeException exception) {
+                log.debug("页面准入清单解析失败：applicationId={}, exceptionType={}", app.getId(),
+                        exception.getClass().getSimpleName());
+                continue;
+            }
+            if (!pagePermissions.isEmpty()) {
+                applicationCodes.add(app.getApplicationCode());
+            }
+        }
+        log.debug("页面准入应用码清单：userId={}, platformAdmin={}, 命中 {} 个应用", userId, platformAdmin,
+                applicationCodes.size());
+        return applicationCodes;
+    }
+
     private boolean isActiveAndAdmitted(IamApplicationAuthorizationEntity authorization) {
         return authorization.getStatus() != null
                 && SimpleIamServerConstant.STATUS_ACTIVE == authorization.getStatus().intValue()
@@ -143,15 +203,12 @@ public class IamPortalApplicationService {
     private Set<String> resolvePagePermissions(Long applicationId, IamApplicationAuthorizationEntity authorization,
                                                IamApplicationPermissionManifestEntity manifest, boolean platformAdmin) {
         try {
-            // 特权全量菜单仅对内置应用（manifest 存在即特权直通应用）；非内置应用走授权行裁剪。
-            // 内置但无清单的特权应用（manifest 缺失）也落入授权行分支（可能为空集），与 1.3.0 一致
-            if (!platformAdmin || manifest == null) {
-                return authorization == null ? Collections.emptySet() : new HashSet<>(
-                        IamApplicationAuthorizationJsonCodec.readStringList(
-                                authorization.getPagePermissionsJson(), "pagePermissions"));
-            }
-            return new HashSet<>(
-                    IamApplicationAuthorizationJsonCodec.readStringList(manifest.getPagePermissionsJson(), "pagePermissions"));
+            PagePermissionSource source = PagePermissionSource.resolve(platformAdmin,
+                    builtInResolver.isBuiltIn(applicationId), manifest != null, authorization != null);
+            Set<String> pagePermissions = source.read(authorization, manifest);
+            log.debug("Portal 页面权限策略：applicationId={}, source={}, pagePermissions={}",
+                    applicationId, source, pagePermissions.size());
+            return pagePermissions;
         } catch (RuntimeException exception) {
             log.debug("Portal 菜单页面权限解析失败：applicationId={}, exceptionType={}", applicationId,
                     exception.getClass().getSimpleName());

@@ -4,6 +4,13 @@
 
 ## 版本对应关系
 
+### 1.3.5 服务端契约增量
+
+`simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.5`；其他契约不因 Server 版本变化统一改号。增量两件，均为向后兼容新增：
+
+- `GET /iam/api/users/{subjectId}/page-admitted-applications`：按主体返回有页面准入（PAGE 投影非空）的启用应用编码裸数组。仅供服务间拉取（如反馈服务 hint 交集过滤）；最小授权=AKP 勾 `iam:portal:api` 单码，无 DATA 面，勿为此授 `iam:user:api`。清单顺序未定义；不含 Portal 集成启用维度（未挂门户壳但已注册且有页面准入的应用同样在列，与门户侧边栏口径的两处分叉见 server DESIGN.1.3.5 §10.1）。
+- `UserRestResponse` 新增 `subjectId` 字段（列表与详情均回传）：对外公开主体标识，消费方以它做关联绑定，不依赖内部数字 id。旧消费方忽略新键，无破坏。
+
 ### 1.3.2 服务端契约增量
 
 `simple-iam-admin-web.openapi.yaml` 与 `simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.2`；其他契约不因 Server 版本变化统一改号。该增量不改变既有人员身份基座和普通角色调用方式，也不构成任何新前端版本已联调的声明。
@@ -43,7 +50,7 @@
 | `openapi/simple-iam-admin-web.openapi.yaml` | `simple-iam-admin-web` 调用的 `/iam/admin/**` 管理 API 契约；1.3.2 包含受委托角色摘要与共同条件写 |
 | `openapi/simple-iam-owner-authorization.openapi.yaml` | 仅受控协作服务以固定内部 reader SERVICE 调用的所属人授权投影读取契约；不向浏览器、Portal 或普通 OAuth Client 暴露 |
 | `openapi/simple-iam-resource-token-verification.openapi.yaml` | `simple-iam-resource-server-starter` 调用的受控 IAM Access Token 验证 API 契约 |
-| `openapi/simple-iam-open-api.openapi.yaml` | 外部业务系统持 AKSK 凭证调用的开放 API 契约（`/iam/api/**`），含组织与人员同步，以及 1.3.2 服务主体受委托角色治理和只读事实；含 AKSK 侧接入准备 |
+| `openapi/simple-iam-open-api.openapi.yaml` | 外部业务系统持 AKSK 凭证调用的开放 API 契约（`/iam/api/**`），含组织与人员同步、1.3.2 服务主体受委托角色治理和只读事实、1.3.5 页面准入查询与 users 投影 `subjectId`；含 AKSK 侧接入准备 |
 
 ## 约束
 

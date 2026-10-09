@@ -17,6 +17,11 @@ public class UserRestResponse {
 
     private Long id;
 
+    /**
+     * 对外公开主体标识（路径参数与消费方关联键均用它，内部数字 id 不对外承诺稳定性）。
+     */
+    private String subjectId;
+
     private String username;
 
     private String displayName;
@@ -43,6 +48,7 @@ public class UserRestResponse {
     public static UserRestResponse from(IamUserEntity user, String departmentName, List<String> roles) {
         return new UserRestResponse(
                 user.getId(),
+                user.getSubjectId(),
                 user.getUsername(),
                 user.getDisplayName(),
                 user.getDepartmentId(),

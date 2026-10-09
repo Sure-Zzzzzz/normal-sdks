@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleApplication;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalAccessibleMenuTreeNode;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalApplicationOrderResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalIntegrationResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.trustedapplication.request.CreateTrustedApplicationClientRequest;
@@ -18,7 +19,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerExcepti
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationCleanupOperationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamPlatformAdminPrivilegeService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
@@ -82,6 +85,11 @@ class IamPortalApplicationServiceTest {
 
     @Autowired
     private IamUserService userService;
+    @Autowired
+    private IamTrustedApplicationRepository trustedApplicationRepository;
+
+    @Autowired
+    private IamPlatformAdminPrivilegeService platformAdminPrivilegeService;
 
     @Autowired
     private IamRoleService roleService;
@@ -464,6 +472,101 @@ class IamPortalApplicationServiceTest {
                 "删除全局首页应用必须同步清理单例引用");
 
         log.info("全局登录首页引用完整性断言完成");
+    }
+
+    @Test
+    @DisplayName("1.3.5 平台管理员对非内置应用按授权行裁剪页面：清单申报范围必须 ⊋ 授权行授予范围以分裂两分支")
+    void platformAdminNonBuiltInPagePermissionsFollowAuthorizationRow() {
+        // 分裂数据（§6 铁律）：清单申报两页，授权行只授一页——特权全量分支与授权行分支结果不同
+        putManifest(applicationIdA, java.util.Arrays.asList("page-x", "page-y"));
+        updateApplicationMenuTree(applicationIdA, java.util.Arrays.asList(
+                groupWithPage("group-x", "甲组", page("page-x-node", "页面X", "/x", "page-x")),
+                groupWithPage("group-y", "乙组", page("page-y-node", "页面Y", "/y", "page-y"))));
+        grantAdmitted(adminUserId, applicationIdA, Collections.singletonList("page-x"));
+        authorizationRepository.findByUserId(targetUserId)
+                .forEach(authorization -> authorizationRepository.delete(authorization));
+        grantAdmitted(targetUserId, applicationIdA, Collections.singletonList("page-x"));
+
+        List<String> adminLeafCodes = accessibleLeafCodes(findAccessibleApplication(adminUserId, applicationCodeA));
+        assertEquals(Collections.singletonList("page-x-node"), adminLeafCodes,
+                "平台管理员对非内置应用必须按授权行裁剪，不得膨胀为清单全量（page-y 不得出现）");
+        List<String> userLeafCodes = accessibleLeafCodes(findAccessibleApplication(targetUserId, applicationCodeA));
+        assertEquals(adminLeafCodes, userLeafCodes, "平台管理员与普通用户在非内置应用上同权同视图");
+
+        log.info("1.3.5 分裂数据断言完成：adminLeafCodes={}", adminLeafCodes);
+    }
+
+    @Test
+    @DisplayName("1.3.5 零页面权限的授权行使应用从门户消失（管理员不豁免）")
+    void zeroPagePermissionAuthorizationHidesApplicationForPlatformAdmin() {
+        putManifest(applicationIdA, java.util.Arrays.asList("page-x", "page-y"));
+        updateApplicationMenuTree(applicationIdA, java.util.Arrays.asList(
+                groupWithPage("group-x", "甲组", page("page-x-node", "页面X", "/x", "page-x")),
+                groupWithPage("group-y", "乙组", page("page-y-node", "页面Y", "/y", "page-y"))));
+        grantAdmitted(adminUserId, applicationIdA, Collections.<String>emptyList());
+
+        assertFalse(accessibleCodes(adminUserId).contains(applicationCodeA),
+                "零页面权限行：菜单树裁剪为空时应用不可见，平台管理员对非内置应用不豁免");
+
+        log.info("1.3.5 零权限行断言完成：adminCodes={}", accessibleCodes(adminUserId));
+    }
+
+    @Test
+    @DisplayName("1.3.5 特权兜底对非内置应用返回空上下文，对内置应用保留特权（introspect 侧防回归）")
+    void privilegedContextIsNullForNonBuiltInApplication() {
+        Instant issuedAt = Instant.now();
+        Instant expiresAt = issuedAt.plusSeconds(60L);
+        assertNull(platformAdminPrivilegeService.buildPrivilegedContext(adminUserId, applicationIdA, issuedAt, expiresAt),
+                "非内置应用不走平台特权（introspect 快照 1.3.1 语义，本版补直测钉住）");
+        Long iamApplicationId = trustedApplicationRepository.findByApplicationCode("iam")
+                .orElseThrow(() -> new AssertionError("内置应用 iam 必须存在")).getId();
+        assertNotNull(platformAdminPrivilegeService.buildPrivilegedContext(adminUserId, iamApplicationId, issuedAt, expiresAt),
+                "内置应用对平台管理员保留特权直通");
+
+        log.info("特权兜底分支直测完成：非内置 applicationId={} 返回空，内置 iam={}", applicationIdA, iamApplicationId);
+    }
+
+    @Test
+    @DisplayName("1.3.5 页面准入口径与门户口径分叉：未挂 Portal 集成但有投影的应用进清单、不进侧边栏")
+    void pageAdmissionCodesSplitFromPortalReachability() throws InterruptedException {
+        // 应用 C：注册但未挂 Portal 集成（portal=null），manifest 申报一页
+        String codeC = "page-adm-" + suffix;
+        CreateTrustedApplicationClientRequest client = new CreateTrustedApplicationClientRequest();
+        client.setClientId(codeC + "-web");
+        client.setClientName(codeC + "-web");
+        client.setClientType("PUBLIC");
+        client.setRequireConsent(false);
+        client.setRedirectUris(Collections.singletonList("https://" + codeC + ".example.test/callback"));
+        client.setScopes(java.util.Arrays.asList("openid", "profile"));
+        client.setGrantTypes(Collections.singletonList(AuthorizationGrantType.AUTHORIZATION_CODE.getValue()));
+        client.setAuthenticationMethods(Collections.singletonList("none"));
+        CreateTrustedApplicationRequest request = new CreateTrustedApplicationRequest();
+        request.setApplicationCode(codeC);
+        request.setApplicationName("Page Admission Test " + codeC);
+        request.setInitialClient(client);
+        Long applicationIdC = trustedApplicationService.createApplication(request).getApplication().getId();
+        try {
+            putManifest(applicationIdC, Collections.singletonList("page-c"));
+            grantAdmitted(targetUserId, applicationIdC, Collections.singletonList("page-c"));
+
+            List<String> codes = portalApplicationService.listPageAdmittedApplicationCodes(targetUserId);
+            assertTrue(codes.contains(codeC), "未挂 Portal 集成但有页面准入的应用必须在清单（页面准入口径）");
+            assertFalse(accessibleCodes(targetUserId).contains(codeC), "同一应用不进门户侧边栏（门户口径，分叉实证）");
+            assertFalse(codes.contains(applicationCodeA), "prepare 中零页面权限的授权行不得进清单（投影空）");
+
+            log.info("页面准入/门户口径分叉断言完成：codes={}", codes);
+        } finally {
+            authorizationRepository.findByUserId(targetUserId)
+                    .forEach(authorization -> authorizationRepository.delete(authorization));
+            deleteAndAwaitCompletion(applicationIdC);
+        }
+    }
+
+    private List<String> accessibleLeafCodes(PortalAccessibleApplication application) {
+        return application.getMenuTree().stream()
+                .flatMap(node -> node.getChildren().stream())
+                .map(PortalAccessibleMenuTreeNode::getCode)
+                .collect(Collectors.toList());
     }
 
     private void deleteAndAwaitCompletion(Long applicationId) throws InterruptedException {

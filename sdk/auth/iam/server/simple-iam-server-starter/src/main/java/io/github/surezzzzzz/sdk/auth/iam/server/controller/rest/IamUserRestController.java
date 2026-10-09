@@ -14,6 +14,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.UserRestRespon
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.IamUserDataAccessPlanHelper;
 import io.github.surezzzzzz.sdk.auth.resource.core.model.VerifiedResourceContext;
@@ -54,6 +55,7 @@ public class IamUserRestController {
     private final IamUserService userService;
     private final IamRoleService roleService;
     private final IamDepartmentService departmentService;
+    private final IamPortalApplicationService portalApplicationService;
 
     /**
      * 分页查询用户（status / departmentId / keyword 过滤，DATA 部门范围求交）。
@@ -104,6 +106,22 @@ public class IamUserRestController {
         IamUserEntity user = userService.getBySubjectId(subjectId);
         requireWithinScope(plan, user);
         return ResponseEntity.ok(roleCodes(user.getId()));
+    }
+
+    /**
+     * 用户有页面准入（PAGE 投影非空）的启用应用编码清单。
+     *
+     * <p>供服务间消费方（如反馈服务 hint adaptor）按 subjectId 拉取提交下拉交集过滤所需清单；
+     * 返回为应用码聚合而非用户档案，无 DATA 面区别于 users 族其余端点。清单顺序未定义。</p>
+     */
+    @GetMapping("/{subjectId}/page-admitted-applications")
+    @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API)
+    public ResponseEntity<List<String>> listPageAdmittedApplications(@PathVariable String subjectId) {
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        List<String> applicationCodes = portalApplicationService.listPageAdmittedApplicationCodes(user.getId());
+        log.debug("开放 API 页面准入清单查询：operator={}, subjectId={}, 命中 {} 个应用",
+                resolveOperator(), subjectId, applicationCodes.size());
+        return ResponseEntity.ok(applicationCodes);
     }
 
     /**
