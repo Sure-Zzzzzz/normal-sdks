@@ -1,0 +1,31 @@
+def jakartaCloudVersion = rootProject.findProperty('jakartaCloudVersion') ?: '2024.0.0'
+// 由 spring-cloud-dependencies:2024.0.0 POM 的 spring-cloud-openfeign.version 定义。
+def jakartaOpenFeignVersion = rootProject.findProperty('jakartaOpenFeignVersion') ?: '4.2.0'
+
+dependencyManagement {
+    imports {
+        // 仅作用于本 jakarta 模块，不继承根工程的 legacy Cloud 约束。
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${jakartaCloudVersion}"
+    }
+}
+
+configurations.configureEach {
+    // 根工程的 legacy 3.1.8 约束会覆盖模块 BOM，须在 jakarta 模块局部纠正。
+    resolutionStrategy.force "org.springframework.cloud:spring-cloud-openfeign:${jakartaOpenFeignVersion}"
+}
+
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-aksk-openapi-client-core:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    // OpenFeign 由宿主自备（compileOnly，未使用 Feign 的应用不被强带入 Spring Cloud）
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // E2E：底座令牌链宿主件（Redis 路由/AOP/连接池）
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+}

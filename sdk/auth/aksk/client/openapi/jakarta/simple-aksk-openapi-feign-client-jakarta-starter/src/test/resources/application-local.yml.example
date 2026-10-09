@@ -1,0 +1,12 @@
+# E2E 本地凭据模板：复制为 application-local.yml（gitignored）并填入管理 AKP 凭据；
+# 其余参数（server-url/Redis/开关）见受管 application.yml。
+# 管理 AKP 需持全部管理码 + 三资源 DATA grant + 已准入，预置步骤见 LOCAL_TEST_COMMANDS.md。
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              client-id: AKPxxxxxxxxxxxxxxxxxxxx
+              client-secret: SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
