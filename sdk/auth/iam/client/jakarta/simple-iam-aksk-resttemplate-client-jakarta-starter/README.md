@@ -4,13 +4,13 @@ RestTemplate 装配的 IAM openapi client（Spring Boot 3.x / Jakarta 宿主，A
 直接引用 aksk 底座 jakarta 线 `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0`，
 在底座 `akskClientRestTemplate`（hc5）之上装配 core 三接口的默认实现——
 `IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient`。
-契约语义（三接口 29 方法/双分页/If-Match/错误透传）与 SB2 形态完全同标。
+契约语义（三接口 30 方法/双分页/If-Match/错误透传）与 SB2 形态完全同标。
 
 ## 核心能力
 
-### 1. 三接口 29 方法全覆盖
+### 1. 三接口 30 方法全覆盖
 
-- **IamUserClient**（11）：用户分页/详情/角色/启停/删除/重置密码/挂摘角色
+- **IamUserClient**（12）：用户分页/详情/角色/启停/删除/重置密码/挂摘角色/页面准入应用清单（单码 `iam:portal:api`，无 DATA 面）
 - **IamDepartmentClient**（5）：部门列表/详情/增改删
 - **IamOpenRoleClient**（13）：受委托角色全生命周期，含 If-Match 乐观并发写
 
@@ -33,7 +33,7 @@ users/departments 族返回 `IamSpringPage`（**页码 0 起**）；open-roles �
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.0` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族（Java 8 字节码，双线共用） |
+| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族（Java 8 字节码，双线共用） |
 | `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | aksk 底座 jakarta 线：akskClientRestTemplate（hc5）+ 令牌链 |
 | Spring Boot 3 Web / HttpClient 5 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
@@ -44,7 +44,7 @@ users/departments 族返回 `IamSpringPage`（**页码 0 起**）；open-roles �
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-jakarta-starter:1.0.1'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -113,7 +113,7 @@ If-Match 乐观并发用法与 SB2 形态一致（revision 取自响应模型，
 | Spring Boot | 2.x（建议 2.7.x） | 3.x（Java 17+） |
 | 连接池 | Apache HttpClient 4 | Apache HttpClient 5 |
 | 自动配置注册 | `spring.factories` | `AutoConfiguration.imports` 单入口 |
-| 契约/接口/模型 | 同一份 `simple-iam-client-core:1.0.0` | 同左 |
+| 契约/接口/模型 | 同一份 `simple-iam-client-core:1.0.1` | 同左 |
 
 ## 安全边界
 
@@ -122,7 +122,7 @@ If-Match 乐观并发用法与 SB2 形态一致（revision 取自响应模型，
 
 ## 测试覆盖
 
-- 契约测试 4：29 方法逐端点断言（同 SB2 契约集，断言随 Spring 6 API 适配）
+- 契约测试 4：30 方法逐端点断言（同 SB2 契约集，断言随 Spring 6 API 适配）
 - 装配测试 4：默认关/正常装配三客户端/缺底座模板响亮失败/非法 origin 拒启
 
 ## 兼容性

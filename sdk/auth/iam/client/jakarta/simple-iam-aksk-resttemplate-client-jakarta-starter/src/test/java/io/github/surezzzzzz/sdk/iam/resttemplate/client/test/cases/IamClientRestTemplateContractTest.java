@@ -28,7 +28,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
 /**
- * 三客户端契约测试：MockRestServiceServer 桩底座 RestTemplate，29 方法断言 URL/方法/请求体/响应解析。
+ * 三客户端契约测试：MockRestServiceServer 桩底座 RestTemplate，30 方法断言 URL/方法/请求体/响应解析。
  *
  * @author surezzzzzz
  */
@@ -51,7 +51,7 @@ class IamClientRestTemplateContractTest {
     }
 
     private static String userJson() {
-        return "{\"id\":3,\"username\":\"e2e-user\",\"displayName\":\"成员\",\"departmentId\":1,"
+        return "{\"id\":3,\"subjectId\":\"sid-e2e-1\",\"username\":\"e2e-user\",\"displayName\":\"成员\",\"departmentId\":1,"
                 + "\"departmentName\":\"root\",\"status\":1,\"email\":null,\"phone\":\"+8613800000001\","
                 + "\"roles\":[\"iam_user\"]}";
     }
@@ -104,7 +104,17 @@ class IamClientRestTemplateContractTest {
         server.expect(requestTo(API + "/users/sub-1"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess(userJson(), MediaType.APPLICATION_JSON));
-        assertEquals("e2e-user", users.getUser("sub-1").getUsername(), "用户详情");
+        io.github.surezzzzzz.sdk.iam.client.model.IamUser detail = users.getUser("sub-1");
+        assertEquals("e2e-user", detail.getUsername(), "用户详情");
+        assertEquals("sid-e2e-1", detail.getSubjectId(), "用户详情 subjectId 回传解析");
+        server.verify();
+        server.reset();
+
+        server.expect(requestTo(API + "/users/sub-1/page-admitted-applications"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[\"iam\",\"kms\"]", MediaType.APPLICATION_JSON));
+        assertEquals(Arrays.asList("iam", "kms"), users.listPageAdmittedApplications("sub-1"),
+                "页面准入应用编码裸列表");
         server.verify();
         server.reset();
 

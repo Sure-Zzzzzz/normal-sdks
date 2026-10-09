@@ -53,6 +53,7 @@ public class IamUserRestTemplateClient implements IamUserClient {
     private static IamUser user(JsonNode node) {
         return IamUser.builder()
                 .id(IamClientHttpSupport.optionalLong(node, "id"))
+                .subjectId(IamClientHttpSupport.optionalText(node, "subjectId"))
                 .username(IamClientHttpSupport.text(node, "username"))
                 .displayName(IamClientHttpSupport.optionalText(node, "displayName"))
                 .departmentId(IamClientHttpSupport.optionalLong(node, "departmentId"))
@@ -107,6 +108,23 @@ public class IamUserRestTemplateClient implements IamUserClient {
             roles.add(item.textValue());
         }
         return roles;
+    }
+
+    @Override
+    public List<String> listPageAdmittedApplications(String subjectId) {
+        // wire 契约为字符串数组（应用编码裸列表），非对象数组；与 getUserRoles 同款直读形态
+        JsonNode node = http.get(SimpleIamClientConstant.RESOURCE_USERS, subjectId, "page-admitted-applications");
+        if (!node.isArray()) {
+            throw new io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException();
+        }
+        List<String> applicationCodes = new ArrayList<String>();
+        for (JsonNode item : node) {
+            if (!item.isTextual()) {
+                throw new io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException();
+            }
+            applicationCodes.add(item.textValue());
+        }
+        return applicationCodes;
     }
 
     @Override
