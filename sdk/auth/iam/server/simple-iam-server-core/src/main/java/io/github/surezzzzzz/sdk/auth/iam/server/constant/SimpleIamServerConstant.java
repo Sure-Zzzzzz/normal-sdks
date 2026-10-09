@@ -606,6 +606,10 @@ public final class SimpleIamServerConstant {
      */
     public static final String BUILT_IN_PERMISSION_USER_API = "iam:user:api";
     /**
+     * 内置权限编码：IAM 门户准入查询接口（按 subjectId 查询页面准入应用清单，服务间纯读）
+     */
+    public static final String BUILT_IN_PERMISSION_PORTAL_API = "iam:portal:api";
+    /**
      * 内置权限编码：IAM 角色管理接口
      */
     public static final String BUILT_IN_PERMISSION_ROLE_API = "iam:role:api";

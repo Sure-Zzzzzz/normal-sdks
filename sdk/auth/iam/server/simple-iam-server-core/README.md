@@ -2,7 +2,9 @@
 
 IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件、错误码、常量和异常，不含任何技术设施实现。
 
-当前版本为 `1.3.2`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.3`。版本沿革见各 `CHANGELOG.*.md`。
+
+`1.3.3` 新增内置权限编码常量 `iam:portal:api`（页面准入查询，端点随 simple-iam-server-starter 1.3.5 发布）；既有常量、身份协议、公开方法、异常类型、事件与枚举不变。
 
 `1.3.2` 在三个既有常量类中补齐受委托角色契约：API（接口操作权限）、DATA（数据范围权限）、固定执行上限、标识格式、内部错误码与安全文案。身份协议、既有公开方法、异常类型、事件及枚举不变；本模块不实现角色治理接口或商业授权业务。
 
@@ -14,7 +16,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.2"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.3"
 }
 ```
 
