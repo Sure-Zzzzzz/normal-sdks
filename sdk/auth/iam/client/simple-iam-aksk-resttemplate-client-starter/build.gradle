@@ -1,6 +1,6 @@
 dependencies {
     // 契约层：接口/模型/常量/异常族（公开 API 含 core 类型，收 api）
-    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.1'
 
     // aksk 底座：提供 akskClientRestTemplate（认证+连接池+超时），本模块代码不 import 底座类型
     implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
