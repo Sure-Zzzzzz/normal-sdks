@@ -744,6 +744,35 @@ sdk/{domain}/{module}/
 - `X-CSRF-TOKEN` 仅属于浏览器会话面，机器面禁用。
 - 统一门户的子应用请求桥仅透传 `If-Match` 与 `If-None-Match`；新增可透传头必须先修订本节。
 
+### 3.7 适配件（adaptor）规范
+
+适配件=对接外部系统或兄弟线的可选扩展件，由宿主按需引入。已有实例：
+`simple-iam-aksk-collaboration-starter`（实现型）、`smart-redis-limiter-management-iam-directory-starter`（装饰型）。
+
+#### SPI 归属原则
+
+跨模块扩展点（SPI 接口与配套模型）必须住在 core 契约层；**接口长在 starter 实现件里是结构性错误**——扩展件会被迫依赖整个实现件。需要对方类型而它在 starter 里时，正确动作是推动类型下沉 core（发 core 新版本），而不是用 `compileOnly` 引实现件糊过去。
+
+#### 装配纪律：引用即装配
+
+- **无开关**：不设 enable 配置项，引依赖即生效、不引即不用；实现替换即替换依赖，不提供两个实现并存的让位语义（禁 `@ConditionalOnMissingBean` 防御）。
+- **自定义注解 + ComponentScan 三件套加载**（`basePackageClasses` + `includeFilters` + `useDefaultFilters = false`），与普通 starter 同构；特殊 Bean（如 BeanPostProcessor）同样是扫描件，不写 `@Bean` 手工注册。
+- **缺件响亮失败**：外部客户端 Bean 缺失时启动即败（构造注入直接暴露缺失），不静默降级、不以空数据伪装可用。
+- **错误透传**：上游调用失败原样上抛，不包装、不吞成空结果；字段缺失的条目跳过并告警，不以替代值冒充。
+
+#### 依赖纪律：只依赖契约，不依赖实现件
+
+对被适配线的依赖只能是它的 core/契约件（`api`）；**不得引用对方 starter，`compileOnly` 也不行**——`compileOnly` 只是不传递，编译期仍然拖入实现类型并造成版本耦合。适配件自身需要的 Spring 基础件用 `compileOnly`（boot-autoconfigure、javax.annotation-api 等），随宿主运行期提供。
+
+#### 两形态与选择判据
+
+| 形态 | 机制 | 适用场景 | 实例 |
+| --- | --- | --- | --- |
+| 实现型 | 扫描件直接实现 SPI 接口 | 全权实现扩展点，行为不依赖既有实现 | IAM-AKSK 协作适配件（owner 授权投影） |
+| 装饰型 | BeanPostProcessor 包装容器内既有 SPI Bean，只拦截目标维度、其余转发原实现 | 只增强某维行为，其余保留既有实现（配置式/宿主自有） | IAM 用户目录适配件（USER 维度走 IAM） |
+
+判据：替换全部行为=实现型；只改一个维度且服务清单等部署事实仍由既有实现回答=装饰型。装饰型的结构性收益：不关心 Bean 由谁注册，让位与装配时序问题整类消掉。
+
 ---
 
 ## 4. 配置类规范
