@@ -1,6 +1,6 @@
 # Simple Data Permission Spring MVC Jakarta Starter
 
-> 当前版本 **1.0.0**（jakarta 线首发）。Spring Boot 2.x 业务请使用 `simple-data-permission-spring-mvc-starter`（javax 线）。
+> **1.1.0**：与 SB2 线 1.1.0 同构——参数解析器双认 core/legacy 注解、拒绝异常与范围校验器改为委托 core 的薄壳（FQCN 与 403 语义不变，403 兜底维持 @ResponseStatus 路径）；core 坐标升至 1.2.0。Spring Boot 2.x 业务请使用 `simple-data-permission-spring-mvc-starter`（javax 线）。
 
 为已接入 `simple-resource-server-jakarta-starter` 的 Spring MVC 资源服务提供 DATA 访问计划评估与安全传递。它从唯一的 `VerifiedResourceContext` 读取 IAM、AKSK 或其他 Provider 已验证的 `DataGrantDocument`，不解析令牌、不依赖 IAM/AKSK 实现，也不自动生成 SQL、ES、JPA 或 MyBatis 条件。
 
@@ -8,21 +8,27 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-jakarta-starter:1.1.0'
 }
 ```
 
-该 Starter 依赖 `simple-data-permission-core:1.1.0` 与 `simple-resource-server-core:1.1.1`。业务服务还需接入 `simple-resource-server-jakarta-starter:1.0.0`，完成 Bearer / Provider 认证、应用准入和 API 权限校验。
+该 Starter 依赖 `simple-data-permission-core:1.2.0` 与 `simple-resource-server-core:1.1.1`。业务服务还需接入 `simple-resource-server-jakarta-starter:1.0.0`，完成 Bearer / Provider 认证、应用准入和 API 权限校验。
 
-Controller 方法显式声明 DATA 资源动作，并注入当前请求已评估的访问计划：
+Controller 方法显式声明 DATA 资源动作，并注入当前请求已评估的访问计划（1.1.0 起注解 import core 包——与 SB2 线同一组契约类型，签名只依赖 core）：
 
 ```java
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
+
 @GetMapping("/api/orders")
 @DataPermissionOperation(resource = "order", action = "read")
 public Page<OrderView> list(@CurrentDataAccessPlan DataAccessPlan plan, OrderQuery query) {
     return orderService.list(query, plan);
 }
 ```
+
+存量代码里的 `spring.mvc.annotation.CurrentDataAccessPlan` 旧 import 无需改动（解析器双认，行为等价）；异常捕获与 `@ExceptionHandler` 面向 core 的 `core.exception.DataPermissionAccessDeniedException`（薄壳是其子类，两种写法都命中；无人处理时 403 与 1.0.0 一致）。
 
 未声明 `@DataPermissionOperation` 的接口不会被本 Starter 收紧。已声明但没有已验证 DATA 文档、未命中授权项或当前上下文无效时，接口返回 403。
 
@@ -76,6 +82,12 @@ API 权限只基于路径和精确 HTTP method（或 `@RequireApiPermission`）�
 - `@CurrentDataAccessPlan` 只能标注 `DataAccessPlan` 参数，且只从本请求内部评估结果注入，不能通过请求参数或请求体伪造。
 
 ## 版本历史
+
+### 1.1.0
+
+- SPI 契约归位兼容层（零破坏，与 SB2 线 1.1.0 同构）：双认 core/legacy 注解、异常与校验器委托 core 薄壳、403 兜底维持 @ResponseStatus；core 坐标升至 1.2.0。
+
+详见 [CHANGELOG.1.1.0.md](CHANGELOG.1.1.0.md)。
 
 ### 1.0.0
 

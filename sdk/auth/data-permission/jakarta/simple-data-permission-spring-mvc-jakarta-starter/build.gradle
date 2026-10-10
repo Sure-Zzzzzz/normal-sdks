@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.2.0'
     api 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
 
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
