@@ -27,7 +27,10 @@ public final class CurrentDataAccessPlanArgumentResolver implements HandlerMetho
      */
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
-        return parameter.hasParameterAnnotation(CurrentDataAccessPlan.class);
+        // 1.1.0 起双认：core 契约注解（新代码）与 legacy 本包注解（存量签名）等价注入
+        return parameter.hasParameterAnnotation(CurrentDataAccessPlan.class)
+                || parameter.hasParameterAnnotation(
+                io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan.class);
     }
 
     /**

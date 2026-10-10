@@ -184,6 +184,54 @@ class DataPermissionSpringMvcAutoConfigurationTest {
         log.info("DATA缺文档失败关闭，且严格位于API权限之后");
     }
 
+    /**
+     * 验证 core 契约注解（1.2.0 起）与 legacy 注解等价注入与拒绝（resolver 双认）。
+     *
+     * @throws Exception MockMvc调用异常
+     */
+    @Test
+    void shouldResolveCoreAnnotationSameAsLegacy() throws Exception {
+        mockMvc.perform(get("/api/orders-core").queryParam("tenantId", "tenant-a")
+                        .header(AUTHORIZATION_HEADER, bearer("iam")))
+                .andExpect(status().isOk())
+                .andExpect(content().string("tenant-a"));
+        mockMvc.perform(get("/api/orders").queryParam("tenantId", "tenant-a")
+                        .header(AUTHORIZATION_HEADER, bearer("iam")))
+                .andExpect(status().isOk())
+                .andExpect(content().string("tenant-a"));
+        log.info("core 契约注解与 legacy 注解等价注入（双认生效）");
+    }
+
+    /**
+     * 验证无人显式处理时薄壳经 @ResponseStatus 兜底 403（与 1.0.1 行为一致；一期不注册 advice，
+     * 排序与宿主 advice 的竞态风险见 DESIGN.1.2.0 三期注记）。
+     *
+     * @throws Exception MockMvc调用异常
+     */
+    @Test
+    void shouldFallBackToResponseStatus403() throws Exception {
+        mockMvc.perform(get("/api/orders-core").queryParam("tenantId", "tenant-b")
+                        .header(AUTHORIZATION_HEADER, bearer("iam")))
+                .andExpect(status().isForbidden());
+        log.info("无本地 handler 时 @ResponseStatus 兜底 403 与 1.0.1 一致");
+    }
+
+    /**
+     * 验证薄壳异常是 core 契约异常子类（存量 catch 与 @ExceptionHandler(core) 均可命中）。
+     */
+    @Test
+    void shellExceptionIsInstanceOfCoreContract() {
+        io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException shell =
+                new io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException(
+                        "数据范围不足");
+        org.junit.jupiter.api.Assertions.assertTrue(
+                shell instanceof io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException,
+                "MVC 薄壳必须继承 core 契约异常（存量 catch 与 @ExceptionHandler(core) 均命中）");
+        org.junit.jupiter.api.Assertions.assertEquals("BIZ_006", shell.getErrorCode(),
+                "壳透传 core 错误码");
+        log.info("薄壳 instanceof core 契约并透传错误码");
+    }
+
     private String bearer(String sourceId) {
         String header = "{\"alg\":\"dir\",\"enc\":\"A256GCM\",\"kid\":\"" + sourceId + "/key-a\"}";
         String encodedHeader = Base64.getUrlEncoder().withoutPadding().encodeToString(header.getBytes(StandardCharsets.UTF_8));
@@ -301,6 +349,24 @@ class DataPermissionSpringMvcAutoConfigurationTest {
         @RequireApiPermission("order:read")
         @DataPermissionOperation(resource = "order", action = "read")
         public String orders(@CurrentDataAccessPlan DataAccessPlan plan, @RequestParam String tenantId) {
+            DataAccessPlanRestrictionVerifier.requireTargetAllowed(plan,
+                    Collections.singletonMap("tenantId", tenantId));
+            return tenantId;
+        }
+
+        /**
+         * 查询指定租户订单（core 契约注解形态，1.1.0 双认回归）。
+         *
+         * @param plan     当前数据访问计划（core 注解注入）
+         * @param tenantId 请求租户标识
+         * @return 租户标识
+         */
+        @GetMapping("/api/orders-core")
+        @RequireApiPermission("order:read")
+        @DataPermissionOperation(resource = "order", action = "read")
+        public String ordersCore(
+                @io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan DataAccessPlan plan,
+                @RequestParam String tenantId) {
             DataAccessPlanRestrictionVerifier.requireTargetAllowed(plan,
                     Collections.singletonMap("tenantId", tenantId));
             return tenantId;
