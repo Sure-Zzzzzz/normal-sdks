@@ -27,6 +27,10 @@ public final class ErrorCode {
      * 授权文档无效。
      */
     public static final String INVALID_DOCUMENT = "BIZ_005";
+    /**
+     * 数据权限拒绝（范围不足）。
+     */
+    public static final String DATA_ACCESS_DENIED = "BIZ_006";
 
     private ErrorCode() {
         throw new UnsupportedOperationException(SimpleDataPermissionConstant.MESSAGE_CONSTANT_CLASS_CANNOT_INSTANTIATE);

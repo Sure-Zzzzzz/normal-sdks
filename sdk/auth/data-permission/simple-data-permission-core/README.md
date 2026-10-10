@@ -2,6 +2,8 @@
 
 数据权限协议核心：把一份“允许访问哪些资源、哪些数据范围”的授权信息，转换为资源服务可执行的访问结果。
 
+> **1.2.0**：DATA 权限 SPI 契约归位——新增 `core.annotation.CurrentDataAccessPlan`、`core.exception.DataPermissionAccessDeniedException`（纯 RuntimeException+`BIZ_006`）、`core.support.DataAccessPlanRestrictionVerifier`（实现源）；MVC 双线装配件旧 FQCN 保留兼容壳，新代码签名一律用 core 三件。既有类零变化、依赖保持为空。
+
 ## 这个模块解决什么问题
 
 资源服务通常已经知道“当前是谁”，但还需要回答：**这个调用方能访问哪些数据？**
