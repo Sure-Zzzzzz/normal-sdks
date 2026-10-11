@@ -302,6 +302,15 @@ public final class SimpleIamServerConstant {
      */
     public static final String PROVISIONING_MODE_PRE_BOUND_ONLY = "pre-bound-only";
     /**
+     * JIT 用户名冲突处置策略值：自动后缀（默认，按现存最大号+1 续，GitHub/GitLab 同款）
+     */
+    public static final String USERNAME_CONFLICT_STRATEGY_AUTO_SUFFIX = "auto-suffix";
+
+    /**
+     * JIT 用户名冲突处置策略值：拒绝（收紧项，走既有管理员预绑定语义）
+     */
+    public static final String USERNAME_CONFLICT_STRATEGY_REJECT = "reject";
+    /**
      * SAS 授权记录中保存的 IAM 会话 ID 属性名
      */
     public static final String AUTHORIZATION_ATTRIBUTE_IAM_SESSION_ID = "iam_session_id";
@@ -609,6 +618,11 @@ public final class SimpleIamServerConstant {
      * 内置权限编码：IAM 门户准入查询接口（按 subjectId 查询页面准入应用清单，服务间纯读）
      */
     public static final String BUILT_IN_PERMISSION_PORTAL_API = "iam:portal:api";
+
+    /**
+     * 内置权限编码：IAM 可信应用目录查询接口（openapi 列可信应用，1.3.7）
+     */
+    public static final String BUILT_IN_PERMISSION_APPLICATION_API = "iam:application:api";
     /**
      * 内置权限编码：IAM 角色管理接口
      */
@@ -653,6 +667,12 @@ public final class SimpleIamServerConstant {
      * 内置 DATA 资源：IAM 用户（数据范围按部门维度约束）
      */
     public static final String DATA_RESOURCE_IAM_USER = "iam:user";
+
+    /**
+     * DATA 资源标识：IAM 可信应用目录（1.3.7；注册表无部门归属，授权恒为 all=true 全量，
+     * IN 范围维度不适用）
+     */
+    public static final String DATA_RESOURCE_IAM_APPLICATION = "iam:application";
     /**
      * DATA 资源动作：读
      */
