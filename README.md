@@ -49,7 +49,7 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 | 模块 | javax | jakarta | 一句话 | 文档 |
 |------|-------|---------|--------|------|
 | simple-iam-server-starter（+core/adapter/resource/audit 共10件） | 1.3.7 | 资源侧 1.0.0 / 审计 1.0.1 | 统一身份：OAuth 2.1+PKCE / RBAC 投影 / 门户 | [认证与授权-IAM](docs/business/认证与授权-IAM.md) |
-| IAM 开放 API client（client-core + feign/rt × SB2/jakarta 四件） | 1.0.3 | 1.0.3 | IAM 开放 API 契约与传输件（十族 48 方法 openapi 全覆盖） | [认证与授权-IAM](docs/business/认证与授权-IAM.md) |
+| IAM 开放 API client（client-core 1.0.3 + feign/rt × SB2/jakarta 四件） | core 1.0.3 + 传输件 1.0.2 | 同左 | IAM 开放 API 契约与传输件（十族 48 方法 openapi 全覆盖） | [认证与授权-IAM](docs/business/认证与授权-IAM.md) |
 | simple-aksk-server-starter（+client/resource 共12件） | 3.2.2 | 资源侧 1.0.0 | 服务身份：OAuth2 / JWE / 应用授权投影 | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
 | AKSK 管理 OpenAPI client（openapi-client-core + feign/rt × SB2/jakarta 四件） | core 1.0.1 + 1.0.0 | 1.0.0 | AKSK 管理 OpenAPI 契约与传输件（20 端点，listClients 分页/批量双形态） | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
 | 公共资源层 resource-server + data-permission | 1.1.1 / 1.2.0 / 1.1.0 | 1.0.0 / 1.0.0 / 1.1.0 | 人+机双身份资源服务协作底座 | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |

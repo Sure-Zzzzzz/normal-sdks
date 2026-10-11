@@ -18,7 +18,7 @@
 - **页面准入详情**：`GET /iam/api/users/{subjectId}/page-admitted-application-details`（与裸数组同判定同口径，displayName 与门户侧边栏同源；同码 `iam:portal:api`、无 DATA）。feedback 提交下拉消费。
 - **可信应用目录**：`GET /iam/api/applications`（分页三字段；`iam:application:api` + DATA `iam:application` read all——全局目录无部门归属）。limiter 目录 adaptor 消费。
 - **六族补全**：messages（发/查/批次）、sessions（列/踢）、permissions、role-catalog（普通角色只读目录，与受委托角色族 /iam/api/roles 区隔）、statistics、user-groups（CRUD+成员）——各持既有码族，纯码控无 DATA 面（对齐管理台同族判断）。
-- client 契约镜像：`simple-iam-client-core:1.0.3` 十接口 48 方法（openapi 全覆盖）。
+- client 契约镜像：`simple-iam-client-core:1.0.3` 十接口 48 方法（openapi 全覆盖，四传输件 1.0.2）。
 
 ### 1.3.6 服务端契约增量
 

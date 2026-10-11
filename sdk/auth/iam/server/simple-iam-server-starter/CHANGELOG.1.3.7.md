@@ -5,7 +5,7 @@
 - 版本：`1.3.7`
 - 类型：Bug 修复 + Feature（五件：特权短路修复 / JIT 冲突策略 / 页面准入详情端点 / 可信应用目录端点 / openapi 六族补全）
 - 基线版本：`1.3.6`
-- 关联制品：`simple-iam-server-core:1.3.6`（常量+文案，1.3.5 为废号跳号）、`simple-iam-client-core:1.0.3` 与四传输件（C/D/E 件契约镜像，1.0.2 为废号跳号）
+- 关联制品：`simple-iam-server-core:1.3.6`（常量+文案，1.3.5 为废号跳号）、`simple-iam-client-core:1.0.3` 与四传输件（C/D/E 件契约镜像）
 
 ## A 件：特权短路缺陷修复（集成环境缺陷报告）
 
@@ -55,4 +55,4 @@
 - core 坐标升至 1.3.6；行为变更两条（JIT 默认自动后缀；特权保底并集——空行管理员恢复全量）需知会存量部署。
 - 存量"空准入行"无需清理（保底并集已无害化）；如需治理可按"清单全量 vs 行投影"差异清单人工核对。
 - AKP 授权面新增 `iam:application:api`（bootstrap 升级重启自动登记）；六族码均已在册，消费方按最小码申领。
-- feedback/limiter 消费方：引 `simple-iam-client-core:1.0.3` + 对应传输件 1.0.3。
+- feedback/limiter 消费方：引 `simple-iam-client-core:1.0.3` + 对应传输件 1.0.2。
