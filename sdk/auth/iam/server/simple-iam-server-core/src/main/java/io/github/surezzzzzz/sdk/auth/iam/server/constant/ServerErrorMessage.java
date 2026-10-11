@@ -100,6 +100,11 @@ public final class ServerErrorMessage {
     public static final String DEPARTMENT_HAS_CHILD = "部门存在子部门，不能删除：%s";
     public static final String DEPARTMENT_HAS_USER = "部门已被用户引用，不能删除：%s";
     public static final String USER_GROUP_NOT_FOUND = "协作组不存在：%s";
+    /**
+     * JIT 冲突策略配置非法（1.3.7）
+     */
+    public static final String USERNAME_CONFLICT_STRATEGY_INVALID =
+            "iam.server.external-identity.username-conflict-strategy 非法值：%s（合法值 auto-suffix / reject）";
 
     // ==================== 协作组管理消息 ====================
     public static final String USER_GROUP_ALREADY_EXISTS = "协作组编码已存在：%s";

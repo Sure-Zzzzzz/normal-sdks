@@ -2,9 +2,9 @@
 
 IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件、错误码、常量和异常，不含任何技术设施实现。
 
-当前版本为 `1.3.5`。版本沿革见各 `CHANGELOG.*.md`。
+当前版本为 `1.3.6`。版本沿革见各 `CHANGELOG.*.md`。
 
-`1.3.5` 随 starter 1.3.7 补三组常量：JIT 冲突策略值（auto-suffix/reject）、内置权限码 `iam:application:api`（可信应用目录）、DATA 资源 `iam:application`。
+`1.3.6` 随 starter 1.3.7 补常量：JIT 冲突策略值（auto-suffix/reject）+ 策略非法配置文案、内置权限码 `iam:application:api`（可信应用目录）、DATA 资源 `iam:application`。（`1.3.5` 为废号：误发 Central 作废跳号，未发布有效列车）
 
 `1.3.4` 补两条错误消息常量（口令生存期特性随 starter 1.3.6：新密码不得等于当前密码、提醒窗口大于生存期启动拒绝），其余零变化。
 
@@ -20,7 +20,7 @@ IAM Server 契约层。承载跨模块共享的纯契约：审计与令牌事件
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.5"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-core:1.3.6"
 }
 ```
 
@@ -98,7 +98,7 @@ IAM Server 1.3.2 的角色创建、修改、删除、规则设置与清除、部
 
 ## 版本记录
 
-- [CHANGELOG.1.3.5.md](CHANGELOG.1.3.5.md)：随 starter 1.3.7 的 JIT 冲突策略常量、目录查询权限码与 DATA 资源标识。
+- [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md)：随 starter 1.3.7 的 JIT 冲突策略常量、目录查询权限码与 DATA 资源标识。
 - [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md)：随 starter 1.3.6 口令生存期特性的两条错误消息常量。
 - [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md)：门户准入查询权限码常量 `iam:portal:api`（端点随 starter 1.3.5）。
 - [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md)：受委托角色权限、标识、执行上限与错误契约，复用既有审计事件。
