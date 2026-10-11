@@ -7,7 +7,7 @@
 - 基线版本：`1.3.6`
 - 关联制品：`simple-iam-server-core:1.3.6`（常量+文案，1.3.5 为废号跳号）、`simple-iam-client-core:1.0.3` 与四传输件（C/D/E 件契约镜像，1.0.2 为废号跳号）
 
-## A 件：特权短路缺陷修复（GA dev 实报）
+## A 件：特权短路缺陷修复（集成环境缺陷报告）
 
 - 症状：平台管理员对内置应用存在"仅准入空行"（投影合成产物）时，资源令牌验证返回空权限——特权兜底只在行缺失时触发，行有效即短路。
 - 修复：`applyPrivilegeFloor` 保底并集——行有效且平台管理员+内置应用时 pages/apis=union(行投影, 清单全量)、DATA=清单全量合成、roles/authorizationVersion 保留行的；行可以更细但不劣化为空。非特权/非内置/无清单语义零变化。
@@ -42,11 +42,11 @@
 
 ## 测试
 
-- 特权保底 4 用例（GA 现场复刻/部分码并集/非特权不误放+无行兜底/非内置 1.3.1 回归）+ 投影堵空行 1 用例。
+- 特权保底 4 用例（缺陷现场复刻/部分码并集/非特权不误放+无行兜底/非内置 1.3.1 回归）+ 投影堵空行 1 用例。
 - JIT 策略 4 用例（of 解析/max+1 续号/并发窗口/REJECT 回归）+ 集成 18/18（同名自动后缀开号+不并号+cleanup 覆盖后缀号）。
 - C/D 真 AKP HTTP 用例（details 同源断言+裸数组回归/目录分页三字段+无码 403+无 DATA 403）。
 - client 契约（javax 17/17、jakarta 14/14）：details 对象数组解析、applications 分页解析、方法数 48（十族全量断言）。
-- **端到端实测**（mavenLocal + local-runtime 1.3.7 部署，真 AKP 令牌过 iam.zs.com）：六族 14 端点全形态矩阵（无 token 401/假 token 401/真 token 200）、无码 403×8 端点、user-groups 全生命周期（建 201→读 200→改 200→成员 204/200→移 204→删 204→删后 404）、踢会话 204+列表消失实证、发信全链（201→批次 200→查信 200，senderUsername=aksk 主体）、GA 空准入行现场复刻（limiter 在列=保底并集生效）。
+- **端到端实测**（mavenLocal + local-runtime 1.3.7 部署，真 AKP 令牌过 iam.zs.com）：六族 14 端点全形态矩阵（无 token 401/假 token 401/真 token 200）、无码 403×8 端点、user-groups 全生命周期（建 201→读 200→改 200→成员 204/200→移 204→删 204→删后 404）、踢会话 204+列表消失实证、发信全链（201→批次 200→查信 200，senderUsername=aksk 主体）、空准入行缺陷现场复刻（受影响应用在列=保底并集生效）。
 - E2E 抓出并修复三缺陷：iam_message.sender_user_id NOT NULL（外部主体发信 500，改 nullable+实体同步）、sender_username 64 溢出（resolveOperator 改短标识 aksk:{clientId}、列扩 128）、六族分页无上限（补 MAX_ADMIN_PAGE_SIZE）。
 
 ## 升级指引
