@@ -68,21 +68,28 @@ public class IamExternalIdentityResolutionService {
         }
         suggestedUsername = suggestedUsername.trim();
 
-        // 同名本地账号存在：绝不自动并号，需管理员显式预绑定
-        if (userRepository.existsByUsername(suggestedUsername)) {
-            throw new SimpleIamServerException(ErrorCode.EXTERNAL_IDENTITY_NOT_BOUND,
-                    ServerErrorMessage.EXTERNAL_IDENTITY_NOT_BOUND);
-        }
-
+        // pre-bound-only 优先于冲突策略：禁止 JIT 的部署任何策略值下统一短路
         if (SimpleIamServerConstant.PROVISIONING_MODE_PRE_BOUND_ONLY
                 .equals(properties.getExternalIdentity().getProvisioningMode())) {
             throw new SimpleIamServerException(ErrorCode.EXTERNAL_IDENTITY_NOT_BOUND,
                     ServerErrorMessage.EXTERNAL_IDENTITY_NOT_BOUND);
         }
 
+        // 1.3.7 用户名冲突处置策略化：默认 auto-suffix（max+1 续号），reject 保留 1.3.6 行为；
+        // 绝不自动并号的防线不变（并号=identity 绑定复用，仍需管理员显式预绑定）
+        String finalUsername = JitUsernameConflictStrategy
+                .of(properties.getExternalIdentity().getUsernameConflictStrategy())
+                .resolve(suggestedUsername, userRepository::existsByUsername,
+                        userRepository.findByUsernameStartingWith(suggestedUsername + JitUsernameConflictStrategy.SUFFIX_SEPARATOR).stream()
+                                .map(IamUserEntity::getUsername).collect(java.util.stream.Collectors.toList()));
+        if (!finalUsername.equals(suggestedUsername)) {
+            log.info("JIT 用户名冲突自动后缀：strategy=auto-suffix, suggestion={}, finalUsername={}, provider={}",
+                    suggestedUsername, finalUsername, identity.getProviderCode());
+        }
+
         IamUserEntity user = new IamUserEntity();
         user.setSubjectId(assignSubjectId());
-        user.setUsername(suggestedUsername);
+        user.setUsername(finalUsername);
         user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
         user.setDisplayName(defaultString(identity.getDisplayName(), suggestedUsername));
         user.setEmail(identity.getEmail());
@@ -93,8 +100,8 @@ public class IamExternalIdentityResolutionService {
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         IamUserEntity saved = userRepository.save(user);
-        log.info("外部身份首次登录自动开号：provider={}, username={}, userId={}",
-                identity.getProviderCode(), suggestedUsername, saved.getId());
+        log.info("外部身份首次登录自动开号：provider={}, username={}, suggestion={}, userId={}",
+                identity.getProviderCode(), finalUsername, suggestedUsername, saved.getId());
         return saved;
     }
 

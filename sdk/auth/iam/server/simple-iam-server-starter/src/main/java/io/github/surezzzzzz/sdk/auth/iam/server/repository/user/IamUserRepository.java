@@ -54,6 +54,11 @@ public interface IamUserRepository extends JpaRepository<IamUserEntity, Long> {
     Optional<IamUserEntity> findByPhone(String phone);
 
     /**
+     * 前缀查询用户名（JIT 冲突续号 max 解析用，1.3.7；走 DB collation 唯一性同语义）
+     */
+    List<IamUserEntity> findByUsernameStartingWith(String prefix);
+
+    /**
      * 根据外部身份源与外部 ID 查询已绑定用户
      */
     Optional<IamUserEntity> findByIdentitySourceAndExternalId(String identitySource, String externalId);

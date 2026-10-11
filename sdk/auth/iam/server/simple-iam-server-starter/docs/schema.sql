@@ -559,8 +559,8 @@ DROP TABLE IF EXISTS iam_message;
 CREATE TABLE iam_message (
     id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     recipient_user_id BIGINT NOT NULL COMMENT '收件人用户ID',
-    sender_user_id BIGINT NOT NULL COMMENT '发送人用户ID',
-    sender_username VARCHAR(64) NOT NULL COMMENT '发送人用户名',
+    sender_user_id BIGINT NULL COMMENT '发送人用户ID（1.3.7 起可空：外部主体经 openapi 发信时无本地 userId，发送者标识记 sender_username）',
+    sender_username VARCHAR(128) NOT NULL COMMENT '发送人用户名（外部主体标识 aksk:{clientId}，1.3.7 扩容）',
     title VARCHAR(128) NOT NULL COMMENT '标题',
     content VARCHAR(2000) NOT NULL COMMENT '内容',
     send_batch_id VARCHAR(64) DEFAULT NULL COMMENT '发送批次ID',

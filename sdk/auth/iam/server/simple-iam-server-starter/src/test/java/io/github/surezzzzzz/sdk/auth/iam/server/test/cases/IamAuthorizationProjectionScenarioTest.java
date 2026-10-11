@@ -152,6 +152,30 @@ class IamAuthorizationProjectionScenarioTest {
         }
     }
 
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("1.3.7 堵空行增量：例行重算投影三集合全空且行不存在时不再新建")
+    void routineRecomputeSkipsNewEmptyProjectionRow() {
+        // 用户挂角色但该角色在目标应用下无任何规则 → 例行重算（onUserRoleAssigned，
+        // admittedActive=false）对无行用户不落空准入行（GA 空准入行来源堵增量）
+        Long emptyRowUserId = createUser("empty-row-skip-" + suffix);
+        Long emptyRowRoleId = createRole("empty-row-role-" + suffix);
+        try {
+            roleService.assignRole(emptyRowUserId, emptyRowRoleId);
+
+            projectionService.onUserRoleAssigned(emptyRowUserId);
+
+            boolean anyAdmissionRow = authorizationRepository.findByUserId(emptyRowUserId).stream()
+                    .anyMatch(row -> row.getApplicationId() != null);
+            org.junit.jupiter.api.Assertions.assertFalse(anyAdmissionRow,
+                    "角色在任何应用下都无规则：全量重算不得为该用户新建任何空准入行（1.3.7）");
+        } finally {
+            authorizationRepository.findByUserId(emptyRowUserId)
+                    .forEach(authorizationRepository::delete);
+            userService.deleteUser(emptyRowUserId);
+            roleService.deleteRole(emptyRowRoleId);
+        }
+    }
+
     @Test
     @DisplayName("场景2：角色分配触发投影创建并集，撤销后收缩，版本单调递增，admitted 保持")
     void roleAssignmentProjectsUnionAndShrinksOnRevoke() {

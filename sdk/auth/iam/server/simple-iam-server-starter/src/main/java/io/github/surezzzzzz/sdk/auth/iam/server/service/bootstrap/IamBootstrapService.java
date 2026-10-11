@@ -106,6 +106,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_GROUP_API, "IAM 协作组管理接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_API, "IAM 仪表盘统计接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API, "IAM 门户准入查询接口", "api"),
+                new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_APPLICATION_API, "IAM 可信应用目录查询接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_SESSION_API, "IAM 会话管理接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DATA_ALL, "IAM 全量数据范围", "data")
         };

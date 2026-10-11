@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Open API
-  version: 1.3.5
+  version: 1.3.7
   description: >-
     IAM 对外开放 API（`/iam/api/**`），供外部系统持 AKSK 凭证（平台级 AKP
     或用户级 AKU）调用，做组织与人员同步及受委托角色治理。浏览器、Portal、Admin 和普通
@@ -35,6 +35,10 @@ info:
     按需逐项批准；IAM 宿主关闭 introspect 本地缓存及旧结果回退。
     `iam:user:api` 包含普通用户角色关系管理，但不能绕过受委托角色禁止个人直授的约束；
     只需同步无需绑角色的场景，用 DATA 写动作收窄。
+
+    可信应用目录（1.3.7）：`GET /iam/api/applications` 要求勾 `iam:application:api` API 码与
+    `iam:application` DATA 资源 read all=true（全局目录无部门归属，IN 范围不适用）——限流目录
+    adaptor 等外部同步方按此最小组合授权。
 
     页面准入查询（1.3.5）单列最小授权：`GET /iam/api/users/{subjectId}/page-admitted-applications`
     只要求勾 `iam:portal:api` 单码，无 DATA 面（返回为应用码聚合，非用户档案）——供反馈服务
@@ -168,6 +172,24 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/users/{subjectId}/page-admitted-application-details:
+    parameters:
+      - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
+    get:
+      summary: 页面准入应用详情列表
+      operationId: listPageAdmittedApplicationDetails
+      description: 与裸数组端点（page-admitted-applications）同判定同口径（共用唯一实现），差异仅携带
+        displayName / description（应用注册申报的公开元数据，与门户侧边栏同源）。同码 iam:portal:api、
+        无 DATA 面；列表顺序未定义。1.3.7 起。
+      responses:
+        '200':
+          description: 应用详情数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/PageAdmittedApplicationDetail'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
   /iam/api/users/{subjectId}/roles:
     parameters:
       - {name: subjectId, in: path, required: true, schema: {type: string, maxLength: 64}, description: 公开主体 ID}
@@ -244,6 +266,238 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '403': {$ref: '#/components/responses/Forbidden'}
         '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/messages:
+    post:
+      summary: 发送站内信
+      operationId: sendMessage
+      description: 外部系统给 IAM 用户发通知（1.3.7 起）；收件人形态与管理台同构。码 iam:message:api，无 DATA 面。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MessageSendRequest'}
+      responses:
+        '201':
+          description: 已发送。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MessageSendResult'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+    get:
+      summary: 按收件人查信
+      operationId: listMessagesBySubject
+      description: subjectId 必填（防全库遍历）；页码 1 起（1.3.7 起）。
+      parameters:
+        - {name: subjectId, in: query, required: true, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 信件数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiMessage'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/messages/{sendBatchId}:
+    parameters:
+      - {name: sendBatchId, in: path, required: true, schema: {type: string}}
+    get:
+      summary: 发送批次详情
+      operationId: getMessageBatch
+      description: 对账（1.3.7 起）。
+      responses:
+        '200':
+          description: 批次详情。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MessageBatch'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/sessions:
+    get:
+      summary: 按用户列在线会话
+      operationId: listSessionsBySubject
+      description: 风控审计视角（1.3.7 起）；subjectId 必填；码 iam:session:api，无 DATA 面。
+      parameters:
+        - {name: subjectId, in: query, required: true, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 会话数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiSession'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/sessions/{sessionId}:
+    parameters:
+      - {name: sessionId, in: path, required: true, schema: {type: string}}
+    delete:
+      summary: 踢指定会话
+      operationId: revokeSession
+      description: 风控强制下线（1.3.7 起）。
+      responses:
+        '204': {description: 已踢除。}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/permissions:
+    get:
+      summary: 分页列权限（只读目录）
+      operationId: listPermissions
+      description: 对账/下拉（1.3.7 起）；码 iam:permission:api，无 DATA 面；页码 1 起。
+      parameters:
+        - {name: keyword, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 权限数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiPermission'}}
+  /iam/api/role-catalog:
+    get:
+      summary: 分页列角色（只读目录）
+      operationId: listRoleCatalog
+      description: 内置+自定义全量（1.3.7 起）；/iam/api/roles 为受委托角色族在册路径，普通角色以 role-catalog 区隔；写管理保留管理台。码 iam:role:api，无 DATA 面。
+      parameters:
+        - {name: keyword, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 角色数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiRoleEntry'}}
+  /iam/api/statistics:
+    get:
+      summary: 统计聚合（只读）
+      operationId: getStatistics
+      description: 外部监控/大屏（1.3.7 起）；与管理台同源；登录明细不开放。码 iam:dashboard:api，无 DATA 面。
+      responses:
+        '200':
+          description: 统计快照。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenApiStatistics'}
+  /iam/api/user-groups:
+    get:
+      summary: 分页列协作组
+      operationId: listUserGroups
+      description: 组织同步（1.3.7 起）；码 iam:user-group:api，无 DATA 面；页码 1 起。
+      parameters:
+        - {name: status, in: query, schema: {type: integer}}
+        - {name: keyword, in: query, schema: {type: string}}
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 协作组数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiUserGroup'}}
+    post:
+      summary: 建协作组
+      operationId: createUserGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UserGroupCreateRequest'}
+      responses:
+        '201':
+          description: 已创建。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenApiUserGroup'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /iam/api/user-groups/{groupId}:
+    parameters:
+      - {name: groupId, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      summary: 协作组详情
+      operationId: getUserGroup
+      responses:
+        '200':
+          description: 协作组。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenApiUserGroup'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      summary: 改协作组
+      operationId: updateUserGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UserGroupUpdateRequest'}
+      responses:
+        '200':
+          description: 已更新。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OpenApiUserGroup'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      summary: 删协作组
+      operationId: deleteUserGroup
+      responses:
+        '204': {description: 已删除。}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/user-groups/{groupId}/users:
+    parameters:
+      - {name: groupId, in: path, required: true, schema: {type: integer, format: int64}}
+    get:
+      summary: 组成员分页
+      operationId: listUserGroupUsers
+      parameters:
+        - {name: page, in: query, schema: {type: integer, default: 1}}
+        - {name: size, in: query, schema: {type: integer, default: 20}}
+      responses:
+        '200':
+          description: 成员数组。
+          content:
+            application/json:
+              schema: {type: array, items: {$ref: '#/components/schemas/OpenApiGroupUser'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/user-groups/{groupId}/users/{subjectId}:
+    parameters:
+      - {name: groupId, in: path, required: true, schema: {type: integer, format: int64}}
+      - {name: subjectId, in: path, required: true, schema: {type: string}}
+    post:
+      summary: 加成员
+      operationId: assignUserGroupUser
+      responses:
+        '204': {description: 已加入。}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      summary: 移成员
+      operationId: revokeUserGroupUser
+      responses:
+        '204': {description: 已移除。}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /iam/api/applications:
+    get:
+      summary: 分页列出全部可信应用（全局目录）
+      operationId: listApplications
+      description: |
+        IAM 权威注册的可信应用目录（1.3.7 起）：全局事实、无用户维度，供外部系统
+        （如限流管理目录 adaptor）同步应用清单。API 码 iam:application:api；
+        DATA 资源 iam:application read——注册表无部门归属，授权恒为 all=true（IN 范围不适用）。
+        排序 createdAt 倒序（新注册在前）；分页 Spring Page wire 形态（页码 0 起）。
+      parameters:
+        - {name: page, in: query, schema: {type: integer, default: 0}, description: 页码（从 0 起）}
+        - {name: size, in: query, schema: {type: integer, default: 20}, description: 每页大小}
+      responses:
+        '200':
+          description: 可信应用分页（目录三字段，不含 client 明细）。
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ApplicationPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
   /iam/api/departments:
     get:
       summary: 全量部门平铺列表
@@ -846,6 +1100,130 @@ components:
         manifestVersion: {type: integer, format: int64}
         manifestDigest: {type: string}
         updatedAt: {type: string, format: date-time}
+    MessageSendRequest:
+      type: object
+      required: [title, content]
+      properties:
+        recipientSubjectIds: {type: array, items: {type: string}}
+        departmentIds: {type: array, items: {type: integer, format: int64}}
+        userGroupIds: {type: array, items: {type: integer, format: int64}}
+        includeChildDepartments: {type: boolean}
+        title: {type: string}
+        content: {type: string}
+    MessageSendResult:
+      type: object
+      properties:
+        sendBatchId: {type: string}
+        recipientCount: {type: integer}
+    OpenApiMessage:
+      type: object
+      properties:
+        title: {type: string}
+        content: {type: string}
+        createdAt: {type: string, format: date-time}
+        read: {type: boolean}
+    MessageBatch:
+      type: object
+      properties:
+        sendBatchId: {type: string}
+        title: {type: string}
+        content: {type: string}
+        senderUsername: {type: string}
+        targetUserCount: {type: integer}
+        targetDepartmentCount: {type: integer}
+    OpenApiSession:
+      type: object
+      properties:
+        sessionId: {type: string}
+        subjectId: {type: string}
+        username: {type: string}
+        clientId: {type: string, nullable: true}
+        remoteIp: {type: string, nullable: true}
+        userAgent: {type: string, nullable: true}
+        authTime: {type: string, format: date-time}
+        lastActiveAt: {type: string, format: date-time}
+    OpenApiPermission:
+      type: object
+      properties:
+        code: {type: string}
+        name: {type: string}
+        description: {type: string, nullable: true}
+        type: {type: string, enum: [page, api, data]}
+        builtIn: {type: integer}
+    OpenApiRoleEntry:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        code: {type: string}
+        name: {type: string}
+        description: {type: string, nullable: true}
+        builtIn: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    OpenApiStatistics:
+      type: object
+      properties:
+        user: {type: integer, format: int64}
+        department: {type: integer, format: int64}
+        userGroup: {type: integer, format: int64}
+        role: {type: integer, format: int64}
+        permission: {type: integer, format: int64}
+        trustedApplication: {type: integer, format: int64}
+        activeSessions: {type: integer, format: int64}
+        todayLoggedInUsers: {type: integer, format: int64}
+        lockedUsers: {type: integer, format: int64}
+        disabledUsers: {type: integer, format: int64}
+        usersWithoutDepartment: {type: integer, format: int64}
+    UserGroupCreateRequest:
+      type: object
+      required: [code, name]
+      properties:
+        code: {type: string}
+        name: {type: string}
+        description: {type: string, nullable: true}
+    UserGroupUpdateRequest:
+      type: object
+      properties:
+        name: {type: string}
+        description: {type: string}
+        status: {type: integer}
+    OpenApiUserGroup:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        code: {type: string}
+        name: {type: string}
+        description: {type: string, nullable: true}
+        status: {type: integer}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    OpenApiGroupUser:
+      type: object
+      properties:
+        subjectId: {type: string}
+        username: {type: string}
+        displayName: {type: string, nullable: true}
+        status: {type: integer}
+    PageAdmittedApplicationDetail:
+      type: object
+      properties:
+        code: {type: string, description: 应用编码}
+        displayName: {type: string, description: 应用显示名（与门户侧边栏同源）}
+        description: {type: string, nullable: true, description: 应用描述（可空）}
+    ApplicationOpenApi:
+      type: object
+      properties:
+        applicationCode: {type: string, description: 应用编码}
+        applicationName: {type: string, description: 应用名称}
+        status: {type: integer, description: "1=启用"}
+    ApplicationPage:
+      type: object
+      properties:
+        content: {type: array, items: {$ref: '#/components/schemas/ApplicationOpenApi'}}
+        totalElements: {type: integer, format: int64}
+        totalPages: {type: integer}
+        number: {type: integer, description: 页码（0 起）}
+        size: {type: integer}
     UserRestResponse:
       type: object
       properties:

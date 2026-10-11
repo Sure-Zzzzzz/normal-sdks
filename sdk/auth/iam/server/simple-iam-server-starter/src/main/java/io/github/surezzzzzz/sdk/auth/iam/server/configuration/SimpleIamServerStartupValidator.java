@@ -43,6 +43,8 @@ public class SimpleIamServerStartupValidator {
 
     private final io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamPasswordMaxAgeSupport passwordMaxAgeSupport;
 
+    private final SimpleIamServerProperties properties;
+
     /**
      * 启动校验与软提示。
      */
@@ -52,6 +54,14 @@ public class SimpleIamServerStartupValidator {
         String passwordConfigError = passwordMaxAgeSupport.validateConfiguration();
         if (passwordConfigError != null) {
             throw new SimpleIamServerException(ErrorCode.CONFIG_VALIDATION_FAILED, passwordConfigError);
+        }
+
+        // 1.3.7 JIT 冲突策略配置校验：非法值启动即拒（of() 同口径，提前到启动期暴露）
+        try {
+            io.github.surezzzzzz.sdk.auth.iam.server.service.user.JitUsernameConflictStrategy.of(
+                    properties.getExternalIdentity().getUsernameConflictStrategy());
+        } catch (SimpleIamServerException exception) {
+            throw exception;
         }
         ResourceServerProperties resourceServerProperties = Binder
                 .get(environment)

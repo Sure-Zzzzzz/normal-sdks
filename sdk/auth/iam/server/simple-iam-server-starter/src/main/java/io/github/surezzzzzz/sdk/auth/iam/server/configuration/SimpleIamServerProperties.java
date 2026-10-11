@@ -20,10 +20,14 @@ import java.util.List;
 @ConfigurationProperties(prefix = SimpleIamServerConstant.CONFIG_PREFIX)
 public class SimpleIamServerProperties {
 
-    /** 口令最长生存期默认关闭（0=不治理），客户要等保时按部署开启 */
+    /**
+     * 口令最长生存期默认关闭（0=不治理），客户要等保时按部署开启
+     */
     public static final int DEFAULT_PASSWORD_MAX_AGE_DAYS = 0;
 
-    /** 到期前提醒窗口默认 7 天（仅生存期开启时生效） */
+    /**
+     * 到期前提醒窗口默认 7 天（仅生存期开启时生效）
+     */
     public static final int DEFAULT_PASSWORD_WARN_BEFORE_DAYS = 7;
 
     /**
@@ -148,6 +152,12 @@ public class SimpleIamServerProperties {
          * 外部身份开号模式：jit（首次登录自动创建本地账号，默认）/ pre-bound-only（仅管理员预绑定身份可登录）
          */
         private String provisioningMode = SimpleIamServerConstant.PROVISIONING_MODE_JIT;
+
+        /**
+         * JIT 开号用户名冲突处置策略：auto-suffix（默认，按现存最大号+1 续）/ reject（撞名拒绝走管理员预绑定）；
+         * 非法值启动期拒绝（1.3.7）
+         */
+        private String usernameConflictStrategy = SimpleIamServerConstant.USERNAME_CONFLICT_STRATEGY_AUTO_SUFFIX;
 
         /**
          * 跳转型登录回调地址基础 URL（含协议主机端口，不含路径）；为空时按请求推断。

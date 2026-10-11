@@ -129,11 +129,14 @@ class IamPageAdmissionApiTest {
 
         DataGrant userRead = new DataGrant(SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
                 Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true, Collections.emptyList());
+        DataGrant applicationRead = new DataGrant(SimpleIamServerConstant.DATA_RESOURCE_IAM_APPLICATION,
+                Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true, Collections.emptyList());
         DataGrantDocument all = new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
-                SimpleDataPermissionConstant.VERSION, Collections.singletonList(userRead));
+                SimpleDataPermissionConstant.VERSION, Arrays.asList(userRead, applicationRead));
         AKSK.authorize(true, Arrays.asList(
                 SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API,
-                SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API), all);
+                SimpleIamServerConstant.BUILT_IN_PERMISSION_USER_API,
+                SimpleIamServerConstant.BUILT_IN_PERMISSION_APPLICATION_API), all);
         String token = AKSK.token();
         String path = "/iam/api/users/" + memberSubjectId + "/page-admitted-applications";
 
@@ -185,6 +188,88 @@ class IamPageAdmissionApiTest {
                 "users 详情投影必须回传 subjectId 且与路径参数一致");
 
         log.info("users 投影 subjectId 回传验收通过：subjectId={}", memberSubjectId);
+    }
+
+    @Test
+    void pageAdmissionDetailsCarryDisplayNameSameSourceAsPortal() throws Exception {
+        String codeA = "page-adm-portal-" + suffix;
+        Long applicationIdA = createApplication(codeA, true);
+        putManifest(applicationIdA, Arrays.asList("page-x", "page-y"));
+        createUserWithAdmissions(Collections.singletonList(admission(applicationIdA,
+                Collections.singletonList("page-x"))));
+
+        DataGrant userRead = new DataGrant(SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
+                Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true, Collections.emptyList());
+        DataGrantDocument all = new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
+                SimpleDataPermissionConstant.VERSION, Collections.singletonList(userRead));
+        // fixture 授权行按 subject 唯一：非首个用例用受限令牌造持码形态（1.3.5 坑档）
+        String token = AKSK.restrictedToken(
+                Collections.singletonList(SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API), all);
+        String path = "/iam/api/users/" + memberSubjectId + "/page-admitted-application-details";
+
+        // 无码 403（details 与裸数组同码）→ 本次 authorize 恰好持码，改验主体：持码 200 + 字段断言
+        ResponseEntity<String> response = request(HttpMethod.GET, path, null, null, token);
+        assertEquals(200, response.getStatusCodeValue());
+        JsonNode details = mapper.readTree(response.getBody());
+        JsonNode hit = null;
+        for (JsonNode item : details) {
+            if (codeA.equals(item.path("code").asText())) {
+                hit = item;
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertNotNull(hit, "详情必须包含已准入应用");
+        assertEquals("Page Admission API Test " + codeA, hit.path("displayName").asText(),
+                "displayName 与实体 applicationName 同源");
+        org.junit.jupiter.api.Assertions.assertTrue(hit.path("description").isNull(),
+                "description 可空字段在位（本夹具未设置描述）");
+        // 裸数组端点回归：契约零变化（同为码串数组）
+        JsonNode codes = mapper.readTree(request(HttpMethod.GET,
+                "/iam/api/users/" + memberSubjectId + "/page-admitted-applications", null, null, token).getBody());
+        boolean bareContains = false;
+        for (JsonNode item : codes) {
+            if (codeA.equals(item.asText())) bareContains = true;
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(bareContains, "裸数组端点回归：同判定应用在列");
+        log.info("页面准入详情端点验收通过：details={}", details.size());
+    }
+
+    @Test
+    void applicationsDirectoryListsAllTrustedApplicationsPaged() throws Exception {
+        String codeA = "page-adm-portal-" + suffix;
+        createApplication(codeA, true);
+
+        DataGrant applicationRead = new DataGrant(SimpleIamServerConstant.DATA_RESOURCE_IAM_APPLICATION,
+                Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true, Collections.emptyList());
+        DataGrantDocument all = new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
+                SimpleDataPermissionConstant.VERSION, Collections.singletonList(applicationRead));
+        String token = AKSK.restrictedToken(
+                Collections.singletonList(SimpleIamServerConstant.BUILT_IN_PERMISSION_APPLICATION_API), all);
+
+        // 持码+DATA all → 200 分页（目录含本夹具应用；分页 wire 形态）
+        ResponseEntity<String> response = request(HttpMethod.GET,
+                "/iam/api/applications?page=0&size=50", null, null, token);
+        assertEquals(200, response.getStatusCodeValue());
+        JsonNode page = mapper.readTree(response.getBody());
+        org.junit.jupiter.api.Assertions.assertTrue(page.path("totalElements").asLong() >= 1,
+                "目录至少含本夹具应用");
+        boolean found = false;
+        for (JsonNode item : page.path("content")) {
+            if (codeA.equals(item.path("applicationCode").asText())) {
+                found = true;
+                assertEquals("Page Admission API Test " + codeA, item.path("applicationName").asText());
+                assertEquals(1, item.path("status").asInt(), "夹具应用启用中");
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(found, "目录必须包含夹具应用（三字段直读）");
+
+        // 无码 403（目录码独立）：restrictedToken 空 API 码
+        assertEquals(403, request(HttpMethod.GET, "/iam/api/applications", null, null,
+                AKSK.restrictedToken(Collections.emptyList(), all)).getStatusCodeValue());
+        // 有码无 DATA → 403（失败关闭）
+        assertEquals(403, request(HttpMethod.GET, "/iam/api/applications", null, null,
+                AKSK.restrictedToken(Collections.singletonList(
+                        SimpleIamServerConstant.BUILT_IN_PERMISSION_APPLICATION_API), null)).getStatusCodeValue());
+        log.info("可信应用目录端点验收通过：totalElements={}", page.path("totalElements").asLong());
     }
 
     private Long createApplication(String code, boolean withPortal) {

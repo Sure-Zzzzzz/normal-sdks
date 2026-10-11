@@ -1,5 +1,11 @@
 # IAM Server 升级
 
+## 1.3.7
+
+从已运行的 1.3.6 升级执行同目录 [V1.3.6__to__V1.3.7__openapi_expansion.sql](V1.3.6__to__V1.3.7__openapi_expansion.sql) 一次：`iam_message` 两列变更——`sender_user_id` 改可空（外部主体经 openapi 发信无本地 userId）、`sender_username` 扩容 128（外部主体标识 `aksk:{clientId}` 形态）。[schema.sql](../schema.sql) 已同步。纯列变更无数据回填，无停写要求（列变更是在线 DDL）。全新库直接用 schema.sql。
+
+同轮无其他表变更：六族 openapi 端点（messages/sessions/permissions/role-catalog/statistics/user-groups）全部复用既有表；`iam:application:api` 新码由启动引导幂等登记（升级重启即得，无需 SQL）。
+
 ## 1.3.6
 
 从已运行的 1.3.5 升级只需执行同目录 [V1.3.5__to__V1.3.6__password_max_age.sql](V1.3.5__to__V1.3.6__password_max_age.sql) 一次：`iam_user` 加 `must_change_password_reason`（须改密原因，与须改密标记同写同清）与 `password_updated_at`（口令生存期基线）两个 nullable 列，[schema.sql](../schema.sql) 已同步含新列。**无数据回填**——存量行两列为 null 属预期：原因 null 时前端兜底通用改密文案；`password_updated_at` null 时生存期策略开启后由用户首次登录回填激活基线（不做迁移期批量回填，避免一刀切全员判过期）。核查查询应返回空。全新库直接用 `schema.sql` 初始化。

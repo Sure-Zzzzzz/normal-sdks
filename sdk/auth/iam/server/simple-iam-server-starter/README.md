@@ -2,7 +2,9 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.6`，变更与升级要求见 [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md)。
+当前版本为 `1.3.7`，变更与升级要求见 [CHANGELOG.1.3.7.md](CHANGELOG.1.3.7.md)。
+
+`1.3.7` 四件：①特权短路修复（平台管理员对内置应用的空准入行不再劣化为空权限——行投影与清单全量保底并集；例行投影重算不再新建空准入行）；②JIT 用户名冲突策略（`auto-suffix` 默认 max+1 续号 / `reject` 收紧，**默认行为从拒绝变更为自动后缀**）；③页面准入详情端点（feedback 消费，displayName 与门户同源）；④可信应用目录端点 + `IamApplicationClient`（limiter 消费，`iam:application:api` + DATA all）。
 
 `1.3.6` 本地账号口令最长生存期策略（默认关闭，等保基线应用层实现）：超期登录置须改密复用受限通道、临期携带剩余天数、须改密原因三态下传（FIRST_LOGIN/PASSWORD_RESET/PASSWORD_EXPIRED）、管理面密码状态只读两字段；同轮行为收紧——三处改密点拒绝新密码=当前密码。数据库 `iam_user` 加两列。
 
@@ -300,6 +302,14 @@ dependencies {
 | `GET /iam/api/users`、`GET /iam/api/users/{subjectId}` | 用户分页 / 详情（DATA 部门范围求交，越权数据不出库） |
 | `GET /iam/api/users/{subjectId}/roles` | 用户角色列表 |
 | `GET /iam/api/users/{subjectId}/page-admitted-applications` | 页面准入应用编码清单（1.3.5；API 码 `iam:portal:api` 单码、无 DATA 面，供反馈服务等按主体拉取交集过滤；清单顺序未定义） |
+| `GET /iam/api/users/{subjectId}/page-admitted-application-details` | 页面准入应用详情（1.3.7，displayName 与门户同源；同码 iam:portal:api） |
+| `GET /iam/api/applications` | 可信应用目录分页（1.3.7；iam:application:api + DATA iam:application read all） |
+| `POST / GET /iam/api/messages`、`GET /iam/api/messages/{sendBatchId}` | 站内信发信/按收件人查信/批次详情（1.3.7；iam:message:api，发信者记外部主体标识） |
+| `GET /iam/api/sessions`、`DELETE /iam/api/sessions/{sessionId}` | 按用户列在线会话/踢会话（1.3.7；iam:session:api，风控视角） |
+| `GET /iam/api/permissions` | 权限清单只读目录（1.3.7；iam:permission:api） |
+| `GET /iam/api/role-catalog` | 角色目录只读（1.3.7；iam:role:api；与受委托角色族 /iam/api/roles 区隔） |
+| `GET /iam/api/statistics` | 统计聚合只读（1.3.7；iam:dashboard:api） |
+| `GET/POST /iam/api/user-groups`、`GET/PUT/DELETE .../{groupId}`、`GET/POST/DELETE .../{groupId}/users/{subjectId}` | 协作组 CRUD+成员管理（1.3.7；iam:user-group:api） |
 | `POST /iam/api/users`、`PUT / DELETE /iam/api/users/{subjectId}` | 用户创建 / 更新 / 删除（目标部门须在 DATA 范围内） |
 | `PUT /iam/api/users/{subjectId}/enable` / `disable` / `reset-password` | 启用 / 禁用（全端吊销）/ 重置密码（审计 operator 为 AKSK 主体标识） |
 | `POST / DELETE /iam/api/users/{subjectId}/roles/{roleId}` | 角色绑定 / 解绑 |
@@ -468,5 +478,6 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md) | web 账号手机号端点注册修复（漏标注解） |
 | [CHANGELOG.1.3.5.md](CHANGELOG.1.3.5.md) | 特权全量分支收口 + 页面准入查询端点 + users 投影 subjectId |
 | [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md) | 口令最长生存期（默认关闭）+ 须改密原因下传 + 假换密拦截 |
+| [CHANGELOG.1.3.7.md](CHANGELOG.1.3.7.md) | 特权保底并集 + JIT 冲突策略 + 页面准入详情 + 可信应用目录 + openapi 六族补全 |
 | [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |

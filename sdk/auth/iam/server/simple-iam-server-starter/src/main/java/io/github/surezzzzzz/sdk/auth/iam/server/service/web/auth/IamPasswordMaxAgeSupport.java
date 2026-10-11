@@ -1,8 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.MustChangePasswordReason;
 import lombok.RequiredArgsConstructor;

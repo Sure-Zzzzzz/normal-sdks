@@ -85,7 +85,7 @@ class ExternalIdentityLoginApiTest {
     @AfterEach
     void cleanup() {
         for (String username : new String[]{ldapUsername, ssoUsername, preBoundUsername,
-                conflictingUsername, adminUsername}) {
+                conflictingUsername, conflictingUsername + "-1", adminUsername}) {
             userRepository.findByUsername(username).ifPresent(user -> userService.deleteUser(user.getId()));
             assertFalse(userRepository.findByUsername(username).isPresent(),
                     "测试清理后不应残留外部身份账号：" + username);
@@ -176,7 +176,7 @@ class ExternalIdentityLoginApiTest {
     }
 
     @Test
-    @DisplayName("外部身份与本地账号同名时不得自动并号")
+    @DisplayName("外部身份与本地账号同名时自动后缀开号（1.3.7 默认），本地账号不被并号")
     void testSameNameLocalAccountNotMerged() throws Exception {
         CreateUserRequest request = new CreateUserRequest();
         request.setUsername(conflictingUsername);
@@ -184,16 +184,20 @@ class ExternalIdentityLoginApiTest {
         request.setDisplayName("本地同名账号");
         userService.createUser(request);
 
+        // 1.3.7 默认 auto-suffix：同名外部身份以 建议名-1 开号登录成功（不再 401 拒绝）
         mockMvc.perform(post("/iam/web/auth/login")
                         .contentType("application/json")
                         .content("{\"provider\":\"ldap-password\",\"username\":\"" + conflictingUsername
                                 + "\",\"password\":\"" + FakeExternalIdentitySupport.LDAP_VALID_CREDENTIAL + "\"}")
                         .with(csrf()))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
 
         Optional<IamUserEntity> local = userRepository.findByUsername(conflictingUsername);
         assertTrue(local.isPresent());
-        assertNull(local.get().getIdentitySource(), "同名本地账号不得被隐式绑定");
+        assertNull(local.get().getIdentitySource(), "同名本地账号不得被隐式绑定（并号防线不变）");
+        Optional<IamUserEntity> suffixed = userRepository.findByUsername(conflictingUsername + "-1");
+        assertTrue(suffixed.isPresent(), "外部身份自动后缀开号 " + conflictingUsername + "-1");
+        assertEquals("ldap-password", suffixed.get().getIdentitySource(), "后缀号是独立 JIT 账号");
     }
 
     @Test

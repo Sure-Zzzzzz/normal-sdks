@@ -23,10 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * 平台管理员特权支撑（解析层合并，不落授权表）
@@ -127,16 +124,7 @@ public class IamPlatformAdminPrivilegeService {
                     1L, UNMANIFESTED_VERSION, UNMANIFESTED_DIGEST,
                     issuedAt, expiresAt);
         }
-        List<DataGrant> grants = new ArrayList<>();
-        for (DataResourceDeclaration resource : IamApplicationAuthorizationJsonCodec
-                .readDataResourceList(manifest.getDataResourcesJson())) {
-            grants.add(new DataGrant(resource.getResource(), resource.getActions(), true,
-                    Collections.emptyList()));
-        }
-        DataGrantDocument dataGrantDocument = grants.isEmpty()
-                ? null
-                : new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
-                SimpleDataPermissionConstant.VERSION, grants);
+        DataGrantDocument dataGrantDocument = synthesizeManifestDataGrant(manifest);
         log.debug("平台管理员特权解析（清单全量）：userId={}, applicationId={}, manifestVersion={}",
                 userId, applicationId, manifest.getManifestVersion());
         return new ApplicationAuthorizationContext(
@@ -156,5 +144,79 @@ public class IamPlatformAdminPrivilegeService {
                 String.valueOf(manifest.getManifestVersion()),
                 manifest.getManifestDigest(),
                 issuedAt, expiresAt);
+    }
+
+    /**
+     * 特权保底合并（1.3.7 特权短路缺陷修复）：平台管理员对内置应用的有效授权行投影
+     * 与清单申报全量取并集——行可以更细，但不因空准入行劣化为空。
+     *
+     * <p>pages/apis = union(行投影, 清单)；DATA = 清单全量合成（行 DATA 必然 ⊆ 清单，直接替换）；
+     * roles 保留行的（用户真实角色，展示性字段）；authorizationVersion 保留行的（投影乐观锁语义），
+     * manifestVersion/digest 取当前清单（union 后内容与当前清单强相关，版本应如实）。
+     * 非平台管理员或非内置应用：原样返回（零行为变化）。无清单的内置应用：返回行
+     * （无清单可并，行已是唯一事实；"仅准入"语义由行自带）。</p>
+     *
+     * @param rowContext    行投影构建的上下文（非 null）
+     * @param userId        用户 ID
+     * @param applicationId 应用 ID
+     * @return 保底合并后的上下文（入参原样或增强副本，永不返回 null）
+     */
+    public ApplicationAuthorizationContext applyPrivilegeFloor(ApplicationAuthorizationContext rowContext,
+                                                               Long userId, Long applicationId) {
+        IamTrustedApplicationEntity application = trustedApplicationRepository
+                .findById(applicationId).orElse(null);
+        if (application == null) {
+            return rowContext;
+        }
+        if (!isPlatformAdmin(userId) || !builtInResolver.isBuiltIn(application)) {
+            return rowContext;
+        }
+        IamApplicationPermissionManifestEntity manifest = manifestRepository
+                .findByApplicationId(applicationId).orElse(null);
+        if (manifest == null) {
+            return rowContext;
+        }
+        Set<String> pages = new LinkedHashSet<>(rowContext.getPagePermissions());
+        pages.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
+                manifest.getPagePermissionsJson(), "pagePermissions"));
+        Set<String> apis = new LinkedHashSet<>(rowContext.getApiPermissions());
+        apis.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
+                manifest.getApiPermissionsJson(), "apiPermissions"));
+        log.info("特权保底合并：userId={}, applicationId={}, 行 pages={}/apis={} → 并集 pages={}/apis={}",
+                userId, applicationId,
+                rowContext.getPagePermissions().size(), rowContext.getApiPermissions().size(),
+                pages.size(), apis.size());
+        return new ApplicationAuthorizationContext(
+                rowContext.getProtocol(),
+                rowContext.getVersion(),
+                rowContext.getSubjectType(),
+                rowContext.getSubjectId(),
+                rowContext.getApplicationCode(),
+                true,
+                rowContext.getRoles(),
+                new ArrayList<>(pages),
+                new ArrayList<>(apis),
+                synthesizeManifestDataGrant(manifest),
+                rowContext.getAuthorizationVersion(),
+                String.valueOf(manifest.getManifestVersion()),
+                manifest.getManifestDigest(),
+                rowContext.getIssuedAt(),
+                rowContext.getExpiresAt());
+    }
+
+    /**
+     * 清单 DATA 全量合成：每种申报资源 all 全动作授权项（特权语义，无清单资源返回 null）。
+     */
+    private DataGrantDocument synthesizeManifestDataGrant(IamApplicationPermissionManifestEntity manifest) {
+        List<DataGrant> grants = new ArrayList<>();
+        for (DataResourceDeclaration resource : IamApplicationAuthorizationJsonCodec
+                .readDataResourceList(manifest.getDataResourcesJson())) {
+            grants.add(new DataGrant(resource.getResource(), resource.getActions(), true,
+                    Collections.emptyList()));
+        }
+        return grants.isEmpty()
+                ? null
+                : new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
+                SimpleDataPermissionConstant.VERSION, grants);
     }
 }

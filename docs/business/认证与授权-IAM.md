@@ -29,6 +29,7 @@
 
 | server-starter | server-core | 说明 |
 |----------------|-------------|------|
+| 1.3.7 | 1.3.6 | 特权保底并集（空准入行不再劣化）+ JIT 用户名冲突策略（默认自动后缀）+ 页面准入详情端点 + 可信应用目录端点（iam:application:api）+ openapi 六族补全（messages/sessions/permissions/role-catalog/statistics/user-groups，码族全覆盖） |
 | 1.3.6 | 1.3.4 | 本地账号口令最长生存期（默认关闭，超期置须改密复用受限通道、临期携带剩余天数）+ 须改密原因三态下传 + 假换密拦截（新密码≠当前密码） |
 | 1.3.5 | 1.3.3 | 平台管理员特权全量分支收口（非内置应用按授权行裁剪页面）+ 开放 API 页面准入查询端点（AKP 持 `iam:portal:api`）+ users 投影回传 `subjectId` |
 | 1.3.4 | 1.3.2 | web 账号手机号端点族注册修复（漏标注解） |

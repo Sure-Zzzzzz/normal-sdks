@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.ResetPasswordRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.UpdateUserRequest;
+import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.PageAdmittedApplicationDetailResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.response.UserRestResponse;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
@@ -122,6 +123,28 @@ public class IamUserRestController {
         log.debug("开放 API 页面准入清单查询：operator={}, subjectId={}, 命中 {} 个应用",
                 resolveOperator(), subjectId, applicationCodes.size());
         return ResponseEntity.ok(applicationCodes);
+    }
+
+    /**
+     * 用户有页面准入（PAGE 投影非空）的启用应用详情列表（1.3.7）。
+     *
+     * <p>与裸数组端点同判定同口径（共用唯一实现，两端点永不分裂），差异仅在携带
+     * displayName/description（应用注册申报的公开元数据，与门户侧边栏同源）；同码
+     * {@code iam:portal:api}、无 DATA 面；列表顺序未定义。
+     */
+    @GetMapping("/{subjectId}/page-admitted-application-details")
+    @RequireApiPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API)
+    public ResponseEntity<List<PageAdmittedApplicationDetailResponse>> listPageAdmittedApplicationDetails(
+            @PathVariable String subjectId) {
+        IamUserEntity user = userService.getBySubjectId(subjectId);
+        List<PageAdmittedApplicationDetailResponse> details = portalApplicationService
+                .listPageAdmittedApplications(user.getId()).stream()
+                .map(app -> new PageAdmittedApplicationDetailResponse(
+                        app.getApplicationCode(), app.getApplicationName(), app.getDescription()))
+                .collect(Collectors.toList());
+        log.debug("开放 API 页面准入详情查询：operator={}, subjectId={}, 命中 {} 个应用",
+                resolveOperator(), subjectId, details.size());
+        return ResponseEntity.ok(details);
     }
 
     /**

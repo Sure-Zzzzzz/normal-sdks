@@ -4,6 +4,22 @@
 
 ## 版本对应关系
 
+### 1.3.7 服务端契约增量
+
+`simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.7`（login/admin 两件维持 1.3.6）。增量两件：
+
+- `GET /iam/api/users/{subjectId}/page-admitted-application-details`：与裸数组同判定同口径，携带 displayName/description（与门户侧边栏同源）；同码 `iam:portal:api`、无 DATA。feedback 提交下拉消费。
+- `GET /iam/api/applications`（分页）：可信应用目录三字段（applicationCode/applicationName/status，createdAt 倒序）；`iam:application:api` + DATA `iam:application` read all（全局目录无部门归属）。limiter 目录 adaptor 消费。
+
+### 1.3.7 服务端契约增量
+
+`simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.7`（login/admin 两件维持 1.3.6）。增量三组：
+
+- **页面准入详情**：`GET /iam/api/users/{subjectId}/page-admitted-application-details`（与裸数组同判定同口径，displayName 与门户侧边栏同源；同码 `iam:portal:api`、无 DATA）。feedback 提交下拉消费。
+- **可信应用目录**：`GET /iam/api/applications`（分页三字段；`iam:application:api` + DATA `iam:application` read all——全局目录无部门归属）。limiter 目录 adaptor 消费。
+- **六族补全**：messages（发/查/批次）、sessions（列/踢）、permissions、role-catalog（普通角色只读目录，与受委托角色族 /iam/api/roles 区隔）、statistics、user-groups（CRUD+成员）——各持既有码族，纯码控无 DATA 面（对齐管理台同族判断）。
+- client 契约镜像：`simple-iam-client-core:1.0.3` 十接口 48 方法（openapi 全覆盖）。
+
 ### 1.3.6 服务端契约增量
 
 `simple-iam-login-web.openapi.yaml` 与 `simple-iam-admin-web.openapi.yaml` 的 `info.version` 为 `1.3.6`；`simple-iam-open-api.openapi.yaml` 本轮零变化（维持 1.3.5）。增量均为向后兼容的可空新字段：

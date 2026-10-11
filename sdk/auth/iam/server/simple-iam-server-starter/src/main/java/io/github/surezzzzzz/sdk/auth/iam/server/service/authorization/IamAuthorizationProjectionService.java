@@ -237,6 +237,15 @@ public class IamAuthorizationProjectionService {
             log.warn("授权投影计算：用户无角色 - userId={}, applicationId={}", userId, applicationId);
         }
 
+        // 1.3.7 堵空行增量：例行重算（场景 2/3/4）投影三集合全空且行不存在时不再新建——
+        // 空准入行无业务价值（门户不可见 + API 全拒 + 短路特权兜底），纯制造脏数据；
+        // 显式准入（场景 1 admittedActive=true）与管理员已有行不受影响（收缩语义不变）
+        boolean emptyProjection = pagePermissions.isEmpty() && apiPermissions.isEmpty() && dataGrants.isEmpty();
+        if (emptyProjection && !admittedActive
+                && !authorizationRepository.findByUserIdAndApplicationId(userId, applicationId).isPresent()) {
+            log.debug("授权投影跳过空投影新建：userId={}, applicationId={}", userId, applicationId);
+            return;
+        }
         createOrUpdateProjection(userId, applicationId, roleCodes,
                 new ArrayList<>(pagePermissions), new ArrayList<>(apiPermissions),
                 aggregateDataGrantDocument(dataGrants, userId, applicationId),

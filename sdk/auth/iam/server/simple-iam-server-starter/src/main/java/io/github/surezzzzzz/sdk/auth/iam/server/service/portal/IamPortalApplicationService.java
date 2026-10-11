@@ -148,6 +148,19 @@ public class IamPortalApplicationService {
      * @return 有页面准入的应用编码列表
      */
     public List<String> listPageAdmittedApplicationCodes(Long userId) {
+        return listPageAdmittedApplications(userId).stream()
+                .map(IamTrustedApplicationEntity::getApplicationCode)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 页面准入应用实体列表（1.3.7 抽取）：裸数组端点与详情端点共用的唯一判定实现——
+     * 过滤口径（准入门 / 特权直通 / 投影非空 / 应用启用）两端点永不分裂；顺序未定义。
+     *
+     * @param userId 用户ID
+     * @return 有页面准入的应用实体列表
+     */
+    public List<IamTrustedApplicationEntity> listPageAdmittedApplications(Long userId) {
         if (userId == null) {
             return new ArrayList<>();
         }
@@ -167,7 +180,7 @@ public class IamPortalApplicationService {
                         .map(IamTrustedApplicationEntity::getId).collect(Collectors.toList())).stream()
                 .collect(Collectors.toMap(IamApplicationPermissionManifestEntity::getApplicationId, item -> item))
                 : Collections.<Long, IamApplicationPermissionManifestEntity>emptyMap();
-        List<String> applicationCodes = new ArrayList<>();
+        List<IamTrustedApplicationEntity> admitted = new ArrayList<>();
         for (IamTrustedApplicationEntity app : applications) {
             IamApplicationAuthorizationEntity authorization = authorizations.get(app.getId());
             boolean privilegedApp = platformAdmin && builtInResolver.isBuiltIn(app);
@@ -185,12 +198,12 @@ public class IamPortalApplicationService {
                 continue;
             }
             if (!pagePermissions.isEmpty()) {
-                applicationCodes.add(app.getApplicationCode());
+                admitted.add(app);
             }
         }
-        log.debug("页面准入应用码清单：userId={}, platformAdmin={}, 命中 {} 个应用", userId, platformAdmin,
-                applicationCodes.size());
-        return applicationCodes;
+        log.debug("页面准入应用清单：userId={}, platformAdmin={}, 命中 {} 个应用", userId, platformAdmin,
+                admitted.size());
+        return admitted;
     }
 
     private boolean isActiveAndAdmitted(IamApplicationAuthorizationEntity authorization) {

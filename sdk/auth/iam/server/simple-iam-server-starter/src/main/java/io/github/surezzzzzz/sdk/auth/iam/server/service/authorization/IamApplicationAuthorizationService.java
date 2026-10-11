@@ -65,26 +65,30 @@ public class IamApplicationAuthorizationService {
             return null;
         }
         try {
-            return new ApplicationAuthorizationContext(
-                    SimpleApplicationAuthorizationConstant.PROTOCOL,
-                    SimpleApplicationAuthorizationConstant.VERSION,
-                    ApplicationAuthorizationSubjectType.HUMAN,
-                    subjectId,
-                    application.getApplicationCode(),
-                    true,
-                    IamApplicationAuthorizationJsonCodec.readStringList(
-                            authorization.getRolesJson(), "roles"),
-                    IamApplicationAuthorizationJsonCodec.readStringList(
-                            authorization.getPagePermissionsJson(), "pagePermissions"),
-                    IamApplicationAuthorizationJsonCodec.readStringList(
-                            authorization.getApiPermissionsJson(), "apiPermissions"),
-                    IamApplicationAuthorizationJsonCodec.readDataGrantDocument(
-                            authorization.getDataGrantDocumentJson()),
-                    authorization.getAuthorizationVersion(),
-                    authorization.getManifestVersion(),
-                    authorization.getManifestDigest(),
-                    issuedAt,
-                    expiresAt);
+            // 1.3.7 特权保底合并：平台管理员对内置应用的有效行（含空准入行）投影与清单全量
+            // 取并集——行可以更细，但不因投影合成产生的空行劣化为空（特权短路缺陷修复）
+            return platformAdminPrivilegeSupport.applyPrivilegeFloor(
+                    new ApplicationAuthorizationContext(
+                            SimpleApplicationAuthorizationConstant.PROTOCOL,
+                            SimpleApplicationAuthorizationConstant.VERSION,
+                            ApplicationAuthorizationSubjectType.HUMAN,
+                            subjectId,
+                            application.getApplicationCode(),
+                            true,
+                            IamApplicationAuthorizationJsonCodec.readStringList(
+                                    authorization.getRolesJson(), "roles"),
+                            IamApplicationAuthorizationJsonCodec.readStringList(
+                                    authorization.getPagePermissionsJson(), "pagePermissions"),
+                            IamApplicationAuthorizationJsonCodec.readStringList(
+                                    authorization.getApiPermissionsJson(), "apiPermissions"),
+                            IamApplicationAuthorizationJsonCodec.readDataGrantDocument(
+                                    authorization.getDataGrantDocumentJson()),
+                            authorization.getAuthorizationVersion(),
+                            authorization.getManifestVersion(),
+                            authorization.getManifestDigest(),
+                            issuedAt,
+                            expiresAt),
+                    userId, applicationId);
         } catch (RuntimeException exception) {
             if (platformAdminPrivilegeSupport.isPlatformAdmin(userId)) {
                 return platformAdminPrivilegeSupport.buildPrivilegedContext(

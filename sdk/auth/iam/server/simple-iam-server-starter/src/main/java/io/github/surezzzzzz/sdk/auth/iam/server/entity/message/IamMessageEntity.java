@@ -22,7 +22,7 @@ public class IamMessageEntity {
     @Column(name = "recipient_user_id", nullable = false)
     private Long recipientUserId;
 
-    @Column(name = "sender_user_id", nullable = false)
+    @Column(name = "sender_user_id")
     private Long senderUserId;
 
     @Column(name = "sender_username", length = 64, nullable = false)
