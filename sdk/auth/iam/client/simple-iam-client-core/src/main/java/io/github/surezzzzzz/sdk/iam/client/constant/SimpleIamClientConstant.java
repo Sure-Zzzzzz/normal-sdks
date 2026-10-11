@@ -23,6 +23,11 @@ public final class SimpleIamClientConstant {
      * 用户族资源段
      */
     public static final String RESOURCE_USERS = "users";
+
+    /**
+     * 资源路径段：可信应用目录（/iam/api/applications，1.3.7）
+     */
+    public static final String RESOURCE_APPLICATIONS = "applications";
     /**
      * 部门族资源段
      */

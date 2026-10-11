@@ -18,7 +18,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.2'
 ```
 
 - 发布 POM 零依赖；Java 8 字节码，SB2（Java 8+）与 jakarta（Java 17+）宿主均可消费

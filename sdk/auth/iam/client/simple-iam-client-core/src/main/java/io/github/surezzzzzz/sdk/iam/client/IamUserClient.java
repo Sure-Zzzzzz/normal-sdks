@@ -6,7 +6,7 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamUser;
 import java.util.List;
 
 /**
- * IAM 用户族 openapi 契约（12 方法，对位 server /iam/api/users）。
+ * IAM 用户族 openapi 契约（13 方法，对位 server /iam/api/users）。
  *
  * <p>消费方 AKP 需授 {@code iam:user:api} API 码与 iam:user DATA 范围；非 2xx 透传
  * Spring/Feign 标准异常。分页为 Spring Page wire 形态（content/totalElements，页码 0 起）。</p>
@@ -116,6 +116,18 @@ public interface IamUserClient {
      * @return 有页面准入的应用编码列表
      */
     List<String> listPageAdmittedApplications(String subjectId);
+
+    /**
+     * 用户有页面准入（PAGE 投影非空）的启用应用详情列表（1.3.7）。
+     *
+     * <p>与裸数组方法同判定同口径，差异仅携带 displayName / description（与门户侧边栏同源）；
+     * 此方法与 {@link #listPageAdmittedApplications(String)} 同样单独持 {@code iam:portal:api} 码，
+     * 无 DATA 面；wire 为对象数组，顺序未定义。</p>
+     *
+     * @param subjectId 公开主体
+     * @return 有页面准入的应用详情列表
+     */
+    java.util.List<io.github.surezzzzzz.sdk.iam.client.model.PageAdmittedApplication> listPageAdmittedApplicationDetails(String subjectId);
 
     /**
      * 摘角色（204）。
