@@ -5,7 +5,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 
 ## 定位
 
-提供与 `simple-iam-server-starter:1.3.5+` openapi 契约对齐的 Java 接口，使调用方与 HTTP 传输
+提供与 `simple-iam-server-starter:1.3.7+` openapi 契约对齐的 Java 接口，使调用方与 HTTP 传输
 细节、JSON 编解码、If-Match 乐观并发头管理解耦。
 
 ## 适用场景
@@ -18,7 +18,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.2'
+implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
 ```
 
 - 发布 POM 零依赖；Java 8 字节码，SB2（Java 8+）与 jakarta（Java 17+）宿主均可消费
@@ -28,9 +28,9 @@ implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.2'
 
 | 类别 | 内容 |
 | --- | --- |
-| 接口 | `IamUserClient`（12 方法）、`IamDepartmentClient`（5 方法）、`IamOpenRoleClient`（13 方法）——共 30 方法，逐端点对位 server 三组 rest controller |
+| 接口 | 十族共 **48 方法**（1.0.3 起 openapi 全覆盖）：`IamUserClient`（13）/ `IamDepartmentClient`（5）/ `IamOpenRoleClient`（13）/ `IamApplicationClient`（1）/ `IamMessageClient`（3）/ `IamSessionClient`（2）/ `IamPermissionClient`（1）/ `IamUserGroupClient`（8）/ `IamRoleCatalogClient`（1）/ `IamStatisticsClient`（1）——逐端点对位 server rest controller |
 | 分页模型 | `IamSpringPage<T>`（users/departments 族，Spring Page wire 形态：content/totalElements，页码 **0 起**）与 `IamOpenRolePage`/`IamOpenRoleDepartmentPage`（open-roles 族，server 自持形态：items/total，页码 **1 起**）——两种形态是 server 契约事实，不可混用 |
-| 领域模型 | `IamUser` / `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` 等 14 个 |
+| 领域模型 | `IamUser`（含 subjectId）/ `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` / `PageAdmittedApplication` / `IamApplication` / `IamMessage` 族四件 / `IamSession` / `IamPermission` / `IamUserGroup` 族两件 / `IamRoleCatalogEntry` / `IamStatistics` 等 24 个 |
 | 常量 | `SimpleIamClientConstant`：路径段/协议头（`If-Match`/`ETag`）/wire 字段名/查询参数名，值逐字对位 server 契约 |
 | 异常族 | `SimpleIamClientException`（基类）+ `IamClientProtocolException`（2xx 形状不符）/ `IamClientConfigurationException`（配置不合法）。非 2xx 不进本族——由传输层透传 Spring/Feign 标准异常 |
 
@@ -49,6 +49,12 @@ open-roles 族的写操作（putOpenRoleRule / deleteOpenRoleRule / mount / unmo
 | --- | --- | --- |
 | IamUserClient（除页面准入查询） | `iam:user:api` | `iam:user`（部门范围求交） |
 | IamUserClient#listPageAdmittedApplications | `iam:portal:api`（单码即够，勿授 `iam:user:api`） | —（应用码聚合非用户档案，无 DATA 面） |
+| IamApplicationClient | `iam:application:api` | `iam:application` read all（全局目录无部门归属） |
+| IamMessageClient | `iam:message:api` | —（收件人过滤是查询参数非行级范围） |
+| IamSessionClient | `iam:session:api` | —（运行时会话状态非行级业务数据） |
+| IamPermissionClient / IamRoleCatalogClient | `iam:permission:api` / `iam:role:api` | —（只读配置目录） |
+| IamUserGroupClient | `iam:user-group:api` | —（对齐管理台同族零 DATA） |
+| IamStatisticsClient | `iam:dashboard:api` | —（只读聚合） |
 | IamDepartmentClient | `iam:department:api` | — |
 | IamOpenRoleClient 全部方法 | `iam:open-role:create:api` / `iam:open-role:read:api` / `iam:open-role-rule:read:api` / `iam:open-role-rule:write:api` / `iam:open-department-role:read:api` / `iam:open-department-role:write:api` / `iam:open-directory:read:api` / `iam:open-application:read:api`（按方法族分码，值=server 常量逐字） | `iam:open-role` 系列（读/写动作分码） |
 

@@ -1,7 +1,5 @@
 package io.github.surezzzzzz.sdk.iam.client.test.cases;
 
-import io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient;
-import io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
 import io.github.surezzzzzz.sdk.iam.client.constant.SimpleIamClientConstant;
 import io.github.surezzzzzz.sdk.iam.client.model.IamOpenRole;
@@ -52,15 +50,28 @@ class IamClientCoreContractTest {
     }
 
     @Test
-    void shouldExposeExactlyThirtyOneMethodsAcrossThreeClients() {
+    void shouldExposeExactlyFortyEightMethodsAcrossAllClients() {
         assertEquals(13, countMethods(IamUserClient.class), "用户族 13 方法");
-        assertEquals(5, countMethods(IamDepartmentClient.class), "部门族 5 方法");
-        assertEquals(13, countMethods(IamOpenRoleClient.class), "受委托角色族 13 方法");
-        assertEquals(1, countMethods(io.github.surezzzzzz.sdk.iam.client.IamApplicationClient.class),
-                "可信应用目录族 1 方法（1.3.7）");
-        assertEquals(31, countMethods(IamUserClient.class) + countMethods(IamDepartmentClient.class)
-                + countMethods(IamOpenRoleClient.class), "全 openapi 共 31 方法");
-        log.info("三接口 31 方法对位通过");
+        assertEquals(5, countMethods(io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient.class), "部门族 5 方法");
+        assertEquals(13, countMethods(io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient.class), "受委托角色族 13 方法");
+        assertEquals(1, countMethods(io.github.surezzzzzz.sdk.iam.client.IamApplicationClient.class), "应用目录族 1 方法");
+        assertEquals(3, countMethods(io.github.surezzzzzz.sdk.iam.client.IamMessageClient.class), "站内信族 3 方法");
+        assertEquals(2, countMethods(io.github.surezzzzzz.sdk.iam.client.IamSessionClient.class), "会话族 2 方法");
+        assertEquals(1, countMethods(io.github.surezzzzzz.sdk.iam.client.IamPermissionClient.class), "权限清单族 1 方法");
+        assertEquals(8, countMethods(io.github.surezzzzzz.sdk.iam.client.IamUserGroupClient.class), "协作组族 8 方法");
+        assertEquals(1, countMethods(io.github.surezzzzzz.sdk.iam.client.IamRoleCatalogClient.class), "角色目录族 1 方法");
+        assertEquals(1, countMethods(io.github.surezzzzzz.sdk.iam.client.IamStatisticsClient.class), "统计族 1 方法");
+        assertEquals(48, countMethods(IamUserClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamApplicationClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamMessageClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamSessionClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamPermissionClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamUserGroupClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamRoleCatalogClient.class)
+                + countMethods(io.github.surezzzzzz.sdk.iam.client.IamStatisticsClient.class), "全 openapi 共 48 方法");
+        log.info("全 openapi 48 方法对位通过（1.3.7 全族）");
     }
 
     @Test

@@ -28,6 +28,41 @@ public final class SimpleIamClientConstant {
      * 资源路径段：可信应用目录（/iam/api/applications，1.3.7）
      */
     public static final String RESOURCE_APPLICATIONS = "applications";
+
+    /**
+     * 资源路径段：站内信（/iam/api/messages，1.3.7）
+     */
+    public static final String RESOURCE_MESSAGES = "messages";
+
+    /**
+     * 资源路径段：会话（/iam/api/sessions，1.3.7）
+     */
+    public static final String RESOURCE_SESSIONS = "sessions";
+
+    /**
+     * 资源路径段：权限清单（/iam/api/permissions，1.3.7）
+     */
+    public static final String RESOURCE_PERMISSIONS = "permissions";
+
+    /**
+     * 资源路径段：角色目录（/iam/api/role-catalog，1.3.7）
+     */
+    public static final String RESOURCE_ROLE_CATALOG = "role-catalog";
+
+    /**
+     * 资源路径段：统计聚合（/iam/api/statistics，1.3.7）
+     */
+    public static final String RESOURCE_STATISTICS = "statistics";
+
+    /**
+     * 资源路径段：协作组（/iam/api/user-groups，1.3.7）
+     */
+    public static final String RESOURCE_USER_GROUPS = "user-groups";
+
+    /**
+     * 查询参数名：公开主体（1.3.7）
+     */
+    public static final String QUERY_SUBJECT_ID = "subjectId";
     /**
      * 部门族资源段
      */
@@ -143,6 +178,7 @@ public final class SimpleIamClientConstant {
      * 配置不合法
      */
     public static final String MESSAGE_INVALID_CONFIGURATION = "IAM Client 配置不合法";
+
     private SimpleIamClientConstant() {
         throw new UnsupportedOperationException("Utility class");
     }
