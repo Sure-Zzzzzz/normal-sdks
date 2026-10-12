@@ -28,7 +28,7 @@ implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
 
 | 类别 | 内容 |
 | --- | --- |
-| 接口 | 十族共 **48 方法**（1.0.3 起 openapi 全覆盖）：`IamUserClient`（13）/ `IamDepartmentClient`（5）/ `IamOpenRoleClient`（13）/ `IamApplicationClient`（1）/ `IamMessageClient`（3）/ `IamSessionClient`（2）/ `IamPermissionClient`（1）/ `IamUserGroupClient`（8）/ `IamRoleCatalogClient`（1）/ `IamStatisticsClient`（1）——逐端点对位 server rest controller |
+| 接口 | 十族共 **48 方法**（1.0.2 起 openapi 全覆盖）：`IamUserClient`（13）/ `IamDepartmentClient`（5）/ `IamOpenRoleClient`（13）/ `IamApplicationClient`（1）/ `IamMessageClient`（3）/ `IamSessionClient`（2）/ `IamPermissionClient`（1）/ `IamUserGroupClient`（8）/ `IamRoleCatalogClient`（1）/ `IamStatisticsClient`（1）——逐端点对位 server rest controller |
 | 分页模型 | `IamSpringPage<T>`（users/departments 族，Spring Page wire 形态：content/totalElements，页码 **0 起**）与 `IamOpenRolePage`/`IamOpenRoleDepartmentPage`（open-roles 族，server 自持形态：items/total，页码 **1 起**）——两种形态是 server 契约事实，不可混用 |
 | 领域模型 | `IamUser`（含 subjectId）/ `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` / `PageAdmittedApplication` / `IamApplication` / `IamMessage` 族四件 / `IamSession` / `IamPermission` / `IamUserGroup` 族两件 / `IamRoleCatalogEntry` / `IamStatistics` 等 24 个 |
 | 常量 | `SimpleIamClientConstant`：路径段/协议头（`If-Match`/`ETag`）/wire 字段名/查询参数名，值逐字对位 server 契约 |
