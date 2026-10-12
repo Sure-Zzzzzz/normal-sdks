@@ -42,15 +42,20 @@
 
 ## 开放 API Client（1.x）
 
-对 IAM 开放 API 的调用侧契约与传输件（AKP 自助消费），与 Server 线独立演进：
+对 IAM 开放 API 的调用侧契约与传输件（AKP 自助消费），与 Server 线独立演进。版本对应关系：
+
+| client-core | 传输件 | 需 server | 说明 |
+|-------------|--------|-----------|------|
+| 1.0.1 | 1.0.1 | ≥1.3.2 | 三接口 29 方法（读链 + 受委托角色） |
+| 1.0.3 | 1.0.2 | ≥1.3.7 | 十接口 48 方法 openapi 全覆盖（六族 + 页面准入详情 + 可信应用目录；旧 server 上新能力 404，既有方法不受影响） |
 
 | SDK | javax | jakarta | 说明 | 文档 |
 |-----|-------|---------|------|------|
-| [simple-iam-client-core](../../sdk/auth/iam/client/simple-iam-client-core) | 1.0.1 | — | 开放 API 契约层（三接口 29 方法；1.0.1 页面准入清单方法与 subjectId 回传） | [README](../../sdk/auth/iam/client/simple-iam-client-core/README.md) |
-| [simple-iam-aksk-feign-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter) | 1.0.1 | — | Feign 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter/README.md) |
-| [simple-iam-aksk-resttemplate-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter) | 1.0.1 | — | RestTemplate 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter/README.md) |
-| [simple-iam-aksk-feign-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter) | — | 1.0.1 | Feign 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter/README.md) |
-| [simple-iam-aksk-resttemplate-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter) | — | 1.0.1 | RestTemplate 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter/README.md) |
+| [simple-iam-client-core](../../sdk/auth/iam/client/simple-iam-client-core) | 1.0.3 | — | 开放 API 契约层（十接口 48 方法 openapi 全覆盖；1.0.3 六族契约 + 页面准入详情 + 可信应用目录） | [README](../../sdk/auth/iam/client/simple-iam-client-core/README.md) |
+| [simple-iam-aksk-feign-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter) | 1.0.2 | — | Feign 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-feign-client-starter/README.md) |
+| [simple-iam-aksk-resttemplate-client-starter](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter) | 1.0.2 | — | RestTemplate 传输件（SB2 线） | [README](../../sdk/auth/iam/client/simple-iam-aksk-resttemplate-client-starter/README.md) |
+| [simple-iam-aksk-feign-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter) | — | 1.0.2 | Feign 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-feign-client-jakarta-starter/README.md) |
+| [simple-iam-aksk-resttemplate-client-jakarta-starter](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter) | — | 1.0.2 | RestTemplate 传输件（jakarta 线） | [README](../../sdk/auth/iam/client/jakarta/simple-iam-aksk-resttemplate-client-jakarta-starter/README.md) |
 
 ## 核心特性
 
