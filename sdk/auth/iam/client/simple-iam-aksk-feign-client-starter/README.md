@@ -1,14 +1,16 @@
 # simple-iam-aksk-feign-client-starter
 
 Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 3.x，Spring Boot 2.x 宿主）：直接引用
-aksk 底座 `simple-aksk-feign-redis-client-starter:3.0.2`，提供预写好的三份契约接口——
-`IamUserFeignClient` / `IamDepartmentFeignClient` / `IamOpenRoleFeignClient`（服务名族内唯一）。
+aksk 底座 `simple-aksk-feign-redis-client-starter:3.0.2`，提供预写好的契约接口族（1.0.2 起 openapi 全族十接口）——
+`IamUserFeignClient` / `IamDepartmentFeignClient` / `IamOpenRoleFeignClient` / `IamApplicationFeignClient` 与六族新接口（messages/sessions/permissions/user-groups/role-catalog/statistics）。
 宿主 `@EnableFeignClients` 扫描后 Authorization 头由底座令牌链自动注入，本模块为契约接口层，
 无自有装配面。
 
+> **1.0.2**：契约对齐 server 1.3.7 三件——第 13 方法页面准入详情 + IamApplicationClient 可信应用目录 + openapi 六族新接口实现（messages/sessions/permissions/user-groups/role-catalog/statistics）；依赖 simple-iam-client-core:1.0.3（十接口 48 方法）。对应 server >= 1.3.7，旧 server 新能力 404。
+
 ## 核心能力
 
-### 1. 三契约接口 30 方法
+### 1. 契约接口族 48 方法（1.0.2 起 openapi 全覆盖）
 
 与 RestTemplate 形态（`simple-iam-aksk-resttemplate-client-starter`）逐端点一一对应；
 请求体为 `Map<String, Object>`（可选字段 null 不放入），路径注解写契约字面量。
@@ -33,7 +35,7 @@ Feign 自带重试必须显式关闭（幂等语义由调用方负责）。
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约常量/异常族 |
+| `simple-iam-client-core:1.0.3` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-starter:3.0.2` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证拦截器装配 |
 | Spring Cloud OpenFeign 3.x | `compileOnly`，**宿主自行引入** | 版本随宿主 Spring Boot 线 |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
@@ -44,7 +46,7 @@ Feign 自带重试必须显式关闭（幂等语义由调用方负责）。
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-starter:1.0.2'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

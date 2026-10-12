@@ -21,7 +21,7 @@ public interface IamDepartmentFeignClient {
     io.github.surezzzzzz.sdk.iam.feign.client.model.IamDepartmentResponse createDepartment(
             @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> body);
 
-    @org.springframework.web.bind.annotation.PatchMapping("/departments/{departmentId}")
+    @org.springframework.web.bind.annotation.PutMapping("/departments/{departmentId}")
     io.github.surezzzzzz.sdk.iam.feign.client.model.IamDepartmentResponse updateDepartment(
             @org.springframework.web.bind.annotation.PathVariable("departmentId") Long departmentId,
             @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> body);

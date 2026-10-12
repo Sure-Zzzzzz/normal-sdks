@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.feign.client;
 
 /**
- * IAM 用户族 Feign 契约接口（12 方法）。请求体为 Map（可选字段 null 不放入）；响应为 wire DTO；非 2xx 透传 FeignException。分页为 Spring Page wire 形态（页码 0 起）。
+ * IAM 用户族 Feign 契约接口（13 方法）。请求体为 Map（可选字段 null 不放入）；响应为 wire DTO；非 2xx 透传 FeignException。分页为 Spring Page wire 形态（页码 0 起）。
  *
  * @author surezzzzzz
  */
@@ -39,11 +39,18 @@ public interface IamUserFeignClient {
     java.util.List<String> listPageAdmittedApplications(
             @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId);
 
+    /**
+     * 页面准入应用详情对象数组（1.3.7）；此端点单独持 iam:portal:api 码。
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/users/{subjectId}/page-admitted-application-details")
+    java.util.List<io.github.surezzzzzz.sdk.iam.feign.client.model.PageAdmittedApplicationResponse> listPageAdmittedApplicationDetails(
+            @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId);
+
     @org.springframework.web.bind.annotation.PostMapping("/users")
     io.github.surezzzzzz.sdk.iam.feign.client.model.IamUserResponse createUser(
             @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> body);
 
-    @org.springframework.web.bind.annotation.PatchMapping("/users/{subjectId}")
+    @org.springframework.web.bind.annotation.PutMapping("/users/{subjectId}")
     io.github.surezzzzzz.sdk.iam.feign.client.model.IamUserResponse updateUser(
             @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId,
             @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> body);
@@ -64,7 +71,7 @@ public interface IamUserFeignClient {
             @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId,
             @org.springframework.web.bind.annotation.RequestBody java.util.Map<String, Object> body);
 
-    @org.springframework.web.bind.annotation.PutMapping("/users/{subjectId}/roles/{roleId}")
+    @org.springframework.web.bind.annotation.PostMapping("/users/{subjectId}/roles/{roleId}")
     void assignRole(
             @org.springframework.web.bind.annotation.PathVariable("subjectId") String subjectId,
             @org.springframework.web.bind.annotation.PathVariable("roleId") Long roleId);
