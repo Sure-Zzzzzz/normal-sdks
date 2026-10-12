@@ -164,7 +164,7 @@ public class IamOpenRoleRestTemplateClient implements IamOpenRoleClient {
 
     @Override
     public void mountOpenRoleToDepartment(Long departmentId, String openRoleId, String ifMatch) {
-        http.put(ifMatch, new LinkedHashMap<String, Object>(), SimpleIamClientConstant.RESOURCE_DEPARTMENTS,
+        http.put(ifMatch, null, SimpleIamClientConstant.RESOURCE_DEPARTMENTS,
                 String.valueOf(departmentId), SimpleIamClientConstant.RESOURCE_ROLES, openRoleId);
     }
 

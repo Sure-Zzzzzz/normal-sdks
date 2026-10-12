@@ -42,7 +42,7 @@ io:
         iam:
           client:
             enable: true
-            base-url: http://127.0.0.1:8189
+            base-url: http://127.0.0.1:8180
 
 logging:
   level:

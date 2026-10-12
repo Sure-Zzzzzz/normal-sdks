@@ -2,16 +2,16 @@
 
 RestTemplate 装配的 IAM openapi client（Spring Boot 2.x 宿主）：直接引用 aksk 底座
 `simple-aksk-resttemplate-redis-client-starter:3.0.2`，连接池、超时与 AKSK 认证头全部复用底座
-`akskClientRestTemplate`，本模块在其上装配 core 三接口的默认实现——
-`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient`。
+`akskClientRestTemplate`，本模块在其上装配 core 十接口（1.0.2 起 openapi 全族）的默认实现——
+`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现（messages/sessions/permissions/user-groups/role-catalog/statistics）。
+
+> **1.0.2**：契约对齐 server 1.3.7 三件——第 13 方法页面准入详情 + IamApplicationClient 可信应用目录 + openapi 六族新接口实现（messages/sessions/permissions/user-groups/role-catalog/statistics）；依赖 simple-iam-client-core:1.0.3（十接口 48 方法）。对应 server >= 1.3.7，旧 server 新能力 404。
 
 ## 核心能力
 
-### 1. 三接口 30 方法全覆盖
+### 1. 契约接口族 48 方法全覆盖（1.0.2 起 openapi 全族）
 
-- **IamUserClient**（12）：用户分页/详情/角色/启停/删除/重置密码/挂摘角色/页面准入应用清单（单码 `iam:portal:api`，无 DATA 面）
-- **IamDepartmentClient**（5）：部门列表/详情/增改删
-- **IamOpenRoleClient**（13）：受委托角色全生命周期，含 If-Match 乐观并发写
+- **十族 48 方法**（1.0.2 起）：users 13 / departments 5 / open-roles 13 / applications 1 / messages 3 / sessions 2 / permissions 1 / user-groups 8 / role-catalog 1 / statistics 1，详见 client-core 契约。
 
 ### 2. 认证零自研
 
@@ -33,7 +33,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
+| `simple-iam-client-core:1.0.3` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
 | `simple-aksk-resttemplate-redis-client-starter:3.0.2` | `implementation` 运行时传递 | aksk 底座：akskClientRestTemplate + 令牌链 |
 | Spring Boot Web / HttpClient 4 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
@@ -44,7 +44,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.2'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents:httpclient:4.5.13'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -132,7 +132,7 @@ public class UserSyncService {
 
 ## 测试覆盖
 
-- 契约测试 4：30 方法逐端点断言（URL/方法/请求体 STRICT/If-Match 头/双分页解析/revision 直取/4xx 透传）
+- 契约测试 4：48 方法逐端点断言（URL/方法/请求体 STRICT/If-Match 头/双分页解析/revision 直取/4xx 透传；1.0.2 起 openapi 全族）
 - 装配测试 4：默认关/正常装配三客户端/缺底座模板响亮失败/非法 origin 拒启
 - 端到端 6：AKP → aksk 底座真令牌链 → dual-identity 宿主 → 真 IAM openapi
   （users 分页/详情/角色/keyword/部门列表/详情/404 透传，2026-10-08 全绿）
