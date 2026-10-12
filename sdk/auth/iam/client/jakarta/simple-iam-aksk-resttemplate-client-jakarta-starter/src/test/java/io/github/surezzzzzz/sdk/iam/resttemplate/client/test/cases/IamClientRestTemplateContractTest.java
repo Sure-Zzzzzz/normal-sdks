@@ -43,6 +43,7 @@ class IamClientRestTemplateContractTest {
     private IamUserClient users;
     private IamDepartmentClient departments;
     private IamOpenRoleClient openRoles;
+    private io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient applicationsClient;
 
     private static String springPageJson() {
         return "{\"content\":[" + userJson() + "],\"totalElements\":1,\"totalPages\":1,\"number\":0,\"size\":20,"
@@ -86,6 +87,7 @@ class IamClientRestTemplateContractTest {
         users = new IamUserRestTemplateClient(restTemplate, properties);
         departments = new IamDepartmentRestTemplateClient(restTemplate, properties);
         openRoles = new IamOpenRoleRestTemplateClient(restTemplate, properties);
+        applicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient(restTemplate, properties);
     }
 
     @Test
@@ -118,6 +120,31 @@ class IamClientRestTemplateContractTest {
         server.verify();
         server.reset();
 
+        // 1.3.7 details：对象数组直读（code/displayName/description）
+        server.expect(requestTo(API + "/users/sub-1/page-admitted-application-details"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"code\":\"iam\",\"displayName\":\"IAM 管理台\",\"description\":null}]",
+                        MediaType.APPLICATION_JSON));
+        java.util.List<io.github.surezzzzzz.sdk.iam.client.model.PageAdmittedApplication> details =
+                users.listPageAdmittedApplicationDetails("sub-1");
+        assertEquals("IAM 管理台", details.get(0).getDisplayName(), "详情 displayName 解析");
+        assertEquals("iam", details.get(0).getCode(), "详情 code 解析");
+        server.verify();
+        server.reset();
+
+        // 1.3.7 applications：目录分页（Spring Page wire + 三字段）
+        server.expect(requestTo(API + "/applications?page=0&size=20"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"content\":[{\"applicationCode\":\"iam\",\"applicationName\":\"IAM 管理台\",\"status\":1}],\"totalElements\":1,\"totalPages\":1,\"number\":0,\"size\":20}",
+                        MediaType.APPLICATION_JSON));
+        io.github.surezzzzzz.sdk.iam.client.model.IamSpringPage<io.github.surezzzzzz.sdk.iam.client.model.IamApplication> applications =
+                applicationsClient.listApplications(0, 20);
+        assertEquals(1L, applications.getTotalElements(), "目录分页 totalElements");
+        assertEquals("iam", applications.getContent().get(0).getApplicationCode(), "目录三字段解析");
+        assertEquals(Integer.valueOf(1), applications.getContent().get(0).getStatus(), "目录 status 解析");
+        server.verify();
+        server.reset();
+
         server.expect(requestTo(API + "/users/sub-1/roles"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("[\"iam_user\",\"kms-admin\"]", MediaType.APPLICATION_JSON));
@@ -135,7 +162,7 @@ class IamClientRestTemplateContractTest {
         server.reset();
 
         server.expect(requestTo(API + "/users/sub-1"))
-                .andExpect(method(HttpMethod.PATCH))
+                .andExpect(method(HttpMethod.PUT))
                 .andExpect(content().json("{\"displayName\":\"新名\",\"email\":\"\",\"phone\":\"\"}", true))
                 .andRespond(withSuccess(userJson(), MediaType.APPLICATION_JSON));
         users.updateUser("sub-1", "新名", "", "");
@@ -165,7 +192,7 @@ class IamClientRestTemplateContractTest {
         server.verify();
         server.reset();
 
-        expectVoid(HttpMethod.PUT, API + "/users/sub-1/roles/5", null);
+        expectVoid(HttpMethod.POST, API + "/users/sub-1/roles/5", null);
         users.assignRole("sub-1", 5L);
         server.verify();
         server.reset();
@@ -200,7 +227,7 @@ class IamClientRestTemplateContractTest {
         server.reset();
 
         server.expect(requestTo(API + "/departments/1"))
-                .andExpect(method(HttpMethod.PATCH))
+                .andExpect(method(HttpMethod.PUT))
                 .andExpect(content().json("{\"name\":\"新名\"}", true))
                 .andRespond(withSuccess(departmentJson(), MediaType.APPLICATION_JSON));
         departments.updateDepartment(1L, "新名", null, null, null);
@@ -333,6 +360,142 @@ class IamClientRestTemplateContractTest {
                 () -> users.getUser("sub-1"), "4xx 透传");
         assertEquals(400, exception.getStatusCode().value(), "状态码保留");
         server.verify();
+    }
+
+
+    @Test
+    void shouldCallSixClanEndpointsWithContractFields() {
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient messagesClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient(restTemplate, properties());
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamSessionRestTemplateClient sessionsClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamSessionRestTemplateClient(restTemplate, properties());
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPermissionRestTemplateClient permissionsClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPermissionRestTemplateClient(restTemplate, properties());
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamRoleCatalogRestTemplateClient roleCatalogClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamRoleCatalogRestTemplateClient(restTemplate, properties());
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamStatisticsRestTemplateClient statisticsClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamStatisticsRestTemplateClient(restTemplate, properties());
+        io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserGroupRestTemplateClient userGroupsClient =
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserGroupRestTemplateClient(restTemplate, properties());
+
+        // applications（Spring Page wire）
+        server.expect(requestTo(API + "/applications?page=0&size=50"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"content\":[{\"applicationCode\":\"iam\",\"applicationName\":\"IAM\","
+                        + "\"status\":1,\"createdAt\":\"2026-01-01T00:00:00Z\"}],\"totalElements\":1,\"totalPages\":1,"
+                        + "\"number\":0,\"size\":50}", MediaType.APPLICATION_JSON));
+        assertEquals(1L, applicationsClient.listApplications(0, 50).getTotalElements());
+        server.reset();
+
+        // messages 三方法
+        server.expect(requestTo(API + "/messages"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"recipientSubjectIds\":[\"sid-e2e-1\"],\"title\":\"t\",\"content\":\"c\"}", true))
+                .andRespond(withSuccess("{\"sendBatchId\":\"batch-1\",\"recipientCount\":1}", MediaType.APPLICATION_JSON));
+        assertEquals("batch-1", messagesClient.sendMessage(
+                io.github.surezzzzzz.sdk.iam.client.model.IamMessageSendRequest.builder()
+                        .recipientSubjectIds(java.util.Collections.singletonList("sid-e2e-1"))
+                        .title("t").content("c").build()).getSendBatchId());
+        server.reset();
+        server.expect(requestTo(API + "/messages?subjectId=sid-e2e-1&page=1&size=5"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"title\":\"t\",\"content\":\"c\",\"sendBatchId\":\"batch-1\","
+                        + "\"senderUsername\":\"aksk:c1\"}]", MediaType.APPLICATION_JSON));
+        assertEquals("t", messagesClient.listBySubject("sid-e2e-1", 1, 5).get(0).getTitle());
+        server.reset();
+        server.expect(requestTo(API + "/messages/batch-1"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"sendBatchId\":\"batch-1\",\"title\":\"t\",\"content\":\"c\",\"recipientCount\":1,"
+                        + "\"targetUserCount\":1,\"targetDepartmentCount\":0}", MediaType.APPLICATION_JSON));
+        assertEquals(1, messagesClient.getBatch("batch-1").getTargetUserCount());
+        server.reset();
+
+        // sessions 两方法
+        server.expect(requestTo(API + "/sessions?subjectId=sid-e2e-1&page=1&size=10"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"sessionId\":\"sess-1\",\"username\":\"e2e-user\",\"subjectId\":\"sid-e2e-1\","
+                                + "\"clientId\":\"c1\",\"remoteIp\":\"127.0.0.1\",\"userAgent\":\"ua\"}]",
+                        MediaType.APPLICATION_JSON));
+        assertEquals("sess-1", sessionsClient.listBySubject("sid-e2e-1", 1, 10).get(0).getSessionId());
+        server.reset();
+        expectVoid(HttpMethod.DELETE, API + "/sessions/sess-1", null);
+        sessionsClient.revokeSession("sess-1");
+        server.reset();
+
+        // permissions
+        server.expect(requestTo(API + "/permissions?keyword=&page=1&size=50"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"code\":\"iam:user:api\",\"name\":\"用户API\",\"type\":\"API\","
+                        + "\"description\":\"d\",\"builtIn\":true}]", MediaType.APPLICATION_JSON));
+        assertEquals("iam:user:api", permissionsClient.listPermissions("", 1, 50).get(0).getCode());
+        server.reset();
+
+        // role-catalog
+        server.expect(requestTo(API + "/role-catalog?keyword=&page=1&size=50"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":2,\"code\":\"iam_user\",\"name\":\"普通用户\","
+                        + "\"description\":\"d\",\"builtIn\":true}]", MediaType.APPLICATION_JSON));
+        assertEquals(Long.valueOf(2L), roleCatalogClient.listRoles("", 1, 50).get(0).getId());
+        server.reset();
+
+        // statistics（嵌套 wire）
+        server.expect(requestTo(API + "/statistics"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"counts\":{\"user\":10,\"role\":14,\"department\":6,\"userGroup\":0,"
+                                + "\"permission\":33,\"trustedApplication\":7},\"stats\":{\"activeSessions\":0,"
+                                + "\"todayLoggedInUsers\":3,\"lockedUsers\":0,\"disabledUsers\":0,\"usersWithoutDepartment\":0}}",
+                        MediaType.APPLICATION_JSON));
+        assertEquals(10L, statisticsClient.getStatistics().getUser());
+        server.reset();
+
+        // user-groups 八方法
+        server.expect(requestTo(API + "/user-groups?status=1&keyword=e2e&page=1&size=10"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"description\":\"d\","
+                        + "\"displayName\":\"组一\",\"status\":1}]", MediaType.APPLICATION_JSON));
+        assertEquals("g1", userGroupsClient.listGroups(1, "e2e", 1, 10).get(0).getCode());
+        server.reset();
+        server.expect(requestTo(API + "/user-groups"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("{\"code\":\"g1\",\"name\":\"组一\",\"description\":\"d\"}", true))
+                .andRespond(withSuccess("{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"status\":1}",
+                        MediaType.APPLICATION_JSON));
+        assertEquals(Long.valueOf(9L), userGroupsClient.createGroup("g1", "组一", "d").getId());
+        server.reset();
+        server.expect(requestTo(API + "/user-groups/9"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"status\":1}",
+                        MediaType.APPLICATION_JSON));
+        assertEquals("g1", userGroupsClient.getGroup(9L).getCode());
+        server.reset();
+        server.expect(requestTo(API + "/user-groups/9"))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(content().json("{\"name\":\"组二\"}", true))
+                .andRespond(withSuccess("{\"id\":9,\"code\":\"g1\",\"name\":\"组二\",\"status\":1}",
+                        MediaType.APPLICATION_JSON));
+        assertEquals("组二", userGroupsClient.updateGroup(9L, "组二", null).getName());
+        server.reset();
+        expectVoid(HttpMethod.POST, API + "/user-groups/9/users/sid-e2e-1", null);
+        userGroupsClient.assignUser(9L, "sid-e2e-1");
+        server.reset();
+        server.expect(requestTo(API + "/user-groups/9/users?page=1&size=10"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("[{\"subjectId\":\"sid-e2e-1\",\"username\":\"e2e-user\","
+                        + "\"displayName\":\"成员\"}]", MediaType.APPLICATION_JSON));
+        assertEquals("sid-e2e-1", userGroupsClient.listGroupUsers(9L, 1, 10).get(0).getSubjectId());
+        server.reset();
+        expectVoid(HttpMethod.DELETE, API + "/user-groups/9/users/sid-e2e-1", null);
+        userGroupsClient.revokeUser(9L, "sid-e2e-1");
+        server.reset();
+        expectVoid(HttpMethod.DELETE, API + "/user-groups/9", null);
+        userGroupsClient.deleteGroup(9L);
+        server.verify();
+    }
+
+    private SimpleIamClientRestTemplateProperties properties() {
+        SimpleIamClientRestTemplateProperties properties = new SimpleIamClientRestTemplateProperties();
+        properties.setBaseUrl(BASE);
+        return properties;
     }
 
     private void expectVoid(HttpMethod httpMethod, String url, String ifMatch) {

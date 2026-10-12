@@ -128,6 +128,25 @@ public class IamUserRestTemplateClient implements IamUserClient {
     }
 
     @Override
+    public List<io.github.surezzzzzz.sdk.iam.client.model.PageAdmittedApplication> listPageAdmittedApplicationDetails(
+            String subjectId) {
+        // wire 契约为对象数组（code/displayName/description），与 getUserRoles 同款 JsonNode 直读形态
+        JsonNode node = http.get(SimpleIamClientConstant.RESOURCE_USERS, subjectId, "page-admitted-application-details");
+        if (!node.isArray()) {
+            throw new io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException();
+        }
+        List<io.github.surezzzzzz.sdk.iam.client.model.PageAdmittedApplication> details = new ArrayList<>();
+        for (JsonNode item : node) {
+            details.add(io.github.surezzzzzz.sdk.iam.client.model.PageAdmittedApplication.builder()
+                    .code(IamClientHttpSupport.text(item, "code"))
+                    .displayName(IamClientHttpSupport.text(item, "displayName"))
+                    .description(IamClientHttpSupport.optionalText(item, "description"))
+                    .build());
+        }
+        return details;
+    }
+
+    @Override
     public IamUser createUser(String username, String password, String displayName, String email, String phone,
                               Long departmentId) {
         Map<String, Object> body = new LinkedHashMap<String, Object>();
@@ -146,7 +165,7 @@ public class IamUserRestTemplateClient implements IamUserClient {
         putIfPresent(body, "displayName", displayName);
         putIfPresent(body, "email", email);
         putIfPresent(body, "phone", phone);
-        return user(http.patch(body, SimpleIamClientConstant.RESOURCE_USERS, subjectId));
+        return user(http.put(null, body, SimpleIamClientConstant.RESOURCE_USERS, subjectId));
     }
 
     @Override
@@ -176,7 +195,7 @@ public class IamUserRestTemplateClient implements IamUserClient {
 
     @Override
     public void assignRole(String subjectId, Long roleId) {
-        http.put(null, body(), SimpleIamClientConstant.RESOURCE_USERS, subjectId,
+        http.post(body(), SimpleIamClientConstant.RESOURCE_USERS, subjectId,
                 "roles", String.valueOf(roleId));
     }
 

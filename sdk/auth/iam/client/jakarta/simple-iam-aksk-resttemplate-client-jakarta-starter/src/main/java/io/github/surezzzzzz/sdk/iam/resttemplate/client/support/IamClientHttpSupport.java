@@ -213,16 +213,6 @@ public final class IamClientHttpSupport {
         return exchange(HttpMethod.PUT, uri(segments), headers(ifMatch), body);
     }
 
-    /**
-     * PATCH 请求体（用户资料更新）。
-     *
-     * @param segments 资源路径段
-     * @param body     JSON 请求体
-     * @return 契约 JSON
-     */
-    public JsonNode patch(Map<String, Object> body, String... segments) {
-        return exchange(HttpMethod.PATCH, uri(segments), null, body);
-    }
 
     /**
      * DELETE（204 语义；可选携带 If-Match）。

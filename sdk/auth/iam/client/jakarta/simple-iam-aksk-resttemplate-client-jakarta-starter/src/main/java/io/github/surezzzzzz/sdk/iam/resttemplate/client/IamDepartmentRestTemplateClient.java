@@ -95,7 +95,7 @@ public class IamDepartmentRestTemplateClient implements IamDepartmentClient {
         putIfPresent(body, "parentId", parentId);
         putIfPresent(body, "sortOrder", sortOrder);
         putIfPresent(body, "status", status);
-        return department(http.patch(body, SimpleIamClientConstant.RESOURCE_DEPARTMENTS,
+        return department(http.put(null, body, SimpleIamClientConstant.RESOURCE_DEPARTMENTS,
                 String.valueOf(departmentId)));
     }
 
