@@ -29,7 +29,7 @@ public interface IamOpenRoleFeignClient {
             @org.springframework.web.bind.annotation.PathVariable("applicationId") Long applicationId);
 
     /**
-     * 写入/替换规则；If-Match 缺失=首写（428/412 由 FeignException 透传）。
+     * 写入/替换规则；If-Match 必填且带引号（值="open-role:<id>:<revision>"，版本源=角色行 revision；428/412 由 FeignException 透传）。
      */
     @org.springframework.web.bind.annotation.PutMapping("/roles/{openRoleId}/authorization-rules/{applicationId}")
     io.github.surezzzzzz.sdk.iam.feign.client.model.IamOpenRoleRuleResponse putOpenRoleRule(

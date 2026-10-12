@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.feign.client.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * 受委托角色 wire 模型（revision=If-Match 值来源）
  *
@@ -7,6 +9,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client.model;
  *
  * @author surezzzzzz
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class IamOpenRoleResponse {
 
     /**

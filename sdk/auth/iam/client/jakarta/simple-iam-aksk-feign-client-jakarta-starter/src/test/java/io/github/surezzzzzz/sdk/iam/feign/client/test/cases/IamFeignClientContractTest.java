@@ -56,6 +56,20 @@ class IamFeignClientContractTest {
     private IamDepartmentFeignClient departments;
     @Autowired
     private IamOpenRoleFeignClient openRoles;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamApplicationFeignClient applications;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamMessageFeignClient messages;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamSessionFeignClient sessions;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamPermissionFeignClient permissions;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamRoleCatalogFeignClient roleCatalog;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamStatisticsFeignClient statistics;
+    @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamUserGroupFeignClient userGroups;
 
     @DynamicPropertySource
     static void baseUrl(DynamicPropertyRegistry registry) {
@@ -104,6 +118,105 @@ class IamFeignClientContractTest {
     @org.junit.jupiter.api.BeforeEach
     void resetStub() {
         stub.reset();
+    }
+
+
+    @Test
+    void shouldCallSixClanEndpointsWithContractFields() {
+        // applications（Spring Page wire）
+        stub.reply("GET", "/iam/api/applications?page=0&size=50", "{\"content\":[{\"applicationCode\":\"iam\","
+                + "\"applicationName\":\"IAM\",\"status\":1}],\"totalElements\":1,\"totalPages\":1,"
+                + "\"number\":0,\"size\":50}");
+        assertEquals(1L, applications.listApplications(0, 50).totalElements, "应用目录分页");
+        serverVerify();
+
+        // messages 三方法
+        Map<String, Object> send = new LinkedHashMap<String, Object>();
+        send.put("recipientSubjectIds", Collections.singletonList("sid-e2e-1"));
+        send.put("title", "t");
+        send.put("content", "c");
+        stub.reply("POST", "/iam/api/messages", "{\"sendBatchId\":\"batch-1\",\"recipientCount\":1}");
+        io.github.surezzzzzz.sdk.iam.feign.client.model.IamMessageSendResultResponse sendResult =
+                messages.sendMessage(send);
+        assertEquals("batch-1", sendResult.sendBatchId, "发信批次回读");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/messages", "[{\"title\":\"t\",\"content\":\"c\","
+                + "\"sendBatchId\":\"batch-1\",\"senderUsername\":\"aksk:c1\"}]");
+        assertEquals("t", messages.listMessagesBySubject("sid-e2e-1", 1, 5).get(0).title, "按人查信");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/messages/batch-1", "{\"sendBatchId\":\"batch-1\",\"title\":\"t\","
+                + "\"content\":\"c\",\"targetUserCount\":1,\"targetDepartmentCount\":0}");
+        assertEquals(1, messages.getMessageBatch("batch-1").targetUserCount, "批次详情");
+        serverVerify();
+
+        // sessions 两方法
+        stub.reply("GET", "/iam/api/sessions", "[{\"sessionId\":\"sess-1\",\"username\":\"e2e-user\","
+                + "\"subjectId\":\"sid-e2e-1\",\"clientId\":\"c1\"}]");
+        assertEquals("sess-1", sessions.listSessionsBySubject("sid-e2e-1", 1, 10).get(0).sessionId, "会话列表");
+        serverVerify();
+
+        stub.reply("DELETE", "/iam/api/sessions/sess-1", "");
+        sessions.revokeSession("sess-1");
+        serverVerify();
+
+        // permissions
+        stub.reply("GET", "/iam/api/permissions", "[{\"code\":\"iam:user:api\",\"name\":\"用户API\","
+                + "\"type\":\"API\",\"builtIn\":1}]");
+        assertEquals("iam:user:api", permissions.listPermissions(null, 1, 50).get(0).code, "权限目录");
+        serverVerify();
+
+        // role-catalog
+        stub.reply("GET", "/iam/api/role-catalog", "[{\"id\":2,\"code\":\"iam_user\",\"name\":\"普通用户\","
+                + "\"builtIn\":1}]");
+        assertEquals(Long.valueOf(2L), roleCatalog.listRoleCatalog(null, 1, 50).get(0).id, "角色目录");
+        serverVerify();
+
+        // statistics（嵌套 wire）
+        stub.reply("GET", "/iam/api/statistics", "{\"counts\":{\"user\":10,\"role\":14,\"department\":6},"
+                + "\"stats\":{\"activeSessions\":0,\"todayLoggedInUsers\":3}}");
+        assertEquals(10L, statistics.getStatistics().counts.user, "统计嵌套 counts");
+        serverVerify();
+
+        // user-groups 八方法
+        stub.reply("GET", "/iam/api/user-groups", "[{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"status\":1}]");
+        assertEquals("g1", userGroups.listUserGroups(1, "e2e", 1, 10).get(0).code, "组目录");
+        serverVerify();
+
+        Map<String, Object> group = new LinkedHashMap<String, Object>();
+        group.put("code", "g1");
+        group.put("name", "组一");
+        stub.reply("POST", "/iam/api/user-groups", "{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"status\":1}");
+        assertEquals(Long.valueOf(9L), userGroups.createUserGroup(group).id, "建组");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/user-groups/9", "{\"id\":9,\"code\":\"g1\",\"name\":\"组一\",\"status\":1}");
+        assertEquals("g1", userGroups.getUserGroup(9L).code, "单组读取");
+        serverVerify();
+
+        Map<String, Object> rename = new LinkedHashMap<String, Object>();
+        rename.put("name", "组二");
+        stub.reply("PUT", "/iam/api/user-groups/9", "{\"id\":9,\"code\":\"g1\",\"name\":\"组二\",\"status\":1}");
+        assertEquals("组二", userGroups.updateUserGroup(9L, rename).name, "改组");
+        serverVerify();
+
+        stub.reply("DELETE", "/iam/api/user-groups/9", "");
+        userGroups.deleteUserGroup(9L);
+        serverVerify();
+
+        stub.reply("POST", "/iam/api/user-groups/9/users/sid-e2e-1", "");
+        userGroups.assignUserGroupUser(9L, "sid-e2e-1");
+        serverVerify();
+
+        stub.reply("DELETE", "/iam/api/user-groups/9/users/sid-e2e-1", "");
+        userGroups.revokeUserGroupUser(9L, "sid-e2e-1");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/user-groups/9/users", "[{\"subjectId\":\"sid-e2e-1\","
+                + "\"username\":\"e2e-user\",\"displayName\":\"成员\"}]");
+        assertEquals("sid-e2e-1", userGroups.listUserGroupUsers(9L, 1, 10).get(0).subjectId, "成员列表");
+        serverVerify();
     }
 
     @Test

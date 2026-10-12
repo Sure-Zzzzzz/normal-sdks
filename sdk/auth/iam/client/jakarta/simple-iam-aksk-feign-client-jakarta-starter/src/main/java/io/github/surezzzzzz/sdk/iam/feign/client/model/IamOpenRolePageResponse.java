@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.feign.client.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * 受委托角色分页 wire（自持形态，页码 1 起）
  *
@@ -7,6 +9,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client.model;
  *
  * @author surezzzzzz
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class IamOpenRolePageResponse {
 
     /**

@@ -6,9 +6,11 @@ Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 4.x，Spring Boot 3.
 与 OpenFeign 3.x 形态（`simple-iam-aksk-feign-client-starter`）同源代码、同一份 wire DTO；
 宿主 `@EnableFeignClients` 扫描后认证由底座令牌链注入，本模块为契约接口层，无自有装配面。
 
+> **1.0.2**：契约对齐 server 1.3.7 三件——第 13 方法页面准入详情 + IamApplicationClient 可信应用目录 + openapi 六族新接口实现（messages/sessions/permissions/user-groups/role-catalog/statistics）；依赖 simple-iam-client-core:1.0.3（十接口 48 方法）。对应 server >= 1.3.7，旧 server 新能力 404。
+
 ## 核心能力
 
-### 1. 三契约接口 30 方法
+### 1. 契约接口族 48 方法（1.0.2 起 openapi 全覆盖）
 
 与 RestTemplate 形态逐端点一一对应；请求体为 `Map<String, Object>`（可选字段 null 不放入），
 路径注解写契约字面量。
@@ -31,7 +33,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.1` | `api` 编译期传递 | 契约常量/异常族 |
+| `simple-iam-client-core:1.0.3` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
 | Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024.0.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
@@ -42,7 +44,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.0.2'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }

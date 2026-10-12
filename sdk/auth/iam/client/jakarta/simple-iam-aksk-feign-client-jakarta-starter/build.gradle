@@ -16,13 +16,16 @@ configurations.configureEach {
 
 dependencies {
     // 契约层：常量/异常族（接口与 DTO 属本模块，base-url 键常量取自 core，收 api）
-    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
 
     // aksk 底座（Feign jakarta 形态）：@AkskClientFeignClient 元注解与拦截器装配
     implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
 
     // Spring Cloud OpenFeign（compileOnly，版本由上方 BOM 纠偏管理）
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // wire 模型 @JsonIgnoreProperties 仅编译期需要（POM 零依赖，宿主 Feign 解码链自带 jackson）
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
 
     // Spring Boot
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

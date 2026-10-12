@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.feign.client.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * IAM 部门 wire 模型
  *
@@ -7,6 +9,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client.model;
  *
  * @author surezzzzzz
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class IamDepartmentResponse {
 
     /**
