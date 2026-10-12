@@ -5,6 +5,7 @@ import lombok.Value;
 
 /**
  * IAM 统计聚合（statistics 族响应模型，1.3.7）：与管理台同源口径。
+ * wire 为 {counts:{...},stats:{...}} 嵌套结构（模型已拍平，传输件负责分层读取）。
  *
  * @author surezzzzzz
  */

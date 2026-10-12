@@ -61,12 +61,12 @@ public interface IamOpenRoleClient {
      *
      * @param openRoleId        角色 UUID
      * @param applicationId     目标应用 ID
-     * @param ifMatch           乐观并发条件（null=首写；否则 open-role:&lt;id&gt;:&lt;revision&gt;）
+     * @param ifMatch           乐观并发条件（必填：open-role:&lt;id&gt;:&lt;revision&gt;，版本源=角色行 revision）
      * @param manifestVersion   清单版本
      * @param manifestDigest    清单摘要
      * @param pagePermissions   页面权限码
      * @param apiPermissions    API 权限码
-     * @param dataGrantTemplate DATA 授权模板
+     * @param dataGrantTemplate DATA 授权模板（null=不携带；服务端不收空对象，结构须为 simple-data-permission 文档）
      * @return 写入后的规则（含新 revision）
      */
     IamOpenRoleRule putOpenRoleRule(String openRoleId, Long applicationId, String ifMatch, Long manifestVersion,
@@ -78,7 +78,7 @@ public interface IamOpenRoleClient {
      *
      * @param openRoleId    角色 UUID
      * @param applicationId 目标应用 ID
-     * @param ifMatch       乐观并发条件（null=首写形态）
+     * @param ifMatch       乐观并发条件（必填：open-role:&lt;id&gt;:&lt;revision&gt;）
      */
     void deleteOpenRoleRule(String openRoleId, Long applicationId, String ifMatch);
 
