@@ -81,3 +81,6 @@ changelog.md
 .vscode/
 .trae/
 .claude/
+
+# 本地联调 init 脚本（E2E 起服等，凭据可能内嵌）
+*.init.gradle
