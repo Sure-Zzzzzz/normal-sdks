@@ -1,10 +1,11 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.management.iam.directory.test.cases;
 
+import io.github.surezzzzzz.sdk.iam.client.IamApplicationClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryObject;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterDirectoryProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.directory.SmartRedisLimiterServiceDeclaration;
-import io.github.surezzzzzz.sdk.limiter.redis.smart.management.iam.directory.IamUserSmartRedisLimiterDirectoryProvider;
+import io.github.surezzzzzz.sdk.limiter.redis.smart.management.iam.directory.IamApplicationSmartRedisLimiterDirectoryProvider;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.iam.directory.configuration.SmartRedisLimiterManagementIamDirectoryAutoConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -51,9 +52,9 @@ class SmartRedisLimiterManagementIamDirectoryAutoConfigurationTest {
             assertEquals(1, context.getBeanNamesForType(SmartRedisLimiterDirectoryProvider.class).length,
                     "目录提供方仍恰好一个（装饰不增量）");
             assertTrue(context.getBean(SmartRedisLimiterDirectoryProvider.class)
-                            instanceof IamUserSmartRedisLimiterDirectoryProvider,
-                    "引用即装配：目录 Bean 已被装饰为适配件");
-            log.info("引用即装饰验证通过：USER 维度由 IAM 接管");
+                            instanceof IamApplicationSmartRedisLimiterDirectoryProvider,
+                    "引用即装配：目录 Bean 已被装饰为应用权威化适配件（外层，组合内层 USER 适配件）");
+            log.info("引用即装饰验证通过：应用清单权威 + USER 维度由 IAM 接管");
         });
     }
 
@@ -102,7 +103,7 @@ class SmartRedisLimiterManagementIamDirectoryAutoConfigurationTest {
     }
 
     /**
-     * 桩 IAM 用户客户端（表达 iam.client 装配链已就绪的事实；装配测试不调用业务方法）。
+     * 桩 IAM 契约客户端（表达 iam.client 装配链已就绪的事实；装配测试不调用业务方法）。
      */
     @Configuration
     static class StubClientConfiguration {
@@ -110,6 +111,11 @@ class SmartRedisLimiterManagementIamDirectoryAutoConfigurationTest {
         @Bean
         public IamUserClient iamUserClient() {
             return org.mockito.Mockito.mock(IamUserClient.class);
+        }
+
+        @Bean
+        public IamApplicationClient iamApplicationClient() {
+            return org.mockito.Mockito.mock(IamApplicationClient.class);
         }
     }
 }
