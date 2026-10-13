@@ -156,7 +156,9 @@ GET https://management.internal/api/v1/policy/snapshot?serviceCode=test-service
 X-Smart-Redis-Limiter-Policy-Token: <shared-secret>
 ```
 
-该 header 用于 management 明确关闭 resource-server 后的临时固定 token 模式；token 不会进入 URL、user-info、查询参数、事件或日志。resource-server/AKSK 模式下默认客户端不会获取 AKSK 凭据；调用方应接入自身的认证获取/网关能力，或提供自定义 `SmartRedisLimiterPolicyClient`。
+该 header 仅用于 management 明确关闭 resource-server 后的固定 token 兜底（Console 历史形态，Portal 不使用）；token 不会进入 URL、user-info、查询参数、事件或日志。
+
+**真实部署的认证形态是 AKP 换 Bearer 令牌**（Management 以 Portal 形态运行、公共 Resource 验证机器令牌）：运行端引入认证传输件 `smart-redis-limiter-management-aksk-resttemplate-client-starter`（jakarta 线用其 jakarta 变体），传输与认证复用 AKSK 底座 `akskClientRestTemplate`，本表 `policy-token` 留空。凭据申请、`snapshot:read` 最小授权与 DATA 授权文档的完整五步见 Web 仓接入手册「机器运行端接入」章。既不接传输件也不配固定 token 时，由调用方自行提供认证获取能力或自定义 `SmartRedisLimiterPolicyClient`。
 
 Management `1.0.0` 是独立服务，官方运行时为 Spring Boot 2.7.x。真实 Management → MySQL → HTTP 快照 → limiter → Redis Route/Redis 算法的 E2E 仅在本模块 Spring Boot 2.7.9 基线执行；其余兼容矩阵验证 limiter 和 Redis Route 本身。
 
