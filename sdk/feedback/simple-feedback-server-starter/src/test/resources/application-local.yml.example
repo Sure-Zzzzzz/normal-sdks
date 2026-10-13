@@ -1,0 +1,12 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              feedback:
+                password: "你的本机测试库密码"
+        oss:
+          s3:
+            secret-key: "你的本机 MinIO 密钥"

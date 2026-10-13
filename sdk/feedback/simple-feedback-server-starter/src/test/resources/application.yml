@@ -1,0 +1,42 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        # adaptor（testImplementation project 引入）传递链带 smart-cache 自动配置：
+        # 测试无 Redis 路由，关闭缓存（adaptor 测试 yml 同款）
+        cache:
+          enabled: false
+        mysql:
+          route:
+            enable: true
+            primary-datasource: feedback
+            datasources:
+              feedback:
+                url: ${FEEDBACK_TEST_JDBC_URL:jdbc:mysql://localhost:3307/feedback_server_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+                username: ${FEEDBACK_TEST_JDBC_USERNAME:root}
+                password: ${FEEDBACK_TEST_JDBC_PASSWORD:}
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 8
+                  minimum-idle: 2
+                  connection-timeout: 3000
+                  validation-timeout: 3000
+        oss:
+          s3:
+            enabled: true
+            endpoint: http://127.0.0.1:19002
+            access-key: feedback-local-access
+            secret-key: ${FEEDBACK_TEST_S3_SECRET:}
+        feedback:
+          server:
+            enable: true
+            attachment:
+              bucket-name: feedback-attachment-test
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.feedback: DEBUG

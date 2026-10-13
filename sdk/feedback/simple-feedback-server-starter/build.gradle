@@ -1,0 +1,59 @@
+dependencies {
+    // core 1.0.0 已上 Central（10-13），固定坐标形态（规范 §13.1）
+    api 'io.github.sure-zzzzzz:simple-feedback-server-core:1.0.0'
+    // 聚散原则：主源码只编译依赖协议层 core（认证桥翻译的上下文类型、三权注解与模型）；
+    // 协作装配件（resource/iam 两 starter）由宿主按需自引——
+    // 引即全链协作，不引则自备 FeedbackPrincipalResolver（桥 @ConditionalOnClass 自动让位）。
+    // 协议层最小集（数据面只引 core，10-13 定）：MVC 装配件
+    // （@CurrentDataAccessPlan 注入与 @DataPermissionOperation 强制）由宿主自引
+    // simple-data-permission-spring-mvc-starter——与协作装配件同一聚散口径，不随本 POM 强加
+    api 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.2.0'
+    // 数据源路由为部署契约（配置即 simple.mysql.route 形态，平台约定），随 starter 发布
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    // 附件为部署契约（可选聚件：散形态不引本依赖或 S3ClientProperties.enabled=false）
+    implementation 'io.github.sure-zzzzzz:s3-client-starter:2.1.0'
+    compileOnly 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.apache.logging.log4j:log4j-core'
+    testImplementation 'org.apache.httpcomponents:httpclient'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.security:spring-security-test'
+    // 走查宿主（walkthrough 包）组合 IAM 适配器需要 oauth2-resource-server
+    // （适配器 compileOnly 口径，宿主自备——与部署方引入 starter 时的义务一致）
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    // 走查宿主与集成测试的组合装配件（协作链 + 数据源路由；不随 POM 发布）。
+    // 与 KMS 差异：不引 aksk-resource——首发无机器面（DESIGN D2），机器面开位时随 aksk Provider 一并补
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+    // 走查宿主的数据面 MVC 装配件（@CurrentDataAccessPlan 注入）——与部署方义务一致，不随 POM 发布
+    testImplementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
+    // 协作共存验收（starter+adaptor 同装）：让位次序不变量的双 Bean 断言（walkthrough 包，不随 POM 发布）
+    testImplementation project(':sdk:feedback:simple-feedback-iam-adaptor-starter')
+    // 数据面切面织入（dp-mvc 强制件的 aspectj 织入依赖；runtime 同款补法）
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    // 共存验收的 IAM 客户端类型面（adaptor 为 implementation 口径不导出，测试侧自备）
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
+}
+
+// 日常 test 恒排除协作验收（外部 IAM 终端）；协作起服与验收任务由本地 init 脚本提供，故意不入库。
+// 本机凭据在 gitignored 的 src/test/resources/application-local.yml（存在即生效），
+// 无该文件的机器经环境变量注入。
+tasks.test {
+    useJUnitPlatform {
+        excludeTags 'collaboration'
+    }
+}

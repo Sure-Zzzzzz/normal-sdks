@@ -1,0 +1,12 @@
+# simple-feedback-server-starter 迁移目录
+
+仅追加式迁移：每版一个 `V<n>__<描述>.sql`，按序号升序执行一次；不修改已发布迁移，不重放 `../schema.sql`。
+
+| 迁移 | 版本 | 内容 |
+|---|---|---|
+| （基线） | 1.0.0 | `../schema.sql` 三表全量建表；`feedback_submission.first_response` 已含在基线（全新库直接执行 schema.sql） |
+
+## 升级路径
+
+- 1.0.0 全新部署：执行 `../schema.sql`。
+- 早期联调库（基线前手工建的 `feedback_submission`）：补 `ALTER TABLE feedback_submission ADD COLUMN first_response TEXT COMMENT '首成功响应快照（重放依据）' AFTER idempotency_digest;` 即对齐基线。

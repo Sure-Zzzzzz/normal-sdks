@@ -1,0 +1,20 @@
+services:
+  feedback-minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: feedback-attachment-minio
+    command: server /data
+    ports:
+      - "19002:9000"
+    environment:
+      # 本地测试容器凭据：值经环境变量注入（.env / shell），不写受管文件
+      MINIO_ROOT_USER: ${FEEDBACK_TEST_MINIO_USER:-feedback-local-access}
+      MINIO_ROOT_PASSWORD: ${FEEDBACK_TEST_MINIO_PASSWORD:?请注入 FEEDBACK_TEST_MINIO_PASSWORD}
+    volumes:
+      - feedback-minio-data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+volumes:
+  feedback-minio-data:

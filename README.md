@@ -61,6 +61,7 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 | simple-crm-aksk-resttemplate-client-starter | 1.0.0 | 1.0.0 | CRM AKSK RestTemplate 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
 | simple-crm-aksk-feign-client-starter | 1.0.0 | 1.0.0 | CRM AKSK Feign 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
 | simple-crm-audit-listener-starter | 1.0.0 | — | CRM 审计事件监听（Handler SPI） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-feedback-server-starter（+core/iam-adaptor 共3件） | 1.0.0 | — | 通用产品反馈服务：三表 MySQL+S3 附件+三权协作+幂等快照+双档频控+注册表来源同源锁（修正㉔） | [产品反馈-Feedback](docs/business/产品反馈-Feedback.md) |
 
 > AKSK 2.x / 1.x 已封版，快照见 AKSK 篇内封版小节。IAM/AKSK 的 Server 本体固定 Spring Boot 2.7，仅资源侧与客户端走 jakarta 线。
 
