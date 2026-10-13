@@ -1,0 +1,11 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        feedback:
+          server:
+            enable: true
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.feedback: DEBUG
