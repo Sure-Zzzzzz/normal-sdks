@@ -1,16 +1,18 @@
 package io.github.surezzzzzz.sdk.crm.server.core.port.idempotency;
 
 import io.github.surezzzzzz.sdk.crm.server.core.command.CrmCommandMetadata;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmCommandType;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 
 /**
  * 可重放已知目标资源命令幂等事实端口。
  *
- * <p>仅适用于执行前已经确定目标报价 ID 的命令：ISSUE_QUOTATION/QUOTATION、CONFIRM_QUOTATION/QUOTATION。
- * 实现必须拒绝其他命令或资源类型配对。首次请求只能执行首次回调；同一稳定范围与请求摘要重放时，必须仅执行
- * 重放回调，由其按当前 tenant 与数据范围加载已提交事实并重建声明结果；确认报价时必须通过
+ * <p>适用于执行前已经确定目标资源 ID 的已知目标命令（签发/确认/编辑/撤回报价、客户停用/复启/合并/转移、
+ * 目录上架/下架、履约回报/重置、消费者注册）。实现必须拒绝不在受支持配对内的命令或资源类型组合。
+ * 首次请求只能执行首次回调；同一稳定范围与请求摘要重放时，必须走只读重放路径，
+ * 在当前主体与数据范围校验后，从持久化首结果或重放回调重建首个成功声明结果；
+ * 后续状态变化不得覆盖首次响应。通过回调重建确认报价时必须通过
  * {@link io.github.surezzzzzz.sdk.crm.server.core.port.repository.ReplayableFulfillmentItemRepository}
  * 读取完整履约项集合。重放绝不重执首次回调、状态迁移、订单创建、审计或 Outbox 写入。</p>
  *
@@ -26,7 +28,7 @@ public interface CrmReplayableIdempotencyPort extends CrmIdempotencyPort {
     /**
      * 执行可重放的已知目标资源命令。
      *
-     * @param actor              已认证且绑定租户的操作者
+     * @param actor              归属主体（人 iam:/服务 aksk:）
      * @param metadata           命令关联与幂等元数据
      * @param commandType        已知目标资源命令类型
      * @param targetResourceType 目标资源类型
@@ -37,7 +39,7 @@ public interface CrmReplayableIdempotencyPort extends CrmIdempotencyPort {
      * @param <T>                领域声明结果类型
      * @return 首次成功或重放重建的声明结果
      */
-    <T> T execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
+    <T> T execute(CrmOwner actor, CrmCommandMetadata metadata, CrmCommandType commandType,
                   CrmResourceType targetResourceType, String targetResourceId, String requestDigest,
                   CrmIdempotentCallback<T> callback, CrmIdempotentReplayCallback<T> replayCallback);
 

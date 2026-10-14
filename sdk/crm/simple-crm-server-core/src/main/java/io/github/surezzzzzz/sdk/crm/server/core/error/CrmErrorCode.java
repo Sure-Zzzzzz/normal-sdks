@@ -21,26 +21,6 @@ public enum CrmErrorCode {
     INVALID_FORMAT("invalid_format", "invalid、格式"),
 
     /**
-     * 未认证。
-     */
-    UNAUTHENTICATED("unauthenticated", "未认证"),
-
-    /**
-     * 操作者、已停用。
-     */
-    ACTOR_DISABLED("actor_disabled", "操作者、已停用"),
-
-    /**
-     * 租户、不匹配。
-     */
-    TENANT_MISMATCH("tenant_mismatch", "租户、不匹配"),
-
-    /**
-     * 操作、未授权。
-     */
-    ACTION_FORBIDDEN("action_forbidden", "操作、未授权"),
-
-    /**
      * 数据、访问、被拒绝。
      */
     DATA_ACCESS_DENIED("data_access_denied", "数据、访问、被拒绝"),
@@ -83,12 +63,7 @@ public enum CrmErrorCode {
     /**
      * 履约、结果、一致性、failure。
      */
-    FULFILLMENT_RESULT_CONSISTENCY_FAILURE("fulfillment_result_consistency_failure", "履约、结果、一致性、failure"),
-
-    /**
-     * 可重试、依赖、不可用。
-     */
-    RETRYABLE_DEPENDENCY_UNAVAILABLE("retryable_dependency_unavailable", "可重试、依赖、不可用");
+    FULFILLMENT_RESULT_CONSISTENCY_FAILURE("fulfillment_result_consistency_failure", "履约、结果、一致性、failure");
 
     /**
      * 稳定类型代码。

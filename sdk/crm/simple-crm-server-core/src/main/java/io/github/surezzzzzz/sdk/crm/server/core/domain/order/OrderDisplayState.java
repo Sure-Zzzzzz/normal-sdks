@@ -69,6 +69,21 @@ public enum OrderDisplayState {
     }
 
     /**
+     * 按订单交付项事实派生展示态（唯一派生入口，供履约回写/重置后事务性重算）：
+     * 交付项全部完成=已履约；部分完成=部分已履约；无完成=待履约。空集合视为待履约。
+     *
+     * @param totalItems     交付项总数
+     * @param completedItems 已完成交付项数
+     * @return 派生展示态
+     */
+    public static OrderDisplayState derive(long totalItems, long completedItems) {
+        if (totalItems <= 0 || completedItems <= 0) {
+            return PENDING_FULFILLMENT;
+        }
+        return completedItems >= totalItems ? FULFILLED : PARTIALLY_FULFILLED;
+    }
+
+    /**
      * 判断稳定代码是否有效。
      *
      * @param code 稳定类型代码

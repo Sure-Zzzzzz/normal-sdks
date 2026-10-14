@@ -30,18 +30,18 @@ public final class QuotationLifecycleService {
      * @param quotation 报价聚合当前事实
      * @param version   报价版本事实或版本号
      * @param now       当前权威业务时间
-     * @param actorId   执行操作的操作者标识
+     * @param owner     归属主体字符串（iam:/aksk: 前缀）
      * @return 处理后的领域事实或校验结果。
      *
      */
-    public QuotationIssuance issue(Quotation quotation, QuotationVersion version, Instant now, String actorId) {
+    public QuotationIssuance issue(Quotation quotation, QuotationVersion version, Instant now, String owner) {
         requireSameQuotation(quotation, version);
         CrmValidationHelper.requiredObject(now, "now");
-        CrmValidationHelper.required(actorId, "actorId");
+        CrmValidationHelper.required(owner, "owner");
         if (!now.isBefore(version.getValidUntil())) {
             throw new CrmException(CrmErrorCode.QUOTATION_EXPIRED, "quotation has expired");
         }
-        return new QuotationIssuance(quotation.issued(version.getVersion(), now), version.issue(now, actorId));
+        return new QuotationIssuance(quotation.issued(version.getVersion(), now), version.issue(now, owner));
     }
 
     /**
@@ -50,18 +50,38 @@ public final class QuotationLifecycleService {
      * @param quotation        报价聚合当前事实
      * @param version          报价版本事实或版本号
      * @param now              当前权威业务时间
-     * @param actorId          执行操作的操作者标识
+     * @param owner            归属主体字符串（iam:/aksk: 前缀）
      * @param idGenerator      类型化资源标识生成器
      * @param consumerSelector 履约消费者选择器
      * @return 处理后的领域事实或校验结果。
      *
      */
     public QuotationConfirmation confirm(Quotation quotation, QuotationVersion version, Instant now,
-                                         String actorId, CrmIdGenerator idGenerator,
+                                         String owner, CrmIdGenerator idGenerator,
                                          FulfillmentConsumerSelector consumerSelector) {
+        return confirm(quotation, version, now, owner, idGenerator, consumerSelector, null, null);
+    }
+
+    /**
+     * 确认指定报价并生成订单与履约事实；重议派生的报价确认时同事务将被取代旧报价置为 SUPERSEDED。
+     *
+     * @param quotation              报价聚合当前事实
+     * @param version                报价版本事实或版本号
+     * @param now                    当前权威业务时间
+     * @param owner                  归属主体字符串（iam:/aksk: 前缀）
+     * @param idGenerator            类型化资源标识生成器
+     * @param consumerSelector       履约消费者选择器
+     * @param supersedeTarget        被取代的旧报价事实（本报价为重议派生时必填，否则必须为 null）
+     * @param supersedeTargetVersion 被取代旧报价的版本事实
+     * @return 待在同一权威事务持久化的完整确认事实
+     */
+    public QuotationConfirmation confirm(Quotation quotation, QuotationVersion version, Instant now,
+                                         String owner, CrmIdGenerator idGenerator,
+                                         FulfillmentConsumerSelector consumerSelector,
+                                         Quotation supersedeTarget, QuotationVersion supersedeTargetVersion) {
         requireSameQuotation(quotation, version);
         CrmValidationHelper.requiredObject(now, "now");
-        CrmValidationHelper.required(actorId, "actorId");
+        CrmValidationHelper.required(owner, "owner");
         CrmValidationHelper.requiredObject(idGenerator, "idGenerator");
         CrmValidationHelper.requiredObject(consumerSelector, "consumerSelector");
         if (quotation.isConfirmed()) {
@@ -79,8 +99,8 @@ public final class QuotationLifecycleService {
         for (QuotationLine quotationLine : version.getLines()) {
             String orderLineId = nextId(idGenerator, CrmIdResourceType.ORDER_LINE, "orderLineId");
             FulfillmentConsumer consumer = CrmValidationHelper.requiredObject(consumerSelector.select(
-                    quotation.getTenantId(), quotationLine.getFulfillmentObligationTemplate()), "consumer");
-            if (!quotation.getTenantId().equals(consumer.getTenantId()) || !quotationLine
+                    quotationLine.getFulfillmentObligationTemplate()), "consumer");
+            if (!quotationLine
                     .getFulfillmentObligationTemplate().getRequiredConsumerCapability()
                     .equals(consumer.getCapability())) {
                 throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
@@ -92,16 +112,51 @@ public final class QuotationLifecycleService {
                     quotationLine.getCommercialTermsSnapshot(), quotationLine.getFulfillmentObligationTemplate());
             orderLines.add(orderLine);
             fulfillmentItems.add(new FulfillmentItem(nextId(idGenerator, CrmIdResourceType.FULFILLMENT_ITEM,
-                    "fulfillmentId"), quotation.getTenantId(), orderId, orderLineId, 1,
+                    "fulfillmentId"), orderId, orderLineId, 1,
                     FulfillmentState.PENDING_DISPATCH, quotationLine.getFulfillmentObligationTemplate(),
-                    consumer.getConsumerId(), consumer.getProtocolVersion()));
+                    consumer.getConsumerId(), consumer.getProtocolVersion(), quotation.getOwner(), 0, null));
         }
-        Order order = new Order(orderId, quotation.getTenantId(), quotation.getQuotationId(), version.getVersion(),
-                quotation.getCustomerId(), version.getSettlementCurrency(), version.getTotalAmount(), actorId, now,
+        Order order = new Order(orderId, quotation.getQuotationId(), version.getVersion(),
+                quotation.getCustomerId(), version.getSettlementCurrency(), version.getTotalAmount(), owner, now,
                 1L, OrderDisplayState.PENDING_FULFILLMENT, orderLines);
         Quotation confirmedQuotation = quotation.confirmed(version.getVersion(), orderId, now);
-        QuotationVersion confirmedVersion = version.confirm(now, actorId);
-        return new QuotationConfirmation(confirmedQuotation, confirmedVersion, order, fulfillmentItems);
+        QuotationVersion confirmedVersion = version.confirm(now, owner);
+        Quotation supersededTarget = null;
+        QuotationVersion supersededTargetVersion = null;
+        if (quotation.getSupersedesQuotationId() != null) {
+            if (supersedeTarget == null || supersedeTargetVersion == null
+                    || !quotation.getSupersedesQuotationId().equals(supersedeTarget.getQuotationId())
+                    || !supersedeTarget.getQuotationId().equals(supersedeTargetVersion.getQuotationId())
+                    || supersedeTargetVersion.getState() != QuotationState.ISSUED) {
+                throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
+                        "supersede target must be an issued quotation");
+            }
+            supersededTarget = supersedeTarget.superseded(now);
+            supersededTargetVersion = supersedeTargetVersion.superseded(now);
+        } else if (supersedeTarget != null || supersedeTargetVersion != null) {
+            throw CrmException.validation("supersedeTarget");
+        }
+        return new QuotationConfirmation(confirmedQuotation, confirmedVersion, order, fulfillmentItems,
+                supersededTarget, supersededTargetVersion);
+    }
+
+    /**
+     * 撤回已签发报价：聚合与版本同事务置 WITHDRAWN，撤回后不可再确认。
+     *
+     * @param quotation 报价聚合当前事实
+     * @param version   报价版本事实或版本号
+     * @param now       当前权威业务时间
+     * @param owner     撤回人 owner（iam:/aksk: 前缀）
+     * @return 撤回后的事实对
+     */
+    public QuotationWithdrawal withdraw(Quotation quotation, QuotationVersion version, Instant now, String owner) {
+        requireSameQuotation(quotation, version);
+        CrmValidationHelper.requiredObject(now, "now");
+        CrmValidationHelper.required(owner, "owner");
+        if (quotation.isConfirmed() || !quotation.isIssued()) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be withdrawn");
+        }
+        return new QuotationWithdrawal(quotation.withdrawn(now), version.withdrawn(now, owner));
     }
 
     private String nextId(CrmIdGenerator idGenerator, CrmIdResourceType resourceType, String field) {
@@ -114,5 +169,44 @@ public final class QuotationLifecycleService {
         if (!quotation.getQuotationId().equals(version.getQuotationId())) {
             throw CrmException.validation("quotationVersion.quotationId");
         }
+    }
+
+    /**
+     * 重议派生新草稿：自已签发报价版本复制冻结快照（行/币种/总金额/有效截止时间），新报价记录取代来源；
+     * 新报价确认时来源报价自动 SUPERSEDED。源报价可为惰性过期态（落库仍为 ISSUED）。
+     *
+     * @param sourceQuotation 源报价聚合当前事实（须已签发未确认）
+     * @param sourceVersion   源报价当前可确认版本事实
+     * @param now             当前权威业务时间
+     * @param idGenerator     类型化资源标识生成器
+     * @return 以复制快照为起点的新草稿事实对
+     */
+    public QuotationDraft renegotiate(Quotation sourceQuotation, QuotationVersion sourceVersion, Instant now,
+                                      CrmIdGenerator idGenerator) {
+        requireSameQuotation(sourceQuotation, sourceVersion);
+        CrmValidationHelper.requiredObject(now, "now");
+        CrmValidationHelper.requiredObject(idGenerator, "idGenerator");
+        if (sourceQuotation.isConfirmed() || !sourceQuotation.isIssued()) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
+                    "only issued quotation can be renegotiated");
+        }
+        String newQuotationId = CrmValidationHelper.required(
+                idGenerator.nextId(CrmIdResourceType.QUOTATION), "quotationId");
+        Quotation newQuotation = new Quotation(newQuotationId, sourceQuotation.getCustomerId(),
+                sourceQuotation.getOwner(), 1L, 1, null, null, sourceQuotation.getQuotationId(), now, now);
+        // 行快照复制但行 ID 必须换新：本报价的行是自己的事实，沿用源行 ID 会撞全局唯一键
+        List<QuotationLine> copiedLines = new ArrayList<QuotationLine>();
+        for (QuotationLine sourceLine : sourceVersion.getLines()) {
+            copiedLines.add(new QuotationLine(
+                    idGenerator.nextId(CrmIdResourceType.QUOTATION_LINE),
+                    sourceLine.getOfferingId(), sourceLine.getOfferingReference(),
+                    sourceLine.getQuantity(), sourceLine.getUnit(), sourceLine.getUnitPrice(),
+                    sourceLine.getLineTotal(), sourceLine.getCommercialTermsSnapshot(),
+                    sourceLine.getFulfillmentObligationTemplate()));
+        }
+        QuotationVersion draftVersion = new QuotationVersion(newQuotationId, 1, QuotationState.DRAFT,
+                sourceVersion.getSettlementCurrency(), sourceVersion.getValidUntil(),
+                copiedLines, sourceVersion.getTotalAmount(), null, null, null, null);
+        return new QuotationDraft(newQuotation, draftVersion);
     }
 }

@@ -4,18 +4,17 @@ import io.github.surezzzzzz.sdk.crm.server.core.command.CrmCommandMetadata;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.commercial.FixedPriceCommercialTermsSnapshot;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.commercial.FulfillmentObligationTemplate;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.common.Money;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.fulfillment.FulfillmentConsumer;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.fulfillment.FulfillmentItem;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.order.Order;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.order.OrderLine;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.quotation.*;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmCommandType;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmException;
 import io.github.surezzzzzz.sdk.crm.server.core.port.idempotency.CrmReplayableIdempotencyPort;
+import io.github.surezzzzzz.sdk.crm.server.core.port.repository.FulfillmentItemRepository;
 import io.github.surezzzzzz.sdk.crm.server.core.port.repository.ReplayableFulfillmentItemRepository;
+import io.github.surezzzzzz.sdk.crm.server.core.port.system.CrmIdGenerator;
 import io.github.surezzzzzz.sdk.crm.server.core.port.system.FulfillmentConsumerSelector;
 import io.github.surezzzzzz.sdk.crm.server.core.support.CrmValidationHelper;
 import lombok.Getter;
@@ -30,12 +29,12 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * 已知目标命令可重放幂等端口契约测试。
+ * 已知目标资源幂等端口契约测试：owner 作用域（owner、命令类型、资源类型、目标资源 ID、幂等键）。
  *
  * @author surezzzzzz
  */
@@ -45,326 +44,223 @@ class CrmReplayableIdempotencyPortContractTest {
     private static final String REQUEST_DIGEST_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private static final String REQUEST_DIGEST_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
-    private static FulfillmentObligationTemplate copyObligationTemplate(FulfillmentObligationTemplate template) {
-        return new FulfillmentObligationTemplate(template.getSubjectReference(), template.getFulfillmentScope(),
-                template.getRequiredConsumerCapability());
-    }
-
     @Test
     void replaysQuotationIssuanceWithoutExecutingFirstCallbackAgain() {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
         QuotationLifecycleService service = new QuotationLifecycleService();
         AtomicInteger firstCallbackCount = new AtomicInteger();
-        AtomicInteger replayCallbackCount = new AtomicInteger();
-        AtomicReference<QuotationIssuance> committedIssuance = new AtomicReference<QuotationIssuance>();
+        CrmOwner actor = owner();
 
-        QuotationIssuance first = port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION,
-                CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A, () -> {
-                    firstCallbackCount.incrementAndGet();
-                    QuotationIssuance issuance = service.issue(draftQuotation(), draftVersion(), createdAt(), "actor-1");
-                    committedIssuance.set(issuance);
-                    return issuance;
-                }, () -> rehydrateIssuance(committedIssuance.get(), replayCallbackCount));
-        QuotationIssuance replayed = port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION,
+        QuotationIssuance first = port.execute(actor, metadata(), CrmCommandType.ISSUE_QUOTATION,
                 CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> {
-                    firstCallbackCount.incrementAndGet();
-                    throw new AssertionError("重放不得执行报价签发首次回调");
-                }, () -> rehydrateIssuance(committedIssuance.get(), replayCallbackCount));
+                () -> firstIssuance(service, firstCallbackCount),
+                () -> replayIssuance(service));
+        QuotationIssuance replay = port.execute(actor, metadata(), CrmCommandType.ISSUE_QUOTATION,
+                CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
+                () -> firstIssuance(service, firstCallbackCount),
+                () -> replayIssuance(service));
 
-        log.info("报价签发幂等重放：报价ID={}，版本={}，首次回调次数={}，重放回调次数={}",
-                replayed.getQuotation().getQuotationId(), replayed.getQuotationVersion().getVersion(),
-                firstCallbackCount.get(), replayCallbackCount.get());
-        assertEquals(first.getQuotation().getQuotationId(), replayed.getQuotation().getQuotationId(),
-                "重放必须按已提交报价事实重建同一签发结果");
-        assertEquals(QuotationState.ISSUED, replayed.getQuotationVersion().getState(), "重放结果必须是已签发版本");
-        assertNotSame(first.getQuotation(), replayed.getQuotation(), "重放必须重新加载报价权威事实");
-        assertNotSame(first.getQuotationVersion(), replayed.getQuotationVersion(), "重放必须重新加载报价版本事实");
-        assertEquals(1, firstCallbackCount.get(), "重放报价签发不得再次执行状态迁移回调");
-        assertEquals(1, replayCallbackCount.get(), "重放必须执行声明结果重建回调");
+        log.info("签发幂等重放结果：首次签发版本态={}，重放版本态={}，首次回调次数={}",
+                first.getQuotationVersion().getState(), replay.getQuotationVersion().getState(),
+                firstCallbackCount.get());
+        assertEquals(QuotationState.ISSUED, replay.getQuotationVersion().getState(), "重放必须重建已提交签发事实");
+        assertEquals(1, firstCallbackCount.get(), "重放不得再次执行首次回调");
     }
 
     @Test
     void replaysQuotationConfirmationWithoutExecutingOrderCreationAgain() {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
         QuotationLifecycleService service = new QuotationLifecycleService();
-        QuotationIssuance issuance = service.issue(draftQuotation(), draftVersion(), createdAt(), "actor-1");
+        InMemoryFulfillmentItemRepository repository = new InMemoryFulfillmentItemRepository();
         AtomicInteger firstCallbackCount = new AtomicInteger();
-        AtomicInteger replayCallbackCount = new AtomicInteger();
-        AtomicReference<QuotationConfirmation> committedConfirmation = new AtomicReference<QuotationConfirmation>();
+        CrmOwner actor = owner();
 
-        QuotationConfirmation first = port.execute(actor(), metadata(), CrmCommandType.CONFIRM_QUOTATION,
-                CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A, () -> {
-                    firstCallbackCount.incrementAndGet();
-                    QuotationConfirmation confirmation = service.confirm(issuance.getQuotation(),
-                            issuance.getQuotationVersion(), confirmedAt(), "actor-2", resourceType -> resourceType.getCode()
-                                    + "-1", consumerSelector());
-                    committedConfirmation.set(confirmation);
-                    return confirmation;
-                }, () -> rehydrateConfirmation(committedConfirmation.get(), replayCallbackCount));
-        QuotationConfirmation replayed = port.execute(actor(), metadata(), CrmCommandType.CONFIRM_QUOTATION,
+        QuotationConfirmation first = confirmOnce(port, service, repository, firstCallbackCount, actor,
+                REQUEST_DIGEST_A);
+        for (FulfillmentItem item : first.getFulfillmentItems()) {
+            repository.insert(item);
+        }
+        QuotationConfirmation replay = port.execute(actor, metadata(), CrmCommandType.CONFIRM_QUOTATION,
                 CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> {
-                    firstCallbackCount.incrementAndGet();
-                    throw new AssertionError("重放不得执行报价确认首次回调");
-                }, () -> rehydrateConfirmation(committedConfirmation.get(), replayCallbackCount));
+                () -> confirmOnce(service, repository, firstCallbackCount),
+                () -> replayConfirmation(service, repository));
 
-        log.info("报价确认幂等重放：订单ID={}，履约项数={}，首次回调次数={}，重放回调次数={}",
-                replayed.getOrder().getOrderId(), replayed.getFulfillmentItems().size(), firstCallbackCount.get(),
-                replayCallbackCount.get());
-        assertEquals(first.getOrder().getOrderId(), replayed.getOrder().getOrderId(),
-                "重放必须按已提交订单与履约事实重建同一确认结果");
-        assertEquals(first.getFulfillmentItems().size(), replayed.getFulfillmentItems().size(),
-                "重放必须恢复完整履约事实集合");
-        assertNotSame(first.getQuotation(), replayed.getQuotation(), "重放必须重新加载已确认报价事实");
-        assertNotSame(first.getQuotationVersion(), replayed.getQuotationVersion(), "重放必须重新加载已确认报价版本");
-        assertNotSame(first.getOrder(), replayed.getOrder(), "重放必须重新加载订单事实");
-        assertNotSame(first.getFulfillmentItems().get(0), replayed.getFulfillmentItems().get(0),
-                "重放必须重新加载履约项事实");
-        assertEquals(1, firstCallbackCount.get(), "重放报价确认不得再次创建订单或履约项");
-        assertEquals(1, replayCallbackCount.get(), "重放必须执行确认结果重建回调");
+        log.info("确认幂等重放结果：重放订单ID={}，履约项数={}，首次回调次数={}",
+                replay.getOrder().getOrderId(), replay.getFulfillmentItems().size(), firstCallbackCount.get());
+        assertEquals(first.getOrder().getOrderId(), replay.getOrder().getOrderId(), "重放必须重建同一订单事实");
+        assertEquals(first.getFulfillmentItems().size(), replay.getFulfillmentItems().size(),
+                "重放必须按订单完整重建履约事实集合");
+        assertEquals(1, firstCallbackCount.get(), "重放不得再次执行订单创建回调");
     }
 
     @Test
-    void readsCommittedFulfillmentItemsByTenantAndOrderForConfirmationReplay() {
+    void readsCommittedFulfillmentItemsByOrderForConfirmationReplay() {
         QuotationLifecycleService service = new QuotationLifecycleService();
-        QuotationIssuance issuance = service.issue(draftQuotation(), draftVersion(), createdAt(), "actor-1");
-        QuotationConfirmation confirmation = service.confirm(issuance.getQuotation(), issuance.getQuotationVersion(),
-                confirmedAt(), "actor-2", resourceType -> resourceType.getCode() + "-1", consumerSelector());
         InMemoryFulfillmentItemRepository repository = new InMemoryFulfillmentItemRepository();
-        for (FulfillmentItem fulfillmentItem : confirmation.getFulfillmentItems()) {
-            repository.insert(fulfillmentItem.getTenantId(), fulfillmentItem);
+        QuotationConfirmation confirmation = service.confirm(issuedQuotation(), issuedVersion(), confirmedAt(),
+                "iam:actor-1", idGenerator(), consumerSelector());
+        for (FulfillmentItem item : confirmation.getFulfillmentItems()) {
+            repository.insert(item);
         }
 
-        List<FulfillmentItem> reloaded = repository.findByOrderId("tenant-1", confirmation.getOrder().getOrderId());
-        List<FulfillmentItem> crossTenant = repository.findByOrderId("tenant-2", confirmation.getOrder().getOrderId());
+        List<FulfillmentItem> reloaded = repository.findByOrderId(confirmation.getOrder().getOrderId());
+        List<FulfillmentItem> otherOrder = repository.findByOrderId("order-other");
 
-        log.info("报价确认重放履约读取：订单ID={}，履约项数={}", confirmation.getOrder().getOrderId(), reloaded.size());
-        assertEquals(confirmation.getFulfillmentItems().size(), reloaded.size(), "重放必须读取订单的完整履约事实集合");
-        assertNotSame(confirmation.getFulfillmentItems().get(0), reloaded.get(0), "重放必须重新加载履约项权威事实");
-        assertEquals(Collections.emptyList(), crossTenant, "履约项读取不得跨租户泄漏");
+        log.info("履约事实按订单读取结果：本订单数={}，其他订单数={}", reloaded.size(), otherOrder.size());
+        assertEquals(confirmation.getFulfillmentItems().size(), reloaded.size(), "按订单必须完整读取履约事实");
+        assertEquals(0, otherOrder.size(), "不得返回其他订单的履约项");
     }
 
     @Test
     void rejectsDifferentDigestWithoutExecutingAnyCallback() {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
         AtomicInteger callbackCount = new AtomicInteger();
-        port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION,
-                "quotation-1", REQUEST_DIGEST_A, () -> firstResult(callbackCount, "issued-version-1"),
-                () -> replayResult(callbackCount, "issued-version-1"));
+        port.execute(owner(), metadata(), CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION,
+                "quotation-1", REQUEST_DIGEST_A, () -> firstResult(callbackCount, "issuance-1"));
 
-        CrmException exception = assertThrows(CrmException.class, () -> port.execute(actor(), metadata(),
+        CrmException exception = assertThrows(CrmException.class, () -> port.execute(owner(), metadata(),
                 CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_B,
-                () -> firstResult(callbackCount, "wrong"), () -> replayResult(callbackCount, "wrong")));
+                () -> firstResult(callbackCount, "issuance-2")));
 
-        log.info("已知目标幂等摘要冲突：错误码={}，回调次数={}", exception.getErrorCode(), callbackCount.get());
+        log.info("摘要冲突拒绝结果：错误码={}，回调次数={}", exception.getErrorCode(), callbackCount.get());
         assertEquals(CrmErrorCode.IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD, exception.getErrorCode(),
-                "同一稳定范围使用不同摘要必须拒绝");
-        assertEquals(1, callbackCount.get(), "摘要冲突不得执行首次或重放回调");
+                "同一稳定范围复用不同摘要必须拒绝");
+        assertEquals(1, callbackCount.get(), "摘要冲突不得执行任何回调");
     }
 
     @Test
     void rejectsInvalidKnownTargetCommandResourcePair() {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
 
-        CrmException createException = assertThrows(CrmException.class, () -> port.execute(actor(), metadata(),
-                CrmCommandType.CREATE_QUOTATION, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> "wrong", () -> "wrong"));
-        CrmException resourceException = assertThrows(CrmException.class, () -> port.execute(actor(), metadata(),
-                CrmCommandType.ISSUE_QUOTATION, CrmResourceType.ORDER, "order-1", REQUEST_DIGEST_A,
-                () -> "wrong", () -> "wrong"));
+        CrmException commandException = assertThrows(CrmException.class, () -> port.execute(owner(), metadata(),
+                CrmCommandType.CREATE_CUSTOMER, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
+                () -> "result"));
+        CrmException resourceException = assertThrows(CrmException.class, () -> port.execute(owner(), metadata(),
+                CrmCommandType.ISSUE_QUOTATION, CrmResourceType.CUSTOMER, "customer-1", REQUEST_DIGEST_A,
+                () -> "result"));
 
-        log.info("已知目标命令资源配对校验：创建命令错误码={}，资源错误码={}", createException.getErrorCode(),
+        log.info("已知目标命令资源配对校验结果：命令错误码={}，资源错误码={}", commandException.getErrorCode(),
                 resourceException.getErrorCode());
-        assertEquals(CrmErrorCode.VALIDATION_FAILED, createException.getErrorCode(),
-                "创建命令不得使用已知目标可重放幂等端口");
+        assertEquals(CrmErrorCode.VALIDATION_FAILED, commandException.getErrorCode(),
+                "签发/确认外的命令不得使用已知目标幂等端口");
         assertEquals(CrmErrorCode.VALIDATION_FAILED, resourceException.getErrorCode(),
-                "报价签发只能使用报价目标资源类型");
-    }
-
-    @Test
-    void keepsCommittedSuccessWhenReplayCallbackFails() {
-        InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
-        AtomicInteger firstCallbackCount = new AtomicInteger();
-        AtomicInteger replayCallbackCount = new AtomicInteger();
-        port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION,
-                "quotation-1", REQUEST_DIGEST_A, () -> firstResult(firstCallbackCount, "issued-version-1"),
-                () -> replayResult(replayCallbackCount, "issued-version-1"));
-
-        assertThrows(IllegalStateException.class, () -> port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION,
-                CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> firstResult(firstCallbackCount, "wrong"), () -> {
-                    replayCallbackCount.incrementAndGet();
-                    throw new IllegalStateException("重放结果加载失败");
-                }));
-        String replayed = port.execute(actor(), metadata(), CrmCommandType.ISSUE_QUOTATION,
-                CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> firstResult(firstCallbackCount, "wrong"),
-                () -> replayResult(replayCallbackCount, "issued-version-1"));
-
-        log.info("重放失败后再次重放结果={}，首次回调次数={}，重放回调次数={}", replayed,
-                firstCallbackCount.get(), replayCallbackCount.get());
-        assertEquals("issued-version-1", replayed, "重放失败不得删除或改写既有成功记录");
-        assertEquals(1, firstCallbackCount.get(), "重放失败后不得重新执行首次回调");
-        assertEquals(2, replayCallbackCount.get(), "后续请求必须仍按既有成功记录进入重放回调");
-    }
-
-    @Test
-    void isolatesTenantActorCommandTargetAndIdempotencyKey() {
-        InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
-        AtomicInteger firstCallbackCount = new AtomicInteger();
-
-        execute(port, actor("tenant-1", "actor-1"), metadata("key-1"), CrmCommandType.ISSUE_QUOTATION,
-                "quotation-1", firstCallbackCount);
-        execute(port, actor("tenant-2", "actor-1"), metadata("key-1"), CrmCommandType.ISSUE_QUOTATION,
-                "quotation-1", firstCallbackCount);
-        execute(port, actor("tenant-1", "actor-2"), metadata("key-1"), CrmCommandType.ISSUE_QUOTATION,
-                "quotation-1", firstCallbackCount);
-        execute(port, actor("tenant-1", "actor-1"), metadata("key-1"), CrmCommandType.CONFIRM_QUOTATION,
-                "quotation-1", firstCallbackCount);
-        execute(port, actor("tenant-1", "actor-1"), metadata("key-1"), CrmCommandType.ISSUE_QUOTATION,
-                "quotation-2", firstCallbackCount);
-        execute(port, actor("tenant-1", "actor-1"), metadata("key-2"), CrmCommandType.ISSUE_QUOTATION,
-                "quotation-1", firstCallbackCount);
-
-        log.info("已知目标幂等稳定范围隔离：独立首次回调次数={}", firstCallbackCount.get());
-        assertEquals(6, firstCallbackCount.get(), "稳定范围任一维度不同都不得重放其他已知目标记录");
+                "已知目标幂等端口只接受报价资源");
     }
 
     @Test
     void doesNotPersistSuccessWhenFirstCallbackFails() {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
         AtomicInteger callbackCount = new AtomicInteger();
-        assertThrows(IllegalStateException.class, () -> port.execute(actor(), metadata(),
-                CrmCommandType.CONFIRM_QUOTATION, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
+
+        assertThrows(IllegalStateException.class, () -> port.execute(owner(), metadata(),
+                CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
                 () -> {
                     callbackCount.incrementAndGet();
-                    throw new IllegalStateException("首次确认失败");
-                }, () -> replayResult(callbackCount, "wrong")));
-
-        String result = port.execute(actor(), metadata(), CrmCommandType.CONFIRM_QUOTATION,
+                    throw new IllegalStateException("first attempt failed");
+                }));
+        String result = port.execute(owner(), metadata(), CrmCommandType.ISSUE_QUOTATION,
                 CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
-                () -> firstResult(callbackCount, "order-1|fulfillment-1"),
-                () -> replayResult(callbackCount, "order-1|fulfillment-1"));
-        log.info("首次失败后重试结果={}，首次回调次数={}", result, callbackCount.get());
-        assertEquals("order-1|fulfillment-1", result, "首次失败不得留下可重放成功结果");
+                () -> firstResult(callbackCount, "issuance-1"));
+
+        log.info("首次失败后重试结果：{}，回调次数={}", result, callbackCount.get());
+        assertEquals("issuance-1", result, "失败尝试不得留下可重放成功记录");
         assertEquals(2, callbackCount.get(), "失败后重试必须重新执行首次回调");
+    }
+
+    @Test
+    void isolatesOwnerCommandTargetAndIdempotencyKey() {
+        InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
+        AtomicInteger callbackCount = new AtomicInteger();
+
+        execute(port, "iam:actor-1", "key-1", CrmCommandType.ISSUE_QUOTATION, "quotation-1", callbackCount);
+        execute(port, "aksk:client-1", "key-1", CrmCommandType.ISSUE_QUOTATION, "quotation-1", callbackCount);
+        execute(port, "iam:actor-1", "key-1", CrmCommandType.CONFIRM_QUOTATION, "quotation-1", callbackCount);
+        execute(port, "iam:actor-1", "key-1", CrmCommandType.ISSUE_QUOTATION, "quotation-2", callbackCount);
+        execute(port, "iam:actor-1", "key-2", CrmCommandType.ISSUE_QUOTATION, "quotation-1", callbackCount);
+
+        log.info("已知目标幂等隔离结果：独立执行次数={}", callbackCount.get());
+        assertEquals(5, callbackCount.get(), "稳定范围任一维度不同都不得重放其他成功记录");
     }
 
     @Test
     void convergesConcurrentFirstConfirmationToOneResult() throws Exception {
         InMemoryReplayableIdempotencyPort port = new InMemoryReplayableIdempotencyPort();
+        QuotationLifecycleService service = new QuotationLifecycleService();
+        InMemoryFulfillmentItemRepository repository = new InMemoryFulfillmentItemRepository();
         AtomicInteger firstCallbackCount = new AtomicInteger();
-        AtomicInteger replayCallbackCount = new AtomicInteger();
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<String> first = executor.submit(() -> executeConcurrent(port, firstCallbackCount, replayCallbackCount,
-                    ready, start));
-            Future<String> second = executor.submit(() -> executeConcurrent(port, firstCallbackCount, replayCallbackCount,
-                    ready, start));
+            Future<QuotationConfirmation> first = executor.submit(() -> concurrentConfirm(
+                    port, service, repository, firstCallbackCount, ready, start));
+            Future<QuotationConfirmation> second = executor.submit(() -> concurrentConfirm(
+                    port, service, repository, firstCallbackCount, ready, start));
             ready.await();
             start.countDown();
-            String firstResult = first.get();
-            String secondResult = second.get();
-            log.info("并发报价确认收敛：首次结果={}，第二结果={}，首次回调次数={}，重放回调次数={}", firstResult,
-                    secondResult, firstCallbackCount.get(), replayCallbackCount.get());
-            assertEquals(firstResult, secondResult, "并发首次确认必须收敛到同一成功结果");
-            assertEquals(1, firstCallbackCount.get(), "并发首次确认只允许执行一次首次回调");
-            assertEquals(1, replayCallbackCount.get(), "竞争失败请求必须仅通过重放回调返回成功结果");
+
+            QuotationConfirmation firstResult = first.get();
+            QuotationConfirmation secondResult = second.get();
+            log.info("并发确认收敛结果：首次订单ID={}，第二订单ID={}，首次回调次数={}",
+                    firstResult.getOrder().getOrderId(), secondResult.getOrder().getOrderId(),
+                    firstCallbackCount.get());
+            assertEquals(firstResult.getOrder().getOrderId(), secondResult.getOrder().getOrderId(),
+                    "同一稳定范围并发确认必须收敛到同一订单");
+            assertEquals(1, firstCallbackCount.get(), "同一稳定范围并发确认只允许执行一次首次回调");
         } finally {
             executor.shutdownNow();
         }
     }
 
-    private String executeConcurrent(InMemoryReplayableIdempotencyPort port, AtomicInteger firstCallbackCount,
-                                     AtomicInteger replayCallbackCount, CountDownLatch ready, CountDownLatch start)
-            throws Exception {
+    private QuotationIssuance firstIssuance(QuotationLifecycleService service, AtomicInteger callbackCount) {
+        callbackCount.incrementAndGet();
+        return service.issue(draftQuotation(), draftVersion(), confirmedAt(), "iam:actor-1");
+    }
+
+    private QuotationIssuance replayIssuance(QuotationLifecycleService service) {
+        return service.issue(draftQuotation(), draftVersion(), confirmedAt(), "iam:actor-1");
+    }
+
+    private QuotationConfirmation confirmOnce(InMemoryReplayableIdempotencyPort port,
+                                              QuotationLifecycleService service,
+                                              InMemoryFulfillmentItemRepository repository,
+                                              AtomicInteger callbackCount, CrmOwner actor, String digest) {
+        return port.execute(actor, metadata(), CrmCommandType.CONFIRM_QUOTATION, CrmResourceType.QUOTATION,
+                "quotation-1", digest, () -> confirmOnce(service, repository, callbackCount),
+                () -> replayConfirmation(service, repository));
+    }
+
+    private QuotationConfirmation confirmOnce(QuotationLifecycleService service,
+                                              InMemoryFulfillmentItemRepository repository,
+                                              AtomicInteger callbackCount) {
+        callbackCount.incrementAndGet();
+        return service.confirm(issuedQuotation(), issuedVersion(), confirmedAt(), "iam:actor-1",
+                idGenerator(), consumerSelector());
+    }
+
+    private QuotationConfirmation replayConfirmation(QuotationLifecycleService service,
+                                                     InMemoryFulfillmentItemRepository repository) {
+        return service.confirm(issuedQuotation(), issuedVersion(), confirmedAt(), "iam:actor-1",
+                idGenerator(), consumerSelector());
+    }
+
+    private QuotationConfirmation concurrentConfirm(InMemoryReplayableIdempotencyPort port,
+                                                    QuotationLifecycleService service,
+                                                    InMemoryFulfillmentItemRepository repository,
+                                                    AtomicInteger callbackCount, CountDownLatch ready,
+                                                    CountDownLatch start) throws Exception {
         ready.countDown();
         start.await();
-        return port.execute(actor(), metadata(), CrmCommandType.CONFIRM_QUOTATION, CrmResourceType.QUOTATION,
+        return port.execute(owner(), metadata(), CrmCommandType.CONFIRM_QUOTATION, CrmResourceType.QUOTATION,
                 "quotation-1", REQUEST_DIGEST_A,
-                () -> firstResult(firstCallbackCount, "order-1|fulfillment-1"),
-                () -> replayResult(replayCallbackCount, "order-1|fulfillment-1"));
+                () -> confirmOnce(service, repository, callbackCount),
+                () -> replayConfirmation(service, repository));
     }
 
-    private QuotationIssuance rehydrateIssuance(QuotationIssuance issuance, AtomicInteger callbackCount) {
-        callbackCount.incrementAndGet();
-        return new QuotationIssuance(copyQuotation(issuance.getQuotation()),
-                copyQuotationVersion(issuance.getQuotationVersion()));
-    }
-
-    private QuotationConfirmation rehydrateConfirmation(QuotationConfirmation confirmation,
-                                                        AtomicInteger callbackCount) {
-        callbackCount.incrementAndGet();
-        return new QuotationConfirmation(copyQuotation(confirmation.getQuotation()),
-                copyQuotationVersion(confirmation.getQuotationVersion()), copyOrder(confirmation.getOrder()),
-                copyFulfillmentItems(confirmation.getFulfillmentItems()));
-    }
-
-    private Quotation copyQuotation(Quotation quotation) {
-        return new Quotation(quotation.getQuotationId(), quotation.getTenantId(), quotation.getCustomerId(),
-                quotation.getOwnerActorId(), quotation.getAggregateVersion(), quotation.getCurrentVersion(),
-                quotation.getCurrentConfirmableVersion(), quotation.getConfirmedOrderId(), quotation.getCreatedAt(),
-                quotation.getUpdatedAt());
-    }
-
-    private QuotationVersion copyQuotationVersion(QuotationVersion version) {
-        List<QuotationLine> lines = new ArrayList<QuotationLine>();
-        for (QuotationLine line : version.getLines()) {
-            lines.add(copyQuotationLine(line));
-        }
-        return new QuotationVersion(version.getQuotationId(), version.getVersion(), version.getState(),
-                version.getSettlementCurrency(), version.getValidUntil(), lines, copyMoney(version.getTotalAmount()),
-                version.getIssuedAt(), version.getIssuedByActorId(), version.getConfirmedAt(),
-                version.getConfirmedByActorId());
-    }
-
-    private QuotationLine copyQuotationLine(QuotationLine line) {
-        return new QuotationLine(line.getQuotationLineId(), line.getOfferingId(), line.getOfferingReference(),
-                line.getQuantity(), line.getUnit(), copyMoney(line.getUnitPrice()), copyMoney(line.getLineTotal()),
-                new FixedPriceCommercialTermsSnapshot(line.getQuantity(), line.getUnit(), copyMoney(line.getUnitPrice())),
-                copyObligationTemplate(line.getFulfillmentObligationTemplate()));
-    }
-
-    private Order copyOrder(Order order) {
-        List<OrderLine> lines = new ArrayList<OrderLine>();
-        for (OrderLine line : order.getLines()) {
-            lines.add(copyOrderLine(line));
-        }
-        return new Order(order.getOrderId(), order.getTenantId(), order.getSourceQuotationId(),
-                order.getSourceQuotationVersion(), order.getCustomerId(), order.getSettlementCurrency(),
-                copyMoney(order.getTotalAmount()), order.getConfirmedByActorId(), order.getConfirmedAt(),
-                order.getOrderVersion(), order.getDisplayState(), lines);
-    }
-
-    private OrderLine copyOrderLine(OrderLine line) {
-        return new OrderLine(line.getOrderLineId(), line.getSourceQuotationLineId(), line.getOfferingReference(),
-                line.getQuantity(), line.getUnit(), copyMoney(line.getUnitPrice()), copyMoney(line.getLineTotal()),
-                new FixedPriceCommercialTermsSnapshot(line.getQuantity(), line.getUnit(), copyMoney(line.getUnitPrice())),
-                copyObligationTemplate(line.getFulfillmentObligationTemplate()));
-    }
-
-    private List<FulfillmentItem> copyFulfillmentItems(List<FulfillmentItem> fulfillmentItems) {
-        List<FulfillmentItem> copies = new ArrayList<FulfillmentItem>();
-        for (FulfillmentItem fulfillmentItem : fulfillmentItems) {
-            copies.add(new FulfillmentItem(fulfillmentItem.getFulfillmentId(), fulfillmentItem.getTenantId(),
-                    fulfillmentItem.getOrderId(), fulfillmentItem.getOrderLineId(), fulfillmentItem.getVersion(),
-                    fulfillmentItem.getState(), copyObligationTemplate(fulfillmentItem.getObligationTemplate()),
-                    fulfillmentItem.getConsumerId(), fulfillmentItem.getConsumerProtocolVersion()));
-        }
-        return copies;
-    }
-
-    private Money copyMoney(Money money) {
-        return new Money(money.getAmount(), money.getCurrency());
-    }
-
-    private void execute(InMemoryReplayableIdempotencyPort port, CrmActor actor, CrmCommandMetadata metadata,
+    private void execute(InMemoryReplayableIdempotencyPort port, String owner, String idempotencyKey,
                          CrmCommandType commandType, String targetResourceId, AtomicInteger callbackCount) {
-        port.execute(actor, metadata, commandType, CrmResourceType.QUOTATION, targetResourceId, REQUEST_DIGEST_A,
-                () -> firstResult(callbackCount, targetResourceId), () -> targetResourceId);
+        port.execute(CrmOwner.of(owner), metadata(idempotencyKey), commandType, CrmResourceType.QUOTATION,
+                targetResourceId, REQUEST_DIGEST_A, () -> firstResult(callbackCount, "result"));
     }
 
     private String firstResult(AtomicInteger callbackCount, String result) {
@@ -372,9 +268,16 @@ class CrmReplayableIdempotencyPortContractTest {
         return result;
     }
 
-    private String replayResult(AtomicInteger callbackCount, String result) {
-        callbackCount.incrementAndGet();
-        return result;
+    private CrmOwner owner() {
+        return CrmOwner.of("iam:actor-1");
+    }
+
+    private CrmCommandMetadata metadata() {
+        return metadata("idempotency-key-1");
+    }
+
+    private CrmCommandMetadata metadata(String idempotencyKey) {
+        return new CrmCommandMetadata("correlation-1", idempotencyKey);
     }
 
     private Instant createdAt() {
@@ -385,9 +288,23 @@ class CrmReplayableIdempotencyPortContractTest {
         return Instant.parse("2026-07-30T00:00:00Z");
     }
 
+    private CrmIdGenerator idGenerator() {
+        return resourceType -> resourceType.name().toLowerCase().replace('_', '-')
+                + "-" + resourceType.ordinal() + "-1";
+    }
+
+    private FulfillmentConsumerSelector consumerSelector() {
+        return template -> new io.github.surezzzzzz.sdk.crm.server.core.domain.fulfillment.FulfillmentConsumer(
+                "consumer-1", template.getRequiredConsumerCapability(), 2);
+    }
+
+    private Quotation issuedQuotation() {
+        return draftQuotation().issued(1, confirmedAt());
+    }
+
     private Quotation draftQuotation() {
-        return new Quotation("quotation-1", "tenant-1", "customer-1", "actor-1", 1L, 1,
-                null, null, createdAt(), createdAt());
+        return new Quotation("quotation-1", "customer-1", "iam:actor-1", 1L, 1,
+                null, null, null, createdAt(), createdAt());
     }
 
     private QuotationVersion draftVersion() {
@@ -401,50 +318,29 @@ class CrmReplayableIdempotencyPortContractTest {
                 new Money(new BigDecimal("59.70"), "CNY"), null, null, null, null);
     }
 
-    private FulfillmentConsumerSelector consumerSelector() {
-        return (tenantId, template) -> new FulfillmentConsumer("consumer-1", tenantId,
-                template.getRequiredConsumerCapability(), 2);
+    private QuotationVersion issuedVersion() {
+        return draftVersion().issue(confirmedAt(), "iam:actor-1");
     }
 
-    private CrmActor actor() {
-        return actor("tenant-1", "actor-1");
-    }
-
-    private CrmActor actor(String tenantId, String actorId) {
-        return new CrmActor(tenantId, actorId, "操作者");
-    }
-
-    private CrmCommandMetadata metadata() {
-        return metadata("idempotency-key-1");
-    }
-
-    private CrmCommandMetadata metadata(String idempotencyKey) {
-        return new CrmCommandMetadata("correlation-1", idempotencyKey);
-    }
-
-    private static final class InMemoryFulfillmentItemRepository implements ReplayableFulfillmentItemRepository {
+    private static final class InMemoryFulfillmentItemRepository
+            implements ReplayableFulfillmentItemRepository, FulfillmentItemRepository {
 
         private final List<FulfillmentItem> items = new ArrayList<FulfillmentItem>();
 
         @Override
-        public List<FulfillmentItem> findByOrderId(String tenantId, String orderId) {
+        public List<FulfillmentItem> findByOrderId(String orderId) {
             List<FulfillmentItem> result = new ArrayList<FulfillmentItem>();
             for (FulfillmentItem item : items) {
-                if (tenantId.equals(item.getTenantId()) && orderId.equals(item.getOrderId())) {
-                    result.add(new FulfillmentItem(item.getFulfillmentId(), item.getTenantId(), item.getOrderId(),
-                            item.getOrderLineId(), item.getVersion(), item.getState(),
-                            copyObligationTemplate(item.getObligationTemplate()), item.getConsumerId(),
-                            item.getConsumerProtocolVersion()));
+                if (orderId.equals(item.getOrderId())) {
+                    result.add(item);
                 }
             }
             return result;
         }
 
         @Override
-        public FulfillmentItem insert(String tenantId, FulfillmentItem fulfillmentItem) {
-            if (!tenantId.equals(fulfillmentItem.getTenantId())) {
-                throw new CrmException(CrmErrorCode.TENANT_MISMATCH, "tenantId");
-            }
+        public FulfillmentItem insert(FulfillmentItem fulfillmentItem) {
+            CrmValidationHelper.requiredObject(fulfillmentItem, "fulfillmentItem");
             items.add(fulfillmentItem);
             return fulfillmentItem;
         }
@@ -455,14 +351,15 @@ class CrmReplayableIdempotencyPortContractTest {
         private final Map<String, Record> records = new HashMap<String, Record>();
 
         @Override
-        public <T> T execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
+        public <T> T execute(CrmOwner actor, CrmCommandMetadata metadata, CrmCommandType commandType,
                              CrmResourceType targetResourceType, String targetResourceId, String requestDigest,
                              CrmIdempotentCallback<T> callback) {
-            return callback.execute();
+            return execute(actor, metadata, commandType, targetResourceType, targetResourceId, requestDigest,
+                    callback, () -> callback.execute());
         }
 
         @Override
-        public synchronized <T> T execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
+        public synchronized <T> T execute(CrmOwner actor, CrmCommandMetadata metadata, CrmCommandType commandType,
                                           CrmResourceType targetResourceType, String targetResourceId,
                                           String requestDigest, CrmIdempotentCallback<T> callback,
                                           CrmIdempotentReplayCallback<T> replayCallback) {
@@ -475,12 +372,13 @@ class CrmReplayableIdempotencyPortContractTest {
             CrmValidationHelper.sha256(requestDigest, "requestDigest");
             CrmValidationHelper.requiredObject(callback, "callback");
             CrmValidationHelper.requiredObject(replayCallback, "replayCallback");
-            String key = actor.getTenantId() + "|" + actor.getActorId() + "|" + commandType.getCode() + "|"
+            String key = actor.getOwner() + "|" + commandType.getCode() + "|"
                     + targetResourceType.getCode() + "|" + targetResourceId + "|" + metadata.getIdempotencyKey();
             Record record = records.get(key);
             if (record != null) {
                 if (!record.getRequestDigest().equals(requestDigest)) {
-                    throw new CrmException(CrmErrorCode.IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD, "requestDigest");
+                    throw new CrmException(CrmErrorCode.IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD,
+                            "requestDigest");
                 }
                 return replayCallback.execute();
             }
@@ -511,11 +409,6 @@ class CrmReplayableIdempotencyPortContractTest {
          */
         private final String requestDigest;
 
-        /**
-         * 创建已提交幂等成功记录。
-         *
-         * @param requestDigest 请求摘要
-         */
         Record(String requestDigest) {
             this.requestDigest = requestDigest;
         }

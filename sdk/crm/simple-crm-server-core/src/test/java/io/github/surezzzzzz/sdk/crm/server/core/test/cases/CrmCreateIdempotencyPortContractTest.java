@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.crm.server.core.test.cases;
 
 import io.github.surezzzzzz.sdk.crm.server.core.command.CrmCommandMetadata;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmCommandType;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * 创建命令幂等端口契约测试。
+ * 创建命令幂等端口契约测试：owner 作用域（owner、命令类型、资源类型、幂等键）。
  *
  * @author surezzzzzz
  */
@@ -40,10 +40,10 @@ class CrmCreateIdempotencyPortContractTest {
         AtomicInteger callbackCount = new AtomicInteger();
         AtomicInteger idGeneratorCount = new AtomicInteger();
 
-        String firstResourceId = port.execute(actor("tenant-1", "actor-1"), metadata("key-1"),
+        String firstResourceId = port.execute(owner("iam:actor-1"), metadata("key-1"),
                 CrmCommandType.CREATE_CUSTOMER, CrmResourceType.CUSTOMER, REQUEST_DIGEST_A,
                 () -> generatedId(callbackCount, idGeneratorCount, "customer"));
-        String replayedResourceId = port.execute(actor("tenant-1", "actor-1"), metadata("key-1"),
+        String replayedResourceId = port.execute(owner("iam:actor-1"), metadata("key-1"),
                 CrmCommandType.CREATE_CUSTOMER, CrmResourceType.CUSTOMER, REQUEST_DIGEST_A,
                 () -> generatedId(callbackCount, idGeneratorCount, "customer"));
 
@@ -83,10 +83,11 @@ class CrmCreateIdempotencyPortContractTest {
     void rejectsSameScopeWithDifferentDigestWithoutExecutingCallback() {
         InMemoryCreateIdempotencyPort port = new InMemoryCreateIdempotencyPort();
         AtomicInteger callbackCount = new AtomicInteger();
-        port.execute(actor("tenant-1", "actor-1"), metadata("key-1"), CrmCommandType.CREATE_CONTACT,
-                CrmResourceType.CONTACT, REQUEST_DIGEST_A, () -> generatedId(callbackCount, new AtomicInteger(), "contact"));
+        port.execute(owner("iam:actor-1"), metadata("key-1"), CrmCommandType.CREATE_CONTACT,
+                CrmResourceType.CONTACT, REQUEST_DIGEST_A,
+                () -> generatedId(callbackCount, new AtomicInteger(), "contact"));
 
-        CrmException exception = assertThrows(CrmException.class, () -> port.execute(actor("tenant-1", "actor-1"),
+        CrmException exception = assertThrows(CrmException.class, () -> port.execute(owner("iam:actor-1"),
                 metadata("key-1"), CrmCommandType.CREATE_CONTACT, CrmResourceType.CONTACT, REQUEST_DIGEST_B,
                 () -> generatedId(callbackCount, new AtomicInteger(), "contact")));
 
@@ -97,37 +98,35 @@ class CrmCreateIdempotencyPortContractTest {
     }
 
     @Test
-    void isolatesTenantActorCommandResourceTypeAndIdempotencyKey() {
+    void isolatesOwnerCommandResourceTypeAndIdempotencyKey() {
         InMemoryCreateIdempotencyPort port = new InMemoryCreateIdempotencyPort();
         AtomicInteger callbackCount = new AtomicInteger();
 
-        execute(port, actor("tenant-1", "actor-1"), "key-1", CrmCommandType.CREATE_CUSTOMER,
+        execute(port, owner("iam:actor-1"), "key-1", CrmCommandType.CREATE_CUSTOMER,
                 CrmResourceType.CUSTOMER, callbackCount, "customer");
-        execute(port, actor("tenant-2", "actor-1"), "key-1", CrmCommandType.CREATE_CUSTOMER,
+        execute(port, owner("aksk:client-1"), "key-1", CrmCommandType.CREATE_CUSTOMER,
                 CrmResourceType.CUSTOMER, callbackCount, "customer");
-        execute(port, actor("tenant-1", "actor-2"), "key-1", CrmCommandType.CREATE_CUSTOMER,
-                CrmResourceType.CUSTOMER, callbackCount, "customer");
-        execute(port, actor("tenant-1", "actor-1"), "key-1", CrmCommandType.CREATE_CONTACT,
+        execute(port, owner("iam:actor-1"), "key-1", CrmCommandType.CREATE_CONTACT,
                 CrmResourceType.CONTACT, callbackCount, "contact");
-        execute(port, actor("tenant-1", "actor-1"), "key-1", CrmCommandType.CREATE_OFFERING,
+        execute(port, owner("iam:actor-1"), "key-1", CrmCommandType.CREATE_OFFERING,
                 CrmResourceType.OFFERING, callbackCount, "offering");
-        execute(port, actor("tenant-1", "actor-1"), "key-1", CrmCommandType.CREATE_QUOTATION,
+        execute(port, owner("iam:actor-1"), "key-1", CrmCommandType.CREATE_QUOTATION,
                 CrmResourceType.QUOTATION, callbackCount, "quotation");
-        execute(port, actor("tenant-1", "actor-1"), "key-2", CrmCommandType.CREATE_CUSTOMER,
+        execute(port, owner("iam:actor-1"), "key-2", CrmCommandType.CREATE_CUSTOMER,
                 CrmResourceType.CUSTOMER, callbackCount, "customer");
 
         log.info("创建幂等隔离结果：独立创建次数={}", callbackCount.get());
-        assertEquals(7, callbackCount.get(), "稳定范围任一维度不同都不得重放其他创建记录");
+        assertEquals(6, callbackCount.get(), "稳定范围任一维度不同都不得重放其他创建记录");
     }
 
     @Test
     void rejectsInvalidCreateCommandResourcePair() {
         InMemoryCreateIdempotencyPort port = new InMemoryCreateIdempotencyPort();
 
-        CrmException commandException = assertThrows(CrmException.class, () -> port.execute(actor("tenant-1", "actor-1"),
+        CrmException commandException = assertThrows(CrmException.class, () -> port.execute(owner("iam:actor-1"),
                 metadata("key-1"), CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION, REQUEST_DIGEST_A,
                 () -> "quotation-1"));
-        CrmException resourceException = assertThrows(CrmException.class, () -> port.execute(actor("tenant-1", "actor-1"),
+        CrmException resourceException = assertThrows(CrmException.class, () -> port.execute(owner("iam:actor-1"),
                 metadata("key-1"), CrmCommandType.CREATE_CUSTOMER, CrmResourceType.CONTACT, REQUEST_DIGEST_A,
                 () -> "customer-1"));
 
@@ -142,22 +141,24 @@ class CrmCreateIdempotencyPortContractTest {
         InMemoryCreateIdempotencyPort port = new InMemoryCreateIdempotencyPort();
         AtomicInteger callbackCount = new AtomicInteger();
 
-        assertThrows(IllegalStateException.class, () -> port.execute(actor("tenant-1", "actor-1"), metadata("key-1"),
+        assertThrows(IllegalStateException.class, () -> port.execute(owner("iam:actor-1"), metadata("key-1"),
                 CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A, () -> {
                     callbackCount.incrementAndGet();
                     throw new IllegalStateException("first attempt failed");
                 }));
-        CrmException nullResourceException = assertThrows(CrmException.class, () -> port.execute(actor("tenant-1", "actor-1"),
-                metadata("key-1"), CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A,
-                () -> null));
-        CrmException blankResourceException = assertThrows(CrmException.class, () -> port.execute(actor("tenant-1", "actor-1"),
-                metadata("key-1"), CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A,
-                () -> " "));
+        CrmException nullResourceException = assertThrows(CrmException.class,
+                () -> port.execute(owner("iam:actor-1"), metadata("key-1"),
+                        CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A,
+                        () -> null));
+        CrmException blankResourceException = assertThrows(CrmException.class,
+                () -> port.execute(owner("iam:actor-1"), metadata("key-1"),
+                        CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A,
+                        () -> " "));
         log.info("创建回调资源ID校验结果：空值错误码={}，空白错误码={}", nullResourceException.getErrorCode(),
                 blankResourceException.getErrorCode());
         assertEquals(CrmErrorCode.VALIDATION_FAILED, nullResourceException.getErrorCode(), "空资源ID必须拒绝");
         assertEquals(CrmErrorCode.VALIDATION_FAILED, blankResourceException.getErrorCode(), "空白资源ID必须拒绝");
-        String resourceId = port.execute(actor("tenant-1", "actor-1"), metadata("key-1"),
+        String resourceId = port.execute(owner("iam:actor-1"), metadata("key-1"),
                 CrmCommandType.CREATE_OFFERING, CrmResourceType.OFFERING, REQUEST_DIGEST_A, () -> {
                     callbackCount.incrementAndGet();
                     return "offering-1";
@@ -169,34 +170,34 @@ class CrmCreateIdempotencyPortContractTest {
     }
 
     @Test
-    void keepsPublishedTargetKnownPortImplementationCompatible() {
+    void keepsKnownTargetPortImplementationCompatible() {
         CrmIdempotencyPort port = new CrmIdempotencyPort() {
             @Override
-            public <T> T execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
+            public <T> T execute(CrmOwner actor, CrmCommandMetadata metadata, CrmCommandType commandType,
                                  CrmResourceType targetResourceType, String targetResourceId, String requestDigest,
                                  CrmIdempotentCallback<T> callback) {
                 return callback.execute();
             }
         };
 
-        String result = port.execute(actor("tenant-1", "actor-1"), metadata("key-1"),
+        String result = port.execute(owner("iam:actor-1"), metadata("key-1"),
                 CrmCommandType.ISSUE_QUOTATION, CrmResourceType.QUOTATION, "quotation-1", REQUEST_DIGEST_A,
                 () -> "issuance-1");
 
         log.info("已知目标资源幂等端口兼容结果：{}", result);
-        assertEquals("issuance-1", result, "1.0.0 端口的既有实现必须保持可编译和可调用");
+        assertEquals("issuance-1", result, "已知目标资源端口的既有实现必须保持可编译和可调用");
     }
 
     private String concurrentCreate(InMemoryCreateIdempotencyPort port, AtomicInteger callbackCount,
                                     CountDownLatch ready, CountDownLatch start) throws Exception {
         ready.countDown();
         start.await();
-        return port.execute(actor("tenant-1", "actor-1"), metadata("key-1"), CrmCommandType.CREATE_CUSTOMER,
+        return port.execute(owner("iam:actor-1"), metadata("key-1"), CrmCommandType.CREATE_CUSTOMER,
                 CrmResourceType.CUSTOMER, REQUEST_DIGEST_A,
                 () -> "customer-" + callbackCount.incrementAndGet());
     }
 
-    private void execute(InMemoryCreateIdempotencyPort port, CrmActor actor, String idempotencyKey,
+    private void execute(InMemoryCreateIdempotencyPort port, CrmOwner actor, String idempotencyKey,
                          CrmCommandType commandType, CrmResourceType resourceType, AtomicInteger callbackCount,
                          String resourcePrefix) {
         port.execute(actor, metadata(idempotencyKey), commandType, resourceType, REQUEST_DIGEST_A,
@@ -208,8 +209,8 @@ class CrmCreateIdempotencyPortContractTest {
         return resourcePrefix + "-" + idGeneratorCount.incrementAndGet();
     }
 
-    private CrmActor actor(String tenantId, String actorId) {
-        return new CrmActor(tenantId, actorId, "Actor");
+    private CrmOwner owner(String owner) {
+        return CrmOwner.of(owner);
     }
 
     private CrmCommandMetadata metadata(String idempotencyKey) {
@@ -218,24 +219,25 @@ class CrmCreateIdempotencyPortContractTest {
 
     private static final class InMemoryCreateIdempotencyPort implements CrmCreateIdempotencyPort {
 
-        private final Map<String, Record> records = new HashMap<>();
+        private final Map<String, Record> records = new HashMap<String, Record>();
 
         @Override
-        public synchronized String execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
-                                           CrmResourceType targetResourceType, String requestDigest,
-                                           CrmCreateIdempotentCallback callback) {
+        public synchronized String execute(CrmOwner actor, CrmCommandMetadata metadata,
+                                           CrmCommandType commandType, CrmResourceType targetResourceType,
+                                           String requestDigest, CrmCreateIdempotentCallback callback) {
             validateCreatePair(commandType, targetResourceType);
             CrmValidationHelper.requiredObject(actor, "actor");
             CrmValidationHelper.requiredObject(metadata, "metadata");
             CrmValidationHelper.sha256(requestDigest, "requestDigest");
             CrmValidationHelper.requiredObject(callback, "callback");
 
-            String key = actor.getTenantId() + "|" + actor.getActorId() + "|" + commandType.getCode() + "|"
+            String key = actor.getOwner() + "|" + commandType.getCode() + "|"
                     + targetResourceType.getCode() + "|" + metadata.getIdempotencyKey();
             Record record = records.get(key);
             if (record != null) {
                 if (!record.requestDigest.equals(requestDigest)) {
-                    throw new CrmException(CrmErrorCode.IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD, "requestDigest");
+                    throw new CrmException(CrmErrorCode.IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD,
+                            "requestDigest");
                 }
                 return record.resourceId;
             }

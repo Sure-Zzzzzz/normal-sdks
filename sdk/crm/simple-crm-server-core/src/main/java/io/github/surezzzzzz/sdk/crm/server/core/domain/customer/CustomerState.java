@@ -18,7 +18,12 @@ public enum CustomerState {
     /**
      * 停用。
      */
-    INACTIVE("inactive", "停用");
+    INACTIVE("inactive", "停用"),
+
+    /**
+     * 已并入目标客户（终态，不物理删除，保留追溯）。
+     */
+    MERGED("merged", "已并入目标客户");
 
     /**
      * 稳定类型代码。

@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.crm.server.core.port.idempotency;
 
 import io.github.surezzzzzz.sdk.crm.server.core.command.CrmCommandMetadata;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmCommandType;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 
@@ -19,7 +19,7 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
  */
 public interface CrmIdempotencyPort {
 
-    <T> T execute(CrmActor actor, CrmCommandMetadata metadata, CrmCommandType commandType,
+    <T> T execute(CrmOwner actor, CrmCommandMetadata metadata, CrmCommandType commandType,
                   CrmResourceType targetResourceType, String targetResourceId, String requestDigest,
                   CrmIdempotentCallback<T> callback);
 

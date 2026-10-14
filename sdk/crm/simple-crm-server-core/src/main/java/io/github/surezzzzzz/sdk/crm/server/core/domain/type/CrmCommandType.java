@@ -38,7 +38,72 @@ public enum CrmCommandType {
     /**
      * 确认、报价。
      */
-    CONFIRM_QUOTATION("confirm_quotation", "确认、报价");
+    CONFIRM_QUOTATION("confirm_quotation", "确认、报价"),
+
+    /**
+     * 编辑报价草稿。
+     */
+    EDIT_QUOTATION("edit_quotation", "编辑报价草稿"),
+
+    /**
+     * 撤回报价。
+     */
+    WITHDRAW_QUOTATION("withdraw_quotation", "撤回报价"),
+
+    /**
+     * 重议派生新草稿。
+     */
+    RENEGOTIATE_QUOTATION("renegotiate_quotation", "重议派生新草稿"),
+
+    /**
+     * 停用客户。
+     */
+    DEACTIVATE_CUSTOMER("deactivate_customer", "停用客户"),
+
+    /**
+     * 复启客户。
+     */
+    ACTIVATE_CUSTOMER("activate_customer", "复启客户"),
+
+    /**
+     * 上架商品或服务。
+     */
+    PUBLISH_OFFERING("publish_offering", "上架商品或服务"),
+
+    /**
+     * 下架商品或服务。
+     */
+    DISABLE_OFFERING("disable_offering", "下架商品或服务"),
+
+    /**
+     * 合并客户。
+     */
+    MERGE_CUSTOMER("merge_customer", "合并客户"),
+
+    /**
+     * 转移客户归属。
+     */
+    TRANSFER_CUSTOMER("transfer_customer", "转移客户归属"),
+
+    /**
+     * 转移报价归属。
+     */
+    TRANSFER_QUOTATION("transfer_quotation", "转移报价归属"),
+
+    /**
+     * 回写履约结果。
+     */
+    REPORT_FULFILLMENT_RESULT("report_fulfillment_result", "回写履约结果"),
+
+    /**
+     * 重置履约项。
+     */
+    RESET_FULFILLMENT_ITEM("reset_fulfillment_item", "重置履约项"),
+
+    /**
+     * 注册或更新履约消费者。
+     */
+    UPSERT_FULFILLMENT_CONSUMER("upsert_fulfillment_consumer", "注册履约消费者");
 
     /**
      * 稳定类型代码。

@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.crm.server.core.port.audit;
 
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmAction;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmResourceType;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
@@ -17,7 +17,7 @@ public interface CrmAuditPort {
     /**
      * 记录受保护命令的审计结果。
      *
-     * @param actor                  已认证且绑定租户的操作者
+     * @param actor                  归属主体（人 iam:/服务 aksk:）
      * @param action                 已执行的 CRM 操作
      * @param targetResourceType     被操作资源的类型
      * @param targetResourceId       被操作资源的唯一标识
@@ -26,7 +26,7 @@ public interface CrmAuditPort {
      * @param resultCode             命令执行结果错误码
      * @param occurredAt             审计事实发生时间
      */
-    void record(CrmActor actor, CrmAction action, CrmResourceType targetResourceType,
+    void record(CrmOwner actor, CrmAction action, CrmResourceType targetResourceType,
                 String targetResourceId, long targetAggregateVersion, String correlationId,
                 CrmErrorCode resultCode, Instant occurredAt);
 }

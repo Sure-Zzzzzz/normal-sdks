@@ -15,9 +15,8 @@ public interface FulfillmentConsumerSelector {
     /**
      * 选择满足履约义务的消费者。
      *
-     * @param tenantId           租户唯一标识
      * @param obligationTemplate 冻结的履约义务模板
      * @return 处理后的领域事实或校验结果。
      */
-    FulfillmentConsumer select(String tenantId, FulfillmentObligationTemplate obligationTemplate);
+    FulfillmentConsumer select(FulfillmentObligationTemplate obligationTemplate);
 }

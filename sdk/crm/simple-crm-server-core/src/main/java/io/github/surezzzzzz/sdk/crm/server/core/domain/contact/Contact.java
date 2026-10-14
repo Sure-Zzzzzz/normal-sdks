@@ -14,7 +14,6 @@ import java.time.Instant;
 public final class Contact {
 
     private final String contactId;
-    private final String tenantId;
     private final String customerId;
     private final String displayName;
     private final String title;
@@ -27,7 +26,6 @@ public final class Contact {
      * 创建Contact。
      *
      * @param contactId        联系人唯一标识
-     * @param tenantId         租户唯一标识
      * @param customerId       客户唯一标识
      * @param displayName      展示名称
      * @param title            职务名称
@@ -37,10 +35,9 @@ public final class Contact {
      * @param updatedAt        变更后的更新时间
      *
      */
-    public Contact(String contactId, String tenantId, String customerId, String displayName, String title,
+    public Contact(String contactId, String customerId, String displayName, String title,
                    ContactState state, long aggregateVersion, Instant createdAt, Instant updatedAt) {
         this.contactId = CrmValidationHelper.required(contactId, "contactId");
-        this.tenantId = CrmValidationHelper.required(tenantId, "tenantId");
         this.customerId = CrmValidationHelper.required(customerId, "customerId");
         this.displayName = CrmValidationHelper.required(displayName, "displayName");
         this.title = CrmValidationHelper.optional(title);

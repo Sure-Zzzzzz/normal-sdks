@@ -26,7 +26,11 @@ public final class Money {
      */
     public Money(BigDecimal amount, String currency) {
         this.currency = CrmValidationHelper.currency(currency, "currency");
-        this.amount = CrmValidationHelper.monetaryAmount(amount, this.currency, "amount");
+        // 规范化 scale：DECIMAL(20,6) 读回的尾零安全去除（stripTrailingZeros 后不足位补齐），
+        // 真超币种精度的值仍被 monetaryAmount 拒绝
+        BigDecimal normalized = amount == null ? null
+                : amount.stripTrailingZeros();
+        this.amount = CrmValidationHelper.monetaryAmount(normalized, this.currency, "amount");
     }
 
 

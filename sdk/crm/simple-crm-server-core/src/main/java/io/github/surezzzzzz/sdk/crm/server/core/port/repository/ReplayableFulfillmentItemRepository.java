@@ -17,9 +17,8 @@ public interface ReplayableFulfillmentItemRepository extends FulfillmentItemRepo
     /**
      * 按租户和订单读取完整履约事实集合。
      *
-     * @param tenantId 租户唯一标识
-     * @param orderId  订单唯一标识
+     * @param orderId 订单唯一标识
      * @return 已提交的履约项集合
      */
-    List<FulfillmentItem> findByOrderId(String tenantId, String orderId);
+    List<FulfillmentItem> findByOrderId(String orderId);
 }

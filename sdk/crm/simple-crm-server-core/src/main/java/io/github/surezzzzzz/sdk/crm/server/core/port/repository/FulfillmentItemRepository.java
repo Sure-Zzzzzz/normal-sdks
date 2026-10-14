@@ -12,9 +12,8 @@ public interface FulfillmentItemRepository {
     /**
      * 新增权威领域事实。
      *
-     * @param tenantId        租户唯一标识
      * @param fulfillmentItem fulfillmentItem参数。
      * @return 处理后的领域事实或校验结果。
      */
-    FulfillmentItem insert(String tenantId, FulfillmentItem fulfillmentItem);
+    FulfillmentItem insert(FulfillmentItem fulfillmentItem);
 }

@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.crm.server.core.domain.quotation;
 
 import io.github.surezzzzzz.sdk.crm.server.core.command.CreateQuotationCommand;
+import io.github.surezzzzzz.sdk.crm.server.core.command.EditQuotationCommand;
 import io.github.surezzzzzz.sdk.crm.server.core.command.QuotationLineCommand;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.commercial.CommercialCapability;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.commercial.CommercialCapabilityRegistry;
@@ -9,9 +10,8 @@ import io.github.surezzzzzz.sdk.crm.server.core.domain.commercial.CommercialCapa
 import io.github.surezzzzzz.sdk.crm.server.core.domain.common.Money;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.customer.Customer;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.customer.CustomerState;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmActor;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.offering.Offering;
-import io.github.surezzzzzz.sdk.crm.server.core.domain.offering.OfferingState;
 import io.github.surezzzzzz.sdk.crm.server.core.domain.type.CrmIdResourceType;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmException;
@@ -47,7 +47,7 @@ public final class QuotationDraftService {
     /**
      * 构造报价草稿领域事实。
      *
-     * @param actor       已认证且绑定租户的操作者
+     * @param actor       归属主体（人 iam:/服务 aksk:）
      * @param customer    已按租户边界加载的客户事实
      * @param command     传输无关的业务命令
      * @param offerings   已按租户边界加载的商品或服务事实集合
@@ -56,9 +56,9 @@ public final class QuotationDraftService {
      * @return 处理后的领域事实或校验结果。
      *
      */
-    public QuotationDraft create(CrmActor actor, Customer customer, CreateQuotationCommand command,
+    public QuotationDraft create(CrmOwner actor, Customer customer, CreateQuotationCommand command,
                                  List<Offering> offerings, Instant now, CrmIdGenerator idGenerator) {
-        CrmActor requiredActor = CrmValidationHelper.requiredObject(actor, "actor");
+        CrmOwner requiredActor = CrmValidationHelper.requiredObject(actor, "actor");
         Customer requiredCustomer = CrmValidationHelper.requiredObject(customer, "customer");
         CreateQuotationCommand requiredCommand = CrmValidationHelper.requiredObject(command, "command");
         Map<String, Offering> offeringsById = offeringsById(offerings);
@@ -70,13 +70,75 @@ public final class QuotationDraftService {
         }
 
         String quotationId = nextId(idGenerator, CrmIdResourceType.QUOTATION, "quotationId");
+        CalculatedLines calculated = calculateLines(requiredCommand.getLines(), offeringsById, idGenerator);
+        Quotation quotation = new Quotation(quotationId, requiredCustomer.getCustomerId(),
+                requiredActor.getOwner(), 1L, 1, null, null, null, createdAt, createdAt);
+        QuotationVersion quotationVersion = new QuotationVersion(quotationId, 1, QuotationState.DRAFT,
+                calculated.settlementCurrency, requiredCommand.getValidUntil(), calculated.lines,
+                calculated.totalAmount, null, null, null, null);
+        return new QuotationDraft(quotation, quotationVersion);
+    }
+
+    /**
+     * 编辑报价草稿：仅当前草稿版本可整单替换行项与有效截止时间，版本号不变、聚合版本递增。
+     *
+     * @param quotation    报价聚合当前事实
+     * @param draftVersion 当前草稿版本事实
+     * @param command      传输无关的编辑命令（整单行项替换）
+     * @param customer     已加载的客户事实
+     * @param offerings    已加载的商品或服务事实集合
+     * @param now          当前权威业务时间
+     * @param idGenerator  类型化资源标识生成器
+     * @return 编辑后的草稿事实对
+     */
+    public QuotationDraft edit(Quotation quotation, QuotationVersion draftVersion, EditQuotationCommand command,
+                               Customer customer, List<Offering> offerings, Instant now,
+                               CrmIdGenerator idGenerator) {
+        Quotation requiredQuotation = CrmValidationHelper.requiredObject(quotation, "quotation");
+        QuotationVersion requiredDraft = CrmValidationHelper.requiredObject(draftVersion, "draftVersion");
+        EditQuotationCommand requiredCommand = CrmValidationHelper.requiredObject(command, "command");
+        Customer requiredCustomer = CrmValidationHelper.requiredObject(customer, "customer");
+        Instant updatedAt = CrmValidationHelper.requiredObject(now, "now");
+        CrmValidationHelper.requiredObject(idGenerator, "idGenerator");
+        if (requiredQuotation.isConfirmed() || requiredDraft.getState() != QuotationState.DRAFT
+                || !requiredQuotation.getQuotationId().equals(requiredDraft.getQuotationId())
+                || requiredDraft.getVersion() != requiredQuotation.getCurrentVersion()) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "only current draft can be edited");
+        }
+        if (requiredCustomer.getState() != CustomerState.ACTIVE) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "customer is not active");
+        }
+        if (!updatedAt.isBefore(requiredCommand.getValidUntil())) {
+            throw CrmException.validation("validUntil");
+        }
+        CalculatedLines calculated = calculateLines(requiredCommand.getLines(), offeringsById(offerings),
+                idGenerator);
+        Quotation editedQuotation = new Quotation(requiredQuotation.getQuotationId(),
+                requiredQuotation.getCustomerId(), requiredQuotation.getOwner(),
+                requiredQuotation.getAggregateVersion() + 1L, requiredQuotation.getCurrentVersion(),
+                null, null, requiredQuotation.getSupersedesQuotationId(),
+                requiredQuotation.getCreatedAt(), updatedAt);
+        QuotationVersion editedVersion = new QuotationVersion(requiredQuotation.getQuotationId(),
+                requiredDraft.getVersion(), QuotationState.DRAFT, calculated.settlementCurrency,
+                requiredCommand.getValidUntil(), calculated.lines, calculated.totalAmount, null, null, null, null);
+        return new QuotationDraft(editedQuotation, editedVersion);
+    }
+
+    /**
+     * 按行命令集合重算冻结行、结算币种与总金额。
+     */
+    private CalculatedLines calculateLines(List<QuotationLineCommand> lineCommands,
+                                           Map<String, Offering> offeringsById, CrmIdGenerator idGenerator) {
+        if (lineCommands == null || lineCommands.isEmpty() || lineCommands.contains(null)) {
+            throw CrmException.validation("lines");
+        }
         List<QuotationLine> lines = new ArrayList<QuotationLine>();
         String settlementCurrency = null;
         Money totalAmount = null;
-        for (QuotationLineCommand lineCommand : requiredCommand.getLines()) {
+        for (QuotationLineCommand lineCommand : lineCommands) {
             Offering offering = CrmValidationHelper.requiredObject(offeringsById.get(lineCommand.getOfferingId()),
                     "offering");
-            validateOffering(requiredActor, offering, lineCommand);
+            validateOffering(null, offering, lineCommand);
             CommercialCapability capability = capabilityRegistry.getRequired(offering.getCapabilityType());
             CommercialCapabilityResult result = capability.evaluate(new CommercialCapabilityRequest(
                     lineCommand.getQuantity(), lineCommand.getUnit(), lineCommand.getUnitPrice(),
@@ -99,11 +161,7 @@ public final class QuotationDraftService {
                     lineCommand.getUnit(), lineCommand.getUnitPrice(), result.getLineTotal(),
                     result.getCommercialTermsSnapshot(), result.getFulfillmentObligationTemplate()));
         }
-        Quotation quotation = new Quotation(quotationId, requiredActor.getTenantId(), requiredCustomer.getCustomerId(),
-                requiredActor.getActorId(), 1L, 1, null, null, createdAt, createdAt);
-        QuotationVersion quotationVersion = new QuotationVersion(quotationId, 1, QuotationState.DRAFT,
-                settlementCurrency, requiredCommand.getValidUntil(), lines, totalAmount, null, null, null, null);
-        return new QuotationDraft(quotation, quotationVersion);
+        return new CalculatedLines(settlementCurrency, totalAmount, lines);
     }
 
     private Map<String, Offering> offeringsById(List<Offering> offerings) {
@@ -119,27 +177,34 @@ public final class QuotationDraftService {
         return offeringsById;
     }
 
-    private void validateCustomer(CrmActor actor, Customer customer, CreateQuotationCommand command) {
-        if (!actor.getTenantId().equals(customer.getTenantId())
-                || !customer.getCustomerId().equals(command.getCustomerId())) {
-            throw new CrmException(CrmErrorCode.TENANT_MISMATCH, "customer is outside actor tenant");
-        }
+    private void validateCustomer(CrmOwner actor, Customer customer, CreateQuotationCommand command) {
         if (customer.getState() != CustomerState.ACTIVE) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "customer is not active");
         }
     }
 
-    private void validateOffering(CrmActor actor, Offering offering, QuotationLineCommand lineCommand) {
-        if (!actor.getTenantId().equals(offering.getTenantId())
-                || !offering.getOfferingId().equals(lineCommand.getOfferingId())) {
-            throw new CrmException(CrmErrorCode.TENANT_MISMATCH, "offering is outside actor tenant");
-        }
-        if (offering.getState() != OfferingState.ACTIVE) {
-            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "offering is not active");
+    private void validateOffering(CrmOwner actor, Offering offering, QuotationLineCommand lineCommand) {
+        if (!offering.isPublished()) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "offering is not published");
         }
     }
 
     private String nextId(CrmIdGenerator idGenerator, CrmIdResourceType resourceType, String field) {
         return CrmValidationHelper.required(idGenerator.nextId(resourceType), field);
+    }
+
+    /**
+     * 行重算结果载体（内部复用）。
+     */
+    private static final class CalculatedLines {
+        private final String settlementCurrency;
+        private final Money totalAmount;
+        private final List<QuotationLine> lines;
+
+        private CalculatedLines(String settlementCurrency, Money totalAmount, List<QuotationLine> lines) {
+            this.settlementCurrency = settlementCurrency;
+            this.totalAmount = totalAmount;
+            this.lines = lines;
+        }
     }
 }

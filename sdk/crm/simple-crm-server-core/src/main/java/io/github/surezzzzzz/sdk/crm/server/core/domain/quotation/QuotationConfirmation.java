@@ -21,6 +21,14 @@ public final class QuotationConfirmation {
     private final QuotationVersion quotationVersion;
     private final Order order;
     private final List<FulfillmentItem> fulfillmentItems;
+    /**
+     * 被本报价取代的旧报价事实（重议链路，可空）。
+     */
+    private final Quotation supersededQuotation;
+    /**
+     * 被取代旧报价的版本事实（可空）。
+     */
+    private final QuotationVersion supersededQuotationVersion;
 
     /**
      * 创建QuotationConfirmation。
@@ -33,6 +41,22 @@ public final class QuotationConfirmation {
      */
     public QuotationConfirmation(Quotation quotation, QuotationVersion quotationVersion, Order order,
                                  List<FulfillmentItem> fulfillmentItems) {
+        this(quotation, quotationVersion, order, fulfillmentItems, null, null);
+    }
+
+    /**
+     * 创建QuotationConfirmation（含重议取代事实对）。
+     *
+     * @param quotation                  报价聚合当前事实
+     * @param quotationVersion           报价版本事实
+     * @param order                      由报价确认生成的订单事实
+     * @param fulfillmentItems           由报价确认生成的履约项事实集合
+     * @param supersededQuotation        被取代的旧报价事实（重议链路，可空）
+     * @param supersededQuotationVersion 被取代旧报价的版本事实（可空）
+     */
+    public QuotationConfirmation(Quotation quotation, QuotationVersion quotationVersion, Order order,
+                                 List<FulfillmentItem> fulfillmentItems, Quotation supersededQuotation,
+                                 QuotationVersion supersededQuotationVersion) {
         this.quotation = CrmValidationHelper.requiredObject(quotation, "quotation");
         this.quotationVersion = CrmValidationHelper.requiredObject(quotationVersion, "quotationVersion");
         this.order = CrmValidationHelper.requiredObject(order, "order");
@@ -41,7 +65,6 @@ public final class QuotationConfirmation {
         }
         if (!this.quotation.getQuotationId().equals(this.quotationVersion.getQuotationId())
                 || !this.quotation.getQuotationId().equals(this.order.getSourceQuotationId())
-                || !this.quotation.getTenantId().equals(this.order.getTenantId())
                 || this.quotationVersion.getVersion() != this.order.getSourceQuotationVersion()
                 || !this.order.getOrderId().equals(this.quotation.getConfirmedOrderId())
                 || this.quotation.getCurrentConfirmableVersion() != null
@@ -67,7 +90,6 @@ public final class QuotationConfirmation {
         Set<String> fulfillmentOrderLineIds = new HashSet<String>();
         for (FulfillmentItem fulfillmentItem : fulfillmentItems) {
             if (!fulfillmentIds.add(fulfillmentItem.getFulfillmentId())
-                    || !this.quotation.getTenantId().equals(fulfillmentItem.getTenantId())
                     || !this.order.getOrderId().equals(fulfillmentItem.getOrderId())
                     || !orderLineIds.contains(fulfillmentItem.getOrderLineId())
                     || !fulfillmentOrderLineIds.add(fulfillmentItem.getOrderLineId())) {
@@ -75,6 +97,18 @@ public final class QuotationConfirmation {
             }
         }
         this.fulfillmentItems = Collections.unmodifiableList(new ArrayList<FulfillmentItem>(fulfillmentItems));
+        if ((supersededQuotation == null) != (supersededQuotationVersion == null)) {
+            throw CrmException.validation("supersededQuotation");
+        }
+        if (supersededQuotation != null
+                && (!supersededQuotation.getQuotationId().equals(supersededQuotationVersion.getQuotationId())
+                || supersededQuotationVersion.getState() != QuotationState.SUPERSEDED
+                || !supersededQuotation.getQuotationId().equals(this.quotation.getSupersedesQuotationId())
+                || supersededQuotation.getCurrentConfirmableVersion() != null)) {
+            throw CrmException.validation("supersededQuotation");
+        }
+        this.supersededQuotation = supersededQuotation;
+        this.supersededQuotationVersion = supersededQuotationVersion;
     }
 
 

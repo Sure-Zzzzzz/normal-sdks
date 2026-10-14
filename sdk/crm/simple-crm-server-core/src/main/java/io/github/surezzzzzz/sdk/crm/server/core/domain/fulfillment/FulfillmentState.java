@@ -13,32 +13,22 @@ public enum FulfillmentState {
     /**
      * 待投递、派发。
      */
-    PENDING_DISPATCH("pending_dispatch", "待投递、派发"),
-
-    /**
-     * 已派发。
-     */
-    DISPATCHED("dispatched", "已派发"),
-
-    /**
-     * 已受理。
-     */
-    ACCEPTED("accepted", "已受理"),
-
-    /**
-     * 处理中。
-     */
-    PROCESSING("processing", "处理中"),
-
-    /**
-     * 已履约。
-     */
-    FULFILLED("fulfilled", "已履约"),
+    PENDING_DISPATCH("pending_dispatch", "待执行（可被消费者拉取认领）"),
 
     /**
      * 失败。
      */
-    FAILED("failed", "失败"),
+    IN_PROGRESS("in_progress", "执行中（已被消费方认领）"),
+
+    /**
+     * 已完成。
+     */
+    COMPLETED("completed", "已完成"),
+
+    /**
+     * 失败。
+     */
+    FAILED("failed", "失败（可人工重置回待执行）"),
 
     /**
      * 已撤销。

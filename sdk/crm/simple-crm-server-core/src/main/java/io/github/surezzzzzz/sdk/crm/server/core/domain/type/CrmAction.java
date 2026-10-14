@@ -41,6 +41,71 @@ public enum CrmAction {
     QUOTATION_CONFIRM("quotation_confirm", "报价、确认"),
 
     /**
+     * 报价、编辑。
+     */
+    QUOTATION_EDIT("quotation_edit", "报价、编辑"),
+
+    /**
+     * 报价、撤回。
+     */
+    QUOTATION_WITHDRAW("quotation_withdraw", "报价、撤回"),
+
+    /**
+     * 报价、重议。
+     */
+    QUOTATION_RENEGOTIATE("quotation_renegotiate", "报价、重议"),
+
+    /**
+     * 客户、停用。
+     */
+    CUSTOMER_DEACTIVATE("customer_deactivate", "客户、停用"),
+
+    /**
+     * 客户、复启。
+     */
+    CUSTOMER_ACTIVATE("customer_activate", "客户、复启"),
+
+    /**
+     * 客户、合并。
+     */
+    CUSTOMER_MERGE("customer_merge", "客户、合并"),
+
+    /**
+     * 客户、归属转移。
+     */
+    CUSTOMER_TRANSFER("customer_transfer", "客户、归属转移"),
+
+    /**
+     * 报价、归属转移。
+     */
+    QUOTATION_TRANSFER("quotation_transfer", "报价、归属转移"),
+
+    /**
+     * 目录、上架。
+     */
+    OFFERING_PUBLISH("offering_publish", "目录、上架"),
+
+    /**
+     * 目录、下架。
+     */
+    OFFERING_DISABLE("offering_disable", "目录、下架"),
+
+    /**
+     * 履约、回写。
+     */
+    FULFILLMENT_REPORT("fulfillment_report", "履约、回写"),
+
+    /**
+     * 履约、重置。
+     */
+    FULFILLMENT_RESET("fulfillment_reset", "履约、重置"),
+
+    /**
+     * 履约、消费者管理。
+     */
+    FULFILLMENT_CONSUMER_ADMIN("fulfillment_consumer_admin", "履约、消费者管理"),
+
+    /**
      * 客户、查询。
      */
     CUSTOMER_READ("customer_read", "客户、查询"),

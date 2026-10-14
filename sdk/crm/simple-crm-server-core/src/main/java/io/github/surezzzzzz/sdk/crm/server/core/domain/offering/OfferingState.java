@@ -13,12 +13,17 @@ public enum OfferingState {
     /**
      * 启用。
      */
-    ACTIVE("active", "启用"),
+    DRAFT("draft", "录入（不可进新报价）"),
 
     /**
      * 停用。
      */
-    INACTIVE("inactive", "停用");
+    PUBLISHED("published", "可售（可进新报价）"),
+
+    /**
+     * 已下架。
+     */
+    DISABLED("disabled", "下架（不进新报价，历史不受影响；可重新上架）");
 
     /**
      * 稳定类型代码。
