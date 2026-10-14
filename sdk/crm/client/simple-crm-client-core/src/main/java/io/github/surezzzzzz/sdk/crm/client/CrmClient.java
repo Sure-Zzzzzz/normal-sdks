@@ -1,0 +1,303 @@
+package io.github.surezzzzzz.sdk.crm.client;
+
+import io.github.surezzzzzz.sdk.crm.client.command.CrmClientCommand;
+import io.github.surezzzzzz.sdk.crm.client.model.CrmPageView;
+import io.github.surezzzzzz.sdk.crm.client.model.CrmResourceView;
+
+import java.util.List;
+import java.util.Map;
+
+/**
+ * CRM 机器客户端契约（资源名词 + PATCH 状态变更）。
+ *
+ * <p>与服务端 RESTful API 一一对应：状态变更统一走 patch 方法族
+ * （客户停用/复启/合并/转移=patchCustomer、目录上架/下架=patchOffering、
+ * 报价签发/确认/撤回/转移=patchQuotation、履约回报/重置=patchFulfillmentItem）；
+ * 重议=createQuotation 带 sourceQuotationId。</p>
+ *
+ * <p>实现约束：金额/数量以十进制字符串进出；时间带 offset ISO-8601；
+ * 状态只用稳定 code；写方法首参元数据携带幂等键；列表以不透明 cursor 续读，
+ * 不发送管理台 page/pageSize 参数。消费者列表为不带分页参数的完整列表。</p>
+ *
+ * @author surezzzzzz
+ */
+public interface CrmClient {
+
+    // ===== 客户 =====
+
+    /**
+     * 创建客户。
+     *
+     * @param command     命令元数据
+     * @param displayName 展示名称
+     * @return 客户视图
+     */
+    CrmResourceView createCustomer(CrmClientCommand command, String displayName);
+
+    /**
+     * 点查客户。
+     *
+     * @param customerId 客户标识
+     * @return 客户视图
+     */
+    CrmResourceView getCustomer(String customerId);
+
+    /**
+     * 客户列表。
+     *
+     * @param state  状态过滤（可空）
+     * @param cursor 游标（可空=首页）
+     * @param limit  每页上限
+     * @return 列表页
+     */
+    CrmPageView listCustomers(String state, String cursor, int limit);
+
+    /**
+     * 修改客户（PATCH 状态变更：停用/复启/合并/归属转移按 patch 字段区分）。
+     *
+     * @param command    命令元数据
+     * @param customerId 客户标识
+     * @param patch      补丁体（state=inactive/active/merged 或 owner=iam:xxx；合并须含 mergeTargetId）
+     * @return 停用/复启为客户视图；合并为 source/target/relocatedContacts；转移为 customer/transferredQuotations
+     */
+    CrmResourceView patchCustomer(CrmClientCommand command, String customerId,
+                                  Map<String, Object> patch);
+
+    // ===== 联系人 =====
+
+    /**
+     * 创建联系人。
+     *
+     * @param command     命令元数据
+     * @param customerId  归属客户
+     * @param displayName 展示名称
+     * @param title       职务（可空）
+     * @return 联系人视图
+     */
+    CrmResourceView createContact(CrmClientCommand command, String customerId, String displayName,
+                                  String title);
+
+    /**
+     * 点查联系人。
+     *
+     * @param contactId 联系人标识
+     * @return 联系人视图
+     */
+    CrmResourceView getContact(String contactId);
+
+    /**
+     * 联系人列表（按客户）。
+     *
+     * @param customerId 客户标识
+     * @param cursor     游标
+     * @param limit      每页上限
+     * @return 列表页
+     */
+    CrmPageView listContacts(String customerId, String cursor, int limit);
+
+    // ===== 目录 =====
+
+    /**
+     * 创建目录项（DRAFT 录入）。
+     *
+     * @param command                    命令元数据
+     * @param offeringReference          稳定业务引用
+     * @param displayName                展示名称
+     * @param capabilityType             商业能力类型稳定 code
+     * @param requiredConsumerCapability 所需消费者能力
+     * @return 目录视图
+     */
+    CrmResourceView createOffering(CrmClientCommand command, String offeringReference,
+                                   String displayName, String capabilityType,
+                                   String requiredConsumerCapability);
+
+    /**
+     * 点查目录。
+     *
+     * @param offeringId 目录标识
+     * @return 目录视图
+     */
+    CrmResourceView getOffering(String offeringId);
+
+    /**
+     * 目录列表。
+     *
+     * @param state  状态过滤（可空）
+     * @param cursor 游标
+     * @param limit  每页上限
+     * @return 列表页
+     */
+    CrmPageView listOfferings(String state, String cursor, int limit);
+
+    /**
+     * 修改目录项（PATCH 状态变更：上架/下架按 patch.state 区分）。
+     *
+     * @param command    命令元数据
+     * @param offeringId 目录标识
+     * @param patch      补丁体（state=published/disabled）
+     * @return 目录视图
+     */
+    CrmResourceView patchOffering(CrmClientCommand command, String offeringId,
+                                  Map<String, Object> patch);
+
+    // ===== 报价 =====
+
+    /**
+     * 创建报价草稿。
+     *
+     * @param command    命令元数据
+     * @param customerId 客户标识
+     * @param validUntil 有效截止（offset ISO-8601）
+     * @param lines      行命令（offeringId/quantity/unit/unitPrice{amount,currency}/subjectReference/fulfillmentScope）；
+     *                   同商品可出现多行，各行保留独立数量、价格、授权对象和履约范围
+     * @return 报价视图
+     */
+    CrmResourceView createQuotation(CrmClientCommand command, String customerId,
+                                    String validUntil, List<Map<String, Object>> lines);
+
+    /**
+     * 重议派生新草稿（POST /quotations 带 sourceQuotationId）。
+     *
+     * @param command           命令元数据
+     * @param sourceQuotationId 源报价标识
+     * @return 新报价视图
+     */
+    CrmResourceView renegotiateQuotation(CrmClientCommand command, String sourceQuotationId);
+
+    /**
+     * 点查报价。
+     *
+     * @param quotationId 报价标识
+     * @return 报价视图
+     */
+    CrmResourceView getQuotation(String quotationId);
+
+    /**
+     * 点查报价版本（含行明细）。
+     *
+     * @param quotationId 报价标识
+     * @param version     版本号
+     * @return 版本视图
+     */
+    CrmResourceView getQuotationVersion(String quotationId, int version);
+
+    /**
+     * 报价列表。
+     *
+     * @param state  状态过滤（可空）
+     * @param cursor 游标
+     * @param limit  每页上限
+     * @return 列表页
+     */
+    CrmPageView listQuotations(String state, String cursor, int limit);
+
+    /**
+     * 编辑报价草稿（整单替换行，版本号不变）。
+     *
+     * @param command     命令元数据
+     * @param quotationId 报价标识
+     * @param validUntil  有效截止
+     * @param lines       行命令，同商品多行保留独立业务行，不合并或去重
+     * @return 报价视图
+     */
+    CrmResourceView editQuotation(CrmClientCommand command, String quotationId,
+                                  String validUntil, List<Map<String, Object>> lines);
+
+    /**
+     * 修改报价（PATCH 状态变更：签发/确认/撤回/转移按 patch 字段区分）。
+     *
+     * @param command     命令元数据
+     * @param quotationId 报价标识
+     * @param patch       补丁体（state=issued/confirmed/withdrawn 或 owner=iam:xxx；
+     *                    签发/确认须含 quotationVersion 与 expectedAggregateVersion）
+     * @return 报价视图
+     */
+    CrmResourceView patchQuotation(CrmClientCommand command, String quotationId,
+                                   Map<String, Object> patch);
+
+    // ===== 订单 =====
+
+    /**
+     * 点查订单（含行明细与履约义务）。
+     *
+     * @param orderId 订单标识
+     * @return 订单视图
+     */
+    CrmResourceView getOrder(String orderId);
+
+    /**
+     * 订单列表。
+     *
+     * @param cursor 游标
+     * @param limit  每页上限
+     * @return 列表页
+     */
+    CrmPageView listOrders(String cursor, int limit);
+
+    // ===== 履约 =====
+
+    /**
+     * 点查履约项（机器按派发归属可见）。
+     *
+     * @param fulfillmentId 履约项标识
+     * @return 履约项视图
+     */
+    CrmResourceView getFulfillmentItem(String fulfillmentId);
+
+    /**
+     * 履约项列表（消费者拉取待执行项：state=pending_dispatch/in_progress）。
+     *
+     * @param state   状态过滤
+     * @param orderId 订单过滤（人员面）
+     * @param cursor  游标
+     * @param limit   每页上限
+     * @return 列表页
+     */
+    CrmPageView listFulfillmentItems(String state, String orderId, String cursor, int limit);
+
+    /**
+     * 修改履约项（PATCH：回报进度或人工重置按 patch 区分）。
+     *
+     * @param command       命令元数据
+     * @param fulfillmentId 履约项标识
+     * @param patch         补丁体（回报含 sequence/state/resultData；重置仅 state=PENDING_DISPATCH）
+     * @return 履约项视图
+     */
+    CrmResourceView patchFulfillmentItem(CrmClientCommand command, String fulfillmentId,
+                                         Map<String, Object> patch);
+
+    // ===== 消费者 =====
+
+    /**
+     * 注册或更新履约消费者（consumerId 须与 AKP clientId 一致）。
+     *
+     * @param command         命令元数据
+     * @param consumerId      消费者标识
+     * @param capability      能力
+     * @param protocolVersion 协议版本
+     * @param enabled         是否启用
+     * @return 注册结果视图
+     */
+    CrmResourceView upsertFulfillmentConsumer(CrmClientCommand command, String consumerId,
+                                              String capability, int protocolVersion,
+                                              boolean enabled);
+
+    /**
+     * 消费者完整列表（不使用分页参数，返回结果无续读游标）。
+     *
+     * @return 列表页
+     */
+    CrmPageView listFulfillmentConsumers();
+
+    // ===== 操作记录 =====
+
+    /**
+     * 操作记录列表（业务级：谁在何时对哪个对象做了什么）。
+     *
+     * @param resourceId 资源过滤（可空）
+     * @param cursor     游标
+     * @param limit      每页上限
+     * @return 列表页
+     */
+    CrmPageView listOperationLogs(String resourceId, String cursor, int limit);
+}
