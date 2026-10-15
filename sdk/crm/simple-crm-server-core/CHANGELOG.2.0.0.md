@@ -8,7 +8,7 @@
 
 - `CrmActor`（tenantId+actorId+displayName）→ `CrmOwner`（owner+主体类型 `CrmSubjectType`，`human`/`service`/`of` 工厂）。
 - 四个安全 Port：`CrmActorProvider`、`CrmCommandAuthorizer`、`CrmDataPermissionProvider`、`CrmOperationsAuthorizer`——三权由身份协作底座组件在 HTTP 层完成。
-- 双 Outbox Port：`DomainEventOutboxPort`、`FulfillmentCommandOutboxPort` 及 `domain.event` 记录族、`FulfillmentCommandOutboxRecord`——零事件形态（履约消费走 HTTP 拉取回写）下无存在必要。
+- 双 Outbox Port：`DomainEventOutboxPort`、`FulfillmentCommandOutboxPort` 及 `domain.event` 记录族、`FulfillmentCommandOutboxRecord`——履约消费改为 HTTP 拉取回写，因此移除跨服务 Outbox；业务审计事件仍由 server 在提交后按 `CrmAuditEvent` 契约发布。
 - 错误码：`UNAUTHENTICATED`、`ACTOR_DISABLED`、`TENANT_MISMATCH`、`ACTION_FORBIDDEN`（401/403 由底座统一给出）、`RETRYABLE_DEPENDENCY_UNAVAILABLE`（无触发入口）。
 
 ### 领域状态机扩展

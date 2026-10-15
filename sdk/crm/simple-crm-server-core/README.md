@@ -87,7 +87,7 @@ boolean hasNext = customers.hasNext();
 2.0.0 是破坏性版本，详见 [CHANGELOG.2.0.0.md](CHANGELOG.2.0.0.md)。核心迁移点：
 
 1. `CrmActor`（tenantId+actorId）→ `CrmOwner`（`iam:{subjectId}`/`aksk:{clientId}` 前缀 owner 字符串+主体类型）；全链移除 tenant 概念。
-2. 四个安全 Port（`CrmActorProvider`/`CrmCommandAuthorizer`/`CrmDataPermissionProvider`/`CrmOperationsAuthorizer`）与双 Outbox Port（`DomainEventOutboxPort`/`FulfillmentCommandOutboxPort`）移除——三权由身份协作底座在 HTTP 层完成；事件能力零事件形态下无存在必要。
+2. 四个安全 Port（`CrmActorProvider`/`CrmCommandAuthorizer`/`CrmDataPermissionProvider`/`CrmOperationsAuthorizer`）与双 Outbox Port（`DomainEventOutboxPort`/`FulfillmentCommandOutboxPort`）移除——三权由身份协作底座在 HTTP 层完成；履约不再使用跨服务 Outbox 或消息事件，server 仍可将业务审计事实投影为提交后的进程内 `CrmAuditEvent`。
 3. `OfferingState` 由两态改三态（`DRAFT→PUBLISHED→DISABLED`）；`FulfillmentState` 由七态改四态（`pending_dispatch/in_progress/completed/failed` 稳定 code 变化）。
 4. `QuotationVersion` 确认时间/操作人槽位更名 `terminalAt`/`terminalBy`（三终态共用）；`Quotation` 新增 `supersedesQuotationId`（重议链）。
 5. `FulfillmentItem` 新增 `owner`/`reportSequence`/`result` 字段与 `report()`/`reset()` 迁移方法；`FulfillmentConsumer` 新增 `enabled` 启停。
