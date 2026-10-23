@@ -5,8 +5,9 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 
 ## 定位
 
-提供与 `simple-iam-server-starter:1.3.7+` openapi 契约对齐的 Java 接口，使调用方与 HTTP 传输
-细节、JSON 编解码、If-Match 乐观并发头管理解耦。
+提供与 IAM Server OpenAPI 对齐的 Java 接口，使调用方与 HTTP 传输细节、JSON 编解码、If-Match
+乐观并发头管理解耦。本版新增的 Portal 机器路由投影契约对应 Server 1.3.8；既有接口继续按各自
+历史兼容基线使用。
 
 ## 适用场景
 
@@ -18,7 +19,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
+implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.4'
 ```
 
 - 发布 POM 零依赖；Java 8 字节码，SB2（Java 8+）与 jakarta（Java 17+）宿主均可消费
@@ -28,7 +29,7 @@ implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.3'
 
 | 类别 | 内容 |
 | --- | --- |
-| 接口 | 十族共 **48 方法**（1.0.2 起 openapi 全覆盖）：`IamUserClient`（13）/ `IamDepartmentClient`（5）/ `IamOpenRoleClient`（13）/ `IamApplicationClient`（1）/ `IamMessageClient`（3）/ `IamSessionClient`（2）/ `IamPermissionClient`（1）/ `IamUserGroupClient`（8）/ `IamRoleCatalogClient`（1）/ `IamStatisticsClient`（1）——逐端点对位 server rest controller |
+| 接口 | 十一族共 **49 方法**：在既有 48 方法上新增 `IamPortalApplicationClient`（1），对应 Server 1.3.8 的 Portal 可信应用路由投影；旧 `IamApplicationClient` 仍保持三字段全局目录 |
 | 分页模型 | `IamSpringPage<T>`（users/departments 族，Spring Page wire 形态：content/totalElements，页码 **0 起**）与 `IamOpenRolePage`/`IamOpenRoleDepartmentPage`（open-roles 族，server 自持形态：items/total，页码 **1 起**）——两种形态是 server 契约事实，不可混用 |
 | 领域模型 | `IamUser`（含 subjectId）/ `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` / `PageAdmittedApplication` / `IamApplication` / `IamMessage` 族四件 / `IamSession` / `IamPermission` / `IamUserGroup` 族两件 / `IamRoleCatalogEntry` / `IamStatistics` 等 24 个 |
 | 常量 | `SimpleIamClientConstant`：路径段/协议头（`If-Match`/`ETag`）/wire 字段名/查询参数名，值逐字对位 server 契约 |
@@ -50,6 +51,7 @@ open-roles 族的写操作（putOpenRoleRule / deleteOpenRoleRule / mount / unmo
 | IamUserClient（除页面准入查询） | `iam:user:api` | `iam:user`（部门范围求交） |
 | IamUserClient#listPageAdmittedApplications | `iam:portal:api`（单码即够，勿授 `iam:user:api`） | —（应用码聚合非用户档案，无 DATA 面） |
 | IamApplicationClient | `iam:application:api` | `iam:application` read all（全局目录无部门归属） |
+| IamPortalApplicationClient | `iam:portal-application:read:api`（仅 SERVICE 机器主体） | `iam:portal-application` read（按应用范围或 all） |
 | IamMessageClient | `iam:message:api` | —（收件人过滤是查询参数非行级范围） |
 | IamSessionClient | `iam:session:api` | —（运行时会话状态非行级业务数据） |
 | IamPermissionClient / IamRoleCatalogClient | `iam:permission:api` / `iam:role:api` | —（只读配置目录） |
@@ -61,11 +63,18 @@ open-roles 族的写操作（putOpenRoleRule / deleteOpenRoleRule / mount / unmo
 ## 安全边界
 
 - 模块零 HTTP、零 Spring、零认证接触；凭据与传输由传输装配件与 aksk 底座管理
+- Portal 路由模型只描述业务自有 Nginx 的 HTTP `targetOrigin`、公共路径和转发策略；core 不执行路由、不创建或校验 Token
+- `forwardAuthorization` 的契约值固定为 `REQUEST`，表示转发层按原请求处理 Authorization；`forwardCookieNames` 契约为空，不向业务应用转发 Cookie
 - 模型不承载密钥材料；`phone` 为 E.164 规范化形态（null=未登记）
+- core 不产生运行时日志或领域事件；认证、请求观测和事件埋点由传输装配件或上层 adaptor 按其职责完成，且不得记录凭据或 Token
 
 ## 兼容性
 
-- 对应 server 版本：`simple-iam-server-starter:1.3.5+`（`/iam/api` 基路径；open-roles 族
-  契约 1.3.2 引入，phone 三态语义 1.3.3 收紧对 client 透明；users 投影 `subjectId`
-  与页面准入清单方法 1.3.5 引入，旧 server 下这两个新增能力不可用，其余方法不受影响）
-- 契约演进 = server 先行、client 跟版走号；本模块无前版
+- 新增 `IamPortalApplicationClient` 要求 `simple-iam-server-starter:1.3.8+`；该接口读取
+  `/iam/api/portal/applications` 的 Portal 可信应用路由投影。
+- 其余既有 48 个方法继续按各自历史最低 Server 版本可用：open-roles 族契约从 Server
+  `1.3.2` 引入，phone 三态语义从 `1.3.3` 收紧，users 投影 `subjectId` 与页面准入清单
+  方法从 `1.3.5` 引入；旧 Server 不提供对应新增能力时，仅该能力不可用，其他已支持方法不受影响。
+- 契约演进 = Server 先行、client 跟版走号；本版基线为 `1.0.3`，新增 Portal 路由投影方法对应
+  Server `1.3.8+`。需要 Portal 路由投影时，应同步升级 core、对应传输 starter 和 Server；仅使用既有
+  48 个方法的调用方可继续使用 `1.0.3`。

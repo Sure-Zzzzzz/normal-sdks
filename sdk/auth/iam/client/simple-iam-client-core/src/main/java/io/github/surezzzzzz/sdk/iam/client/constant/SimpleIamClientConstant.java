@@ -30,6 +30,11 @@ public final class SimpleIamClientConstant {
     public static final String RESOURCE_APPLICATIONS = "applications";
 
     /**
+     * Portal 可信应用路由投影资源段（与 applications 组合为 /iam/api/portal/applications）。
+     */
+    public static final String RESOURCE_PORTAL = "portal";
+
+    /**
      * 资源路径段：站内信（/iam/api/messages，1.3.7）
      */
     public static final String RESOURCE_MESSAGES = "messages";
@@ -148,6 +153,26 @@ public final class SimpleIamClientConstant {
      * 受委托角色分页页码字段（1 起）
      */
     public static final String FIELD_PAGE = "page";
+
+    /**
+     * Portal 目录全局版本字段。
+     */
+    public static final String FIELD_CATALOG_REVISION = "catalogRevision";
+    /**
+     * Portal 路由投影字段。
+     */
+    public static final String FIELD_PORTAL_ENABLED = "portalEnabled";
+    public static final String FIELD_ROUTE_PREFIX = "routePrefix";
+    public static final String FIELD_ENTRY = "entry";
+    public static final String FIELD_API_BASE = "apiBase";
+    public static final String FIELD_TARGET_ORIGIN = "targetOrigin";
+    public static final String FIELD_CONFIG_VERSION = "configVersion";
+    public static final String FIELD_FORWARD_AUTHORIZATION = "forwardAuthorization";
+    public static final String FIELD_FORWARD_COOKIE_NAMES = "forwardCookieNames";
+    /**
+     * 1.3.8 Portal 路由契约：透传原请求的 Authorization 请求头。
+     */
+    public static final String FORWARD_AUTHORIZATION_REQUEST = "REQUEST";
     /**
      * 查询参数：用户状态过滤
      */
@@ -168,6 +193,11 @@ public final class SimpleIamClientConstant {
      * 查询参数：页大小
      */
     public static final String QUERY_SIZE = "size";
+
+    /**
+     * Portal 目录全局版本查询参数。
+     */
+    public static final String QUERY_CATALOG_REVISION = "catalogRevision";
     /**
      * 响应不符合协议
      */
