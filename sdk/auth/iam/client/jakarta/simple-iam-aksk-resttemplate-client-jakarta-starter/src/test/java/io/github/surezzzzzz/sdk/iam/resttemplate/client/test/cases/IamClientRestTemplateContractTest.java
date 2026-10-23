@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient;
 import io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
 import io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException;
+import io.github.surezzzzzz.sdk.iam.client.model.*;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamDepartmentRestTemplateClient;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamOpenRoleRestTemplateClient;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserRestTemplateClient;
@@ -23,6 +24,7 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 

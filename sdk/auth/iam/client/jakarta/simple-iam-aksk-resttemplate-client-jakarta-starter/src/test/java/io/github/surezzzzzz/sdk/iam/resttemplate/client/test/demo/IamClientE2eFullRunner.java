@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.resttemplate.client.test.demo;
 
+import io.github.surezzzzzz.sdk.iam.client.*;
+import io.github.surezzzzzz.sdk.iam.client.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
