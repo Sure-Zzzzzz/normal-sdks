@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client.test.cases;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.configuration.AkskFeignConfiguration;
+import io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException;
 import io.github.surezzzzzz.sdk.iam.feign.client.IamDepartmentFeignClient;
 import io.github.surezzzzzz.sdk.iam.feign.client.IamOpenRoleFeignClient;
 import io.github.surezzzzzz.sdk.iam.feign.client.IamUserFeignClient;
@@ -59,6 +60,8 @@ class IamFeignClientContractTest {
     @Autowired
     private io.github.surezzzzzz.sdk.iam.feign.client.IamApplicationFeignClient applications;
     @Autowired
+    private io.github.surezzzzzz.sdk.iam.feign.client.IamPortalApplicationFeignClient portalApplications;
+    @Autowired
     private io.github.surezzzzzz.sdk.iam.feign.client.IamMessageFeignClient messages;
     @Autowired
     private io.github.surezzzzzz.sdk.iam.feign.client.IamSessionFeignClient sessions;
@@ -110,16 +113,46 @@ class IamFeignClientContractTest {
                 + "\"state\":\"ACTIVE\",\"rulePresent\":true}";
     }
 
+    private static String portalApplicationJson() {
+        return "{\"applicationCode\":\"ticket\",\"applicationName\":\"Ticket\",\"status\":1,"
+                + "\"portalEnabled\":true,\"routePrefix\":\"/app/ticket\","
+                + "\"entry\":\"/app/ticket/\",\"apiBase\":\"/api/ticket\",\"targetOrigin\":\"http://ticket.internal\",\"configVersion\":3,"
+                + "\"forwardAuthorization\":\"REQUEST\",\"forwardCookieNames\":[]}";
+    }
+
+    private static String portalPageJson(String itemJson) {
+        return "{\"catalogRevision\":7,\"totalElements\":1,\"page\":0,\"size\":50,\"items\":["
+                + itemJson + "]}";
+    }
+
     private static String ruleJson() {
         return "{\"openRoleId\":\"uuid-1\",\"applicationId\":3,\"revision\":6,\"pagePermissions\":[],"
                 + "\"apiPermissions\":[\"kms.key:api\"],\"dataGrantTemplate\":{\"iam:user\":{\"read\":true}}}";
+    }
+
+    private static boolean hasProtocolCause(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof IamClientProtocolException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static String repeat(String value, int count) {
+        StringBuilder result = new StringBuilder();
+        for (int index = 0; index < count; index++) {
+            result.append(value);
+        }
+        return result.toString();
     }
 
     @org.junit.jupiter.api.BeforeEach
     void resetStub() {
         stub.reset();
     }
-
 
     @Test
     void shouldCallSixClanEndpointsWithContractFields() {
@@ -128,6 +161,19 @@ class IamFeignClientContractTest {
                 + "\"applicationName\":\"IAM\",\"status\":1}],\"totalElements\":1,\"totalPages\":1,"
                 + "\"number\":0,\"size\":50}");
         assertEquals(1L, applications.listApplications(0, 50).totalElements, "应用目录分页");
+        serverVerify();
+
+        stub.reply("GET", "/iam/api/portal/applications?page=0&size=50&catalogRevision=7",
+                "{\"catalogRevision\":7,\"totalElements\":1,\"page\":0,\"size\":50,"
+                        + "\"items\":[{\"applicationCode\":\"ticket\",\"applicationName\":\"Ticket\","
+                        + "\"status\":1,\"portalEnabled\":true,\"routePrefix\":\"/app/ticket\","
+                        + "\"entry\":\"/app/ticket/\",\"apiBase\":\"/api/ticket\",\"targetOrigin\":\"http://ticket.internal\",\"configVersion\":3,"
+                        + "\"forwardAuthorization\":\"REQUEST\",\"forwardCookieNames\":[]}]}");
+        io.github.surezzzzzz.sdk.iam.feign.client.model.IamPortalApplicationPageResponse portalPage =
+                portalApplications.listApplications(0, 50, 7L);
+        assertEquals(Long.valueOf(7L), portalPage.catalogRevision, "Portal 目录 revision");
+        assertEquals("/app/ticket", portalPage.items.get(0).routePrefix, "Portal 路由前缀");
+        assertEquals("REQUEST", portalPage.items.get(0).forwardAuthorization, "Authorization 原样转发策略");
         serverVerify();
 
         // messages 三方法
@@ -216,6 +262,103 @@ class IamFeignClientContractTest {
         stub.reply("GET", "/iam/api/user-groups/9/users", "[{\"subjectId\":\"sid-e2e-1\","
                 + "\"username\":\"e2e-user\",\"displayName\":\"成员\"}]");
         assertEquals("sid-e2e-1", userGroups.listUserGroupUsers(9L, 1, 10).get(0).subjectId, "成员列表");
+        serverVerify();
+    }
+
+    @Test
+    void shouldAcceptEmptyPortalPageAndRejectOmittedPortalFields() {
+        log.info("Portal 目录边界响应：空页合法，公共路径字段不可缺省");
+        stub.reply("GET", "/iam/api/portal/applications?page=0&size=50&catalogRevision=7",
+                "{\"catalogRevision\":7,\"totalElements\":0,\"page\":0,\"size\":50,\"items\":[]}");
+        io.github.surezzzzzz.sdk.iam.feign.client.model.IamPortalApplicationPageResponse emptyPage =
+                portalApplications.listApplications(0, 50, 7L);
+        assertEquals(0, emptyPage.items.size(), "空目录页仍为有效响应");
+        assertEquals(0L, emptyPage.totalElements, "空目录总数");
+        serverVerify();
+
+        String applicationWithoutApiBase = portalApplicationJson().replace(",\"apiBase\":\"/api/ticket\"", "");
+        stub.reply("GET", "/iam/api/portal/applications?page=0&size=50&catalogRevision=7",
+                portalPageJson(applicationWithoutApiBase));
+        assertThrows(RuntimeException.class, () -> portalApplications.listApplications(0, 50, 7L));
+        serverVerify();
+    }
+
+    @Test
+    void shouldRejectMalformedPortalMachineDirectoryResponses() {
+        String validApplication = portalApplicationJson();
+        log.info("Portal 目录畸形 200 响应校验开始");
+
+        assertPortalProtocolFailure("{\"totalElements\":1,\"page\":0,\"size\":50,\"items\":[]}",
+                "缺少 catalogRevision");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":null,\"page\":0,\"size\":50,\"items\":[]}",
+                "totalElements 为 null");
+        assertPortalProtocolFailure("{\"catalogRevision\":7.5,\"totalElements\":0,\"page\":0,\"size\":50,\"items\":[]}",
+                "catalogRevision 不是整数");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":0,\"page\":-1,\"size\":50,\"items\":[]}",
+                "page 越界");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":0,\"page\":0,\"size\":0,\"items\":[]}",
+                "size 越界");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":0,\"page\":0,\"size\":50,\"items\":{}}",
+                "items 不是数组");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":0,\"page\":0,\"size\":50,\"items\":[null]}",
+                "items 含 null 项");
+
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"applicationCode\":\"ticket\",", "")),
+                "缺少 applicationCode");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace(
+                        ",\"targetOrigin\":\"http://ticket.internal\"", "")),
+                "缺少 targetOrigin");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace(
+                        "\"apiBase\":\"/api/ticket\",", "")),
+                "缺少 apiBase");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"applicationCode\":\"ticket\"", "\"applicationCode\":\"ticket.v1\"")),
+                "applicationCode 字符不符合契约");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"applicationName\":\"Ticket\"", "\"applicationName\":\"   \"")),
+                "applicationName 为空白");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"applicationName\":\"Ticket\"",
+                        "\"applicationName\":\"" + repeat("名", 129) + "\"")),
+                "applicationName 超过 128 个码点");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"status\":1", "\"status\":\"1\"")),
+                "status 类型不符");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"status\":1", "\"status\":2")),
+                "status 不是启用状态");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"portalEnabled\":true", "\"portalEnabled\":false")),
+                "portalEnabled 未启用");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("/app/ticket", "/app/../ticket")),
+                "routePrefix 含点路径段");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("/app/ticket/", "/app/ticket/?x=1")),
+                "entry 含 query");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace(
+                        "\"entry\":\"/app/ticket/\"", "\"entry\":\"http://ticket.internal/app/ticket/\"")),
+                "entry 只能是公共绝对路径");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace(
+                        "\"entry\":\"/app/ticket/\"", "\"entry\":\"/app/other/index.html\"")),
+                "entry 必须位于 routePrefix 下");
+        for (String invalidOrigin : Arrays.asList(
+                "http://ticket.internal/base", "http://ticket.internal?mode=1", "http://user@ticket.internal",
+                "https://ticket.internal")) {
+            assertPortalProtocolFailure(portalPageJson(validApplication.replace(
+                            "\"targetOrigin\":\"http://ticket.internal\"", "\"targetOrigin\":\"" + invalidOrigin + "\"")),
+                    "targetOrigin 不是无路径的 HTTP origin");
+        }
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"configVersion\":3", "\"configVersion\":0")),
+                "configVersion 越界");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"forwardAuthorization\":\"REQUEST\"", "\"forwardAuthorization\":\"NONE\"")),
+                "forwardAuthorization 不匹配固定策略");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"forwardAuthorization\":\"REQUEST\"", "\"forwardAuthorization\":\"BEARER\"")),
+                "forwardAuthorization 不匹配固定策略");
+        assertPortalProtocolFailure(portalPageJson(validApplication.replace("\"forwardCookieNames\":[]", "\"forwardCookieNames\":[\"session\"]")),
+                "forwardCookieNames 非空");
+        assertPortalProtocolFailure("{\"catalogRevision\":7,\"totalElements\":1,\"page\":0,\"size\":50,\"items\":null}",
+                "items 为 null");
+    }
+
+    private void assertPortalProtocolFailure(String responseBody, String scenario) {
+        log.info("Portal 目录畸形 200 响应断言：scenario={}", scenario);
+        stub.reply("GET", "/iam/api/portal/applications?page=0&size=50&catalogRevision=7", responseBody);
+        RuntimeException exception = assertThrows(RuntimeException.class,
+                () -> portalApplications.listApplications(0, 50, 7L), scenario);
+        assertTrue(hasProtocolCause(exception), scenario + " 应映射为 IAM 协议异常");
         serverVerify();
     }
 
@@ -356,7 +499,7 @@ class IamFeignClientContractTest {
                 server.createContext("/", this::handle);
                 server.start();
             } catch (Exception exception) {
-                throw new IllegalStateException("stub server start failed", exception);
+                throw new AssertionError("stub server start failed", exception);
             }
         }
 
