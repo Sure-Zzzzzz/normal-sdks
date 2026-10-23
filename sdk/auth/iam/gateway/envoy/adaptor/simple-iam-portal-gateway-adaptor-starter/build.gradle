@@ -1,0 +1,16 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-iam-portal-gateway-adaptor-core:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.4'
+    api 'io.envoyproxy.controlplane:api:1.0.52'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.3'
+    implementation 'io.envoyproxy.controlplane:server:1.0.52'
+    implementation 'io.grpc:grpc-netty-shaded:1.62.2'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-context'
+    compileOnly 'org.springframework:spring-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
