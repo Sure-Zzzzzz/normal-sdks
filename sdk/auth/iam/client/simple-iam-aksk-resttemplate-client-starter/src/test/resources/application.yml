@@ -26,7 +26,7 @@ io:
               enable: true
               server-url: http://127.0.0.1:8280
               token-endpoint: /oauth2/token
-              # client-id / client-secret 在 application-local.yml（e2e AKP: iam-client-e2e-1008）
+              # client-id / client-secret 在 application-local.yml（仅用于本地端到端测试）
               client-id: test-client-id
               client-secret: test-client-secret
               resttemplate:

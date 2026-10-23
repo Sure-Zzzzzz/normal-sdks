@@ -2,16 +2,16 @@
 
 RestTemplate 装配的 IAM openapi client（Spring Boot 2.x 宿主）：直接引用 aksk 底座
 `simple-aksk-resttemplate-redis-client-starter:3.0.2`，连接池、超时与 AKSK 认证头全部复用底座
-`akskClientRestTemplate`，本模块在其上装配 core 十接口（1.0.2 起 openapi 全族）的默认实现——
-`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现（messages/sessions/permissions/user-groups/role-catalog/statistics）。
+`akskClientRestTemplate`，本模块在其上装配 core 十一接口（1.0.3 起含 Portal 可信应用路由投影）的默认实现——
+`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现，1.0.3 起含 `IamPortalApplicationRestTemplateClient`。
 
-> **1.0.2**：契约对齐 server 1.3.7 三件——第 13 方法页面准入详情 + IamApplicationClient 可信应用目录 + openapi 六族新接口实现（messages/sessions/permissions/user-groups/role-catalog/statistics）；依赖 simple-iam-client-core:1.0.3（十接口 48 方法）。对应 server >= 1.3.7，旧 server 新能力 404。
+> **1.0.3**：契约对齐 server 1.3.8，新增 Portal 可信应用路由投影分页（`catalogRevision` 一致性快照、路由来源和受控转发策略）；依赖 `simple-iam-client-core:1.0.4`，总计 49 方法。对应 server >= 1.3.8，旧 server 仅新增方法不可用。
 
 ## 核心能力
 
-### 1. 契约接口族 48 方法全覆盖（1.0.2 起 openapi 全族）
+### 1. 契约接口族 49 方法全覆盖
 
-- **十族 48 方法**（1.0.2 起）：users 13 / departments 5 / open-roles 13 / applications 1 / messages 3 / sessions 2 / permissions 1 / user-groups 8 / role-catalog 1 / statistics 1，详见 client-core 契约。
+- **十一族 49 方法**：既有十族 48 方法加 Portal 可信应用路由投影 1 方法，详见 client-core 契约。
 
 ### 2. 认证零自研
 
@@ -33,7 +33,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.3` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
+| `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
 | `simple-aksk-resttemplate-redis-client-starter:3.0.2` | `implementation` 运行时传递 | aksk 底座：akskClientRestTemplate + 令牌链 |
 | Spring Boot Web / HttpClient 4 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
@@ -44,7 +44,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.3'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents:httpclient:4.5.13'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -132,14 +132,14 @@ public class UserSyncService {
 
 ## 测试覆盖
 
-- 契约测试 4：48 方法逐端点断言（URL/方法/请求体 STRICT/If-Match 头/双分页解析/revision 直取/4xx 透传；1.0.2 起 openapi 全族）
+- 契约测试 4：49 方法逐端点断言，额外覆盖 Portal 路径、catalogRevision 查询和路由字段解析
 - 装配测试 4：默认关/正常装配三客户端/缺底座模板响亮失败/非法 origin 拒启
 - 端到端 6：AKP → aksk 底座真令牌链 → dual-identity 宿主 → 真 IAM openapi
   （users 分页/详情/角色/keyword/部门列表/详情/404 透传，2026-10-08 全绿）
 
 ## 兼容性
 
-- 对应 server：`simple-iam-server-starter:1.3.2+`
+- 对应 server：`simple-iam-server-starter:1.3.8+`
 - Spring Boot 2.7.9 验证（server 部署基线），自动配置经 `spring.factories` 注册
 - Spring Boot 3.x 宿主用 `simple-iam-aksk-resttemplate-client-jakarta-starter`；
   Feign 形态用 `simple-iam-aksk-feign-client-starter`

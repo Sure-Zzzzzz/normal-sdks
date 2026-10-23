@@ -1,9 +1,10 @@
 package io.github.surezzzzzz.sdk.iam.resttemplate.client.test.cases;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient;
 import io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
-import io.github.surezzzzzz.sdk.iam.client.model.*;
+import io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamDepartmentRestTemplateClient;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamOpenRoleRestTemplateClient;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserRestTemplateClient;
@@ -18,12 +19,10 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URI;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
@@ -44,6 +43,7 @@ class IamClientRestTemplateContractTest {
     private IamDepartmentClient departments;
     private IamOpenRoleClient openRoles;
     private io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient applicationsClient;
+    private io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPortalApplicationRestTemplateClient portalApplicationsClient;
 
     private static String springPageJson() {
         return "{\"content\":[" + userJson() + "],\"totalElements\":1,\"totalPages\":1,\"number\":0,\"size\":20,"
@@ -78,6 +78,33 @@ class IamClientRestTemplateContractTest {
                 + "\"departments\":[{\"departmentId\":1,\"code\":\"ROOT\",\"parentId\":null,\"name\":\"root\",\"status\":1}]}";
     }
 
+    private static PortalPageFixture portalPageFixture() {
+        Map<String, Object> item = new LinkedHashMap<String, Object>();
+        item.put("applicationCode", "ticket");
+        item.put("applicationName", "Ticket");
+        item.put("status", Integer.valueOf(1));
+        item.put("portalEnabled", Boolean.TRUE);
+        item.put("routePrefix", "/app/ticket");
+        item.put("entry", "/app/ticket/");
+        item.put("apiBase", "/api/ticket");
+        item.put("targetOrigin", "http://ticket.internal");
+        item.put("configVersion", Long.valueOf(3L));
+        item.put("forwardAuthorization", "REQUEST");
+        item.put("forwardCookieNames", new ArrayList<String>());
+
+        Map<String, Object> page = new LinkedHashMap<String, Object>();
+        page.put("catalogRevision", Long.valueOf(7L));
+        page.put("totalElements", Long.valueOf(1L));
+        page.put("page", Integer.valueOf(0));
+        page.put("size", Integer.valueOf(20));
+        page.put("items", Collections.singletonList(item));
+        return new PortalPageFixture(page, item);
+    }
+
+    private static String portalJson(PortalPageFixture fixture) throws Exception {
+        return new ObjectMapper().writeValueAsString(fixture.page);
+    }
+
     @BeforeEach
     void setUp() {
         restTemplate = new RestTemplate();
@@ -88,6 +115,7 @@ class IamClientRestTemplateContractTest {
         departments = new IamDepartmentRestTemplateClient(restTemplate, properties);
         openRoles = new IamOpenRoleRestTemplateClient(restTemplate, properties);
         applicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient(restTemplate, properties);
+        portalApplicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPortalApplicationRestTemplateClient(restTemplate, properties);
     }
 
     @Test
@@ -142,6 +170,22 @@ class IamClientRestTemplateContractTest {
         assertEquals(1L, applications.getTotalElements(), "目录分页 totalElements");
         assertEquals("iam", applications.getContent().get(0).getApplicationCode(), "目录三字段解析");
         assertEquals(Integer.valueOf(1), applications.getContent().get(0).getStatus(), "目录 status 解析");
+        server.verify();
+        server.reset();
+
+        server.expect(requestTo(API + "/portal/applications?page=0&size=20&catalogRevision=7"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"catalogRevision\":7,\"totalElements\":1,\"page\":0,\"size\":20,"
+                                + "\"items\":[{\"applicationCode\":\"ticket\",\"applicationName\":\"Ticket\","
+                                + "\"status\":1,\"portalEnabled\":true,\"routePrefix\":\"/app/ticket\","
+                                + "\"entry\":\"/app/ticket/\",\"apiBase\":\"/api/ticket\",\"targetOrigin\":\"http://ticket.internal\",\"configVersion\":3,"
+                                + "\"forwardAuthorization\":\"REQUEST\",\"forwardCookieNames\":[]}]}",
+                        MediaType.APPLICATION_JSON));
+        io.github.surezzzzzz.sdk.iam.client.model.IamPortalApplicationPage portalPage =
+                portalApplicationsClient.listApplications(0, 20, 7L);
+        assertEquals(7L, portalPage.getCatalogRevision(), "Portal 目录 revision");
+        assertEquals("/app/ticket", portalPage.getItems().get(0).getRoutePrefix(), "Portal 路由前缀");
+        assertEquals("REQUEST", portalPage.getItems().get(0).getForwardAuthorization(), "Authorization 原样转发策略");
         server.verify();
         server.reset();
 
@@ -200,6 +244,117 @@ class IamClientRestTemplateContractTest {
         expectVoid(HttpMethod.DELETE, API + "/users/sub-1/roles/5", null);
         users.revokeRole("sub-1", 5L);
         server.verify();
+    }
+
+    @Test
+    void shouldRejectMissingPortalRequiredFields() throws Exception {
+        for (String field : Arrays.asList("catalogRevision", "totalElements", "page", "size", "items")) {
+            PortalPageFixture fixture = portalPageFixture();
+            fixture.page.remove(field);
+            assertPortalProtocolError(fixture, "缺少分页字段 " + field);
+        }
+        for (String field : Arrays.asList("applicationCode", "applicationName", "status", "portalEnabled",
+                "routePrefix", "entry", "apiBase", "targetOrigin", "configVersion", "forwardAuthorization", "forwardCookieNames")) {
+            PortalPageFixture fixture = portalPageFixture();
+            fixture.item.remove(field);
+            assertPortalProtocolError(fixture, "缺少路由字段 " + field);
+        }
+    }
+
+    @Test
+    void shouldRejectMalformedPortalRequiredFields() throws Exception {
+        PortalPageFixture fixture = portalPageFixture();
+        fixture.page.put("catalogRevision", "7");
+        assertPortalProtocolError(fixture, "catalogRevision 类型错误");
+
+        fixture = portalPageFixture();
+        fixture.page.put("totalElements", Long.valueOf(-1L));
+        assertPortalProtocolError(fixture, "totalElements 越界");
+
+        fixture = portalPageFixture();
+        fixture.page.put("items", "[]");
+        assertPortalProtocolError(fixture, "items 类型错误");
+
+        fixture = portalPageFixture();
+        fixture.item.put("status", Integer.valueOf(2));
+        assertPortalProtocolError(fixture, "status 不符合机器目录状态契约");
+
+        fixture = portalPageFixture();
+        fixture.item.put("portalEnabled", "true");
+        assertPortalProtocolError(fixture, "portalEnabled 类型错误");
+
+        fixture = portalPageFixture();
+        fixture.item.put("forwardCookieNames", "[]");
+        assertPortalProtocolError(fixture, "forwardCookieNames 类型错误");
+
+        fixture = portalPageFixture();
+        fixture.item.put("forwardCookieNames", Collections.singletonList("session"));
+        assertPortalProtocolError(fixture, "forwardCookieNames 非空");
+
+        fixture = portalPageFixture();
+        fixture.item.put("apiBase", Integer.valueOf(1));
+        assertPortalProtocolError(fixture, "apiBase 非空时类型必须为文本");
+
+        fixture = portalPageFixture();
+        fixture.item.put("entry", "http://ticket.internal/app/ticket/");
+        assertPortalProtocolError(fixture, "entry 只能是公共绝对路径");
+
+        for (String invalidOrigin : Arrays.asList(
+                "http://ticket.internal/base", "http://ticket.internal?mode=1", "http://user@ticket.internal",
+                "https://ticket.internal", "http://[fe80::1%25eth0]", "http://订单.internal")) {
+            fixture = portalPageFixture();
+            fixture.item.put("targetOrigin", invalidOrigin);
+            assertPortalProtocolError(fixture, "targetOrigin 必须是无路径、无 query、无 userinfo 的 origin");
+        }
+
+        fixture = portalPageFixture();
+        fixture.item.put("routePrefix", "/app/ticket/");
+        assertPortalProtocolError(fixture, "routePrefix 不允许尾部斜杠");
+        fixture = portalPageFixture();
+        fixture.item.put("apiBase", "/api//ticket");
+        assertPortalProtocolError(fixture, "apiBase 不允许重复斜杠");
+        fixture = portalPageFixture();
+        fixture.item.put("entry", "/app/other/index.html");
+        assertPortalProtocolError(fixture, "entry 必须位于 routePrefix 下");
+    }
+
+    @Test
+    void shouldRejectMissingOrNullPortalApiBaseOrTargetOrigin() throws Exception {
+        for (boolean includeApiBase : Arrays.asList(Boolean.TRUE, Boolean.FALSE)) {
+            PortalPageFixture fixture = portalPageFixture();
+            if (includeApiBase) {
+                fixture.item.put("apiBase", null);
+            } else {
+                fixture.item.remove("apiBase");
+            }
+            log.info("验证 Portal 公共路径字段缺失或为空时拒绝: includeApiBase={}", includeApiBase);
+            server.expect(requestTo(API + "/portal/applications?page=0&size=20&catalogRevision=7"))
+                    .andExpect(method(HttpMethod.GET))
+                    .andRespond(withSuccess(portalJson(fixture), MediaType.APPLICATION_JSON));
+            assertThrows(IamClientProtocolException.class,
+                    () -> portalApplicationsClient.listApplications(0, 20, 7L));
+            server.verify();
+            server.reset();
+        }
+        PortalPageFixture fixture = portalPageFixture();
+        fixture.item.remove("targetOrigin");
+        assertPortalProtocolError(fixture, "targetOrigin 缺失");
+        for (String forwardingPolicy : Arrays.asList("NONE", "BEARER", "request")) {
+            fixture = portalPageFixture();
+            fixture.item.put("forwardAuthorization", forwardingPolicy);
+            assertPortalProtocolError(fixture, "forwardAuthorization 不符合固定策略");
+        }
+    }
+
+    private void assertPortalProtocolError(PortalPageFixture fixture, String scenario) throws Exception {
+        log.info("验证 Portal 客户端拒绝不符合契约的响应: {}", scenario);
+        server.expect(requestTo(API + "/portal/applications?page=0&size=20&catalogRevision=7"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(portalJson(fixture), MediaType.APPLICATION_JSON));
+        assertThrows(IamClientProtocolException.class,
+                () -> portalApplicationsClient.listApplications(0, 20, 7L), scenario);
+        server.verify();
+        server.reset();
     }
 
     @Test
@@ -362,7 +517,6 @@ class IamClientRestTemplateContractTest {
         server.verify();
     }
 
-
     @Test
     void shouldCallSixClanEndpointsWithContractFields() {
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient messagesClient =
@@ -505,5 +659,15 @@ class IamClientRestTemplateContractTest {
             actions = actions.andExpect(header("If-Match", ifMatch));
         }
         actions.andRespond(withNoContent());
+    }
+
+    private static final class PortalPageFixture {
+        private final Map<String, Object> page;
+        private final Map<String, Object> item;
+
+        private PortalPageFixture(Map<String, Object> page, Map<String, Object> item) {
+            this.page = page;
+            this.item = item;
+        }
     }
 }
