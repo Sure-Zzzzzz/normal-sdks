@@ -62,7 +62,7 @@ io:
 
 - IAM Nginx 继续自闭环平台根路径、Portal 壳、IAM/AKSK 页面、OAuth 和平台固定 API；Adaptor 只处理不覆盖平台保留前缀的业务可信应用路由。
 - IAM Portal 投影为每个应用提供 `routePrefix`、`entry`、`apiBase` 和一个 `targetOrigin`。页面和 API 共用该业务 Nginx origin，不在 adaptor 内拆分上游或改写业务路径。
-- 当前版本只接受 HTTP upstream。外层 TLS 可在防火墙、硬负载或 IAM Nginx 终止；内部业务 upstream、xDS 和健康检查不挂载证书或 CA。
+- 当前版本只接受 HTTP 业务应用连接（Envoy upstream）。入口侧 TLS 可在防火墙、硬负载或 IAM Nginx 终止；业务应用连接、xDS 和健康检查不挂载证书或 CA。
 - 目标先由 core 校验，再由注入的 DNS resolver 返回固定 IP，Envoy 通过 EDS（端点发现资源）连接 IP；不使用运行期域名解析。
 - `REQUEST` 策略保留调用方 `Authorization` 请求头，`NONE` 策略移除它。Cookie 始终移除；非空 Cookie 白名单在当前版本拒绝发布，避免把完整 Cookie 泄露到业务上游。
 - 平台保留前缀、非 HTTP scheme、未允许端口、危险地址、非法路径、重复目录和 DNS 结果不一致，均拒绝整份候选快照；不会发布部分目录。
