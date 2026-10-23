@@ -2,17 +2,17 @@
 
 RestTemplate 装配的 IAM openapi client（Spring Boot 3.x / Jakarta 宿主，Apache HttpClient 5 连接池）：
 直接引用 aksk 底座 jakarta 线 `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0`，
-在底座 `akskClientRestTemplate`（hc5）之上装配 core 十接口（1.0.2 起 openapi 全族）的默认实现——
-`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现（messages/sessions/permissions/user-groups/role-catalog/statistics）。
-契约语义（十接口 48 方法/双分页/If-Match/错误透传，1.0.2 起 openapi 全族）与 SB2 形态完全同标。
+在底座 `akskClientRestTemplate`（hc5）之上装配 core 十一接口（含 Portal 可信应用路由投影）的默认实现——
+`IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，含 `IamApplicationRestTemplateClient`、六族新实现和 `IamPortalApplicationRestTemplateClient`。
+契约语义（十一接口 49 方法/双分页/If-Match/错误透传）与 SB2 形态完全同标。
 
-> **1.0.2**：契约对齐 server 1.3.7 三件——第 13 方法页面准入详情 + IamApplicationClient 可信应用目录 + openapi 六族新接口实现（messages/sessions/permissions/user-groups/role-catalog/statistics）；依赖 simple-iam-client-core:1.0.3（十接口 48 方法）。对应 server >= 1.3.7，旧 server 新能力 404。
+> **1.0.3**：契约对齐 server 1.3.8，新增 Portal 可信应用路由投影 Jakarta RestTemplate 实现；依赖 `simple-iam-client-core:1.0.4`，总计 49 方法。
 
 ## 核心能力
 
-### 1. 契约接口族 48 方法全覆盖（1.0.2 起 openapi 全族）
+### 1. 契约接口族 49 方法全覆盖
 
-- **十族 48 方法**（1.0.2 起）：users 13 / departments 5 / open-roles 13 / applications 1 / messages 3 / sessions 2 / permissions 1 / user-groups 8 / role-catalog 1 / statistics 1，详见 client-core 契约。
+- **十一族 49 方法**：既有十族 48 方法加 Portal 可信应用路由投影 1 方法，详见 client-core 契约。
 
 ### 2. 认证零自研（jakarta 线底座）
 
@@ -33,7 +33,7 @@ users/departments 族返回 `IamSpringPage`（**页码 0 起**）；open-roles �
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.3` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族（Java 8 字节码，双线共用） |
+| `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族（Java 8 字节码，双线共用） |
 | `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | aksk 底座 jakarta 线：akskClientRestTemplate（hc5）+ 令牌链 |
 | Spring Boot 3 Web / HttpClient 5 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
@@ -44,7 +44,7 @@ users/departments 族返回 `IamSpringPage`（**页码 0 起**）；open-roles �
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-jakarta-starter:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-jakarta-starter:1.0.3'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -113,7 +113,7 @@ If-Match 乐观并发用法与 SB2 形态一致（revision 取自响应模型，
 | Spring Boot | 2.x（建议 2.7.x） | 3.x（Java 17+） |
 | 连接池 | Apache HttpClient 4 | Apache HttpClient 5 |
 | 自动配置注册 | `spring.factories` | `AutoConfiguration.imports` 单入口 |
-| 契约/接口/模型 | 同一份 `simple-iam-client-core:1.0.3` | 同左 |
+| 契约/接口/模型 | 同一份 `simple-iam-client-core:1.0.4` | 同左 |
 
 ## 安全边界
 
@@ -122,12 +122,12 @@ If-Match 乐观并发用法与 SB2 形态一致（revision 取自响应模型，
 
 ## 测试覆盖
 
-- 契约测试 4：48 方法逐端点断言（同 SB2 契约集，断言随 Spring 6 API 适配；1.0.2 起 openapi 全族）
+- 契约测试 4：49 方法逐端点断言（同 SB2 契约集，额外覆盖 Portal 路径、revision 和路由字段）
 - 装配测试 4：默认关/正常装配三客户端/缺底座模板响亮失败/非法 origin 拒启
 
 ## 兼容性
 
-- 对应 server：`simple-iam-server-starter:1.3.2+`
-- Spring Boot 3.4.2 / 3.3.13 / 3.2.12 × Java 17 / 21 兼容矩阵全绿（2026-10-08，坐标形态），jakarta 线独立走号
+- 对应 server：`simple-iam-server-starter:1.3.8+`
+- 本轮坐标验证：Spring Boot 3.4.2，Java 17；其他 Spring Boot 档位不在本版本验收范围内，jakarta 线独立走号
 - SB2 宿主用 `simple-iam-aksk-resttemplate-client-starter`；Feign 4.x 形态用
   `simple-iam-aksk-feign-client-jakarta-starter`
