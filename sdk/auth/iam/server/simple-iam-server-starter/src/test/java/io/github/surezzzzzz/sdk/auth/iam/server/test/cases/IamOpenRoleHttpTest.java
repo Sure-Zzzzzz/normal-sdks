@@ -27,9 +27,11 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOpenRole
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamOpenRoleBindingRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleAuthorizationRuleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamBootstrapProjectionReconciliationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.bootstrap.IamOpenRoleManifestUpgradeService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.department.IamDepartmentService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
@@ -122,6 +124,10 @@ class IamOpenRoleHttpTest {
     private AuditCollector audits;
     @Autowired
     private IamOpenRoleManifestUpgradeService manifestUpgrade;
+    @Autowired
+    private IamApplicationAuthorizationStateService authorizationStateService;
+    @Autowired
+    private IamBootstrapProjectionReconciliationService bootstrapProjectionReconciliationService;
 
     @BeforeEach
     void prepare() {
@@ -678,40 +684,56 @@ class IamOpenRoleHttpTest {
             legacy.getDataResources().removeIf(resource -> IamOpenRoleManifestUpgradeService.declarations().stream().anyMatch(expected -> expected.getResource().equals(resource.getResource())));
             manifestService.putManifest(iamId, legacy);
             Long legacyVersion = manifestService.getManifest(iamId).getManifestVersion();
-            // 两个独立 Bean 图同时升级缺项清单，数据库锁必须只允许一次实际合并。
-            try (ConfigurableApplicationContext second = new SpringApplication(SimpleIamServerTestApplication.class, AuthenticationFixture.class)
-                    .run("--server.port=0", "--io.github.surezzzzzz.sdk.auth.iam.server.bootstrap.enabled=false",
-                            "--io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[0]=/iam/api/**")) {
-                IamOpenRoleManifestUpgradeService otherUpgrade = second.getBean(IamOpenRoleManifestUpgradeService.class);
-                assertNotSame(manifestUpgrade, otherUpgrade);
-                ExecutorService upgrades = Executors.newFixedThreadPool(2);
-                try {
-                    Future<?> first = upgrades.submit(manifestUpgrade::upgrade);
-                    Future<?> next = upgrades.submit(otherUpgrade::upgrade);
-                    first.get(30, TimeUnit.SECONDS);
-                    next.get(30, TimeUnit.SECONDS);
-                } catch (Exception failed) {
-                    throw new IllegalStateException(failed);
-                } finally {
-                    upgrades.shutdownNow();
-                }
+            IamApplicationAuthorizationStateService.RecomputeToken token =
+                    authorizationStateService.beginRecompute(iamId);
+            ExecutorService upgrades = Executors.newFixedThreadPool(2);
+            try {
+                Future<?> first = upgrades.submit(() -> manifestUpgrade.upgradeForBootstrap(token));
+                Future<?> next = upgrades.submit(() -> manifestUpgrade.upgradeForBootstrap(token));
+                first.get(30, TimeUnit.SECONDS);
+                next.get(30, TimeUnit.SECONDS);
+            } catch (Exception failed) {
+                throw new IllegalStateException(failed);
+            } finally {
+                upgrades.shutdownNow();
             }
+            reconcileAndFinish(iamId, token);
             io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.response.ApplicationPermissionManifestResponse upgraded = manifestService.getManifest(iamId);
             assertEquals(Long.valueOf(legacyVersion + 1L), upgraded.getManifestVersion());
             assertTrue(upgraded.getApiPermissions().contains("sample:custom:api"));
             assertTrue(upgraded.getApiPermissions().containsAll(IamOpenRoleManifestUpgradeService.apiCodes()));
             assertEquals(Collections.singletonList(oldCode), ruleService.getRoleAuthorizationRule(ordinaryId, iamId).getApiPermissions());
-            manifestUpgrade.upgrade();
+
+            IamApplicationAuthorizationStateService.RecomputeToken idempotentToken =
+                    authorizationStateService.beginRecompute(iamId);
+            manifestUpgrade.upgradeForBootstrap(idempotentToken);
+            reconcileAndFinish(iamId, idempotentToken);
             assertEquals(upgraded.getManifestVersion(), manifestService.getManifest(iamId).getManifestVersion());
+
             PutApplicationPermissionManifestRequest conflicting = copyManifest(upgraded);
             conflicting.getDataResources().stream().filter(resource -> "iam:open-role".equals(resource.getResource())).findFirst().get().setActions(Collections.singletonList("read"));
             manifestService.putManifest(iamId, conflicting);
             Long conflictVersion = manifestService.getManifest(iamId).getManifestVersion();
-            assertThrows(io.github.surezzzzzz.sdk.auth.iam.server.exception.IamOpenRoleException.class, manifestUpgrade::upgrade);
+            IamApplicationAuthorizationStateService.RecomputeToken conflictToken =
+                    authorizationStateService.beginRecompute(iamId);
+            assertThrows(io.github.surezzzzzz.sdk.auth.iam.server.exception.IamOpenRoleException.class,
+                    () -> manifestUpgrade.upgradeForBootstrap(conflictToken));
+            reconcileAndFinish(iamId, conflictToken);
             assertEquals(conflictVersion, manifestService.getManifest(iamId).getManifestVersion());
         } finally {
+            if (authorizationStateService.isRecomputePending(iamId)) {
+                IamApplicationAuthorizationStateService.RecomputeToken cleanupToken =
+                        authorizationStateService.beginRecompute(iamId);
+                reconcileAndFinish(iamId, cleanupToken);
+            }
             manifestService.putManifest(iamId, restore);
         }
+    }
+
+    private void reconcileAndFinish(Long applicationId,
+                                    IamApplicationAuthorizationStateService.RecomputeToken token) {
+        bootstrapProjectionReconciliationService.reconcile(applicationId, token, () -> true);
+        authorizationStateService.finishRecompute(applicationId, token);
     }
 
     @Test

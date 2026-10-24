@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.auth.iam.core.spi.CaptchaProvider;
 import io.github.surezzzzzz.sdk.auth.iam.core.spi.ExternalBrowserLoginProvider;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.IamWebAuthConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.web.auth.request.*;
@@ -85,6 +86,7 @@ public class IamAuthRestController {
     private final IamPhoneChallengeService phoneChallengeService;
     private final IamUserRepository userRepository;
     private final IamLoginFailurePolicyService loginFailurePolicyService;
+    private final IamLoginRequirementsService loginRequirementsService;
 
     /**
      * 取 CSRF token（匿名，登录页用）
@@ -169,12 +171,22 @@ public class IamAuthRestController {
                     servletRequest.getHeader("User-Agent"), "PHONE_CODE_INVALID", null);
             throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
         }
-        IamUserEntity user = userRepository.findByPhone(phone).orElse(null);
-        if (user == null || user.getPhoneBoundAt() == null) {
-            throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
+        IamUserEntity user = null;
+        try {
+            user = userRepository.findByPhone(phone).orElse(null);
+            if (user == null || user.getPhoneBoundAt() == null) {
+                throw new SimpleIamServerException(io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED, "验证码错误或已失效");
+            }
+            // 与密码/外部身份登录同口径：禁用或锁定账号不得经短信登录
+            loginFailurePolicyService.assertAccountUsable(user);
+            loginRequirementsService.assertAccepted(request.getRequirementsRevision(),
+                    request.getAcceptedDocumentVersionIds(), user, SimpleIamServerConstant.LOGIN_PROVIDER_PHONE_SMS);
+        } catch (SimpleIamServerException exception) {
+            auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_FAILED,
+                    "phone", "phone", user == null ? null : user.getId(), servletRequest.getRemoteAddr(),
+                    servletRequest.getHeader("User-Agent"), exception.getErrorCode(), null);
+            throw exception;
         }
-        // 与密码/外部身份登录同口径：禁用或锁定账号不得经短信登录
-        loginFailurePolicyService.assertAccountUsable(user);
         UserDetails userDetails = establishSession(user, servletRequest);
         auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_SUCCEEDED,
                 "phone", user.getUsername(), user.getId(),
@@ -242,6 +254,8 @@ public class IamAuthRestController {
             user = SimpleIamServerConstant.LOGIN_PROVIDER_LOCAL_PASSWORD.equals(provider)
                     ? authenticationService.authenticate(request.getUsername(), request.getPassword())
                     : externalLoginService.credentialLogin(provider, request.getUsername(), request.getPassword());
+            loginRequirementsService.assertAccepted(request.getRequirementsRevision(),
+                    request.getAcceptedDocumentVersionIds(), user, provider);
         } catch (SimpleIamServerException exception) {
             auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_FAILED,
                     provider, request.getUsername(), null,
@@ -267,6 +281,8 @@ public class IamAuthRestController {
     @GetMapping("/authorize/{providerCode}")
     public ResponseEntity<WebAuthorizeResponse> authorize(@PathVariable String providerCode,
                                                           @RequestParam(required = false) String redirect,
+                                                          @RequestParam(required = false) String requirementsRevision,
+                                                          @RequestParam(required = false) List<Long> acceptedDocumentVersionIds,
                                                           HttpServletRequest request) {
         ExternalBrowserLoginProvider provider = providerRegistry.getBrowserLoginProvider(providerCode);
         if (provider == null) {
@@ -282,6 +298,10 @@ public class IamAuthRestController {
             session.setAttribute(SimpleIamServerConstant.SESSION_ATTRIBUTE_EXTERNAL_LOGIN_REDIRECT_PREFIX
                     + providerCode, safeRedirect);
         }
+        session.setAttribute(IamWebAuthConstant.SESSION_REQUIREMENTS_REVISION_PREFIX
+                + providerCode, requirementsRevision);
+        session.setAttribute(IamWebAuthConstant.SESSION_REQUIREMENTS_DOCUMENTS_PREFIX
+                + providerCode, acceptedDocumentVersionIds == null ? new ArrayList<Long>() : acceptedDocumentVersionIds);
         String callbackUrl = buildCallbackUrl(request, providerCode);
         return ResponseEntity.ok(new WebAuthorizeResponse(provider.buildAuthorizeUrl(callbackUrl, state)));
     }
@@ -304,6 +324,8 @@ public class IamAuthRestController {
             }
             consumeState(request, providerCode, params.get("state"));
             IamUserEntity user = externalLoginService.completeBrowserLogin(provider, params);
+            loginRequirementsService.assertAccepted(externalRequirementsRevision(request, providerCode),
+                    externalRequirementsDocuments(request, providerCode), user, providerCode);
             establishSession(user, request);
             auditEventPublisher.publishAuthentication(AuthenticationEventType.LOGIN_SUCCEEDED,
                     providerCode, user.getUsername(), user.getId(),
@@ -438,6 +460,11 @@ public class IamAuthRestController {
             return ResponseEntity.badRequest()
                     .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
         }
+        if (io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode.VALIDATION_FAILED
+                .equals(e.getErrorCode())) {
+            return ResponseEntity.badRequest()
+                    .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
+        }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new WebLoginResponse(e.getMessage(), null, false, false, null, null));
     }
@@ -511,6 +538,40 @@ public class IamAuthRestController {
             }
         }
         return PORTAL_DEFAULT_TARGET;
+    }
+
+    private String externalRequirementsRevision(HttpServletRequest request, String providerCode) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
+        }
+        String attribute = IamWebAuthConstant.SESSION_REQUIREMENTS_REVISION_PREFIX
+                + providerCode;
+        Object value = session.getAttribute(attribute);
+        session.removeAttribute(attribute);
+        return value instanceof String ? (String) value : null;
+    }
+
+    private List<Long> externalRequirementsDocuments(HttpServletRequest request, String providerCode) {
+        HttpSession session = request.getSession(false);
+        if (session == null) {
+            return null;
+        }
+        String attribute = IamWebAuthConstant.SESSION_REQUIREMENTS_DOCUMENTS_PREFIX
+                + providerCode;
+        Object value = session.getAttribute(attribute);
+        session.removeAttribute(attribute);
+        if (!(value instanceof List)) {
+            return null;
+        }
+        List<?> values = (List<?>) value;
+        List<Long> result = new ArrayList<>();
+        for (Object item : values) {
+            if (item instanceof Long) {
+                result.add((Long) item);
+            }
+        }
+        return result;
     }
 
     private String buildCallbackUrl(HttpServletRequest request, String providerCode) {

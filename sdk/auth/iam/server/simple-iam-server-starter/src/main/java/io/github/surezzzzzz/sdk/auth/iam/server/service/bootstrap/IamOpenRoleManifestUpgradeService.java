@@ -13,14 +13,12 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleAuth
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
-import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminActionType;
-import io.github.surezzzzzz.sdk.auth.iam.server.event.AdminSubjectType;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.IamOpenRoleException;
-import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleAuthorizationRuleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleAuthorizationRuleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
@@ -50,8 +48,8 @@ public class IamOpenRoleManifestUpgradeService {
     private final IamTrustedApplicationMutationGuard mutationGuard;
     private final IamApplicationPermissionManifestService manifestService;
     private final IamRoleAuthorizationRuleService ruleService;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
     private final EntityManager entityManager;
-    private final IamAuditEventPublisher auditEventPublisher;
 
     /**
      * 所有新增精确 API 码；不把粗粒度旧码解释成新能力。
@@ -97,10 +95,11 @@ public class IamOpenRoleManifestUpgradeService {
      * 原清单及所有其他角色保留；重复执行不持续提高清单版本。
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void upgrade() {
+    public void upgradeForBootstrap(IamApplicationAuthorizationStateService.RecomputeToken token) {
         IamTrustedApplicationEntity app = applicationRepository.findByApplicationCode(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM).orElse(null);
         if (app == null) return;
         mutationGuard.requireMutable(app.getId());
+        authorizationStateService.requireActiveRecomputeToken(app.getId(), token);
         entityManager.refresh(app, LockModeType.PESSIMISTIC_WRITE);
         IamApplicationPermissionManifestEntity manifest = manifestRepository.findByApplicationId(app.getId()).orElse(null);
         if (manifest == null) return;
@@ -131,13 +130,14 @@ public class IamOpenRoleManifestUpgradeService {
             request.setPagePermissions(new ArrayList<>(IamApplicationAuthorizationJsonCodec.readStringList(manifest.getPagePermissionsJson(), SimpleIamServerConstant.OPEN_ROLE_FIELD_PAGE_PERMISSIONS)));
             request.setApiPermissions(apis);
             request.setDataResources(resources);
-            manifestService.putManifest(app.getId(), request);
+            manifestService.putManifestForBootstrap(app.getId(), request, token);
         }
-        upgradeAdminRule(app.getId());
+        upgradeAdminRule(app.getId(), token);
         log.debug("IAM 委托权限清单核对完成：applicationId={}, changed={}", app.getId(), changed);
     }
 
-    private void upgradeAdminRule(Long applicationId) {
+    private void upgradeAdminRule(Long applicationId,
+                                  IamApplicationAuthorizationStateService.RecomputeToken token) {
         IamRoleEntity admin = roleRepository.findByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN).orElse(null);
         if (admin == null) return;
         entityManager.refresh(admin, LockModeType.PESSIMISTIC_WRITE);
@@ -165,11 +165,9 @@ public class IamOpenRoleManifestUpgradeService {
         if (changed) {
             String json = IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(new DataGrantDocument(
                     SimpleDataPermissionConstant.PROTOCOL, SimpleDataPermissionConstant.VERSION, grants));
-            ruleService.putRoleAuthorizationRule(admin.getId(), applicationId,
+            ruleService.putRoleAuthorizationRuleForBootstrap(admin.getId(), applicationId,
                     IamApplicationAuthorizationJsonCodec.readStringList(rule.getPagePermissionsJson(), SimpleIamServerConstant.OPEN_ROLE_FIELD_PAGE_PERMISSIONS),
-                    apis, IamApplicationAuthorizationJsonCodec.readDataGrantDocumentMap(json));
-            auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.ROLE,
-                    admin.getId().toString(), null, SimpleIamServerConstant.OPEN_ROLE_UPGRADE_AUDIT_DETAIL);
+                    apis, IamApplicationAuthorizationJsonCodec.readDataGrantDocumentMap(json), token);
         }
     }
 }

@@ -27,14 +27,19 @@ public class PortalIntegrationResponse {
     private String routePrefix;
 
     /**
-     * 微前端 entry URL（按部署环境存值）
+     * Portal 初始页面入口；动态业务应用必须位于 routePrefix 下。
      */
     private String entry;
 
     /**
-     * 后端 API 基地址（按部署环境存值）
+     * 业务 API 的统一入口公共路径；不是独立 API 服务地址。
      */
     private String apiBase;
+
+    /**
+     * 页面和 API 共用的业务自有 Nginx HTTP origin。
+     */
+    private String targetOrigin;
 
     /**
      * Portal 菜单项列表

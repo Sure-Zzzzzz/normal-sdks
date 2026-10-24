@@ -208,9 +208,9 @@ components:
         applicationName: { type: string }
         description: { type: string, nullable: true }
         icon: { type: string, nullable: true, description: 内置图标编码，未知或历史空值以默认图标显示, enum: [access-control, users, key, settings, lock, dashboard, project, message, calendar, workflow, data-service, database, analytics, document, folder, search, cloud, network, developer, application, default] }
-        routePrefix: { type: string }
-        entry: { type: string }
-        apiBase: { type: string, nullable: true }
+        routePrefix: { type: string, description: 页面和静态资源的统一入口公共前缀 }
+        entry: { type: string, description: Portal 初始页面入口；动态业务应用返回位于 routePrefix 下的公共路径，平台内置应用仍走固定入口 }
+        apiBase: { type: string, nullable: true, description: 业务 API 的统一入口公共路径前缀，不是独立 API 服务地址；平台内置应用可为空 }
         menus:
           type: array
           deprecated: true

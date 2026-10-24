@@ -13,11 +13,14 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamApplicat
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleAuthorizationRuleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.manifest.IamApplicationPermissionManifestEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.SimpleIamServerException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamApplicationAuthorizationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleAuthorizationRuleRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.IamRoleRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +65,60 @@ public class IamAuthorizationProjectionService {
     private final IamEffectiveRoleResolver effectiveRoleResolver;
     private final IamApplicationAuthorizationStateService authorizationStateService;
     private final IamOwnerAuthorizationChangeLogService changeService;
+    private final IamUserRepository userRepository;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
+
+    /**
+     * 启动对账的单用户事务入口；缺失身份只作为可恢复跳过项，不写投影或协作变更日志。
+     */
+    @Transactional
+    public BootstrapProjectionResult recomputeProjectionForBootstrap(
+            Long userId, Long applicationId,
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
+        mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireActiveRecomputeToken(applicationId, token);
+        IamUserEntity user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return BootstrapProjectionResult.MISSING_USER;
+        }
+        if (user.getSubjectId() == null || user.getSubjectId().trim().isEmpty()) {
+            return BootstrapProjectionResult.MISSING_SUBJECT;
+        }
+        recomputeProjectionContent(userId, applicationId, false);
+        return BootstrapProjectionResult.UPDATED;
+    }
+
+    /**
+     * 同步未被角色规则覆盖的既有投影版本；先验证主体，孤儿行保持原样。
+     */
+    @Transactional
+    public BootstrapProjectionResult synchronizeManifestForBootstrap(
+            Long userId, Long applicationId, IamApplicationPermissionManifestEntity manifest,
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
+        mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireActiveRecomputeToken(applicationId, token);
+        IamUserEntity user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return BootstrapProjectionResult.MISSING_USER;
+        }
+        if (user.getSubjectId() == null || user.getSubjectId().trim().isEmpty()) {
+            return BootstrapProjectionResult.MISSING_SUBJECT;
+        }
+        IamApplicationAuthorizationEntity authorization = authorizationRepository
+                .findByUserIdAndApplicationId(userId, applicationId).orElse(null);
+        if (authorization == null) {
+            return BootstrapProjectionResult.UPDATED;
+        }
+        IamApplicationAuthorizationStateEntity state = authorizationStateService.getState(applicationId);
+        authorization.setManifestVersion(manifest.getManifestVersion().toString());
+        authorization.setManifestDigest(manifest.getManifestDigest());
+        authorization.setApplicationAuthorizationEpoch(state.getAuthorizationEpoch());
+        authorization.setUpdatedAt(Instant.now());
+        authorizationRepository.save(authorization);
+        changeService.recordProjection(authorization,
+                IamOwnerAuthorizationChangeLogService.REASON_APPLICATION_PROJECTION_RECOMPUTED);
+        return BootstrapProjectionResult.UPDATED;
+    }
 
     /**
      * 场景1：管理员为用户授予某应用的准入权限。
@@ -83,7 +140,7 @@ public class IamAuthorizationProjectionService {
     @Transactional
     public void onUserRoleAssigned(Long userId) {
         log.info("授权投影更新：角色分配触发 - userId={}", userId);
-        Set<Long> applicationIds = new LinkedHashSet<>();
+        Set<Long> applicationIds = new TreeSet<>();
         for (IamApplicationAuthorizationEntity authorization : authorizationRepository.findByUserId(userId)) {
             if (authorization.getAdmitted() != null
                     && SimpleIamServerConstant.STATUS_ACTIVE == authorization.getAdmitted().intValue()) {
@@ -93,6 +150,12 @@ public class IamAuthorizationProjectionService {
         List<Long> roleIds = new ArrayList<>(effectiveRoleResolver.resolveRoleIds(userId));
         if (!roleIds.isEmpty()) {
             applicationIds.addAll(ruleApplicationIds(roleIds));
+        }
+        for (Long applicationId : applicationIds) {
+            mutationGuard.requireMutable(applicationId);
+        }
+        for (Long applicationId : applicationIds) {
+            authorizationStateService.requireNoActiveRecompute(applicationId);
         }
         for (Long applicationId : applicationIds) {
             recomputeProjection(userId, applicationId, false);
@@ -162,6 +225,8 @@ public class IamAuthorizationProjectionService {
     @Transactional
     public void revokeApplicationAdmission(Long userId, Long applicationId) {
         log.info("授权投影更新：撤销准入触发 - userId={}, applicationId={}", userId, applicationId);
+        mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
         IamApplicationAuthorizationEntity authorization = authorizationRepository
                 .findByUserIdAndApplicationId(userId, applicationId)
                 .orElse(null);
@@ -186,7 +251,16 @@ public class IamAuthorizationProjectionService {
     public void synchronizeOwnerSecurityEpoch(Long userId) {
         Long ownerSecurityEpoch = resolveOwnerSecurityEpoch(userId);
         int synchronizedCount = 0;
-        for (IamApplicationAuthorizationEntity authorization : authorizationRepository.findByUserId(userId)) {
+        List<IamApplicationAuthorizationEntity> authorizations = new ArrayList<>(
+                authorizationRepository.findByUserId(userId));
+        authorizations.sort(Comparator.comparing(IamApplicationAuthorizationEntity::getApplicationId));
+        for (IamApplicationAuthorizationEntity authorization : authorizations) {
+            mutationGuard.requireMutable(authorization.getApplicationId());
+        }
+        for (IamApplicationAuthorizationEntity authorization : authorizations) {
+            authorizationStateService.requireNoActiveRecompute(authorization.getApplicationId());
+        }
+        for (IamApplicationAuthorizationEntity authorization : authorizations) {
             authorization.setOwnerSecurityEpoch(ownerSecurityEpoch);
             authorization.setUpdatedAt(Instant.now());
             authorizationRepository.save(authorization);
@@ -203,6 +277,12 @@ public class IamAuthorizationProjectionService {
      *                       例行重算（false）不改动既有投影的 admitted
      */
     private void recomputeProjection(Long userId, Long applicationId, boolean admittedActive) {
+        mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
+        recomputeProjectionContent(userId, applicationId, admittedActive);
+    }
+
+    private void recomputeProjectionContent(Long userId, Long applicationId, boolean admittedActive) {
         IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
 
         List<Long> roleIds = new ArrayList<>(effectiveRoleResolver.resolveRoleIds(userId));
@@ -219,18 +299,14 @@ public class IamAuthorizationProjectionService {
         if (!roleIds.isEmpty()) {
             for (IamRoleAuthorizationRuleEntity rule : ruleRepository
                     .findByRoleIdInAndApplicationId(roleIds, applicationId)) {
-                try {
-                    pagePermissions.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
-                            rule.getPagePermissionsJson(), "pagePermissions"));
-                    apiPermissions.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
-                            rule.getApiPermissionsJson(), "apiPermissions"));
-                    DataGrantDocument template = IamApplicationAuthorizationJsonCodec
-                            .readDataGrantDocument(rule.getDataGrantTemplateJson());
-                    if (template != null) {
-                        dataGrants.addAll(template.getGrants());
-                    }
-                } catch (Exception e) {
-                    log.error("解析角色授权规则失败：ruleId={}", rule.getId(), e);
+                pagePermissions.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
+                        rule.getPagePermissionsJson(), "pagePermissions"));
+                apiPermissions.addAll(IamApplicationAuthorizationJsonCodec.readStringList(
+                        rule.getApiPermissionsJson(), "apiPermissions"));
+                DataGrantDocument template = IamApplicationAuthorizationJsonCodec
+                        .readDataGrantDocument(rule.getDataGrantTemplateJson());
+                if (template != null) {
+                    dataGrants.addAll(template.getGrants());
                 }
             }
         } else {
@@ -340,5 +416,11 @@ public class IamAuthorizationProjectionService {
 
     private Long resolveOwnerSecurityEpoch(Long userId) {
         return effectiveRoleResolver.resolveUserPermissionVersion(userId) + 1L;
+    }
+
+    public enum BootstrapProjectionResult {
+        UPDATED,
+        MISSING_USER,
+        MISSING_SUBJECT
     }
 }

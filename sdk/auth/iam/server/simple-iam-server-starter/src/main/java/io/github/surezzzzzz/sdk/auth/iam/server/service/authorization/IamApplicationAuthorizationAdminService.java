@@ -102,6 +102,7 @@ public class IamApplicationAuthorizationAdminService {
         IamUserEntity user = requireUser(userId);
         requireApplication(applicationId);
         mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
         normalize(request);
         IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
         requireCodesWithin(request.getRoles(), manifest.getRolesJson(), "roles");
@@ -164,6 +165,7 @@ public class IamApplicationAuthorizationAdminService {
     public void revokeAuthorization(Long userId, Long applicationId) {
         IamUserEntity user = requireUser(userId);
         mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
         IamApplicationAuthorizationEntity entity = requireAuthorization(userId, applicationId);
         if (entity.getStatus() != null
                 && SimpleIamServerConstant.STATUS_ACTIVE == entity.getStatus().intValue()) {

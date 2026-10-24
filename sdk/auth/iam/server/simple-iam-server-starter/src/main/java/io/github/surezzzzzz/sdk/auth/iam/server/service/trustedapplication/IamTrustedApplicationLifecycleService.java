@@ -24,6 +24,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.Ia
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalCatalogRevisionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -78,6 +79,8 @@ public class IamTrustedApplicationLifecycleService {
     private final IamApplicationAuthorizationRepository applicationAuthorizationRepository;
     private final IamResourceVerificationClientRepository resourceVerificationClientRepository;
     private final IamPortalApplicationOrderService portalApplicationOrderService;
+    private final IamPortalCatalogRevisionService portalCatalogRevisionService;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
     private final IamTrustedApplicationAuthorizationCleanupService authorizationCleanupService;
     private final IamTrustedApplicationMutationGuard mutationGuard;
     private final IamApplicationAuthorizationStateService authorizationStateService;
@@ -136,12 +139,16 @@ public class IamTrustedApplicationLifecycleService {
         if (isActive(application)) {
             return;
         }
+        boolean wasDynamicDirectoryMember = isDynamicDirectoryMember(application);
         application.setStatus(SimpleIamServerConstant.STATUS_ACTIVE);
         application.setApplicationSecurityEpoch(nextSecurityEpoch(application.getApplicationSecurityEpoch()));
         application.setUpdatedAt(Instant.now());
         trustedApplicationRepository.save(application);
         authorizationStateService.advanceAuthorizationEpoch(application.getId());
         authorizationStateService.advanceOwnerInheritedAccessEpoch(application.getId());
+        if (wasDynamicDirectoryMember != isDynamicDirectoryMember(application)) {
+            portalCatalogRevisionService.bump("PORTAL_APPLICATION_RESUMED", application.getApplicationCode());
+        }
     }
 
     /**
@@ -275,12 +282,25 @@ public class IamTrustedApplicationLifecycleService {
         if (!isActive(application)) {
             return;
         }
+        boolean wasDynamicDirectoryMember = isDynamicDirectoryMember(application);
         application.setStatus(SimpleIamServerConstant.STATUS_INACTIVE);
         application.setApplicationSecurityEpoch(nextSecurityEpoch(application.getApplicationSecurityEpoch()));
         application.setUpdatedAt(Instant.now());
         trustedApplicationRepository.save(application);
         authorizationStateService.advanceAuthorizationEpoch(application.getId());
         authorizationStateService.advanceOwnerInheritedAccessEpoch(application.getId());
+        if (wasDynamicDirectoryMember != isDynamicDirectoryMember(application)) {
+            portalCatalogRevisionService.bump("PORTAL_APPLICATION_SUSPENDED", application.getApplicationCode());
+        }
+    }
+
+    private boolean isDynamicDirectoryMember(IamTrustedApplicationEntity application) {
+        return isActive(application)
+                && trustedApplicationPortalRepository.findById(application.getId())
+                .map(portal -> portal.getEnabled() != null
+                        && portal.getEnabled() == SimpleIamServerConstant.STATUS_ACTIVE)
+                .orElse(false)
+                && !builtInResolver.isBuiltIn(application);
     }
 
     private IamTrustedApplicationCleanupOperationEntity requireOperation(Long operationId) {

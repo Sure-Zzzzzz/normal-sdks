@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.service.portal;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalApplicationOrderRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalApplicationOrderItem;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.response.PortalApplicationOrderResponse;
@@ -17,6 +18,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamPortalSetti
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationPortalRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.TrustedApplicationBuiltInResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -49,8 +51,10 @@ public class IamPortalApplicationOrderService {
     private final IamPortalSettingRepository portalSettingRepository;
     private final JdbcTemplate jdbcTemplate;
     private final IamAuditEventPublisher auditEventPublisher;
+    private final IamPortalCatalogRevisionService portalCatalogRevisionService;
     private final EntityManager entityManager;
     private final IamTrustedApplicationMutationGuard mutationGuard;
+    private final TrustedApplicationBuiltInResolver builtInResolver;
 
     /**
      * 读取供管理端编辑的全部 Portal 集成快照，停用项仍保留在列表中。
@@ -76,7 +80,12 @@ public class IamPortalApplicationOrderService {
             mutationGuard.requireMutable(applicationId);
         }
         setting = lockGlobalSetting(setting);
+        List<Long> visibleBefore = dynamicApplicationIds(portals);
+        List<Long> visibleAfter = dynamicApplicationIds(request.getApplicationIds(), portals);
         rewriteNormalizedOrder(portals, request.getApplicationIds());
+        if (!visibleBefore.equals(visibleAfter)) {
+            portalCatalogRevisionService.bump("PORTAL_APPLICATION_ORDER_CHANGED", null);
+        }
 
         log.debug("Portal 应用顺序更新成功：count={}, version={}", portals.size(), setting.getVersion());
         auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
@@ -110,6 +119,11 @@ public class IamPortalApplicationOrderService {
             setting.setLoginLandingApplicationId(null);
         }
         lockGlobalSetting(setting);
+        IamTrustedApplicationPortalEntity portal = trustedApplicationPortalRepository.findById(applicationId).orElse(null);
+        IamTrustedApplicationEntity application = trustedApplicationRepository.findById(applicationId).orElse(null);
+        if (isDynamicDirectoryMember(application, portal)) {
+            portalCatalogRevisionService.bump("PORTAL_APPLICATION_REMOVED", null);
+        }
         log.debug("Portal 集成移出全局顺序：applicationId={}, landingCleared={}", applicationId, landingCleared);
     }
 
@@ -173,6 +187,39 @@ public class IamPortalApplicationOrderService {
             result.add(portal.getApplicationId());
         }
         return result;
+    }
+
+    private List<Long> dynamicApplicationIds(List<IamTrustedApplicationPortalEntity> portals) {
+        return dynamicApplicationIds(applicationIds(portals), portals);
+    }
+
+    private List<Long> dynamicApplicationIds(List<Long> applicationIds,
+                                             List<IamTrustedApplicationPortalEntity> portals) {
+        Map<Long, IamTrustedApplicationPortalEntity> portalByApplication = new HashMap<>();
+        for (IamTrustedApplicationPortalEntity portal : portals) {
+            portalByApplication.put(portal.getApplicationId(), portal);
+        }
+        Map<Long, IamTrustedApplicationEntity> applications = new HashMap<>();
+        for (IamTrustedApplicationEntity application : trustedApplicationRepository.findAllById(applicationIds)) {
+            applications.put(application.getId(), application);
+        }
+        List<Long> result = new ArrayList<>();
+        for (Long applicationId : applicationIds) {
+            if (isDynamicDirectoryMember(applications.get(applicationId), portalByApplication.get(applicationId))) {
+                result.add(applicationId);
+            }
+        }
+        return result;
+    }
+
+    private boolean isDynamicDirectoryMember(IamTrustedApplicationEntity application,
+                                             IamTrustedApplicationPortalEntity portal) {
+        return application != null && portal != null
+                && application.getStatus() != null
+                && application.getStatus() == SimpleIamServerConstant.STATUS_ACTIVE
+                && portal.getEnabled() != null
+                && portal.getEnabled() == SimpleIamServerConstant.STATUS_ACTIVE
+                && !builtInResolver.isBuiltIn(application);
     }
 
     private List<IamTrustedApplicationPortalEntity> orderedPortals() {

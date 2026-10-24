@@ -7,8 +7,11 @@ import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
 import io.github.surezzzzzz.sdk.lock.redis.model.RedisLockLease;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import javax.annotation.PreDestroy;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -23,28 +26,47 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @SimpleIamServerComponent
 @RequiredArgsConstructor
-public class IamTrustedApplicationCleanupScheduler {
+public class IamTrustedApplicationCleanupScheduler implements ApplicationListener<ContextClosedEvent> {
 
     private final IamTrustedApplicationCleanupWorker cleanupWorker;
     private final SimpleRedisLock simpleRedisLock;
+    private final Object lifecycleMonitor = new Object();
+    private volatile boolean stopping;
 
     /**
      * 定期领取一个待删应用，避免管理端请求线程参与长时间授权清理。
      */
     @Scheduled(fixedDelay = SimpleIamServerConstant.TRUSTED_APPLICATION_CLEANUP_SCHEDULE_DELAY_MILLIS)
     public void processNextOperation() {
-        Optional<RedisLockLease> lease = simpleRedisLock.tryLockWithLease(
-                SimpleIamServerConstant.TRUSTED_APPLICATION_CLEANUP_LOCK_KEY,
-                SimpleIamServerConstant.TRUSTED_APPLICATION_CLEANUP_LOCK_LEASE_SECONDS, TimeUnit.SECONDS);
-        if (!lease.isPresent()) {
-            return;
+        synchronized (lifecycleMonitor) {
+            if (stopping) {
+                return;
+            }
+            Optional<RedisLockLease> lease = simpleRedisLock.tryLockWithLease(
+                    SimpleIamServerConstant.TRUSTED_APPLICATION_CLEANUP_LOCK_KEY,
+                    SimpleIamServerConstant.TRUSTED_APPLICATION_CLEANUP_LOCK_LEASE_SECONDS, TimeUnit.SECONDS);
+            if (!lease.isPresent()) {
+                return;
+            }
+            try {
+                cleanupWorker.processNextOperation();
+            } catch (RuntimeException exception) {
+                log.error("可信应用异步删除调度执行失败", exception);
+            } finally {
+                lease.get().close();
+            }
         }
-        try {
-            cleanupWorker.processNextOperation();
-        } catch (RuntimeException exception) {
-            log.error("可信应用异步删除调度执行失败", exception);
-        } finally {
-            lease.get().close();
+    }
+
+    @PreDestroy
+    public void stopScheduling() {
+        synchronized (lifecycleMonitor) {
+            stopping = true;
         }
+    }
+
+    @Override
+    public void onApplicationEvent(ContextClosedEvent event) {
+        stopScheduling();
     }
 }

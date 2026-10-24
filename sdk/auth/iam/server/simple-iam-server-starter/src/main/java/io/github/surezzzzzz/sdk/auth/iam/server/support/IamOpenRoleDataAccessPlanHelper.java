@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataConstrain
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataConstraint;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.support.DataAccessPlanRestrictionVerifier;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.support.DataAccessPlanRestrictionVerifier;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamOpenRoleBindingEntity;

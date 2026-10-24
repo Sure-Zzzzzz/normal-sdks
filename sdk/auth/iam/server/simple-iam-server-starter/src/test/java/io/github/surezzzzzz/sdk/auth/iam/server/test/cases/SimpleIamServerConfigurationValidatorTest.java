@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.auth.iam.server.test.cases;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamLoginRequirementsService;
 import io.github.surezzzzzz.sdk.auth.iam.server.validator.SimpleIamServerConfigurationValidator;
 import io.github.surezzzzzz.sdk.redis.route.registry.SimpleRedisRouteRegistry;
 import io.github.surezzzzzz.sdk.redis.route.template.RedisRouteTemplate;
@@ -10,10 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -103,9 +101,49 @@ class SimpleIamServerConfigurationValidatorTest {
         assertDoesNotThrow(() -> validator(properties, routeBeanFactory(true, true, registry)).afterSingletonsInstantiated());
     }
 
+    @Test
+    void shouldRejectBuiltInApplicationListWithoutIamOrAksk() {
+        SimpleIamServerProperties properties = validProperties();
+        SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig iam =
+                properties.getBootstrap().getBuiltInApplications().get(0);
+        properties.getBootstrap().setBuiltInApplications(new ArrayList<>(Collections.singletonList(iam)));
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> validator(properties, emptyBeanFactory()).afterSingletonsInstantiated());
+
+        assertTrue(exception.getMessage().contains("必须保留iam与aksk"));
+    }
+
+    @Test
+    void shouldRejectAkskRoutePrefixThatIsNotFixedPortalRoute() {
+        SimpleIamServerProperties properties = validProperties();
+        SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig aksk =
+                properties.getBootstrap().getBuiltInApplications().get(1);
+        aksk.setRoutePrefix("/app/other");
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> validator(properties, emptyBeanFactory()).afterSingletonsInstantiated());
+
+        assertTrue(exception.getMessage().contains("aksk.route-prefix必须为/app/aksk"));
+    }
+
+    @Test
+    void shouldRejectAkskEntryBecauseIamDoesNotManageItsRuntime() {
+        SimpleIamServerProperties properties = validProperties();
+        SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig aksk =
+                properties.getBootstrap().getBuiltInApplications().get(1);
+        aksk.setEntry("http://localhost:8280");
+
+        ConfigurationException exception = assertThrows(ConfigurationException.class,
+                () -> validator(properties, emptyBeanFactory()).afterSingletonsInstantiated());
+
+        assertTrue(exception.getMessage().contains("aksk.entry必须为空"));
+    }
+
     private SimpleIamServerConfigurationValidator validator(SimpleIamServerProperties properties,
                                                             ConfigurableListableBeanFactory beanFactory) {
-        return new SimpleIamServerConfigurationValidator(properties, beanFactory);
+        return new SimpleIamServerConfigurationValidator(properties, beanFactory,
+                mock(IamLoginRequirementsService.class));
     }
 
     private ConfigurableListableBeanFactory emptyBeanFactory() {

@@ -180,8 +180,9 @@ class IamPortalAccessibleApplicationApiTest {
 
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(true);
-        portal.setEntry("https://" + applicationCode + ".example.test/index.html");
-        portal.setApiBase("https://" + applicationCode + ".example.test/api");
+        portal.setEntry("/app/" + applicationCode + "/index.html");
+        portal.setApiBase("/api/" + applicationCode);
+        portal.setTargetOrigin("http://" + applicationCode + ".example.test");
         MenuItemRequest menu = new MenuItemRequest();
         menu.setCode("home");
         menu.setName("首页");

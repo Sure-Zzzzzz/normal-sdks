@@ -9,7 +9,7 @@ import java.util.List;
  * Portal 侧边栏可访问应用响应
  *
  * <p>Portal 前端拉取侧边栏数据用：当前用户有权访问、启用 Portal 集成的应用 + 菜单。
- * {@code entry}/{@code apiBase} 按部署环境存值，后端直读库不读 Spring profile。
+ * 动态业务应用的 {@code entry}/{@code apiBase} 是统一入口公共路径；平台内置应用仍由固定入口承载。
  *
  * @author surezzzzzz
  */
@@ -43,12 +43,12 @@ public class PortalAccessibleApplication {
     private String routePrefix;
 
     /**
-     * 微前端 entry URL（按部署环境存值，运行时直读）
+     * Portal 初始页面入口；动态业务应用必须位于 routePrefix 下。
      */
     private String entry;
 
     /**
-     * 后端 API 基地址
+     * 业务 API 的统一入口公共路径；不是独立 API 服务地址。
      */
     private String apiBase;
 

@@ -52,16 +52,27 @@ public class IamPortalMenuTreeService {
      */
     public void updateMenus(Long applicationId, List<MenuItemRequest> menus,
                             List<PortalMenuTreeNodeRequest> menuTree) {
+        updateMenusAndReportChanged(applicationId, menus, menuTree);
+    }
+
+    /**
+     * 更新菜单并返回机器目录配置版本是否需要随之变化。
+     *
+     * <p>保留原 {@link #updateMenus(Long, List, List)} 的 void 签名，避免破坏已编译调用方。</p>
+     */
+    public boolean updateMenusAndReportChanged(Long applicationId, List<MenuItemRequest> menus,
+                                               List<PortalMenuTreeNodeRequest> menuTree) {
         mutationGuard.requireMutable(applicationId);
         if (menus != null && menuTree != null) {
             throw invalid("menus 与 menuTree 不能同时提交");
         }
+        if (menus == null && menuTree == null) {
+            return false;
+        }
+        String beforeSignature = menuTreeSignature(buildManagementTree(listEntities(applicationId)));
         if (menuTree != null) {
             replaceTree(applicationId, menuTree);
-            return;
-        }
-        if (menus == null) {
-            return;
+            return !beforeSignature.equals(menuTreeSignature(buildManagementTree(listEntities(applicationId))));
         }
 
         List<IamTrustedApplicationMenuEntity> current = listEntities(applicationId);
@@ -70,9 +81,10 @@ public class IamPortalMenuTreeService {
                 throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT,
                         ServerErrorMessage.TRUSTED_APPLICATION_MENU_TREE_LEGACY_CONFLICT);
             }
-            return;
+            return false;
         }
         replaceTree(applicationId, toRootPages(menus));
+        return !beforeSignature.equals(menuTreeSignature(buildManagementTree(listEntities(applicationId))));
     }
 
     /**
@@ -361,6 +373,39 @@ public class IamPortalMenuTreeService {
                     .build());
         }
         return result;
+    }
+
+    private String menuTreeSignature(List<PortalMenuTreeNodeResponse> nodes) {
+        StringBuilder result = new StringBuilder();
+        appendMenuTreeSignature(result, nodes);
+        return result.toString();
+    }
+
+    private void appendMenuTreeSignature(StringBuilder result, List<PortalMenuTreeNodeResponse> nodes) {
+        result.append('[');
+        if (nodes != null) {
+            for (PortalMenuTreeNodeResponse node : nodes) {
+                appendMenuPart(result, node.getCode());
+                appendMenuPart(result, node.getName());
+                appendMenuPart(result, node.getNodeType());
+                appendMenuPart(result, node.getIcon());
+                appendMenuPart(result, node.getRoute());
+                appendMenuPart(result, node.getRequiredPagePermission());
+                appendMenuPart(result, node.getPresentationMode());
+                appendMenuPart(result, node.getSortOrder());
+                appendMenuTreeSignature(result, node.getChildren());
+            }
+        }
+        result.append(']');
+    }
+
+    private void appendMenuPart(StringBuilder result, Object value) {
+        if (value == null) {
+            result.append("-;");
+            return;
+        }
+        String text = String.valueOf(value);
+        result.append(text.length()).append(':').append(text);
     }
 
     private List<PortalAccessibleMenuTreeNode> buildAccessible(

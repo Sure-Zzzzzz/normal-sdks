@@ -920,17 +920,19 @@ components:
       type: object
       properties:
         enabled: { type: boolean }
-        entry: { type: string, nullable: true }
-        apiBase: { type: string, nullable: true }
+        entry: { type: string, nullable: true, description: 'Portal 公共页面路径，例如 /app/orders/index.html；不能填写绝对 URL' }
+        apiBase: { type: string, nullable: true, description: 'Portal 公共 API 路径，例如 /api/orders；不能填写绝对 URL' }
+        targetOrigin: { type: string, nullable: true, description: '业务自有 Nginx 的唯一 HTTP origin，例如 http://orders-nginx:80；不能带路径、查询、片段、用户信息或使用 HTTPS' }
         menus: { type: array, deprecated: true, description: "1.0 根级 PAGE 完整快照；不能与 menuTree 同时提交。", items: { $ref: '#/components/schemas/PortalMenuItem' } }
         menuTree: { type: array, description: "1.1 递归菜单完整快照；空数组明确清空。", items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
     PortalIntegration:
       type: object
       properties:
         enabled: { type: boolean }
-        entry: { type: string, nullable: true }
-        apiBase: { type: string, nullable: true }
-        routePrefix: { type: string }
+        entry: { type: string, nullable: true, description: 'Portal 初始文档的公共页面路径；动态应用启用时必须等于 routePrefix 或位于其下；内置应用可为空' }
+        apiBase: { type: string, nullable: true, description: 'API 的公共路径前缀，不是独立 API origin；内置应用可为空' }
+        targetOrigin: { type: string, nullable: true, description: '页面和 API 共用的业务自有 Nginx HTTP origin；内置应用可为空，动态应用启用时必填' }
+        routePrefix: { type: string, description: '页面和静态资源的公共路径前缀；动态应用启用时必填，不能与其他动态应用的页面或 API 路径冲突' }
         menus: { type: array, deprecated: true, description: "兼容 1.0 管理端的 PAGE 平铺列表。", items: { $ref: '#/components/schemas/PortalMenuItem' } }
         menuTree: { type: array, items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
         defaultEntry: { $ref: '#/components/schemas/PortalDefaultEntry', nullable: true }
@@ -946,11 +948,12 @@ components:
       required: [enabled, menuTree, configVersion]
       properties:
         enabled: { type: boolean }
-        entry: { type: string, nullable: true }
-        apiBase: { type: string, nullable: true }
+        entry: { type: string, nullable: true, description: 'Portal 初始文档的公共页面路径，例如 /app/orders/index.html；必须等于或位于服务端生成的 routePrefix /app/orders 下；不能填写绝对 URL' }
+        apiBase: { type: string, nullable: true, description: 'API 的公共路径前缀，例如 /api/orders；Envoy 按此匹配 API 请求，但转发到同一个 targetOrigin；不能填写绝对 URL' }
+        targetOrigin: { type: string, nullable: true, description: '页面和 API 共用的业务自有 Nginx HTTP origin，例如 http://orders-nginx:80；动态应用启用时必填，不填写 Nginx 后方的内部服务地址' }
         menuTree: { type: array, description: 完整递归菜单快照；空数组明确清空, items: { $ref: '#/components/schemas/PortalMenuTreeNode' } }
         defaultEntry: { $ref: '#/components/schemas/PortalDefaultEntryRequest', nullable: true, description: null 明确清空应用默认入口 }
-        configVersion: { type: integer, format: int64 }
+        configVersion: { type: integer, format: int64, minimum: 1, description: 当前 Portal 配置版本；必须使用服务端返回的正数版本 }
     PortalDefaultEntryRequest:
       type: object
       required: [pageMenuCode]

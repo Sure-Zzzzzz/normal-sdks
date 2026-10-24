@@ -1,5 +1,13 @@
 # IAM Server 升级
 
+## 1.3.8
+
+从已运行的 1.3.7 升级执行同目录 [V1.3.7__to__V1.3.8__portal_route_projection.sql](V1.3.7__to__V1.3.8__portal_route_projection.sql) 一次：新增 Portal 可信应用路由投影的 revision 单例、登录要求文档版本表和同意记录表，扩展 `route_prefix` 到 128 字符，新增可空的 `target_origin`（业务自有 Nginx 的唯一 HTTP origin），并幂等登记路由投影 API 权限码。脚本会把历史 `config_version=0` 规范化为 `1`，不改写可信应用地址、Portal 菜单、用户授权或授权范围；执行前必须按本页只读核验和备份要求确认版本，SQL 本身不做版本判断。新初始化库直接使用上级 `docs/schema.sql`。脚本中的服务条款与隐私政策是默认启用且必须确认的联调占位文本，正式发布前必须替换正文和版本号；只有显式配置 `login.requirements.enabled=false` 才关闭登录门禁。
+
+动态 Portal 应用启用前必须补齐 `entry`、`apiBase` 和 `target_origin`：前两项是 IAM 公共路径，后一项只能是无路径 HTTP origin。内置 IAM/AKSK 不进入动态机器目录，`target_origin` 保持为空。迁移后应只读核对 `target_origin` 列存在、动态启用项三项均非空、内置项为空；缺字段的动态应用不得加入机器目录，先补齐管理配置再启用。
+
+启动 1.3.8 后，IAM 应用权限清单会幂等补齐路由投影 API 与 DATA 声明，但不会覆盖既有自定义权限。Gateway 使用的 AKP 仍需在 AKSK 管理侧显式获得 API 码与 `iam:portal-application` DATA read 范围；旧 AKP 不自动扩权。Server starter 只携带 `simple-data-permission-core`，部署 runtime 必须显式装配 `simple-data-permission-spring-mvc-starter`，否则 `@CurrentDataAccessPlan` 无法完成 MVC 参数解析。
+
 ## 1.3.7
 
 从已运行的 1.3.6 升级执行同目录 [V1.3.6__to__V1.3.7__openapi_expansion.sql](V1.3.6__to__V1.3.7__openapi_expansion.sql) 一次：`iam_message` 两列变更——`sender_user_id` 改可空（外部主体经 openapi 发信无本地 userId）、`sender_username` 扩容 128（外部主体标识 `aksk:{clientId}` 形态）。[schema.sql](../schema.sql) 已同步。纯列变更无数据回填，无停写要求（列变更是在线 DDL）。全新库直接用 schema.sql。

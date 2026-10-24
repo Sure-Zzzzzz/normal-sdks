@@ -37,7 +37,9 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplica
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamOpenRoleMutationSupport;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalCatalogRevisionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalMenuTreeService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalRouteValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -93,6 +95,7 @@ public class IamTrustedApplicationService {
     private final IamTrustedApplicationPortalRepository trustedApplicationPortalRepository;
     private final IamPortalSettingRepository portalSettingRepository;
     private final IamPortalApplicationOrderService portalApplicationOrderService;
+    private final IamPortalCatalogRevisionService portalCatalogRevisionService;
     private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
     private final IamPortalMenuTreeService portalMenuTreeService;
     private final IamApplicationPermissionManifestRepository manifestRepository;
@@ -116,6 +119,9 @@ public class IamTrustedApplicationService {
     public TrustedApplicationCreatedResponse createApplication(CreateTrustedApplicationRequest request) {
         String applicationCode = normalizeRequired(request.getApplicationCode(),
                 ServerErrorMessage.TRUSTED_APPLICATION_CODE_EMPTY);
+        if (!applicationCode.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw new SimpleIamServerException(ErrorCode.VALIDATION_FAILED, "应用编码格式错误");
+        }
         if (trustedApplicationRepository.existsByApplicationCode(applicationCode)) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_CODE_EXISTS,
                     String.format(ServerErrorMessage.TRUSTED_APPLICATION_CODE_EXISTS, applicationCode));
@@ -216,12 +222,17 @@ public class IamTrustedApplicationService {
     public TrustedApplicationResponse updateApplication(Long applicationId, UpdateTrustedApplicationRequest request) {
         IamTrustedApplicationEntity app = requireApplication(applicationId);
         lifecycleService.requireMutable(applicationId);
+        boolean wasBuiltIn = builtInResolver.isBuiltIn(app);
+        boolean wasDynamicDirectoryMember = isActive(app) && isPortalEnabled(applicationId) && !wasBuiltIn;
+        boolean applicationNameChanged = false;
         // 活跃委托固定为非内置应用；应用升级为内置前必须先清理委托。
         if (Boolean.TRUE.equals(request.getBuiltIn())) {
             openRoleSupport.requireApplicationUnreferenced(applicationId);
         }
         if (StringUtils.hasText(request.getApplicationName())) {
-            app.setApplicationName(request.getApplicationName().trim());
+            String applicationName = request.getApplicationName().trim();
+            applicationNameChanged = !Objects.equals(app.getApplicationName(), applicationName);
+            app.setApplicationName(applicationName);
         }
         if (request.getDescription() != null) {
             app.setDescription(request.getDescription());
@@ -247,6 +258,13 @@ public class IamTrustedApplicationService {
                     request.getPortal(), Instant.now(), true));
         } else {
             portalEnabled = isPortalEnabled(applicationId);
+        }
+        boolean isDynamicDirectoryMember = isActive(app) && portalEnabled && !builtInResolver.isBuiltIn(app);
+        if (wasDynamicDirectoryMember != isDynamicDirectoryMember) {
+            portalCatalogRevisionService.bump("BUILT_IN_CLASSIFICATION_CHANGED", app.getApplicationCode());
+        }
+        if (applicationNameChanged && (wasDynamicDirectoryMember || isDynamicDirectoryMember)) {
+            portalCatalogRevisionService.bump("PORTAL_APPLICATION_NAME_CHANGED", app.getApplicationCode());
         }
         log.info("可信应用更新成功：id={}", applicationId);
         auditEventPublisher.publishAdminAction(AdminActionType.UPDATED, AdminSubjectType.APPLICATION,
@@ -310,21 +328,58 @@ public class IamTrustedApplicationService {
             return null;
         }
         boolean enabled = Boolean.TRUE.equals(portal.getEnabled());
-        if (enabled && !StringUtils.hasText(portal.getEntry())) {
+        String entry = StringUtils.hasText(portal.getEntry()) ? portal.getEntry().trim() : null;
+        String apiBase = StringUtils.hasText(portal.getApiBase()) ? portal.getApiBase().trim() : null;
+        String targetOrigin = StringUtils.hasText(portal.getTargetOrigin())
+                ? portal.getTargetOrigin().trim() : null;
+        String routePrefix = String.format(SimpleIamServerConstant.PORTAL_ROUTE_PREFIX_TEMPLATE, applicationCode);
+        if (enabled && (!StringUtils.hasText(entry) || !StringUtils.hasText(apiBase)
+                || !StringUtils.hasText(targetOrigin))) {
             throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID,
                     ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
         }
-        String routePrefix = String.format(SimpleIamServerConstant.PORTAL_ROUTE_PREFIX_TEMPLATE, applicationCode);
+        if (entry != null && !IamPortalRouteValidator.isValidPublicEntry(routePrefix, entry)) {
+            throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID,
+                    ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
+        }
+        if (apiBase != null && !IamPortalRouteValidator.isValidPublicApiBase(apiBase)) {
+            throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID,
+                    ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
+        }
+        if (targetOrigin != null && !IamPortalRouteValidator.isValidTargetOrigin(targetOrigin)) {
+            throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID,
+                    ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
+        }
         Optional<IamTrustedApplicationPortalEntity> current = trustedApplicationPortalRepository.findById(applicationId);
         IamTrustedApplicationPortalEntity portalEntity = current.orElseGet(IamTrustedApplicationPortalEntity::new);
+        boolean machineResponseChanged = !current.isPresent()
+                || !Objects.equals(current.get().getEnabled(), enabled
+                ? SimpleIamServerConstant.STATUS_ACTIVE : SimpleIamServerConstant.STATUS_INACTIVE)
+                || !Objects.equals(current.get().getEntry(), entry)
+                || !Objects.equals(current.get().getApiBase(), apiBase)
+                || !Objects.equals(current.get().getTargetOrigin(), targetOrigin)
+                || !StringUtils.hasText(current.get().getRoutePrefix());
+        boolean wasDynamicDirectoryMember = current.isPresent()
+                && isDynamicDirectoryMember(applicationId, current.get());
         portalEntity.setApplicationId(applicationId);
         portalEntity.setEnabled(enabled
                 ? SimpleIamServerConstant.STATUS_ACTIVE : SimpleIamServerConstant.STATUS_INACTIVE);
-        portalEntity.setRoutePrefix(routePrefix);
-        portalEntity.setEntry(StringUtils.hasText(portal.getEntry()) ? portal.getEntry().trim() : null);
-        portalEntity.setApiBase(StringUtils.hasText(portal.getApiBase()) ? portal.getApiBase().trim() : null);
-        portalEntity.setUpdatedAt(now);
-        portalMenuTreeService.updateMenus(applicationId, portal.getMenus(), portal.getMenuTree());
+        if (!StringUtils.hasText(portalEntity.getRoutePrefix())) {
+            portalEntity.setRoutePrefix(routePrefix);
+        }
+        if (!IamPortalRouteValidator.isValidRoutePrefix(portalEntity.getRoutePrefix())) {
+            throw new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID,
+                    ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIG_INVALID);
+        }
+        portalEntity.setEntry(entry);
+        portalEntity.setApiBase(apiBase);
+        portalEntity.setTargetOrigin(targetOrigin);
+        boolean menuChanged = portalMenuTreeService.updateMenusAndReportChanged(
+                applicationId, portal.getMenus(), portal.getMenuTree());
+        machineResponseChanged = machineResponseChanged || menuChanged;
+        if (machineResponseChanged) {
+            portalEntity.setUpdatedAt(now);
+        }
         if (validateExistingDefault) {
             validateConfiguredDefaultEntry(applicationId, portalEntity);
             validateGlobalLandingReference(applicationId, portalEntity);
@@ -332,7 +387,12 @@ public class IamTrustedApplicationService {
         if (!current.isPresent()) {
             portalApplicationOrderService.assignInitialSortOrder(portalEntity);
         }
-        return trustedApplicationPortalRepository.save(portalEntity);
+        IamTrustedApplicationPortalEntity saved = trustedApplicationPortalRepository.save(portalEntity);
+        if (machineResponseChanged && (wasDynamicDirectoryMember
+                || isDynamicDirectoryMember(applicationId, portalEntity))) {
+            portalCatalogRevisionService.bump("PORTAL_CONFIGURATION_CHANGED", applicationCode);
+        }
+        return saved;
     }
 
     private PortalIntegrationResponse toPortalResponse(IamTrustedApplicationPortalEntity portal) {
@@ -343,6 +403,7 @@ public class IamTrustedApplicationService {
                 .routePrefix(portal.getRoutePrefix())
                 .entry(portal.getEntry())
                 .apiBase(portal.getApiBase())
+                .targetOrigin(portal.getTargetOrigin())
                 .menus(portalMenuTreeService.flattenManagement(menuTree))
                 .menuTree(menuTree)
                 .defaultEntry(toDefaultEntry(portal))
@@ -361,6 +422,8 @@ public class IamTrustedApplicationService {
         lifecycleService.requireMutable(applicationId);
         IamTrustedApplicationPortalEntity current = trustedApplicationPortalRepository.findById(applicationId)
                 .orElseGet(() -> newPortal(applicationId, app.getApplicationCode()));
+        PortalMachineResponseSnapshot beforeMachineResponse = PortalMachineResponseSnapshot.of(current);
+        boolean wasDynamicDirectoryMember = isDynamicDirectoryMember(app, current);
         if (request == null || request.getConfigVersion() == null
                 || !Objects.equals(request.getConfigVersion(), versionOf(current.getConfigVersion()))) {
             throw portalConfigurationConflict(applicationId);
@@ -370,6 +433,7 @@ public class IamTrustedApplicationService {
         legacyShape.setEnabled(request.getEnabled());
         legacyShape.setEntry(request.getEntry());
         legacyShape.setApiBase(request.getApiBase());
+        legacyShape.setTargetOrigin(request.getTargetOrigin());
         legacyShape.setMenuTree(request.getMenuTree());
         IamTrustedApplicationPortalEntity saved = savePortalConfig(applicationId, app.getApplicationCode(),
                 legacyShape, Instant.now(), false);
@@ -378,6 +442,10 @@ public class IamTrustedApplicationService {
         validateGlobalLandingReference(applicationId, saved);
         try {
             IamTrustedApplicationPortalEntity persisted = trustedApplicationPortalRepository.saveAndFlush(saved);
+            if (!beforeMachineResponse.sameAs(persisted)
+                    && (wasDynamicDirectoryMember || isDynamicDirectoryMember(app, persisted))) {
+                portalCatalogRevisionService.bump("PORTAL_CONFIGURATION_CHANGED", app.getApplicationCode());
+            }
             int rootMenuCount = request.getMenuTree() == null ? 0 : request.getMenuTree().size();
             boolean defaultEntryConfigured = toDefaultEntry(persisted) != null;
             log.info("可信应用 Portal 配置更新成功：applicationId={}, code={}, enabled={}, configVersion={}, rootMenuCount={}, defaultEntryConfigured={}",
@@ -530,6 +598,22 @@ public class IamTrustedApplicationService {
                 && portal.getEnabled() == SimpleIamServerConstant.STATUS_ACTIVE;
     }
 
+    private boolean isActive(IamTrustedApplicationEntity application) {
+        return application != null && application.getStatus() != null
+                && application.getStatus() == SimpleIamServerConstant.STATUS_ACTIVE;
+    }
+
+    private boolean isDynamicDirectoryMember(Long applicationId, IamTrustedApplicationPortalEntity portal) {
+        return trustedApplicationRepository.findById(applicationId)
+                .map(application -> isDynamicDirectoryMember(application, portal))
+                .orElse(false);
+    }
+
+    private boolean isDynamicDirectoryMember(IamTrustedApplicationEntity application,
+                                             IamTrustedApplicationPortalEntity portal) {
+        return isActive(application) && isEnabled(portal) && !builtInResolver.isBuiltIn(application);
+    }
+
     private SimpleIamServerException portalConfigurationConflict(Long applicationId) {
         return new SimpleIamServerException(ErrorCode.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT,
                 String.format(ServerErrorMessage.TRUSTED_APPLICATION_PORTAL_CONFIGURATION_CONFLICT, applicationId));
@@ -622,6 +706,44 @@ public class IamTrustedApplicationService {
                 || (request.getPagePermissions() != null && !request.getPagePermissions().isEmpty())
                 || (request.getApiPermissions() != null && !request.getApiPermissions().isEmpty())
                 || (request.getDataResources() != null && !request.getDataResources().isEmpty());
+    }
+
+    private static final class PortalMachineResponseSnapshot {
+        private final Integer enabled;
+        private final String routePrefix;
+        private final String entry;
+        private final String apiBase;
+        private final String targetOrigin;
+        private final Long configVersion;
+
+        private PortalMachineResponseSnapshot(Integer enabled, String routePrefix, String entry,
+                                              String apiBase, String targetOrigin, Long configVersion) {
+            this.enabled = enabled;
+            this.routePrefix = routePrefix;
+            this.entry = entry;
+            this.apiBase = apiBase;
+            this.targetOrigin = targetOrigin;
+            this.configVersion = configVersion;
+        }
+
+        private static PortalMachineResponseSnapshot of(IamTrustedApplicationPortalEntity portal) {
+            if (portal == null) {
+                return null;
+            }
+            return new PortalMachineResponseSnapshot(portal.getEnabled(), portal.getRoutePrefix(),
+                    portal.getEntry(), portal.getApiBase(), portal.getTargetOrigin(), portal.getConfigVersion());
+        }
+
+        private boolean sameAs(IamTrustedApplicationPortalEntity portal) {
+            PortalMachineResponseSnapshot other = of(portal);
+            return other != null
+                    && Objects.equals(enabled, other.enabled)
+                    && Objects.equals(routePrefix, other.routePrefix)
+                    && Objects.equals(entry, other.entry)
+                    && Objects.equals(apiBase, other.apiBase)
+                    && Objects.equals(targetOrigin, other.targetOrigin)
+                    && Objects.equals(configVersion, other.configVersion);
+        }
     }
 
     /**

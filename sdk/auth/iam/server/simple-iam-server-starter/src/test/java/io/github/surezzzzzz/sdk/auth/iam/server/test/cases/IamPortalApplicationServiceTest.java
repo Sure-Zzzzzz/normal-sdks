@@ -261,8 +261,9 @@ class IamPortalApplicationServiceTest {
 
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(true);
-        portal.setEntry("//localhost:9xxx/" + applicationCodeA + "/");
+        portal.setEntry("/app/" + applicationCodeA + "/index.html");
         portal.setApiBase("/" + applicationCodeA);
+        portal.setTargetOrigin("http://localhost:9000");
         portal.setMenuTree(Collections.singletonList(group));
 
         UpdateTrustedApplicationRequest update = new UpdateTrustedApplicationRequest();
@@ -669,6 +670,7 @@ class IamPortalApplicationServiceTest {
         request.setEnabled(true);
         request.setEntry(current.getEntry());
         request.setApiBase(current.getApiBase());
+        request.setTargetOrigin(current.getTargetOrigin());
         request.setMenuTree(tree);
         request.setConfigVersion(current.getConfigVersion());
         PortalDefaultEntryRequest defaultEntry = new PortalDefaultEntryRequest();
@@ -693,8 +695,9 @@ class IamPortalApplicationServiceTest {
     private PortalIntegrationRequest enabledPortal(String applicationCode) {
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(true);
-        portal.setEntry("//localhost:9xxx/" + applicationCode + "/");
+        portal.setEntry("/app/" + applicationCode + "/index.html");
         portal.setApiBase("/" + applicationCode);
+        portal.setTargetOrigin("http://localhost:9000");
         return portal;
     }
 
@@ -772,8 +775,9 @@ class IamPortalApplicationServiceTest {
 
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(true);
-        portal.setEntry("//localhost:9xxx/" + code + "/");
+        portal.setEntry("/app/" + code + "/index.html");
         portal.setApiBase("/" + code);
+        portal.setTargetOrigin("http://localhost:9000");
         MenuItemRequest menu = new MenuItemRequest();
         menu.setCode("home");
         menu.setName("首页");

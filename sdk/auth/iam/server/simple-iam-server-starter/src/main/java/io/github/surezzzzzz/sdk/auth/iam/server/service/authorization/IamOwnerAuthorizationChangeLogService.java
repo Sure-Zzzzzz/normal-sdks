@@ -50,6 +50,8 @@ public class IamOwnerAuthorizationChangeLogService {
     public static final String REASON_APPLICATION_AUTHORIZATION_REVOKED = "APPLICATION_AUTHORIZATION_REVOKED";
     public static final String REASON_APPLICATION_ADMISSION_REVOKED = "APPLICATION_ADMISSION_REVOKED";
     public static final String REASON_APPLICATION_AUTHORIZATION_EPOCH_CHANGED = "APPLICATION_AUTHORIZATION_EPOCH_CHANGED";
+    public static final String REASON_APPLICATION_AUTHORIZATION_RECOMPUTE_STARTED = "APPLICATION_AUTHORIZATION_RECOMPUTE_STARTED";
+    public static final String REASON_APPLICATION_AUTHORIZATION_RECOMPUTE_FINISHED = "APPLICATION_AUTHORIZATION_RECOMPUTE_FINISHED";
     public static final String REASON_OWNER_INHERITANCE_CHANGED = "OWNER_INHERITANCE_CHANGED";
     public static final String REASON_OWNER_INHERITED_ACCESS_EPOCH_CHANGED = "OWNER_INHERITED_ACCESS_EPOCH_CHANGED";
     public static final String REASON_APPLICATION_PROJECTION_CREATED = "APPLICATION_PROJECTION_CREATED";
@@ -110,7 +112,8 @@ public class IamOwnerAuthorizationChangeLogService {
         IamApplicationAuthorizationStateEntity state = stateRepository.findById(applicationId).orElse(null);
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put(FIELD_TARGET_APPLICATION_ID, applicationId);
-        payload.put(FIELD_ACTIVE, isActive(application) && isInheritanceEnabled(state));
+        payload.put(FIELD_ACTIVE, isActive(application) && isInheritanceEnabled(state)
+                && !isRecomputeBarrierActive(state));
         payload.put(FIELD_APPLICATION_AUTHORIZATION_EPOCH, positiveOrOne(state == null ? null
                 : state.getAuthorizationEpoch()));
         payload.put(FIELD_OWNER_INHERITED_ACCESS_EPOCH, positiveOrOne(state == null ? null
@@ -217,6 +220,11 @@ public class IamOwnerAuthorizationChangeLogService {
     private boolean isInheritanceEnabled(IamApplicationAuthorizationStateEntity state) {
         return state != null && state.getOwnerInheritanceEnabled() != null
                 && state.getOwnerInheritanceEnabled().intValue() == SimpleIamServerConstant.STATUS_ACTIVE;
+    }
+
+    private boolean isRecomputeBarrierActive(IamApplicationAuthorizationStateEntity state) {
+        return state != null && state.getRecomputeBarrier() != null
+                && state.getRecomputeBarrier().intValue() == SimpleIamServerConstant.STATUS_ACTIVE;
     }
 
     private boolean isActiveAndAdmitted(IamApplicationAuthorizationEntity projection) {

@@ -302,6 +302,7 @@ class IamAdminActionEventPublishTest {
         configuration.setEnabled(Boolean.TRUE);
         configuration.setEntry(current.getEntry());
         configuration.setApiBase(current.getApiBase());
+        configuration.setTargetOrigin(current.getTargetOrigin());
         configuration.setMenuTree(Collections.singletonList(home));
         configuration.setDefaultEntry(defaultEntry);
         configuration.setConfigVersion(current.getConfigVersion());
@@ -365,7 +366,9 @@ class IamAdminActionEventPublishTest {
         application.setApplicationName("Admin Event Application");
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(Boolean.TRUE);
-        portal.setEntry("https://admin-event.example.test/app/");
+        portal.setEntry("/app/" + applicationCode + "/index.html");
+        portal.setApiBase("/api/admin-event");
+        portal.setTargetOrigin("http://admin-event.example.test");
         application.setPortal(portal);
         application.setInitialClient(client);
         Long createdId = trustedApplicationService.createApplication(application).getApplication().getId();

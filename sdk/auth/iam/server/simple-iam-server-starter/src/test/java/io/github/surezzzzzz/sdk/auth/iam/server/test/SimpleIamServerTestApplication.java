@@ -82,7 +82,9 @@ public class SimpleIamServerTestApplication {
     private PortalIntegrationRequest createLocalPortal() {
         PortalIntegrationRequest portal = new PortalIntegrationRequest();
         portal.setEnabled(true);
-        portal.setEntry("http://localhost:5175");
+        portal.setEntry("/app/iam/index.html");
+        portal.setApiBase("/api/iam");
+        portal.setTargetOrigin("http://localhost:5175");
         portal.setMenus(Arrays.asList(
                 menu("dashboard", "工作台", "/", 0),
                 menu("organizations", "组织与成员", "/organizations", 1),

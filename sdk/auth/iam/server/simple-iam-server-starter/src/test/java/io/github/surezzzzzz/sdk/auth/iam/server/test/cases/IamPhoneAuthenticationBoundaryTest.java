@@ -78,7 +78,7 @@ class IamPhoneAuthenticationBoundaryTest {
                 mock(IamSessionService.class), mock(IamCaptchaVerificationService.class), objectProvider(),
                 mock(SimpleIamServerProperties.class), mock(CsrfTokenRepository.class),
                 mock(IamAuditEventPublisher.class), challengeService, userRepository,
-                mock(IamLoginFailurePolicyService.class));
+                mock(IamLoginFailurePolicyService.class), mock(IamLoginRequirementsService.class));
         WebPhoneLoginRequest request = new WebPhoneLoginRequest();
         request.setPhone("13800138000");
         request.setChallengeId("challenge-a");

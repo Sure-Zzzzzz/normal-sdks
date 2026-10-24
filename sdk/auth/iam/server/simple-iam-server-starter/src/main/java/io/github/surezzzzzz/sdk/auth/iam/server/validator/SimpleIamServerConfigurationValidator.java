@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerCompon
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.web.auth.IamLoginRequirementsService;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.execution.SmartRedisLimiterExecutionCoordinator;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Collections;
+import java.util.List;
 
 /**
  * IAM 启动配置校验器。
@@ -26,8 +28,19 @@ import java.util.Collections;
 @RequiredArgsConstructor
 public class SimpleIamServerConfigurationValidator implements SmartInitializingSingleton {
 
+    private static final String BUILT_IN_APPLICATION_IAM = "iam";
+    private static final String BUILT_IN_APPLICATION_AKSK = "aksk";
+    private static final String AKSK_ROUTE_PREFIX = "/app/aksk";
+    private static final String BUILT_IN_APPLICATIONS_REQUIRED =
+            "bootstrap.built-in-applications必须保留iam与aksk";
+    private static final String AKSK_ROUTE_PREFIX_INVALID =
+            "bootstrap.built-in-applications中的aksk.route-prefix必须为/app/aksk";
+    private static final String AKSK_ENTRY_FORBIDDEN =
+            "bootstrap.built-in-applications中的aksk.entry必须为空";
+
     private final SimpleIamServerProperties properties;
     private final ConfigurableListableBeanFactory beanFactory;
+    private final IamLoginRequirementsService loginRequirementsService;
 
     /**
      * 单例就绪后校验配置合法性与配套组件就位（Redis / 缓存 / 限流 / 锁守门）
@@ -35,6 +48,7 @@ public class SimpleIamServerConfigurationValidator implements SmartInitializingS
     @Override
     public void afterSingletonsInstantiated() {
         validateBasicProperties();
+        loginRequirementsService.validateConfiguration();
         validateSecurityDependencies();
     }
 
@@ -66,6 +80,42 @@ public class SimpleIamServerConfigurationValidator implements SmartInitializingS
         SimpleIamServerProperties.BootstrapConfig bootstrap = properties.getBootstrap();
         if (Boolean.TRUE.equals(bootstrap.getEnabled())) {
             requireText(bootstrap.getUsername(), ServerErrorMessage.BOOTSTRAP_USERNAME_REQUIRED);
+        }
+        validateBuiltInApplications(bootstrap.getBuiltInApplications());
+    }
+
+    /**
+     * IAM 与 AKSK 是 IAM 平台固定内置应用。配置列表可以扩展其他可信应用，
+     * 但不能覆盖掉这两个基础入口，也不能把 AKSK 变成由 IAM 引导管理的运行时。
+     */
+    private void validateBuiltInApplications(
+            List<SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig> applications) {
+        if (applications == null || applications.isEmpty()) {
+            throw new ConfigurationException(BUILT_IN_APPLICATIONS_REQUIRED);
+        }
+
+        boolean iamPresent = false;
+        boolean akskPresent = false;
+        for (SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig application : applications) {
+            if (application == null || application.getApplicationCode() == null) {
+                continue;
+            }
+            String applicationCode = application.getApplicationCode().trim();
+            if (BUILT_IN_APPLICATION_IAM.equals(applicationCode)) {
+                iamPresent = true;
+            }
+            if (BUILT_IN_APPLICATION_AKSK.equals(applicationCode)) {
+                akskPresent = true;
+                if (!AKSK_ROUTE_PREFIX.equals(application.getRoutePrefix())) {
+                    throw new ConfigurationException(AKSK_ROUTE_PREFIX_INVALID);
+                }
+                if (application.getEntry() != null && !application.getEntry().trim().isEmpty()) {
+                    throw new ConfigurationException(AKSK_ENTRY_FORBIDDEN);
+                }
+            }
+        }
+        if (!iamPresent || !akskPresent) {
+            throw new ConfigurationException(BUILT_IN_APPLICATIONS_REQUIRED);
         }
     }
 

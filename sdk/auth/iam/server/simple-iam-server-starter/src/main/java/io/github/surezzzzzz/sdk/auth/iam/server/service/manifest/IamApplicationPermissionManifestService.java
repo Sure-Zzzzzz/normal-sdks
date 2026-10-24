@@ -19,6 +19,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.publisher.IamAuditEventPublisher
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.portal.IamTrustedApplicationMenuRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.trustedapplication.IamTrustedApplicationRepository;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamApplicationAuthorizationStateService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamAuthorizationProjectionService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.TokenHashHelper;
@@ -53,6 +54,7 @@ public class IamApplicationPermissionManifestService {
     private final IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
     private final IamAuditEventPublisher auditEventPublisher;
     private final IamTrustedApplicationMutationGuard mutationGuard;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
     // ObjectProvider 惰性解析：投影服务反向依赖本服务，构造器直连会成环
     private final ObjectProvider<IamAuthorizationProjectionService> projectionServiceProvider;
 
@@ -81,8 +83,34 @@ public class IamApplicationPermissionManifestService {
     @Transactional
     public ApplicationPermissionManifestResponse putManifest(
             Long applicationId, PutApplicationPermissionManifestRequest request) {
+        return putManifestInternal(applicationId, request, null);
+    }
+
+    /**
+     * 启动引导专用清单写入：只更新权威清单，不触发普通同步投影和管理事件。
+     * 调用方必须在独立的启动对账屏障内完成后续投影重算。
+     */
+    @Transactional
+    public ApplicationPermissionManifestResponse putManifestForBootstrap(
+            Long applicationId, PutApplicationPermissionManifestRequest request,
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
+        if (token == null) {
+            throw new SimpleIamServerException(ErrorCode.APPLICATION_AUTHORIZATION_CONFLICT,
+                    "启动清单更新缺少有效的授权投影 fencing token");
+        }
+        return putManifestInternal(applicationId, request, token);
+    }
+
+    private ApplicationPermissionManifestResponse putManifestInternal(
+            Long applicationId, PutApplicationPermissionManifestRequest request,
+            IamApplicationAuthorizationStateService.RecomputeToken bootstrapToken) {
         requireApplication(applicationId);
         mutationGuard.requireMutable(applicationId);
+        if (bootstrapToken != null) {
+            authorizationStateService.requireActiveRecomputeToken(applicationId, bootstrapToken);
+        } else {
+            authorizationStateService.requireNoActiveRecompute(applicationId);
+        }
         List<String> roles = normalizeCodes(request.getRoles(), "roles");
         List<String> pagePermissions = normalizeCodes(request.getPagePermissions(), "pagePermissions");
         List<String> apiPermissions = normalizeCodes(request.getApiPermissions(), "apiPermissions");
@@ -114,16 +142,17 @@ public class IamApplicationPermissionManifestService {
         log.info("权限清单{}成功：applicationId={}, manifestVersion={}, roles={}, pagePermissions={}, apiPermissions={}, dataResources={}",
                 created ? "登记" : "替换", applicationId, entity.getManifestVersion(),
                 roles.size(), pagePermissions.size(), apiPermissions.size(), dataResources.size());
-        auditEventPublisher.publishAdminAction(
-                created ? AdminActionType.CREATED : AdminActionType.REPLACED,
-                AdminSubjectType.APPLICATION, String.valueOf(applicationId), null,
-                "manifestVersion=" + entity.getManifestVersion() + ", roles=" + roles.size()
-                        + ", pagePermissions=" + pagePermissions.size()
-                        + ", apiPermissions=" + apiPermissions.size()
-                        + ", dataResources=" + dataResources.size());
+        if (bootstrapToken == null) {
+            auditEventPublisher.publishAdminAction(
+                    created ? AdminActionType.CREATED : AdminActionType.REPLACED,
+                    AdminSubjectType.APPLICATION, String.valueOf(applicationId), null,
+                    "manifestVersion=" + entity.getManifestVersion() + ", roles=" + roles.size()
+                            + ", pagePermissions=" + pagePermissions.size()
+                            + ", apiPermissions=" + apiPermissions.size()
+                            + ", dataResources=" + dataResources.size());
 
-        // 触发授权投影更新（场景4：应用清单更新）
-        projectionServiceProvider.getObject().onManifestUpdated(applicationId);
+            projectionServiceProvider.getObject().onManifestUpdated(applicationId);
+        }
 
         return toResponse(entity);
     }

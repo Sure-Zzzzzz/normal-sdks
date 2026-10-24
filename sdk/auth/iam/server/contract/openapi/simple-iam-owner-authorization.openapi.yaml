@@ -283,7 +283,10 @@ components:
         payload:
           type: object
           additionalProperties: true
-          description: 由 changeType 决定的最终态载荷；调用方按各变更类型的既有字段契约严格解析，缺失必填字段失败关闭。
+          description: >-
+            由 changeType 决定的最终态载荷；调用方按各变更类型的既有字段契约严格解析，缺失必填字段失败关闭。
+            TARGET_APPLICATION_STATE 是异步投影的目标级总闸：启动重算前 active=false，所有逐人员投影事件之后才发布最终目标状态；
+            消费方必须按 sourceSequence 顺序应用，并在目标状态 active=false 时拒绝该应用下所有人员投影。
     OwnerAuthorizationCandidateApplication:
       type: object
       additionalProperties: false

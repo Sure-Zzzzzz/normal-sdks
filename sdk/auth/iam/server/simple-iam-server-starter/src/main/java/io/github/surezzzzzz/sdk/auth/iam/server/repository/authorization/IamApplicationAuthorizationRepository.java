@@ -37,6 +37,18 @@ public interface IamApplicationAuthorizationRepository
     List<IamApplicationAuthorizationEntity> findByApplicationId(Long applicationId);
 
     /**
+     * 合法主体的投影必须追平目标应用纪元；缺失主体的孤儿行由启动对账记录并跳过。
+     */
+    @Query("SELECT COUNT(authorization) FROM IamApplicationAuthorizationEntity authorization, "
+            + "IamUserEntity user WHERE authorization.userId = user.id "
+            + "AND authorization.applicationId = :applicationId "
+            + "AND user.subjectId IS NOT NULL AND TRIM(user.subjectId) <> '' "
+            + "AND (authorization.applicationAuthorizationEpoch IS NULL "
+            + "OR authorization.applicationAuthorizationEpoch <> :authorizationEpoch)")
+    long countValidSubjectsWithStaleApplicationEpoch(@Param("applicationId") Long applicationId,
+                                                     @Param("authorizationEpoch") Long authorizationEpoch);
+
+    /**
      * 应用授权纪元推进后，同步既存投影的纪元标签，不改变投影内容或业务版本。
      */
     @Modifying(flushAutomatically = true, clearAutomatically = true)

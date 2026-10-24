@@ -24,7 +24,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -59,6 +62,9 @@ class IamBusinessSchemaBaselineTest {
 
     @Autowired
     private IamTrustedApplicationMenuRepository trustedApplicationMenuRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Test
     @DisplayName("schema.sql 应初始化 14 个内置权限并按 page/api/data 分类")
@@ -137,7 +143,7 @@ class IamBusinessSchemaBaselineTest {
     }
 
     @Test
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("首次引导应递归创建内置菜单树，重复启动保持幂等")
     void bootstrapCreatesMenuTreeForNewApplication() {
         String applicationCode = "bootstrap-menu-tree-" + UUID.randomUUID().toString().substring(0, 8);
@@ -187,7 +193,7 @@ class IamBusinessSchemaBaselineTest {
     }
 
     @Test
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @DisplayName("未定制的 IAM 1.0 默认菜单应升级为分组树，重复启动保持幂等")
     void bootstrapUpgradesExactLegacyIamMenu() {
         IamTrustedApplicationEntity application = requireIamApplication();
@@ -232,19 +238,21 @@ class IamBusinessSchemaBaselineTest {
     }
 
     private void replaceWithLegacyIamMenus(Long applicationId) {
-        trustedApplicationMenuRepository.deleteByApplicationId(applicationId);
-        for (int index = 0; index < legacyIamMenus().size(); index++) {
-            LegacyMenu item = legacyIamMenus().get(index);
-            IamTrustedApplicationMenuEntity menu = new IamTrustedApplicationMenuEntity();
-            menu.setApplicationId(applicationId);
-            menu.setCode(item.code);
-            menu.setName(item.name);
-            menu.setNodeType(PortalMenuNodeType.PAGE);
-            menu.setRoute(item.route);
-            menu.setSortOrder(index);
-            trustedApplicationMenuRepository.save(menu);
-        }
-        trustedApplicationMenuRepository.flush();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            trustedApplicationMenuRepository.deleteByApplicationId(applicationId);
+            for (int index = 0; index < legacyIamMenus().size(); index++) {
+                LegacyMenu item = legacyIamMenus().get(index);
+                IamTrustedApplicationMenuEntity menu = new IamTrustedApplicationMenuEntity();
+                menu.setApplicationId(applicationId);
+                menu.setCode(item.code);
+                menu.setName(item.name);
+                menu.setNodeType(PortalMenuNodeType.PAGE);
+                menu.setRoute(item.route);
+                menu.setSortOrder(index);
+                trustedApplicationMenuRepository.save(menu);
+            }
+            trustedApplicationMenuRepository.flush();
+        });
     }
 
     private List<LegacyMenu> legacyIamMenus() {

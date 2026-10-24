@@ -53,6 +53,7 @@ public class IamRoleAuthorizationRuleService {
     private final IamApplicationPermissionManifestService manifestService;
     private final IamAuthorizationProjectionService projectionService;
     private final IamTrustedApplicationMutationGuard mutationGuard;
+    private final IamApplicationAuthorizationStateService authorizationStateService;
     private final IamOpenRoleMutationSupport openRoleSupport;
     private final IamAuditEventPublisher auditEventPublisher;
 
@@ -91,6 +92,7 @@ public class IamRoleAuthorizationRuleService {
         requireRole(roleId);
         requireApplication(applicationId);
         mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
         normalize(pagePermissions, apiPermissions);
 
         IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
@@ -139,6 +141,47 @@ public class IamRoleAuthorizationRuleService {
     }
 
     /**
+     * 启动对账专用 source 写入；投影与管理事件由启动对账器在主事务提交后处理。
+     */
+    @Transactional
+    public RoleAuthorizationRuleResponse putRoleAuthorizationRuleForBootstrap(
+            Long roleId, Long applicationId, List<String> pagePermissions, List<String> apiPermissions,
+            Map<String, Object> dataGrantTemplate,
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
+        requireRole(roleId);
+        requireApplication(applicationId);
+        mutationGuard.requireMutable(applicationId);
+        if (token == null) {
+            throw new SimpleIamServerException(ErrorCode.APPLICATION_AUTHORIZATION_CONFLICT,
+                    "启动角色规则更新缺少有效的授权投影 fencing token");
+        }
+        authorizationStateService.requireActiveRecomputeToken(applicationId, token);
+        normalize(pagePermissions, apiPermissions);
+        IamApplicationPermissionManifestEntity manifest = manifestService.requireManifest(applicationId);
+        validatePermissions(pagePermissions, apiPermissions, manifest);
+        DataGrantDocument template = manifestService
+                .validateDataGrantTemplateWithinManifest(dataGrantTemplate, applicationId);
+        IamRoleAuthorizationRuleEntity rule = ruleRepository
+                .findByRoleIdAndApplicationId(roleId, applicationId).orElse(null);
+        boolean created = rule == null;
+        if (created) {
+            rule = new IamRoleAuthorizationRuleEntity();
+            rule.setRoleId(roleId);
+            rule.setApplicationId(applicationId);
+            rule.setCreatedAt(Instant.now());
+        }
+        rule.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(pagePermissions));
+        rule.setApiPermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(apiPermissions));
+        rule.setDataGrantTemplateJson(IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(template));
+        rule.setUpdatedAt(Instant.now());
+        rule = ruleRepository.save(rule);
+        log.info("启动角色授权规则{}：roleId={}, applicationId={}, pages={}, apis={}, dataGrantTemplate={}",
+                created ? "创建" : "更新", roleId, applicationId,
+                pagePermissions.size(), apiPermissions.size(), template != null);
+        return toResponse(rule);
+    }
+
+    /**
      * 删除角色在指定应用下的授权规则（无规则时幂等无操作）。
      * 删除后触发持有该角色用户的投影重算（权限收缩为剩余规则并集）。
      *
@@ -159,6 +202,7 @@ public class IamRoleAuthorizationRuleService {
         IamOpenRoleBindingEntity binding = openRoleSupport.begin(roleId);
         IamOpenRoleActor actor = suppliedActor;
         mutationGuard.requireMutable(applicationId);
+        authorizationStateService.requireNoActiveRecompute(applicationId);
         IamRoleAuthorizationRuleEntity rule = ruleRepository
                 .findByRoleIdAndApplicationId(roleId, applicationId)
                 .orElse(null);

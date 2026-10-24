@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.configuration;
 
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.IamWebAuthConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
@@ -318,6 +319,7 @@ public class OAuth2SecurityConfiguration {
                         .antMatchers(SimpleIamServerConstant.PATH_WEB_AUTH_CSRF,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_LOGIN,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_PROVIDERS,
+                                IamWebAuthConstant.PATH_REQUIREMENTS,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_CAPTCHA,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_AUTHORIZE,
                                 SimpleIamServerConstant.PATH_WEB_AUTH_CALLBACK,

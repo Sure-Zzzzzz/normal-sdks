@@ -8,7 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -286,6 +285,64 @@ public class SimpleIamServerProperties {
          * 锁定时长（分钟）
          */
         private Integer lockMinutes = SimpleIamServerConstant.DEFAULT_LOGIN_LOCK_MINUTES;
+
+        /**
+         * 登录前必须确认的服务条款与隐私政策版本化文档；默认启用，缺文档时启动失败，仅显式关闭才放行。
+         */
+        private LoginRequirementsConfig requirements = new LoginRequirementsConfig();
+    }
+
+    @Data
+    public static class LoginRequirementsConfig {
+
+        /**
+         * 登录前置要求总开关，默认开启；关闭后登录页隐藏法律入口且登录不校验文档同意。
+         */
+        private Boolean enabled = SimpleIamServerConstant.DEFAULT_ENABLE;
+
+        /**
+         * 当前登录要求集合版本；文档集合发生变化时由部署方显式递增。
+         */
+        private String revision;
+
+        /**
+         * 登录前展示的版本化文档，versionId 在部署配置内必须稳定且唯一。
+         */
+        private List<LoginRequirementDocumentConfig> documents = new ArrayList<>();
+    }
+
+    @Data
+    public static class LoginRequirementDocumentConfig {
+
+        /**
+         * 文档版本稳定标识，写入用户同意记录。
+         */
+        private Long versionId;
+
+        /**
+         * 文档类型编码，例如 terms-of-service 或 privacy-policy。
+         */
+        private String code;
+
+        /**
+         * 登录页展示标题。
+         */
+        private String title;
+
+        /**
+         * 文档正文地址，可使用同源相对地址或部署方允许的绝对地址。
+         */
+        private String url;
+
+        /**
+         * 文档正文；用于联调和自包含部署，正式内容由部署方维护。
+         */
+        private String content;
+
+        /**
+         * 是否必须同意；服务条款和隐私政策必须保持为 true。
+         */
+        private Boolean required = Boolean.TRUE;
     }
 
     @Data
@@ -382,10 +439,25 @@ public class SimpleIamServerProperties {
 
         /**
          * 内置可信应用列表（平台自身子应用，随引导注册进门户；已存在的应用编码跳过不覆盖）。
-         * 列表整体可被配置覆盖/追加（如协作管理台）；单项 entry 置空则跳过该项。
+         * 部署方可覆盖列表属性并追加其他平台组件，但必须保留 iam 与 aksk；单项 entry 置空则跳过该项。
          */
-        private List<BuiltInApplicationConfig> builtInApplications = new ArrayList<>(
-                Collections.singletonList(defaultIamAdminApplication()));
+        private List<BuiltInApplicationConfig> builtInApplications = new ArrayList<>(Arrays.asList(
+                defaultIamAdminApplication(), defaultAkskApplication()));
+
+        /**
+         * AKSK 是 IAM 平台内置应用：只参与有效分类，不由 IAM 引导创建或管理其运行时。
+         * entry 为空使启动引导跳过创建，已有 AKSK 记录仍会被 resolver 排除出动态目录。
+         */
+        private static BuiltInApplicationConfig defaultAkskApplication() {
+            BuiltInApplicationConfig application = new BuiltInApplicationConfig();
+            application.setApplicationCode("aksk");
+            application.setApplicationName("AKSK");
+            application.setDescription("IAM 平台内置凭证管理应用，由固定入口承载");
+            application.setRoutePrefix("/app/aksk");
+            application.setEntry(null);
+            application.setApiBase(null);
+            return application;
+        }
 
         /**
          * IAM 管理台默认引导项（本机联调形态，部署方按环境覆盖 entry/apiBase）
@@ -477,17 +549,17 @@ public class SimpleIamServerProperties {
             private String description;
 
             /**
-             * 门户路由前缀（缺省按 /micro/{applicationCode} 拼接）
+             * 门户路由前缀（缺省按 /app/{applicationCode} 拼接）
              */
             private String routePrefix;
 
             /**
-             * 微前端 entry 地址（置空则跳过该项）
+             * Portal 初始页面入口（置空则跳过该项引导）；动态路由只由机器目录投影处理。
              */
             private String entry;
 
             /**
-             * 后端 API 基地址
+             * 应用的 Portal API 路径配置；此引导项不登记动态机器上游。
              */
             private String apiBase;
 

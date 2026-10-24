@@ -1,6 +1,6 @@
 # Portal 默认入口与沉浸页路由
 
-本文描述 IAM Server 1.3.2 的可信应用 Portal 行为，覆盖默认入口、登录首页、应用顺序和沉浸页路由，以及菜单树与页面可见性的权限边界。默认入口与沉浸页能力自 1.1.0 引入，应用顺序自 1.1.1 由服务端维护。
+本文描述可信应用 Portal 的默认入口、登录首页、应用顺序和沉浸页路由，以及菜单树与页面可见性的权限边界。默认入口与沉浸页能力自 1.1.0 引入，应用顺序自 1.1.1 由服务端维护；1.3.8 增加机器动态路由投影，支持业务自有 Nginx 自闭环接入统一入口。
 
 ## 目标与边界
 
@@ -37,6 +37,8 @@
 
 `menuCode` 在应用树内已经唯一，快照替换后仍可重新解析。若编辑菜单时删除、改名或将默认 PAGE 改为 GROUP，新的完整 Portal 配置必须在同一事务中选择新默认页或明确清空默认入口；不能留下失效 code。
 
+自 1.3.8 起，AKSK 属于平台内置应用：它仍可出现在用户态 Portal 导航和登录落点模型中，但 `entry` 固定为空，浏览器访问 `/app/aksk` 由 IAM Nginx 的固定入口承载，不通过动态机器目录或 Envoy 路由。下文的 `entry` 示例均为非内置业务应用。
+
 延续 IAM 的关系一致性策略，默认 PAGE 归属、节点类型、全局首页应用启用状态等由服务事务校验，不用跨表外键表达。关闭 Portal 集成、清空默认入口、删除默认 PAGE 或将其改名时，如果该应用是全局登录首页，返回 `409 Conflict` 并要求先改选或关闭全局首页。删除整个可信应用则先安全停用并受理持久化清理任务，返回 202；后台完成授权、Portal 配置及全局引用等关联清理后才完成物理删除，不能将受理成功当成同步删除完成。内置应用不能删除，有 ACTIVE 受委托角色引用的应用也须先清理角色再删除。
 
 ### 管理写模型与并发
@@ -52,8 +54,9 @@ PUT /iam/admin/trusted-applications/{applicationId}/portal/configuration
 ```json
 {
   "enabled": true,
-  "entry": "https://portal.example.invalid/app/aksk/",
-  "apiBase": "https://api.example.invalid",
+  "entry": "/app/sample-app/index.html",
+  "apiBase": "/api/sample-app",
+  "targetOrigin": "http://sample-app-nginx:80",
   "menuTree": [],
   "defaultEntry": {
     "pageMenuCode": "operations-wall",
@@ -62,6 +65,8 @@ PUT /iam/admin/trusted-applications/{applicationId}/portal/configuration
   "configVersion": 7
 }
 ```
+
+这里的 `entry` 和 `apiBase` 只表示统一 IAM 入口下的公共页面/API 路径，不填写业务内网地址；`entry` 必须等于或位于该应用的 `routePrefix` 下。动态业务同时登记一个 `targetOrigin`，指向业务自有 Nginx。IAM Nginx 把平台保留路径送到 IAM，把其他已登记的业务路径交给 Envoy；Envoy 用 `routePrefix` 匹配页面、用 `apiBase` 匹配 API，但两者都转发到同一个 `targetOrigin` 并保留原路径。业务 Nginx 自己负责静态文件和 API 的内部转发，IAM 与 Envoy 不保存其后的容器、服务或端口拓扑。`targetOrigin` 只出现在管理配置和机器路由投影中，不由用户态 Portal 返回或展示。
 
 `defaultEntry: null` 是明确清空。非 null 时，`pageMenuCode` 必须解析为本次 `menuTree` 中的 PAGE，`entryPath` 必须通过后文的路径校验。`configVersion` 条件更新不匹配时返回 `409`；管理台刷新详情后由管理员决定是否重做编辑，不能覆盖另一位管理员刚修改的菜单或入口。
 
@@ -75,7 +80,7 @@ PUT /iam/admin/portal/login-landing
 
 ```json
 {
-  "applicationCode": "aksk",
+  "applicationCode": "sample-app",
   "version": 3
 }
 ```
@@ -92,13 +97,13 @@ PUT /iam/admin/portal/login-landing
 
 ## 路由契约
 
-默认入口是相对 `routePrefix` 的静态 history 路径，不是外部跳转器。以 AKSK 为例：应用根为 `/app/aksk`，菜单 PAGE `code=operations-wall` 的 `route=/wall`：
+默认入口是相对 `routePrefix` 的静态 history 路径，不是外部跳转器。以下使用非内置示例应用说明：应用根为 `/app/sample-app`，菜单 PAGE `code=operations-wall` 的 `route=/wall`：
 
 | 配置或访问地址 | 结论 |
 |---|---|
 | `entryPath=/wall` | 合法，应用根进入该 PAGE |
 | `entryPath=/wall/overview` | 合法，大屏应用内默认子路由 |
-| `/app/aksk/wall/region/east` | 合法，继承 `/wall` 的展示模式 |
+| `/app/sample-app/wall/region/east` | 合法，继承 `/wall` 的展示模式 |
 | `/wallpaper` | 非法，不是 `/wall` 的分段子路径 |
 | `/wall/../clients`、`/%2e%2e/clients` | 非法，拒绝目录穿越 |
 | `https://other.example/wall`、`//other.example/wall` | 非法，拒绝跨域和协议相对路径 |
@@ -124,8 +129,8 @@ GET /iam/web/portal/navigation-context
 {
   "applications": [
     {
-      "applicationCode": "aksk",
-      "routePrefix": "/app/aksk",
+      "applicationCode": "sample-app",
+      "routePrefix": "/app/sample-app",
       "menuTree": [],
       "defaultEntry": {
         "pageMenuCode": "operations-wall",
@@ -133,7 +138,7 @@ GET /iam/web/portal/navigation-context
       }
     }
   ],
-  "loginLandingApplicationCode": "aksk"
+  "loginLandingApplicationCode": "sample-app"
 }
 ```
 
@@ -187,7 +192,7 @@ Portal 仅在精确进入应用根路径时应用默认入口。含子路径的�
 | 场景 | 断言 |
 |---|---|
 | 两个应用各有默认入口 | 各自根路由进入各自入口；仅全局单例应用作为无深链登录首页 |
-| 登录前深链 | `/app/aksk/wall/region/east` 登录后原样恢复 |
+| 登录前深链 | `/app/sample-app/wall/region/east` 登录后原样恢复 |
 | 沉浸子路由与标准覆盖 | 大屏子路由继承 `IMMERSIVE`；更具体且可访问的 `STANDARD` PAGE 恢复 Portal 框架 |
 | IAM 仪表盘下钻 | `/app/iam` 隐藏 Portal 壳；进入 `/app/iam/users` 等标准管理页立即恢复壳，仪表盘内抽屉操作保持当前页面 |
 | 普通用户撤权 | 不下发失效入口和全局首页；Portal 稳定回退，资源 API 仍返回 403 |

@@ -10,7 +10,8 @@ import java.time.Instant;
  * IAM 可信应用 Portal 集成配置实体
  *
  * <p>与 {@link IamTrustedApplicationEntity} 1:1 共享主键；启用后该应用作为 qiankun 微前端出现在 Portal 侧边栏。
- * {@code entry}/{@code apiBase} 按部署环境直接存值，后端不读 Spring profile。
+ * {@code entry}/{@code apiBase} 保存统一入口的公共路径，{@code targetOrigin} 保存业务自有
+ * Nginx 的机器 origin；后端不读 Spring profile。
  *
  * @author surezzzzzz
  */
@@ -29,7 +30,7 @@ public class IamTrustedApplicationPortalEntity {
     @Column(name = "enabled", nullable = false)
     private Integer enabled = SimpleIamServerConstant.DEFAULT_PORTAL_INTEGRATION_ENABLED;
 
-    @Column(name = "route_prefix", length = 64, nullable = false)
+    @Column(name = "route_prefix", length = 128, nullable = false)
     private String routePrefix;
 
     @Column(name = "entry", length = 512)
@@ -37,6 +38,12 @@ public class IamTrustedApplicationPortalEntity {
 
     @Column(name = "api_base", length = 512)
     private String apiBase;
+
+    /**
+     * 页面与 API 共用的业务自有 Nginx HTTP origin，不含路径、查询串或片段。
+     */
+    @Column(name = "target_origin", length = 512)
+    private String targetOrigin;
 
     /**
      * Portal 应用根节点全局顺序。它与应用内菜单的 sort_order 完全独立，且只由全局排序快照服务维护。
@@ -61,7 +68,7 @@ public class IamTrustedApplicationPortalEntity {
      */
     @Version
     @Column(name = "config_version", nullable = false)
-    private Long configVersion;
+    private Long configVersion = 1L;
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;

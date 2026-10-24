@@ -2,7 +2,52 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.7`，变更与升级要求见 [CHANGELOG.1.3.7.md](CHANGELOG.1.3.7.md)。
+当前版本为 `1.3.8`，变更与升级要求见 [CHANGELOG.1.3.8.md](CHANGELOG.1.3.8.md)。
+
+`1.3.8` 新增无用户会话的 `GET /iam/api/portal/applications` Portal 可信应用路由投影：已授权 AKP 按 API + DATA
+三权读取启用 Portal 的可信应用路由投影，并用 `catalogRevision` 保证分页快照一致性。目录变化返回
+409，旧凭证不会自动扩权；IAM 只提供登记、权限和目录事实，不代理业务请求，也不感知 Envoy。动态路由固定投影
+`forwardAuthorization=REQUEST`，由 Gateway 原样转发浏览器 Authorization 给业务自有 Nginx/API；IAM 不读取或记录该凭据值，Cookie 始终由 Gateway 移除。
+
+`1.3.8` 将 IAM 与 AKSK 固定为平台内置应用：两者保留在用户态 Portal 授权模型中，但不进入动态机器目录，浏览器入口由 IAM Nginx 固定承载。默认 `bootstrap.built-in-applications` 必须保留 `iam` 与 `aksk`，部署方只能追加其他平台组件；AKSK 使用固定 `/app/aksk` 前缀且不由 IAM 引导创建运行时。
+
+同时新增登录前服务条款与隐私政策确认：通过 `GET /iam/web/auth/requirements` 返回当前文档版本，密码、短信和外部登录统一携带修订号及已确认文档版本。登录要求默认开启；将
+`io.github.surezzzzzz.sdk.auth.iam.server.login.requirements.enabled` 设为 `false` 才会关闭门禁，前端同步隐藏同意项，登录不读取或校验文档。开启时两份当前文档均需确认，缺少确认或提交过期版本会拒绝登录，并按用户、文档版本和登录方式幂等保存确认记录。
+
+启动期授权投影重算采用目标应用级屏障：开启时先通过同事务变更事件关闭 AKSK 本地投影总闸，逐用户投影按 fencing token 对账；所有有效主体追平后才发布目标应用恢复事件。失败实例不会发出恢复事件，避免异步消费者使用重算中的授权快照。
+
+登录要求配置示例（仅作为没有数据库文档时的兼容回退；正式正文存于 `iam_login_requirement_document`；
+`revision` 最长 128 个字符，`version-id` 必须为正数且唯一）：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          iam:
+            server:
+              login:
+                requirements:
+                  enabled: true
+                  revision: legal-2026-10
+                  documents:
+                    - version-id: 20261001
+                      code: terms-of-service
+                      title: 服务条款
+                      url: /legal/terms
+                      required: true
+                    - version-id: 20261002
+                      code: privacy-policy
+                      title: 隐私政策
+                      url: /legal/privacy
+                      required: true
+```
+
+登录页每次提交当前修订号和已勾选文档版本；IAM 保存同意记录用于审计，不以历史记录替代本次提交。
+当前 schema 与 1.3.8 迁移脚本带有两条明确标记的联调占位文本，均为必选确认；正式发布前必须替换为批准的正文并调整版本号。修订号或任一文档版本变化后，登录页会清空旧勾选并要求重新确认。
+`enabled: false` 时接口返回 `mode: DISABLED`、`required: false`，三种登录方式保持历史行为。默认开启时必须同时存在
+`terms-of-service` 与 `privacy-policy` 两条 `required: true` 文档；缺少文档、标记为可选或数据库读取失败会在启动期失败，运行期异常返回非成功响应，前端进入 `ERROR` 并停止登录，不会把故障误判为关闭。条款校验失败沿用 `LOGIN_FAILED` 认证事件并使用安全错误码，不记录文档正文、手机号、口令或令牌。
 
 `1.3.7` 四件：①特权短路修复（平台管理员对内置应用的空准入行不再劣化为空权限——行投影与清单全量保底并集；例行投影重算不再新建空准入行）；②JIT 用户名冲突策略（`auto-suffix` 默认 max+1 续号 / `reject` 收紧，**默认行为从拒绝变更为自动后缀**）；③页面准入详情端点（feedback 消费，displayName 与门户同源）；④可信应用目录端点 + `IamApplicationClient`（limiter 消费，`iam:application:api` + DATA all）。
 
@@ -16,7 +61,7 @@
 
 `1.3.2` 增加服务主体受委托角色 API：外部系统通过 AKSK 身份维护自己创建的普通角色、固定应用规则和批准根子树内的部门挂载；商业授权、期限和产品资格仍由外部系统管理。既有身份协议、事件类型和普通角色行为保持兼容。
 
-> **1.3.1 要点**：平台管理员特权域收窄至内置应用（模块默认仅 `iam`，部署方可经引导配置追加）——非内置（业务）应用不再走 iam_admin 特权兜底（门户可见性、令牌投影、资源校验一律要求真实授权行）；无清单应用的"仅准入"隐性通道同步收窄；内置应用行为不变。详见 [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)。
+> **1.3.1 要点**：平台管理员特权域收窄至内置应用——非内置（业务）应用不再走 iam_admin 特权兜底（门户可见性、令牌投影、资源校验一律要求真实授权行）；无清单应用的"仅准入"隐性通道同步收窄；内置应用行为不变。1.3.8 明确默认内置域固定包含 `iam` 与 `aksk`。详见 [CHANGELOG.1.3.1.md](CHANGELOG.1.3.1.md)。
 
 > **1.3.0 要点**：对外身份口径全面切换为稳定公开主体 `subjectId`（管理面/开放 API/URI/claim/事件载荷，数字 userId 退出对外）；新增手机号绑定与短信登录、忘记密码、Excel 用户导入、B2M 短信投递适配器；可信应用内置标记管理面可调。升级与破坏性说明见 [CHANGELOG.1.3.0.md](CHANGELOG.1.3.0.md)。
 
@@ -30,7 +75,7 @@
 | 2 | **Vue Web** | 登录页 / Consent 页 / Portal / 管理界面的渲染方；服务端供数，无独立后端 |
 | 3 | **业务系统** | 持 Token 访问的资源应用；本地验签或调本服务的验证端点 |
 
-模块分层：`simple-iam-core`（身份协议契约基座）→ `simple-iam-server-core`（IAM Server 域契约：事件、错误码、常量、异常）→ **`simple-iam-server-starter`（本模块：Web API、服务、装配、实体与仓储）**。只需订阅 IAM 事件或引用错误码契约的集成方，可以只依赖 `simple-iam-server-core`。
+模块分层：`simple-iam-core`（身份协议契约基座）→ `simple-iam-server-core`（IAM Server 域契约：事件、错误码、常量、异常）→ **`simple-iam-server-starter`（本模块：Web API、服务、装配、实体与仓储）**。DATA 领域模型、注解和纯逻辑校验来自 `simple-data-permission-core`；Spring MVC 参数解析、拦截和异常适配不由本 starter 传递，部署宿主必须显式引入 `simple-data-permission-spring-mvc-starter`。只需订阅 IAM 事件或引用错误码契约的集成方，可以只依赖 `simple-iam-server-core`。
 
 权威 API Contract 位于 `sdk/auth/iam/server/contract/`；各前端仓库的 release 必须声明兼容的 Server 与 Contract 版本范围。
 
@@ -126,7 +171,7 @@
 
 ```gradle
 dependencies {
-    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.2"
+    implementation "io.github.sure-zzzzzz:simple-iam-server-starter:1.3.8"
     implementation "org.springframework.boot:spring-boot-starter-web"
     implementation "org.springframework.boot:spring-boot-starter-security"
     implementation "org.springframework.boot:spring-boot-starter-data-jpa"
@@ -134,7 +179,7 @@ dependencies {
 ```
 
 - 固定运行时基线为 Spring Boot **2.7.9**、Spring Authorization Server **0.4.1**、Java **8**；不支持 Spring Boot 3.x，不声明其他 Spring Boot 版本的 Server 运行时兼容性
-- Starter 通过 `api` 传递正式制品 `simple-iam-server-core:1.3.2`，身份协议基座仍为 `simple-iam-core:1.1.0`；不要将 Server Core 强制降回旧版
+- 1.3.8 Starter 通过 `api` 传递正式制品 `simple-iam-server-core:1.3.6`，身份协议基座仍为 `simple-iam-core:1.1.0`；不要将 Server Core 强制降回旧版
 - 独立 MySQL 数据库（`mysql-connector-java` 已随模块 runtimeOnly 引入），字符集 `utf8mb4`
 - Redis 6+（会话 / 缓存 / 限流 / 锁 / SSE 广播 / OAuth2 授权缓存共用）
 - RSA 公私钥对；JWE 模式另需 AES-256 加密密钥
@@ -142,18 +187,17 @@ dependencies {
 
 数据库初始化：在**全新环境**执行 [schema.sql](docs/schema.sql)。该脚本包含建表前置清理，不能直接用于已有数据环境。
 
-### 从 1.3.1 升级
+### 从 1.3.7 升级到 1.3.8
 
-1. 暂停写请求并完成可恢复备份，确认目标 InnoDB 支持 3072 字节索引预算及 `DYNAMIC` 行格式。
-2. 在目标库执行一次 [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql)。脚本仅创建 `iam_open_role_binding`，不修改旧角色或授权，不按名称接管人工角色；不是可反复执行的初始化脚本。已有数据环境不得执行 `schema.sql`。
-3. 将 Starter 升至 `1.3.2`，由其消费 Server Core `1.3.2`。开启启动引导时，增量合并 IAM 应用清单中的八个新 API 码和五个 DATA 资源，并补齐受管内置 `iam_admin` 的已有规则；数据库锁协调多实例，保留定制声明，重复核对不持续递增版本。同名 DATA 动作或维度不兼容时启动失败，不覆盖。
-4. 引导关闭时，先确认内置 `iam` 应用、权限清单和管理员规则已存在，再由宿主显式调用 `IamOpenRoleManifestUpgradeService.upgrade()`；该服务不会创建缺失的应用或清单。无论采用哪种方式，都须核对实际清单及规则后再配置调用方。
-5. 在 AKSK 管理侧显式授予服务主体准入、精确 API 与 DATA 范围。原 `iam:user:api`、`iam:department:api` 不包含新管理权，旧 AKP 不自动扩权。受委托角色治理宿主关闭 introspect 本地缓存和 fallback（旧结果回退）。AKSK 验证组件默认自动装配且三件套缺一即启动失败；暂不接管的宿主须显式 `io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled: false`。
-6. 管理端消费 `openRoleBinding`，对受委托角色改名、改规则、挂载或删除提交强 If-Match；普通角色仍按原方式调用。消费方回读角色、规则、目录和成员事实后再开启自动联动。
+1. 暂停写请求并完成可恢复备份，确认目标为 MySQL 8.0+、InnoDB 和 `DYNAMIC` 行格式。
+2. 在目标库执行一次 [V1.3.7__to__V1.3.8__portal_route_projection.sql](docs/migration/V1.3.7__to__V1.3.8__portal_route_projection.sql)。脚本新增登录要求文档/同意记录、Portal 路由投影版本和 `target_origin`，不重置既有数据；已有数据环境不得执行 `schema.sql`。
+3. 将 Starter 升至 `1.3.8`，并保持 Server Core `1.3.6`、`simple-iam-core:1.1.0` 的已发布坐标；部署 runtime 显式引入 `simple-data-permission-spring-mvc-starter`。
+4. 启动后核对三张新增表、Portal 路由投影 API/DATA 权限和内置应用授权；Gateway AKP 必须在 AKSK 管理侧显式获得 `iam:portal-application:read:api` 及 `iam:portal-application` DATA read，升级不会自动扩权旧 AKP。
+5. 登录要求默认 REQUIRED，数据库中必须有 `terms-of-service` 与 `privacy-policy` 两条必选文档；正文、修订号和版本标识由部署方替换为已批准内容。只有显式 `login.requirements.enabled=false` 才关闭门禁，不能通过删除文档绕过。
 
 角色删除保留 `DELETED` 墓碑，防止同一创建键重新生成授权；不能通过删除委托表进行降版。需要回退时，停写并恢复完整升级前备份。数据库清理、恢复或环境替换后，消费方重新确认身份、目标应用、部门根和三权，不凭复用的数字编号自动续接旧状态。
 
-### 数据表清单（31 张 = 3 张 SAS 标准表 + 28 张 `iam_*` 业务表）
+### 数据表清单（34 张 = 3 张 SAS 标准表 + 31 张 `iam_*` 业务表）
 
 | 表 | 用途 |
 |---|---|
@@ -179,8 +223,11 @@ dependencies {
 | `iam_owner_authorization_change_log` | 所属人授权变更顺序及最终状态快照，供协作方增量读取 |
 | `iam_resource_verification_client` | 资源验证客户端 |
 | `iam_trusted_application_portal` / `iam_trusted_application_menu` / `iam_portal_setting` | Portal 集成、应用菜单与全局登录首页单例 |
+| `iam_portal_catalog_revision` | Portal 可信应用路由投影全局版本单例 |
 | `iam_message` | 站内信 |
 | `iam_user_theme_preference` | 用户主题偏好 |
+| `iam_login_requirement_document` | 登录前置服务条款与隐私政策的不可变版本正文 |
+| `iam_user_document_consent` | 用户对登录要求文档版本的确认记录 |
 
 ## HTTP 端点总览
 
@@ -199,6 +246,7 @@ dependencies {
 | 端点 | 方法 | 认证 | 说明 |
 |---|---|---|---|
 | `/iam/web/auth/csrf` | GET | 匿名 | 取 CSRF token（登录页用） |
+| `/iam/web/auth/requirements` | GET | 匿名 | 取当前服务条款/隐私政策版本；返回 `mode=REQUIRED` 或显式关闭后的 `mode=DISABLED` |
 | `/iam/web/auth/providers` | GET | 匿名 | 登录方式列表（含展示文案） |
 | `/iam/web/auth/captcha` | GET | 匿名 | 验证码挑战 |
 | `/iam/web/auth/login` | POST | 匿名 | 登录（本地或外部凭证型）；响应携带 `mustChangePassword`——管理员建号 / 重置后首登 / 口令生存期超期为 `true`，同携 `mustChangePasswordReason` 三态与临期 `passwordExpiresInDays`（1.3.6） |
@@ -304,6 +352,7 @@ dependencies {
 | `GET /iam/api/users/{subjectId}/page-admitted-applications` | 页面准入应用编码清单（1.3.5；API 码 `iam:portal:api` 单码、无 DATA 面，供反馈服务等按主体拉取交集过滤；清单顺序未定义） |
 | `GET /iam/api/users/{subjectId}/page-admitted-application-details` | 页面准入应用详情（1.3.7，displayName 与门户同源；同码 iam:portal:api） |
 | `GET /iam/api/applications` | 可信应用目录分页（1.3.7；iam:application:api + DATA iam:application read all） |
+| `GET /iam/api/portal/applications` | Portal 可信应用机器路由投影分页（1.3.8；AKP `SERVICE` + `iam:portal-application:read:api` + DATA `iam:portal-application/read`；`catalogRevision` 一致性，响应 `Cache-Control: no-store`） |
 | `POST / GET /iam/api/messages`、`GET /iam/api/messages/{sendBatchId}` | 站内信发信/按收件人查信/批次详情（1.3.7；iam:message:api，发信者记外部主体标识） |
 | `GET /iam/api/sessions`、`DELETE /iam/api/sessions/{sessionId}` | 按用户列在线会话/踢会话（1.3.7；iam:session:api，风控视角） |
 | `GET /iam/api/permissions` | 权限清单只读目录（1.3.7；iam:permission:api） |
@@ -355,7 +404,7 @@ AKSK 管理台作为统一应用门户中的业务应用时，IAM 侧登记一�
 
 ## 安全过滤链
 
-七条链按 Order 精确分工，先匹配先赢；开放 API `/iam/api/**` 由公共资源层链（`HIGHEST_PRECEDENCE`，simple-resource-server-starter）在其前接管——宿主配置 `protected-paths` 覆盖该路径后启用（STATELESS、排斥 Cookie、无 CSRF、失败统一 401/403），未配置时该路径落 Order(5) 会话链拒绝（失败关闭，启动期软提示），矛盾配置 fail-fast：
+七条链按 Order 精确分工，先匹配先赢；开放 API `/iam/api/**` 由公共资源层链（`HIGHEST_PRECEDENCE`，simple-resource-server-starter）在其前接管——宿主配置 `protected-paths` 覆盖该路径后启用（STATELESS、排斥 Cookie、无 CSRF、失败统一 401/403）。1.3.8 起，未配置该资源链或缺少机器端点的 `SERVICE` 门禁时必须 fail-fast，或由端点专用 guard 统一拒绝；不得落入 IAM Session/Cookie 链，也不能以启动期 WARN 代替安全边界。矛盾配置 fail-fast：
 
 | Order | 路径 | 认证方式 | 要点 |
 |---|---|---|---|
@@ -380,7 +429,7 @@ AKSK 管理台作为统一应用门户中的业务应用时，IAM 侧登记一�
 
 ## 开放 API 部署（AKSK 接入）
 
-开放 API `/iam/api/**` 默认失败关闭（未配置即落会话链拒绝）。接入共六步，分布在两侧，联调前逐项核对（完整版含各步语义见[开放 API 契约](../contract/openapi/simple-iam-open-api.openapi.yaml)的「接入检查清单」）：
+开放 API `/iam/api/**` 默认失败关闭（未配置资源链或缺少 `SERVICE` 门禁即拒绝，不回退到会话链）。接入共六步，分布在两侧，联调前逐项核对（完整版含各步语义见[开放 API 契约](../contract/openapi/simple-iam-open-api.openapi.yaml)的「接入检查清单」）：
 
 | # | 配置点 | 归属侧 | 漏配症状 |
 |---|---|---|---|
@@ -451,6 +500,8 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 
 本模块提供身份、角色、授权投影及 JSON API；浏览器页面和代理由 Web 与宿主承载，业务应用负责消费授权结果。受委托角色 API 不替代产品资格判断、商业有效期检查或离线授权验证，模块测试也不替代消费方的真实 AKSK 通信与部署联调。
 
+测试边界：默认 `gradle test` 只验证 IAM 自身契约和通用资源认证替身，不启动 AKSK、不读取 AKSK 凭据，也不依赖 AKSK 数据库。真实 AKSK token、introspect 和 API/DATA 组合链路只通过 `LOCAL_DUAL_IDENTITY_E2E.init.gradle` 的显式协作联调入口验收。
+
 **预留骨架（开关或表结构在、实现未完全接线）**：
 
 | 项 | 现状 |
@@ -474,10 +525,11 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [Portal默认入口与沉浸页路由](docs/领域文档/Portal默认入口与沉浸页路由.md) | 默认入口、登录首页、服务端应用顺序、沉浸展示与权限边界 |
 | [升级说明](docs/migration/README.md) | 各版本数据库前提、增量迁移及回退要求 |
 | [schema.sql](docs/schema.sql) | 全新环境数据库初始化脚本 |
-| [V1.3.1__to__V1.3.2__open_role_binding.sql](docs/migration/V1.3.1__to__V1.3.2__open_role_binding.sql) | 从 1.3.1 升级的增量建表脚本，不重置旧数据 |
+| [V1.3.7__to__V1.3.8__portal_route_projection.sql](docs/migration/V1.3.7__to__V1.3.8__portal_route_projection.sql) | 从 1.3.7 升级 Portal 路由投影与登录要求文档结构，不重置旧数据 |
 | [CHANGELOG.1.3.4.md](CHANGELOG.1.3.4.md) | web 账号手机号端点注册修复（漏标注解） |
 | [CHANGELOG.1.3.5.md](CHANGELOG.1.3.5.md) | 特权全量分支收口 + 页面准入查询端点 + users 投影 subjectId |
 | [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md) | 口令最长生存期（默认关闭）+ 须改密原因下传 + 假换密拦截 |
 | [CHANGELOG.1.3.7.md](CHANGELOG.1.3.7.md) | 特权保底并集 + JIT 冲突策略 + 页面准入详情 + 可信应用目录 + openapi 六族补全 |
+| [CHANGELOG.1.3.8.md](CHANGELOG.1.3.8.md) | Portal 可信应用路由投影、登录要求确认、投影重算屏障与升级要求 |
 | [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |

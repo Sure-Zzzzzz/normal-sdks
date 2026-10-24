@@ -7,7 +7,6 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.authorization.IamRoleEnti
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
-import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationCleanupWorker;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.test.SimpleIamServerTestApplication;
@@ -66,9 +65,6 @@ class IamAdminTrustedApplicationApiTest {
     private IamTrustedApplicationService trustedApplicationService;
     @Autowired
     private IamTrustedApplicationTestCleanupHelper trustedApplicationCleanupHelper;
-
-    @Autowired
-    private IamTrustedApplicationCleanupWorker cleanupWorker;
 
     @Autowired
     private IamApplicationPermissionManifestService manifestService;
@@ -329,7 +325,7 @@ class IamAdminTrustedApplicationApiTest {
                 .andExpect(jsonPath("$.state").value("PENDING"))
                 .andExpect(jsonPath("$.retryable").value(false));
 
-        cleanupWorker.processNextOperation();
+        trustedApplicationCleanupHelper.deleteAndAwaitCompletion(applicationId);
 
         mockMvc.perform(get("/iam/admin/trusted-applications/" + applicationId).cookie(adminSession))
                 .andExpect(status().isNotFound())
@@ -507,7 +503,9 @@ class IamAdminTrustedApplicationApiTest {
     private String createPortalApplicationJson() {
         return "{\"applicationCode\":\"" + applicationCode + "\","
                 + "\"applicationName\":\"可信应用管理测试\",\"portal\":{\"enabled\":true,"
-                + "\"entry\":\"https://example.com/entry.js\",\"menus\":[{\"code\":\"workspace\","
+                + "\"entry\":\"/app/" + applicationCode + "/index.html\","
+                + "\"apiBase\":\"/api/" + applicationCode + "\","
+                + "\"targetOrigin\":\"http://example.com\",\"menus\":[{\"code\":\"workspace\","
                 + "\"name\":\"工作台\",\"route\":\"workspace\",\"sortOrder\":1}]},\"initialClient\":"
                 + createClientJson(clientId, "https://example.com/callback") + "}";
     }

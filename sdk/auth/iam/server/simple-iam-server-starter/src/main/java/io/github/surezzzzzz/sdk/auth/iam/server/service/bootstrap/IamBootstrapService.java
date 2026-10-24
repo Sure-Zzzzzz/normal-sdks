@@ -6,10 +6,7 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocumen
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.codec.IamApplicationAuthorizationJsonCodec;
 import io.github.surezzzzzz.sdk.auth.iam.server.configuration.SimpleIamServerProperties;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalMenuNodeType;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.PortalPresentationMode;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.ServerErrorMessage;
-import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
+import io.github.surezzzzzz.sdk.auth.iam.server.constant.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.DataResourceDeclaration;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.manifest.request.PutApplicationPermissionManifestRequest;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.portal.request.PortalMenuTreeNodeRequest;
@@ -22,6 +19,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.entity.portal.IamTrustedApplicat
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.portal.IamTrustedApplicationPortalEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.trustedapplication.IamTrustedApplicationEntity;
 import io.github.surezzzzzz.sdk.auth.iam.server.entity.user.IamUserEntity;
+import io.github.surezzzzzz.sdk.auth.iam.server.exception.IamOpenRoleException;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.authorization.*;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.department.IamDepartmentRepository;
 import io.github.surezzzzzz.sdk.auth.iam.server.repository.manifest.IamApplicationPermissionManifestRepository;
@@ -35,6 +33,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.service.authorization.IamRoleSer
 import io.github.surezzzzzz.sdk.auth.iam.server.service.manifest.IamApplicationPermissionManifestService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalApplicationOrderService;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.portal.IamPortalMenuTreeService;
+import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.IamTrustedApplicationMutationGuard;
 import io.github.surezzzzzz.sdk.auth.iam.server.service.user.IamUserService;
 import io.github.surezzzzzz.sdk.auth.iam.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.auth.iam.server.validator.PasswordPolicyValidator;
@@ -80,6 +79,7 @@ public class IamBootstrapService implements ApplicationRunner {
     private final IamAuthorizationProjectionService projectionService;
     private final IamApplicationAuthorizationStateService authorizationStateService;
     private final IamUserService userService;
+    private final IamTrustedApplicationMutationGuard mutationGuard;
     private final IamRoleService roleService;
     private final PasswordPolicyValidator passwordPolicyValidator;
     private final SimpleRedisLock redisLock;
@@ -87,6 +87,7 @@ public class IamBootstrapService implements ApplicationRunner {
     private final TransactionTemplate transactionTemplate;
     private final IamDeploymentPasswordRecoveryService deploymentPasswordRecoveryService;
     private final IamOpenRoleManifestUpgradeService openRoleManifestUpgradeService;
+    private final IamBootstrapProjectionReconciliationService bootstrapProjectionReconciliationService;
 
     private static BuiltInPermission[] builtInPermissions() {
         return new BuiltInPermission[]{
@@ -107,6 +108,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_API, "IAM 仪表盘统计接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_PORTAL_API, "IAM 门户准入查询接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_APPLICATION_API, "IAM 可信应用目录查询接口", "api"),
+                new BuiltInPermission(IamPortalMachineDirectoryConstant.API_PERMISSION, "IAM Portal 可信应用路由投影接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_SESSION_API, "IAM 会话管理接口", "api"),
                 new BuiltInPermission(SimpleIamServerConstant.BUILT_IN_PERMISSION_DATA_ALL, "IAM 全量数据范围", "data")
         };
@@ -117,37 +119,93 @@ public class IamBootstrapService implements ApplicationRunner {
      */
     @Override
     public void run(ApplicationArguments args) {
-        if (!Boolean.TRUE.equals(properties.getBootstrap().getEnabled())) {
-            return;
-        }
         String lockKey = redisKeyHelper.buildLockKey(SimpleIamServerConstant.LOCK_KEY_BOOTSTRAP);
         Optional<RedisLockLease> lease = redisLock.tryLockWithLease(lockKey,
                 SimpleIamServerConstant.BOOTSTRAP_LOCK_LEASE_SECONDS, TimeUnit.SECONDS);
         if (!lease.isPresent()) {
             log.info(ServerErrorMessage.BOOTSTRAP_LOCK_UNAVAILABLE);
-            openRoleManifestUpgradeService.upgrade();
             return;
         }
+        RedisLockLease bootstrapLease = lease.get();
         try {
-            transactionTemplate.executeWithoutResult(status -> {
-                ensureAdminRole();
-                ensureBuiltInPermissions();
-                bindAdminRolePermissions();
-                ensureRootDepartment();
-                ensureBuiltInApplications();
-                ensureBuiltInApplicationManifests();
-                upgradeIamDashboardPermissionIfNeeded(false);
-                ensureBuiltInApplicationMenus();
-                ensureAdminRoleAuthorizationRules();
-                upgradeIamDashboardPermissionIfNeeded(true);
-                String bootstrapInitialPassword = ensureAdminUser();
-                ensureAdminApplicationAuthorizations();
-                deploymentPasswordRecoveryService.recoverBootstrapAdministratorIfRequested(bootstrapInitialPassword);
-                openRoleManifestUpgradeService.upgrade();
-            });
+            requireBootstrapLease(bootstrapLease);
+            boolean fullBootstrapEnabled = Boolean.TRUE.equals(properties.getBootstrap().getEnabled());
+            if (fullBootstrapEnabled) {
+                transactionTemplate.executeWithoutResult(status -> {
+                    ensureAdminRole();
+                    ensureBuiltInPermissions();
+                    bindAdminRolePermissions();
+                    ensureRootDepartment();
+                    ensureBuiltInApplications();
+                    String bootstrapInitialPassword = ensureAdminUser();
+                    deploymentPasswordRecoveryService
+                            .recoverBootstrapAdministratorIfRequested(bootstrapInitialPassword);
+                });
+            }
+
+            requireBootstrapLease(bootstrapLease);
+            IamTrustedApplicationEntity iamApp = trustedApplicationRepository
+                    .findByApplicationCode(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM).orElse(null);
+            if (iamApp != null && (authorizationStateService.isRecomputePending(iamApp.getId())
+                    || requiresBootstrapReconciliation(iamApp.getId(), fullBootstrapEnabled))) {
+                IamApplicationAuthorizationStateService.RecomputeToken token =
+                        authorizationStateService.beginRecompute(iamApp.getId());
+                requireBootstrapLease(bootstrapLease);
+                transactionTemplate.executeWithoutResult(status -> {
+                    if (fullBootstrapEnabled) {
+                        ensureBuiltInApplicationManifests(token);
+                        upgradeIamDashboardPermissionIfNeeded(false, token);
+                        ensureAdminRoleAuthorizationRules(token);
+                        upgradeIamDashboardPermissionIfNeeded(true, token);
+                        // 菜单引用的页面权限必须在清单和角色规则完成后再写入。
+                        ensureBuiltInApplicationMenus();
+                        openRoleManifestUpgradeService.upgradeForBootstrap(token);
+                    } else {
+                        upgradeExistingIamPortalManifest(token);
+                    }
+                });
+                bootstrapProjectionReconciliationService.reconcile(iamApp.getId(), token,
+                        () -> bootstrapLease.renew(SimpleIamServerConstant.BOOTSTRAP_LOCK_LEASE_SECONDS,
+                                TimeUnit.SECONDS));
+                requireBootstrapLease(bootstrapLease);
+                authorizationStateService.finishRecompute(iamApp.getId(), token);
+            }
+
+            requireBootstrapLease(bootstrapLease);
+            if (fullBootstrapEnabled) {
+                transactionTemplate.executeWithoutResult(status -> ensureAdminApplicationAuthorizations());
+            }
         } finally {
-            lease.get().close();
+            bootstrapLease.close();
         }
+    }
+
+    private void requireBootstrapLease(RedisLockLease bootstrapLease) {
+        if (!bootstrapLease.renew(SimpleIamServerConstant.BOOTSTRAP_LOCK_LEASE_SECONDS, TimeUnit.SECONDS)) {
+            log.warn("IAM 启动引导租约续期失败，本实例停止后续写入与授权投影对账");
+            throw new IamOpenRoleException(ErrorCode.APPLICATION_AUTHORIZATION_CONFLICT);
+        }
+    }
+
+    /**
+     * 引导关闭时仍补齐已存在 IAM 应用清单的新声明，不创建管理员、应用或其他引导数据。
+     */
+    private void upgradeExistingIamPortalManifest(
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
+        IamTrustedApplicationEntity iamApp = trustedApplicationRepository
+                .findByApplicationCode(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM).orElse(null);
+        if (iamApp == null) {
+            return;
+        }
+        IamApplicationPermissionManifestEntity manifest = manifestRepository
+                .findByApplicationId(iamApp.getId()).orElse(null);
+        if (manifest == null || manifest.getManifestVersion() <= 0L) {
+            return;
+        }
+        ensurePortalMachineDirectoryPermission();
+        ensureAdminRolePortalPermissionBinding();
+        upgradePortalMachineDirectoryManifest(iamApp.getId(), manifest, token);
+        upgradeIamAdminPortalAuthorizationRule(iamApp.getId(), token);
     }
 
     /**
@@ -251,7 +309,7 @@ public class IamBootstrapService implements ApplicationRunner {
             portal.setEnabled(1);
             portal.setRoutePrefix(config.getRoutePrefix() != null && !config.getRoutePrefix().trim().isEmpty()
                     ? config.getRoutePrefix().trim()
-                    : "/micro/" + config.getApplicationCode());
+                    : "/app/" + config.getApplicationCode());
             portal.setEntry(entry);
             portal.setApiBase(config.getApiBase());
             portal.setUpdatedAt(Instant.now());
@@ -322,8 +380,15 @@ public class IamBootstrapService implements ApplicationRunner {
         for (int index = 0; index < expected.size(); index++) {
             IamTrustedApplicationMenuEntity menu = current.get(index);
             LegacyMenu legacy = expected.get(index);
+            String expectedPagePermission = "dashboard".equals(legacy.code)
+                    ? SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE : null;
+            boolean dashboardPermissionAccepted = "dashboard".equals(legacy.code)
+                    && (menu.getRequiredPagePermission() == null
+                    || expectedPagePermission.equals(menu.getRequiredPagePermission()));
             if (menu.getParentId() != null || menu.getNodeType() != PortalMenuNodeType.PAGE || menu.getIcon() != null
-                    || menu.getRequiredPagePermission() != null || !Integer.valueOf(index).equals(menu.getSortOrder())
+                    || (!dashboardPermissionAccepted
+                    && !Objects.equals(expectedPagePermission, menu.getRequiredPagePermission()))
+                    || !Integer.valueOf(index).equals(menu.getSortOrder())
                     || !legacy.code.equals(menu.getCode()) || !legacy.name.equals(menu.getName())
                     || !legacy.route.equals(menu.getRoute())) {
                 return false;
@@ -399,6 +464,8 @@ public class IamBootstrapService implements ApplicationRunner {
                     adminUserId, application.getId()).isPresent()) {
                 continue;
             }
+            mutationGuard.requireMutable(application.getId());
+            authorizationStateService.requireNoActiveRecompute(application.getId());
             boolean manifestDeclared = manifestRepository
                     .findByApplicationId(application.getId()).isPresent();
             if (manifestDeclared) {
@@ -516,7 +583,8 @@ public class IamBootstrapService implements ApplicationRunner {
      * 为内置可信应用创建权限清单（幂等）。
      * IAM 应用清单包含当前所有内置权限码。
      */
-    private void ensureBuiltInApplicationManifests() {
+    private void ensureBuiltInApplicationManifests(
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
         IamTrustedApplicationEntity iamApp = trustedApplicationRepository
                 .findByApplicationCode("iam").orElse(null);
         if (iamApp == null) {
@@ -524,16 +592,11 @@ public class IamBootstrapService implements ApplicationRunner {
         }
 
         // 检查是否已存在清单
-        IamApplicationPermissionManifestEntity existingManifest = null;
-        try {
-            existingManifest = manifestService.requireManifest(iamApp.getId());
-        } catch (Exception e) {
-            // 清单不存在，需要创建
-        }
+        IamApplicationPermissionManifestEntity existingManifest = manifestRepository
+                .findByApplicationId(iamApp.getId()).orElse(null);
 
         if (existingManifest != null && existingManifest.getManifestVersion() > 0L) {
-            log.info("IAM 应用权限清单已存在，跳过引导：manifestVersion={}",
-                    existingManifest.getManifestVersion());
+            upgradePortalMachineDirectoryManifest(iamApp.getId(), existingManifest, token);
             return;
         }
 
@@ -557,19 +620,65 @@ public class IamBootstrapService implements ApplicationRunner {
         request.setRoles(manifestRoles);
         request.setPagePermissions(pagePermissions);
         request.setApiPermissions(apiPermissions);
-        request.setDataResources(Collections.singletonList(iamUserDataResourceDeclaration()));
+        request.setDataResources(iamDataResourceDeclarations());
 
-        manifestService.putManifest(iamApp.getId(), request);
+        manifestService.putManifestForBootstrap(iamApp.getId(), request, token);
         log.info("IAM 应用权限清单引导创建成功：roles={}, pages={}, apis={}, dataResources={}",
                 request.getRoles().size(), pagePermissions.size(), apiPermissions.size(),
                 request.getDataResources().size());
     }
 
     /**
+     * 1.3.8 为存量 IAM 应用清单幂等补齐 Portal 可信应用路由投影的 API 与 DATA 声明，
+     * 不覆盖调用方已配置的其他权限。
+     */
+    private void upgradePortalMachineDirectoryManifest(Long applicationId,
+                                                       IamApplicationPermissionManifestEntity existingManifest,
+                                                       IamApplicationAuthorizationStateService.RecomputeToken token) {
+        List<String> roles = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readStringList(existingManifest.getRolesJson(), "roles"));
+        List<String> pages = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readStringList(existingManifest.getPagePermissionsJson(), "pagePermissions"));
+        List<String> apis = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readStringList(existingManifest.getApiPermissionsJson(), "apiPermissions"));
+        List<DataResourceDeclaration> resources = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readDataResourceList(existingManifest.getDataResourcesJson()));
+        boolean changed = false;
+        if (!apis.contains(IamPortalMachineDirectoryConstant.API_PERMISSION)) {
+            apis.add(IamPortalMachineDirectoryConstant.API_PERMISSION);
+            changed = true;
+        }
+        List<DataResourceDeclaration> portalResources = resources.stream()
+                .filter(item -> IamPortalMachineDirectoryConstant.DATA_RESOURCE.equals(item.getResource()))
+                .collect(Collectors.toList());
+        DataResourceDeclaration expectedPortalResource = iamPortalMachineApplicationDataResourceDeclaration();
+        if (portalResources.isEmpty()) {
+            resources.add(expectedPortalResource);
+            changed = true;
+        } else if (portalResources.size() != 1 || !sameDataResourceDeclaration(
+                portalResources.get(0), expectedPortalResource)) {
+            throw new IamOpenRoleException(ErrorCode.OPEN_ROLE_CONFLICT);
+        }
+        if (!changed) {
+            log.info("IAM 应用权限清单已包含 Portal 可信应用路由投影：manifestVersion={}",
+                    existingManifest.getManifestVersion());
+            return;
+        }
+        PutApplicationPermissionManifestRequest request = new PutApplicationPermissionManifestRequest();
+        request.setRoles(roles);
+        request.setPagePermissions(pages);
+        request.setApiPermissions(apis);
+        request.setDataResources(resources);
+        manifestService.putManifestForBootstrap(applicationId, request, token);
+        log.info("IAM 应用权限清单已补齐 Portal 可信应用路由投影：applicationId={}", applicationId);
+    }
+
+    /**
      * 为内置 iam_admin 角色创建应用授权规则（幂等）。
      * 管理员角色拥有 IAM 应用的全部权限。
      */
-    private void ensureAdminRoleAuthorizationRules() {
+    private void ensureAdminRoleAuthorizationRules(
+            IamApplicationAuthorizationStateService.RecomputeToken token) {
         IamRoleEntity adminRole = roleService.getByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN);
         IamTrustedApplicationEntity iamApp = trustedApplicationRepository
                 .findByApplicationCode("iam").orElse(null);
@@ -577,8 +686,10 @@ public class IamBootstrapService implements ApplicationRunner {
             return;
         }
 
-        if (roleAuthorizationRuleRepository.findByRoleIdAndApplicationId(
-                adminRole.getId(), iamApp.getId()).isPresent()) {
+        IamRoleAuthorizationRuleEntity existingRule = roleAuthorizationRuleRepository.findByRoleIdAndApplicationId(
+                adminRole.getId(), iamApp.getId()).orElse(null);
+        if (existingRule != null) {
+            upgradeIamAdminPortalAuthorizationRule(iamApp.getId(), token);
             return;
         }
 
@@ -599,13 +710,228 @@ public class IamBootstrapService implements ApplicationRunner {
         rule.setApplicationId(iamApp.getId());
         rule.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(pagePermissions));
         rule.setApiPermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(apiPermissions));
-        rule.setDataGrantTemplateJson(iamUserDataGrantAllTemplateJson());
+        rule.setDataGrantTemplateJson(iamDataGrantAllTemplateJson());
         rule.setCreatedAt(Instant.now());
         rule.setUpdatedAt(Instant.now());
+        authorizationStateService.requireActiveRecomputeToken(iamApp.getId(), token);
         roleAuthorizationRuleRepository.save(rule);
 
         log.info("iam_admin 角色授权规则引导创建成功：pages={}, apis={}, dataGrantTemplate=all",
                 pagePermissions.size(), apiPermissions.size());
+    }
+
+    /**
+     * 为存量 iam_admin 规则增量补齐 Portal 路由投影的 API 与 DATA 授权，只增不减。
+     */
+    private void upgradeIamAdminPortalAuthorizationRule(
+            Long applicationId, IamApplicationAuthorizationStateService.RecomputeToken token) {
+        IamRoleEntity adminRole = roleRepository.findByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN).orElse(null);
+        if (adminRole == null) {
+            return;
+        }
+        IamRoleAuthorizationRuleEntity rule = roleAuthorizationRuleRepository
+                .findByRoleIdAndApplicationId(adminRole.getId(), applicationId).orElse(null);
+        if (rule == null) {
+            return;
+        }
+        List<String> apiPermissions = new ArrayList<>(IamApplicationAuthorizationJsonCodec
+                .readStringList(rule.getApiPermissionsJson(), "apiPermissions"));
+        DataGrantDocument document = IamApplicationAuthorizationJsonCodec
+                .readDataGrantDocument(rule.getDataGrantTemplateJson());
+        List<DataGrant> grants = document == null ? new ArrayList<>() : new ArrayList<>(document.getGrants());
+        boolean changed = false;
+        if (!apiPermissions.contains(IamPortalMachineDirectoryConstant.API_PERMISSION)) {
+            apiPermissions.add(IamPortalMachineDirectoryConstant.API_PERMISSION);
+            changed = true;
+        }
+        DataGrant portalGrant = grants.stream()
+                .filter(item -> IamPortalMachineDirectoryConstant.DATA_RESOURCE.equals(item.getResource()))
+                .findFirst().orElse(null);
+        if (portalGrant == null) {
+            grants.add(new DataGrant(IamPortalMachineDirectoryConstant.DATA_RESOURCE,
+                    Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true,
+                    Collections.emptyList()));
+            changed = true;
+        } else if (!portalGrant.isAll()
+                || !portalGrant.getActions().contains(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ)) {
+            grants.remove(portalGrant);
+            grants.add(new DataGrant(IamPortalMachineDirectoryConstant.DATA_RESOURCE,
+                    Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true,
+                    Collections.emptyList()));
+            changed = true;
+        }
+        if (!changed) {
+            return;
+        }
+        rule.setApiPermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(apiPermissions));
+        rule.setDataGrantTemplateJson(IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(
+                new DataGrantDocument(SimpleDataPermissionConstant.PROTOCOL,
+                        SimpleDataPermissionConstant.VERSION, grants)));
+        rule.setUpdatedAt(Instant.now());
+        authorizationStateService.requireActiveRecomputeToken(applicationId, token);
+        roleAuthorizationRuleRepository.save(rule);
+        log.info("iam_admin 角色规则已补齐 Portal 路由投影授权：applicationId={}, api={}, dataResource={}",
+                applicationId, IamPortalMachineDirectoryConstant.API_PERMISSION,
+                IamPortalMachineDirectoryConstant.DATA_RESOURCE);
+    }
+
+    /**
+     * 存量应用已存在时补齐新增内置权限，不触发 bootstrap 的其他创建行为。
+     */
+    private void ensurePortalMachineDirectoryPermission() {
+        if (permissionRepository.existsByCode(IamPortalMachineDirectoryConstant.API_PERMISSION)) {
+            return;
+        }
+        IamPermissionEntity permission = new IamPermissionEntity();
+        permission.setCode(IamPortalMachineDirectoryConstant.API_PERMISSION);
+        permission.setName("IAM Portal 可信应用路由投影接口");
+        permission.setType("api");
+        permission.setBuiltIn(1);
+        permission.setCreatedAt(Instant.now());
+        permission.setUpdatedAt(Instant.now());
+        permissionRepository.save(permission);
+        log.info("内置权限创建成功：{}", IamPortalMachineDirectoryConstant.API_PERMISSION);
+    }
+
+    /**
+     * 引导关闭时只补齐本版本新增的管理员权限绑定，不重新执行完整引导。
+     */
+    private void ensureAdminRolePortalPermissionBinding() {
+        IamRoleEntity adminRole = roleRepository.findByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN)
+                .orElse(null);
+        IamPermissionEntity permission = permissionRepository
+                .findByCode(IamPortalMachineDirectoryConstant.API_PERMISSION).orElse(null);
+        if (adminRole == null || permission == null) {
+            return;
+        }
+        boolean bound = rolePermissionRepository.findByRoleId(adminRole.getId()).stream()
+                .anyMatch(item -> permission.getId().equals(item.getPermissionId()));
+        if (bound) {
+            return;
+        }
+        IamRolePermissionEntity binding = new IamRolePermissionEntity();
+        binding.setRoleId(adminRole.getId());
+        binding.setPermissionId(permission.getId());
+        binding.setCreatedAt(Instant.now());
+        rolePermissionRepository.save(binding);
+        log.info("iam_admin 角色已补齐 Portal 路由投影权限绑定：roleId={}, permission={}",
+                adminRole.getId(), IamPortalMachineDirectoryConstant.API_PERMISSION);
+    }
+
+    private boolean requiresBootstrapReconciliation(Long applicationId, boolean includeOpenRole) {
+        if (includeOpenRole && requiresBuiltInApplicationMenuBootstrap()) {
+            return true;
+        }
+        if (includeOpenRole && isManagedDefaultIamMenu(applicationId)
+                && trustedApplicationMenuRepository.findByApplicationIdOrderBySortOrderAsc(applicationId).stream()
+                .anyMatch(menu -> "dashboard".equals(menu.getCode())
+                        && menu.getNodeType() == PortalMenuNodeType.PAGE
+                        && menu.getRequiredPagePermission() == null)) {
+            return true;
+        }
+        IamApplicationPermissionManifestEntity manifest = manifestRepository
+                .findByApplicationId(applicationId).orElse(null);
+        if (manifest == null) {
+            return includeOpenRole;
+        }
+        List<String> requiredPages = new ArrayList<>();
+        List<String> requiredApis = new ArrayList<>();
+        if (includeOpenRole) {
+            for (BuiltInPermission permission : builtInPermissions()) {
+                if ("page".equals(permission.type)) {
+                    requiredPages.add(permission.code);
+                } else if ("api".equals(permission.type)) {
+                    requiredApis.add(permission.code);
+                }
+            }
+        } else {
+            requiredApis.add(IamPortalMachineDirectoryConstant.API_PERMISSION);
+        }
+        if (!IamApplicationAuthorizationJsonCodec.readStringList(manifest.getPagePermissionsJson(), "pagePermissions")
+                .containsAll(requiredPages)
+                || !IamApplicationAuthorizationJsonCodec.readStringList(manifest.getApiPermissionsJson(), "apiPermissions")
+                .containsAll(requiredApis)) {
+            return true;
+        }
+        if (includeOpenRole) {
+            requiredApis.addAll(IamOpenRoleManifestUpgradeService.apiCodes());
+        }
+        List<DataResourceDeclaration> requiredResources = includeOpenRole
+                ? iamDataResourceDeclarations()
+                : new ArrayList<>(Collections.singletonList(iamPortalMachineApplicationDataResourceDeclaration()));
+        if (includeOpenRole) {
+            requiredResources.addAll(IamOpenRoleManifestUpgradeService.declarations());
+        }
+        List<DataResourceDeclaration> manifestResources = IamApplicationAuthorizationJsonCodec
+                .readDataResourceList(manifest.getDataResourcesJson());
+        for (DataResourceDeclaration required : requiredResources) {
+            List<DataResourceDeclaration> matching = manifestResources.stream()
+                    .filter(item -> required.getResource().equals(item.getResource()))
+                    .collect(Collectors.toList());
+            if (matching.size() != 1 || !sameDataResourceDeclaration(matching.get(0), required)) {
+                return true;
+            }
+        }
+        if (!IamApplicationAuthorizationJsonCodec.readStringList(manifest.getApiPermissionsJson(), "apiPermissions")
+                .containsAll(requiredApis)) {
+            return true;
+        }
+
+        IamRoleEntity adminRole = roleRepository.findByCode(SimpleIamServerConstant.BUILT_IN_ROLE_IAM_ADMIN)
+                .orElse(null);
+        if (adminRole == null) {
+            return false;
+        }
+        IamRoleAuthorizationRuleEntity rule = roleAuthorizationRuleRepository
+                .findByRoleIdAndApplicationId(adminRole.getId(), applicationId).orElse(null);
+        if (rule == null) {
+            return false;
+        }
+        if (!IamApplicationAuthorizationJsonCodec.readStringList(rule.getPagePermissionsJson(), "pagePermissions")
+                .containsAll(requiredPages)
+                || !IamApplicationAuthorizationJsonCodec.readStringList(rule.getApiPermissionsJson(), "apiPermissions")
+                .containsAll(requiredApis)) {
+            return true;
+        }
+        DataGrantDocument grantDocument = IamApplicationAuthorizationJsonCodec
+                .readDataGrantDocument(rule.getDataGrantTemplateJson());
+        List<DataGrant> grants = grantDocument == null ? Collections.emptyList() : grantDocument.getGrants();
+        for (DataResourceDeclaration required : requiredResources) {
+            boolean covered = grants.stream().anyMatch(grant -> required.getResource().equals(grant.getResource())
+                    && grant.isAll() && grant.getActions().containsAll(required.getActions()));
+            if (!covered) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean requiresBuiltInApplicationMenuBootstrap() {
+        for (SimpleIamServerProperties.BootstrapConfig.BuiltInApplicationConfig config
+                : properties.getBootstrap().getBuiltInApplications()) {
+            String entry = config.getEntry() == null ? "" : config.getEntry().trim();
+            if (entry.isEmpty()) {
+                continue;
+            }
+            IamTrustedApplicationEntity application = trustedApplicationRepository
+                    .findByApplicationCode(config.getApplicationCode()).orElse(null);
+            if (application != null && trustedApplicationMenuRepository
+                    .findByApplicationIdOrderBySortOrderAsc(application.getId()).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean sameDataResourceDeclaration(DataResourceDeclaration actual,
+                                                DataResourceDeclaration expected) {
+        return Objects.equals(actual.getResource(), expected.getResource())
+                && new HashSet<>(safeList(actual.getActions())).equals(new HashSet<>(expected.getActions()))
+                && new HashSet<>(safeList(actual.getDimensions())).equals(new HashSet<>(expected.getDimensions()));
+    }
+
+    private List<String> safeList(List<String> values) {
+        return values == null ? Collections.emptyList() : values;
     }
 
     /**
@@ -623,6 +949,22 @@ public class IamBootstrapService implements ApplicationRunner {
     }
 
     /**
+     * Portal 可信应用路由投影 DATA 资源声明：按应用 ID 或编码受限，亦支持 all=true。
+     */
+    private DataResourceDeclaration iamPortalMachineApplicationDataResourceDeclaration() {
+        DataResourceDeclaration declaration = new DataResourceDeclaration();
+        declaration.setResource(IamPortalMachineDirectoryConstant.DATA_RESOURCE);
+        declaration.setActions(Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ));
+        declaration.setDimensions(Arrays.asList("applicationId", "applicationCode"));
+        return declaration;
+    }
+
+    private List<DataResourceDeclaration> iamDataResourceDeclarations() {
+        return new ArrayList<>(Arrays.asList(iamUserDataResourceDeclaration(),
+                iamPortalMachineApplicationDataResourceDeclaration()));
+    }
+
+    /**
      * 存量实例补齐仪表盘页面权限门禁（1.3.0 前仪表盘菜单节点无权限要求，
      * 任何持有 IAM 应用准入授权的用户都能看到该节点并被门户当作落地页，
      * 进入管理台后却是无权限空壳页）。
@@ -631,7 +973,8 @@ public class IamBootstrapService implements ApplicationRunner {
      * 保证任何时刻不存在引用未声明权限的菜单。只做增量补齐，
      * 不覆盖管理员对其他权限/菜单的裁剪。
      */
-    private void upgradeIamDashboardPermissionIfNeeded(boolean updateMenu) {
+    private void upgradeIamDashboardPermissionIfNeeded(boolean updateMenu,
+                                                       IamApplicationAuthorizationStateService.RecomputeToken token) {
         IamTrustedApplicationEntity iamApp = trustedApplicationRepository
                 .findByApplicationCode(SimpleIamServerConstant.BUILT_IN_APPLICATION_IAM).orElse(null);
         if (iamApp == null) {
@@ -659,7 +1002,7 @@ public class IamBootstrapService implements ApplicationRunner {
                     .readStringList(manifest.getApiPermissionsJson(), "apiPermissions")));
             request.setDataResources(new ArrayList<>(IamApplicationAuthorizationJsonCodec
                     .readDataResourceList(manifest.getDataResourcesJson())));
-            manifestService.putManifest(iamApp.getId(), request);
+            manifestService.putManifestForBootstrap(iamApp.getId(), request, token);
             manifestUpgraded = true;
             log.info("IAM 应用清单已补齐仪表盘页面权限：applicationId={}", iamApp.getId());
         }
@@ -675,6 +1018,7 @@ public class IamBootstrapService implements ApplicationRunner {
                 rulePages.add(SimpleIamServerConstant.BUILT_IN_PERMISSION_DASHBOARD_PAGE);
                 adminRule.setPagePermissionsJson(IamApplicationAuthorizationJsonCodec.writeStringList(rulePages));
                 adminRule.setUpdatedAt(Instant.now());
+                authorizationStateService.requireActiveRecomputeToken(iamApp.getId(), token);
                 roleAuthorizationRuleRepository.save(adminRule);
                 ruleUpgraded = true;
                 log.info("iam_admin 角色规则已补齐仪表盘页面权限：roleId={}, applicationId={}",
@@ -697,8 +1041,8 @@ public class IamBootstrapService implements ApplicationRunner {
         }
 
         if (manifestUpgraded || ruleUpgraded || menuUpgraded) {
-            // 规则内容变化必须走投影重算，否则存量 iam_admin 持有者的授权行不会出现新权限
-            projectionService.onRoleAuthorizationRuleChanged(adminRole.getId(), iamApp.getId());
+            log.info("IAM 启动授权 source 升级完成：applicationId={}, manifestUpdated={}, ruleUpdated={}, menuUpdated={}",
+                    iamApp.getId(), manifestUpgraded, ruleUpgraded, menuUpgraded);
         }
     }
 
@@ -765,17 +1109,18 @@ public class IamBootstrapService implements ApplicationRunner {
     /**
      * iam_admin 角色的 DATA 模板：iam:user 全量放行（all=true，与该角色全权限哲学一致）。
      */
-    private String iamUserDataGrantAllTemplateJson() {
+    private String iamDataGrantAllTemplateJson() {
         return IamApplicationAuthorizationJsonCodec.writeDataGrantDocument(new DataGrantDocument(
                 SimpleDataPermissionConstant.PROTOCOL,
                 SimpleDataPermissionConstant.VERSION,
-                Collections.singletonList(new DataGrant(
-                        SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
-                        Arrays.asList(
-                                SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ,
-                                SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE),
-                        true,
-                        Collections.emptyList()))));
+                Arrays.asList(
+                        new DataGrant(SimpleIamServerConstant.DATA_RESOURCE_IAM_USER,
+                                Arrays.asList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ,
+                                        SimpleIamServerConstant.DATA_RESOURCE_ACTION_WRITE), true,
+                                Collections.emptyList()),
+                        new DataGrant(IamPortalMachineDirectoryConstant.DATA_RESOURCE,
+                                Collections.singletonList(SimpleIamServerConstant.DATA_RESOURCE_ACTION_READ), true,
+                                Collections.emptyList()))));
     }
 
     /**

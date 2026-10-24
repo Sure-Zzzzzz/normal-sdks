@@ -124,9 +124,9 @@ public class IamExceptionHandler {
     /**
      * 开放 API DATA 消费失败关闭出口（评估失败 / 范围不足 / 计划不可执行）
      */
-    @ExceptionHandler(io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException.class)
+    @ExceptionHandler(io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleDataPermissionDenied(
-            io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException e) {
+            io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException e) {
         log.warn("DATA 访问拒绝（失败关闭）：{}", e.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorBody(ServerErrorMessage.PERMISSION_DENIED));
     }

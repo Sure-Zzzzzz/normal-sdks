@@ -4,12 +4,25 @@
 
 ## 版本对应关系
 
-### 1.3.7 服务端契约增量
+### 1.3.8 服务端契约增量
 
-`simple-iam-open-api.openapi.yaml` 的 `info.version` 为 `1.3.7`（login/admin 两件维持 1.3.6）。增量两件：
+`simple-iam-open-api.openapi.yaml` 与 `simple-iam-login-web.openapi.yaml` 的 `info.version` 为 `1.3.8`；
+Admin 与统一 Portal Web 契约沿用各自兼容版本。本轮新增 Portal 可信应用路由投影接口，并在 Login
+契约中加入默认启用且必须确认的服务条款/隐私政策，正文由 IAM 数据库中的版本化文档提供：
 
-- `GET /iam/api/users/{subjectId}/page-admitted-application-details`：与裸数组同判定同口径，携带 displayName/description（与门户侧边栏同源）；同码 `iam:portal:api`、无 DATA。feedback 提交下拉消费。
-- `GET /iam/api/applications`（分页）：可信应用目录三字段（applicationCode/applicationName/status，createdAt 倒序）；`iam:application:api` + DATA `iam:application` read all（全局目录无部门归属）。limiter 目录 adaptor 消费。
+- `GET /iam/api/portal/applications`：已验证的 AKP `SERVICE` 主体按应用准入、API + DATA 三权读取启用 Portal 的可信应用路由投影；`HUMAN` 主体即使有同名权限也拒绝；
+  使用 `catalogRevision` 保证分页快照一致性，目录变化返回 409，旧 AKP 不会因升级自动获得新权限。
+  最小授权为 `iam:portal-application:read:api` 与 `iam:portal-application` 的 `read` 范围。
+- 响应不包含 client secret、Token、Cookie 值、用户信息或数据库主键；Gateway 只能在所有分页
+  revision 一致且地址校验通过后生成路由快照。
+- Server 1.3.8 依赖 `simple-data-permission-core` 提供 DATA 契约；Spring MVC 注解解析和强制
+  执行由部署宿主显式装配 `simple-data-permission-spring-mvc-starter`，不由 Server starter 传递。
+- Login `GET /iam/web/auth/requirements` 返回 `mode/required/revision/documents`。登录要求默认启用，
+  密码、短信和外部登录必须回传当前修订号及本次确认的文档版本；文档正文来自
+  `iam_login_requirement_document`，用户同意表只引用版本 ID。`documents` 必须包含
+  `terms-of-service` 与 `privacy-policy` 两条必选记录。只有显式关闭配置才返回 `DISABLED`；
+  启用但文档缺失或读取失败不返回成功响应，客户端不得将错误降级为关闭；当前 Server 的配置异常由统一异常出口返回 400，未预期读取异常返回 500。
+  登录、手机号挑战、手机号登录和忘记密码等匿名浏览器端点仍须先获取 CSRF Token 并提交 CSRF 请求头。
 
 ### 1.3.7 服务端契约增量
 
@@ -18,7 +31,7 @@
 - **页面准入详情**：`GET /iam/api/users/{subjectId}/page-admitted-application-details`（与裸数组同判定同口径，displayName 与门户侧边栏同源；同码 `iam:portal:api`、无 DATA）。feedback 提交下拉消费。
 - **可信应用目录**：`GET /iam/api/applications`（分页三字段；`iam:application:api` + DATA `iam:application` read all——全局目录无部门归属）。limiter 目录 adaptor 消费。
 - **六族补全**：messages（发/查/批次）、sessions（列/踢）、permissions、role-catalog（普通角色只读目录，与受委托角色族 /iam/api/roles 区隔）、statistics、user-groups（CRUD+成员）——各持既有码族，纯码控无 DATA 面（对齐管理台同族判断）。
-- client 契约镜像：`simple-iam-client-core:1.0.3` 十接口 48 方法（openapi 全覆盖，四传输件 1.0.2）。
+- client 契约镜像：`simple-iam-client-core:1.0.4`（含 Portal 路由投影契约），四个传输 starter 使用 `1.0.3`；以各模块 README 与已发布坐标为准。
 
 ### 1.3.6 服务端契约增量
 
@@ -74,7 +87,7 @@
 | `openapi/simple-iam-admin-web.openapi.yaml` | `simple-iam-admin-web` 调用的 `/iam/admin/**` 管理 API 契约；1.3.2 包含受委托角色摘要与共同条件写 |
 | `openapi/simple-iam-owner-authorization.openapi.yaml` | 仅受控协作服务以固定内部 reader SERVICE 调用的所属人授权投影读取契约；不向浏览器、Portal 或普通 OAuth Client 暴露 |
 | `openapi/simple-iam-resource-token-verification.openapi.yaml` | `simple-iam-resource-server-starter` 调用的受控 IAM Access Token 验证 API 契约 |
-| `openapi/simple-iam-open-api.openapi.yaml` | 外部业务系统持 AKSK 凭证调用的开放 API 契约（`/iam/api/**`），含组织与人员同步、1.3.2 服务主体受委托角色治理和只读事实、1.3.5 页面准入查询与 users 投影 `subjectId`；含 AKSK 侧接入准备 |
+| `openapi/simple-iam-open-api.openapi.yaml` | 外部业务系统持 AKSK 凭证调用的开放 API 契约（`/iam/api/**`），含组织与人员同步、1.3.2 服务主体受委托角色治理和只读事实、1.3.5 页面准入查询与 users 投影 `subjectId`、1.3.8 Portal 可信应用路由投影 |
 
 ## 约束
 

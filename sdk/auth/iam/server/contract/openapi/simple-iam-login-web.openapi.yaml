@@ -1,11 +1,31 @@
 openapi: 3.0.3
 info:
   title: Simple IAM Login API
-  version: 1.3.6
+  version: 1.3.8
   description: Login 与其他 Web 前端共用的浏览器会话、品牌与 OAuth2 Consent 辅助接口。
 servers:
   - url: /
 paths:
+  /iam/web/auth/requirements:
+    get:
+      summary: 获取当前登录要求
+      description: |
+        返回服务条款、隐私政策等登录前必须确认的文档版本。登录要求默认启用；明确关闭配置时返回 DISABLED。
+        启用但文档缺失或服务异常时不返回成功响应，客户端必须安全停止登录，不得按关闭处理。
+        REQUIRED 响应必须包含 terms-of-service 与 privacy-policy 两条必选文档；文档正文来自 IAM 数据库的版本记录，
+        没有数据库记录时才兼容读取部署配置。
+      operationId: getLoginRequirements
+      security: []
+      responses:
+        '200':
+          description: 当前登录要求
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginRequirementsResponse' }
+        '400':
+          description: 登录要求配置无效（例如文档缺失、版本不一致）；客户端必须进入 ERROR 并停止登录，不得按 DISABLED 处理
+        '500':
+          description: 登录要求读取发生未预期错误；客户端必须进入 ERROR 并停止登录，不得按 DISABLED 处理
   /iam/web/auth/providers:
     description: 1.3.0 起 type 枚举新增 phone（手机号验证码表单型,条目携带 supportedRegions 区号列表）;未装配短信投递时不返回 phone 条目。
 
@@ -34,7 +54,7 @@ paths:
     post:
       summary: 凭证类登录（本地密码或外部凭证校验型登录方式）
       description: |
-        provider 缺省为 local-password（本地账号密码）。
+        provider 缺省为 local-password（本地账号密码）。端点允许匿名浏览器会话访问，但必须先取得 CSRF Token 并提交 CSRF header。
         provider 为外部凭证校验型登录方式（如 ldap-password）时，凭证交由对应适配器
         到外部身份源校验，成功后按账号关联机制映射到本地用户并建立 IAM 会话。
 
@@ -66,14 +86,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400':
+          description: 未确认当前登录要求或提交的登录要求版本已过期
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
   /iam/web/auth/phone-challenges:
     post:
       summary: 创建手机号验证码挑战（登录/忘记密码）
       description: |-
-        匿名+三维频控；未知号统一受理（201）不投递（防枚举），已登记号真实投递。
+        匿名+三维频控；调用方仍须先获取 CSRF Token 并提交 CSRF header。未知号统一受理（201）不投递（防枚举），已登记号真实投递。
         未装配短信投递实现时 404（能力未开放）。
       operationId: createPhoneChallenge
-      security: []
+      security:
+        - csrfToken: []
       requestBody:
         required: true
         content:
@@ -99,8 +125,10 @@ paths:
   /iam/web/auth/phone-login:
     post:
       summary: 手机号验证码登录（会话语义与密码登录一致）
+      description: 匿名登录端点；调用方须先获取 CSRF Token 并提交 CSRF header。REQUIRED 登录要求下还必须提交当前要求修订号和全部必选文档版本。
       operationId: loginWithPhone
-      security: []
+      security:
+        - csrfToken: []
       requestBody:
         required: true
         content:
@@ -112,19 +140,22 @@ paths:
                 challengeId: { type: string, format: uuid }
                 code: { type: string }
                 phone: { type: string, description: 须与挑战创建号一致（消费时按号哈希原子校验） }
+                requirementsRevision: { type: string, nullable: true, description: /iam/web/auth/requirements 返回的要求修订号 }
+                acceptedDocumentVersionIds: { type: array, nullable: true, items: { type: integer, format: int64 }, description: 用户已确认的文档版本 ID }
       responses:
         '200':
           description: 登录成功
           content:
             application/json:
               schema: { $ref: '#/components/schemas/LoginResponse' }
-        '400': { description: 验证码错误或已失效、账号不可用或手机号格式非法 }
+        '400': { description: 验证码错误或已失效、账号不可用、手机号格式非法或未确认当前登录要求 }
   /iam/web/auth/password-reset:
     post:
       summary: 忘记密码重置（手机验证一步完成，不建会话）
-      description: 成功即吊销该用户全部会话；仅已验证手机号可重置，未验证登记号统一拒绝并引导联系管理员。
+      description: 成功即吊销该用户全部会话；仅已验证手机号可重置，未验证登记号统一拒绝并引导联系管理员。匿名端点仍须先获取 CSRF Token 并提交 CSRF header。
       operationId: resetPasswordByPhone
-      security: []
+      security:
+        - csrfToken: []
       requestBody:
         required: true
         content:
@@ -177,8 +208,22 @@ paths:
         - name: redirect
           in: query
           required: false
-          description: 登录完成后的站内回跳目标（以 / 开头且非 // 开头，防开放重定向）
+           description: 登录完成后的站内回跳目标（必须以 / 开头、不得以 // 开头、不得包含反斜杠或控制字符，且解析后仍属于当前站点，防开放重定向）
           schema: { type: string }
+        - name: requirementsRevision
+          in: query
+          required: false
+          description: /iam/web/auth/requirements 返回的要求修订号
+          schema: { type: string }
+        - name: acceptedDocumentVersionIds
+          in: query
+          required: false
+          description: 用户已确认的文档版本 ID，可重复传参
+          schema:
+            type: array
+            items: { type: integer, format: int64 }
+            style: form
+            explode: true
       responses:
         '200':
           description: OK
@@ -378,6 +423,29 @@ components:
         password: { type: string, format: password }
         captchaId: { type: string, description: 人机验证挑战 id（要求验证码时必填，取自 /iam/web/auth/captcha 返回） }
         captchaAnswer: { type: string, description: 人机验证答案（要求验证码时必填） }
+        requirementsRevision: { type: string, nullable: true, description: /iam/web/auth/requirements 返回的要求修订号 }
+        acceptedDocumentVersionIds: { type: array, nullable: true, items: { type: integer, format: int64 }, description: 用户已确认的文档版本 ID }
+    LoginRequirementsResponse:
+      type: object
+      description: mode=REQUIRED 时 required=true、revision 非空且 documents 必须包含两条必选法律文档；mode=DISABLED 时 required=false、revision 为 null 且 documents 为空。配置或读取异常不返回该成功响应。
+      required: [mode, required, documents]
+      properties:
+        mode: { type: string, enum: [DISABLED, REQUIRED], description: 登录前置状态；REQUIRED 固定包含 terms-of-service 与 privacy-policy；服务异常不返回成功响应 }
+        required: { type: boolean, description: 是否要求登录前确认文档 }
+        revision: { type: string, nullable: true, description: 当前登录要求集合修订号 }
+        documents:
+          type: array
+          items: { $ref: '#/components/schemas/LoginRequirementDocument' }
+    LoginRequirementDocument:
+      type: object
+      required: [versionId, code, title, required]
+      properties:
+        versionId: { type: integer, format: int64, minimum: 1, description: 文档稳定版本 ID }
+        code: { type: string, enum: [terms-of-service, privacy-policy], description: 文档类型编码 }
+        title: { type: string, description: 登录页展示标题 }
+        content: { type: string, nullable: true, description: 文档正文；数据库文档通常提供正文，配置回退也可只提供 url；正式内容由部署方维护，联调占位文本不得用于生产 }
+        url: { type: string, format: uri-reference, nullable: true, description: 可选的文档地址 }
+        required: { type: boolean, enum: [true], description: 服务条款和隐私政策必须确认 }
     ChangePasswordRequest:
       type: object
       required: [oldPassword, newPassword]

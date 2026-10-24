@@ -2,10 +2,10 @@ package io.github.surezzzzzz.sdk.auth.iam.server.support;
 
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataAccessOutcome;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.constant.DataConstraintOperator;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataConstraint;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import lombok.extern.slf4j.Slf4j;
 

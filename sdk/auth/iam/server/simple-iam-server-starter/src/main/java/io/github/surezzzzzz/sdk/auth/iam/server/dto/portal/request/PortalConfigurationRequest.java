@@ -16,6 +16,7 @@ public class PortalConfigurationRequest {
     private Boolean enabled;
     private String entry;
     private String apiBase;
+    private String targetOrigin;
     private List<PortalMenuTreeNodeRequest> menuTree;
     private PortalDefaultEntryRequest defaultEntry;
     private Long configVersion;

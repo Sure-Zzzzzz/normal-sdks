@@ -1,10 +1,10 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.annotation.RequireApiPermission;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.annotation.CurrentDataAccessPlan;
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.support.DataAccessPlanRestrictionVerifier;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.support.DataAccessPlanRestrictionVerifier;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
 import io.github.surezzzzzz.sdk.auth.iam.server.dto.user.request.CreateUserRequest;

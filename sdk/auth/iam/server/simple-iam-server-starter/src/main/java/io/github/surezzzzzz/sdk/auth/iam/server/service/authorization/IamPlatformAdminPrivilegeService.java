@@ -21,6 +21,7 @@ import io.github.surezzzzzz.sdk.auth.iam.server.repository.user.IamUserRepositor
 import io.github.surezzzzzz.sdk.auth.iam.server.service.trustedapplication.TrustedApplicationBuiltInResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.*;
@@ -69,6 +70,13 @@ public class IamPlatformAdminPrivilegeService {
         if (userId == null) {
             return false;
         }
+        boolean hasSubjectId = userRepository.findById(userId)
+                .map(user -> StringUtils.hasText(user.getSubjectId()))
+                .orElse(false);
+        if (!hasSubjectId) {
+            log.debug("平台管理员角色解析跳过：用户不存在或缺少有效 subjectId，userId={}", userId);
+            return false;
+        }
         Set<Long> roleIds = effectiveRoleResolver.resolveRoleIds(userId);
         if (roleIds.isEmpty()) {
             return false;
@@ -87,11 +95,12 @@ public class IamPlatformAdminPrivilegeService {
      */
     private String resolveSubjectId(Long userId) {
         String subjectId = userRepository.findById(userId)
-                .map(user -> user.getSubjectId() != null ? user.getSubjectId() : null)
+                .map(user -> user.getSubjectId())
+                .filter(StringUtils::hasText)
                 .orElse(null);
-        if (subjectId == null) {
+        if (!StringUtils.hasText(subjectId)) {
             throw new SimpleIamServerException(ErrorCode.CONFIG_VALIDATION_FAILED,
-                    "平台管理员主体缺失 subject_id，拒绝兜底上下文");
+                    "平台管理员主体缺失有效 subject_id，拒绝兜底上下文");
         }
         return subjectId;
     }

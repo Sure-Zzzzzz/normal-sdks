@@ -1,6 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.iam.server.controller.rest;
 
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException;
 import io.github.surezzzzzz.sdk.auth.iam.server.annotation.SimpleIamServerComponent;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.iam.server.constant.SimpleIamServerConstant;
