@@ -18,7 +18,7 @@ CREATE TABLE `feedback_submission` (
     `contact_email` VARCHAR(254) DEFAULT NULL COMMENT '联系邮箱（选填，自由输入不关联账号）',
     `submitter_subject_id` VARCHAR(128) NOT NULL COMMENT '提交人subjectId快照（不作鉴权依据）',
     `submitter_display_name` VARCHAR(64) DEFAULT NULL COMMENT '提交人显示名快照（可空，展示回退subjectId）',
-    `owner` VARCHAR(160) NOT NULL COMMENT '归属owner（iam:{subjectId}，只从认证上下文派生）',
+    `owner` VARCHAR(160) NOT NULL COMMENT '归属owner（人员=iam:{subjectId}，服务主体=aksk:{clientId}，只从认证上下文派生）',
     `context_path` VARCHAR(500) DEFAULT NULL COMMENT '发起页面路径（深链预填，可改可清）',
     `environment` VARCHAR(2000) DEFAULT NULL COMMENT '环境快照JSON原文（键白名单ua/viewport/theme/locale）',
     `status` VARCHAR(16) NOT NULL COMMENT '状态：submitted-已提交，resolved-已解决，dismissed-不予处理',

@@ -1,12 +1,13 @@
 openapi: 3.0.3
 info:
   title: Simple Feedback Server API
-  version: 1.0.0
+  version: 1.0.1
   description: |
-    通用产品反馈服务公开契约（人员通道，Bearer PKCE 人员令牌）。
-    认证：全部端点要求 `Authorization: Bearer <人员令牌>`；受保护路径 /api/feedback/**。
+    通用产品反馈服务公开契约（人员与服务主体通道）。
+    认证：全部端点要求 `Authorization: Bearer <已验证令牌>`；人员令牌由 PKCE 获取，机器令牌由 AKSK 获取；
+    服务端按主体类型归一 owner（iam:/aksk:），并继续执行 API 与 DATA 三权；受保护路径 /api/feedback/**。
     时间：ISO-8601 带 offset；枚举：稳定 code（submitted/resolved/dismissed、bug/feature/experience/other、proactive/intercepted）。
-    错误体：`{"message","timestamp","correlationId"}`，状态码即语义（401/403 由资源层，400 校验，404 安全不存在，409 状态与幂等冲突，413/415 附件，429 频控，503 依赖故障）。
+    Feedback 领域、请求解析及控制器身份拒绝错误体：`{"message","timestamp","correlationId"}`，响应头 `X-Correlation-Id` 与错误体中的 correlationId 一致。状态码即语义（401 未认证或人员身份无效，403 已认证但主体类型不允许或无权，400 请求解析或校验，404 资源不存在，409 状态与幂等冲突，413/415 附件或请求媒体类型，429 频控，503 依赖故障）；未知错误码或未预期内部故障返回安全消息和 500。
 servers:
   - url: '{apiBase}'
     variables:
@@ -14,10 +15,14 @@ servers:
         default: /api/feedback
 paths:
   /submissions:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     post:
       summary: 提交反馈（multipart）
-      description: '必需头：Idempotency-Key（表单会话级；失败重试复用同键，成功才轮换）。摘要覆盖主体字段+contextPath+附件元数据清单；并发同键由唯一键收敛为重放或 409。首成功响应快照随行持久化，重放返回与首成功完全一致。'
+      description: 'Idempotency-Key 按表单会话生成；失败重试复用同键，成功才轮换。摘要覆盖主体字段+contextPath+附件元数据清单；并发同键由唯一键收敛为重放或 409。首成功响应快照随行持久化，重放返回与首成功完全一致。'
       security: [{ bearerAuth: [] }]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
       requestBody:
         required: true
         content:
@@ -27,51 +32,62 @@ paths:
               required: [submission]
               properties:
                 submission:
-                  type: object
-                  required: [applicationCode, kind, type, score, content]
-                  properties:
-                    applicationCode: { type: string, example: vuln-scanner }
-                    kind: { type: string, enum: [proactive, intercepted] }
-                    type: { type: string, enum: [bug, feature, experience, other] }
-                    score: { type: integer, minimum: 1, maximum: 10 }
-                    content: { type: string, maxLength: 2000 }
-                    contactEmail: { type: string, maxLength: 254, nullable: true }
-                    contextPath: { type: string, maxLength: 500, nullable: true }
-                    environment: { type: string, nullable: true, description: 'JSON 原文；键白名单 ua/viewport/theme/locale，多余键服务端丢弃' }
+                  $ref: '#/components/schemas/SubmissionCreateRequest'
                 attachments:
                   type: array
-                  maxItems: 3
-                  description: 'jpg/png/webp；单件与总量上限、开关均取服务端运行配置'
+                  description: '默认接收 jpg/png/webp、最多 3 件；单件与总量上限、数量、媒体类型和开关均取服务端运行配置'
                   items: { type: string, format: binary }
+            encoding:
+              submission:
+                contentType: application/json
       responses:
-        '201': { description: 创建成功（重放同键返回同一 id 与首成功快照；Location 指向 /submissions/{id}） }
-        '400': { description: 校验失败/目标应用未登记或停用/附件未开放 }
-        '413': { description: 附件大小或请求体超限 }
-        '415': { description: 附件媒体类型不支持 }
-        '429': { description: 提交频控（同 owner 双档计数窗） }
+        '201': {$ref: '#/components/responses/SubmissionCreated'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '413': {$ref: '#/components/responses/PayloadTooLarge'}
+        '415': {$ref: '#/components/responses/UnsupportedMediaType'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
     get:
       summary: 管理列表（筛选+分页）
-      description: DATA application 范围进 SQL；受限空集返回空列表而非 403；page.maxSize 生效（超限截断）。
+      description: DATA application 范围进 SQL；受限空集返回空列表而非 403；page.maxSize 生效（超限截断）。keyword 命中反馈内容、提交人展示名或 subjectId，去首尾空白，超过 64 字符截断，LIKE 通配符按字面匹配。
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: application, schema: { type: string } }
-        - { in: query, name: status, schema: { type: string, enum: [submitted, resolved, dismissed] } }
-        - { in: query, name: type, schema: { type: string, enum: [bug, feature, experience, other] } }
-        - { in: query, name: kind, schema: { type: string, enum: [proactive, intercepted] } }
-        - { in: query, name: score, schema: { type: integer } }
-        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: status, schema: { type: string, enum: [submitted, resolved, dismissed] }, description: 稳定 code；服务端按值过滤，未知值不抛解析错误，通常返回空集 }
+        - { in: query, name: type, schema: { type: string, enum: [bug, feature, experience, other] }, description: 稳定 code；服务端按值过滤，未知值不抛解析错误，通常返回空集 }
+        - { in: query, name: kind, schema: { type: string, enum: [proactive, intercepted] }, description: 稳定 code；服务端按值过滤，未知值不抛解析错误，通常返回空集 }
+        - { in: query, name: score, schema: { type: integer }, description: 精确分数过滤；未命中返回空集 }
+        - { in: query, name: keyword, schema: { type: string }, description: 可选关键词；空白视为不筛选 }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 }, description: 页码与页大小计算的偏移超出整数范围时返回 400 }
         - { in: query, name: size, schema: { type: integer, default: 20 } }
       responses:
-        '200': { description: 分页结果（固定排序 createdTime DESC） }
+        '200': {$ref: '#/components/responses/AdminSubmissionPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /submissions/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 管理详情（DATA 范围外=安全 404）
       security: [{ bearerAuth: [] }]
       parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
       responses:
-        '200': { description: 管理形态（含处理留痕与提交人快照） }
-        '404': { description: 不存在或范围外 }
+        '200': {$ref: '#/components/responses/AdminSubmission'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /submissions/{id}/handling:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     put:
       summary: 处理反馈（状态迁移+覆盖式留痕）
       description: '行版本 CAS：expectedRowVersion 不匹配=409。合法迁移：submitted→resolved/dismissed、resolved/dismissed→submitted（重开）；终态间直迁与自迁移 409。reply 非空时记录答复人与时间。DATA 范围条件进 UPDATE。'
@@ -81,19 +97,19 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [targetStatus, expectedRowVersion]
-              properties:
-                targetStatus: { type: string, enum: [submitted, resolved, dismissed] }
-                handlerNote: { type: string, maxLength: 1000, nullable: true, description: 内部备注（整体覆盖，提交人不可见） }
-                reply: { type: string, maxLength: 1000, nullable: true, description: 给提交人的答复 }
-                expectedRowVersion: { type: integer }
+            schema: {$ref: '#/components/schemas/SubmissionHandlingRequest'}
       responses:
-        '200': { description: 处理后详情（行版本+1） }
-        '404': { description: 不存在或范围外 }
-        '409': { description: 版本冲突或非法迁移 }
+        '200': {$ref: '#/components/responses/AdminSubmission'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /submissions/{id}/attachments/{attachmentId}:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 管理附件下载（服务端代理流）
       security: [{ bearerAuth: [] }]
@@ -101,26 +117,47 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
         - { in: path, name: attachmentId, required: true, schema: { type: string } }
       responses:
-        '200': { description: 附件流（Content-Disposition 原名） }
-        '404': { description: 主体或附件不存在/范围外 }
-  /my-submissions:
+        '200': {$ref: '#/components/responses/Attachment'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /me/submissions:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 我的反馈列表（owner 等值，无 DATA 投影）
+      description: keyword 仅在本人反馈内容内匹配，去首尾空白，超过 64 字符截断，LIKE 通配符按字面匹配。
       security: [{ bearerAuth: [] }]
       parameters:
-        - { in: query, name: page, schema: { type: integer, default: 1 } }
+        - { in: query, name: keyword, schema: { type: string }, description: 可选关键词；空白视为不筛选 }
+        - { in: query, name: page, schema: { type: integer, minimum: 1, default: 1 }, description: 页码与页大小计算的偏移超出整数范围时返回 400 }
         - { in: query, name: size, schema: { type: integer, default: 20 } }
       responses:
-        '200': { description: 分页（mine 形态：不含处理人与内部备注） }
-  /my-submissions/{id}:
+        '200': {$ref: '#/components/responses/MineSubmissionPage'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /me/submissions/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 我的反馈详情（含 reply；非本人=404）
       security: [{ bearerAuth: [] }]
       parameters: [{ in: path, name: id, required: true, schema: { type: string } }]
       responses:
-        '200': { description: mine 形态详情 }
-        '404': { description: 不存在或非本人 }
-  /my-submissions/{id}/attachments/{attachmentId}:
+        '200': {$ref: '#/components/responses/MineSubmission'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
+  /me/submissions/{id}/attachments/{attachmentId}:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 我的附件下载（owner 等值）
       security: [{ bearerAuth: [] }]
@@ -128,87 +165,370 @@ paths:
         - { in: path, name: id, required: true, schema: { type: string } }
         - { in: path, name: attachmentId, required: true, schema: { type: string } }
       responses:
-        '200': { description: 附件流 }
-        '404': { description: 不存在或非本人 }
+        '200': {$ref: '#/components/responses/Attachment'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /submission-hints:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 提交提示（交集后应用详情清单+邮箱预填）
       description: 便利性过滤非安全边界；交集为空/取数点降级均回退注册表启用项全量。
-        应用展示名来源（修正㉓）：聚形态命中路径取 IAM 页面准入详情（与门户侧边栏同源），
+        应用展示名来源：聚形态命中路径取 IAM 页面准入详情（与门户侧边栏同源），
         降级/回退路径取注册表展示名；编码为唯一稳定锚。
       security: [{ bearerAuth: [] }]
       responses:
-        '200':
-          description: 提示
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  applications:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        applicationCode: { type: string }
-                        displayName: { type: string, nullable: true }
-                        description: { type: string, nullable: true }
-                  contactEmail: { type: string, nullable: true }
+        '200': {$ref: '#/components/responses/SubmissionHints'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /selectable-applications:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
       summary: 可选应用列表（启用中注册项全量）
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: '精简列表：applicationCode/displayName/description' }
+        '200': {$ref: '#/components/responses/SelectableApplications'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /applications:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     get:
-      summary: 注册表列表（管理；DATA 进 SQL；修正㉔行级 source 数据来源）
+      summary: 注册表列表（管理；DATA 进 SQL；返回行级 source 数据来源）
       security: [{ bearerAuth: [] }]
       responses:
-        '200': { description: '全量（受限范围外不出现）；行含 source：IAM=与 IAM 可信应用同编码（展示名 IAM 承担）/MANUAL=本表登记/UNKNOWN=目录不可核对（散形态或出站失败，全字段可编辑）' }
+        '200': {$ref: '#/components/responses/ApplicationList'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
     post:
-      summary: 登记应用（受限范围外目标编码=403；唯一键天然幂等；编码命中 IAM 目录时展示名自动抄录 IAM 官方名=修正㉔）
+      summary: 登记应用（受限范围外目标编码=403；重复编码返回409且不创建；编码命中 IAM 目录时展示名自动抄录 IAM 官方名）
       security: [{ bearerAuth: [] }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [applicationCode, displayName]
-              properties:
-                applicationCode: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$', description: 创建后不可变 }
-                displayName: { type: string, maxLength: 64 }
-                description: { type: string, maxLength: 200, nullable: true }
-                enabled: { type: boolean, default: true }
-                ownerGroup: { type: string, maxLength: 64, nullable: true }
+            schema: {$ref: '#/components/schemas/ApplicationCreateRequest'}
       responses:
-        '201': { description: '创建成功（同源行 displayName 为抄录后的 IAM 官方名）' }
-        '403': { description: 无 DATA 授权或目标编码在受限范围外 }
-        '409': { description: 编码已登记 }
+        '201': {$ref: '#/components/responses/ApplicationCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
   /applications/{applicationCode}:
+    parameters:
+      - {$ref: '#/components/parameters/CorrelationId'}
     put:
-      summary: 更新注册项（行版本 CAS；编码不可变；同源行展示名锁定=修正㉔）
+      summary: 更新注册项（行版本 CAS；编码不可变；IAM 同源行展示名锁定）
       security: [{ bearerAuth: [] }]
       parameters: [{ in: path, name: applicationCode, required: true, schema: { type: string } }]
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              type: object
-              required: [expectedRowVersion]
-              properties:
-                displayName: { type: string, maxLength: 64 }
-                description: { type: string, maxLength: 200, nullable: true }
-                enabled: { type: boolean }
-                ownerGroup: { type: string, maxLength: 64, nullable: true }
-                expectedRowVersion: { type: integer }
-                syncFromIam: { type: boolean, description: '显式从 IAM 目录重同步展示名（仅同源行生效；目录不可核对时忽略）' }
+            schema: {$ref: '#/components/schemas/ApplicationUpdateRequest'}
       responses:
-        '200': { description: 更新后注册项 }
-        '404': { description: 不存在或范围外 }
-        '409': { description: '版本冲突；或 SOURCE_001（同源行展示名改写被拒，同步请传 syncFromIam=true）' }
+        '200': {$ref: '#/components/responses/Application'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '500': {$ref: '#/components/responses/InternalServerError'}
+        '503': {$ref: '#/components/responses/ServiceUnavailable'}
 components:
+  parameters:
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Za-z0-9._-]+$'}
+      description: 请求关联标识；省略或不符合安全字符集时服务端生成。
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 1, maxLength: 64}
+      description: 表单会话幂等键；不可仅含空白字符，失败重试复用同键。
+  headers:
+    CorrelationId:
+      description: 服务端生成或回显的请求关联标识。
+      schema: {type: string, minLength: 1, maxLength: 64}
+    Location:
+      description: 创建后资源定位 URI；当前服务返回相对 URI，应用注册表资源目前只提供 PUT 更新操作。
+      schema: {type: string, format: uri-reference}
+    ContentDisposition:
+      description: 下载文件的处置方式与服务端附件 ID 文件名。
+      schema: {type: string}
+  responses:
+    BadRequest:
+      description: 请求解析、字段校验、资源受理或分页参数失败。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    Unauthorized:
+      description: 未认证或认证主体无效。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    Forbidden:
+      description: 已认证但主体类型或 API/DATA 权限不允许。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    NotFound:
+      description: 资源不存在或对当前主体不可见。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    Conflict:
+      description: 并发版本、状态迁移、幂等摘要或唯一键冲突。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    PayloadTooLarge:
+      description: 附件或 multipart 请求体超过运行配置上限。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    UnsupportedMediaType:
+      description: 请求媒体类型或附件媒体类型不受支持。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    TooManyRequests:
+      description: 提交频控拒绝。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    ServiceUnavailable:
+      description: 身份、数据库、对象存储或其他外部依赖暂不可用。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    InternalServerError:
+      description: 未知内部故障；响应只返回安全消息和请求关联标识。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}
+    SubmissionCreated:
+      description: 创建成功；同一 owner 与幂等键重放首成功响应快照。Location 指向当前 API 根路径下的 `/me/submissions/{id}`，提交人可读。
+      headers:
+        Location: {$ref: '#/components/headers/Location'}
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionResponse'}}
+    AdminSubmission:
+      description: 管理形态反馈详情或处理后的详情。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionResponse'}}
+    AdminSubmissionPage:
+      description: 管理反馈分页结果；items 按 createdTime DESC、id DESC 稳定排序。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionPage'}}
+    MineSubmission:
+      description: 本人形态反馈详情。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionResponse'}}
+    MineSubmissionPage:
+      description: 本人反馈分页结果。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionPage'}}
+    Attachment:
+      description: 服务端代理的附件流；实际 Content-Type 取服务端运行时白名单，默认为 jpeg/png/webp，运行配置允许扩展媒体类型。
+      headers:
+        Content-Disposition: {$ref: '#/components/headers/ContentDisposition'}
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/octet-stream: {schema: {type: string, format: binary}}
+        image/jpeg: {schema: {type: string, format: binary}}
+        image/png: {schema: {type: string, format: binary}}
+        image/webp: {schema: {type: string, format: binary}}
+        '*/*': {schema: {type: string, format: binary}}
+    SubmissionHints:
+      description: 提交人便利性提示。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/SubmissionHint'}}
+    SelectableApplications:
+      description: 启用中的注册应用精简列表。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json:
+          schema: {type: array, items: {$ref: '#/components/schemas/SelectableApplication'}}
+    ApplicationList:
+      description: DATA 范围内的注册应用列表。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json:
+          schema: {type: array, items: {$ref: '#/components/schemas/ApplicationResponse'}}
+    ApplicationCreated:
+      description: 创建成功；应用编码命中 IAM 目录时展示名由 IAM 官方目录提供，否则使用请求中的展示名。Location 指向当前 API 根路径下的 `/applications/{applicationCode}` 资源 URI；该资源当前仅提供 PUT 更新操作，不提供 GET 点查。
+      headers:
+        Location: {$ref: '#/components/headers/Location'}
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ApplicationResponse'}}
+    Application:
+      description: 注册应用详情。
+      headers:
+        X-Correlation-Id: {$ref: '#/components/headers/CorrelationId'}
+      content:
+        application/json: {schema: {$ref: '#/components/schemas/ApplicationResponse'}}
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [message, timestamp, correlationId]
+      properties:
+        message: {type: string}
+        timestamp: {type: string, format: date-time}
+        correlationId: {type: string, minLength: 1, maxLength: 64}
+    SubmissionCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [applicationCode, kind, type, score, content]
+      properties:
+        applicationCode: {type: string, minLength: 2, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$'}
+        kind: {type: string, enum: [proactive, intercepted]}
+        type: {type: string, enum: [bug, feature, experience, other]}
+        score: {type: integer, minimum: 1, maximum: 10}
+        content: {type: string, minLength: 1, maxLength: 2000}
+        contactEmail: {type: string, format: email, maxLength: 254, nullable: true, description: 自由输入的联系邮箱；不关联账号}
+        contextPath: {type: string, maxLength: 500, nullable: true}
+        environment: {type: string, maxLength: 2000, nullable: true, description: JSON 原文；服务端仅保留 ua/viewport/theme/locale}
+    SubmissionHandlingRequest:
+      type: object
+      additionalProperties: false
+      required: [targetStatus, expectedRowVersion]
+      properties:
+        targetStatus: {type: string, enum: [submitted, resolved, dismissed]}
+        handlerNote: {type: string, maxLength: 1000, nullable: true}
+        reply: {type: string, maxLength: 1000, nullable: true}
+        expectedRowVersion: {type: integer, minimum: 0}
+    ApplicationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [applicationCode, displayName]
+      properties:
+        applicationCode: {type: string, minLength: 2, maxLength: 64, pattern: '^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$', description: 创建后不可变}
+        displayName: {type: string, minLength: 1, maxLength: 64}
+        description: {type: string, maxLength: 200, nullable: true}
+        enabled: {type: boolean, default: true}
+        ownerGroup: {type: string, minLength: 1, maxLength: 64, nullable: true}
+    ApplicationUpdateRequest:
+      type: object
+      description: '部分更新：expectedRowVersion 必填。displayName 省略或为 null 时保留当前值；enabled 省略时保留当前值；description 与 ownerGroup 按请求值覆盖，省略或传 null 均清空。IAM 同源行的展示名仍需 syncFromIam=true 才会重同步。'
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties:
+        displayName: {type: string, minLength: 1, maxLength: 64, nullable: true, description: 省略或 null 保留当前展示名；同源行非空改名会被拒绝}
+        description: {type: string, maxLength: 200, nullable: true, description: 按请求值覆盖；省略或 null 清空}
+        enabled: {type: boolean, description: 省略时保留当前受理状态}
+        ownerGroup: {type: string, minLength: 1, maxLength: 64, nullable: true, description: 按请求值覆盖；省略或 null 清空}
+        expectedRowVersion: {type: integer, minimum: 0}
+        syncFromIam: {type: boolean, description: 同源行显式重同步展示名}
+    AttachmentMeta:
+      type: object
+      additionalProperties: false
+      required: [id, originalFilename, contentType, sizeBytes]
+      properties:
+        id: {type: string}
+        originalFilename: {type: string}
+        contentType: {type: string}
+        sizeBytes: {type: integer, format: int64, minimum: 0}
+    SubmissionResponse:
+      type: object
+      additionalProperties: false
+      required: [id, applicationCode, kind, type, score, content, status, rowVersion, attachments, createdTime]
+      properties:
+        id: {type: string}
+        applicationCode: {type: string}
+        kind: {type: string, enum: [proactive, intercepted]}
+        type: {type: string, enum: [bug, feature, experience, other]}
+        score: {type: integer, minimum: 1, maximum: 10}
+        content: {type: string}
+        contactEmail: {type: string, nullable: true}
+        submitterDisplayName: {type: string, nullable: true}
+        submitterSubjectId: {type: string, nullable: true, description: 仅管理形态返回}
+        contextPath: {type: string, nullable: true}
+        status: {type: string, enum: [submitted, resolved, dismissed]}
+        handlerNote: {type: string, nullable: true, description: 仅管理形态返回}
+        reply: {type: string, nullable: true}
+        repliedAt: {type: string, format: date-time, nullable: true}
+        handledAt: {type: string, format: date-time, nullable: true}
+        rowVersion: {type: integer, minimum: 0}
+        attachments: {type: array, items: {$ref: '#/components/schemas/AttachmentMeta'}}
+        createdTime: {type: string, format: date-time}
+    SubmissionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total, page, size]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/SubmissionResponse'}}
+        total: {type: integer, format: int64, minimum: 0}
+        page: {type: integer, minimum: 1}
+        size: {type: integer, minimum: 1}
+    ApplicationResponse:
+      type: object
+      additionalProperties: false
+      required: [applicationCode, displayName, enabled, rowVersion, createdTime, updatedTime]
+      properties:
+        applicationCode: {type: string}
+        displayName: {type: string}
+        description: {type: string, nullable: true}
+        enabled: {type: boolean}
+        ownerGroup: {type: string, nullable: true}
+        rowVersion: {type: integer, minimum: 0}
+        createdTime: {type: string, format: date-time}
+        updatedTime: {type: string, format: date-time}
+        source: {type: string, enum: [IAM, MANUAL, UNKNOWN], nullable: true}
+    SelectableApplication:
+      type: object
+      additionalProperties: false
+      required: [applicationCode]
+      properties:
+        applicationCode: {type: string}
+        displayName: {type: string, nullable: true}
+        description: {type: string, nullable: true}
+    SubmissionHint:
+      type: object
+      additionalProperties: false
+      required: [applications, contactEmail]
+      properties:
+        applications: {type: array, items: {$ref: '#/components/schemas/SelectableApplication'}}
+        contactEmail: {type: string, nullable: true}
   securitySchemes:
-    bearerAuth: { type: http, scheme: bearer }
+    bearerAuth: {type: http, scheme: bearer}

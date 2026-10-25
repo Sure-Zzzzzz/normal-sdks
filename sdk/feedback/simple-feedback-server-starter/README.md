@@ -16,9 +16,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    // 协作三件（公共 Resource + IAM Provider；不引=散形态，需自备 FeedbackPrincipalResolver）
+    // 协作认证层（人员 + 服务主体）：Provider 不传递，宿主按需显式组合
     implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
     implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
     // 数据面 MVC 装配件：注解/模型类型已随 starter 的 api 链传递（宿主代码可直接用
     // @RequireApiPermission/@DataPermissionOperation 编译）；本行仅为运行期强制与计划注入
     implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
@@ -38,6 +39,12 @@ io.github.surezzzzzz.sdk:
       verification-endpoint: http://<iam>/iam/resource/tokens/verify
       client-id: <资源验证客户端>
       client-secret: <环境注入>
+    aksk.resource.server:
+      enabled: true
+      introspect:
+        endpoint: http://<aksk>/oauth2/introspect
+        client-id: <内省客户端>
+        client-secret: <环境注入>
     resource.server.security:
       protected-paths: [ /api/feedback/** ]
   oss.s3:
@@ -57,12 +64,15 @@ io.github.surezzzzzz.sdk:
 | 依赖 | 引入方式 | 在场/缺席 |
 |---|---|---|
 | MySQL 路由 | 随 starter 发布 | 缺=拒启（唯一事实源） |
-| 公共 Resource+IAM Provider | 宿主自引 | 聚=认证链必须保护反馈路径，缺失/关闭/路径错配/链顺序错误会拒启；散=自备 `FeedbackPrincipalResolver`，双缺席拒启 |
+| 公共 Resource + IAM Provider | 宿主自引 | 人员通道的认证链必须保护反馈路径，缺失/关闭/路径错配/链顺序错误会拒启；仅人员宿主可省略 AKSK Provider |
+| AKSK Provider | 宿主自引 `simple-aksk-resource-server-starter` | 服务主体通道必需；需配置已认证 introspection（内省）客户端，缺失或关闭时该通道返回 401；不随本 starter 传递 |
 | 数据面 MVC 装配件 | 宿主自引 `simple-data-permission-spring-mvc-starter` | 引=DATA 注解强制与计划注入生效；不引=无数据面遮蔽（注解只编译不强制） |
 | S3 附件 | 随 starter 发布 | 依赖在场且 `enabled=false` 时降级；依赖在场但未部署 S3 时必须显式关闭，提交不带附件仍可用 |
-| IAM hint adaptor | 宿主可选引入 `simple-feedback-iam-adaptor-starter` | 引=hint 完整（下拉 IAM 同源名+邮箱预填+提交人展示名快照）+注册表来源核对（IAM/本表徽标+同源锁）；不引=降级（全量+空邮箱+来源未知全可编辑） |
+| IAM hint adaptor | 宿主可选引入 `simple-feedback-iam-adaptor-starter:1.0.0` | 引=hint 完整（下拉 IAM 同源名+邮箱预填+提交人展示名快照）+注册表来源核对（IAM/本表徽标+同源锁）；不引=降级（全量+空邮箱+来源未知全可编辑） |
 
 宿主不提供 S3 且不接收附件时，必须显式设置 `io.github.surezzzzzz.sdk.oss.s3.enabled: false`；仅不启动 S3 服务不会关闭 classpath 上的自动配置。
+
+上面的最小接入同时覆盖人员令牌与 AKSK 服务主体。仅接受人员令牌时可以不引入 AKSK Provider，并删除对应配置；要接受服务主体，公共 Resource、IAM Provider、AKSK Provider 三件必须同时在场，且 API/DATA 三权仍由反馈端点执行。散形态宿主不引公共 Resource 组合时，需自备 `FeedbackPrincipalResolver`，不能依赖未验证的请求字段推导 owner。
 
 ## 宿主形态参考
 

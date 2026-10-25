@@ -49,7 +49,7 @@
 
 ## SQL 边界声明
 
-- 关键词搜索为 `LIKE '%…%'` 前缀通配，走不了 B-tree 索引，当前为受控全扫：管理台量级（万行内）无压力；若单表增长至十万行级且搜索成为高频操作，再开号引入 FULLTEXT（中文需 ngram parser）索引方案，本期不预铺。
+- 关键词搜索为 `LIKE '%…%'` 包含匹配（前后通配），当前不使用 B-tree 索引，属于受控全扫；本版本未执行大数据量性能基准。后续如需优化，再单独评估 FULLTEXT（中文需 ngram parser）索引方案。
 - 频控双计数窗由 `idx_owner_created(owner, created_time)` 覆盖索引承载（索引内范围扫）；管理列表排序 `created_time DESC` 在无筛选时为 filesort，管理台分页量级可接受，不加写放大索引。
 
 ## 新增测试
@@ -62,6 +62,7 @@
 ## 机器主体通道
 
 - 资源认证桥同时接受已验证 HUMAN 与 SERVICE 主体；人员 owner 归一为 `iam:{subjectId}`，服务 owner 归一为 `aksk:{clientId}`。
+- 服务主体宿主必须显式组合 `simple-resource-server-starter`、`simple-iam-resource-server-starter` 与 `simple-aksk-resource-server-starter:3.1.0`，并配置已认证的 AKSK introspection（内省）客户端；这些 Provider 不由 Feedback starter 传递。
 - SERVICE 请求仍执行 API 与 DATA 三权，不因使用 AKSK 而绕过权限校验。
 - 提交与频控诊断日志只记录 `iam`/`aksk` 主体类型前缀，不记录主体标识；两种主体的日志口径保持一致。
 
@@ -77,4 +78,4 @@
 
 ## 升级指南
 
-将 `simple-feedback-server-core` 与 `simple-feedback-server-starter` 一并升级到 1.0.1；若使用 IAM 聚形态，再将 `simple-feedback-iam-adaptor-starter` 升级到 1.0.1。调用方把本人反馈路径切换为 `/me/submissions`，其余公开操作按 OpenAPI 1.0.1 对接。
+将 `simple-feedback-server-core` 与 `simple-feedback-server-starter` 一并升级到 1.0.1；若使用 IAM 聚形态，可继续使用已发布的 `simple-feedback-iam-adaptor-starter:1.0.0`，并按适配器文档显式提供 IAM 客户端传输件。调用方把本人反馈路径切换为 `/me/submissions`，其余公开操作按 OpenAPI 1.0.1 对接。
