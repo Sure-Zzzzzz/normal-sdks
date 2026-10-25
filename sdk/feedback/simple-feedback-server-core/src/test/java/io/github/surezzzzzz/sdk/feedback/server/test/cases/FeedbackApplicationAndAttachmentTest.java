@@ -42,6 +42,22 @@ class FeedbackApplicationAndAttachmentTest {
                 .build();
     }
 
+    private static FeedbackAttachment.UploadSpec spec(String filename, String contentType, long sizeBytes) {
+        return FeedbackAttachment.UploadSpec.builder()
+                .filename(filename)
+                .contentType(contentType)
+                .sizeBytes(sizeBytes)
+                .build();
+    }
+
+    private static String repeat(char c, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int i = 0; i < count; i++) {
+            builder.append(c);
+        }
+        return builder.toString();
+    }
+
     @Test
     @DisplayName("应用编码正则：合法形态通过，非法形态拒绝")
     void testApplicationCode() {
@@ -74,7 +90,7 @@ class FeedbackApplicationAndAttachmentTest {
     }
 
     @Test
-    @DisplayName("附件校验：null 与空集合通过，数量/单文件/总量/类型/文件名越界各返回对应错误码")
+    @DisplayName("附件校验：空集合通过，数量/大小/总量/类型/文件名与非法规格各返回对应错误码")
     void testAttachmentSpecs() {
         assertDoesNotThrow(() -> FeedbackAttachment.validateSpecs(null));
         assertDoesNotThrow(() -> FeedbackAttachment.validateSpecs(new ArrayList<>()));
@@ -98,6 +114,14 @@ class FeedbackApplicationAndAttachmentTest {
                         spec("1.png", "image/png", each), spec("2.png", "image/png", each),
                         spec("3.png", "image/png", each)))).getErrorCode());
 
+        assertEquals(ErrorCode.INVALID_REQUEST, assertThrows(SimpleFeedbackServerException.class,
+                () -> FeedbackAttachment.validateSpecs(Arrays.asList(
+                        spec("negative.png", "image/png", -1)))).getErrorCode());
+        assertEquals(ErrorCode.INVALID_REQUEST, assertThrows(SimpleFeedbackServerException.class,
+                () -> FeedbackAttachment.validateSpecs(Arrays.asList((FeedbackAttachment.UploadSpec) null)))
+                .getErrorCode());
+        log.info("输出: 负大小、空规格与累计溢出均拒绝，不会绕过附件策略");
+
         assertEquals(ErrorCode.ATTACHMENT_MEDIA_TYPE_REJECTED, assertThrows(SimpleFeedbackServerException.class,
                 () -> FeedbackAttachment.validateSpecs(Arrays.asList(
                         spec("a.pdf", "application/pdf", 10)))).getErrorCode());
@@ -107,21 +131,29 @@ class FeedbackApplicationAndAttachmentTest {
                         spec(repeat('f', SimpleFeedbackServerConstant.ATTACHMENT_FILENAME_MAX_LENGTH + 1),
                                 "image/png", 10)))).getErrorCode());
         log.info("输出: 数量/单文件/总量/类型/文件名五个维度错误码逐一正确");
-    }
 
-    private static FeedbackAttachment.UploadSpec spec(String filename, String contentType, long sizeBytes) {
-        return FeedbackAttachment.UploadSpec.builder()
-                .filename(filename)
-                .contentType(contentType)
-                .sizeBytes(sizeBytes)
-                .build();
-    }
-
-    private static String repeat(char c, int count) {
-        StringBuilder builder = new StringBuilder(count);
-        for (int i = 0; i < count; i++) {
-            builder.append(c);
-        }
-        return builder.toString();
+        List<FeedbackAttachment.UploadSpec> customPolicyFiles = Arrays.asList(
+                spec("1.pdf", "application/pdf", 700),
+                spec("2.pdf", "application/pdf", 700),
+                spec("3.pdf", "application/pdf", 700),
+                spec("4.pdf", "application/pdf", 700));
+        assertDoesNotThrow(() -> FeedbackAttachment.validateSpecs(
+                customPolicyFiles, 4, 1024, 3000, new String[]{"application/pdf"}));
+        assertEquals(ErrorCode.ATTACHMENT_COUNT_EXCEEDED, assertThrows(SimpleFeedbackServerException.class,
+                () -> FeedbackAttachment.validateSpecs(
+                        customPolicyFiles, 3, 1024, 3000, new String[]{"application/pdf"}))
+                .getErrorCode());
+        assertEquals(ErrorCode.ATTACHMENT_SIZE_EXCEEDED, assertThrows(SimpleFeedbackServerException.class,
+                () -> FeedbackAttachment.validateSpecs(
+                        Arrays.asList(spec("large.pdf", "application/pdf", 1025)),
+                        4, 1024, 3000, new String[]{"application/pdf"}))
+                .getErrorCode());
+        assertEquals(ErrorCode.ATTACHMENT_TOTAL_SIZE_EXCEEDED, assertThrows(SimpleFeedbackServerException.class,
+                () -> FeedbackAttachment.validateSpecs(
+                        Arrays.asList(spec("1.pdf", "application/pdf", Long.MAX_VALUE),
+                                spec("2.pdf", "application/pdf", Long.MAX_VALUE)),
+                        4, Long.MAX_VALUE, Long.MAX_VALUE, new String[]{"application/pdf"}))
+                .getErrorCode());
+        log.info("输出: 自定义数量/单件/总量/媒体类型策略均贯穿领域校验");
     }
 }

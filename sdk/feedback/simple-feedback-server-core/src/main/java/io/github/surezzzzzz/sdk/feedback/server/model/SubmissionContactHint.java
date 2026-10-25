@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
  * 提交人联系提示值对象（SPI {@code SubmitterProfileProvider} 的返回）。
  *
  * <p>非直观约束：email 仅作提交表单预填默认值（可改可清），提交值=用户确认值，
- * 「自由输入不关联账号」语义不受影响（DESIGN §6.1）。</p>
+ * 「自由输入不关联账号」语义不受影响。</p>
  *
  * @author surezzzzzz
  */

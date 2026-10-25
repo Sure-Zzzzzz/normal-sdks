@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.feedback.server.model.AccessibleApplication;
 import java.util.List;
 
 /**
- * 提交人可访问应用集 SPI（出站取数点一，DESIGN D12/修正⑩/㉓；目录取数点修正㉔）。
+ * 提交人可访问应用集 SPI（出站取数点一，提供页面准入详情与全局目录）。
  *
  * <p>聚散契约：</p>
  * <ul>
@@ -14,7 +14,7 @@ import java.util.List;
  *       （页面准入详情口径：编码+展示名+描述，展示名与门户侧边栏同源），出站失败按
  *       降级处理（返回 {@code null} 并记 WARN，不拒提交）；</li>
  *   <li>返回值语义：{@code null}=该取数点不支持（降级为注册表启用项全量）；
- *       非 null（含空集）=有效答案——空集由调用方按「交集空回退全量」处理（修正⑬），
+ *       非 null（含空集）=有效答案——空集由调用方按「交集空回退全量」处理，
  *       便利性失败不扩大为可用性故障。</li>
  * </ul>
  *
@@ -33,7 +33,7 @@ public interface AccessibleApplicationProvider {
     List<AccessibleApplication> accessibleApplications(String subjectId);
 
     /**
-     * 查询 IAM 可信应用全局目录（注册表数据来源核对用，修正㉔）。
+     * 查询 IAM 可信应用全局目录（用于注册表数据来源核对）。
      *
      * <p>与 {@link #accessibleApplications(String)} 的口径差异：本方法无用户维度，
      * 用于注册表标注「IAM 同源」行并锁定展示名/说明的编辑权——同源行的名称与说明由

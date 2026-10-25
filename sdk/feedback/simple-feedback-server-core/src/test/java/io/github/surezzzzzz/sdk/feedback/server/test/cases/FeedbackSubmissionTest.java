@@ -54,6 +54,14 @@ class FeedbackSubmissionTest {
                 .build();
     }
 
+    private static String repeat(char c, int count) {
+        StringBuilder builder = new StringBuilder(count);
+        for (int i = 0; i < count; i++) {
+            builder.append(c);
+        }
+        return builder.toString();
+    }
+
     @Test
     @DisplayName("全字段合法的提交通过校验")
     void testValidatePass() {
@@ -185,13 +193,5 @@ class FeedbackSubmissionTest {
         assertEquals("handler-1", submission.getRepliedBy());
         assertEquals("handler-2", submission.getHandledBy());
         log.info("输出: 终态重开成功，reply 未新增时首次答复留痕保持（repliedBy=handler-1）");
-    }
-
-    private static String repeat(char c, int count) {
-        StringBuilder builder = new StringBuilder(count);
-        for (int i = 0; i < count; i++) {
-            builder.append(c);
-        }
-        return builder.toString();
     }
 }

@@ -4,7 +4,7 @@ import lombok.Builder;
 import lombok.Value;
 
 /**
- * 提交人可访问应用（SPI 可访问应用集的条目形态，修正㉓）。
+ * 提交人可访问应用（SPI 可访问应用集的条目形态）。
  *
  * <p>聚形态实现按 IAM「页面准入详情」口径填充（displayName/description 与门户侧边栏同源）；
  * 降级/回退路径由注册表行填充。展示名与描述为展示增强字段，可空——消费方须以编码为锚。</p>

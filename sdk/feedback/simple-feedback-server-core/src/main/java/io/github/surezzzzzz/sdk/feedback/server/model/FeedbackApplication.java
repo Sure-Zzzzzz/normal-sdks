@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 /**
  * 应用注册表聚合（feedback_application）。
  *
- * <p>应用注册表是反馈服务自有一等实体（DESIGN D6）：反馈必须命中启用中的注册项才受理；
+ * <p>应用注册表是反馈服务自有一等实体：反馈必须命中启用中的注册项才受理；
  * 不共库 IAM、不做运行时强校验依赖，编码与部署环境可信应用编码的一致性由部署管理负责。
  * 注册项可停用不可物理删除（历史引用完整性）。</p>
  *
@@ -85,6 +85,13 @@ public class FeedbackApplication {
         }
     }
 
+    private static void validateFieldLength(String value, String field, int maxLength) {
+        if (value == null || value.isEmpty() || value.length() > maxLength) {
+            throw new SubmissionValidationException(ErrorCode.FIELD_TOO_LONG,
+                    String.format(ErrorMessage.FIELD_TOO_LONG, field, maxLength));
+        }
+    }
+
     /**
      * 校验登记字段全集（编码/显示名/描述）。
      *
@@ -98,13 +105,6 @@ public class FeedbackApplication {
         }
         if (ownerGroup != null) {
             validateFieldLength(ownerGroup, "ownerGroup", SimpleFeedbackServerConstant.SUBMITTER_DISPLAY_NAME_MAX_LENGTH);
-        }
-    }
-
-    private static void validateFieldLength(String value, String field, int maxLength) {
-        if (value == null || value.isEmpty() || value.length() > maxLength) {
-            throw new SubmissionValidationException(ErrorCode.FIELD_TOO_LONG,
-                    String.format(ErrorMessage.FIELD_TOO_LONG, field, maxLength));
         }
     }
 }

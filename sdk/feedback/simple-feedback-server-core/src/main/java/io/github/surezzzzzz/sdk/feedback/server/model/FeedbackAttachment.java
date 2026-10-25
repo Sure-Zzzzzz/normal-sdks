@@ -63,6 +63,83 @@ public class FeedbackAttachment {
     private Instant createdTime;
 
     /**
+     * 校验上传件集合（数量/单文件大小/总大小/媒体类型白名单）。
+     *
+     * @param specs 上传件规格集合（可为空集合=无附件）
+     * @throws AttachmentRejectException 任一维度越界（错误码区分 400/413/415 语义）
+     */
+    public static void validateSpecs(List<UploadSpec> specs) {
+        validateSpecs(specs,
+                SimpleFeedbackServerConstant.ATTACHMENT_MAX_COUNT,
+                SimpleFeedbackServerConstant.ATTACHMENT_MAX_SIZE_BYTES,
+                SimpleFeedbackServerConstant.ATTACHMENT_MAX_TOTAL_SIZE_BYTES,
+                SimpleFeedbackServerConstant.ATTACHMENT_ALLOWED_CONTENT_TYPES);
+    }
+
+    /**
+     * 按调用方提供的附件策略校验上传件集合。
+     *
+     * <p>默认重载保持领域层原有固定策略；starter 可将运行配置传入此重载，避免
+     * 配置放宽后又被领域默认值二次拒绝。负大小、空规格和总量累加溢出均视为无效请求。</p>
+     *
+     * @param specs               上传件规格集合（可为空集合=无附件）
+     * @param maxCount            附件数量上限
+     * @param maxSizeBytes        单文件大小上限
+     * @param maxTotalSizeBytes   总大小上限
+     * @param allowedContentTypes 媒体类型白名单
+     * @throws AttachmentRejectException 任一维度越界（错误码区分 400/413/415 语义）
+     */
+    public static void validateSpecs(List<UploadSpec> specs, int maxCount, long maxSizeBytes,
+                                     long maxTotalSizeBytes, String[] allowedContentTypes) {
+        if (specs == null) {
+            return;
+        }
+        if (specs.size() > maxCount) {
+            throw new AttachmentRejectException(ErrorCode.ATTACHMENT_COUNT_EXCEEDED,
+                    String.format(ErrorMessage.ATTACHMENT_COUNT_EXCEEDED, maxCount));
+        }
+        long total = 0L;
+        for (UploadSpec spec : specs) {
+            if (spec == null || spec.getSizeBytes() < 0) {
+                throw new AttachmentRejectException(ErrorCode.INVALID_REQUEST, ErrorMessage.INVALID_REQUEST);
+            }
+            if (spec.getSizeBytes() > maxSizeBytes) {
+                throw new AttachmentRejectException(ErrorCode.ATTACHMENT_SIZE_EXCEEDED,
+                        String.format(ErrorMessage.ATTACHMENT_SIZE_EXCEEDED, maxSizeBytes));
+            }
+            try {
+                total = Math.addExact(total, spec.getSizeBytes());
+            } catch (ArithmeticException ignored) {
+                throw new AttachmentRejectException(ErrorCode.ATTACHMENT_TOTAL_SIZE_EXCEEDED,
+                        String.format(ErrorMessage.ATTACHMENT_TOTAL_SIZE_EXCEEDED, maxTotalSizeBytes));
+            }
+            boolean allowed = false;
+            for (String candidate : allowedContentTypes == null ? new String[0] : allowedContentTypes) {
+                if (candidate != null && candidate.equalsIgnoreCase(spec.getContentType())) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                throw new AttachmentRejectException(ErrorCode.ATTACHMENT_MEDIA_TYPE_REJECTED,
+                        String.format(ErrorMessage.ATTACHMENT_MEDIA_TYPE_REJECTED,
+                                Arrays.toString(allowedContentTypes)));
+            }
+            if (spec.getFilename() != null
+                    && spec.getFilename().length() > SimpleFeedbackServerConstant.ATTACHMENT_FILENAME_MAX_LENGTH) {
+                throw new AttachmentRejectException(ErrorCode.FIELD_TOO_LONG,
+                        String.format(ErrorMessage.FIELD_TOO_LONG, "filename",
+                                SimpleFeedbackServerConstant.ATTACHMENT_FILENAME_MAX_LENGTH));
+            }
+        }
+        if (total > maxTotalSizeBytes) {
+            throw new AttachmentRejectException(ErrorCode.ATTACHMENT_TOTAL_SIZE_EXCEEDED,
+                    String.format(ErrorMessage.ATTACHMENT_TOTAL_SIZE_EXCEEDED,
+                            maxTotalSizeBytes));
+        }
+    }
+
+    /**
      * 上传件规格值对象（提交时校验用：文件名/媒体类型/大小）
      */
     @Data
@@ -85,54 +162,5 @@ public class FeedbackAttachment {
          * 文件大小（字节）
          */
         private long sizeBytes;
-    }
-
-    /**
-     * 校验上传件集合（数量/单文件大小/总大小/媒体类型白名单）。
-     *
-     * @param specs 上传件规格集合（可为空集合=无附件）
-     * @throws AttachmentRejectException 任一维度越界（错误码区分 400/413/415 语义）
-     */
-    public static void validateSpecs(List<UploadSpec> specs) {
-        if (specs == null) {
-            return;
-        }
-        if (specs.size() > SimpleFeedbackServerConstant.ATTACHMENT_MAX_COUNT) {
-            throw new AttachmentRejectException(ErrorCode.ATTACHMENT_COUNT_EXCEEDED,
-                    String.format(ErrorMessage.ATTACHMENT_COUNT_EXCEEDED,
-                            SimpleFeedbackServerConstant.ATTACHMENT_MAX_COUNT));
-        }
-        long total = 0L;
-        for (UploadSpec spec : specs) {
-            if (spec.getSizeBytes() > SimpleFeedbackServerConstant.ATTACHMENT_MAX_SIZE_BYTES) {
-                throw new AttachmentRejectException(ErrorCode.ATTACHMENT_SIZE_EXCEEDED,
-                        String.format(ErrorMessage.ATTACHMENT_SIZE_EXCEEDED,
-                                SimpleFeedbackServerConstant.ATTACHMENT_MAX_SIZE_BYTES));
-            }
-            total += spec.getSizeBytes();
-            boolean allowed = false;
-            for (String candidate : SimpleFeedbackServerConstant.ATTACHMENT_ALLOWED_CONTENT_TYPES) {
-                if (candidate.equalsIgnoreCase(spec.getContentType())) {
-                    allowed = true;
-                    break;
-                }
-            }
-            if (!allowed) {
-                throw new AttachmentRejectException(ErrorCode.ATTACHMENT_MEDIA_TYPE_REJECTED,
-                        String.format(ErrorMessage.ATTACHMENT_MEDIA_TYPE_REJECTED,
-                                Arrays.toString(SimpleFeedbackServerConstant.ATTACHMENT_ALLOWED_CONTENT_TYPES)));
-            }
-            if (spec.getFilename() != null
-                    && spec.getFilename().length() > SimpleFeedbackServerConstant.ATTACHMENT_FILENAME_MAX_LENGTH) {
-                throw new AttachmentRejectException(ErrorCode.FIELD_TOO_LONG,
-                        String.format(ErrorMessage.FIELD_TOO_LONG, "filename",
-                                SimpleFeedbackServerConstant.ATTACHMENT_FILENAME_MAX_LENGTH));
-            }
-        }
-        if (total > SimpleFeedbackServerConstant.ATTACHMENT_MAX_TOTAL_SIZE_BYTES) {
-            throw new AttachmentRejectException(ErrorCode.ATTACHMENT_TOTAL_SIZE_EXCEEDED,
-                    String.format(ErrorMessage.ATTACHMENT_TOTAL_SIZE_EXCEEDED,
-                            SimpleFeedbackServerConstant.ATTACHMENT_MAX_TOTAL_SIZE_BYTES));
-        }
     }
 }

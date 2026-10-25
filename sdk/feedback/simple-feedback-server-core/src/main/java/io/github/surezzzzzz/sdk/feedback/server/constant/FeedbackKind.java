@@ -5,7 +5,7 @@ import lombok.Getter;
 /**
  * 反馈发起形态枚举。
  *
- * <p>统计提示字段（修正④）：intercepted 值来自 web 深链参数声明，服务端无法也不校验其来源真伪，
+ * <p>统计提示字段：intercepted 值来自 web 深链参数声明，服务端无法也不校验其来源真伪，
  * 不做安全语义，仅用于管理侧区分处理优先级。</p>
  *
  * @author surezzzzzz

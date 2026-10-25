@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.feedback.server.constant.SimpleFeedbackServerCon
 /**
  * Owner 派生 Helper（KMS/CRM owner 定式：iam:{subjectId} / aksk:{clientId}）。
  *
- * <p>非直观约束：owner 只能从已验证请求上下文派生，永不出现在请求体（DESIGN §2）。</p>
+ * <p>非直观约束：owner 只能从已验证请求上下文派生，永不出现在请求体。</p>
  *
  * @author surezzzzzz
  */
@@ -26,7 +26,7 @@ public final class OwnerHelper {
     }
 
     /**
-     * 构造机器 owner（首发无发放对象，保留定义）。
+     * 构造机器 owner。
      *
      * @param clientId AKSK 客户端标识
      * @return owner 形态 "aksk:{clientId}"

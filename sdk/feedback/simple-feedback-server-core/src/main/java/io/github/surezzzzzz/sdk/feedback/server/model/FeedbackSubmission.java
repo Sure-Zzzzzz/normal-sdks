@@ -14,13 +14,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.regex.Pattern;
 
 /**
  * 反馈提交聚合（feedback_submission）。
  *
  * <p>提交人快照与鉴权分离：subjectId/displayName 仅作回访展示，鉴权只看 owner 等值；
- * owner 只从认证上下文派生（iam:{subjectId}），永不出现在请求体（DESIGN §2/§5）。</p>
+ * owner 只从认证上下文派生（人员为 iam:{subjectId}，服务主体为 aksk:{clientId}），永不出现在请求体。</p>
  *
  * @author surezzzzzz
  */
@@ -71,12 +72,12 @@ public class FeedbackSubmission {
     private String submitterSubjectId;
 
     /**
-     * 提交人显示名快照（可空：修正㉑，认证上下文有则取、adaptor 可补、均无则空，展示回退 subjectId）
+     * 提交人显示名快照（可空：认证上下文有则取、adaptor 可补、均无则空，展示回退 subjectId）
      */
     private String submitterDisplayName;
 
     /**
-     * 归属（iam:{subjectId}；只从认证上下文派生）
+     * 归属（人员为 iam:{subjectId}，服务主体为 aksk:{clientId}；只从认证上下文派生）
      */
     private String owner;
 
@@ -157,6 +158,29 @@ public class FeedbackSubmission {
     private Instant updatedTime;
 
     /**
+     * 校验环境快照键集合是否全部命中白名单（JSON 解析在 server 层完成，解析出的键集传入本方法）。
+     *
+     * @param keys 环境快照包含的全部键
+     * @throws SubmissionValidationException 含白名单外的键
+     */
+    public static void validateEnvironmentKeys(Iterable<String> keys) {
+        for (String key : keys) {
+            boolean allowed = false;
+            for (String candidate : SimpleFeedbackServerConstant.ENVIRONMENT_ALLOWED_KEYS) {
+                if (candidate.equals(key)) {
+                    allowed = true;
+                    break;
+                }
+            }
+            if (!allowed) {
+                throw new SubmissionValidationException(ErrorCode.ENVIRONMENT_KEY_REJECTED,
+                        String.format(ErrorMessage.ENVIRONMENT_KEY_REJECTED,
+                                Arrays.toString(SimpleFeedbackServerConstant.ENVIRONMENT_ALLOWED_KEYS)));
+            }
+        }
+    }
+
+    /**
      * 校验提交字段全集（分数/文本/邮箱/上下文/环境原文长度；枚举合法性）。
      *
      * @throws SubmissionValidationException 任一字段非法
@@ -192,12 +216,12 @@ public class FeedbackSubmission {
         if (!FeedbackKind.isValid(kind)) {
             throw new SubmissionValidationException(ErrorCode.ENUM_VALUE_INVALID,
                     String.format(ErrorMessage.ENUM_VALUE_INVALID, "kind",
-                            java.util.Arrays.toString(FeedbackKind.getAllCodes())));
+                            Arrays.toString(FeedbackKind.getAllCodes())));
         }
         if (!FeedbackType.isValid(type)) {
             throw new SubmissionValidationException(ErrorCode.ENUM_VALUE_INVALID,
                     String.format(ErrorMessage.ENUM_VALUE_INVALID, "type",
-                            java.util.Arrays.toString(FeedbackType.getAllCodes())));
+                            Arrays.toString(FeedbackType.getAllCodes())));
         }
         if (handlerNote != null
                 && handlerNote.length() > SimpleFeedbackServerConstant.HANDLER_NOTE_MAX_LENGTH) {
@@ -218,39 +242,16 @@ public class FeedbackSubmission {
     }
 
     /**
-     * 校验环境快照键集合是否全部命中白名单（JSON 解析在 server 层完成，解析出的键集传入本方法）。
-     *
-     * @param keys 环境快照包含的全部键
-     * @throws SubmissionValidationException 含白名单外的键
-     */
-    public static void validateEnvironmentKeys(Iterable<String> keys) {
-        for (String key : keys) {
-            boolean allowed = false;
-            for (String candidate : SimpleFeedbackServerConstant.ENVIRONMENT_ALLOWED_KEYS) {
-                if (candidate.equals(key)) {
-                    allowed = true;
-                    break;
-                }
-            }
-            if (!allowed) {
-                throw new SubmissionValidationException(ErrorCode.ENVIRONMENT_KEY_REJECTED,
-                        String.format(ErrorMessage.ENVIRONMENT_KEY_REJECTED,
-                                java.util.Arrays.toString(SimpleFeedbackServerConstant.ENVIRONMENT_ALLOWED_KEYS)));
-            }
-        }
-    }
-
-    /**
      * 应用一次处理（状态迁移 + 处理留痕整体覆盖）。
      *
      * <p>非直观约束：note 与 reply 为覆盖式留痕（每次处理整体覆盖，非追加历史）；reply 非空时
      * 记录 repliedBy/repliedAt，供提交人「我的反馈」查看。</p>
      *
-     * @param target            目标状态
-     * @param handlerSubjectId  处理人 subjectId
-     * @param note              内部备注（可空）
-     * @param replyText         给提交人的答复（可空）
-     * @param now               处理时间
+     * @param target           目标状态
+     * @param handlerSubjectId 处理人 subjectId
+     * @param note             内部备注（可空）
+     * @param replyText        给提交人的答复（可空）
+     * @param now              处理时间
      * @throws FeedbackStateException 非法状态迁移（含终态间直迁、自迁移）
      */
     public void applyHandling(FeedbackStatus target, String handlerSubjectId, String note, String replyText,

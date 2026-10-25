@@ -34,26 +34,6 @@ public enum FeedbackStatus {
     }
 
     /**
-     * 判断能否迁移到目标状态。
-     *
-     * <p>合法迁移：SUBMITTED→RESOLVED、SUBMITTED→DISMISSED（处理）；
-     * RESOLVED→SUBMITTED、DISMISSED→SUBMITTED（终态重开）；其余一律非法
-     * （含两个终态之间直迁与自迁移）。</p>
-     *
-     * @param target 目标状态
-     * @return true 合法，false 非法
-     */
-    public boolean canTransitionTo(FeedbackStatus target) {
-        if (target == null || target == this) {
-            return false;
-        }
-        if (this == SUBMITTED) {
-            return target == RESOLVED || target == DISMISSED;
-        }
-        return target == SUBMITTED;
-    }
-
-    /**
      * 根据代码获取枚举
      *
      * @param code 类型代码
@@ -93,6 +73,26 @@ public enum FeedbackStatus {
             codes[i] = statuses[i].code;
         }
         return codes;
+    }
+
+    /**
+     * 判断能否迁移到目标状态。
+     *
+     * <p>合法迁移：SUBMITTED→RESOLVED、SUBMITTED→DISMISSED（处理）；
+     * RESOLVED→SUBMITTED、DISMISSED→SUBMITTED（终态重开）；其余一律非法
+     * （含两个终态之间直迁与自迁移）。</p>
+     *
+     * @param target 目标状态
+     * @return true 合法，false 非法
+     */
+    public boolean canTransitionTo(FeedbackStatus target) {
+        if (target == null || target == this) {
+            return false;
+        }
+        if (this == SUBMITTED) {
+            return target == RESOLVED || target == DISMISSED;
+        }
+        return target == SUBMITTED;
     }
 
     @Override
