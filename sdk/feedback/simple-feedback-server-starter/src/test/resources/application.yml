@@ -16,9 +16,9 @@ io:
             primary-datasource: feedback
             datasources:
               feedback:
-                url: ${FEEDBACK_TEST_JDBC_URL:jdbc:mysql://localhost:3307/feedback_server_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
-                username: ${FEEDBACK_TEST_JDBC_USERNAME:root}
-                password: ${FEEDBACK_TEST_JDBC_PASSWORD:}
+                url: jdbc:mysql://localhost:3306/feedback_server_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+                username: root
+                password:
                 driver-class-name: com.mysql.cj.jdbc.Driver
                 hikari:
                   maximum-pool-size: 8
@@ -29,13 +29,19 @@ io:
           s3:
             enabled: true
             endpoint: http://127.0.0.1:19002
-            access-key: feedback-local-access
-            secret-key: ${FEEDBACK_TEST_S3_SECRET:}
+            access-key:
+            secret-key:
         feedback:
           server:
             enable: true
             attachment:
               bucket-name: feedback-attachment-test
+        auth:
+          resource:
+            server:
+              security:
+                protected-paths:
+                  - /api/feedback/**
 
 logging:
   level:

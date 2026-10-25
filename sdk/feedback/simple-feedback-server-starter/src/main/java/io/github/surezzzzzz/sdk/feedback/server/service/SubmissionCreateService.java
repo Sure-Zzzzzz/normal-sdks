@@ -25,10 +25,10 @@ import java.util.UUID;
 /**
  * 反馈提交服务（提交链：幂等判定先于频控 → 注册表校验 → 领域校验 → 附件 S3 先传 → 落库）。
  *
- * <p>非直观约束（DESIGN §5.2/修正②）：幂等判定必须在频控之前——首成功后网络丢响应的
+ * <p>非直观约束：幂等判定必须在频控之前——首成功后网络丢响应的
  * 合法同键重试先返回首结果、不占频控窗口；仅新键请求进入频控检查。</p>
  *
- * <p>上传时序（DESIGN §7）：S3 先传、库后写；库写失败时已传对象不可寻址（附件行未落库），
+ * <p>上传时序：S3 先传、库后写；库写失败时已传对象不可寻址（附件行未落库），
  * 由半年生命周期桶兜底回收。</p>
  *
  * @author surezzzzzz
@@ -102,7 +102,7 @@ public class SubmissionCreateService {
      */
     @Transactional
     public CreateResult create(FeedbackSubmission submission, List<AttachmentInput> attachments) {
-        // ① 幂等判定先于频控（修正②）：同键重放返回首成功响应快照（与首结果完全一致，
+        // 幂等判定先于频控：同键重放返回首成功响应快照（与首结果完全一致，
         // 不受后续处理/状态迁移影响——走查纠错：此前重放读当前行，处理过后内容会变化）
         FeedbackSubmission existing = submissionRepository.findByOwnerAndIdempotencyKey(
                 submission.getOwner(), submission.getIdempotencyKey());
@@ -131,7 +131,12 @@ public class SubmissionCreateService {
                         .sizeBytes(input.getSizeBytes())
                         .build());
             }
-            FeedbackAttachment.validateSpecs(specs);
+            SimpleFeedbackServerProperties.AttachmentConfig attachmentConfig = properties.getAttachment();
+            FeedbackAttachment.validateSpecs(specs,
+                    attachmentConfig.getMaxCount(),
+                    attachmentConfig.getMaxSizeBytes(),
+                    attachmentConfig.getMaxTotalSizeBytes(),
+                    attachmentConfig.getAllowedContentTypes());
         }
 
         // ⑤ 附件 S3 先传（库失败时对象不可寻址，孤儿由生命周期回收）
@@ -169,8 +174,8 @@ public class SubmissionCreateService {
         for (FeedbackAttachment attachment : storedAttachments) {
             attachmentRepository.insert(attachment);
         }
-        log.debug("提交落库终态 id={} owner前缀=iam 状态={} 附件数={}", submission.getId(),
-                submission.getStatus(), storedAttachments.size());
+        log.debug("提交落库终态 id={} owner前缀={} 状态={} 附件数={}", submission.getId(),
+                ownerPrefix(submission.getOwner()), submission.getStatus(), storedAttachments.size());
         return new CreateResult(submission, false);
     }
 
@@ -192,15 +197,29 @@ public class SubmissionCreateService {
         int shortCount = submissionRepository.countByOwnerSince(owner,
                 now.minusSeconds(config.getShortWindowSeconds()));
         if (shortCount >= config.getShortWindowMax()) {
-            log.info("频控拒绝 维度=短窗 owner前缀=iam 计数={}", shortCount);
+            log.info("频控拒绝 维度=短窗 owner前缀={} 计数={}", ownerPrefix(owner), shortCount);
             throw new SubmissionRateLimitException(ErrorCode.RATE_LIMITED, ErrorMessage.RATE_LIMITED);
         }
         int longCount = submissionRepository.countByOwnerSince(owner,
                 now.minusSeconds(config.getLongWindowSeconds()));
         if (longCount >= config.getLongWindowMax()) {
-            log.info("频控拒绝 维度=长窗 owner前缀=iam 计数={}", longCount);
+            log.info("频控拒绝 维度=长窗 owner前缀={} 计数={}", ownerPrefix(owner), longCount);
             throw new SubmissionRateLimitException(ErrorCode.RATE_LIMITED, ErrorMessage.RATE_LIMITED);
         }
+    }
+
+    /**
+     * 只保留 owner 的主体类型前缀，日志不记录主体标识。
+     *
+     * @param owner 归属值
+     * @return 主体类型前缀
+     */
+    private static String ownerPrefix(String owner) {
+        if (owner == null) {
+            return "unknown";
+        }
+        int separator = owner.indexOf(':');
+        return separator > 0 ? owner.substring(0, separator) : "unknown";
     }
 
     /**

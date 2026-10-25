@@ -7,7 +7,7 @@ services:
       - "19002:9000"
     environment:
       # 本地测试容器凭据：值经环境变量注入（.env / shell），不写受管文件
-      MINIO_ROOT_USER: ${FEEDBACK_TEST_MINIO_USER:-feedback-local-access}
+      MINIO_ROOT_USER: ${FEEDBACK_TEST_MINIO_USER:?请注入 FEEDBACK_TEST_MINIO_USER}
       MINIO_ROOT_PASSWORD: ${FEEDBACK_TEST_MINIO_PASSWORD:?请注入 FEEDBACK_TEST_MINIO_PASSWORD}
     volumes:
       - feedback-minio-data:/data

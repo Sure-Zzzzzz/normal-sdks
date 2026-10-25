@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -72,6 +73,20 @@ public class FeedbackAttachmentRepository {
                 "SELECT id, submission_id, storage_key, original_filename, content_type, size_bytes, created_time "
                         + "FROM feedback_attachment WHERE submission_id = :submissionId ORDER BY created_time",
                 new MapSqlParameterSource("submissionId", submissionId), ROW_MAPPER);
+    }
+
+    /**
+     * 列表批量取附件（1.0.1 优化：消灭列表逐行 N+1 点查）。
+     *
+     * @param submissionIds 反馈 ID 集（空集由调用方短路，不进 SQL）
+     * @return 附件列表（按 submission_id、created_time 升序，调用方自行分组）
+     */
+    public List<FeedbackAttachment> findBySubmissionIds(Collection<String> submissionIds) {
+        return jdbcTemplate.query(
+                "SELECT id, submission_id, storage_key, original_filename, content_type, size_bytes, created_time "
+                        + "FROM feedback_attachment WHERE submission_id IN (:submissionIds) "
+                        + "ORDER BY submission_id, created_time",
+                new MapSqlParameterSource("submissionIds", submissionIds), ROW_MAPPER);
     }
 
     /**

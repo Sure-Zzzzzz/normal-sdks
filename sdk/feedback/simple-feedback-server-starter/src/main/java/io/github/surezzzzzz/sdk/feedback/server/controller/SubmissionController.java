@@ -13,6 +13,7 @@ import io.github.surezzzzzz.sdk.feedback.server.controller.request.SubmissionHan
 import io.github.surezzzzzz.sdk.feedback.server.controller.response.SubmissionResponse;
 import io.github.surezzzzzz.sdk.feedback.server.exception.AttachmentRejectException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
+import io.github.surezzzzzz.sdk.feedback.server.exception.SubmissionValidationException;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplicationAccessScope;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackSubmission;
 import io.github.surezzzzzz.sdk.feedback.server.repository.FeedbackSubmissionRepository;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -37,11 +39,13 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
- * 反馈提交族 REST 端点（12 端点之 9；根路径可配，常量默认 /api/feedback）。
+ * 反馈提交族 REST 端点（13 个 REST 操作之 10；根路径可配，常量默认 /api/feedback）。
  *
  * <p>规范 §3.5/§3.6：资源名词路径、状态只由 HTTP status 表达、创建 201+Location、
  * 写请求必带 Idempotency-Key、X-Correlation-Id 缺头服务端生成并回显。</p>
@@ -139,7 +143,7 @@ public class SubmissionController {
     }
 
     /**
-     * 环境快照白名单裁剪（多余键服务端丢弃，DESIGN §5）。
+     * 环境快照白名单裁剪（多余键服务端丢弃）。
      *
      * @param environment 原文 JSON
      * @return 裁剪后 JSON（原值为空或非法 JSON 时返回 null）
@@ -217,6 +221,15 @@ public class SubmissionController {
                                                      @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                      HttpServletRequest request) {
         FeedbackRequestContext context = requireContext(request);
+        if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
+            throw new SubmissionValidationException(ErrorCode.REQUIRED_FIELD_MISSING,
+                    String.format(ErrorMessage.REQUIRED_FIELD_MISSING, "Idempotency-Key"));
+        }
+        if (idempotencyKey.length() > SimpleFeedbackServerConstant.IDEMPOTENCY_KEY_MAX_LENGTH) {
+            throw new SubmissionValidationException(ErrorCode.FIELD_TOO_LONG,
+                    String.format(ErrorMessage.FIELD_TOO_LONG, "Idempotency-Key",
+                            SimpleFeedbackServerConstant.IDEMPOTENCY_KEY_MAX_LENGTH));
+        }
         List<SubmissionCreateService.AttachmentInput> attachments = new ArrayList<>();
         if (files != null && !files.isEmpty()) {
             // 走查纠错：附件开关/数量/单文件/总量/类型全部走运行配置（Properties），
@@ -255,9 +268,15 @@ public class SubmissionController {
                 .build();
         SubmissionCreateService.CreateResult result = createService.create(submission, attachments);
         HttpHeaders headers = correlationHeaders();
-        headers.setLocation(URI.create("/submissions/" + result.getSubmission().getId()));
+        String apiBasePath = properties.getApiBasePath();
+        if (apiBasePath.endsWith("/")) {
+            apiBasePath = apiBasePath.substring(0, apiBasePath.length() - 1);
+        }
+        headers.setLocation(URI.create(request.getContextPath() + apiBasePath + "/me/submissions/"
+                + result.getSubmission().getId()));
         return ResponseEntity.status(HttpStatus.CREATED).headers(headers)
-                .body(SubmissionResponse.fromMine(result.getSubmission(), null));
+                .body(SubmissionResponse.fromMine(result.getSubmission(),
+                        queryService.attachments(result.getSubmission().getId())));
     }
 
     /**
@@ -295,7 +314,10 @@ public class SubmissionController {
     }
 
     /**
-     * 管理列表（筛选+DATA 范围+分页）。
+     * 管理列表（筛选+关键词搜索+DATA 范围+分页）。
+     *
+     * <p>关键词（1.0.1 起）命中反馈内容或提交人展示名，与筛选/DATA 范围取交集；
+     * 归一口径=去首尾空白、空白视为未传、超 64 字符截断（与 page size 超限截断同口径，不设独立错误码）。</p>
      *
      * @return 200 分页
      */
@@ -309,6 +331,7 @@ public class SubmissionController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String kind,
             @RequestParam(required = false) Integer score,
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(required = false) Integer size,
             @CurrentDataAccessPlan DataAccessPlan plan,
@@ -316,13 +339,22 @@ public class SubmissionController {
         requireContext(request);
         int resolvedSize = resolvePageSize(size);
         FeedbackSubmissionRepository.Filter filter = new FeedbackSubmissionRepository.Filter(application, status,
-                type, kind, score);
+                type, kind, score, normalizeKeyword(keyword));
         SubmissionQueryService.PageResult<FeedbackSubmission> result = queryService.adminList(filter,
                 FeedbackApplicationAccessScope.from(plan), page, resolvedSize);
         List<SubmissionResponse> items = new ArrayList<>();
+        // 附件一页一次批量取（1.0.1 优化：取代逐行 N+1 点查）
+        List<String> rowIds = new ArrayList<>();
+        for (FeedbackSubmission submission : result.getItems()) {
+            rowIds.add(submission.getId());
+        }
+        Map<String, List<io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment>> rowAttachments =
+                queryService.attachmentsBySubmissionIds(rowIds);
         for (FeedbackSubmission submission : result.getItems()) {
             items.add(SubmissionResponse.fromAdmin(submission,
-                    queryService.attachments(submission.getId())));
+                    rowAttachments.containsKey(submission.getId())
+                            ? rowAttachments.get(submission.getId())
+                            : Collections.emptyList()));
         }
         return ResponseEntity.ok().headers(correlationHeaders())
                 .body(new SubmissionQueryService.PageResult<>(items, result.getTotal(), result.getPage(),
@@ -367,32 +399,51 @@ public class SubmissionController {
                     String.format(ErrorMessage.ENUM_VALUE_INVALID, "targetStatus",
                             java.util.Arrays.toString(FeedbackStatus.getAllCodes())));
         }
+        if (handlingRequest.getExpectedRowVersion() == null) {
+            throw new SubmissionValidationException(ErrorCode.REQUIRED_FIELD_MISSING,
+                    String.format(ErrorMessage.REQUIRED_FIELD_MISSING, "expectedRowVersion"));
+        }
+        if (handlingRequest.getExpectedRowVersion() < 0) {
+            throw new SubmissionValidationException(ErrorCode.INVALID_REQUEST,
+                    ErrorMessage.INVALID_REQUEST);
+        }
         FeedbackSubmission submission = handlingService.handle(id, target, context.getSubjectId(),
                 handlingRequest.getHandlerNote(), handlingRequest.getReply(),
-                handlingRequest.getExpectedRowVersion() == null ? -1 : handlingRequest.getExpectedRowVersion(),
+                handlingRequest.getExpectedRowVersion(),
                 FeedbackApplicationAccessScope.from(plan));
         return ResponseEntity.ok().headers(correlationHeaders())
                 .body(SubmissionResponse.fromAdmin(submission, queryService.attachments(id)));
     }
 
     /**
-     * 我的反馈列表（owner 等值）。
+     * 我的反馈列表（owner 等值；关键词可空，命中反馈内容）。
      *
      * @return 200 分页
      */
-    @GetMapping("/my-submissions")
+    @GetMapping("/me/submissions")
     @RequireApiPermission(FeedbackPermissionConstant.API_SUBMISSION_MINE)
     public ResponseEntity<SubmissionQueryService.PageResult<SubmissionResponse>> myList(
+            @RequestParam(required = false) String keyword,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(required = false) Integer size,
             HttpServletRequest request) {
         FeedbackRequestContext context = requireContext(request);
         int resolvedSize = resolvePageSize(size);
         SubmissionQueryService.PageResult<FeedbackSubmission> result = queryService.mineList(context.getOwner(),
-                page, resolvedSize);
+                normalizeKeyword(keyword), page, resolvedSize);
         List<SubmissionResponse> items = new ArrayList<>();
+        // 附件一页一次批量取（1.0.1 优化：取代逐行 N+1 点查）
+        List<String> rowIds = new ArrayList<>();
         for (FeedbackSubmission submission : result.getItems()) {
-            items.add(SubmissionResponse.fromMine(submission, queryService.attachments(submission.getId())));
+            rowIds.add(submission.getId());
+        }
+        Map<String, List<io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment>> rowAttachments =
+                queryService.attachmentsBySubmissionIds(rowIds);
+        for (FeedbackSubmission submission : result.getItems()) {
+            items.add(SubmissionResponse.fromMine(submission,
+                    rowAttachments.containsKey(submission.getId())
+                            ? rowAttachments.get(submission.getId())
+                            : Collections.emptyList()));
         }
         return ResponseEntity.ok().headers(correlationHeaders())
                 .body(new SubmissionQueryService.PageResult<>(items, result.getTotal(), result.getPage(),
@@ -404,7 +455,7 @@ public class SubmissionController {
      *
      * @return 200 详情（含 reply）
      */
-    @GetMapping("/my-submissions/{id}")
+    @GetMapping("/me/submissions/{id}")
     @RequireApiPermission(FeedbackPermissionConstant.API_SUBMISSION_MINE)
     public ResponseEntity<SubmissionResponse> myGet(@PathVariable String id, HttpServletRequest request) {
         FeedbackRequestContext context = requireContext(request);
@@ -418,7 +469,7 @@ public class SubmissionController {
      *
      * @return 200 附件流
      */
-    @GetMapping("/my-submissions/{id}/attachments/{attachmentId}")
+    @GetMapping("/me/submissions/{id}/attachments/{attachmentId}")
     @RequireApiPermission(FeedbackPermissionConstant.API_SUBMISSION_MINE)
     public ResponseEntity<org.springframework.core.io.InputStreamResource> myDownload(@PathVariable String id,
                                                                                       @PathVariable String attachmentId,
@@ -486,8 +537,7 @@ public class SubmissionController {
     private FeedbackRequestContext requireContext(HttpServletRequest request) {
         FeedbackRequestContext context = principalResolver.resolve(request);
         if (context == null) {
-            throw new SimpleFeedbackServerException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    ErrorMessage.DEPENDENCY_UNAVAILABLE);
+            throw new InsufficientAuthenticationException(ErrorMessage.AUTHENTICATION_REQUIRED);
         }
         return context;
     }
@@ -505,5 +555,22 @@ public class SubmissionController {
             return config.getDefaultSize();
         }
         return Math.min(size, config.getMaxSize());
+    }
+
+    /**
+     * 关键词归一：去首尾空白，空白视为未传，超 64 字符截断（前端输入框同限 64）。
+     *
+     * @param keyword 原始关键词
+     * @return 归一后关键词（null=不过滤）
+     */
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String trimmed = keyword.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() > 64 ? trimmed.substring(0, 64) : trimmed;
     }
 }

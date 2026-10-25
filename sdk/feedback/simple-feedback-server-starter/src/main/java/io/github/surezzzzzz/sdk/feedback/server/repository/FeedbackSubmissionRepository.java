@@ -60,6 +60,44 @@ public class FeedbackSubmissionRepository {
                     .build();
         }
     };
+
+    /**
+     * 列表精简列（1.0.1 优化）：只取响应投影消费的列——不含 first_response（TEXT 重放快照，
+     * 列表永不消费）、environment（2000，详情也不出响应）、owner/幂等两列/审计人列/updated_time。
+     * 详情与重放路径（findById/findByOwnerAndIdempotencyKey）仍走全列。
+     */
+    private static final String LIST_COLUMNS =
+            "id, application_code, kind, type, score, content, contact_email, submitter_subject_id, "
+                    + "submitter_display_name, context_path, status, handled_at, handler_note, reply, "
+                    + "replied_at, row_version, created_time";
+
+    /**
+     * 列表精简映射：未选列一律不取（实体对应字段保持 null），不碰 ResultSet 缺席列名。
+     */
+    private static final RowMapper<FeedbackSubmission> LIST_ROW_MAPPER = new RowMapper<FeedbackSubmission>() {
+        @Override
+        public FeedbackSubmission mapRow(ResultSet rs, int rowNum) throws SQLException {
+            return FeedbackSubmission.builder()
+                    .id(rs.getString("id"))
+                    .applicationCode(rs.getString("application_code"))
+                    .kind(rs.getString("kind"))
+                    .type(rs.getString("type"))
+                    .score(rs.getInt("score"))
+                    .content(rs.getString("content"))
+                    .contactEmail(rs.getString("contact_email"))
+                    .submitterSubjectId(rs.getString("submitter_subject_id"))
+                    .submitterDisplayName(rs.getString("submitter_display_name"))
+                    .contextPath(rs.getString("context_path"))
+                    .status(rs.getString("status"))
+                    .handledAt(toInstant(rs.getTimestamp("handled_at")))
+                    .handlerNote(rs.getString("handler_note"))
+                    .reply(rs.getString("reply"))
+                    .repliedAt(toInstant(rs.getTimestamp("replied_at")))
+                    .rowVersion(rs.getInt("row_version"))
+                    .createdTime(toInstant(rs.getTimestamp("created_time")))
+                    .build();
+        }
+    };
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public FeedbackSubmissionRepository(NamedParameterJdbcTemplate jdbcTemplate) {
@@ -88,10 +126,28 @@ public class FeedbackSubmissionRepository {
             sql.append(" AND score = :fScore");
             params.addValue("fScore", filter.score);
         }
+        if (filter.keyword != null) {
+            // 关键词命中反馈内容、提交人展示名或提交人 subjectId（三任一）；展示名为 NULL 的旧行
+            // 不参与展示名命中（LIKE NULL=NULL），subjectId 维度保证改名后仍可按 ID 全量寻址
+            sql.append(" AND (content LIKE :fKeyword ESCAPE '!' OR submitter_display_name LIKE :fKeyword"
+                    + " ESCAPE '!' OR submitter_subject_id LIKE :fKeyword ESCAPE '!')");
+            params.addValue("fKeyword", "%" + escapeLike(filter.keyword) + "%");
+        }
         if (applicationCodes != null) {
             sql.append(" AND application_code IN (:fApplications)");
             params.addValue("fApplications", applicationCodes);
         }
+    }
+
+    /**
+     * LIKE 通配符转义（! 作转义符，避开反斜杠在 NO_BACKSLASH_ESCAPES 两态下的歧义）：
+     * ! → !!、% → !%、_ → !_；用户输入中的通配符按字面匹配。
+     *
+     * @param raw 原始关键词
+     * @return 转义后的关键词
+     */
+    private static String escapeLike(String raw) {
+        return raw.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     private static Instant toInstant(Timestamp timestamp) {
@@ -161,7 +217,7 @@ public class FeedbackSubmissionRepository {
     }
 
     /**
-     * 频控计数（同 owner 自指定时刻以来的提交数；窗口边界并发轻微超限可接受，DESIGN §5.3）。
+     * 频控计数（同 owner 自指定时刻以来的提交数；窗口边界并发轻微超限可接受）。
      *
      * @param owner 归属
      * @param since 起始时刻（含）
@@ -175,15 +231,17 @@ public class FeedbackSubmissionRepository {
     }
 
     /**
-     * 本人总数（owner 等值）。
+     * 本人总数（owner 等值；关键词可空，命中反馈内容）。
      *
-     * @param owner 归属
+     * @param owner   归属
+     * @param keyword 关键词（null=不过滤）
      * @return 总数
      */
-    public long countByOwner(String owner) {
-        Long count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM feedback_submission WHERE owner = :owner",
-                new MapSqlParameterSource("owner", owner), Long.class);
+    public long countByOwner(String owner, String keyword) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM feedback_submission WHERE owner = :owner");
+        MapSqlParameterSource params = new MapSqlParameterSource("owner", owner);
+        appendOwnerKeyword(sql, params, keyword);
+        Long count = jdbcTemplate.queryForObject(sql.toString(), params, Long.class);
         return count == null ? 0L : count;
     }
 
@@ -197,12 +255,12 @@ public class FeedbackSubmissionRepository {
      * @return 反馈列表
      */
     public List<FeedbackSubmission> listByFilter(Filter filter, Set<String> applicationCodes, int offset, int size) {
-        StringBuilder sql = new StringBuilder("SELECT " + ALL_COLUMNS + " FROM feedback_submission WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT " + LIST_COLUMNS + " FROM feedback_submission WHERE 1=1");
         MapSqlParameterSource params = new MapSqlParameterSource();
         appendFilter(sql, params, filter, applicationCodes);
         sql.append(" ORDER BY created_time DESC, id DESC LIMIT :limit OFFSET :offset");
         params.addValue("limit", size).addValue("offset", offset);
-        return jdbcTemplate.query(sql.toString(), params, ROW_MAPPER);
+        return jdbcTemplate.query(sql.toString(), params, LIST_ROW_MAPPER);
     }
 
     /**
@@ -221,19 +279,31 @@ public class FeedbackSubmissionRepository {
     }
 
     /**
-     * 本人列表（owner 等值，固定排序 created_time DESC）。
+     * 本人列表（owner 等值，固定排序 created_time DESC；关键词可空，命中反馈内容）。
      *
-     * @param owner  归属
-     * @param offset 偏移
-     * @param size   页大小
+     * @param owner   归属
+     * @param keyword 关键词（null=不过滤）
+     * @param offset  偏移
+     * @param size    页大小
      * @return 反馈列表
      */
-    public List<FeedbackSubmission> listByOwner(String owner, int offset, int size) {
-        return jdbcTemplate.query(
-                "SELECT " + ALL_COLUMNS + " FROM feedback_submission WHERE owner = :owner "
-                        + "ORDER BY created_time DESC, id DESC LIMIT :limit OFFSET :offset",
-                new MapSqlParameterSource("owner", owner).addValue("limit", size).addValue("offset", offset),
-                ROW_MAPPER);
+    public List<FeedbackSubmission> listByOwner(String owner, String keyword, int offset, int size) {
+        StringBuilder sql = new StringBuilder("SELECT " + LIST_COLUMNS + " FROM feedback_submission WHERE owner = :owner");
+        MapSqlParameterSource params = new MapSqlParameterSource("owner", owner);
+        appendOwnerKeyword(sql, params, keyword);
+        sql.append(" ORDER BY created_time DESC, id DESC LIMIT :limit OFFSET :offset");
+        params.addValue("limit", size).addValue("offset", offset);
+        return jdbcTemplate.query(sql.toString(), params, LIST_ROW_MAPPER);
+    }
+
+    /**
+     * 本人列表关键词分支（只命中 content——本人列表提交人恒为自身，名字/ID 无区分度）。
+     */
+    private static void appendOwnerKeyword(StringBuilder sql, MapSqlParameterSource params, String keyword) {
+        if (keyword != null) {
+            sql.append(" AND content LIKE :fOwnerKeyword ESCAPE '!'");
+            params.addValue("fOwnerKeyword", "%" + escapeLike(keyword) + "%");
+        }
     }
 
     /**
@@ -241,7 +311,7 @@ public class FeedbackSubmissionRepository {
      *
      * @param submission         已应用处理的目标反馈（携带新状态/留痕与新版本号）
      * @param expectedRowVersion 期望的当前行版本
-     * @param applicationCodes   DATA application IN 集（null=全量；修正③：处理写范围条件同样进 SQL，不做先授权后无条件更新）
+     * @param applicationCodes   DATA application IN 集（null=全量；处理写范围条件同样进 SQL，不做先授权后无条件更新）
      * @return 影响行数（0=冲突或范围不可见）
      */
     public int updateHandling(FeedbackSubmission submission, int expectedRowVersion, Set<String> applicationCodes) {
@@ -298,12 +368,19 @@ public class FeedbackSubmissionRepository {
          */
         private final Integer score;
 
-        public Filter(String applicationCode, String status, String type, String kind, Integer score) {
+        /**
+         * 关键词（可空；命中反馈内容或提交人展示名，通配符转义在 appendFilter 内完成）
+         */
+        private final String keyword;
+
+        public Filter(String applicationCode, String status, String type, String kind, Integer score,
+                      String keyword) {
             this.applicationCode = applicationCode;
             this.status = status;
             this.type = type;
             this.kind = kind;
             this.score = score;
+            this.keyword = keyword;
         }
     }
 }

@@ -15,8 +15,8 @@ import javax.servlet.http.HttpServletRequest;
  * <p>公共资源层认证成功后把 {@link VerifiedResourceContext} 放入
  * {@code SecurityContextHolder} 的 {@code Authentication.principal}；本桥只做翻译，
  * 不验证凭据、不解析 token、不调用 introspection、不持有任何密钥材料——认证责任全部在
- * 公共层与 Provider 适配器。反馈首发仅收人员主体（HUMAN），机器主体一律返回 null
- * 走 401 链，不猜测、不回退。</p>
+ * 公共层与 Provider 适配器。人员主体（HUMAN）与服务主体（SERVICE）均可进入 REST 契约，
+ * owner 分别归一为 {@code iam:} 与 {@code aksk:} 前缀；缺少有效身份返回 null，不猜测、不回退。</p>
  *
  * <p>日志红线：只输出脱敏原因码，不输出 token、claim、subjectId 裸值。</p>
  *
@@ -26,8 +26,6 @@ import javax.servlet.http.HttpServletRequest;
 public class FeedbackResourceServerPrincipalResolver implements FeedbackPrincipalResolver {
 
     private static final String REASON_CONTEXT_SHAPE_MISMATCH = "resource-context-shape-mismatch";
-    private static final String REASON_NOT_HUMAN = "subject-not-human";
-
     @Override
     public FeedbackRequestContext resolve(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -39,8 +37,8 @@ public class FeedbackResourceServerPrincipalResolver implements FeedbackPrincipa
             return null;
         }
         VerifiedResourceContext context = (VerifiedResourceContext) principal;
-        if (context.getPrincipal() == null || context.getPrincipal().getSubjectType() != ResourceSubjectType.HUMAN) {
-            log.info("反馈资源层主体解析拒绝 原因码={}", REASON_NOT_HUMAN);
+        if (context.getPrincipal() == null) {
+            log.info("反馈资源层主体解析拒绝 原因码={}", REASON_CONTEXT_SHAPE_MISMATCH);
             return null;
         }
         String subjectId = context.getPrincipal().getSubjectId();
@@ -48,6 +46,10 @@ public class FeedbackResourceServerPrincipalResolver implements FeedbackPrincipa
             log.info("反馈资源层主体解析拒绝 原因码={}", REASON_CONTEXT_SHAPE_MISMATCH);
             return null;
         }
-        return new FeedbackRequestContext(subjectId.trim(), OwnerHelper.buildIamOwner(subjectId.trim()));
+        String normalizedSubjectId = subjectId.trim();
+        String owner = context.getPrincipal().getSubjectType() == ResourceSubjectType.HUMAN
+                ? OwnerHelper.buildIamOwner(normalizedSubjectId)
+                : OwnerHelper.buildAkskOwner(normalizedSubjectId);
+        return new FeedbackRequestContext(normalizedSubjectId, owner);
     }
 }

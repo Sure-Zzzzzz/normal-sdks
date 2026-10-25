@@ -16,7 +16,7 @@ public class FeedbackRequestContext {
     String subjectId;
 
     /**
-     * 归属 owner（iam:{subjectId}）
+     * 归属 owner（人员为 iam:{subjectId}，服务为 aksk:{clientId}）
      */
     String owner;
 }

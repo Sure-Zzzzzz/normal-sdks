@@ -7,6 +7,7 @@ import io.github.surezzzzzz.sdk.feedback.server.constant.FeedbackStatus;
 import io.github.surezzzzzz.sdk.feedback.server.constant.SimpleFeedbackServerConstant;
 import io.github.surezzzzzz.sdk.feedback.server.exception.FeedbackStateException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
+import io.github.surezzzzzz.sdk.feedback.server.exception.SubmissionValidationException;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplicationAccessScope;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackSubmission;
 import io.github.surezzzzzz.sdk.feedback.server.repository.FeedbackSubmissionRepository;
@@ -19,7 +20,7 @@ import java.time.Instant;
 /**
  * 反馈处理服务（状态迁移+覆盖式留痕+行版本 CAS+DATA 范围进 UPDATE）。
  *
- * <p>非直观约束（DESIGN §6）：expectedRowVersion 不匹配=409；行不可见=安全 404——
+ * <p>非直观约束：expectedRowVersion 不匹配=409；行不可见=安全 404——
  * 两者以 CAS 影响行数 0 后重查区分，不泄露存在性。</p>
  *
  * @author surezzzzzz
@@ -35,11 +36,11 @@ public class SubmissionHandlingService {
         int noteLimit = SimpleFeedbackServerConstant.HANDLER_NOTE_MAX_LENGTH;
         int replyLimit = SimpleFeedbackServerConstant.REPLY_MAX_LENGTH;
         if (note != null && note.length() > noteLimit) {
-            throw new FeedbackStateException(ErrorCode.FIELD_TOO_LONG,
+            throw new SubmissionValidationException(ErrorCode.FIELD_TOO_LONG,
                     String.format(ErrorMessage.FIELD_TOO_LONG, "handlerNote", noteLimit));
         }
         if (replyText != null && replyText.length() > replyLimit) {
-            throw new FeedbackStateException(ErrorCode.FIELD_TOO_LONG,
+            throw new SubmissionValidationException(ErrorCode.FIELD_TOO_LONG,
                     String.format(ErrorMessage.FIELD_TOO_LONG, "reply", replyLimit));
         }
     }

@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Simple Feedback Server Properties（单一配置类，键面见 DESIGN §4.2；
+ * Simple Feedback Server Properties（单一配置类；
  * 默认值全部引用常量；敏感值一律部署环境注入不进示例实值）
  *
  * @author surezzzzzz

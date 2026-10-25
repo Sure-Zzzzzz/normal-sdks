@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.feedback.server.test.walkthrough;
 
 import io.github.surezzzzzz.sdk.feedback.server.adaptor.IamAccessibleApplicationProvider;
 import io.github.surezzzzzz.sdk.feedback.server.adaptor.IamSubmitterProfileProvider;
+import io.github.surezzzzzz.sdk.feedback.server.fixture.ServiceTestResourceAdapterConfiguration;
 import io.github.surezzzzzz.sdk.feedback.server.spi.AccessibleApplicationProvider;
 import io.github.surezzzzzz.sdk.feedback.server.spi.SubmitterProfileProvider;
 import io.github.surezzzzzz.sdk.feedback.server.test.SimpleFeedbackServerTestApplication;
@@ -36,6 +37,7 @@ import static org.mockito.Mockito.mock;
 @Slf4j
 @Tag("collaboration")
 @SpringBootTest(classes = {SimpleFeedbackServerTestApplication.class,
+        ServiceTestResourceAdapterConfiguration.class,
         AdaptorFallbackCoexistenceTest.IamClientStubConfiguration.class},
         properties = "io.github.surezzzzzz.sdk.cache.enabled=false")
 class AdaptorFallbackCoexistenceTest {

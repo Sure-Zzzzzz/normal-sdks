@@ -71,7 +71,7 @@ class FeedbackCollaborationThreeRightHttpTest {
             String body = readBody(exchange);
             String token = extractToken(body);
             String projection = projectionFor(token);
-            System.out.println("STUB verify token=" + token + " -> " + (projection.isEmpty() ? "401" : "200 " + projection));
+            log.debug("verify 桩完成响应 status={}", projection.isEmpty() ? 401 : 200);
             byte[] out = projection.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             if (projection.isEmpty()) {
@@ -88,7 +88,7 @@ class FeedbackCollaborationThreeRightHttpTest {
         registry.add("io.github.surezzzzzz.sdk.auth.iam.resource.server.verification-endpoint",
                 () -> "http://127.0.0.1:" + stubPort + "/iam/resource/tokens/verify");
         registry.add("io.github.surezzzzzz.sdk.auth.iam.resource.server.client-id", () -> "stub-verify");
-        registry.add("io.github.surezzzzzz.sdk.auth.iam.resource.server.client-secret", () -> "stub-secret");
+        registry.add("io.github.surezzzzzz.sdk.auth.iam.resource.server.client-secret", () -> "fixture-value");
         registry.add("io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[0]",
                 () -> "/api/feedback/**");
     }
@@ -283,7 +283,7 @@ class FeedbackCollaborationThreeRightHttpTest {
         log.info("输出: 全权处理 200 resolved");
 
         // ⑧ 我的反馈（owner 等值）：全权身份自见
-        ResponseEntity<String> mine = rest.exchange(baseUrl() + "/my-submissions", HttpMethod.GET,
+        ResponseEntity<String> mine = rest.exchange(baseUrl() + "/me/submissions", HttpMethod.GET,
                 new HttpEntity<>(bearer(TOKEN_FULL)), String.class);
         assertEquals(200, mine.getStatusCodeValue());
         assertTrue(mine.getBody().contains("协作链走查-a"), "我的反馈应含本人提交内容");

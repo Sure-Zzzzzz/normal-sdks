@@ -35,7 +35,7 @@ public class FeedbackTestSchemaHelper {
                 connection.commit();
             }
         } catch (SQLException failure) {
-            throw new IllegalStateException(RESET_FAILED, failure);
+            throw new AssertionError(RESET_FAILED, failure);
         }
     }
 
@@ -48,7 +48,7 @@ public class FeedbackTestSchemaHelper {
     public static void requireTestCatalog(Connection connection) throws SQLException {
         String catalog = connection.getCatalog();
         if (catalog == null || !TEST_CATALOG.matcher(catalog).matches()) {
-            throw new IllegalStateException(UNSAFE_CATALOG);
+            throw new AssertionError(UNSAFE_CATALOG);
         }
     }
 }

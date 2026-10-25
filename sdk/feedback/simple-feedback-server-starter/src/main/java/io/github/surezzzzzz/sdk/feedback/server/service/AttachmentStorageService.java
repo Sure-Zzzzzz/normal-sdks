@@ -114,7 +114,7 @@ public class AttachmentStorageService {
     }
 
     /**
-     * 存储对象包装值对象（不暴露第三方 SDK 类型，DESIGN §4）。
+     * 存储对象包装值对象（不暴露第三方 SDK 类型）。
      */
     @lombok.Value
     public static class StoredObject {

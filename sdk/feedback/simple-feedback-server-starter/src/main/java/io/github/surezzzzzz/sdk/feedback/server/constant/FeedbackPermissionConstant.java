@@ -1,7 +1,7 @@
 package io.github.surezzzzzz.sdk.feedback.server.constant;
 
 /**
- * 三权码常量（PAGE 4 / API 8 / DATA 资源 2，与 DESIGN §6 及 web 仓 manifest 逐字一致）
+ * 三权码常量（PAGE 4 / API 8 / DATA 资源 2，与 web 仓 manifest 逐字一致）
  *
  * @author surezzzzzz
  */

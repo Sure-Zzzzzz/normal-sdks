@@ -3,9 +3,10 @@ package io.github.surezzzzzz.sdk.feedback.server.controller.request;
 import lombok.Data;
 
 /**
- * 应用注册/更新请求（编码创建后不可变；更新仅 displayName/description/enabled/ownerGroup）。
+ * 应用注册/更新请求（编码创建后不可变；更新为部分覆盖：displayName 与 enabled 缺省时保留，
+ * description 与 ownerGroup 缺省时按 null 清空）。
  *
- * <p>同源锁（修正㉔）：编码命中 IAM 目录的行 displayName 不可改写，重同步须显式传
+ * <p>同源锁：编码命中 IAM 目录的行 displayName 不可改写，重同步须显式传
  * syncFromIam=true（服务端抄录 IAM 官方名）。</p>
  *
  * @author surezzzzzz

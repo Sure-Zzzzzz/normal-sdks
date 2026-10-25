@@ -37,6 +37,12 @@ public class FeedbackResourceServerBridgeAutoConfiguration {
             "io.github.surezzzzzz.sdk.auth.resource.server.filter.ResourceAuthenticationFilter";
 
     private static void logAssembly(ListableBeanFactory beanFactory) {
+        boolean starterPresent = ClassUtils.isPresent(RESOURCE_AUTHENTICATION_FILTER_CLASS,
+                FeedbackResourceServerBridgeAutoConfiguration.class.getClassLoader());
+        logAssembly(beanFactory, starterPresent);
+    }
+
+    static void logAssembly(ListableBeanFactory beanFactory, boolean starterPresent) {
         Map<String, FeedbackPrincipalResolver> resolvers = beanFactory.getBeansOfType(FeedbackPrincipalResolver.class);
         if (resolvers.isEmpty()) {
             log.debug("反馈资源层桥装配事实：容器内无 FeedbackPrincipalResolver，反馈自动配置未装配");
@@ -45,17 +51,15 @@ public class FeedbackResourceServerBridgeAutoConfiguration {
             if (resolver instanceof FeedbackResourceServerPrincipalResolver) {
                 log.info("反馈资源层认证桥已装配：classpath 检测到 simple-resource-server-core，"
                         + "FeedbackResourceServerPrincipalResolver 已注册");
+                if (!starterPresent) {
+                    log.warn("反馈资源层配对告警：classpath 仅有 simple-resource-server-core 而未检测到 "
+                            + "simple-resource-server-starter，无组件填充已验证上下文，所有反馈请求将恒 401；"
+                            + "core 应与 starter 成对引入");
+                }
             } else {
                 log.info("反馈资源层认证桥让位：检测到宿主自定义 FeedbackPrincipalResolver（{}），桥未注册",
                         resolver.getClass().getName());
             }
-        }
-        boolean starterPresent = ClassUtils.isPresent(RESOURCE_AUTHENTICATION_FILTER_CLASS,
-                FeedbackResourceServerBridgeAutoConfiguration.class.getClassLoader());
-        if (!starterPresent) {
-            log.warn("反馈资源层配对告警：classpath 仅有 simple-resource-server-core 而未检测到 "
-                    + "simple-resource-server-starter，无组件填充已验证上下文，所有反馈请求将恒 401；"
-                    + "core 应与 starter 成对引入");
         }
     }
 

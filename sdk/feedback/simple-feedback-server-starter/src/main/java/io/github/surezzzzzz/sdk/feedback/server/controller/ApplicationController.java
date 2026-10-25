@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.feedback.server.constant.SimpleFeedbackServerCon
 import io.github.surezzzzzz.sdk.feedback.server.controller.request.ApplicationUpsertRequest;
 import io.github.surezzzzzz.sdk.feedback.server.exception.FeedbackStateException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
+import io.github.surezzzzzz.sdk.feedback.server.exception.SubmissionValidationException;
 import io.github.surezzzzzz.sdk.feedback.server.model.AccessibleApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplicationAccessScope;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
@@ -36,7 +38,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 应用注册表族 REST 端点（12 端点之 3；管理面）。
+ * 应用注册表族 REST 端点（13 个 REST 操作之 3；管理面）。
  *
  * @author surezzzzzz
  */
@@ -89,7 +91,7 @@ public class ApplicationController {
      * <p>非直观约束（走查纠错）：受限 DATA 范围外的目标编码=403 越权拒绝——创建也是写，
      * 目标应用维度同样受投影约束，DENY 同 403；不因"新建"而绕过范围。</p>
      *
-     * <p>同源抄录（修正㉔）：编码命中 IAM 目录时展示名强制抄录 IAM 官方名（单一事实源，
+     * <p>同源抄录：编码命中 IAM 目录时展示名强制抄录 IAM 官方名（单一事实源，
      * 手滑即纠）；目录不可核对（散形态/出站失败）时按提交值落库。</p>
      *
      * @return 201
@@ -125,7 +127,9 @@ public class ApplicationController {
                 .build();
         registryService.create(application, context.getSubjectId());
         HttpHeaders headers = correlationHeaders();
-        headers.setLocation(URI.create("/applications/" + application.getApplicationCode()));
+        String createPath = request.getRequestURI();
+        headers.setLocation(URI.create(createPath + (createPath.endsWith("/") ? "" : "/")
+                + application.getApplicationCode()));
         return ResponseEntity.status(HttpStatus.CREATED).headers(headers)
                 .body(ApplicationResponse.from(application, source));
     }
@@ -133,7 +137,7 @@ public class ApplicationController {
     /**
      * 更新注册项（expectedRowVersion CAS；编码不可变）。
      *
-     * <p>同源锁（修正㉔）：编码命中 IAM 目录时展示名不可改写（SOURCE_001 拒绝），
+     * <p>同源锁：编码命中 IAM 目录时展示名不可改写（SOURCE_001 拒绝），
      * 显式传 syncFromIam=true 则以 IAM 官方名重同步；受理门（enabled）与处理组
      * （ownerGroup）始终可改。目录不可核对时保持全字段可编辑（散形态自主面）。</p>
      *
@@ -155,8 +159,12 @@ public class ApplicationController {
                     ErrorMessage.APPLICATION_NOT_FOUND);
         }
         if (upsertRequest.getExpectedRowVersion() == null) {
-            throw new SimpleFeedbackServerException(ErrorCode.ROW_VERSION_CONFLICT,
-                    ErrorMessage.ROW_VERSION_CONFLICT);
+            throw new SubmissionValidationException(ErrorCode.REQUIRED_FIELD_MISSING,
+                    String.format(ErrorMessage.REQUIRED_FIELD_MISSING, "expectedRowVersion"));
+        }
+        if (upsertRequest.getExpectedRowVersion() < 0) {
+            throw new SubmissionValidationException(ErrorCode.INVALID_REQUEST,
+                    ErrorMessage.INVALID_REQUEST);
         }
         Map<String, AccessibleApplication> catalogIndex = sourceService.catalogIndex();
         boolean iamBacked = catalogIndex != null && catalogIndex.containsKey(applicationCode);
@@ -195,8 +203,7 @@ public class ApplicationController {
     private FeedbackRequestContext requireContext(HttpServletRequest request) {
         FeedbackRequestContext context = principalResolver.resolve(request);
         if (context == null) {
-            throw new SimpleFeedbackServerException(ErrorCode.DEPENDENCY_UNAVAILABLE,
-                    ErrorMessage.DEPENDENCY_UNAVAILABLE);
+            throw new InsufficientAuthenticationException(ErrorMessage.AUTHENTICATION_REQUIRED);
         }
         return context;
     }
@@ -251,7 +258,7 @@ public class ApplicationController {
         private Instant updatedTime;
 
         /**
-         * 数据来源（修正㉔）：IAM=与 IAM 可信应用同编码（展示名 IAM 承担）；MANUAL=本表登记；
+         * 数据来源：IAM=与 IAM 可信应用同编码（展示名 IAM 承担）；MANUAL=本表登记；
          * UNKNOWN=目录不可核对（散形态或出站失败，全字段可编辑）
          */
         private String source;

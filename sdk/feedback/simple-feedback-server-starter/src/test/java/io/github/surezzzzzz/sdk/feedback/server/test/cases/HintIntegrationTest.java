@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.feedback.server.test.cases;
 import io.github.surezzzzzz.sdk.feedback.server.model.AccessibleApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.SubmissionContactHint;
+import io.github.surezzzzzz.sdk.feedback.server.fixture.ServiceTestResourceAdapterConfiguration;
 import io.github.surezzzzzz.sdk.feedback.server.service.ApplicationRegistryService;
 import io.github.surezzzzzz.sdk.feedback.server.service.HintService;
 import io.github.surezzzzzz.sdk.feedback.server.spi.AccessibleApplicationProvider;
@@ -32,6 +33,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Slf4j
 @SpringBootTest(classes = {SimpleFeedbackServerTestApplication.class,
+        ServiceTestResourceAdapterConfiguration.class,
         HintIntegrationTest.IntersectStubConfiguration.class})
 class HintIntegrationTest {
 
@@ -116,7 +118,7 @@ class HintIntegrationTest {
                     if (call == 2) {
                         return Arrays.asList();
                     }
-                    throw new IllegalStateException("stub outbound failure");
+                    throw new RuntimeException("stub outbound failure");
                 }
             };
         }

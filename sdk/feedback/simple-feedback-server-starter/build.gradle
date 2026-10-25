@@ -1,6 +1,6 @@
 dependencies {
-    // core 1.0.0 已上 Central（10-13），固定坐标形态（规范 §13.1）
-    api 'io.github.sure-zzzzzz:simple-feedback-server-core:1.0.0'
+    // core 1.0.1 固定坐标形态（规范 §13.1）
+    api 'io.github.sure-zzzzzz:simple-feedback-server-core:1.0.1'
     // 聚散原则：主源码只编译依赖协议层 core（认证桥翻译的上下文类型、三权注解与模型）；
     // 协作装配件（resource/iam 两 starter）由宿主按需自引——
     // 引即全链协作，不引则自备 FeedbackPrincipalResolver（桥 @ConditionalOnClass 自动让位）。
@@ -36,13 +36,14 @@ dependencies {
     // （适配器 compileOnly 口径，宿主自备——与部署方引入 starter 时的义务一致）
     testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
     // 走查宿主与集成测试的组合装配件（协作链 + 数据源路由；不随 POM 发布）。
-    // 与 KMS 差异：不引 aksk-resource——首发无机器面（DESIGN D2），机器面开位时随 aksk Provider 一并补
+    // 资源认证链由宿主提供；HUMAN 与 SERVICE 均由公共 Resource/IAM/AKSK Provider 验证
     testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
     testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
     // 走查宿主的数据面 MVC 装配件（@CurrentDataAccessPlan 注入）——与部署方义务一致，不随 POM 发布
     testImplementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
-    // 协作共存验收（starter+adaptor 同装）：让位次序不变量的双 Bean 断言（walkthrough 包，不随 POM 发布）
-    testImplementation project(':sdk:feedback:simple-feedback-iam-adaptor-starter')
+    // 协作共存验收（starter+adaptor 同装）：让位次序不变量的双 Bean 断言（walkthrough 包，不随 POM 发布）；
+    // 固定坐标形态，共存测试跑在消费者视角坐标上
+    testImplementation 'io.github.sure-zzzzzz:simple-feedback-iam-adaptor-starter:1.0.1'
     // 数据面切面织入（dp-mvc 强制件的 aspectj 织入依赖；runtime 同款补法）
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
     // 共存验收的 IAM 客户端类型面（adaptor 为 implementation 口径不导出，测试侧自备）

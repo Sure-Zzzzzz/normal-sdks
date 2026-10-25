@@ -31,7 +31,7 @@ public final class JsonHelper {
             }
             return 0L;
         } catch (Exception exception) {
-            throw new IllegalStateException("JSON 字段提取失败: " + field, exception);
+            throw new AssertionError("JSON 字段提取失败: " + field, exception);
         }
     }
 
@@ -47,7 +47,7 @@ public final class JsonHelper {
             }
             return null;
         } catch (Exception exception) {
-            throw new IllegalStateException("JSON 字段提取失败: " + field, exception);
+            throw new AssertionError("JSON 字段提取失败: " + field, exception);
         }
     }
 
@@ -71,7 +71,7 @@ public final class JsonHelper {
             }
             return null;
         } catch (Exception exception) {
-            throw new IllegalStateException("JSON 字段提取失败: " + field, exception);
+            throw new AssertionError("JSON 字段提取失败: " + field, exception);
         }
     }
 }

@@ -13,7 +13,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 注册表数据来源核对服务单测（修正㉔的降级语义三态）。
+ * 注册表数据来源核对服务单测（覆盖降级语义三态）。
  *
  * <p>覆盖三个分支：provider 缺席（散形态）=null→UNKNOWN；provider 出站抛异常=null→UNKNOWN
  * （注册表不锁）；目录在场的 IAM/MANUAL 判定。纯服务级，无 Spring 上下文。</p>
@@ -59,7 +59,7 @@ class ApplicationSourceServiceTest {
     @DisplayName("出站异常：降级为不可核对（null→UNKNOWN），不抛出不锁表")
     void testOutboundFailureDegrades() {
         ApplicationSourceService service = new ApplicationSourceService(providerOf(subjectId -> {
-            throw new IllegalStateException("stub outbound failure");
+            throw new RuntimeException("stub outbound failure");
         }));
         assertNull(service.catalogIndex());
         assertEquals(ApplicationSourceService.SOURCE_UNKNOWN, ApplicationSourceService.sourceOf("kms", null));

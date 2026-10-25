@@ -13,13 +13,16 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 反馈查询服务（管理列表+DATA 遮蔽+mine owner 等值；不可见一律安全 404 不泄露存在性）。
  *
- * <p>非直观约束（DESIGN §5.1）：无 DATA 授权（DENY）=403；有授权但范围为空=空列表 200；
+ * <p>非直观约束：无 DATA 授权（DENY）=403；有授权但范围为空=空列表 200；
  * 受限范围与筛选条件叠加后交集为空=空列表——三分支语义不混。</p>
  *
  * @author surezzzzzz
@@ -42,6 +45,14 @@ public class SubmissionQueryService {
         return new SimpleFeedbackServerException(ErrorCode.SUBMISSION_NOT_FOUND, ErrorMessage.SUBMISSION_NOT_FOUND);
     }
 
+    private static int pageOffset(int page, int size) {
+        long offset = ((long) page - 1L) * size;
+        if (page < 1 || size < 1 || offset > Integer.MAX_VALUE) {
+            throw new SimpleFeedbackServerException(ErrorCode.INVALID_REQUEST, ErrorMessage.INVALID_REQUEST);
+        }
+        return (int) offset;
+    }
+
     /**
      * 管理列表（DATA 范围进 SQL）。
      *
@@ -54,6 +65,7 @@ public class SubmissionQueryService {
     public PageResult<FeedbackSubmission> adminList(FeedbackSubmissionRepository.Filter filter,
                                                     FeedbackApplicationAccessScope scope, int page, int size) {
         requireNotDenied(scope);
+        int offset = pageOffset(page, size);
         java.util.Set<String> codes = scope.restrictedCodesOrNull();
         if (codes != null && codes.isEmpty()) {
             log.debug("管理列表 DATA 受限空集，返回空列表");
@@ -62,7 +74,7 @@ public class SubmissionQueryService {
         long total = submissionRepository.countByFilter(filter, codes);
         List<FeedbackSubmission> items = total == 0L
                 ? Collections.<FeedbackSubmission>emptyList()
-                : submissionRepository.listByFilter(filter, codes, (page - 1) * size, size);
+                : submissionRepository.listByFilter(filter, codes, offset, size);
         return new PageResult<FeedbackSubmission>(items, total, page, size);
     }
 
@@ -90,11 +102,12 @@ public class SubmissionQueryService {
      * @param size  页大小
      * @return 分页结果
      */
-    public PageResult<FeedbackSubmission> mineList(String owner, int page, int size) {
-        long total = submissionRepository.countByOwner(owner);
+    public PageResult<FeedbackSubmission> mineList(String owner, String keyword, int page, int size) {
+        int offset = pageOffset(page, size);
+        long total = submissionRepository.countByOwner(owner, keyword);
         List<FeedbackSubmission> items = total == 0L
                 ? Collections.<FeedbackSubmission>emptyList()
-                : submissionRepository.listByOwner(owner, (page - 1) * size, size);
+                : submissionRepository.listByOwner(owner, keyword, offset, size);
         return new PageResult<FeedbackSubmission>(items, total, page, size);
     }
 
@@ -121,6 +134,28 @@ public class SubmissionQueryService {
      */
     public List<FeedbackAttachment> attachments(String submissionId) {
         return attachmentRepository.findBySubmissionId(submissionId);
+    }
+
+    /**
+     * 列表批量附件（1.0.1 优化：一页一次 IN 查询取代逐行 N+1 点查）。
+     *
+     * @param submissionIds 本页反馈 ID（空集=空 Map，不进 SQL）
+     * @return 反馈 ID → 附件列表（组内 created_time 升序，与单查口径一致）
+     */
+    public Map<String, List<FeedbackAttachment>> attachmentsBySubmissionIds(List<String> submissionIds) {
+        Map<String, List<FeedbackAttachment>> grouped = new LinkedHashMap<String, List<FeedbackAttachment>>();
+        if (submissionIds == null || submissionIds.isEmpty()) {
+            return grouped;
+        }
+        for (FeedbackAttachment attachment : attachmentRepository.findBySubmissionIds(submissionIds)) {
+            List<FeedbackAttachment> bucket = grouped.get(attachment.getSubmissionId());
+            if (bucket == null) {
+                bucket = new ArrayList<FeedbackAttachment>();
+                grouped.put(attachment.getSubmissionId(), bucket);
+            }
+            bucket.add(attachment);
+        }
+        return grouped;
     }
 
     /**

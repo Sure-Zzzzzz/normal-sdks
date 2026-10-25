@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.feedback.server.service;
 import io.github.surezzzzzz.sdk.feedback.server.annotation.SimpleFeedbackServerComponent;
 import io.github.surezzzzzz.sdk.feedback.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.feedback.server.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.feedback.server.exception.ApplicationAlreadyRegisteredException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.FeedbackStateException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplication;
@@ -18,7 +19,7 @@ import java.util.List;
 /**
  * 应用注册表服务（登记/更新/启停；applicationCode 唯一键天然幂等，创建不收幂等键）。
  *
- * <p>非直观约束：注册项可停用不可物理删除（历史引用完整性，DESIGN §7）；
+ * <p>非直观约束：注册项可停用不可物理删除（历史引用完整性）；
  * 停用=拦新提交不影响历史（D6）。</p>
  *
  * @author surezzzzzz
@@ -48,7 +49,7 @@ public class ApplicationRegistryService {
         try {
             applicationRepository.insert(application);
         } catch (DuplicateKeyException exception) {
-            throw new FeedbackStateException(ErrorCode.ROW_VERSION_CONFLICT,
+            throw new ApplicationAlreadyRegisteredException(ErrorCode.APPLICATION_ALREADY_REGISTERED,
                     String.format(ErrorMessage.APPLICATION_ALREADY_REGISTERED, application.getApplicationCode()));
         }
         log.debug("注册表登记终态 code={}", application.getApplicationCode());

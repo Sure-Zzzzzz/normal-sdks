@@ -6,7 +6,6 @@ import io.github.surezzzzzz.sdk.auth.authorization.application.core.claim.Applic
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * verify 桩投影与 IAM claim 映射器契约对齐测试（协作测试的投影 JSON 形状在此维护：
@@ -15,7 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = io.github.surezzzzzz.sdk.feedback.server.test.SimpleFeedbackServerTestApplication.class)
 class ProjectionShapeTest {
 
     private static final String GRANTS_TEMPLATE =

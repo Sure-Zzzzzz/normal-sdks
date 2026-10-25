@@ -121,7 +121,7 @@ public class SubmissionResponse {
     public static SubmissionResponse fromMine(FeedbackSubmission submission,
                                               List<io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment>
                                                       attachments) {
-        return base(submission, attachments).submitterSubjectId(null).handlerNote(null).build();
+        return base(submission, attachments);
     }
 
     /**
@@ -134,11 +134,13 @@ public class SubmissionResponse {
     public static SubmissionResponse fromAdmin(FeedbackSubmission submission,
                                                List<io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment>
                                                        attachments) {
-        return base(submission, attachments).submitterSubjectId(submission.getSubmitterSubjectId())
-                .handlerNote(submission.getHandlerNote()).build();
+        SubmissionResponse response = base(submission, attachments);
+        response.submitterSubjectId = submission.getSubmitterSubjectId();
+        response.handlerNote = submission.getHandlerNote();
+        return response;
     }
 
-    private static SubmissionResponseBuilder base(
+    private static SubmissionResponse base(
             FeedbackSubmission submission,
             List<io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment> attachments) {
         List<AttachmentMeta> metas = new ArrayList<AttachmentMeta>();
@@ -152,23 +154,24 @@ public class SubmissionResponse {
                         .build());
             }
         }
-        return SubmissionResponse.builder()
-                .id(submission.getId())
-                .applicationCode(submission.getApplicationCode())
-                .kind(submission.getKind())
-                .type(submission.getType())
-                .score(submission.getScore())
-                .content(submission.getContent())
-                .contactEmail(submission.getContactEmail())
-                .submitterDisplayName(submission.getSubmitterDisplayName())
-                .contextPath(submission.getContextPath())
-                .status(submission.getStatus())
-                .reply(submission.getReply())
-                .repliedAt(submission.getRepliedAt())
-                .handledAt(submission.getHandledAt())
-                .rowVersion(submission.getRowVersion())
-                .attachments(metas)
-                .createdTime(submission.getCreatedTime());
+        SubmissionResponse response = new SubmissionResponse();
+        response.id = submission.getId();
+        response.applicationCode = submission.getApplicationCode();
+        response.kind = submission.getKind();
+        response.type = submission.getType();
+        response.score = submission.getScore();
+        response.content = submission.getContent();
+        response.contactEmail = submission.getContactEmail();
+        response.submitterDisplayName = submission.getSubmitterDisplayName();
+        response.contextPath = submission.getContextPath();
+        response.status = submission.getStatus();
+        response.reply = submission.getReply();
+        response.repliedAt = submission.getRepliedAt();
+        response.handledAt = submission.getHandledAt();
+        response.rowVersion = submission.getRowVersion();
+        response.attachments = metas;
+        response.createdTime = submission.getCreatedTime();
+        return response;
     }
 
     /**

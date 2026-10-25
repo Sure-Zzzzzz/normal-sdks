@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.feedback.server.test.cases;
 
 import io.github.surezzzzzz.sdk.feedback.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
+import io.github.surezzzzzz.sdk.feedback.server.fixture.ServiceTestResourceAdapterConfiguration;
 import io.github.surezzzzzz.sdk.feedback.server.service.AttachmentStorageService;
 import io.github.surezzzzzz.sdk.feedback.server.test.SimpleFeedbackServerTestApplication;
 import io.github.surezzzzzz.sdk.oss.s3.client.S3Client;
@@ -27,7 +28,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * @author surezzzzzz
  */
 @Slf4j
-@SpringBootTest(classes = SimpleFeedbackServerTestApplication.class)
+@SpringBootTest(classes = {SimpleFeedbackServerTestApplication.class,
+        ServiceTestResourceAdapterConfiguration.class})
 class AttachmentMinioIntegrationTest {
 
     private static final String BUCKET = "feedback-attachment-test";
