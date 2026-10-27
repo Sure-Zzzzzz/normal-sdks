@@ -34,13 +34,7 @@ import org.springframework.web.servlet.handler.HandlerExceptionResolverComposite
 
 import javax.sql.DataSource;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -84,32 +78,6 @@ class SubmissionFlowIntegrationTest {
         FeedbackTestSchemaHelper.reset(dataSource);
     }
 
-    @Test
-    @DisplayName("反馈前置异常解析器唯一注册并优先于 MVC 默认解析器")
-    void testPreControllerExceptionResolverRegistration() throws Exception {
-        Map<String, FeedbackPreControllerExceptionResolver> feedbackResolvers =
-                webApplicationContext.getBeansOfType(FeedbackPreControllerExceptionResolver.class);
-        assertEquals(1, feedbackResolvers.size());
-        List<HandlerExceptionResolver> ordered = new ArrayList<HandlerExceptionResolver>(
-                webApplicationContext.getBeansOfType(HandlerExceptionResolver.class).values());
-        AnnotationAwareOrderComparator.sort(ordered);
-        int feedbackIndex = ordered.indexOf(feedbackResolvers.values().iterator().next());
-        int mvcIndex = -1;
-        for (int index = 0; index < ordered.size(); index++) {
-            if (ordered.get(index) instanceof HandlerExceptionResolverComposite) {
-                mvcIndex = index;
-                break;
-            }
-        }
-        assertTrue(feedbackIndex >= 0 && mvcIndex > feedbackIndex);
-
-        MockMvc mvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        mvc.perform(post("/api/feedback/submissions").contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isUnsupportedMediaType())
-                .andExpect(result -> assertEquals("application/json", result.getResponse().getContentType().split(";")[0]))
-                .andExpect(result -> assertNotNull(result.getResponse().getHeader("X-Correlation-Id")));
-    }
-
     private static FeedbackSubmission buildSubmission(String applicationCode, String idempotencyKey,
                                                       String digestSuffix) {
         return buildSubmission(applicationCode, idempotencyKey, digestSuffix, SUBJECT);
@@ -144,6 +112,32 @@ class SubmissionFlowIntegrationTest {
                 .enabled(enabled)
                 .createdBy("registry-admin")
                 .build();
+    }
+
+    @Test
+    @DisplayName("反馈前置异常解析器唯一注册并优先于 MVC 默认解析器")
+    void testPreControllerExceptionResolverRegistration() throws Exception {
+        Map<String, FeedbackPreControllerExceptionResolver> feedbackResolvers =
+                webApplicationContext.getBeansOfType(FeedbackPreControllerExceptionResolver.class);
+        assertEquals(1, feedbackResolvers.size());
+        List<HandlerExceptionResolver> ordered = new ArrayList<HandlerExceptionResolver>(
+                webApplicationContext.getBeansOfType(HandlerExceptionResolver.class).values());
+        AnnotationAwareOrderComparator.sort(ordered);
+        int feedbackIndex = ordered.indexOf(feedbackResolvers.values().iterator().next());
+        int mvcIndex = -1;
+        for (int index = 0; index < ordered.size(); index++) {
+            if (ordered.get(index) instanceof HandlerExceptionResolverComposite) {
+                mvcIndex = index;
+                break;
+            }
+        }
+        assertTrue(feedbackIndex >= 0 && mvcIndex > feedbackIndex);
+
+        MockMvc mvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        mvc.perform(post("/api/feedback/submissions").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(result -> assertEquals("application/json", result.getResponse().getContentType().split(";")[0]))
+                .andExpect(result -> assertNotNull(result.getResponse().getHeader("X-Correlation-Id")));
     }
 
     @Test

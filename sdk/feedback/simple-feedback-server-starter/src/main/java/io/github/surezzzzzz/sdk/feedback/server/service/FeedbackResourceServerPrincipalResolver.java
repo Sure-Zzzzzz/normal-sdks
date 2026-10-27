@@ -26,6 +26,7 @@ import javax.servlet.http.HttpServletRequest;
 public class FeedbackResourceServerPrincipalResolver implements FeedbackPrincipalResolver {
 
     private static final String REASON_CONTEXT_SHAPE_MISMATCH = "resource-context-shape-mismatch";
+
     @Override
     public FeedbackRequestContext resolve(HttpServletRequest request) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

@@ -28,24 +28,15 @@ import io.github.surezzzzzz.sdk.feedback.server.controller.response.SubmissionRe
 import io.github.surezzzzzz.sdk.feedback.server.exception.FeedbackStateException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
 import io.github.surezzzzzz.sdk.feedback.server.exception.SubmissionValidationException;
-import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment;
-import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplicationAccessScope;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplication;
+import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplicationAccessScope;
+import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackAttachment;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackSubmission;
 import io.github.surezzzzzz.sdk.feedback.server.repository.FeedbackAttachmentRepository;
 import io.github.surezzzzzz.sdk.feedback.server.repository.FeedbackSubmissionRepository;
-import io.github.surezzzzzz.sdk.feedback.server.service.ApplicationRegistryService;
-import io.github.surezzzzzz.sdk.feedback.server.service.ApplicationSourceService;
-import io.github.surezzzzzz.sdk.feedback.server.service.AttachmentStorageService;
-import io.github.surezzzzzz.sdk.feedback.server.service.FeedbackPrincipalResolver;
-import io.github.surezzzzzz.sdk.feedback.server.service.FeedbackRequestContext;
-import io.github.surezzzzzz.sdk.feedback.server.service.FeedbackResourceServerPrincipalResolver;
-import io.github.surezzzzzz.sdk.feedback.server.service.HintService;
-import io.github.surezzzzzz.sdk.feedback.server.service.SubmissionCreateService;
-import io.github.surezzzzzz.sdk.feedback.server.service.SubmissionHandlingService;
-import io.github.surezzzzzz.sdk.feedback.server.service.SubmissionQueryService;
-import io.github.surezzzzzz.sdk.feedback.server.support.FeedbackRequestExceptionHandler;
+import io.github.surezzzzzz.sdk.feedback.server.service.*;
 import io.github.surezzzzzz.sdk.feedback.server.support.FeedbackPreControllerExceptionResolver;
+import io.github.surezzzzzz.sdk.feedback.server.support.FeedbackRequestExceptionHandler;
 import io.github.surezzzzzz.sdk.feedback.server.support.FeedbackRestExceptionHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,8 +55,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -75,21 +66,12 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -103,12 +85,6 @@ class FeedbackRestExceptionHandlerTest {
 
     private final FeedbackRestExceptionHandler handler = new FeedbackRestExceptionHandler();
     private final ObjectMapper mapper = new ObjectMapper();
-
-    @AfterEach
-    void clearRequestContext() {
-        RequestContextHolder.resetRequestAttributes();
-        SecurityContextHolder.clearContext();
-    }
 
     private static Map<String, HttpStatus> expectedStatuses() {
         Map<String, HttpStatus> statuses = new LinkedHashMap<>();
@@ -138,6 +114,21 @@ class FeedbackRestExceptionHandlerTest {
         statuses.put(ErrorCode.IAM_SOURCED_FIELD_LOCKED, HttpStatus.CONFLICT);
         statuses.put(ErrorCode.COLLABORATION_ASSEMBLY_INCOMPLETE, HttpStatus.INTERNAL_SERVER_ERROR);
         return statuses;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SubmissionController submissionController(HintService hintService,
+                                                             FeedbackPrincipalResolver principalResolver) {
+        return new SubmissionController(mock(SubmissionCreateService.class), mock(SubmissionQueryService.class),
+                mock(SubmissionHandlingService.class), hintService, mock(AttachmentStorageService.class),
+                principalResolver, mock(ApplicationRegistryService.class), new SimpleFeedbackServerProperties(),
+                mock(ObjectProvider.class));
+    }
+
+    @AfterEach
+    void clearRequestContext() {
+        RequestContextHolder.resetRequestAttributes();
+        SecurityContextHolder.clearContext();
     }
 
     @Test
@@ -556,15 +547,6 @@ class FeedbackRestExceptionHandlerTest {
         assertEquals(feedbackResponse.getHeader("X-Correlation-Id"),
                 assertDoesNotThrow(() -> mapper.readTree(feedbackResponse.getContentAsByteArray()))
                         .path("correlationId").asText());
-    }
-
-    @SuppressWarnings("unchecked")
-    private static SubmissionController submissionController(HintService hintService,
-                                                             FeedbackPrincipalResolver principalResolver) {
-        return new SubmissionController(mock(SubmissionCreateService.class), mock(SubmissionQueryService.class),
-                mock(SubmissionHandlingService.class), hintService, mock(AttachmentStorageService.class),
-                principalResolver, mock(ApplicationRegistryService.class), new SimpleFeedbackServerProperties(),
-                mock(ObjectProvider.class));
     }
 
     @RestController

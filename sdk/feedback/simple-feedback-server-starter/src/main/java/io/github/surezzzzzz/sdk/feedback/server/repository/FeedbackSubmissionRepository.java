@@ -155,6 +155,16 @@ public class FeedbackSubmissionRepository {
     }
 
     /**
+     * 本人列表关键词分支（只命中 content——本人列表提交人恒为自身，名字/ID 无区分度）。
+     */
+    private static void appendOwnerKeyword(StringBuilder sql, MapSqlParameterSource params, String keyword) {
+        if (keyword != null) {
+            sql.append(" AND content LIKE :fOwnerKeyword ESCAPE '!'");
+            params.addValue("fOwnerKeyword", "%" + escapeLike(keyword) + "%");
+        }
+    }
+
+    /**
      * 插入提交行。
      *
      * @param submission 反馈提交
@@ -294,16 +304,6 @@ public class FeedbackSubmissionRepository {
         sql.append(" ORDER BY created_time DESC, id DESC LIMIT :limit OFFSET :offset");
         params.addValue("limit", size).addValue("offset", offset);
         return jdbcTemplate.query(sql.toString(), params, LIST_ROW_MAPPER);
-    }
-
-    /**
-     * 本人列表关键词分支（只命中 content——本人列表提交人恒为自身，名字/ID 无区分度）。
-     */
-    private static void appendOwnerKeyword(StringBuilder sql, MapSqlParameterSource params, String keyword) {
-        if (keyword != null) {
-            sql.append(" AND content LIKE :fOwnerKeyword ESCAPE '!'");
-            params.addValue("fOwnerKeyword", "%" + escapeLike(keyword) + "%");
-        }
     }
 
     /**

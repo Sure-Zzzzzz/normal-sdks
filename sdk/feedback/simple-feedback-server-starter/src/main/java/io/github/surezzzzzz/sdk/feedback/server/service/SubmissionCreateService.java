@@ -94,6 +94,20 @@ public class SubmissionCreateService {
     }
 
     /**
+     * 只保留 owner 的主体类型前缀，日志不记录主体标识。
+     *
+     * @param owner 归属值
+     * @return 主体类型前缀
+     */
+    private static String ownerPrefix(String owner) {
+        if (owner == null) {
+            return "unknown";
+        }
+        int separator = owner.indexOf(':');
+        return separator > 0 ? owner.substring(0, separator) : "unknown";
+    }
+
+    /**
      * 提交反馈。
      *
      * @param submission  已由控制器构造的提交（owner/快照来自认证上下文）
@@ -206,20 +220,6 @@ public class SubmissionCreateService {
             log.info("频控拒绝 维度=长窗 owner前缀={} 计数={}", ownerPrefix(owner), longCount);
             throw new SubmissionRateLimitException(ErrorCode.RATE_LIMITED, ErrorMessage.RATE_LIMITED);
         }
-    }
-
-    /**
-     * 只保留 owner 的主体类型前缀，日志不记录主体标识。
-     *
-     * @param owner 归属值
-     * @return 主体类型前缀
-     */
-    private static String ownerPrefix(String owner) {
-        if (owner == null) {
-            return "unknown";
-        }
-        int separator = owner.indexOf(':');
-        return separator > 0 ? owner.substring(0, separator) : "unknown";
     }
 
     /**

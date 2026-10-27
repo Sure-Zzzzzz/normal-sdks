@@ -34,6 +34,17 @@ import static org.junit.jupiter.api.Assertions.*;
 @Slf4j
 class FeedbackExceptionLogTest {
 
+    private static RuntimeException failure(String message, String source, int line, Throwable cause) {
+        RuntimeException failure = new RuntimeException(message, cause);
+        failure.setStackTrace(new StackTraceElement[]{frame(source, line)});
+        return failure;
+    }
+
+    private static StackTraceElement frame(String source, int line) {
+        return new StackTraceElement("io.github.surezzzzzz.sdk.feedback.server." + source,
+                "fail", source + ".java", line);
+    }
+
     @Test
     void unexpectedFailureLogsBoundedStackWithoutExceptionMessage() {
         log.debug("验证未预期故障日志的脱敏边界");
@@ -98,17 +109,6 @@ class FeedbackExceptionLogTest {
             assertFalse(message.contains("private-cause"));
             assertFalse(message.contains("forged-frame"));
         }
-    }
-
-    private static RuntimeException failure(String message, String source, int line, Throwable cause) {
-        RuntimeException failure = new RuntimeException(message, cause);
-        failure.setStackTrace(new StackTraceElement[]{frame(source, line)});
-        return failure;
-    }
-
-    private static StackTraceElement frame(String source, int line) {
-        return new StackTraceElement("io.github.surezzzzzz.sdk.feedback.server." + source,
-                "fail", source + ".java", line);
     }
 
     private static final class LogCapture implements AutoCloseable {

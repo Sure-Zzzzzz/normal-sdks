@@ -34,12 +34,7 @@ import org.springframework.web.util.UriTemplate;
 import javax.servlet.Filter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collection;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Simple Feedback Server Auto Configuration。
@@ -70,49 +65,6 @@ public class SimpleFeedbackServerAutoConfiguration {
     private static final String SECURITY_FILTER_CHAIN_BEAN = "springSecurityFilterChain";
     private static final String REQUEST_MAPPING_BEAN = "requestMappingHandlerMapping";
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();
-
-    /**
-     * SPI 降级实现：可访问应用集（散形态恒返回 null=不过滤；adaptor 覆盖）。
-     *
-     * <p>让位次序不变量（非直观约束，ticket 同构线同款）：两个自动配置间无显式排序注解，
-     * 依赖 spring.factories 字母序 SimpleFeedback<b>IamAdaptor</b> 先于 SimpleFeedback<b>Server</b>
-     * 求值——adaptor 扫描件先注册，本降级 @ConditionalOnMissingBean 才能让位；任一侧自动配置
-     * 改名即破（届时双 Bean 由协作共存测试拦下，见 walkthrough 包）。</p>
-     *
-     * @return 降级实现
-     */
-    @Bean
-    @ConditionalOnMissingBean(AccessibleApplicationProvider.class)
-    public AccessibleApplicationProvider fallbackAccessibleApplicationProvider() {
-        return new FallbackAccessibleApplicationProvider();
-    }
-
-    /**
-     * SPI 降级实现：提交人联系提示（散形态恒返回 null=空输入框；adaptor 覆盖）。
-     *
-     * @return 降级实现
-     */
-    @Bean
-    @ConditionalOnMissingBean(SubmitterProfileProvider.class)
-    public SubmitterProfileProvider fallbackSubmitterProfileProvider() {
-        return new FallbackSubmitterProfileProvider();
-    }
-
-    /**
-     * 协作装配完整性检查（启动期失败，避免运行时所有反馈请求退化为 503）。
-     *
-     * <p>默认资源认证桥需要公共资源服务过滤器在实际安全链内保护每个反馈端点。
-     * 只检测类存在不能发现资源服务关闭、路径遗漏或其他链抢先匹配。宿主自备身份解析器免检。</p>
-     *
-     * @param principalResolver 反馈身份解析器
-     * @param context           应用上下文
-     * @return 装配完整性检查（单例装配完成后执行）
-     */
-    @Bean
-    public SmartInitializingSingleton collaborationAssemblyCheck(FeedbackPrincipalResolver principalResolver,
-                                                                  ApplicationContext context) {
-        return () -> validateAssembly(principalResolver, context);
-    }
 
     static void validateAssembly(FeedbackPrincipalResolver principalResolver, ApplicationContext context) {
         if (!(principalResolver instanceof FeedbackResourceServerPrincipalResolver)) {
@@ -203,5 +155,48 @@ public class SimpleFeedbackServerAutoConfiguration {
     private static FeedbackConfigurationException incompleteAssembly() {
         return new FeedbackConfigurationException(ErrorCode.COLLABORATION_ASSEMBLY_INCOMPLETE,
                 ErrorMessage.COLLABORATION_ASSEMBLY_INCOMPLETE);
+    }
+
+    /**
+     * SPI 降级实现：可访问应用集（散形态恒返回 null=不过滤；adaptor 覆盖）。
+     *
+     * <p>让位次序不变量（非直观约束，ticket 同构线同款）：两个自动配置间无显式排序注解，
+     * 依赖 spring.factories 字母序 SimpleFeedback<b>IamAdaptor</b> 先于 SimpleFeedback<b>Server</b>
+     * 求值——adaptor 扫描件先注册，本降级 @ConditionalOnMissingBean 才能让位；任一侧自动配置
+     * 改名即破（届时双 Bean 由协作共存测试拦下，见 walkthrough 包）。</p>
+     *
+     * @return 降级实现
+     */
+    @Bean
+    @ConditionalOnMissingBean(AccessibleApplicationProvider.class)
+    public AccessibleApplicationProvider fallbackAccessibleApplicationProvider() {
+        return new FallbackAccessibleApplicationProvider();
+    }
+
+    /**
+     * SPI 降级实现：提交人联系提示（散形态恒返回 null=空输入框；adaptor 覆盖）。
+     *
+     * @return 降级实现
+     */
+    @Bean
+    @ConditionalOnMissingBean(SubmitterProfileProvider.class)
+    public SubmitterProfileProvider fallbackSubmitterProfileProvider() {
+        return new FallbackSubmitterProfileProvider();
+    }
+
+    /**
+     * 协作装配完整性检查（启动期失败，避免运行时所有反馈请求退化为 503）。
+     *
+     * <p>默认资源认证桥需要公共资源服务过滤器在实际安全链内保护每个反馈端点。
+     * 只检测类存在不能发现资源服务关闭、路径遗漏或其他链抢先匹配。宿主自备身份解析器免检。</p>
+     *
+     * @param principalResolver 反馈身份解析器
+     * @param context           应用上下文
+     * @return 装配完整性检查（单例装配完成后执行）
+     */
+    @Bean
+    public SmartInitializingSingleton collaborationAssemblyCheck(FeedbackPrincipalResolver principalResolver,
+                                                                 ApplicationContext context) {
+        return () -> validateAssembly(principalResolver, context);
     }
 }

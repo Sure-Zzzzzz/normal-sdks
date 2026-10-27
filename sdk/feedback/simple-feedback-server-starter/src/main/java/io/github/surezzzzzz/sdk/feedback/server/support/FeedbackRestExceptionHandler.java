@@ -5,7 +5,7 @@ import io.github.surezzzzzz.sdk.feedback.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.feedback.server.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.feedback.server.controller.ApplicationController;
 import io.github.surezzzzzz.sdk.feedback.server.controller.SubmissionController;
-import io.github.surezzzzzz.sdk.feedback.server.exception.*;
+import io.github.surezzzzzz.sdk.feedback.server.exception.SimpleFeedbackServerException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;

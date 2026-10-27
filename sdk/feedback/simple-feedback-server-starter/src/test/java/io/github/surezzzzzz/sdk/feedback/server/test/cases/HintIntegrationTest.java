@@ -1,9 +1,9 @@
 package io.github.surezzzzzz.sdk.feedback.server.test.cases;
 
+import io.github.surezzzzzz.sdk.feedback.server.fixture.ServiceTestResourceAdapterConfiguration;
 import io.github.surezzzzzz.sdk.feedback.server.model.AccessibleApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.FeedbackApplication;
 import io.github.surezzzzzz.sdk.feedback.server.model.SubmissionContactHint;
-import io.github.surezzzzzz.sdk.feedback.server.fixture.ServiceTestResourceAdapterConfiguration;
 import io.github.surezzzzzz.sdk.feedback.server.service.ApplicationRegistryService;
 import io.github.surezzzzzz.sdk.feedback.server.service.HintService;
 import io.github.surezzzzzz.sdk.feedback.server.spi.AccessibleApplicationProvider;
