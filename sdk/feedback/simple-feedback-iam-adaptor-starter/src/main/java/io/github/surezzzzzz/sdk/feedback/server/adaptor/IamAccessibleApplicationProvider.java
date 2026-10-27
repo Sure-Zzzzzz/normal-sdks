@@ -13,14 +13,14 @@ import java.util.List;
 /**
  * IAM 可访问应用集 SPI 实现（聚形态真实现；IAM 1.3.7 页面准入详情接口）。
  *
- * <p>非直观约束：配对键=入参 subjectId 绑定（IamUser 响应不含 subjectId，修正㉑同源纪律）。
+ * <p>非直观约束：配对键由入参 subjectId 绑定（IamUser 响应不含 subjectId）。
  * 出站失败按降级处理（返回 null+WARN，不拒提交）——便利性失败不扩大为可用性故障；
  * 客户端 Bean 缺席则本模块装配期即失败（见 AutoConfiguration，不静默降级）。</p>
  *
- * <p>取数口径（修正㉓）：详情端点（code/displayName/description，displayName 与门户侧边栏
+ * <p>取数口径：详情端点（code/displayName/description，displayName 与门户侧边栏
  * 同源）而非裸编码端点——下拉命名由 IAM 单一事实源承担；与裸端点同判定同码（iam:portal:api）。</p>
  *
- * <p>目录口径（修正㉔）：catalogApplications 走全局目录端点（iam:application:api +
+ * <p>目录口径：catalogApplications 走全局目录端点（iam:application:api +
  * iam:application DATA read all），分页拉全（createdAt 倒序）；目录投影不含描述字段，
  * 描述无同源依据，注册表说明字段不参与锁定。</p>
  *

@@ -8,13 +8,13 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamUser;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * IAM 联系提示 SPI 实现（聚形态；DESIGN D12/修正⑩）。
+ * IAM 联系提示 SPI 实现（聚形态）。
  *
- * <p>非直观约束（修正㉑）：IamUser 响应不含 subjectId（id 为内部数字标识）——
+ * <p>非直观约束：IamUser 响应不含 subjectId（id 为内部数字标识）——
  * 配对键=调用入参侧绑定（请求是谁就归谁），不依赖响应回传。</p>
  *
  * <p>容错语义：IAM 客户端 Bean 缺失（传输件未引）或出站失败均按降级处理
- * （返回 null+WARN，不拒提交）——便利性失败不扩大为可用性故障（DESIGN §6.1）。</p>
+ * （返回 null+WARN，不拒提交）——便利性失败不扩大为可用性故障。</p>
  *
  * @author surezzzzzz
  */

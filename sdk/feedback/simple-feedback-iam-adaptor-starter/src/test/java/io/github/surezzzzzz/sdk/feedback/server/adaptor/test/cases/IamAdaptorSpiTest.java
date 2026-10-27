@@ -86,7 +86,7 @@ class IamAdaptorSpiTest {
         io.github.surezzzzzz.sdk.iam.client.IamApplicationClient failApplicationClient =
                 mock(io.github.surezzzzzz.sdk.iam.client.IamApplicationClient.class);
         when(failApplicationClient.listApplications(0, IamAccessibleApplicationProvider.CATALOG_PAGE_SIZE))
-                .thenThrow(new IllegalStateException("stub outbound failure"));
+                .thenThrow(new RuntimeException("stub outbound failure"));
         IamAccessibleApplicationProvider failProvider =
                 new IamAccessibleApplicationProvider(failUserClient, failApplicationClient);
         assertNull(failProvider.catalogApplications());
@@ -111,7 +111,7 @@ class IamAdaptorSpiTest {
             when(client.getUser("subject-ok")).thenReturn(user);
             when(client.getUser("subject-noemail")).thenReturn(IamUser.builder()
                     .id(2L).username("no-email").displayName("无邮箱").build());
-            when(client.getUser("subject-fail")).thenThrow(new IllegalStateException("stub outbound failure"));
+            when(client.getUser("subject-fail")).thenThrow(new RuntimeException("stub outbound failure"));
             when(client.listPageAdmittedApplicationDetails("subject-ok"))
                     .thenReturn(Arrays.asList(
                             PageAdmittedApplication.builder()
@@ -119,7 +119,7 @@ class IamAdaptorSpiTest {
                             PageAdmittedApplication.builder()
                                     .code("beta-app").displayName("应用乙").description(null).build()));
             when(client.listPageAdmittedApplicationDetails("subject-fail"))
-                    .thenThrow(new IllegalStateException("stub outbound failure"));
+                    .thenThrow(new RuntimeException("stub outbound failure"));
             return client;
         }
 
