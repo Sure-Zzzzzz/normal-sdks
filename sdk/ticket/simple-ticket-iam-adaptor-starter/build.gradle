@@ -1,0 +1,12 @@
+dependencies {
+    // localMaven/正式消费形态：固定工单 SPI 坐标。
+    api 'io.github.sure-zzzzzz:simple-ticket-server-core:1.0.0'
+    // 只依赖 IAM 客户端契约；宿主自行选择传输装配件。
+    api 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.4'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
