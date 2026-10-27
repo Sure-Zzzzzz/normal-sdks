@@ -1,0 +1,14 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
+    // 发布验收按消费者视角解析精确坐标，避免测试退回源码组合
+    testImplementation 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+}
