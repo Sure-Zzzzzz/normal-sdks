@@ -1,0 +1,9 @@
+spring:
+  profiles:
+    active: local
+
+ticket:
+  test:
+    jdbc:
+      url: jdbc:mysql://localhost:3306/simple_ticket_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      username: ticket_test

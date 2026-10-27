@@ -1,0 +1,43 @@
+dependencies {
+    // localMaven/正式消费形态：固定契约坐标，不将 project 依赖带入发布 POM。
+    api 'io.github.sure-zzzzzz:simple-ticket-server-core:1.0.0'
+    // 聚散原则（feedback 同构）：主源码只编译依赖协议层；协作装配件由宿主按需自引
+    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    compileOnly 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
+    // Ticket 1.0 是单库直连；不引入 mysql-route，避免把未使用的多数据源能力带入 POM。
+    // 附件为部署契约（可选聚件：散形态不引或 enabled=false）
+    compileOnly 'io.github.sure-zzzzzz:s3-client-starter:2.1.0'
+    // 突发限流为部署契约（可选聚件；KeyProvider 定义只在类在场时装配，ConditionalOnClass 让位）
+    compileOnly 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.2.1'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+    testImplementation 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.apache.logging.log4j:log4j-core'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.security:spring-security-test'
+    // 组合装配件（协作链；不随 POM 发布，宿主义务同 feedback）
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
+    testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.2.1'
+}
+
+// 日常 test 恒排除协作验收（外部 IAM/AKSK 终端）；协作起服与验收任务由本地 init 脚本提供，故意不入库。
+// 本机凭据在 gitignored 的 src/test/resources/application-local.yml（存在即生效）。
+tasks.test {
+    useJUnitPlatform {
+        excludeTags 'collaboration'
+    }
+}

@@ -1,0 +1,4 @@
+ticket:
+  test:
+    jdbc:
+      password: YOUR_TEST_DB_PASSWORD
