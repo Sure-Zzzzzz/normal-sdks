@@ -78,4 +78,4 @@
 
 ## 升级指南
 
-将 `simple-feedback-server-core` 与 `simple-feedback-server-starter` 一并升级到 1.0.1；若使用 IAM 聚形态，可继续使用已发布的 `simple-feedback-iam-adaptor-starter:1.0.0`，并按适配器文档显式提供 IAM 客户端传输件。调用方把本人反馈路径切换为 `/me/submissions`，其余公开操作按 OpenAPI 1.0.1 对接。
+将 `simple-feedback-server-core`、`simple-feedback-server-starter` 与 `simple-feedback-iam-adaptor-starter` 一并升级到 1.0.1；适配器宿主继续按文档显式提供 IAM 客户端传输件。调用方把本人反馈路径切换为 `/me/submissions`，其余公开操作按 OpenAPI 1.0.1 对接。

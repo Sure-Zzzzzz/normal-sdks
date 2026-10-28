@@ -68,7 +68,7 @@ io.github.surezzzzzz.sdk:
 | AKSK Provider | 宿主自引 `simple-aksk-resource-server-starter` | 服务主体通道必需；需配置已认证 introspection（内省）客户端，缺失或关闭时该通道返回 401；不随本 starter 传递 |
 | 数据面 MVC 装配件 | 宿主自引 `simple-data-permission-spring-mvc-starter` | 引=DATA 注解强制与计划注入生效；不引=无数据面遮蔽（注解只编译不强制） |
 | S3 附件 | 随 starter 发布 | 依赖在场且 `enabled=false` 时降级；依赖在场但未部署 S3 时必须显式关闭，提交不带附件仍可用 |
-| IAM hint adaptor | 宿主可选引入 `simple-feedback-iam-adaptor-starter:1.0.0` | 引=hint 完整（下拉 IAM 同源名+邮箱预填+提交人展示名快照）+注册表来源核对（IAM/本表徽标+同源锁）；不引=降级（全量+空邮箱+来源未知全可编辑） |
+| IAM hint adaptor | 宿主可选引入 `simple-feedback-iam-adaptor-starter:1.0.1` | 引=hint 完整（下拉 IAM 同源名+邮箱预填+提交人展示名快照）+注册表来源核对（IAM/本表徽标+同源锁）；不引=降级（全量+空邮箱+来源未知全可编辑） |
 
 宿主不提供 S3 且不接收附件时，必须显式设置 `io.github.surezzzzzz.sdk.oss.s3.enabled: false`；仅不启动 S3 服务不会关闭 classpath 上的自动配置。
 
