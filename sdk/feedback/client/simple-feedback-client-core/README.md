@@ -22,11 +22,20 @@ dependencies {
 
 ## 版本边界
 
-本版本的传输实现只有 `simple-feedback-aksk-resttemplate-client-starter:1.0.1`（Spring Boot 2.7.9 / Java 8）。Feign 和 Spring Boot 3/Jakarta 传输件不属于本版本支持范围，也没有从本模块间接提供。
+本契约包只定义 Java API 和公开 wire 结构，认证与 HTTP 传输由宿主按运行时选择对应 starter。四套 1.0.1 传输实现都对接同一份 Feedback OpenAPI 1.0.1 契约。
 
 ## 兼容性
 
-Java 8 字节码；无 Spring 依赖，可被 Spring Boot 2.x 或其他 Java 8 宿主引用。公开 HTTP 字段和状态码以仓内 `sdk/feedback/contract/openapi/simple-feedback-server.openapi.yaml` 的 1.0.1 契约为准。
+Java 8 字节码；无 Spring 依赖，可被 Spring Boot 2.x 或其他 Java 8 宿主引用。传输实现基线如下：
+
+| 传输实现 | Spring Boot | Spring Cloud / OpenFeign | Java |
+|---|---|---|---:|
+| `simple-feedback-aksk-resttemplate-client-starter:1.0.1` | 2.7.9 | 不依赖 | 8 |
+| `simple-feedback-aksk-feign-client-starter:1.0.1` | 2.7.9 | 2021.0.8 / 3.1.8 | 8 |
+| `simple-feedback-aksk-resttemplate-client-jakarta-starter:1.0.1` | 3.4.2 | 不依赖 | 17 |
+| `simple-feedback-aksk-feign-client-jakarta-starter:1.0.1` | 3.4.2 | 2024.0.0 / 4.2.0 | 17 |
+
+公开 HTTP 字段和状态码以仓内 `sdk/feedback/contract/openapi/simple-feedback-server.openapi.yaml` 的 1.0.1 契约为准。
 
 ## 版本映射
 

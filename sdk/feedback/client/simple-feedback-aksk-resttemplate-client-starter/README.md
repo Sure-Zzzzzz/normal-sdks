@@ -67,7 +67,11 @@ FeedbackSubmission result = feedbackClient.createSubmission(
 
 ## 版本边界与兼容性
 
-本模块是 javax 线实现，基线为 Spring Boot 2.7.9 / Java 8。Feign 和 Spring Boot 3/Jakarta 传输件不属于 1.0.1 支持范围，不应与本模块同时引入。对接服务端契约为 `simple-feedback-server-starter:1.0.1`。
+本模块是 javax 线实现，基线为 Spring Boot 2.7.9 / Java 8。Feign 和 Spring Boot 3/Jakarta 传输件属于同一 1.0.1 契约的其他运行时实现，不应与本模块在同一应用同时引入。对接服务端契约为 `simple-feedback-server-starter:1.0.1`。
+
+## 兼容性
+
+本模块验证基线为 Spring Boot 2.7.9 / Java 8。Feign 宿主使用 `simple-feedback-aksk-feign-client-starter:1.0.1`；Spring Boot 3 / Jakarta 宿主使用对应的 Jakarta RestTemplate 或 Feign starter。四条传输线共享 `simple-feedback-client-core:1.0.1`，同一应用只选择一条运行时线。
 
 ## 版本映射
 

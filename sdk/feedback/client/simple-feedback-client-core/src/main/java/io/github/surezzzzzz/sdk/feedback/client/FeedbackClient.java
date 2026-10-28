@@ -11,7 +11,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Feedback 机器调用契约。实现由认证传输 starter 提供；当前版本提供 AKSK RestTemplate 实现。
+ * Feedback 机器调用契约。实现由认证传输 starter 提供；当前版本提供 AKSK RestTemplate、Feign
+ * 以及 Jakarta 运行时传输实现。
  *
  * <p>参数 Map 是公开 wire（网络字段）面，不复用 server 内部 DTO；写操作的
  * 幂等键由调用方生成并在失败重试时复用。</p>

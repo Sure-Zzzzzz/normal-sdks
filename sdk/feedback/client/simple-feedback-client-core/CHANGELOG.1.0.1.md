@@ -27,7 +27,7 @@ Feature
 
 - Java 8 字节码，零 Spring 运行时依赖。
 - 对接 `simple-feedback-server-starter:1.0.1`。
-- 本版本不包含 Feign 或 Spring Boot 3/Jakarta 传输实现。
+- 传输实现按宿主选择 javax RestTemplate/Feign（Boot 2.7.9）或 Jakarta RestTemplate/Feign（Boot 3.4.2）。
 
 ## 新增测试
 

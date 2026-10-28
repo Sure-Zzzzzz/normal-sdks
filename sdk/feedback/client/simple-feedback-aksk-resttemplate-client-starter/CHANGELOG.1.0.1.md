@@ -28,7 +28,7 @@ Feature
 
 - Spring Boot 2.7.9 / Java 8。
 - 依赖 `simple-feedback-client-core:1.0.1` 和 AKSK RestTemplate 传输底座 3.0.2。
-- 本版本不包含 Feign 或 Spring Boot 3/Jakarta 传输实现。
+- Jakarta 宿主使用同版本契约包和 Jakarta RestTemplate starter；Feign 宿主使用对应 Feign starter。
 
 ## 新增测试
 

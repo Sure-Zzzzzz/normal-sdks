@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.feedback.client.exception.FeedbackClientProtocol
 import io.github.surezzzzzz.sdk.feedback.client.model.FeedbackAttachmentPart;
 import io.github.surezzzzzz.sdk.feedback.client.model.FeedbackSubmission;
 import io.github.surezzzzzz.sdk.feedback.client.support.FeedbackResponseValidator;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -14,6 +15,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Slf4j
 class FeedbackClientModelValidationTest {
 
     @Test
@@ -21,11 +23,13 @@ class FeedbackClientModelValidationTest {
         FeedbackClientValidationException exception = assertThrows(FeedbackClientValidationException.class,
                 () -> new FeedbackSubmission(null));
 
+        log.info("空反馈字段被客户端校验拒绝，参数={}", exception.getParameter());
         assertEquals("fields", exception.getParameter());
     }
 
     @Test
     void rejectsEachInvalidAttachmentFieldWithClientValidationException() {
+        log.info("开始校验附件文件名、媒体类型和内容的非法输入");
         assertEquals("filename", assertThrows(FeedbackClientValidationException.class,
                 () -> new FeedbackAttachmentPart(" ", "text/plain", new byte[] {1})).getParameter());
         assertEquals("contentType", assertThrows(FeedbackClientValidationException.class,
@@ -38,6 +42,7 @@ class FeedbackClientModelValidationTest {
     void keepsSubmissionFieldsIndependentFromCallerMap() {
         FeedbackSubmission submission = new FeedbackSubmission(Collections.<String, Object>singletonMap("id", "f-1"));
 
+        log.info("反馈快照保留公开标识={}", submission.getId());
         assertEquals("f-1", submission.getId());
     }
 
@@ -53,6 +58,7 @@ class FeedbackClientModelValidationTest {
         FeedbackClientProtocolException exception = assertThrows(FeedbackClientProtocolException.class,
                 () -> FeedbackResponseValidator.submission(response));
 
+        log.info("缺少公开字段的反馈响应被拒绝，消息={}", exception.getMessage());
         assertEquals("Feedback response field invalid: kind", exception.getMessage());
     }
 
@@ -70,7 +76,9 @@ class FeedbackClientModelValidationTest {
         response.put("attachments", Collections.emptyList());
         response.put("createdTime", "2026-10-24T12:00:00+08:00");
 
-        assertEquals("f-1", FeedbackResponseValidator.submission(response).getId());
+        String id = FeedbackResponseValidator.submission(response).getId();
+        log.info("完整反馈响应通过校验，标识={}", id);
+        assertEquals("f-1", id);
     }
 
     @Test
@@ -85,6 +93,7 @@ class FeedbackClientModelValidationTest {
         FeedbackClientProtocolException exception = assertThrows(FeedbackClientProtocolException.class,
                 () -> FeedbackResponseValidator.page(page));
 
+        log.info("分页内不完整反馈行被拒绝，消息={}", exception.getMessage());
         assertEquals("Feedback response field invalid: applicationCode", exception.getMessage());
     }
 }
