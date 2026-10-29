@@ -1,0 +1,21 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
+    // AKSK 底座 jakarta 认证传输
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // 测试当宿主：提供与 akskClientRestTemplate 同构的 Apache HttpClient 5 传输（PATCH 支持）
+    testImplementation 'org.apache.httpcomponents.client5:httpclient5:5.3.1'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework:spring-web'
+}
+
+// Windows 默认编码可能是 GBK；客户端源码与发布文档统一按 UTF-8 编译。
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
