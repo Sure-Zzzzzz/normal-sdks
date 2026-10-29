@@ -1,0 +1,22 @@
+dependencies {
+    // 契约层：CrmClient 接口/字段面/异常族（base-url 键与 wire 语义收 api）
+    api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
+
+    // aksk 底座（Feign 形态）：@AkskClientFeignClient 元注解与拦截器装配，本模块不重复装配
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+
+    // Spring Cloud OpenFeign（compileOnly，版本由宿主管理）
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // wire 模型注解仅编译期需要，运行时由宿主 Feign/Jackson 链提供
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.openfeign:feign-httpclient'
+    testImplementation 'io.github.openfeign:feign-jackson:11.10'
+    // 底座自闭环原则：契约测试桩直接实现 TokenManager 需自行引入
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core:3.0.0'
+}

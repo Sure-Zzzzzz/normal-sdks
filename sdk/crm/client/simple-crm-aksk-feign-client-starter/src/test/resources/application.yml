@@ -1,0 +1,36 @@
+# 测试配置：全链装配（Redis Route → smart-cache → AKSK 令牌链 → 底座 Feign 拦截器）；
+# 契约桩测试用 @Primary 桩 TokenManager 覆盖真实令牌链，Redis/cache 仅装配不承载断言。
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: 127.0.0.1
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: http://127.0.0.1:8280
+              token-endpoint: /oauth2/token
+              client-id: test-client-id
+              client-secret: test-client-secret
+        cache:
+          enabled: true
+          key-prefix: crm-feign-test
+        crm:
+          client:
+            base-url: http://127.0.0.1:1
