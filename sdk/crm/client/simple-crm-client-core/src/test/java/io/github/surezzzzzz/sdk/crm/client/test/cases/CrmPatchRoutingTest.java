@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -45,6 +46,14 @@ class CrmPatchRoutingTest {
         assertEquals("3", routing.get("sequence"), "sequence 数值须字符串化");
         assertEquals("IN_PROGRESS", routing.get("state"));
         assertEquals(2, routing.size(), "resultData 是载荷不是路由判别值");
+    }
+
+    @Test
+    void stateAndOwnerCannotBeMirroredTogether() {
+        Map<String, Object> patch = new LinkedHashMap<String, Object>();
+        patch.put("state", "inactive");
+        patch.put("owner", "iam:operator-1");
+        assertThrows(IllegalArgumentException.class, () -> CrmPatchRouting.of(patch));
     }
 
     @Test

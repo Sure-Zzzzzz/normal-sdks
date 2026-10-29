@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.crm.client;
 
 import io.github.surezzzzzz.sdk.crm.client.command.CrmClientCommand;
+import io.github.surezzzzzz.sdk.crm.client.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.crm.client.model.CrmPageView;
 import io.github.surezzzzzz.sdk.crm.client.model.CrmResourceView;
 
@@ -51,6 +52,22 @@ public interface CrmClient {
      * @return 列表页
      */
     CrmPageView listCustomers(String state, String cursor, int limit);
+
+    /**
+     * 客户列表（带名称或 ID 关键字过滤）。旧版实现未覆盖时，仅允许省略关键字调用。
+     *
+     * @param state   状态过滤（可空）
+     * @param keyword 名称或 ID 包含匹配（可空）
+     * @param cursor  游标（可空=首页）
+     * @param limit   每页上限
+     * @return 列表页
+     */
+    default CrmPageView listCustomers(String state, String keyword, String cursor, int limit) {
+        if (keyword == null) {
+            return listCustomers(state, cursor, limit);
+        }
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
 
     /**
      * 修改客户（PATCH 状态变更：停用/复启/合并/归属转移按 patch 字段区分）。
@@ -130,6 +147,22 @@ public interface CrmClient {
     CrmPageView listOfferings(String state, String cursor, int limit);
 
     /**
+     * 目录列表（带名称、业务引用或 ID 关键字过滤）。旧版实现未覆盖时，仅允许省略关键字调用。
+     *
+     * @param state   状态过滤（可空）
+     * @param keyword 名称、业务引用或 ID 包含匹配（可空）
+     * @param cursor  游标（可空=首页）
+     * @param limit   每页上限
+     * @return 列表页
+     */
+    default CrmPageView listOfferings(String state, String keyword, String cursor, int limit) {
+        if (keyword == null) {
+            return listOfferings(state, cursor, limit);
+        }
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
+
+    /**
      * 修改目录项（PATCH 状态变更：上架/下架按 patch.state 区分）。
      *
      * @param command    命令元数据
@@ -139,6 +172,79 @@ public interface CrmClient {
      */
     CrmResourceView patchOffering(CrmClientCommand command, String offeringId,
                                   Map<String, Object> patch);
+
+    // ===== 商机 =====
+
+    /**
+     * 创建商机。
+     *
+     * @param command 命令元数据
+     * @param customerId 客户标识
+     * @param title 商机标题
+     * @param primaryOfferingId 主商品标识（可空）
+     * @param contactId 主要联系人标识（可空）
+     * @param expectedCloseDate 预计成交日期（ISO-8601 日期，可空）
+     * @param estimatedAmount 预计金额十进制字符串（可空）
+     * @param currency 金额币种（可空）
+     * @return 商机视图
+     */
+    default CrmResourceView createOpportunity(CrmClientCommand command, String customerId, String title,
+                                              String primaryOfferingId, String contactId,
+                                              String expectedCloseDate, String estimatedAmount, String currency) {
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
+
+    /**
+     * 点查商机。
+     *
+     * @param opportunityId 商机标识
+     * @return 商机视图
+     */
+    default CrmResourceView getOpportunity(String opportunityId) {
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
+
+    /**
+     * 商机列表（机器游标模式）。
+     *
+     * @param stage 阶段过滤（可空）
+     * @param customerId 客户过滤（可空）
+     * @param keyword 标题关键字（可空）
+     * @param cursor 不透明游标（可空）
+     * @param limit 每页上限
+     * @return 列表页
+     */
+    default CrmPageView listOpportunities(String stage, String customerId, String keyword,
+                                          String cursor, int limit) {
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
+
+    /**
+     * 推进商机阶段；阶段为 won 时服务端只接受报价确认事务派生，人工调用会被拒绝。
+     *
+     * @param command 命令元数据
+     * @param opportunityId 商机标识
+     * @param stage 目标阶段
+     * @param lostReason 输单原因（仅 lost 必填）
+     * @return 商机视图
+     */
+    default CrmResourceView patchOpportunityStage(CrmClientCommand command, String opportunityId,
+                                                  String stage, String lostReason) {
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
+
+    /**
+     * 转移商机归属。
+     *
+     * @param command 命令元数据
+     * @param opportunityId 商机标识
+     * @param owner 新归属主体
+     * @return 商机视图
+     */
+    default CrmResourceView patchOpportunityOwner(CrmClientCommand command, String opportunityId,
+                                                  String owner) {
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
 
     // ===== 报价 =====
 
@@ -154,6 +260,26 @@ public interface CrmClient {
      */
     CrmResourceView createQuotation(CrmClientCommand command, String customerId,
                                     String validUntil, List<Map<String, Object>> lines);
+
+    /**
+     * 创建报价草稿并可选关联商机。保留旧重载以兼容未使用商机的调用方。
+     *
+     * @param command 命令元数据
+     * @param customerId 客户标识
+     * @param opportunityId 商机标识（可空）
+     * @param validUntil 有效截止（offset ISO-8601）
+     * @param lines 行命令
+     * @return 报价视图
+     */
+    default CrmResourceView createQuotation(CrmClientCommand command, String customerId,
+                                            String opportunityId, String validUntil,
+                                            List<Map<String, Object>> lines) {
+        if (opportunityId == null) {
+            return createQuotation(command, customerId, validUntil, lines);
+        }
+        // 旧实现未声明商机参数，不能静默降级为未关联商机的报价。
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
 
     /**
      * 重议派生新草稿（POST /quotations 带 sourceQuotationId）。
@@ -190,6 +316,22 @@ public interface CrmClient {
      * @return 列表页
      */
     CrmPageView listQuotations(String state, String cursor, int limit);
+
+    /**
+     * 报价列表（带单号或客户关键字过滤）。旧版实现未覆盖时，仅允许省略关键字调用。
+     *
+     * @param state   状态过滤（可空）
+     * @param keyword 单号或客户显示名包含匹配（可空）
+     * @param cursor  游标（可空=首页）
+     * @param limit   每页上限
+     * @return 列表页
+     */
+    default CrmPageView listQuotations(String state, String keyword, String cursor, int limit) {
+        if (keyword == null) {
+            return listQuotations(state, cursor, limit);
+        }
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
 
     /**
      * 编辑报价草稿（整单替换行，版本号不变）。
@@ -233,6 +375,21 @@ public interface CrmClient {
      * @return 列表页
      */
     CrmPageView listOrders(String cursor, int limit);
+
+    /**
+     * 订单列表（带订单号或客户 ID 关键字过滤）。旧版实现未覆盖时，仅允许省略关键字调用。
+     *
+     * @param keyword 订单号或客户 ID 包含匹配（可空）
+     * @param cursor  游标（可空=首页）
+     * @param limit   每页上限
+     * @return 列表页
+     */
+    default CrmPageView listOrders(String keyword, String cursor, int limit) {
+        if (keyword == null) {
+            return listOrders(cursor, limit);
+        }
+        throw new UnsupportedOperationException(ErrorMessage.OPERATION_NOT_SUPPORTED);
+    }
 
     // ===== 履约 =====
 

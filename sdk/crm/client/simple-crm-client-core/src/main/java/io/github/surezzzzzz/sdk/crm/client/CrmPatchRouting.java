@@ -22,8 +22,9 @@ public final class CrmPatchRouting {
     /**
      * 从 PATCH 载荷推导动作分派查询参数。
      *
-     * @param patch PATCH 载荷（state/owner/sequence 任一存在即镜像进查询参数）
+     * @param patch PATCH 载荷（state/owner/sequence 任一存在即镜像进查询参数；state 与 owner 互斥）
      * @return 分派查询参数；载荷为空时返回空映射
+     * @throws IllegalArgumentException 同一载荷同时包含 state 与 owner
      */
     public static Map<String, String> of(Map<String, Object> patch) {
         if (patch == null || patch.isEmpty()) {
@@ -35,6 +36,9 @@ public final class CrmPatchRouting {
             routing.put("state", String.valueOf(state));
         }
         Object owner = patch.get("owner");
+        if (state != null && owner != null) {
+            throw new IllegalArgumentException("state 与 owner 不能同时作为 PATCH 分派参数");
+        }
         if (owner != null) {
             routing.put("owner", String.valueOf(owner));
         }

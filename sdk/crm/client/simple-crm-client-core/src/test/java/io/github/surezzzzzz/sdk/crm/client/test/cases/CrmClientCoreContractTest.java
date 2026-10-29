@@ -1,5 +1,7 @@
 package io.github.surezzzzzz.sdk.crm.client.test.cases;
 
+import io.github.surezzzzzz.sdk.crm.client.CrmClient;
+import io.github.surezzzzzz.sdk.crm.client.CrmClientFieldSet;
 import io.github.surezzzzzz.sdk.crm.client.command.CrmClientCommand;
 import io.github.surezzzzzz.sdk.crm.client.exception.CrmClientProtocolException;
 import io.github.surezzzzzz.sdk.crm.client.model.CrmPageView;
@@ -119,14 +121,171 @@ class CrmClientCoreContractTest {
     }
 
     @Test
+    void machinePageRequiresExplicitNextCursorField() {
+        Map<String, Object> payload = new LinkedHashMap<String, Object>();
+        payload.put("items", Collections.emptyList());
+        log.info("机器列表缺少 nextCursor 时拒绝，避免把截断结果误判为末页");
+        assertThrows(CrmClientProtocolException.class,
+                () -> CrmResponseValidator.page(payload, "items", ARCHIVE, ARCHIVE));
+    }
+
+    @Test
+    void orderListAndDetailUseSeparateOpenApiFieldSets() {
+        Map<String, Object> money = new LinkedHashMap<String, Object>();
+        money.put("amount", "12.50");
+        money.put("currency", "CNY");
+        Map<String, Object> obligation = new LinkedHashMap<String, Object>();
+        obligation.put("subjectReference", "subject-1");
+        obligation.put("fulfillmentScope", "scope-1");
+        obligation.put("requiredConsumerCapability", "capability-1");
+        Map<String, Object> line = new LinkedHashMap<String, Object>();
+        line.put("orderLineId", "line-1");
+        line.put("sourceQuotationLineId", "quotation-line-1");
+        line.put("offeringReference", "offering-1");
+        line.put("quantity", "1");
+        line.put("unit", "set");
+        line.put("unitPrice", money);
+        line.put("lineTotal", money);
+        line.put("obligation", obligation);
+
+        Map<String, Object> detail = new LinkedHashMap<String, Object>();
+        detail.put("orderId", "order-1");
+        detail.put("sourceQuotationId", "quotation-1");
+        detail.put("sourceQuotationVersion", 1);
+        detail.put("customerId", "customer-1");
+        detail.put("settlementCurrency", "CNY");
+        detail.put("totalAmount", money);
+        detail.put("owner", "iam:owner-1");
+        detail.put("displayState", "pending_fulfillment");
+        detail.put("lines", Collections.singletonList(line));
+        CrmResourceView detailView = CrmResponseValidator.object(detail,
+                CrmClientFieldSet.ORDER_REQUIRED, CrmClientFieldSet.ORDER);
+        log.info("订单详情校验：orderId={}，lines={}", detailView.getString("orderId"),
+                ((List<?>) detailView.get("lines")).size());
+        assertEquals("order-1", detailView.getString("orderId"));
+
+        Map<String, Object> list = new LinkedHashMap<String, Object>();
+        list.put("orderId", "order-1");
+        list.put("sourceQuotationId", "quotation-1");
+        list.put("customerId", "customer-1");
+        list.put("totalAmount", money);
+        list.put("displayState", "pending_fulfillment");
+        CrmResourceView listView = CrmResponseValidator.object(list,
+                CrmClientFieldSet.ORDER_LIST_REQUIRED, CrmClientFieldSet.ORDER_LIST);
+        assertEquals("order-1", listView.getString("orderId"));
+        list.put("lines", Collections.singletonList(line));
+        assertThrows(CrmClientProtocolException.class, () -> CrmResponseValidator.object(list,
+                CrmClientFieldSet.ORDER_LIST_REQUIRED, CrmClientFieldSet.ORDER_LIST));
+    }
+
+    @Test
+    void quotationVersionAndConfirmationRequireTheirOpenApiPayloads() {
+        Map<String, Object> money = new LinkedHashMap<String, Object>();
+        money.put("amount", "12.50");
+        money.put("currency", "CNY");
+        Map<String, Object> obligation = new LinkedHashMap<String, Object>();
+        obligation.put("subjectReference", "subject-1");
+        obligation.put("fulfillmentScope", "scope-1");
+        obligation.put("requiredConsumerCapability", "capability-1");
+        Map<String, Object> line = new LinkedHashMap<String, Object>();
+        line.put("quotationLineId", "line-1");
+        line.put("offeringId", "offering-1");
+        line.put("offeringReference", "offering-ref-1");
+        line.put("quantity", "1");
+        line.put("unit", "set");
+        line.put("unitPrice", money);
+        line.put("lineTotal", money);
+        line.put("obligation", obligation);
+        Map<String, Object> version = new LinkedHashMap<String, Object>();
+        version.put("quotationId", "quotation-1");
+        version.put("version", 1);
+        version.put("state", "issued");
+        version.put("settlementCurrency", "CNY");
+        version.put("validUntil", "2030-01-01T00:00:00Z");
+        version.put("totalAmount", money);
+        version.put("issuedAt", null);
+        version.put("terminalAt", null);
+        version.put("lines", Collections.singletonList(line));
+        assertEquals("quotation-1", CrmResponseValidator.object(version,
+                CrmClientFieldSet.QUOTATION_VERSION_REQUIRED, CrmClientFieldSet.QUOTATION_VERSION)
+                .getString("quotationId"));
+
+        Map<String, Object> confirmation = new LinkedHashMap<String, Object>();
+        confirmation.put("state", "confirmed");
+        confirmation.put("quotationId", "quotation-1");
+        confirmation.put("customerId", "customer-1");
+        confirmation.put("opportunityId", null);
+        confirmation.put("owner", "iam:owner-1");
+        confirmation.put("aggregateVersion", 2);
+        confirmation.put("currentVersion", 1);
+        confirmation.put("currentConfirmableVersion", null);
+        confirmation.put("confirmedOrderId", "order-1");
+        confirmation.put("supersedesQuotationId", null);
+        confirmation.put("orderId", "order-1");
+        confirmation.put("fulfillmentItemIds", Collections.singletonList("fulfillment-1"));
+        assertEquals("order-1", CrmResponseValidator.object(confirmation,
+                CrmClientFieldSet.QUOTATION_CONFIRMATION_REQUIRED, CrmClientFieldSet.QUOTATION_CONFIRMATION)
+                .getString("orderId"));
+        confirmation.remove("fulfillmentItemIds");
+        assertThrows(CrmClientProtocolException.class, () -> CrmResponseValidator.object(confirmation,
+                CrmClientFieldSet.QUOTATION_CONFIRMATION_REQUIRED, CrmClientFieldSet.QUOTATION_CONFIRMATION));
+    }
+
+    @Test
+    void fulfillmentAndOperationLogHonorNullableResponseFields() {
+        Map<String, Object> obligation = new LinkedHashMap<String, Object>();
+        obligation.put("subjectReference", "subject-1");
+        obligation.put("fulfillmentScope", "scope-1");
+        obligation.put("requiredConsumerCapability", "capability-1");
+        Map<String, Object> fulfillment = new LinkedHashMap<String, Object>();
+        fulfillment.put("fulfillmentId", "fulfillment-1");
+        fulfillment.put("orderId", "order-1");
+        fulfillment.put("orderLineId", "line-1");
+        fulfillment.put("owner", "iam:owner-1");
+        fulfillment.put("assignedConsumerId", "consumer-1");
+        fulfillment.put("state", "pending_dispatch");
+        fulfillment.put("reportSequence", 0);
+        fulfillment.put("consumerProtocolVersion", 1);
+        fulfillment.put("obligation", obligation);
+        fulfillment.put("resultData", null);
+        fulfillment.put("note", null);
+        fulfillment.put("reportedBy", null);
+        assertEquals("fulfillment-1", CrmResponseValidator.object(fulfillment,
+                CrmClientFieldSet.FULFILLMENT_REQUIRED, CrmClientFieldSet.FULFILLMENT)
+                .getString("fulfillmentId"));
+        fulfillment.put("reportSequence", "0");
+        assertThrows(CrmClientProtocolException.class, () -> CrmResponseValidator.object(fulfillment,
+                CrmClientFieldSet.FULFILLMENT_REQUIRED, CrmClientFieldSet.FULFILLMENT));
+
+        Map<String, Object> operation = new LinkedHashMap<String, Object>();
+        operation.put("owner", "iam:owner-1");
+        operation.put("action", "create");
+        operation.put("targetResourceType", "customer");
+        operation.put("targetResourceId", "customer-1");
+        operation.put("correlationId", null);
+        operation.put("resultCode", null);
+        operation.put("occurredAt", "2030-01-01T00:00:00Z");
+        assertNull(CrmResponseValidator.object(operation, CrmClientFieldSet.OPERATION_LOG_REQUIRED,
+                CrmClientFieldSet.OPERATION_LOG).getNullable("correlationId"));
+        operation.remove("resultCode");
+        assertThrows(CrmClientProtocolException.class, () -> CrmResponseValidator.object(operation,
+                CrmClientFieldSet.OPERATION_LOG_REQUIRED, CrmClientFieldSet.OPERATION_LOG));
+    }
+
+    @Test
     void completeConsumerListWithoutCursorRemainsCompatible() {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
         payload.put("items", Collections.emptyList());
-        CrmPageView page = CrmResponseValidator.page(payload, "items", ARCHIVE, ARCHIVE);
+        CrmPageView page = CrmResponseValidator.completeList(payload, "items", ARCHIVE, ARCHIVE);
         log.info("完整消费者列表兼容：行数={}，续页={}", page.getItems().size(), page.hasNext());
         assertTrue(page.getItems().isEmpty());
         assertFalse(page.hasNext());
         assertNull(page.getNextCursor());
+
+        payload.put("nextCursor", null);
+        assertThrows(CrmClientProtocolException.class,
+                () -> CrmResponseValidator.completeList(payload, "items", ARCHIVE, ARCHIVE),
+                "完整列表不能混入机器游标字段");
     }
 
     @Test
@@ -139,5 +298,21 @@ class CrmClientCoreContractTest {
         assertEquals("idem-1", withCorrelation.getIdempotencyKey());
         assertEquals("corr-1", withCorrelation.getCorrelationId());
         assertNull(withoutCorrelation.getCorrelationId(), "空白关联 ID 归 null（传输层生成）");
+    }
+
+    @Test
+    void opportunityExtensionsRemainDefaultMethodsForLegacyImplementations() throws Exception {
+        assertTrue(CrmClient.class.getMethod("createOpportunity", CrmClientCommand.class, String.class,
+                String.class, String.class, String.class, String.class, String.class, String.class).isDefault());
+        assertTrue(CrmClient.class.getMethod("getOpportunity", String.class).isDefault());
+        assertTrue(CrmClient.class.getMethod("listOpportunities", String.class, String.class,
+                String.class, String.class, int.class).isDefault());
+        assertTrue(CrmClient.class.getMethod("patchOpportunityStage", CrmClientCommand.class, String.class,
+                String.class, String.class).isDefault());
+        assertTrue(CrmClient.class.getMethod("patchOpportunityOwner", CrmClientCommand.class, String.class,
+                String.class).isDefault());
+        assertTrue(CrmClient.class.getMethod("createQuotation", CrmClientCommand.class, String.class,
+                String.class, String.class, List.class).isDefault());
+        log.info("商机和报价关联扩展保留默认方法，旧版客户端实现仍可加载");
     }
 }

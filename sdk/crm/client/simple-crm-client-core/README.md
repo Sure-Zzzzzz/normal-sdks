@@ -7,7 +7,7 @@ CRM 机器客户端契约层：`CrmClient` 接口提供 CRM Server 公开 HTTP �
 ## 引入依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-crm-client-core:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
 ```
 
 本模块不发送 HTTP 请求、不装配 Spring、不管理任何凭据。传输与认证由两条传输线之一提供：
@@ -36,7 +36,8 @@ CrmClientCommand command = new CrmClientCommand("order-confirm-0001", "checkout-
 - **客户**：创建、点查、列表、停用、复启、合并、归属转移；
 - **联系人**：创建、点查、按客户列表；
 - **目录**：创建（DRAFT 录入）、点查、列表、上架、下架；
-- **报价**：创建草稿、编辑草稿（整单替换）、点查、版本点查、列表、签发、确认、撤回、重议派生、归属转移；
+- **商机**：创建、点查、列表、阶段推进/输单、归属转移；阶段 `won` 只能由关联报价确认成交派生；
+- **报价**：创建草稿、编辑草稿（整单替换）、点查、版本点查、列表、签发、确认、撤回、重议派生、归属转移；创建与重议可携带 `opportunityId`；
 - **订单与履约**：订单点查与列表、履约项点查与列表、履约结果回写（首次 `in_progress` 即认领，序号严格递增）、人工重置；
 - **消费者注册与审计**：履约消费者注册/查询、审计记录查询。
 

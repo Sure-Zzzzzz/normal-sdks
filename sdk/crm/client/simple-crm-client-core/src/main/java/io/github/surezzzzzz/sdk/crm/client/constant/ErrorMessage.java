@@ -34,6 +34,22 @@ public final class ErrorMessage {
      */
     public static final String FIELD_MUST_BE_STRING = "字段必须为字符串: %s";
     /**
+     * 数字字段类型错误。
+     */
+    public static final String FIELD_MUST_BE_NUMBER = "字段必须为数字: %s";
+    /**
+     * 布尔字段类型错误消息模板。
+     */
+    public static final String FIELD_MUST_BE_BOOLEAN = "字段必须为布尔值: %s";
+    /**
+     * 数组字段类型错误消息模板。
+     */
+    public static final String FIELD_MUST_BE_ARRAY = "字段必须为数组: %s";
+    /**
+     * 数组元素类型错误消息模板。
+     */
+    public static final String ARRAY_ITEM_MUST_BE_STRING = "数组元素必须为字符串: %s";
+    /**
      * 嵌套资源对象类型错误消息。
      */
     public static final String NESTED_RESOURCE_MUST_BE_OBJECT = "嵌套资源必须为对象";
@@ -57,6 +73,11 @@ public final class ErrorMessage {
      * 列表行类型错误消息。
      */
     public static final String ITEM_MUST_BE_OBJECT = "行不是对象";
+    /**
+     * 旧版客户端实现未覆盖新增操作时的明确失败消息。
+     */
+    public static final String OPERATION_NOT_SUPPORTED = "当前客户端实现未支持该操作";
+
     private ErrorMessage() {
         throw new UnsupportedOperationException(UTILITY_CLASS);
     }

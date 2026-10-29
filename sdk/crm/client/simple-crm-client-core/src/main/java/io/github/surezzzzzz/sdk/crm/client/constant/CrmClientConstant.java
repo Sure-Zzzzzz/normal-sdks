@@ -12,6 +12,10 @@ public final class CrmClientConstant {
      */
     public static final int SUCCESS_HTTP_STATUS = 200;
     /**
+     * 列表行数组字段。
+     */
+    public static final String FIELD_ITEMS = "items";
+    /**
      * 机器续读游标字段。
      */
     public static final String FIELD_NEXT_CURSOR = "nextCursor";
