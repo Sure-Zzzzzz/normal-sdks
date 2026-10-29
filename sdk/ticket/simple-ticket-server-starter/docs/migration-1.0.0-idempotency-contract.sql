@@ -52,6 +52,7 @@ SELECT CASE
                       AND INDEX_NAME = 'uk_source_credential_idem') = 0
            THEN 1 ELSE 0 END;
 
+-- 不可逆步骤：MySQL DDL 单句原子，但本脚本多句不能整体回滚；执行后若后置断言失败，按备份/克隆演练流程人工恢复旧索引，不要继续放行服务。
 ALTER TABLE ticket DROP INDEX uk_source_idem;
 
 INSERT INTO ticket_idempotency_contract_gate (ready)
