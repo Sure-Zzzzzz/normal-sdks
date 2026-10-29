@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  io.github.surezzzzzz.sdk.crm.server.configuration.SimpleCrmServerAutoConfiguration,\
+  io.github.surezzzzzz.sdk.crm.server.configuration.SimpleCrmServerResourceOwnerResolverConfiguration

@@ -1,0 +1,43 @@
+spring:
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        redis:
+          route:
+            enable: true
+            default-source: default
+            sources:
+              default:
+                mode: standalone
+                host: localhost
+                port: 6379
+                database: 0
+                timeout-ms: 3000
+                connect-timeout-ms: 3000
+        cache:
+          enabled: true
+          me: crm-server-test
+        crm:
+          server:
+            enable: true
+        mysql:
+          route:
+            enable: true
+            primary-datasource: crm
+            datasources:
+              crm:
+                url: jdbc:mysql://localhost:3306/simple_crm_server_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: root
+                driver-class-name: com.mysql.cj.jdbc.Driver
+
+logging:
+  level:
+    io:
+      github:
+        surezzzzzz:
+          sdk:
+            crm: DEBUG

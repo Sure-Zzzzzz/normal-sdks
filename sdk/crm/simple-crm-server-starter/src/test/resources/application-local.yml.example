@@ -1,0 +1,9 @@
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            datasources:
+              crm:
+                password: your_mysql_password_here

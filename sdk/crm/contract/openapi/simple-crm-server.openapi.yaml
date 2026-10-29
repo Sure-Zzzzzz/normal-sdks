@@ -1,0 +1,1123 @@
+openapi: 3.0.3
+info:
+  title: Simple CRM Server API
+  version: "2.1.0"
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+  description: |
+    CRM 商业闭环 REST 契约 v2.1（客户/商机/目录/报价/订单/履约/操作记录）。
+    认证：Bearer（IAM 人员令牌或 AKSK 机器凭据）；权限：37 个 crm.* API 码逐端点执行；
+    DATA：读列表/点查按 owner 维度（授权 all=全量、受限=IN、缺省=本人等值）。
+    写请求必带 Idempotency-Key 头（全部写路径支持同键重放，重放不重复审计）；金额与数量为
+    十进制字符串；时间为 ISO-8601；响应状态为小写稳定 code。
+    请求体只对声明字段建立业务事实；额外字段不参与命令。除报价重议外，写请求必须携带 JSON
+    对象；无额外载荷的状态动作可以传 {}。可选 X-Correlation-Id 用于关联业务操作记录。
+    状态变更统一 PATCH 资源本体，按查询参数分派动作并挂接逐动作权限码（请求体携带同名字段时
+    必须与查询参数一致；同一 PATCH 不得同时携带状态（或阶段）判别参数和归属判别参数，混用返回 400）：
+    客户 ?state=inactive/active/merged 或 ?owner=目标；目录
+    ?state=published/disabled；报价 ?state=issued/confirmed/withdrawn 或 ?owner=目标；
+    履约回报 ?sequence=N、人工重置 ?state=PENDING_DISPATCH。缺判别参数的 PATCH 不匹配任何
+    路由（404）。
+    分页有两种互斥模式：管理台传 page/pageSize（页码从 1 开始，默认 1/20，每页最多 100），
+    返回 items/page/pageSize/total；机器续读传 cursor/limit（默认 20，最多 100），
+    返回 items/nextCursor，nextCursor=null 表示末页。只要传 page 或 pageSize 即进入页码模式，
+    同时传 cursor 或 limit 返回 400；page/pageSize/cursor/limit 出现但值为空也返回 400。
+    页码总数与当页行应用相同过滤条件、授权范围和读取快照；
+    超出末页返回空 items，保留请求页码和真实 total。游标仅能原样续读同一查询，
+    过滤条件或归属授权范围变化后须从首页重查，旧查询游标返回 400。
+    消费者列表保留不带分页参数时返回完整 items 的兼容模式；管理台必须传 page/pageSize，
+    消费者请求出现 cursor 或 limit 即返回 400。
+servers:
+  - url: /api/crm
+security:
+  - bearerAuth: []
+paths:
+  /customers:
+    post:
+      operationId: createCustomer
+      summary: 创建客户
+      tags: [客户]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCustomerRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/CustomerCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      operationId: listCustomers
+      summary: 客户列表
+      tags: [客户]
+      parameters:
+        - {name: state, in: query, schema: {type: string}}
+        - {name: keyword, in: query, schema: {type: string}, description: 名称/ID 包含匹配}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/CustomerList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /customers/{customerId}:
+    get: {operationId: getCustomer, summary: 点查客户, tags: [客户], parameters: [$ref: '#/components/parameters/CustomerId'], responses: {'200': {$ref: '#/components/responses/Customer'}, '404': {$ref: '#/components/responses/NotFound'}}}
+    patch:
+      operationId: patchCustomer
+      summary: 客户状态变更（分派入口）
+      tags: [客户]
+      description: 按查询参数分派：?state=inactive 停用（crm.customer.disable）、?state=active 复启（crm.customer.activate）、?state=merged 合并（crm.customer.merge，body 带 mergeTargetId）、?owner=目标 转移归属（crm.customer.transfer）。state 与 owner 互斥，同时携带返回 400。
+      parameters:
+        - $ref: '#/components/parameters/CustomerId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: state
+          in: query
+          schema: {type: string, enum: [inactive, active, merged]}
+        - name: owner
+          in: query
+          schema: {type: string}
+          description: 转移目标归属（iam:xxx）
+      requestBody:
+        required: true
+        description: state=merged 时 mergeTargetId 必填；停用、复启和转移可以传 {}。携带 state/owner 时须与分派查询参数一致。
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CustomerPatchRequest'}
+      responses: {'200': {$ref: '#/components/responses/CustomerPatch'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}}
+  /opportunities:
+    post:
+      operationId: createOpportunity
+      summary: 创建商机
+      tags: [商机]
+      description: 创建客户下的销售商机，初始阶段固定为 new。商机是独立聚合，可关联多个报价；客户必须已存在且在当前数据范围内可见。
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateOpportunityRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/OpportunityCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      operationId: listOpportunities
+      summary: 商机列表
+      tags: [商机]
+      parameters:
+        - {name: stage, in: query, schema: {type: string, enum: [new, qualified, proposal, negotiation, won, lost]}}
+        - {name: customerId, in: query, schema: {type: string}, description: 按客户过滤}
+        - {name: keyword, in: query, schema: {type: string}, description: 标题/ID 包含匹配}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/OpportunityList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /opportunities/{opportunityId}:
+    get:
+      operationId: getOpportunity
+      summary: 点查商机
+      tags: [商机]
+      parameters: [$ref: '#/components/parameters/OpportunityId']
+      responses:
+        '200': {$ref: '#/components/responses/Opportunity'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      operationId: patchOpportunity
+      summary: 商机阶段或归属变更（分派入口）
+      tags: [商机]
+      description: |-
+        按查询参数分派：?stage=new/qualified/proposal/negotiation/lost 推进阶段（crm.opportunity.stage），
+        ?owner=目标 转移归属（crm.opportunity.transfer）。人工不能将阶段设为 won；won 只能由关联报价确认成交事务派生。
+        lost 必须携带非空 lostReason。商机进入 won 或 lost 后不可再转阶段；商机终态也不可再创建关联报价。
+      parameters:
+        - $ref: '#/components/parameters/OpportunityId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: stage
+          in: query
+          schema: {type: string, enum: [new, qualified, proposal, negotiation, lost]}
+        - name: owner
+          in: query
+          schema: {type: string}
+          description: 转移目标归属（iam:xxx 或 aksk:xxx）
+      requestBody:
+        required: false
+        description: stage/owner 携带同名字段时必须与查询参数一致；stage 与 owner 互斥，同时携带返回 400；stage=lost 时 lostReason 必填；stage=won 不允许人工调用。
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OpportunityPatchRequest'}
+      responses:
+        '200': {$ref: '#/components/responses/Opportunity'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /contacts:
+    post:
+      operationId: createContact
+      summary: 创建联系人
+      tags: [联系人]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateContactRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/ContactCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      operationId: listContacts
+      summary: 按客户列联系人
+      tags: [联系人]
+      parameters:
+        - {name: customerId, in: query, required: true, schema: {type: string}}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/ContactList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /contacts/{contactId}:
+    get: {operationId: getContact, summary: 点查联系人, tags: [联系人], parameters: [$ref: '#/components/parameters/ContactId'], responses: {'200': {$ref: '#/components/responses/Contact'}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /offerings:
+    post:
+      operationId: createOffering
+      summary: 创建目录项
+      tags: [目录]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateOfferingRequest'}
+      responses:
+        '201': {$ref: '#/components/responses/OfferingCreated'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    get:
+      operationId: listOfferings
+      summary: 目录列表（读无 DATA）
+      tags: [目录]
+      parameters:
+        - {name: state, in: query, schema: {type: string}}
+        - {name: keyword, in: query, schema: {type: string}}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/OfferingList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /offerings/{offeringId}:
+    get: {operationId: getOffering, summary: 点查目录项, tags: [目录], parameters: [$ref: '#/components/parameters/OfferingId'], responses: {'200': {$ref: '#/components/responses/Offering'}, '404': {$ref: '#/components/responses/NotFound'}}}
+    patch:
+      operationId: patchOffering
+      summary: 目录项状态变更（分派入口）
+      tags: [目录]
+      description: 按查询参数分派：?state=published 上架（crm.offering.publish）、?state=disabled 下架（crm.offering.disable）。
+      parameters:
+        - $ref: '#/components/parameters/OfferingId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: state
+          in: query
+          required: true
+          schema: {type: string, enum: [published, disabled]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/OfferingPatchRequest'}
+      responses: {'200': {$ref: '#/components/responses/Offering'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}}
+  /quotations:
+    post:
+      operationId: createOrRenegotiateQuotation
+      summary: 创建报价草稿 / 重议派生新草稿（查询参数分派）
+      tags: [报价]
+      description: 不带 sourceQuotationId=创建草稿（crm.quotation.create）；?sourceQuotationId=源单=重议派生（crm.quotation.renegotiate，服务端生成新报价 ID，同键重放返回首成果；body 携带同名字段须与查询参数一致）。同商品允许多行业务行，各行独立保留数量、价格、授权对象和履约范围，不按商品合并。
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sourceQuotationId
+          in: query
+          schema: {type: string}
+          description: 重议分派判别值（源报价 ID）
+      requestBody:
+        required: false
+        description: 不带 sourceQuotationId 时必须传 CreateQuotationRequest；带 sourceQuotationId 时请求体可省略，携带同名字段须一致，其余草稿内容继承源报价。
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - {$ref: '#/components/schemas/CreateQuotationRequest'}
+                - {$ref: '#/components/schemas/RenegotiateQuotationRequest'}
+      responses: {'201': {$ref: '#/components/responses/QuotationCreated'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}}
+    get:
+      operationId: listQuotations
+      summary: 报价列表
+      description: 响应项含展示态 state（draft草稿/issued待确认/confirmed已成交/withdrawn已撤回/superseded已被重议取代/expired已过期——终态真相在版本行，服务端按当前事实派生）。
+      tags: [报价]
+      parameters:
+        - {name: state, in: query, schema: {type: string}}
+        - {name: keyword, in: query, schema: {type: string}, description: 单号或客户显示名包含匹配}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/QuotationList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /quotations/{quotationId}:
+    get: {operationId: getQuotation, summary: 点查报价, tags: [报价], parameters: [$ref: '#/components/parameters/QuotationId'], responses: {'200': {$ref: '#/components/responses/Quotation'}, '404': {$ref: '#/components/responses/NotFound'}}}
+    put:
+      operationId: editQuotation
+      summary: 编辑草稿（整单替换，版本号不变；crm.quotation.edit；同键重放返回已提交编辑）
+      description: 同商品允许出现多行，保持独立数量、价格、授权对象和履约范围，不按商品合并业务行。
+      tags: [报价]
+      parameters:
+        - {$ref: '#/components/parameters/QuotationId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EditQuotationRequest'}
+      responses: {'200': {$ref: '#/components/responses/Quotation'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}}
+    patch:
+      operationId: patchQuotation
+      summary: 报价状态变更（分派入口）
+      tags: [报价]
+      description: 按查询参数分派：?state=issued 签发（crm.quotation.issue，body 带 quotationVersion/expectedAggregateVersion）、?state=confirmed 确认成交（crm.quotation.confirm，同事务生成订单+履约项）、?state=withdrawn 撤回终态（crm.quotation.withdraw）、?owner=目标 转移归属（crm.quotation.transfer，仅未确认且未过期报价；关联未终态商机同事务同步 owner，不改变客户 owner）。state 与 owner 互斥，同时携带返回 400。签发/确认重放按已提交事实重建声明结果。
+      parameters:
+        - $ref: '#/components/parameters/QuotationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: state
+          in: query
+          schema: {type: string, enum: [issued, confirmed, withdrawn]}
+        - name: owner
+          in: query
+          schema: {type: string}
+          description: 转移目标归属（iam:xxx）
+      requestBody:
+        required: true
+        description: 签发/确认必须传 quotationVersion 与 expectedAggregateVersion；撤回和转移可以传 {}。state/owner 携带时须与查询参数一致。
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/QuotationPatchRequest'}
+      responses: {'200': {$ref: '#/components/responses/QuotationPatch'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}, '503': {$ref: '#/components/responses/Unavailable'}}
+  /quotations/{quotationId}/versions/{version}:
+    get: {operationId: getQuotationVersion, summary: 点查报价版本（含行明细与冻结履约义务）, tags: [报价], parameters: [$ref: '#/components/parameters/QuotationId', $ref: '#/components/parameters/QuotationVersion'], responses: {'200': {$ref: '#/components/responses/QuotationVersion'}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /orders:
+    get:
+      operationId: listOrders
+      summary: 订单列表
+      description: 响应含 displayState（pending_fulfillment待履约/partially_fulfilled部分履约/fulfilled已履约——由本单交付项完成事实同事务派生，履约回写或人工重置后即时重算）。
+      tags: [订单]
+      parameters:
+        - {name: keyword, in: query, schema: {type: string}, description: 订单号/客户 ID 包含匹配}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/OrderList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /orders/{orderId}:
+    get: {operationId: getOrder, summary: 点查订单（含行明细与履约义务）, tags: [订单], parameters: [$ref: '#/components/parameters/OrderId'], responses: {'200': {$ref: '#/components/responses/Order'}, '404': {$ref: '#/components/responses/NotFound'}}}
+  /fulfillment-items:
+    get:
+      operationId: listFulfillmentItems
+      summary: 履约项列表（人=owner，机器=派发归属）
+      tags: [履约]
+      parameters:
+        - {name: state, in: query, schema: {type: string}}
+        - {name: orderId, in: query, schema: {type: string}, description: 人员查询的订单过滤条件}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/FulfillmentList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /fulfillment-items/{fulfillmentId}:
+    get: {operationId: getFulfillmentItem, summary: 点查履约项, tags: [履约], parameters: [$ref: '#/components/parameters/FulfillmentId'], responses: {'200': {$ref: '#/components/responses/Fulfillment'}, '404': {$ref: '#/components/responses/NotFound'}}}
+    patch:
+      operationId: patchFulfillmentItem
+      summary: 履约项回写/重置（分派入口）
+      tags: [履约]
+      description: 按查询参数分派：?sequence=N 回报进度（crm.fulfillment.report，DATA write，序号严格递增，body 带 state=in_progress/completed/failed；终态 resultData 必填）、?state=PENDING_DISPATCH 人工重置（crm.fulfillment.reset，DATA write，仅 failed 可重置，水位保留）。回报状态忽略大小写；响应统一小写稳定 code。机器只能回报派发给自己的履约项，人工重置为人员治理动作。
+      parameters:
+        - $ref: '#/components/parameters/FulfillmentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - name: sequence
+          in: query
+          schema: {type: integer, format: int32, minimum: 1}
+          description: 回报序号（回报分派判别值）
+        - name: state
+          in: query
+          schema: {type: string, enum: [PENDING_DISPATCH]}
+      requestBody:
+        required: true
+        description: sequence 分派使用 ReportFulfillmentRequest；state=PENDING_DISPATCH 分派使用 ResetFulfillmentRequest，重置可传 {}。
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - {$ref: '#/components/schemas/ReportFulfillmentRequest'}
+                - {$ref: '#/components/schemas/ResetFulfillmentRequest'}
+      responses: {'200': {$ref: '#/components/responses/Fulfillment'}, '400': {$ref: '#/components/responses/BadRequest'}, '404': {$ref: '#/components/responses/NotFound'}, '409': {$ref: '#/components/responses/Conflict'}}
+  /fulfillment-consumers:
+    post:
+      operationId: upsertFulfillmentConsumer
+      summary: 注册/更新履约消费者（consumerId 须与 AKP clientId 一致；crm.fulfillment.consumer-admin；同键重放不重复审计）
+      tags: [履约]
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/CorrelationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpsertConsumerRequest'}
+      responses: {'200': {$ref: '#/components/responses/ConsumerUpsert'}, '400': {$ref: '#/components/responses/BadRequest'}, '409': {$ref: '#/components/responses/Conflict'}}
+    get:
+      operationId: listFulfillmentConsumers
+      summary: 消费者列表（管理面）
+      description: 传 page 或 pageSize 返回真实页码结果；均不传时返回完整 items，兼容机器客户端。此端点不提供 cursor/limit 续读。
+      tags: [履约]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/Consumers'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+  /operation-logs:
+    get:
+      operationId: listOperationLogs
+      summary: 操作记录查询（按资源过滤；crm.audit.read）
+      tags: [操作记录]
+      parameters:
+        - {name: resourceId, in: query, schema: {type: string}, description: 目标资源 ID 过滤}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200': {$ref: '#/components/responses/OperationLogList'}
+        '400': {$ref: '#/components/responses/InvalidPagination'}
+components:
+  parameters:
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string}, description: 幂等键（同键同参数不重复执行业务或审计；创建复用首资源并回读，已知目标命令重放首次结果，异参数 409）}
+    CorrelationId: {name: X-Correlation-Id, in: header, required: false, schema: {type: string}, description: 操作关联标识；省略或空白时服务端生成，记录到业务操作日志。}
+    CustomerId: {name: customerId, in: path, required: true, schema: {type: string}}
+    ContactId: {name: contactId, in: path, required: true, schema: {type: string}}
+    OfferingId: {name: offeringId, in: path, required: true, schema: {type: string}}
+    OpportunityId: {name: opportunityId, in: path, required: true, schema: {type: string}}
+    QuotationId: {name: quotationId, in: path, required: true, schema: {type: string}}
+    QuotationVersion: {name: version, in: path, required: true, schema: {type: integer, format: int32, minimum: 1}}
+    OrderId: {name: orderId, in: path, required: true, schema: {type: string}}
+    FulfillmentId: {name: fulfillmentId, in: path, required: true, schema: {type: string}}
+    Cursor:
+      name: cursor
+      in: query
+      schema: {type: string, minLength: 1}
+      description: 机器续读的不透明游标，首页省略；出现但为空返回 400，须原样用于同一主体、过滤条件和授权范围，不能与 page/pageSize 混用。
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: 游标模式每页条数，不能与 page/pageSize 混用。
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, format: int32, minimum: 1, default: 1}
+      description: 管理台真实页码；传此参数即进入页码模式，不能同时传 cursor/limit。
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+      description: 页码模式每页条数；单独传此参数时 page 默认为 1，不能同时传 cursor/limit。
+  responses:
+    Offering:
+      description: 商品视图；创建、点查、列表行与上下架返回同一字段形状。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OfferingView'}
+    CustomerPatch:
+      description: 停用/复启为客户视图，合并为 source/target/relocatedContacts，归属转移为 customer/transferredQuotations。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/CustomerView'}
+              - {$ref: '#/components/schemas/CustomerMergeResult'}
+              - {$ref: '#/components/schemas/CustomerTransferResult'}
+    OfferingList:
+      description: 商品列表，行字段与商品点查一致；机器模式为游标页，管理台模式为真实页码页。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/OfferingCursorPage'}
+              - {$ref: '#/components/schemas/OfferingNumberedPage'}
+    Consumers:
+      description: 成功；无分页参数返回完整 items，页码模式为 items/page/pageSize/total。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/ConsumerCompleteList'}
+              - {$ref: '#/components/schemas/ConsumerNumberedPage'}
+    InvalidPagination: {description: 分页参数非法或显式空值、混用两种模式、消费者使用 cursor/limit，或游标不属于当前查询与授权范围。}
+    NotFound: {description: 资源不存在或不可访问（安全 404）；PATCH 缺分派判别参数也为 404}
+    Conflict: {description: 与当前资源状态冲突（版本/状态/幂等异参/无承接方）}
+    BadRequest:
+      description: 请求参数校验失败。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+    Unavailable:
+      description: 依赖的商业能力暂不可用。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
+    CustomerCreated:
+      description: 客户创建成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CustomerView'}
+    Customer:
+      description: 客户视图。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CustomerView'}
+    CustomerList:
+      description: 客户列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/CustomerCursorPage'}
+              - {$ref: '#/components/schemas/CustomerNumberedPage'}
+    ContactCreated:
+      description: 联系人创建成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ContactView'}
+    Contact:
+      description: 联系人视图。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ContactView'}
+    ContactList:
+      description: 联系人列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/ContactCursorPage'}
+              - {$ref: '#/components/schemas/ContactNumberedPage'}
+    OfferingCreated:
+      description: 目录项创建成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OfferingView'}
+    OpportunityCreated:
+      description: 商机创建成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpportunityView'}
+    Opportunity:
+      description: 商机视图。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OpportunityView'}
+    OpportunityList:
+      description: 商机列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/OpportunityCursorPage'}
+              - {$ref: '#/components/schemas/OpportunityNumberedPage'}
+    QuotationCreated:
+      description: 报价草稿或重议草稿创建成功。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/QuotationSummary'}
+    Quotation:
+      description: 报价摘要。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/QuotationSummary'}
+    QuotationList:
+      description: 报价列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/QuotationCursorPage'}
+              - {$ref: '#/components/schemas/QuotationNumberedPage'}
+    QuotationPatch:
+      description: 报价状态或归属变更结果；确认成交时附带订单与履约项标识。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/QuotationSummary'}
+              - {$ref: '#/components/schemas/QuotationConfirmation'}
+    QuotationVersion:
+      description: 报价版本明细，包含冻结的履约义务。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/QuotationVersionView'}
+    Order:
+      description: 订单明细，包含订单行和履约义务。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/OrderView'}
+    OrderList:
+      description: 订单列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/OrderCursorPage'}
+              - {$ref: '#/components/schemas/OrderNumberedPage'}
+    Fulfillment:
+      description: 履约项明细。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/FulfillmentView'}
+    FulfillmentList:
+      description: 履约项列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/FulfillmentCursorPage'}
+              - {$ref: '#/components/schemas/FulfillmentNumberedPage'}
+    ConsumerUpsert:
+      description: 履约消费者注册或更新结果。
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ConsumerUpsertView'}
+    OperationLogList:
+      description: 操作记录列表；响应形状由分页模式决定。
+      content:
+        application/json:
+          schema:
+            oneOf:
+              - {$ref: '#/components/schemas/OperationLogCursorPage'}
+              - {$ref: '#/components/schemas/OperationLogNumberedPage'}
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [message, occurredAt]
+      properties:
+        message: {type: string}
+        occurredAt: {type: string, format: date-time}
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amount, currency]
+      properties:
+        amount: {type: string, description: 十进制金额字符串。}
+        currency: {type: string, minLength: 1}
+    ObligationView:
+      type: object
+      additionalProperties: false
+      required: [subjectReference, fulfillmentScope, requiredConsumerCapability]
+      properties:
+        subjectReference: {type: string}
+        fulfillmentScope: {type: string}
+        requiredConsumerCapability: {type: string}
+    CustomerView:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, state, owner]
+      properties:
+        id: {type: string}
+        displayName: {type: string}
+        state: {type: string}
+        owner: {type: string}
+    OpportunityView:
+      type: object
+      additionalProperties: false
+      required: [opportunityId, customerId, owner, title, stage, aggregateVersion, createdAt, updatedAt]
+      properties:
+        opportunityId: {type: string}
+        customerId: {type: string}
+        owner: {type: string}
+        title: {type: string}
+        primaryOfferingId: {type: string, nullable: true}
+        contactId: {type: string, nullable: true}
+        expectedCloseDate: {type: string, format: date, nullable: true}
+        estimatedAmount: {type: string, nullable: true, description: 十进制金额字符串。}
+        currency: {type: string, nullable: true}
+        stage: {type: string, enum: [new, qualified, proposal, negotiation, won, lost]}
+        lostReason: {type: string, nullable: true}
+        aggregateVersion: {type: integer, format: int64, minimum: 1}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    ContactView:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, state, customerId]
+      properties:
+        id: {type: string}
+        displayName: {type: string}
+        state: {type: string}
+        customerId: {type: string}
+        title: {type: string, nullable: true}
+    QuotationSummary:
+      type: object
+      additionalProperties: false
+      required: [state, quotationId, customerId, owner, aggregateVersion, currentVersion]
+      properties:
+        state: {type: string, enum: [draft, issued, confirmed, withdrawn, superseded, expired]}
+        quotationId: {type: string}
+        customerId: {type: string}
+        opportunityId: {type: string, nullable: true, description: 关联商机标识；同一商机可关联多个报价。}
+        owner: {type: string}
+        aggregateVersion: {type: integer, format: int64, minimum: 0}
+        currentVersion: {type: integer, format: int32, minimum: 1}
+        currentConfirmableVersion: {type: integer, format: int32, minimum: 1, nullable: true}
+        confirmedOrderId: {type: string, nullable: true}
+        supersedesQuotationId: {type: string, nullable: true}
+    QuotationConfirmation:
+      type: object
+      additionalProperties: false
+      required: [state, quotationId, customerId, owner, aggregateVersion, currentVersion, orderId, fulfillmentItemIds]
+      properties:
+        state: {type: string, enum: [confirmed]}
+        quotationId: {type: string}
+        customerId: {type: string}
+        opportunityId: {type: string, nullable: true, description: 关联商机标识；确认成交后关联商机同事务推进为 won。}
+        owner: {type: string}
+        aggregateVersion: {type: integer, format: int64, minimum: 0}
+        currentVersion: {type: integer, format: int32, minimum: 1}
+        currentConfirmableVersion: {type: integer, format: int32, minimum: 1, nullable: true}
+        confirmedOrderId: {type: string, nullable: true}
+        supersedesQuotationId: {type: string, nullable: true}
+        orderId: {type: string}
+        fulfillmentItemIds: {type: array, items: {type: string}}
+    QuotationLineView:
+      type: object
+      additionalProperties: false
+      required: [quotationLineId, offeringId, offeringReference, quantity, unit, unitPrice, lineTotal, obligation]
+      properties:
+        quotationLineId: {type: string}
+        offeringId: {type: string}
+        offeringReference: {type: string}
+        quantity: {type: string, description: 十进制数量字符串。}
+        unit: {type: string}
+        unitPrice: {$ref: '#/components/schemas/Money'}
+        lineTotal: {$ref: '#/components/schemas/Money'}
+        obligation: {$ref: '#/components/schemas/ObligationView'}
+    QuotationVersionView:
+      type: object
+      additionalProperties: false
+      required: [quotationId, version, state, settlementCurrency, validUntil, totalAmount, lines]
+      properties:
+        quotationId: {type: string}
+        version: {type: integer, format: int32, minimum: 1}
+        state: {type: string}
+        settlementCurrency: {type: string}
+        validUntil: {type: string, format: date-time}
+        totalAmount: {$ref: '#/components/schemas/Money'}
+        issuedAt: {type: string, format: date-time, nullable: true}
+        terminalAt: {type: string, format: date-time, nullable: true}
+        lines: {type: array, items: {$ref: '#/components/schemas/QuotationLineView'}}
+    OrderLineView:
+      type: object
+      additionalProperties: false
+      required: [orderLineId, sourceQuotationLineId, offeringReference, quantity, unit, unitPrice, lineTotal, obligation]
+      properties:
+        orderLineId: {type: string}
+        sourceQuotationLineId: {type: string}
+        offeringReference: {type: string}
+        quantity: {type: string}
+        unit: {type: string}
+        unitPrice: {$ref: '#/components/schemas/Money'}
+        lineTotal: {$ref: '#/components/schemas/Money'}
+        obligation: {$ref: '#/components/schemas/ObligationView'}
+    OrderView:
+      type: object
+      additionalProperties: false
+      required: [orderId, sourceQuotationId, sourceQuotationVersion, customerId, settlementCurrency, totalAmount, owner, displayState, lines]
+      properties:
+        orderId: {type: string}
+        sourceQuotationId: {type: string}
+        sourceQuotationVersion: {type: integer, format: int32, minimum: 1}
+        customerId: {type: string}
+        settlementCurrency: {type: string}
+        totalAmount: {$ref: '#/components/schemas/Money'}
+        owner: {type: string}
+        displayState: {type: string, enum: [pending_fulfillment, partially_fulfilled, fulfilled]}
+        lines: {type: array, items: {$ref: '#/components/schemas/OrderLineView'}}
+    OrderListItem:
+      type: object
+      additionalProperties: false
+      required: [orderId, sourceQuotationId, customerId, totalAmount, displayState]
+      properties:
+        orderId: {type: string}
+        sourceQuotationId: {type: string}
+        customerId: {type: string}
+        totalAmount: {$ref: '#/components/schemas/Money'}
+        displayState: {type: string, enum: [pending_fulfillment, partially_fulfilled, fulfilled]}
+    FulfillmentView:
+      type: object
+      additionalProperties: false
+      required: [fulfillmentId, orderId, orderLineId, owner, assignedConsumerId, state, reportSequence, consumerProtocolVersion, obligation]
+      properties:
+        fulfillmentId: {type: string}
+        orderId: {type: string}
+        orderLineId: {type: string}
+        owner: {type: string}
+        assignedConsumerId: {type: string}
+        state: {type: string, enum: [pending_dispatch, in_progress, completed, failed, revoked]}
+        reportSequence: {type: integer, format: int32, minimum: 0}
+        consumerProtocolVersion: {type: integer, format: int32, minimum: 1}
+        obligation: {$ref: '#/components/schemas/ObligationView'}
+        resultData: {type: string, nullable: true}
+        note: {type: string, nullable: true}
+        reportedBy: {type: string, nullable: true}
+    ConsumerView:
+      type: object
+      additionalProperties: false
+      required: [consumerId, capability, protocolVersion, enabled]
+      properties:
+        consumerId: {type: string}
+        capability: {type: string}
+        protocolVersion: {type: integer, format: int32, minimum: 1}
+        enabled: {type: boolean}
+    ConsumerUpsertView:
+      type: object
+      additionalProperties: false
+      required: [consumerId, capability]
+      properties:
+        consumerId: {type: string}
+        capability: {type: string}
+    OperationLogView:
+      type: object
+      additionalProperties: false
+      required: [owner, action, targetResourceType, targetResourceId, correlationId, resultCode, occurredAt]
+      properties:
+        owner: {type: string}
+        action: {type: string}
+        targetResourceType: {type: string}
+        targetResourceId: {type: string}
+        correlationId: {type: string, nullable: true}
+        resultCode: {type: string, nullable: true}
+        occurredAt: {type: string, format: date-time}
+    CreateCustomerRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName]
+      properties:
+        displayName: {type: string, minLength: 1}
+    CreateOpportunityRequest:
+      type: object
+      additionalProperties: false
+      required: [customerId, title]
+      properties:
+        customerId: {type: string, minLength: 1}
+        title: {type: string, minLength: 1}
+        primaryOfferingId: {type: string, nullable: true}
+        contactId: {type: string, nullable: true}
+        expectedCloseDate: {type: string, format: date, nullable: true}
+        estimatedAmount: {type: string, nullable: true, description: 十进制金额字符串，不能为负数。}
+        currency: {type: string, nullable: true}
+    OpportunityPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        stage: {type: string, enum: [new, qualified, proposal, negotiation, lost]}
+        lostReason: {type: string, nullable: true, description: 输单原因；stage=lost 时必填。}
+        owner: {type: string, description: 转移目标归属；与查询参数 owner 一致。}
+    CreateContactRequest:
+      type: object
+      additionalProperties: false
+      required: [customerId, displayName]
+      properties:
+        customerId: {type: string, minLength: 1}
+        displayName: {type: string, minLength: 1}
+        title: {type: string, nullable: true}
+    CreateOfferingRequest:
+      type: object
+      additionalProperties: false
+      required: [offeringReference, displayName, capabilityType, requiredConsumerCapability]
+      properties:
+        offeringReference: {type: string, minLength: 1}
+        displayName: {type: string, minLength: 1}
+        capabilityType: {type: string, minLength: 1}
+        requiredConsumerCapability: {type: string, minLength: 1}
+    QuotationLineRequest:
+      type: object
+      additionalProperties: false
+      required: [offeringId, quantity, unit, unitPrice, subjectReference, fulfillmentScope]
+      properties:
+        offeringId: {type: string, minLength: 1}
+        quantity: {type: string, minLength: 1}
+        unit: {type: string, minLength: 1}
+        unitPrice: {$ref: '#/components/schemas/Money'}
+        subjectReference: {type: string, minLength: 1}
+        fulfillmentScope: {type: string, minLength: 1}
+    CreateQuotationRequest:
+      type: object
+      additionalProperties: false
+      required: [customerId, validUntil, lines]
+      properties:
+        customerId: {type: string, minLength: 1}
+        opportunityId: {type: string, nullable: true, description: 可选商机标识；传入时必须属于同一客户且处于可报价阶段。}
+        validUntil: {type: string, format: date-time}
+        lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/QuotationLineRequest'}}
+    EditQuotationRequest:
+      type: object
+      additionalProperties: false
+      required: [validUntil, lines]
+      properties:
+        validUntil: {type: string, format: date-time}
+        lines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/QuotationLineRequest'}}
+    RenegotiateQuotationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        sourceQuotationId: {type: string, minLength: 1}
+    CustomerPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        state: {type: string, enum: [inactive, active, merged]}
+        mergeTargetId: {type: string, minLength: 1}
+        owner: {type: string, minLength: 1}
+    OfferingPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        state: {type: string, enum: [published, disabled]}
+    QuotationPatchRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        state: {type: string, enum: [issued, confirmed, withdrawn]}
+        owner: {type: string, minLength: 1}
+        quotationVersion: {type: integer, format: int32, minimum: 1}
+        expectedAggregateVersion: {type: integer, format: int64, minimum: 0}
+    ReportFulfillmentRequest:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state: {type: string, enum: [in_progress, completed, failed]}
+        sequence: {type: integer, format: int32, minimum: 1}
+        resultData: {type: string}
+        note: {type: string}
+    ResetFulfillmentRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        state: {type: string, enum: [PENDING_DISPATCH]}
+    UpsertConsumerRequest:
+      type: object
+      additionalProperties: false
+      required: [consumerId, capability, protocolVersion]
+      properties:
+        consumerId: {type: string, minLength: 1}
+        capability: {type: string, minLength: 1}
+        protocolVersion: {type: integer, format: int32, minimum: 1}
+        enabled: {type: boolean, default: true}
+    OfferingView:
+      type: object
+      additionalProperties: false
+      required: [id, displayName, state, owner, offeringReference, capabilityType, requiredConsumerCapability]
+      properties:
+        id: {type: string}
+        displayName: {type: string}
+        state: {type: string, enum: [draft, published, disabled]}
+        owner: {type: string}
+        offeringReference: {type: string, description: 商品稳定业务引用，报价和订单快照以此引用关联商品。}
+        capabilityType: {type: string, description: 商业能力稳定代码。}
+        requiredConsumerCapability: {type: string, description: 商品要求的履约消费者能力。}
+    CustomerMergeResult:
+      type: object
+      additionalProperties: false
+      required: [source, target, relocatedContacts]
+      properties:
+        source: {$ref: '#/components/schemas/CustomerView'}
+        target: {$ref: '#/components/schemas/CustomerView'}
+        relocatedContacts:
+          type: array
+          description: 改挂到目标客户的联系人，可为空数组。
+          items: {$ref: '#/components/schemas/ContactView'}
+    CustomerTransferResult:
+      type: object
+      additionalProperties: false
+      required: [customer, transferredQuotations]
+      properties:
+        customer: {$ref: '#/components/schemas/CustomerView'}
+        transferredQuotations:
+          type: array
+          description: 同事务转移归属的报价摘要，可为空数组。
+          items:
+            type: object
+            additionalProperties: false
+            required: [quotationId, owner]
+            properties:
+              quotationId: {type: string}
+              owner: {type: string}
+    CursorPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextCursor]
+      properties:
+        items: {type: array, items: {type: object}}
+        nextCursor: {type: string, nullable: true, description: 仅存在更多数据时返回游标，null 表示末页。}
+    NumberedPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, pageSize, total]
+      properties:
+        items: {type: array, items: {type: object}}
+        page: {type: integer, format: int32, minimum: 1}
+        pageSize: {type: integer, minimum: 1, maximum: 100}
+        total: {type: integer, format: int64, minimum: 0, description: 相同过滤条件、授权范围和读取快照内的真实总数。}
+    CompleteList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {type: object}}
+    OfferingCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OfferingView'}}
+    OfferingNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OfferingView'}}
+    OpportunityCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OpportunityView'}}
+    OpportunityNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OpportunityView'}}
+    CustomerCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/CustomerView'}}
+    CustomerNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/CustomerView'}}
+    ContactCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/ContactView'}}
+    ContactNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/ContactView'}}
+    QuotationCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/QuotationSummary'}}
+    QuotationNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/QuotationSummary'}}
+    OrderCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OrderListItem'}}
+    OrderNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OrderListItem'}}
+    FulfillmentCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/FulfillmentView'}}
+    FulfillmentNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/FulfillmentView'}}
+    ConsumerCompleteList:
+      allOf:
+        - {$ref: '#/components/schemas/CompleteList'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/ConsumerView'}}
+    ConsumerNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/ConsumerView'}}
+    OperationLogCursorPage:
+      allOf:
+        - {$ref: '#/components/schemas/CursorPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OperationLogView'}}
+    OperationLogNumberedPage:
+      allOf:
+        - {$ref: '#/components/schemas/NumberedPage'}
+        - type: object
+          properties:
+            items: {type: array, items: {$ref: '#/components/schemas/OperationLogView'}}
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}

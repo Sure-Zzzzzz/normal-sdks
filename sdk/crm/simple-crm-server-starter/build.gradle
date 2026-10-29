@@ -1,0 +1,38 @@
+dependencies {
+    // CRM 内核及身份、数据权限依赖均使用固定 Maven 坐标。
+    api 'io.github.sure-zzzzzz:simple-crm-server-core:2.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    // DATA 协议本体：1.2.0 已将公共注解与计划模型收归 core。
+    // QueryService 与控制器公开方法直接消费 DataAccessPlan，必须作为编程契约暴露。
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.2.0'
+    // Resource 主体上下文仅用于编译 owner 翻译桥；运行时由宿主 Resource starter 提供。
+    compileOnly 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+
+    // 数据源路由是 server 的部署契约：生产宿主启用后，JDBC 与事务由同一 Route 数据源接管。
+    // 该依赖随 starter 传递；CRM 不另建连接，也不在 Route 之外复制一套数据源。
+    implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    // 限流 SDK 是 CRM server 的运行组件，默认关闭；规则仍由宿主配置。
+    implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.2.1'
+    // 远程策略快照客户端随 server 提供，启用时复用宿主的 AKSK 出站身份。
+    implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-aksk-resttemplate-client-starter:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-security'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    testImplementation project(':sdk:auth:resource:simple-resource-server-starter')
+    testImplementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+}
