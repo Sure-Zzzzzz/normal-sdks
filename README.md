@@ -55,11 +55,11 @@ implementation 'io.github.sure-zzzzzzz.sdk:示例:版本'   // 见各文档篇�
 | 公共资源层 resource-server + data-permission | 1.1.1 / 1.2.0 / 1.1.0 | 1.0.0 / 1.0.0 / 1.1.0 | 人+机双身份资源服务协作底座 | [认证与授权-AKSK](docs/business/认证与授权-AKSK.md) |
 | smart-kms-server-starter（+core/contract 共3件） | 2.0.2 | — | 密钥全生命周期 | [密钥管理-KMS](docs/business/密钥管理-KMS.md) |
 | KMS client（core + SB2 双件 + jakarta 双件） | 2.0.0 | 1.0.0 | 服务端调用 KMS 的契约与装配件 | [密钥管理-KMS](docs/business/密钥管理-KMS.md) |
-| simple-crm-server-core | 2.0.0 | — | CRM 领域核心：报价五态/履约状态机/幂等可重放契约 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
-| simple-crm-server-starter | 1.0.0 | — | CRM RESTful v2 服务（PATCH 动作分派逐码鉴权+全路径幂等+DATA 接线+审计事件） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
-| simple-crm-client-core | 1.0.0 | — | CRM 客户端契约（与 openapi v2 逐端点对账） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
-| simple-crm-aksk-resttemplate-client-starter | 1.0.0 | 1.0.0 | CRM AKSK RestTemplate 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
-| simple-crm-aksk-feign-client-starter | 1.0.0 | 1.0.0 | CRM AKSK Feign 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-crm-server-core | 2.1.0 | — | CRM 领域核心：商机管线/报价六态/履约状态机/幂等可重放契约 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-crm-server-starter | 1.1.0 | — | CRM RESTful v2.1 服务（商机、PATCH 动作分派逐码鉴权+全路径幂等+DATA 接线+审计事件） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-crm-client-core | 1.1.0 | — | CRM 客户端契约（与 OpenAPI v2.1 逐端点对账） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-crm-aksk-resttemplate-client-starter | 1.1.0 | 1.1.0 | CRM AKSK RestTemplate 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
+| simple-crm-aksk-feign-client-starter | 1.1.0 | 1.1.0 | CRM AKSK Feign 客户端 | [客户管理-CRM](docs/business/客户管理-CRM.md) |
 | simple-crm-audit-listener-starter | 1.0.0 | — | CRM 审计事件监听（Handler SPI） | [客户管理-CRM](docs/business/客户管理-CRM.md) |
 | simple-feedback-server-starter（+core/iam-adaptor 共3件） | 1.0.1 | — | 通用产品反馈服务：三表 MySQL+S3 附件+三权协作+幂等快照+双档频控+注册表来源同源锁 | [产品反馈-Feedback](docs/business/产品反馈-Feedback.md) |
 | simple-feedback-client-core | 1.0.1 | — | Feedback REST 客户端契约（请求、响应与错误分类） | [产品反馈-Feedback](docs/business/产品反馈-Feedback.md) |
