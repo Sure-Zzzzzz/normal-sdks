@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.crm.server.core.domain.customer;
 
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmException;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.support.CrmValidationHelper;
 import lombok.Getter;
 
@@ -66,8 +67,9 @@ public final class Customer {
      * @return 停用后的客户事实
      */
     public Customer deactivated(Instant updatedAt) {
-        if (state == CustomerState.INACTIVE) {
-            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "customer already inactive");
+        if (state == CustomerState.INACTIVE || state == CustomerState.MERGED) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
+                    state == CustomerState.MERGED ? "merged customer cannot deactivate" : "customer already inactive");
         }
         return new Customer(customerId, displayName, CustomerState.INACTIVE, owner, mergedIntoCustomerId,
                 aggregateVersion + 1L, createdAt, updatedAt);
@@ -80,8 +82,9 @@ public final class Customer {
      * @return 复启后的客户事实
      */
     public Customer activated(Instant updatedAt) {
-        if (state == CustomerState.ACTIVE) {
-            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "customer already active");
+        if (state == CustomerState.ACTIVE || state == CustomerState.MERGED) {
+            throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
+                    state == CustomerState.MERGED ? "merged customer cannot activate" : "customer already active");
         }
         return new Customer(customerId, displayName, CustomerState.ACTIVE, owner, mergedIntoCustomerId,
                 aggregateVersion + 1L, createdAt, updatedAt);
@@ -111,7 +114,7 @@ public final class Customer {
      * @return 转移后的客户事实
      */
     public Customer transferredTo(String newOwner, Instant updatedAt) {
-        CrmValidationHelper.required(newOwner, "newOwner");
+        CrmOwner.of(newOwner);
         if (state == CustomerState.MERGED) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "merged customer cannot be transferred");
         }

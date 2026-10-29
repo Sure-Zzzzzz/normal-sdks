@@ -80,6 +80,15 @@ public enum CrmAction {
      */
     QUOTATION_TRANSFER("quotation_transfer", "报价、归属转移"),
 
+    /** 商机、创建。 */
+    OPPORTUNITY_CREATE("opportunity_create", "商机、创建"),
+
+    /** 商机、阶段推进。 */
+    OPPORTUNITY_STAGE("opportunity_stage", "商机、阶段推进"),
+
+    /** 商机、归属转移。 */
+    OPPORTUNITY_TRANSFER("opportunity_transfer", "商机、归属转移"),
+
     /**
      * 目录、上架。
      */

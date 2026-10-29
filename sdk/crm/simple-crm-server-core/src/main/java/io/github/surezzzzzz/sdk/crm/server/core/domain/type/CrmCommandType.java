@@ -30,6 +30,15 @@ public enum CrmCommandType {
      */
     CREATE_QUOTATION("create_quotation", "创建、报价"),
 
+    /** 创建商机。 */
+    CREATE_OPPORTUNITY("create_opportunity", "创建、商机"),
+
+    /** 推进商机阶段。 */
+    TRANSITION_OPPORTUNITY("transition_opportunity", "推进、商机"),
+
+    /** 转移商机归属。 */
+    TRANSFER_OPPORTUNITY("transfer_opportunity", "转移、商机归属"),
+
     /**
      * 签发、报价。
      */

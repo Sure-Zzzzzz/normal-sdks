@@ -156,6 +156,9 @@ public final class QuotationLifecycleService {
         if (quotation.isConfirmed() || !quotation.isIssued()) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be withdrawn");
         }
+        if (version.isExpired(now)) {
+            throw new CrmException(CrmErrorCode.QUOTATION_EXPIRED, "quotation has expired");
+        }
         return new QuotationWithdrawal(quotation.withdrawn(now), version.withdrawn(now, owner));
     }
 
@@ -172,8 +175,9 @@ public final class QuotationLifecycleService {
     }
 
     /**
-     * 重议派生新草稿：自已签发报价版本复制冻结快照（行/币种/总金额/有效截止时间），新报价记录取代来源；
-     * 新报价确认时来源报价自动 SUPERSEDED。源报价可为惰性过期态（落库仍为 ISSUED）。
+     * 重议派生新草稿：自已签发且仍在有效期内的报价版本复制冻结快照（行/币种/总金额/有效截止时间），
+     * 新报价记录取代来源；新报价确认时来源报价自动 SUPERSEDED。过期报价虽然惰性判定、不落库，
+     * 仍是终态，不能继续重议。
      *
      * @param sourceQuotation 源报价聚合当前事实（须已签发未确认）
      * @param sourceVersion   源报价当前可确认版本事实
@@ -190,10 +194,14 @@ public final class QuotationLifecycleService {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION,
                     "only issued quotation can be renegotiated");
         }
+        if (sourceVersion.isExpired(now)) {
+            throw new CrmException(CrmErrorCode.QUOTATION_EXPIRED, "quotation has expired");
+        }
         String newQuotationId = CrmValidationHelper.required(
                 idGenerator.nextId(CrmIdResourceType.QUOTATION), "quotationId");
         Quotation newQuotation = new Quotation(newQuotationId, sourceQuotation.getCustomerId(),
-                sourceQuotation.getOwner(), 1L, 1, null, null, sourceQuotation.getQuotationId(), now, now);
+                sourceQuotation.getOpportunityId(), sourceQuotation.getOwner(), 1L, 1, null, null,
+                sourceQuotation.getQuotationId(), now, now);
         // 行快照复制但行 ID 必须换新：本报价的行是自己的事实，沿用源行 ID 会撞全局唯一键
         List<QuotationLine> copiedLines = new ArrayList<QuotationLine>();
         for (QuotationLine sourceLine : sourceVersion.getLines()) {

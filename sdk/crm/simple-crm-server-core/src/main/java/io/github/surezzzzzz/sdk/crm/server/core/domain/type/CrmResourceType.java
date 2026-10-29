@@ -30,6 +30,9 @@ public enum CrmResourceType {
      */
     QUOTATION("quotation", "报价"),
 
+    /** 商机。 */
+    OPPORTUNITY("opportunity", "商机"),
+
     /**
      * 订单。
      */
@@ -38,7 +41,10 @@ public enum CrmResourceType {
     /**
      * 履约、项。
      */
-    FULFILLMENT_ITEM("fulfillment_item", "履约、项");
+    FULFILLMENT_ITEM("fulfillment_item", "履约、项"),
+
+    /** 履约消费者注册。 */
+    FULFILLMENT_CONSUMER("fulfillment_consumer", "履约消费者");
 
     /**
      * 稳定类型代码。

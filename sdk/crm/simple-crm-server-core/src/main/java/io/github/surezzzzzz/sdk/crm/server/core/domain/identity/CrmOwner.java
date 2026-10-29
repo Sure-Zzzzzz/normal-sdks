@@ -67,9 +67,11 @@ public final class CrmOwner {
     public static CrmOwner of(String owner) {
         CrmValidationHelper.required(owner, "owner");
         if (owner.startsWith(PREFIX_HUMAN)) {
+            CrmValidationHelper.required(owner.substring(PREFIX_HUMAN.length()), "subjectId");
             return new CrmOwner(owner, CrmSubjectType.HUMAN);
         }
         if (owner.startsWith(PREFIX_SERVICE)) {
+            CrmValidationHelper.required(owner.substring(PREFIX_SERVICE.length()), "clientId");
             return new CrmOwner(owner, CrmSubjectType.SERVICE);
         }
         throw new CrmException(CrmErrorCode.INVALID_FORMAT,

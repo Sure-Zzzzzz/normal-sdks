@@ -75,10 +75,14 @@ class ArchiveGovernanceTest {
                 source.getCustomerId(), now));
         CrmException transferMerged = assertThrows(CrmException.class, () -> merged.transferredTo(
                 "iam:actor-2", now));
+        CrmException deactivateMerged = assertThrows(CrmException.class, () -> merged.deactivated(now));
+        CrmException activateMerged = assertThrows(CrmException.class, () -> merged.activated(now));
         log.info("合并守卫结果：自并错误码={}，转移已并入错误码={}", selfMerge.getErrorCode(),
                 transferMerged.getErrorCode());
         assertEquals(CrmErrorCode.INVALID_STATE_TRANSITION, selfMerge.getErrorCode());
         assertEquals(CrmErrorCode.INVALID_STATE_TRANSITION, transferMerged.getErrorCode());
+        assertEquals(CrmErrorCode.INVALID_STATE_TRANSITION, deactivateMerged.getErrorCode());
+        assertEquals(CrmErrorCode.INVALID_STATE_TRANSITION, activateMerged.getErrorCode());
     }
 
     @Test
@@ -95,6 +99,8 @@ class ArchiveGovernanceTest {
                 null, null, null, now, now);
         Quotation transferred = draft.transferredTo("iam:actor-2", now);
         assertEquals("iam:actor-2", transferred.getOwner(), "未确认报价可转移归属");
+        assertEquals(2L, transferred.getAggregateVersion(), "归属转移必须递增报价聚合版本");
+        assertThrows(CrmException.class, () -> draft.transferredTo("invalid-owner", now));
 
         Quotation confirmed = new Quotation("quotation-1", "customer-1", "iam:actor-1", 3L, 1,
                 null, "order-1", null, now, now);

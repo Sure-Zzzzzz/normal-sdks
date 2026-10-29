@@ -30,6 +30,9 @@ public enum CrmIdResourceType {
      */
     QUOTATION("quotation", "报价"),
 
+    /** 商机。 */
+    OPPORTUNITY("opportunity", "商机"),
+
     /**
      * 报价、行。
      */

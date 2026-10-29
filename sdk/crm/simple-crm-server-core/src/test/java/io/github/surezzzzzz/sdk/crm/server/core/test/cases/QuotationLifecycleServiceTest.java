@@ -101,6 +101,14 @@ class QuotationLifecycleServiceTest {
     }
 
     @Test
+    void expiredIssuedQuotationCannotBeWithdrawn() {
+        Instant late = Instant.parse("2026-08-02T00:00:00Z");
+        CrmException exception = assertThrows(CrmException.class, () -> service.withdraw(
+                issuedQuotation(), issuedVersion(), late, "iam:actor-1"));
+        assertEquals(CrmErrorCode.QUOTATION_EXPIRED, exception.getErrorCode());
+    }
+
+    @Test
     void renegotiateDerivesDraftFromIssuedSnapshotWithSupersedeLink() {
         QuotationDraft derived = service.renegotiate(issuedQuotation(), issuedVersion(), now, idGenerator());
 
@@ -116,6 +124,30 @@ class QuotationLifecycleServiceTest {
         assertEquals(QuotationState.DRAFT, derived.getQuotationVersion().getState());
         assertEquals(1, derived.getQuotationVersion().getLines().size(), "行快照必须完整复制");
         assertEquals("iam:actor-1", derived.getQuotation().getOwner());
+    }
+
+    @Test
+    void expiredIssuedQuotationCannotBeRenegotiated() {
+        Instant late = Instant.parse("2026-08-02T00:00:00Z");
+        CrmException exception = assertThrows(CrmException.class, () -> service.renegotiate(
+                issuedQuotation(), issuedVersion(), late, idGenerator()));
+        assertEquals(CrmErrorCode.QUOTATION_EXPIRED, exception.getErrorCode());
+    }
+
+    @Test
+    void renegotiateCarriesOpportunityLinkIntoDerivedQuotation() {
+        Quotation source = new Quotation("quotation-opportunity-1", "customer-1", "opportunity-1",
+                "iam:actor-1", 1L, 1, 1, null, null, now.minusSeconds(1), now.minusSeconds(1));
+        QuotationVersion sourceVersion = new QuotationVersion("quotation-opportunity-1", 1,
+                QuotationState.DRAFT, "CNY", now.plusSeconds(172800L), draftVersion().getLines(),
+                draftVersion().getTotalAmount(), null, null, null, null).issue(now, "iam:actor-1");
+
+        QuotationDraft derived = service.renegotiate(source, sourceVersion, now, idGenerator());
+
+        log.info("重议商机归属：sourceOpportunityId={}，derivedOpportunityId={}",
+                source.getOpportunityId(), derived.getQuotation().getOpportunityId());
+        assertEquals("opportunity-1", derived.getQuotation().getOpportunityId(),
+                "重议报价必须沿用来源报价的商机归属");
     }
 
     @Test

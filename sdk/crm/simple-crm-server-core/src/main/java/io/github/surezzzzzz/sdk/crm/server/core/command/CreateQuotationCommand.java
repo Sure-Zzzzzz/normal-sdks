@@ -18,6 +18,7 @@ import java.util.List;
 public final class CreateQuotationCommand {
 
     private final String customerId;
+    private final String opportunityId;
     private final Instant validUntil;
     private final List<QuotationLineCommand> lines;
 
@@ -31,7 +32,14 @@ public final class CreateQuotationCommand {
      */
     public CreateQuotationCommand(String customerId, Instant validUntil,
                                   List<QuotationLineCommand> lines) {
+        this(customerId, null, validUntil, lines);
+    }
+
+    /** 创建挂在商机下的报价草稿。 */
+    public CreateQuotationCommand(String customerId, String opportunityId, Instant validUntil,
+                                  List<QuotationLineCommand> lines) {
         this.customerId = CrmValidationHelper.required(customerId, "customerId");
+        this.opportunityId = CrmValidationHelper.optional(opportunityId);
         this.validUntil = CrmValidationHelper.requiredObject(validUntil, "validUntil");
         if (lines == null || lines.isEmpty() || lines.contains(null)) {
             throw CrmException.validation("lines");

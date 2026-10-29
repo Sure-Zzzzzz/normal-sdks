@@ -2,6 +2,7 @@ package io.github.surezzzzzz.sdk.crm.server.core.domain.quotation;
 
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmErrorCode;
 import io.github.surezzzzzz.sdk.crm.server.core.error.CrmException;
+import io.github.surezzzzzz.sdk.crm.server.core.domain.identity.CrmOwner;
 import io.github.surezzzzzz.sdk.crm.server.core.support.CrmValidationHelper;
 import lombok.Getter;
 
@@ -17,6 +18,7 @@ public final class Quotation {
 
     private final String quotationId;
     private final String customerId;
+    private final String opportunityId;
     private final String owner;
     private final long aggregateVersion;
     private final int currentVersion;
@@ -47,8 +49,17 @@ public final class Quotation {
     public Quotation(String quotationId, String customerId, String owner,
                      long aggregateVersion, int currentVersion, Integer currentConfirmableVersion,
                      String confirmedOrderId, String supersedesQuotationId, Instant createdAt, Instant updatedAt) {
+        this(quotationId, customerId, null, owner, aggregateVersion, currentVersion,
+                currentConfirmableVersion, confirmedOrderId, supersedesQuotationId, createdAt, updatedAt);
+    }
+
+    /** 创建带商机归属的报价摘要。 */
+    public Quotation(String quotationId, String customerId, String opportunityId, String owner,
+                     long aggregateVersion, int currentVersion, Integer currentConfirmableVersion,
+                     String confirmedOrderId, String supersedesQuotationId, Instant createdAt, Instant updatedAt) {
         this.quotationId = CrmValidationHelper.required(quotationId, "quotationId");
         this.customerId = CrmValidationHelper.required(customerId, "customerId");
+        this.opportunityId = CrmValidationHelper.optional(opportunityId);
         this.owner = CrmValidationHelper.required(owner, "owner");
         this.aggregateVersion = CrmValidationHelper.positiveVersion(aggregateVersion, "aggregateVersion");
         this.currentVersion = CrmValidationHelper.positiveVersion(currentVersion, "currentVersion");
@@ -102,7 +113,7 @@ public final class Quotation {
         if (isConfirmed() || version != currentVersion || currentConfirmableVersion != null) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be issued");
         }
-        return new Quotation(quotationId, customerId, owner, aggregateVersion + 1L,
+        return new Quotation(quotationId, customerId, opportunityId, owner, aggregateVersion + 1L,
                 currentVersion, version, null, supersedesQuotationId, createdAt, updatedAt);
     }
 
@@ -119,7 +130,7 @@ public final class Quotation {
         if (isConfirmed() || currentConfirmableVersion == null || currentConfirmableVersion != version) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be confirmed");
         }
-        return new Quotation(quotationId, customerId, owner, aggregateVersion + 1L,
+        return new Quotation(quotationId, customerId, opportunityId, owner, aggregateVersion + 1L,
                 currentVersion, null, orderId, supersedesQuotationId, createdAt, updatedAt);
     }
 
@@ -133,7 +144,7 @@ public final class Quotation {
         if (isConfirmed() || currentConfirmableVersion == null) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be withdrawn");
         }
-        return new Quotation(quotationId, customerId, owner, aggregateVersion + 1L,
+        return new Quotation(quotationId, customerId, opportunityId, owner, aggregateVersion + 1L,
                 currentVersion, null, null, supersedesQuotationId, createdAt, updatedAt);
     }
 
@@ -147,7 +158,7 @@ public final class Quotation {
         if (isConfirmed() || currentConfirmableVersion == null) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "quotation cannot be superseded");
         }
-        return new Quotation(quotationId, customerId, owner, aggregateVersion + 1L,
+        return new Quotation(quotationId, customerId, opportunityId, owner, aggregateVersion + 1L,
                 currentVersion, null, null, supersedesQuotationId, createdAt, updatedAt);
     }
 
@@ -179,11 +190,12 @@ public final class Quotation {
      * @return 转移后的报价事实
      */
     public Quotation transferredTo(String newOwner, Instant updatedAt) {
-        CrmValidationHelper.required(newOwner, "newOwner");
+        CrmOwner.of(newOwner);
+        Instant requiredUpdatedAt = CrmValidationHelper.requiredObject(updatedAt, "updatedAt");
         if (isConfirmed()) {
             throw new CrmException(CrmErrorCode.INVALID_STATE_TRANSITION, "confirmed quotation cannot transfer");
         }
-        return new Quotation(quotationId, customerId, newOwner, aggregateVersion, currentVersion,
-                currentConfirmableVersion, confirmedOrderId, supersedesQuotationId, createdAt, updatedAt);
+        return new Quotation(quotationId, customerId, opportunityId, newOwner, aggregateVersion + 1L, currentVersion,
+                currentConfirmableVersion, confirmedOrderId, supersedesQuotationId, createdAt, requiredUpdatedAt);
     }
 }

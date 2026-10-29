@@ -72,7 +72,7 @@ public final class QuotationDraftService {
         String quotationId = nextId(idGenerator, CrmIdResourceType.QUOTATION, "quotationId");
         CalculatedLines calculated = calculateLines(requiredCommand.getLines(), offeringsById, idGenerator);
         Quotation quotation = new Quotation(quotationId, requiredCustomer.getCustomerId(),
-                requiredActor.getOwner(), 1L, 1, null, null, null, createdAt, createdAt);
+                requiredCommand.getOpportunityId(), requiredActor.getOwner(), 1L, 1, null, null, null, createdAt, createdAt);
         QuotationVersion quotationVersion = new QuotationVersion(quotationId, 1, QuotationState.DRAFT,
                 calculated.settlementCurrency, requiredCommand.getValidUntil(), calculated.lines,
                 calculated.totalAmount, null, null, null, null);
@@ -114,7 +114,7 @@ public final class QuotationDraftService {
         CalculatedLines calculated = calculateLines(requiredCommand.getLines(), offeringsById(offerings),
                 idGenerator);
         Quotation editedQuotation = new Quotation(requiredQuotation.getQuotationId(),
-                requiredQuotation.getCustomerId(), requiredQuotation.getOwner(),
+                requiredQuotation.getCustomerId(), requiredQuotation.getOpportunityId(), requiredQuotation.getOwner(),
                 requiredQuotation.getAggregateVersion() + 1L, requiredQuotation.getCurrentVersion(),
                 null, null, requiredQuotation.getSupersedesQuotationId(),
                 requiredQuotation.getCreatedAt(), updatedAt);
