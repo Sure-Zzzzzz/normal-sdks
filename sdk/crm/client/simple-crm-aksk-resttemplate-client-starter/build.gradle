@@ -1,0 +1,16 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
+    // AKSK 底座认证传输（传输+认证全归它）
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+    compileOnly 'org.springframework:spring-web'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // 测试当宿主：提供与 akskClientRestTemplate 同构的 Apache HttpClient 传输（PATCH 支持）；
+    // 生产代码零 import Apache 类，此依赖不进发布 POM（test 作用域）
+    testImplementation 'org.apache.httpcomponents:httpclient:4.5.14'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'org.springframework:spring-web'
+}
