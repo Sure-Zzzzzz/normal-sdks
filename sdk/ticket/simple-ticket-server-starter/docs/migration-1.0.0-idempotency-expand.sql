@@ -39,6 +39,9 @@ SELECT CASE
                AND (SELECT COUNT(*) FROM information_schema.COLUMNS
                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ticket'
                       AND COLUMN_NAME = 'request_fingerprint') = 0
+               AND (SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ticket'
+                      AND COLUMN_NAME IN ('creator_credential_id', 'idempotency_key')) = 2
                AND (SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX)
                     FROM information_schema.STATISTICS
                     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ticket'

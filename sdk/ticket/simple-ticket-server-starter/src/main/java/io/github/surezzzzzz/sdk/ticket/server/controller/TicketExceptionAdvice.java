@@ -22,8 +22,13 @@ import io.github.surezzzzzz.sdk.ticket.server.exception.TicketValidationExceptio
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 import java.util.StringJoiner;
@@ -33,7 +38,9 @@ import java.util.StringJoiner;
  *
  * @author surezzzzzz
  */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = {ManageAttachmentController.class, ManageTicketController.class,
+        OpenApiTicketController.class, PortalAttachmentController.class, PortalTicketController.class,
+        TicketAdminController.class})
 @SimpleTicketServerComponent
 @Slf4j
 public class TicketExceptionAdvice {
@@ -61,6 +68,40 @@ public class TicketExceptionAdvice {
             log.debug("工单业务拒绝：status={}", status);
         }
         return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * 请求体、参数或必需请求头解析失败时返回统一的安全 400 响应。
+     *
+     * @param e 请求解析异常
+     * @return 安全错误响应
+     */
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentNotValidException.class,
+            MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class,
+            MissingRequestHeaderException.class})
+    public ResponseEntity<TicketErrorResponse> handleInvalidRequest(Exception e) {
+        log.debug("工单请求解析失败：exceptionType={}", e.getClass().getSimpleName());
+        return errorResponse(HttpStatus.BAD_REQUEST, ErrorMessage.TICKET_VALIDATION_FAILED);
+    }
+
+    /**
+     * 未包装的控制器异常统一返回安全 500，避免框架默认错误体泄露底层细节。
+     *
+     * @param e 未预期异常
+     * @return 安全错误响应
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<TicketErrorResponse> handleUnexpected(Exception e) {
+        log.error("工单控制器内部异常：exceptionType={}, stack={}",
+                e.getClass().getSimpleName(), stackSummary(e));
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, ErrorMessage.TICKET_SERVICE_ERROR);
+    }
+
+    private ResponseEntity<TicketErrorResponse> errorResponse(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(TicketErrorResponse.builder()
+                .message(message)
+                .time(Instant.now().toString())
+                .build());
     }
 
     private String stackSummary(Throwable error) {

@@ -41,6 +41,10 @@ public class TicketS3FileConfiguration {
     @ConditionalOnMissingBean(FileProvider.class)
     public FileProvider s3FileProvider(S3Client s3Client,
             SimpleTicketServerProperties ticketProperties) {
+        String bucket = ticketProperties.getAttachment().getBucket();
+        if (bucket == null || bucket.trim().isEmpty()) {
+            throw new TicketServiceException("附件桶未配置");
+        }
         log.info("工单附件出口：S3 预签名直传（聚形态）");
         return new FileProvider() {
             @Override
@@ -69,7 +73,7 @@ public class TicketS3FileConfiguration {
             @Override
             public String presignUpload(String objectKey, long size, String contentType, Duration ttl) {
                 try {
-                    return s3Client.generateUploadPresignedUrl(ticketProperties.getAttachment().getBucket(),
+                    return s3Client.generateUploadPresignedUrl(bucket,
                             objectKey, ttl.getSeconds(), contentType);
                 } catch (Exception e) {
                     throw new TicketServiceException(e);
@@ -79,7 +83,7 @@ public class TicketS3FileConfiguration {
             @Override
             public String presignDownload(String objectKey, Duration ttl) {
                 try {
-                    return s3Client.generatePresignedUrl(ticketProperties.getAttachment().getBucket(),
+                    return s3Client.generatePresignedUrl(bucket,
                             objectKey, ttl.getSeconds());
                 } catch (Exception e) {
                     throw new TicketServiceException(e);
@@ -88,12 +92,12 @@ public class TicketS3FileConfiguration {
 
             @Override
             public boolean exists(String objectKey) {
-                return s3Client.doesObjectExist(ticketProperties.getAttachment().getBucket(), objectKey);
+                return s3Client.doesObjectExist(bucket, objectKey);
             }
 
             @Override
             public void delete(String objectKey) {
-                s3Client.deleteObject(ticketProperties.getAttachment().getBucket(), objectKey);
+                s3Client.deleteObject(bucket, objectKey);
             }
         };
     }

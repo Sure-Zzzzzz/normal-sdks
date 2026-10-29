@@ -7,14 +7,14 @@
 
 ## 定位
 
-`simple-ticket-*` 家族的契约层：**core 是契约、starter 是装配件**（依赖分层规矩）。业务方对装配件零编译依赖——要类型引本 core，本 core 没有的（如配置 Properties）用反射探测。
+`simple-ticket-*` 家族的契约层：**core 是契约、starter 是装配件**（依赖分层规矩）。调用方对装配件零编译依赖——要类型引本 core，本 core 没有的（如配置 Properties）用反射探测。
 
 ## 核心能力
 
 ### 1. 工单聚合（`model/Ticket`）
 
 - 富领域方法承载全部状态机动作（claim/assign/transfer/request-info/supply/resolve/confirm/reject/withdraw/confirmTimeout），非法转移抛 `TicketStateException`（409）
-- 五状态：`SUBMITTED → PROCESSING ⇄ PENDING_INFO → RESOLVED → CLOSED`（另有 `WITHDRAWN` 终态）
+- 五种主流程状态：`SUBMITTED → PROCESSING ⇄ PENDING_INFO → RESOLVED → CLOSED`（另有 `WITHDRAWN` 终态）
 - SLA 暂停账唯一口径：`办结到期判定 = now > resolutionDeadline + 暂停累计`；`PENDING_INFO` 期间恒暂缓（`effectiveResolutionDeadline` 随 now 同速延伸）
 - 人员快照（ownerName/assigneeName）受理/分派时固化，离职不追改
 
@@ -50,7 +50,7 @@
 ## 快速上手（消费方）
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.0'  // 宿主装配
+implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.1'  // 宿主装配
 // 编译期需要 core 类型时（一般经 starter api 传递，无需显式声明）：
 // compileOnly 'io.github.sure-zzzzzz:simple-ticket-server-core:1.0.0'
 ```
@@ -67,4 +67,4 @@ ticket.requestInfo(RequestInfoReason.AWAIT_MATERIAL, Instant.now()); // 计时�
 
 ## 设计文档
 
-完整设计（状态机全枚举、三权登记、部署形态、完备性矩阵）见 `sdk/ticket/DESIGN.1.0.0.md`；审阅台账见同目录 `LOCAL_REVIEW_50_*.md`。
+完整设计（状态机全枚举、三权登记、部署形态、完备性矩阵）见 [家族设计文档](../DESIGN.1.0.0.md)；审阅台账见 [1.0.0 审阅台账](../LOCAL_REVIEW_50_1.0.0.md)。

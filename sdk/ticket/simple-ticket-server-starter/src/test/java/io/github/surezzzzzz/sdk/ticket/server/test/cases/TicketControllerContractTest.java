@@ -39,7 +39,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import javax.servlet.http.HttpServletRequest;
 import java.lang.reflect.Method;
@@ -197,6 +203,33 @@ class TicketControllerContractTest {
             assertTrue(causeFrames.split(", ").length <= TicketServerLogConstant.MAX_ERROR_STACK_FRAMES);
             assertNull(capture.events().get(0).getThrown());
         }
+    }
+
+    @Test
+    void frameworkRequestFailuresUseSafeErrorContract() {
+        TicketExceptionAdvice advice = new TicketExceptionAdvice();
+        assertSafeBadRequest(advice.handleInvalidRequest(new HttpMessageNotReadableException("raw body")));
+        assertSafeBadRequest(advice.handleInvalidRequest(mock(MethodArgumentNotValidException.class)));
+        assertSafeBadRequest(advice.handleInvalidRequest(mock(MethodArgumentTypeMismatchException.class)));
+        assertSafeBadRequest(advice.handleInvalidRequest(
+                new MissingServletRequestParameterException("page", "int")));
+        assertSafeBadRequest(advice.handleInvalidRequest(mock(MissingRequestHeaderException.class)));
+    }
+
+    @Test
+    void unexpectedFailureUsesSafeInternalErrorContract() {
+        TicketExceptionAdvice advice = new TicketExceptionAdvice();
+        TicketErrorResponse response = advice.handleUnexpected(new RuntimeException("token=private-value"))
+                .getBody();
+        assertEquals(ErrorMessage.TICKET_SERVICE_ERROR, response.getMessage());
+        assertFalse(response.toString().contains("private-value"));
+        assertNotNull(Instant.parse(response.getTime()));
+    }
+
+    private static void assertSafeBadRequest(ResponseEntity<TicketErrorResponse> response) {
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals(ErrorMessage.TICKET_VALIDATION_FAILED, response.getBody().getMessage());
+        assertNotNull(Instant.parse(response.getBody().getTime()));
     }
 
     private static RuntimeException privateServiceFailure() {

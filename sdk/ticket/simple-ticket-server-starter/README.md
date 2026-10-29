@@ -1,6 +1,6 @@
 # Simple Ticket Server Starter
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 统一工单平台的宿主装配：三面 Controller（portal/manage/openapi）、MySQL 持久化、S3 附件、SLA 扫描、通知分发与 IAM/AKSK 双 Provider 组合。Spring Boot 2.7.9 / Java 8，portal 形态（无 console）。
@@ -8,16 +8,16 @@
 ## 快速上手
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.0'
+implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.1'
 ```
 
-宿主义务件（starter 的 Spring 依赖为 compileOnly，README 部署方义务与 feedback 同构）：
+宿主依赖件（starter 的 Spring 依赖为 compileOnly，部署方按宿主形态显式提供）：
 
 - `spring-boot-starter-web/jdbc/security/validation`
 - 公共资源层三件：`simple-resource-server-starter` + `simple-iam-resource-server-starter` + `simple-aksk-resource-server-starter`（openapi 面需要；页面对面只需前两者）
 - 可选聚件：`s3-client-starter`（附件，宿主提供的 `compileOnly` 依赖）、`smart-redis-limiter-starter`（突发限流）
 
-`s3-client-starter` 由宿主按需提供，starter 不会把 S3 传输实现传递给业务方；只有在宿主同时提供该依赖并设置 `attachment.enabled=true`、`attachment.bucket` 后，附件预签名能力才会启用。
+`s3-client-starter` 由宿主按需提供，starter 不会把 S3 传输实现传递给调用方；只有在宿主同时提供该依赖并设置 `attachment.enabled=true`、`attachment.bucket` 后，附件预签名能力才会启用。
 
 ## HTTP 面（基路径 `/api/ticket`）
 
@@ -54,7 +54,7 @@ implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.0'
 ## 底座装配（宿主自引，聚散边界）
 
 - **散形态（默认）**：纯 MySQL 单件可跑——无附件（Noop FileProvider 明确报错）、无站内信（Noop 日志降级）、无限流、显示 subjectId
-- **聚形态**：宿主加引 `s3-client-starter`（附件）、`smart-redis-limiter-starter`（限流，`enable` 显式 true）、`simple-ticket-iam-adaptor-starter`（站内信+姓名解析）；全部 `@ConditionalOn*` 让位，缺席即回退 Noop
+- **聚形态**：宿主加引 `s3-client-starter`（附件）或 `smart-redis-limiter-starter`（限流，`enable` 显式 true）时按条件装配；加引 `simple-ticket-iam-adaptor-starter` 后即装配站内信与姓名解析，IAM 客户端缺失时启动失败；不引 adaptor 才使用 server-starter 的 Noop 降级
 - 资源提供方三件（公共 Resource + IAM/AKSK Provider）由宿主自引，`protected-paths` 含 `/api/ticket/**`
 
 ## 存储与运维
@@ -70,3 +70,9 @@ implementation 'io.github.sure-zzzzzz:simple-ticket-server-starter:1.0.0'
 ## 可信应用接入
 
 IAM 登记、三权清单、宿主网关与验收见工单 Web 仓 `docs/TRUSTED_APPLICATION_ONBOARDING.md`（simple-ticket-admin-web）。
+
+## 版本映射
+
+| 版本 | 说明 |
+| --- | --- |
+| 1.0.1 | 统一请求解析与未预期异常的安全错误响应；附件启用时启动期校验 `attachment.bucket`；见 [`CHANGELOG.1.0.1.md`](CHANGELOG.1.0.1.md) |
