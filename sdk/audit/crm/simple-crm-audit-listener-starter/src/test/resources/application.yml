@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: simple-crm-audit-listener-test
+  profiles:
+    active: local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        cache:
+          l2:
+            enabled: false
+          consistency:
+            mode: eventual

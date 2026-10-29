@@ -1,0 +1,17 @@
+dependencies {
+    // 事件契约属于 CRM core；listener 只依赖契约，不依赖 server 装配件。
+    api 'io.github.sure-zzzzzz:simple-crm-server-core:2.1.0'
+
+    // Spring Boot（仅编译时依赖）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-context'
+
+    // 测试依赖：与使用方组装形态一致，测试侧自行补齐 Spring 件
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    // @EnableAsync 代理由测试上下文启用。
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    // 测试上下文只验证 listener 的事件投影与装配，不启动 CRM server；
+    // Server 的事务提交、回滚和幂等发布由 server 模块自身测试覆盖。
+}
