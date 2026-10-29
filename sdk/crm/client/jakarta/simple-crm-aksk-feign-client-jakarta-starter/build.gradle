@@ -1,0 +1,40 @@
+def jakartaCloudVersion = rootProject.findProperty('jakartaCloudVersion') ?: '2024.0.0'
+def jakartaOpenFeignVersion = rootProject.findProperty('jakartaOpenFeignVersion') ?: '4.2.0'
+
+dependencyManagement {
+    imports {
+        // 仅作用于本 jakarta 模块，不继承根工程的 legacy Cloud 约束（KMS jakarta 定式）。
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${jakartaCloudVersion}"
+    }
+}
+
+configurations.configureEach {
+    resolutionStrategy.force "org.springframework.cloud:spring-cloud-starter-openfeign:${jakartaOpenFeignVersion}"
+}
+
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
+    // aksk 底座 jakarta（Feign 形态，openfeign 4.x 链）
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    // wire 模型注解仅编译期需要，运行时由宿主 Feign/Jackson 链提供
+    compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    // jakarta 上下文需 aop（Pointcut CNFE，KMS 坑档）
+    testImplementation 'org.springframework.boot:spring-boot-starter-aop'
+    // jakarta 线 redis route 传递链需 pool2（GenericObjectPoolConfig CNFE，KMS 坑档①）
+    testRuntimeOnly 'org.apache.commons:commons-pool2'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.openfeign:feign-hc5:13.5'
+    testImplementation 'io.github.openfeign:feign-jackson:13.5'
+    // 底座自闭环原则：契约测试桩直接实现 TokenManager 需自行引入
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+}
+
+// Windows 默认编码可能是 GBK；客户端源码与发布文档统一按 UTF-8 编译。
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
