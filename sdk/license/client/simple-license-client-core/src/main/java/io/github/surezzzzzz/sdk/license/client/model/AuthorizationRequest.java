@@ -3,7 +3,7 @@ package io.github.surezzzzzz.sdk.license.client.model;
 import io.github.surezzzzzz.sdk.license.client.constant.ClientProtocolConstant;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +44,7 @@ public final class AuthorizationRequest {
         this.activationId = activationId;
         this.assignmentId = assignmentId;
         this.businessOperationId = businessOperationId;
-        this.facts = Collections.unmodifiableMap(new HashMap<String, Object>(facts));
+        this.facts = copyFacts(facts);
         List<String> references = reservationReferences == null
                 ? Collections.<String>emptyList() : new ArrayList<String>(reservationReferences);
         java.util.Set<String> unique = new java.util.HashSet<String>();
@@ -146,5 +146,34 @@ public final class AuthorizationRequest {
     /** 本次运行事实（只读视图）。 */
     public Map<String, Object> getFacts() {
         return facts;
+    }
+
+    /** 递归复制 JSON-like facts，避免嵌套 Map/List 在构造后继续改变请求语义。 */
+    private static Map<String, Object> copyFacts(Map<String, Object> source) {
+        Map<String, Object> copy = new LinkedHashMap<String, Object>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            copy.put(entry.getKey(), copyFactValue(entry.getValue()));
+        }
+        return Collections.unmodifiableMap(copy);
+    }
+
+    private static Object copyFactValue(Object value) {
+        if (value instanceof Map) {
+            Map<?, ?> source = (Map<?, ?>) value;
+            Map<Object, Object> copy = new LinkedHashMap<Object, Object>();
+            for (Map.Entry<?, ?> entry : source.entrySet()) {
+                copy.put(entry.getKey(), copyFactValue(entry.getValue()));
+            }
+            return Collections.unmodifiableMap(copy);
+        }
+        if (value instanceof List) {
+            List<?> source = (List<?>) value;
+            List<Object> copy = new ArrayList<Object>(source.size());
+            for (Object item : source) {
+                copy.add(copyFactValue(item));
+            }
+            return Collections.unmodifiableList(copy);
+        }
+        return value;
     }
 }

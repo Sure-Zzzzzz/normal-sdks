@@ -10,6 +10,7 @@ public final class ClientProtocolConstant {
     public static final long SAFE_INTEGER_MAX = 9007199254740991L;
     public static final long EPOCH_SECONDS_MAX = 253402300799L;
     public static final int RESERVATION_REFERENCES_MAX = 256;
+    public static final int TRUST_MATERIAL_PARTS_MAX = 256;
     public static final int IDENTIFIER_MAX_LENGTH = 128;
     public static final int SELECTION_SIZE_DEFAULT = 20;
     public static final int SELECTION_SIZE_MAX = 100;

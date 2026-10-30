@@ -10,6 +10,7 @@ import io.github.surezzzzzz.sdk.license.client.model.ClientReservation;
 import io.github.surezzzzzz.sdk.license.client.model.AuthorizationRequest;
 import io.github.surezzzzzz.sdk.license.client.model.GrantCandidate;
 import io.github.surezzzzzz.sdk.license.client.model.TrustMaterialSnapshot;
+import io.github.surezzzzzz.sdk.license.client.support.ClientResponseHelper;
 import io.github.surezzzzzz.sdk.license.client.spi.ClientResponseValidator;
 import io.github.surezzzzzz.sdk.license.client.spi.LicenseServerClient;
 import java.util.ArrayList;
@@ -99,6 +100,66 @@ class ClientCoreTest {
         assertThatThrownBy(() -> snapshot.getRevocationPartJws().add("part-3"))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(snapshot.getRevocationPartJws()).hasSize(1);
+    }
+
+    @Test
+    void authorizationFactsAreRecursivelyDefensivelyCopied() {
+        Map<String, Object> nested = new HashMap<String, Object>();
+        List<Object> values = new ArrayList<Object>(Arrays.<Object>asList("before"));
+        nested.put("values", values);
+        Map<String, Object> facts = new HashMap<String, Object>();
+        facts.put("nested", nested);
+
+        AuthorizationRequest request = AuthorizationRequest.of("product-1", "grant-1", "PERSON",
+                "data.export", facts);
+        values.set(0, "after");
+        nested.put("added", true);
+
+        Map<?, ?> copiedNested = (Map<?, ?>) request.getFacts().get("nested");
+        assertThat(copiedNested.containsKey("added")).isFalse();
+        assertThat(((List<?>) copiedNested.get("values")).get(0)).isEqualTo("before");
+        assertThatThrownBy(() -> ((Map<Object, Object>) copiedNested).put("blocked", true))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> ((List<Object>) copiedNested.get("values")).add("blocked"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void trustMaterialRejectsUnknownAndInvalidPartCounts() {
+        final Map<String, Object> unknownField = trustMaterialResponse();
+        unknownField.put("unexpected", true);
+        assertThatThrownBy(() -> ClientResponseHelper.trustMaterial(unknownField, "issuer-1", "product-1"))
+                .isInstanceOf(ClientResponseValidator.ProtocolViolationException.class);
+
+        final Map<String, Object> emptyParts = trustMaterialResponse();
+        emptyParts.put("revocationPartJws", new ArrayList<String>());
+        assertThatThrownBy(() -> ClientResponseHelper.trustMaterial(emptyParts, "issuer-1", "product-1"))
+                .isInstanceOf(ClientResponseValidator.ProtocolViolationException.class);
+
+        List<String> tooMany = new ArrayList<String>();
+        for (int i = 0; i < 257; i++) {
+            tooMany.add("part-" + i);
+        }
+        final Map<String, Object> tooManyParts = trustMaterialResponse();
+        tooManyParts.put("revocationPartJws", tooMany);
+        assertThatThrownBy(() -> ClientResponseHelper.trustMaterial(tooManyParts, "issuer-1", "product-1"))
+                .isInstanceOf(ClientResponseValidator.ProtocolViolationException.class);
+
+        assertThat(ClientResponseHelper.trustMaterial(trustMaterialResponse(), "issuer-1", "product-1")
+                .getRevocationPartJws()).hasSize(1);
+    }
+
+    private Map<String, Object> trustMaterialResponse() {
+        Map<String, Object> response = new HashMap<String, Object>();
+        response.put("issuerId", "issuer-1");
+        response.put("productId", "product-1");
+        response.put("sequence", 1L);
+        response.put("issuedAt", 1780000000L);
+        response.put("snapshotId", "snapshot-1");
+        response.put("manifestJws", "manifest-jws");
+        response.put("revocationPartJws", Arrays.asList("part-1"));
+        response.put("trustedPublicKeysJson", Arrays.asList("key-1"));
+        return response;
     }
 
     @Test

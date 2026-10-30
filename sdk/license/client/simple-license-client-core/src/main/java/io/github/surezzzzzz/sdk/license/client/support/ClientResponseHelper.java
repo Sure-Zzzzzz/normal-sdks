@@ -11,6 +11,7 @@ import io.github.surezzzzzz.sdk.license.client.spi.ClientResponseValidator.Proto
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,10 @@ import java.util.function.Function;
  * @author surezzzzzz
  */
 public final class ClientResponseHelper {
+
+    private static final Set<String> TRUST_MATERIAL_FIELDS = Collections.unmodifiableSet(
+            new HashSet<String>(Arrays.asList("issuerId", "productId", "sequence", "issuedAt",
+                    "snapshotId", "manifestJws", "revocationPartJws", "trustedPublicKeysJson")));
 
     private ClientResponseHelper() {
     }
@@ -185,6 +190,9 @@ public final class ClientResponseHelper {
     /** 先核对响应信任域再构造快照；签名、公钥批准与原子安装仍由安装器负责。 */
     public static TrustMaterialSnapshot trustMaterial(Map<String, Object> response,
                                                      String issuerId, String productId) {
+        if (response == null || !TRUST_MATERIAL_FIELDS.equals(response.keySet())) {
+            throw new ProtocolViolationException("信任资料响应字段缺失或未知");
+        }
         if (!text(response, "issuerId").equals(issuerId)
                 || !text(response, "productId").equals(productId)) {
             throw new ProtocolViolationException("信任资料响应与请求范围不一致");
@@ -195,8 +203,9 @@ public final class ClientResponseHelper {
             throw new ProtocolViolationException("信任资料代次或签发时间无效");
         }
         return new TrustMaterialSnapshot(sequence, issuedAt, text(response, "snapshotId"),
-                text(response, "manifestJws"), stringList(response, "revocationPartJws"),
-                stringList(response, "trustedPublicKeysJson"));
+                text(response, "manifestJws"),
+                stringList(response, "revocationPartJws", 1, ClientProtocolConstant.TRUST_MATERIAL_PARTS_MAX),
+                stringList(response, "trustedPublicKeysJson", 0, Integer.MAX_VALUE));
     }
 
     /** 围栏与已知代次为非负安全整数，调用方错误在外部请求前拒绝。 */
@@ -206,13 +215,18 @@ public final class ClientResponseHelper {
         }
     }
 
-    private static List<String> stringList(Map<String, Object> response, String field) {
+    private static List<String> stringList(Map<String, Object> response, String field,
+                                           int minimumSize, int maximumSize) {
         Object value = response == null ? null : response.get(field);
         if (!(value instanceof List)) {
             throw new ProtocolViolationException("响应列表字段缺失：" + field);
         }
+        List<?> values = (List<?>) value;
+        if (values.size() < minimumSize || values.size() > maximumSize) {
+            throw new ProtocolViolationException("响应列表字段数量无效：" + field);
+        }
         List<String> result = new ArrayList<String>();
-        for (Object item : (List<?>) value) {
+        for (Object item : values) {
             if (!(item instanceof String) || ((String) item).isEmpty()) {
                 throw new ProtocolViolationException("响应列表字段含无效文本元素：" + field);
             }

@@ -11,7 +11,7 @@ License 客户端契约层：为需要向 License Server 发起在线判定、�
 ## 依赖坐标
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
 ```
 
 本模块零 Spring、零 HTTP 客户端、零凭据概念、零传递依赖。
@@ -75,8 +75,8 @@ List<GrantCandidate> candidates = client.discoverGrants("product-1", "SERVICE", 
 - 官方传输件共享 `ClientResponseValidator.parseDecision`：`allowed` 必须为布尔，模型版本为非负整数，阶段与原因分类只接受已知值。合法拒绝允许 `commercialPhase: null`，表示尚无可报告的商业阶段；允许结论必须有阶段与 `ENTITLED` 原因。缺字段、错误类型和未知协议字段仍是异常。
 - `modelVersion` 来自本次实际求值的模型，无模型或尚未进入求值时为 `0`，不等于商业修订。`recheckAt` 描述已知失效截止，不是允许调用方跳过下一次在线判定的缓存许可；无截止时为 `null`。
 - 仅 `fetchTrustMaterial` 允许调用方保留最近有效快照：网络失败时继续用旧资料并等待下次同步，这是设计上唯一的降级点。
-- 信任资料响应必须回显请求的 `issuerId` 和 `productId`；代次是正安全整数、签发时间为非负 epoch 秒，禁止把小数或数字字符串转换为整数。安装器仍须独立验签、批准公钥并原子安装。
-- 值对象防御复制：`AuthorizationRequest.getFacts()`、`TrustMaterialSnapshot` 的分片列表都是只读视图，外部改不动内部状态。
+- 信任资料响应必须严格只包含 `issuerId`、`productId`、`sequence`、`issuedAt`、`snapshotId`、`manifestJws`、`revocationPartJws`、`trustedPublicKeysJson` 八个字段，并回显请求的 `issuerId` 和 `productId`；吊销分片数量为 `1..256`（空吊销名单也必须有一个空分片），代次是正安全整数、签发时间为非负 epoch 秒，禁止把小数或数字字符串转换为整数。安装器仍须独立验签、批准公钥并原子安装。
+- 值对象防御复制：`AuthorizationRequest.getFacts()` 递归复制嵌套 Map/List，`TrustMaterialSnapshot` 的分片列表都是只读视图，外部改不动内部状态。
 - 本模块不做协议版本协商与令牌管理；令牌由传输层（AKSK 客户端生态）注入。
 
 ## 聚散形态
