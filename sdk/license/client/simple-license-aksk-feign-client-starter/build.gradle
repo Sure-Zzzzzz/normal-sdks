@@ -1,0 +1,12 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    // 传输件组装正式认证底座，代码不引用底座的装配类型。
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+}
