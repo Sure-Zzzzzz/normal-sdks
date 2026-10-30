@@ -1,0 +1,7 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:smart-license-core:2.0.0'
+    // 信任资料安装器公开接收 Client Core 的 TrustMaterialSnapshot，必须随制品传递。
+    api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
