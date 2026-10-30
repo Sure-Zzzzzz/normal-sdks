@@ -1,0 +1,12 @@
+dependencies {
+    // 单份 client-core 双线共用（Java 8 字节码），jakarta 线仅传输装配不同
+    api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    // AKSK Bearer 注入复用 aksk jakarta 生态
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+}
