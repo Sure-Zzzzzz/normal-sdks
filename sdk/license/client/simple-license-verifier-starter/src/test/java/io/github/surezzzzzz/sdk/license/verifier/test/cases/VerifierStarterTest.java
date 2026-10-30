@@ -147,6 +147,69 @@ class VerifierStarterTest {
         assertThat(store.loadRevocationSequence("i", "p")).hasValue(7L);
     }
 
+    @Test
+    void revocationSequenceKeysRemainDistinctWhenIdentifiersContainDots(@TempDir java.nio.file.Path tempDir) {
+        FileStateStore store = new FileStateStore(tempDir, "state.properties");
+        store.persistRevocationSequence("issuer.a", "product", 7L);
+        store.persistRevocationSequence("issuer", "a.product", 9L);
+
+        assertThat(store.loadRevocationSequence("issuer.a", "product")).hasValue(7L);
+        assertThat(store.loadRevocationSequence("issuer", "a.product")).hasValue(9L);
+    }
+
+    @Test
+    void missingCommittedStateFailsClosedForNewInstance(@TempDir java.nio.file.Path tempDir) throws java.io.IOException {
+        FileStateStore store = new FileStateStore(tempDir, "state.properties");
+        String key = store.buildStateKey("i", "p", "c", "g", "activation:a1");
+        store.persistMaxTrustedTime(key, 1000L);
+        Files.delete(tempDir.resolve("state.properties"));
+
+        assertThatThrownBy(() -> new FileStateStore(tempDir, "state.properties"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("状态文件缺失");
+    }
+
+    @Test
+    void missingCommittedStateCannotBeRecreatedByExistingInstance(@TempDir java.nio.file.Path tempDir)
+            throws java.io.IOException {
+        FileStateStore store = new FileStateStore(tempDir, "state.properties");
+        String key = store.buildStateKey("i", "p", "c", "g", "activation:a1");
+        store.persistMaxTrustedTime(key, 1000L);
+        Files.delete(tempDir.resolve("state.properties"));
+
+        assertThatThrownBy(() -> store.persistMaxTrustedTime(key, 2000L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("状态文件缺失");
+    }
+
+    @Test
+    void firstPersistenceCreatesStateAndMarker(@TempDir java.nio.file.Path tempDir) {
+        FileStateStore store = new FileStateStore(tempDir, "state.properties");
+        String key = store.buildStateKey("i", "p", "c", "g", "activation:a1");
+
+        assertThat(Files.exists(tempDir.resolve("state.properties"))).isFalse();
+        assertThat(Files.exists(tempDir.resolve("state.properties.lock"))).isFalse();
+
+        store.persistMaxTrustedTime(key, 1000L);
+
+        assertThat(Files.exists(tempDir.resolve("state.properties"))).isTrue();
+        assertThat(Files.exists(tempDir.resolve("state.properties.lock"))).isTrue();
+    }
+
+    @Test
+    void committedStateWithoutMarkerIsLoadedAndMarkerIsMigrated(@TempDir java.nio.file.Path tempDir)
+            throws java.io.IOException {
+        FileStateStore store = new FileStateStore(tempDir, "state.properties");
+        String key = store.buildStateKey("i", "p", "c", "g", "activation:a1");
+        store.persistMaxTrustedTime(key, 1000L);
+        Files.delete(tempDir.resolve("state.properties.lock"));
+
+        FileStateStore reloaded = new FileStateStore(tempDir, "state.properties");
+
+        assertThat(reloaded.loadMaxTrustedTime(key)).hasValue(1000L);
+        assertThat(Files.exists(tempDir.resolve("state.properties.lock"))).isTrue();
+    }
+
     /** 真实文件系统写入失败不提交内存水位；修复路径后同值重试必须写盘。 */
     @Test
     void failedPersistenceDoesNotAdvanceCacheAndSameValueRetryWritesDisk(

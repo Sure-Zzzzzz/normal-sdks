@@ -199,6 +199,21 @@ class FileRevocationStoreTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> store.installedSequence("issuer-1", "product-1"))
                 .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new FileRevocationStore(directory))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void committedSnapshotWithoutMarkerIsLoadedAndMarkerIsMigrated() throws Exception {
+        FileRevocationStore store = new FileRevocationStore(directory);
+        store.install(verified("issuer-1", "product-1", 1L, 1000L, "snapshot-1", "credential-1"));
+        Files.delete(directory.resolve("revocations.lock"));
+
+        FileRevocationStore reloaded = new FileRevocationStore(directory);
+
+        assertThat(reloaded.installedSequence("issuer-1", "product-1")).hasValue(1L);
+        assertThat(reloaded.isRevoked("issuer-1", "product-1", "CREDENTIAL", "credential-1")).isTrue();
+        assertThat(Files.exists(directory.resolve("revocations.lock"))).isTrue();
     }
 
     @Test

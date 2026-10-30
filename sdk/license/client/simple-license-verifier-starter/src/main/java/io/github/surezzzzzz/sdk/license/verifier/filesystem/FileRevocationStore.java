@@ -10,6 +10,7 @@ import java.io.Writer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -116,9 +117,10 @@ public class FileRevocationStore implements AtomicRevocationStore {
         synchronized (INSTALL_MONITOR) {
             try {
                 Files.createDirectories(stateFile.getParent());
-                try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE,
-                        StandardOpenOption.WRITE); FileLock ignored = channel.lock()) {
-                    load();
+                boolean lockCreated = createLockMarker();
+                try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.WRITE);
+                        FileLock ignored = channel.lock()) {
+                    load(lockCreated && !Files.exists(stateFile));
                     String scope = scopeKey(verifiedPackage.getIssuerId(), verifiedPackage.getProductId());
                     ScopeState current = scopes.get(scope);
                     Map<String, String> incomingEntries = snapshotEntries(verifiedPackage);
@@ -175,8 +177,13 @@ public class FileRevocationStore implements AtomicRevocationStore {
     }
 
     private void load() {
+        load(false);
+    }
+
+    private void load(boolean allowInitialEmpty) {
         if (!Files.exists(stateFile)) {
-            if (stateObserved) {
+            // 锁文件在首次安装前不会创建；它存在时说明该目录已经尝试提交快照，缺主文件必须失败关闭。
+            if (stateObserved || (!allowInitialEmpty && Files.exists(lockFile))) {
                 throw new IllegalStateException(STATE_ROLLBACK);
             }
             return;
@@ -269,6 +276,18 @@ public class FileRevocationStore implements AtomicRevocationStore {
         }
         replaceCache(loadedScopes, loadedEntries, loadedScopedEntries);
         stateObserved = true;
+        createLockMarker();
+    }
+
+    private boolean createLockMarker() {
+        try {
+            Files.createFile(lockFile);
+            return true;
+        } catch (FileAlreadyExistsException exists) {
+            return false;
+        } catch (IOException failure) {
+            throw new IllegalStateException("吊销仓锁文件创建失败", failure);
+        }
     }
 
     private static String scopeFromMetadataKey(String key) {

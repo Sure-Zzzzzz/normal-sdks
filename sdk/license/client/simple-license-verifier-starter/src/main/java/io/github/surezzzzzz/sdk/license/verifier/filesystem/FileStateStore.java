@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -49,12 +50,21 @@ public class FileStateStore implements StateStore {
 
     @Override
     public void persistRevocationSequence(String issuerId, String productId, long sequence) {
-        persistLong("revocation." + issuerId + "." + productId + ".sequence", sequence, true);
+        persistLong(revocationSequenceKey(issuerId, productId), sequence, true,
+                legacyRevocationSequenceKey(issuerId, productId));
     }
 
     @Override
     public OptionalLong loadRevocationSequence(String issuerId, String productId) {
-        return loadLong("revocation." + issuerId + "." + productId + ".sequence");
+        OptionalLong current = loadLong(revocationSequenceKey(issuerId, productId));
+        OptionalLong legacy = loadLong(legacyRevocationSequenceKey(issuerId, productId));
+        if (!current.isPresent()) {
+            return legacy;
+        }
+        if (!legacy.isPresent()) {
+            return current;
+        }
+        return OptionalLong.of(Math.max(current.getAsLong(), legacy.getAsLong()));
     }
 
     @Override
@@ -85,6 +95,10 @@ public class FileStateStore implements StateStore {
     }
 
     private synchronized void persistLong(String key, long value, boolean monotonic) {
+        persistLong(key, value, monotonic, new String[0]);
+    }
+
+    private synchronized void persistLong(String key, long value, boolean monotonic, String... aliases) {
         synchronized (FileStateStore.class) {
             try {
                 Path parent = stateFile.getParent();
@@ -92,14 +106,24 @@ public class FileStateStore implements StateStore {
                     Files.createDirectories(parent);
                 }
                 // 进程内多个实例也要串行，否则Windows会把同一进程的重叠锁视为错误。
-                try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.CREATE,
-                        StandardOpenOption.WRITE); FileLock ignored = channel.lock()) {
+                boolean lockCreated = createLockMarker();
+                try (FileChannel channel = FileChannel.open(lockFile, StandardOpenOption.WRITE);
+                        FileLock ignored = channel.lock()) {
+                    if (!Files.exists(stateFile) && !lockCreated) {
+                        throw new IllegalStateException("状态文件缺失");
+                    }
                     Map<String, String> current = readState();
                     cache.clear();
                     cache.putAll(current);
                     if (monotonic) {
-                        String existing = current.get(key);
+                        String existing = highestExistingValue(current, key, aliases);
                         if (existing != null && parseStateLong(existing) >= value) {
+                            if (!existing.equals(current.get(key))) {
+                                current.put(key, existing);
+                                flush(current);
+                                cache.clear();
+                                cache.putAll(current);
+                            }
                             return; // 只增不减：以最新磁盘快照为准，旧实例不能覆盖高水位
                         }
                     }
@@ -114,6 +138,19 @@ public class FileStateStore implements StateStore {
         }
     }
 
+    private static String highestExistingValue(Map<String, String> current, String key, String[] aliases) {
+        String highest = current.get(key);
+        long highestValue = highest == null ? Long.MIN_VALUE : parseStateLong(highest);
+        for (String alias : aliases) {
+            String candidate = current.get(alias);
+            if (candidate != null && (highest == null || parseStateLong(candidate) > highestValue)) {
+                highest = candidate;
+                highestValue = parseStateLong(candidate);
+            }
+        }
+        return highest;
+    }
+
     private synchronized OptionalLong loadLong(String key) {
         refresh();
         String value = cache.get(key);
@@ -126,7 +163,8 @@ public class FileStateStore implements StateStore {
 
     private void refresh() {
         if (!Files.exists(stateFile)) {
-            if (!cache.isEmpty()) {
+            // 锁文件在首次持久化前不会创建；它存在时说明该目录已经尝试提交状态，缺主文件必须失败关闭。
+            if (!cache.isEmpty() || Files.exists(lockFile)) {
                 throw new IllegalStateException("状态文件缺失");
             }
             return;
@@ -134,6 +172,18 @@ public class FileStateStore implements StateStore {
         Map<String, String> loaded = readState();
         cache.clear();
         cache.putAll(loaded);
+        createLockMarker();
+    }
+
+    private boolean createLockMarker() {
+        try {
+            Files.createFile(lockFile);
+            return true;
+        } catch (FileAlreadyExistsException exists) {
+            return false;
+        } catch (IOException failure) {
+            throw new IllegalStateException("状态锁文件创建失败", failure);
+        }
     }
 
     private Map<String, String> readState() {
@@ -189,5 +239,13 @@ public class FileStateStore implements StateStore {
             throw new IllegalArgumentException("状态键字段不能为空");
         }
         return value.length() + ":" + value;
+    }
+
+    private static String revocationSequenceKey(String issuerId, String productId) {
+        return "revocation.v2." + frame(issuerId) + frame(productId) + ".sequence";
+    }
+
+    private static String legacyRevocationSequenceKey(String issuerId, String productId) {
+        return "revocation." + issuerId + "." + productId + ".sequence";
     }
 }

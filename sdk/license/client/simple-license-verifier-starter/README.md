@@ -9,7 +9,15 @@
 ## 依赖坐标
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-license-verifier-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-license-verifier-starter:2.0.1'
+```
+
+```xml
+<dependency>
+    <groupId>io.github.sure-zzzzzz</groupId>
+    <artifactId>simple-license-verifier-starter</artifactId>
+    <version>2.0.1</version>
+</dependency>
 ```
 
 模块传递 Core 与 Client Core 契约，宿主不需要重复声明这两个模块。信任资料安装器接收 Client Core 的 `TrustMaterialSnapshot`，因此该依赖属于公开 API，不能改为 `compileOnly`。运行基线为 Spring Boot 2.7.9；公开 Java API 按 Java 8 编写。
@@ -71,7 +79,7 @@ if (!decision.isAllowed()) {
 ## 语义边界
 
 - 验证顺序固定（格式→选钥验签→结构→目标绑定→吊销→新鲜度→时间→规则），`authorize` 每次判定复查当前吊销状态，不复用导入时结论。
-- 状态仓只增不减：已知否定水位（吊销/资格撤销）在重启后不得回退放行；跨修订/换文件不重置状态目录。默认文件仓以旁路锁文件和写前回读保护多个实例的单调水位，状态文件缺失或损坏按失败关闭处理。
+- 状态仓只增不减：已知否定水位（吊销/资格撤销）在重启后不得回退放行；跨修订/换文件不重置状态目录。默认文件仓以旁路锁文件和写前回读保护多个实例的单调水位，首次空目录允许初始化；旁路锁存在时主状态文件缺失或损坏按失败关闭处理。
 - 文件状态仓支持同一状态目录的多实例串行写入，但不防整盘回滚、备份恢复或网络文件系统不具备锁语义的场景；这些场景需宿主提供更高强度的可信锚点或专用 StateStore。
 - 设备绑定证据（WEIGHTED 分量采集/DEVICE_KEY 挑战）由宿主端口先行完成，本件只消费布尔结论；分量级匹配算法属核心引擎后续能力。
 - REQUIRED 吊销政策要求已安装资料足够新鲜；缺少或过期即拒绝。OPTIONAL 仍检查已知吊销。
