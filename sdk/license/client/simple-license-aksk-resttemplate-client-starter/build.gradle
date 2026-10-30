@@ -1,0 +1,11 @@
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    // AKSK Bearer 注入与传输复用 aksk 客户端生态；@ConditionalOnMissingBean 保留宿主覆盖位
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework:spring-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+}
