@@ -1,0 +1,26 @@
+def jakartaCloudVersion = rootProject.findProperty('jakartaCloudVersion') ?: '2024.0.0'
+def jakartaOpenFeignVersion = rootProject.findProperty('jakartaOpenFeignVersion') ?: '4.2.0'
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${jakartaCloudVersion}"
+    }
+}
+
+configurations.configureEach {
+    // 根工程 legacy 3.1.8 约束覆盖模块 BOM，jakarta 线局部纠正（同 aksk feign jakarta 先例）
+    resolutionStrategy.force "org.springframework.cloud:spring-cloud-starter-openfeign:${jakartaOpenFeignVersion}"
+}
+
+dependencies {
+    api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    // AKSK Bearer 注入复用 aksk feign jakarta 生态
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    compileOnly 'org.springframework:spring-web'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+}
