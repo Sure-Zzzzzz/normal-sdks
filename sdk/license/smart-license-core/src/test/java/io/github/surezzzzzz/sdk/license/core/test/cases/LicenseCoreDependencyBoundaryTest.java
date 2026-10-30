@@ -24,7 +24,7 @@ class LicenseCoreDependencyBoundaryTest {
 
     private static final List<String> FORBIDDEN_IMPORT_PREFIXES = Arrays.asList(
             "import org.springframework.",
-            "import com.fasterxml.jackson.",
+            // jackson 已是 core 的明示 api 依赖（StrictJson/Protocol2 契约件）；框架与 KMS 内部仍禁
             "import javax.servlet.",
             "import javax.persistence.",
             "import org.mybatis.",

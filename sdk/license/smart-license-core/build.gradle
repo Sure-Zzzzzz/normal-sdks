@@ -1,3 +1,6 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-kms-client-starter:1.0.1'
+    // SDK 私有 JSON 编解码（协议2载荷、信任资料与模型快照的严格解析/序列化）
+    // jackson 是公开编解码面的一部分（StrictJson）：api 传递，保证消费方运行时版本 ≥ 深度约束所需
+    // （显式 2.18.6：Boot 2.7 BOM 默认 2.13 无 StreamReadConstraints 深度约束，发布 POM 亦需可解析版本）
+    api 'com.fasterxml.jackson.core:jackson-databind:2.18.6'
 }
