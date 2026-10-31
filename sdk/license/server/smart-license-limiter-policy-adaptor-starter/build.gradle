@@ -1,0 +1,13 @@
+dependencies {
+    // 两个 SPI/core 都在公开适配器签名中出现，正式发布使用固定 Maven 坐标。
+    api 'io.github.sure-zzzzzz:smart-license-core:2.0.0'
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-management-policy-mutation-client-core:1.0.0'
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+    testImplementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-policy-mutation-aksk-resttemplate-client-starter:1.0.0'
+}
