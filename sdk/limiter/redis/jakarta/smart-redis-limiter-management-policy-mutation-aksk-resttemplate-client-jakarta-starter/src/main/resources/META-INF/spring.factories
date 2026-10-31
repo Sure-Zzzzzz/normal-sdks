@@ -1,0 +1,1 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\nio.github.surezzzzzz.sdk.limiter.redis.smart.management.client.mutation.resttemplate.configuration.SmartRedisLimiterPolicyMutationClientAutoConfiguration
