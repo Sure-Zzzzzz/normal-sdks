@@ -1,0 +1,29 @@
+# AKSK Provider 默认装配（matchIfMissing=true）在测试上下文缺 introspect 三件套时启动即败：
+# 顶层扁平点号键显式关闭（嵌 io: 树会 YAML 重复键；provider 测试装配另在协作用例内自带配置）
+io.github.surezzzzzz.sdk.auth.aksk.resource.server.enabled: false
+
+logging:
+  level:
+    io.github.surezzzzzz.sdk.license.server.service.JpaQuotaReservationService: DEBUG
+
+spring:
+  profiles:
+    active: local-test,local
+
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        mysql:
+          route:
+            enable: true
+            primary-datasource: default
+            datasources:
+              default:
+                url: jdbc:mysql://localhost:3306/license_server_test?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+                username: ${LICENSE_TEST_JDBC_USERNAME:root}
+                password: ${LICENSE_TEST_JDBC_PASSWORD:}
+                driver-class-name: com.mysql.cj.jdbc.Driver
+                hikari:
+                  maximum-pool-size: 10
+                  minimum-idle: 2

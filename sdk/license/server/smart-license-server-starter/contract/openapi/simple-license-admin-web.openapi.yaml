@@ -1,0 +1,1701 @@
+openapi: 3.0.3
+info:
+  title: Simple License Admin API
+  version: 2.0.0
+  description: >
+    License 管理端 API（2.0 新领域模型，基路径 /api/license/v1）。认证走身份协作底座
+    （IAM 人员 Bearer 由 PKCE 链取得 / AKSK SERVICE Bearer），请求不得同时携带 Cookie 等其他凭据。
+    API 为接口操作权限，DATA 为资源和动作的数据范围，PAGE 为人员页面入口权限；
+    页面可见不代替后端 API 与 DATA 校验。机器调用不要求 PAGE，但仍执行应用准入及后端授权。
+    本契约列出实际提供的接口。Idempotency-Key（幂等请求标识）和 expectedRowVersion
+    （当前对象行版本）仅在相应操作声明时携带；存在幂等请求头不代表每个创建接口均实现请求重放。
+    请求体最大 262144 UTF-8 字节，未知顶层字段拒绝。业务身份、期限和权益不能由调用方扩展字段覆盖。
+    时间字段区分 UTC Epoch 秒与 ISO 8601 文本。签名原文仅在独立交付接口返回且禁止缓存。
+servers:
+  - url: /
+security:
+  - bearerToken: []
+paths:
+  /api/license/v1/me:
+    get:
+      summary: 当前主体最小视图（PAGE/API 摘要，不含原始 DATA）
+      operationId: getMe
+      x-api-permission: license.me.read
+      responses: { '200': { description: 主体视图 }, '401': { $ref: '#/components/responses/Unauthorized' } }
+  /api/license/v1/issuers:
+    get:
+      summary: 分页签发方列表
+      operationId: listIssuers
+      x-api-permission: license.issuer.read
+      x-data-permission: { resource: license-issuer, action: read, dimension: issuerId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { description: 签发方分页 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建签发方（编码须唯一，重复返回409）
+      operationId: createIssuer
+      x-api-permission: license.issuer.manage
+      x-data-permission: { resource: license-issuer, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IssuerInput' } } } }
+      responses: { '201': { description: 签发方 }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/issuers/{issuerId}:
+    get:
+      summary: 签发方详情
+      operationId: getIssuer
+      x-api-permission: license.issuer.read
+      x-data-permission: { resource: license-issuer, action: read, dimension: issuerId }
+      parameters: [ { $ref: '#/components/parameters/IssuerId' } ]
+      responses: { '200': { description: 签发方 }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      summary: 更新签发方展示资料（行版本围栏）
+      operationId: patchIssuer
+      x-api-permission: license.issuer.manage
+      x-data-permission: { resource: license-issuer, action: manage, dimension: issuerId }
+      parameters: [ { $ref: '#/components/parameters/IssuerId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/IssuerPatchInput' } } } }
+      responses: { '200': { description: 签发方 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/customers:
+    get:
+      summary: 分页客户列表
+      operationId: listCustomers
+      x-api-permission: license.customer.read
+      x-data-permission: { resource: license-customer, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' } ]
+      responses: { '200': { description: 客户分页 }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建客户（编码须唯一，重复返回409）
+      operationId: createCustomer
+      x-api-permission: license.customer.manage
+      x-data-permission: { resource: license-customer, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerInput' } } } }
+      responses: { '201': { description: 客户 }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/customers/{customerId}:
+    get:
+      summary: 客户详情
+      operationId: getCustomer
+      x-api-permission: license.customer.read
+      x-data-permission: { resource: license-customer, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/CustomerId' } ]
+      responses: { '200': { description: 客户 }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/products:
+    get:
+      summary: 分页产品列表
+      operationId: listProducts
+      x-api-permission: license.product.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { name: issuerId, in: query, schema: { type: string } } ]
+      responses: { '200': { description: 产品分页 }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建产品（声明动作总集）
+      operationId: createProduct
+      x-api-permission: license.product.manage
+      x-data-permission: { resource: license-product, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }
+      responses: { '201': { description: 产品 }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/products/{productId}:
+    get:
+      summary: 产品详情
+      operationId: getProduct
+      x-api-permission: license.product.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ProductId' } ]
+      responses: { '200': { description: 产品 }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      summary: 扩展产品能力清单（行版本围栏；已有能力不可移除）
+      operationId: patchProductCapabilities
+      x-api-permission: license.product.manage
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ProductId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductCapabilitiesPatchInput' } } } }
+      responses: { '200': { description: 更新后的产品 }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/models:
+    get:
+      summary: 模型版本列表（按产品过滤）
+      operationId: listModels
+      x-api-permission: license.model.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { name: productId, in: query, schema: { type: string } } ]
+      responses: { '200': { description: 完整模型版本列表，以单页结构返回，不支持page/size参数 }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建模型（草稿；快照经发布级校验）
+      operationId: createModel
+      x-api-permission: license.model.manage
+      x-data-permission: { resource: license-product, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ModelInput' } } } }
+      responses: { '201': { description: 模型版本（DRAFT） }, '422': { description: 快照未通过结构校验 } }
+  /api/license/v1/model-versions/{modelVersionId}:
+    get:
+      summary: 模型版本详情（附快照原文——草稿编辑回填源）
+      operationId: getModelVersion
+      x-api-permission: license.model.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ModelVersionId' } ]
+      responses: { '200': { description: 模型版本详情 }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      summary: 编辑草稿快照（行版本围栏；已发布不可变）
+      operationId: patchModelDraft
+      x-api-permission: license.model.manage
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ModelVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ModelPatchInput' } } } }
+      responses: { '200': { description: 模型版本 }, '409': { $ref: '#/components/responses/Conflict' }, '422': { description: 快照未通过结构校验 } }
+  /api/license/v1/model-versions/{modelVersionId}/publication:
+    put:
+      summary: 发布模型（快照固化不可变）
+      operationId: publishModelVersion
+      x-api-permission: license.model.publish
+      x-data-permission: { resource: license-product, action: publish, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ModelVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RowVersionInput' } } } }
+      responses: { '200': { description: 已发布模型版本 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/model-versions/{modelVersionId}/state:
+    patch:
+      summary: 退役模型（PUBLISHED→RETIRED；禁止新引用）
+      operationId: retireModelVersion
+      x-api-permission: license.model.publish
+      x-data-permission: { resource: license-product, action: publish, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ModelVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RetireInput' } } } }
+      responses: { '200': { description: 已退役模型版本 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/model-versions/{modelVersionId}/evaluations:
+    post:
+      summary: 受限试算（假设权益/事实；只判定不签发）
+      operationId: evaluateModelAction
+      x-api-permission: license.model.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ModelVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/EvaluationInput' } } } }
+      responses: { '200': { description: 'declared 结论' }, '422': { description: 快照不可求值 } }
+  /api/license/v1/plans:
+    get:
+      summary: 方案版本列表（按产品过滤）
+      operationId: listPlans
+      x-api-permission: license.plan.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { name: productId, in: query, schema: { type: string } } ]
+      responses: { '200': { description: 完整方案版本列表，以单页结构返回，不支持page/size参数 } }
+    post:
+      summary: 创建方案（只可引用已发布模型；预填键集须为模型 rights 声明子集）
+      operationId: createPlan
+      x-api-permission: license.plan.manage
+      x-data-permission: { resource: license-product, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlanInput' } } } }
+      responses: { '201': { description: 方案版本（DRAFT） }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/plan-versions/{planVersionId}:
+    get:
+      summary: 方案版本详情（附预填）
+      operationId: getPlanVersion
+      x-api-permission: license.plan.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/PlanVersionId' } ]
+      responses: { '200': { description: 方案版本详情 }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      summary: 编辑草稿预填（行版本围栏；已发布不可变）
+      operationId: patchPlanDraft
+      x-api-permission: license.plan.manage
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/PlanVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlanPatchInput' } } } }
+      responses: { '200': { description: 方案版本 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/plan-versions/{planVersionId}/publication:
+    put:
+      summary: 发布方案（预填固化）
+      operationId: publishPlanVersion
+      x-api-permission: license.plan.manage
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/PlanVersionId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RowVersionInput' } } } }
+      responses: { '200': { description: 已发布方案版本 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/grants:
+    get:
+      summary: 分页客户授权列表（客户、产品与DATA范围求交）
+      operationId: listGrants
+      x-api-permission: license.grant.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { name: customerId, in: query, schema: { type: string } }, { name: productId, in: query, schema: { type: string } } ]
+      responses: { '200': { description: 授权分页 }, '403': { $ref: '#/components/responses/Forbidden' } }
+    post:
+      summary: 创建客户授权（必须关联已发布模型；权益键集须为模型 rights 声明子集）
+      operationId: createGrant
+      x-api-permission: license.grant.manage
+      x-data-permission: { resource: license-grant, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantInput' } } } }
+      responses: { '201': { description: 授权 }, '422': { description: 对象/模式/权益校验未通过 } }
+  /api/license/v1/grants/{grantId}:
+    get:
+      summary: 授权详情（含模型关联与权益快照）
+      operationId: getGrant
+      x-api-permission: license.grant.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' } ]
+      responses: { '200': { description: 授权 }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/grants/{grantId}/state:
+    patch:
+      summary: 管理状态（ENABLED/SUSPENDED；REVOKED 只经吊销）
+      operationId: patchGrantState
+      x-api-permission: license.grant.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantStateInput' } } } }
+      responses: { '200': { description: 授权 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/grants/{grantId}/credentials:
+    post:
+      summary: 创建 OFFLINE 签发任务（201/202 仅返回元数据）
+      description: 只允许 OFFLINE 授权；ONLINE/HYBRID 返回422，已有任务也不能绕过当前模式校验。凭据原文通过独立交付接口取得。
+      operationId: requestCredential
+      x-api-permission: license.grant.issue
+      x-data-permission: { resource: license-grant, action: issue, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CredentialRequestInput' } } } }
+      responses:
+        '201': { description: 新建签发任务元数据（不含 compact JWS）, content: { application/json: { schema: { $ref: '#/components/schemas/CredentialMetadataView' } } } }
+        '202': { description: 幂等命中或处理中任务元数据（不含 compact JWS）, content: { application/json: { schema: { $ref: '#/components/schemas/CredentialMetadataView' } } } }
+        '422': { description: 预算预检或对象校验拒绝 }
+  /api/license/v1/credentials:
+    get:
+      summary: 凭据元数据列表（不含原文；DATA、授权、激活筛选求交后分页）
+      operationId: listCredentials
+      x-api-permission: license.grant.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: grantId, in: query, schema: { type: string }, description: 可选授权编号，受 DATA 范围约束 }
+        - { name: activationId, in: query, schema: { type: string }, description: 可选部署激活编号，人员与服务凭据不匹配 }
+      responses: { '200': { description: 凭据分页 } }
+  /api/license/v1/credentials/{credentialId}:
+    get:
+      summary: 凭据元数据（不含原文）
+      operationId: getCredential
+      x-api-permission: license.grant.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/CredentialId' } ]
+      responses: { '200': { description: 凭据 }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/credentials/{credentialId}/content:
+    get:
+      summary: 交付凭据签名文本（no-store；仅 READY）
+      operationId: deliverCredentialContent
+      x-api-permission: license.grant.deliver
+      x-data-permission: { resource: license-grant, action: deliver, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/CredentialId' } ]
+      responses: { '200': { description: JSON交付对象（包含compactJws；no-store）, headers: { Cache-Control: { schema: { type: string }, description: 固定为 no-store } }, content: { application/json: { schema: { $ref: '#/components/schemas/CredentialContentView' } } } }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/grants/{grantId}/subject-assignments:
+    get:
+      summary: 固定资格名单（按授权）
+      operationId: listSubjectAssignments
+      x-api-permission: license.subject-assignment.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' } ]
+      responses: { '200': { description: 完整资格名单，以单页结构返回；不接受分页参数 } }
+    post:
+      summary: 分配资格（PERSON/SERVICE；缺省记录当前授权修订）
+      operationId: createSubjectAssignment
+      x-api-permission: license.subject-assignment.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssignmentInput' } } } }
+      responses: { '201': { description: 资格 }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/subject-assignments/{assignmentId}:
+    get:
+      summary: 资格详情
+      operationId: getSubjectAssignment
+      x-api-permission: license.subject-assignment.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/AssignmentId' } ]
+      responses: { '200': { description: 资格 }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/subject-assignments/{assignmentId}/state:
+    patch:
+      summary: 资格状态（ACTIVE/SUSPENDED；暂停仍占席）
+      operationId: patchAssignmentState
+      x-api-permission: license.subject-assignment.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/AssignmentId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SubjectStateInput' } } } }
+      responses: { '200': { description: 资格 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/subject-assignments/{assignmentId}/named-seat-allocations:
+    post:
+      summary: 追加实名指标（重复指标返回409；已替换或已吊销资格禁止修改）
+      operationId: appendNamedSeats
+      x-api-permission: license.subject-assignment.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/AssignmentId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/NamedSeatInput' } } } }
+      responses: { '200': { description: 资格 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/grants/{grantId}/activations:
+    get:
+      summary: 部署激活列表（按授权）
+      operationId: listActivations
+      x-api-permission: license.activation.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' } ]
+      responses: { '200': { description: 完整激活列表，以单页结构返回；不接受分页参数 } }
+    post:
+      summary: 创建激活申请（调用者绑定；设备政策固定为NONE；LOCAL额度随激活固化）
+      operationId: createActivation
+      x-api-permission: license.activation.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/GrantId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActivationInput' } } } }
+      responses: { '201': { description: 激活, content: { application/json: { schema: { $ref: '#/components/schemas/ActivationView' } } } }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/activations/{activationId}/state:
+    patch:
+      summary: 激活状态（停止新签发；旧离线凭据不即时失效）
+      operationId: patchActivationState
+      x-api-permission: license.activation.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/ActivationId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SubjectStateInput' } } } }
+      responses: { '200': { description: 激活 }, '409': { $ref: '#/components/responses/Conflict' } }
+  /api/license/v1/activations/{activationId}/caller-binding:
+    patch:
+      summary: 更新激活调用者绑定（行版本围栏）
+      operationId: patchActivationCallerBinding
+      x-api-permission: license.activation.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/ActivationId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CallerBindingPatch' } } } }
+      responses: { '200': { description: 激活, content: { application/json: { schema: { $ref: '#/components/schemas/ActivationView' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/revocations:
+    get:
+      summary: 吊销台账（可按目标类型/编号过滤）
+      operationId: listRevocations
+      x-api-permission: license.revocation.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/Size' }, { name: targetKind, in: query, schema: { type: string } }, { name: targetId, in: query, schema: { type: string } } ]
+      responses: { '200': { description: 吊销分页 } }
+    post:
+      summary: 创建吊销（不可撤回；同目标重复409，不重放原响应）
+      operationId: createRevocation
+      x-api-permission: license.revocation.manage
+      x-data-permission: { resource: license-grant, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RevocationInput' } } } }
+      responses: { '201': { description: 吊销 }, '409': { description: 同目标已吊销 } }
+  /api/license/v1/revocations/{revocationId}:
+    get:
+      summary: 吊销详情
+      operationId: getRevocation
+      x-api-permission: license.revocation.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/RevocationId' } ]
+      responses: { '200': { description: 吊销 }, '404': { $ref: '#/components/responses/NotFound' } }
+  /api/license/v1/signing-profiles:
+    get:
+      summary: 签名档案列表（按状态过滤，完整单页）
+      operationId: listSigningProfiles
+      x-api-permission: license.signing-profile.read
+      x-data-permission: { resource: license-signing-profile, action: read, dimension: profileId }
+      parameters: [ { name: status, in: query, schema: { type: string, default: ACTIVE, enum: [ACTIVE, RETIRED, ALL] } } ]
+      responses: { '200': { description: 完整档案列表，不接受分页参数, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfilePage' } } } }, '403': { $ref: '#/components/responses/Forbidden' }, '422': { $ref: '#/components/responses/Unprocessable' } }
+    post:
+      summary: 登记签名档案（读 KMS 公钥验证 ES256/P-256；不可改绑）
+      operationId: createSigningProfile
+      x-api-permission: license.signing-profile.manage
+      x-data-permission: { resource: license-signing-profile, action: manage, all: true }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileInput' } } } }
+      responses: { '201': { description: 首次登记, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '200': { description: 已原子轮换；rotatedFrom指向旧档案, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '422': { description: 公钥验证未通过 }, '503': { $ref: '#/components/responses/DependencyUnavailable' } }
+  /api/license/v1/signing-profiles/{profileId}:
+    get:
+      summary: 档案详情
+      operationId: getSigningProfile
+      x-api-permission: license.signing-profile.read
+      x-data-permission: { resource: license-signing-profile, action: read, dimension: profileId }
+      parameters: [ { $ref: '#/components/parameters/ProfileId' } ]
+      responses: { '200': { description: 档案, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' } }
+    patch:
+      summary: 退役签名档案（行版本校验；不改绑钥）
+      operationId: patchSigningProfile
+      x-api-permission: license.signing-profile.manage
+      x-data-permission: { resource: license-signing-profile, action: manage, dimension: profileId }
+      parameters: [ { $ref: '#/components/parameters/ProfileId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileRetirementInput' } } } }
+      responses: { '200': { description: 退役档案, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' } }
+  /api/license/v1/products/{productId}/signing-profiles/{purpose}:
+    put:
+      summary: 指定产品×用途的签发档案（轮换=切档案；旧公钥保留验签）
+      operationId: selectSigningProfile
+      x-api-permission: license.signing-profile.manage
+      x-data-permission: { resource: license-signing-profile, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/ProductId' }, { name: purpose, in: path, required: true, schema: { type: string, enum: [CREDENTIAL, REVOCATION, STATE_RECOVERY] } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProfileSelectionInput' } } } }
+      responses: { '201': { description: 首次登记并设为在用, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '200': { description: 已轮换并设为在用, content: { application/json: { schema: { $ref: '#/components/schemas/SigningProfileView' } } } }, '409': { $ref: '#/components/responses/Conflict' }, '422': { $ref: '#/components/responses/ValidationError' }, '503': { $ref: '#/components/responses/DependencyUnavailable' } }
+  /api/license/v1/quota-reservations:
+    get:
+      summary: 查询受控额度操作元数据
+      description: 只返回额度操作元数据；grant DATA 范围、筛选、分页和计数在服务端数据库内求交，不返回认证主体、令牌或签名原文。
+      operationId: listQuotaReservations
+      x-api-permission: license.quota.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: grantId, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: activationId, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: metric, in: query, schema: { type: string, maxLength: 128 } }
+        - { name: kind, in: query, schema: { type: string, enum: [CONCURRENT, CONSUMPTION] } }
+        - { name: state, in: query, schema: { type: string, enum: [ACTIVE, RELEASED, EXPIRED] } }
+      responses:
+        '200': { description: 受控分页元数据, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+    post:
+      summary: 预占并发额度或提交累计消费
+      description: 先核API、DATA、本人真实资格、商业期限及模型动作指标。业务号在授权指标与实际认证主体内幂等，换动作或数量返回409。固定窗口锚持久保存，重启及商业续期不清累计水位。
+      operationId: reserveQuota
+      x-api-permission: license.quota.use
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationInput' } } } }
+      responses:
+        '201': { description: 已提交操作或同号原始操作, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationView' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/quota-reservations/{reservationId}:
+    get:
+      summary: 读取本人额度操作元数据
+      description: 先核对当前认证主体与来源，再核对授权 DATA；不开放后台按编号越权读取。
+      operationId: getQuotaReservation
+      x-api-permission: license.quota.use
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      parameters: [ { name: reservationId, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 128 } } ]
+      responses:
+        '200': { description: 额度操作元数据, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationView' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+    delete:
+      summary: 本人归还并发预占
+      description: 已释放或已到期幂等返回原终态；累计消费不可回补，返回409。授权暂停或商业到期后仍可归还并发预占。
+      operationId: releaseQuota
+      x-api-permission: license.quota.use
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      parameters: [ { name: reservationId, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 128 } } ]
+      responses:
+        '200': { description: 操作终态, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/quota-reservations/{reservationId}/release:
+    post:
+      summary: 并发预占释放的POST入口
+      operationId: releaseQuotaPost
+      x-api-permission: license.quota.use
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      parameters: [ { name: reservationId, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 128 } } ]
+      responses:
+        '200': { description: 与DELETE一致的操作终态, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/quota-reservations/{reservationId}/renewal:
+    put:
+      summary: 本人续期仍有效的并发预占
+      description: 当前fence必须匹配；复核真实资格及模型政策。新截止受模型maxReservationSeconds和商业截止约束，到期预占不可复活；续期数量不变，成功延长时持久围栏递增。
+      operationId: renewQuota
+      x-api-permission: license.quota.use
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      parameters: [ { name: reservationId, in: path, required: true, schema: { type: string, minLength: 1, maxLength: 128 } } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaRenewalInput' } } } }
+      responses:
+        '200': { description: 当前预占围栏与截止, content: { application/json: { schema: { $ref: '#/components/schemas/QuotaReservationView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/grant-selections:
+    post:
+      summary: 发现当前真实对象可选授权
+      description: >-
+        产品、对象种类、启用状态及DATA范围在SQL内求交，再核真实本人、固定资格或激活callerBinding。
+        total和items使用同一资格及商业阶段过滤，已关联退役模型仍可使用；候选不是最终许可。
+        PERSON只接受当前IAM本人，SERVICE和DEPLOYMENT只接受已验证服务；代理对象证明尚不支持，显式拒绝。
+        目录或持久快照不可用返回503，不伪装为成功空列表。
+      operationId: selectGrants
+      x-api-permission: license.decision.evaluate
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/GrantSelectionInput' } } } }
+      responses:
+        '200': { description: 候选分页, content: { application/json: { schema: { $ref: '#/components/schemas/GrantSelectionPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/decisions:
+    post:
+      summary: 在线判定（规则、资格与已提交的额度引用；不在判定中扣减余额）
+      operationId: decide
+      x-api-permission: license.decision.evaluate
+      x-data-permission: { resource: license-grant, action: use, dimension: grantId }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionInput' } } } }
+      responses: { '200': { description: 本次在线判定（拒绝也以allowed=false返回）, content: { application/json: { schema: { $ref: '#/components/schemas/DecisionView' } } } }, '400': { $ref: '#/components/responses/BadRequest' }, '401': { $ref: '#/components/responses/Unauthorized' }, '403': { $ref: '#/components/responses/Forbidden' }, '404': { $ref: '#/components/responses/NotFound' }, '413': { $ref: '#/components/responses/PayloadTooLarge' }, '422': { $ref: '#/components/responses/ValidationError' }, '503': { $ref: '#/components/responses/DependencyUnavailable' } }
+  /api/license/v1/customers/{customerId}/organization-binding:
+    get:
+      summary: 读取客户组织绑定
+      description: 客户存在但尚未绑定时返回三个绑定字段为 null 的视图；组织实例编号是治理确认的引用，不是远端环境证明。
+      operationId: getOrganizationBinding
+      x-api-permission: license.customer.read
+      x-data-permission: { resource: license-customer, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/CustomerId' } ]
+      responses:
+        '200': { description: 组织绑定, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationBindingView' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: 登记或重新绑定客户组织
+      description: 首次登记或组织实例、根部门变化时由服务分配绑定代数；请求不接受客户端指定代数或行版本。
+      operationId: putOrganizationBinding
+      x-api-permission: license.customer.manage
+      x-data-permission: { resource: license-customer, action: manage, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/CustomerId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationBindingInput' } } } }
+      responses:
+        '200': { description: 保存后的组织绑定, content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationBindingView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/products/{productId}/application-bindings:
+    get:
+      summary: 读取产品应用绑定及当前行版本
+      operationId: getApplicationBindings
+      x-api-permission: license.product.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ProductId' } ]
+      responses:
+        '200': { description: 应用绑定, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationBindingsView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: 整体替换产品应用绑定
+      description: items 是全量列表；客户端须保留不打算删除的绑定与其中已批准的基础权限快照，不能只提交新增项。
+      operationId: putApplicationBindings
+      x-api-permission: license.product.manage
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ProductId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationBindingsInput' } } } }
+      responses:
+        '200': { description: 保存后的绑定与新行版本, content: { application/json: { schema: { $ref: '#/components/schemas/ApplicationBindingsView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/products/{productId}/role-projection-plans:
+    post:
+      summary: 创建角色联动清单
+      description: >-
+        需要联动资源 manage/all。显式 desiredRules 或绑定中已批准的 basePermissionSnapshot
+        提供精确 PAGE/API/DATA 规则，不把商业动作自动转换为应用权限。
+        幂等按当前已验证主体、HTTP 目标及请求标识隔离；同键不同输入返回 409。
+      operationId: createRoleProjectionPlan
+      x-api-permission: license.integration.manage
+      x-data-permission: { resource: license-integration, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/ProductId' }, { $ref: '#/components/parameters/ProjectionIdempotencyKey' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RoleProjectionPlanInput' } } } }
+      responses:
+        '201': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/role-projection-plans/{planId}:
+    get:
+      summary: 读取角色联动清单
+      description: 按清单所属 customerId 核对 DATA；planId 不是 DATA 维度。
+      operationId: getRoleProjectionPlan
+      x-api-permission: license.integration.read
+      x-data-permission: { resource: license-integration, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/ProjectionPlanId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/license/v1/role-projection-plans/{planId}/confirmations:
+    post:
+      summary: 登记严格人工确认回执
+      description: >-
+        回读实际规则和部门挂载，核对当前期望修订、组织实例、绑定代数和目标角色。
+        MANUALLY_CONFIRMED 是人工回执，不能表示 AUTO 执行已 VERIFIED。
+      operationId: confirmRoleProjectionPlan
+      x-api-permission: license.integration.manage
+      x-data-permission: { resource: license-integration, action: manage, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/ProjectionPlanId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectionConfirmationInput' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/integration-commands:
+    get:
+      summary: 分页读取角色联动命令
+      description: 先按 customerId 的 DATA 范围筛选，再按期望修订倒序形成分页；命令视图与清单视图相同。
+      operationId: listIntegrationCommands
+      x-api-permission: license.integration.read
+      x-data-permission: { resource: license-integration, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/Page' }, { $ref: '#/components/parameters/IntegrationSize' } ]
+      responses:
+        '200': { description: 联动命令分页, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationCommandPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/integration-commands/{commandId}:
+    get:
+      summary: 读取角色联动命令
+      description: 按命令所属 customerId 核对 DATA；commandId 不是 DATA 维度。
+      operationId: getIntegrationCommand
+      x-api-permission: license.integration.read
+      x-data-permission: { resource: license-integration, action: read, dimension: customerId }
+      parameters: [ { $ref: '#/components/parameters/IntegrationCommandId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/license/v1/integration-commands/{commandId}/attempts:
+    post:
+      summary: 刷新人工清单或显式执行自动联动
+      description: >-
+        省略请求体、空对象或 executionMode=MANUAL 只刷新清单；仅显式 AUTO 通过受委托接口
+        执行角色规则与部门挂载，并逐次回读远端修订。响应状态必须逐项检查，HTTP 200 不代表已 VERIFIED。
+        结果不明为 UNCERTAIN，漂移为 DRIFTED；412/409 不触发盲重发。重试保留原幂等键与原输入。
+      operationId: attemptIntegrationCommand
+      x-api-permission: license.integration.manage
+      x-data-permission: { resource: license-integration, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IntegrationCommandId' }, { $ref: '#/components/parameters/ProjectionIdempotencyKey' } ]
+      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/IntegrationAttemptInput' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/integration-commands/{commandId}/reconciliations:
+    post:
+      summary: 核对未知或漂移的联动结果
+      description: 治理者须明确确认原调用已终止，回读实际远端事实，并匹配当前期望及组织绑定；不靠再次执行掩盖未知结果。
+      operationId: reconcileIntegrationCommand
+      x-api-permission: license.integration.manage
+      x-data-permission: { resource: license-integration, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/IntegrationCommandId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectionReconciliationInput' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/products/{productId}/role-projection-reconfirmations:
+    post:
+      summary: 重新确认组织环境与角色投影
+      description: 已知环境清库、恢复或重绑后明确核对当前绑定，并确认旧调用已终止；重新建立外部关联，不自动续用旧角色编号。
+      operationId: reconfirmRoleProjectionEnvironment
+      x-api-permission: license.integration.manage
+      x-data-permission: { resource: license-integration, action: manage, all: true }
+      parameters: [ { $ref: '#/components/parameters/ProductId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectionEnvironmentInput' } } } }
+      responses:
+        '201': { $ref: '#/components/responses/RoleProjectionPlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/operations:
+    get:
+      summary: 分页读取签发任务元数据
+      description: DATA 与可选 grantId 筛选先在数据库求交；不返回冻结输入或签名原文。
+      operationId: listSigningOperations
+      x-api-permission: license.operation.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/Size' }
+        - { name: grantId, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 签发任务分页, content: { application/json: { schema: { $ref: '#/components/schemas/SigningOperationPage' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/license/v1/operations/{operationId}:
+    get:
+      summary: 读取签发任务元数据
+      operationId: getSigningOperation
+      x-api-permission: license.operation.read
+      x-data-permission: { resource: license-grant, action: read, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/OperationId' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SigningOperation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/license/v1/operations/{operationId}/recoveries:
+    post:
+      summary: 受控恢复原冻结签发任务
+      description: >-
+        UNCERTAIN 沿用原任务号和冻结输入，条件更新执行代数后同步签名。
+        接管 SIGNING 还须携带原执行代数及理由，并超过宿主显式配置的失联窗口；
+        未配置窗口时禁止接管。READY 与终态不能借恢复重新执行。
+        503 后先回读任务，不假设签名一定未发生。
+      operationId: recoverSigningOperation
+      x-api-permission: license.operation.recover
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/OperationId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SigningRecoveryInput' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/SigningOperation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/operations/{operationId}/abandonments:
+    post:
+      summary: 安全放弃未完成签发任务
+      description: 按当前行版本与执行代数执行条件更新；READY 与终态拒绝放弃，不回收已交付文件的历史占用。
+      operationId: abandonSigningOperation
+      x-api-permission: license.operation.recover
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/OperationId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/SigningAbandonmentInput' } } } }
+      responses:
+        '200': { $ref: '#/components/responses/SigningOperation' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/fulfillment-integration/synchronization:
+    post:
+      summary: 执行一轮履约同步
+      description: >-
+        需要授权资源 manage/all。消费官方机器履约清单，保存自己的履约去重事实并回报结果；
+        新建草稿属于 awaitingConfiguration，启用且完成回报确认才计入 completed。
+        reportPending 或 failures 表示对应项未确认，不因 HTTP 200 声称全部履约成功。
+      operationId: synchronizeFulfillments
+      x-api-permission: license.grant.manage
+      x-data-permission: { resource: license-grant, action: manage, all: true }
+      requestBody: { required: false, content: { application/json: { schema: { $ref: '#/components/schemas/FulfillmentSynchronizationInput' } } } }
+      responses:
+        '200': { description: 本轮同步统计, content: { application/json: { schema: { $ref: '#/components/schemas/FulfillmentSynchronizationView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/signing-profiles/{profileId}/key-disposal-advice:
+    get:
+      summary: 读取退役签名档案的钥销毁保护建议
+      description: >-
+        只接受 RETIRED 档案。永久或无法确认截止的历史凭据按无截止保留；
+        SAFE_TO_SCHEDULE_DESTRUCTION 仅表示该档案没有仍在保留窗口内的 READY 引用，
+        仍须核对相同钥版本在其他档案和系统的引用。此接口不执行钥销毁。
+      operationId: getKeyDisposalAdvice
+      x-api-permission: license.signing-profile.read
+      x-data-permission: { resource: license-signing-profile, action: read, dimension: profileId }
+      parameters: [ { $ref: '#/components/parameters/ProfileId' } ]
+      responses:
+        '200': { description: 销毁保护建议, content: { application/json: { schema: { $ref: '#/components/schemas/KeyDisposalAdviceView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/subject-assignments/{assignmentId}/replacements:
+    post:
+      summary: 以新主体替换固定资格
+      description: 同事务把原资格标为REPLACED并建立新assignmentId；新编号的代数独立从1开始。已替换或已吊销资格不可再替换、追加指标或恢复ACTIVE。
+      operationId: replaceSubjectAssignment
+      x-api-permission: license.subject-assignment.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/AssignmentId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/AssignmentReplacementInput' } } } }
+      responses:
+        '201': { description: 新资格, content: { application/json: { schema: { $ref: '#/components/schemas/AssignmentView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/activations/{activationId}/replacements:
+    post:
+      summary: 以新激活替换部署对象
+      description: >-
+        同事务把原激活标记为 REPLACED，新记录保留 deploymentCode 并提高 activationGeneration。
+        callerBinding 省略时继承原登记值；显式提供对象须包含完整来源与主体编号。
+        OFFLINE 可显式传 null 清除绑定，ONLINE/HYBRID 必须保留非空绑定。
+        当前设备政策仅NONE；已替换或已吊销激活不可再次替换或恢复ACTIVE。
+      operationId: replaceActivation
+      x-api-permission: license.activation.manage
+      x-data-permission: { resource: license-grant, action: manage, dimension: grantId }
+      parameters: [ { $ref: '#/components/parameters/ActivationId' } ]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ActivationReplacementInput' } } } }
+      responses:
+        '201': { description: 新激活, content: { application/json: { schema: { $ref: '#/components/schemas/ActivationView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/license/v1/products/{productId}/revocation-packages:
+    post:
+      summary: 生成并发布产品完整吊销包
+      description: >-
+        按产品完整范围导出五类吊销目标，按协议字节预算分片并使用 REVOCATION 签名档案签名。
+        序号失败后不复用；幂等重放返回原包。不得传客户或 DATA 子集筛选条件。
+      operationId: createRevocationPackage
+      x-api-permission: license.revocation.deliver
+      x-data-permission: { resource: license-product, action: manage, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/ProductId' }, { $ref: '#/components/parameters/IdempotencyKey' } ]
+      responses:
+        '201': { description: 已生成 READY 包, content: { application/json: { schema: { $ref: '#/components/schemas/RevocationPackageView' } } } }
+        '202': { description: 已受理包, content: { application/json: { schema: { $ref: '#/components/schemas/RevocationPackageView' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/DependencyUnavailable' }
+  /api/license/v1/revocation-packages/{packageId}:
+    get:
+      summary: 吊销包元数据
+      operationId: getRevocationPackage
+      x-api-permission: license.revocation.deliver
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/PackageId' } ]
+      responses:
+        '200': { description: 吊销包元数据, content: { application/json: { schema: { $ref: '#/components/schemas/RevocationPackageView' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/license/v1/revocation-packages/{packageId}/content:
+    get:
+      summary: 吊销包签名内容
+      operationId: getRevocationPackageContent
+      x-api-permission: license.revocation.deliver
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters: [ { $ref: '#/components/parameters/PackageId' } ]
+      responses:
+        '200': { description: 原始 manifest 与分片内容, content: { application/json: { schema: { $ref: '#/components/schemas/RevocationPackageContentView' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/license/v1/products/{productId}/trust-material:
+    get:
+      summary: 获取产品信任资料快照
+      operationId: getTrustMaterial
+      x-api-permission: license.product.read
+      x-data-permission: { resource: license-product, action: read, dimension: productId }
+      parameters:
+        - { $ref: '#/components/parameters/ProductId' }
+        - { name: knownSequence, in: query, description: 调用方已安装的吊销资料序号；当前服务端保留该兼容参数但始终返回最新完整快照，调用方须自行验签并按序号只增安装, schema: { type: integer, format: int64, minimum: 0, default: 0 } }
+      responses:
+        '200': { description: 吊销包与已登记公钥资料, content: { application/json: { schema: { $ref: '#/components/schemas/TrustMaterialView' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    bearerToken: { type: http, scheme: bearer, description: 接受官方认证链取得的人员或服务 Bearer，不限定令牌为 JWT }
+  parameters:
+    Page: { name: page, in: query, schema: { type: integer, default: 1, minimum: 1 } }
+    Size: { name: size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, description: 本次请求的稳定标识；是否重放及长度约束依具体操作执行，不强制UUID格式, schema: { type: string } }
+    IssuerId: { name: issuerId, in: path, required: true, schema: { type: string } }
+    CustomerId: { name: customerId, in: path, required: true, schema: { type: string } }
+    ProductId: { name: productId, in: path, required: true, schema: { type: string } }
+    ModelVersionId: { name: modelVersionId, in: path, required: true, schema: { type: string } }
+    PlanVersionId: { name: planVersionId, in: path, required: true, schema: { type: string } }
+    GrantId: { name: grantId, in: path, required: true, schema: { type: string } }
+    CredentialId: { name: credentialId, in: path, required: true, schema: { type: string } }
+    AssignmentId: { name: assignmentId, in: path, required: true, schema: { type: string } }
+    ActivationId: { name: activationId, in: path, required: true, schema: { type: string } }
+    RevocationId: { name: revocationId, in: path, required: true, schema: { type: string } }
+    PackageId: { name: packageId, in: path, required: true, schema: { type: string } }
+    ProfileId: { name: profileId, in: path, required: true, schema: { type: string } }
+    OperationId: { name: operationId, in: path, required: true, schema: { type: string } }
+    ProjectionPlanId: { name: planId, in: path, required: true, schema: { type: string } }
+    IntegrationCommandId: { name: commandId, in: path, required: true, schema: { type: string } }
+    IntegrationSize: { name: size, in: query, schema: { type: integer, default: 20, minimum: 1, maximum: 200 } }
+    ProjectionIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 当前主体和准确目标内的稳定请求标识；重试保留同键和原输入，同键异输入返回409
+      schema: { type: string, minLength: 1, maxLength: 256 }
+  responses:
+    Unauthorized: { description: 未认证（WWW-Authenticate 质询） }
+    Forbidden: { description: 无权限码或 DATA 维度越界 }
+    NotFound: { description: 资源不存在或不属于当前 DATA 范围 }
+    Conflict: { description: 行版本冲突/状态迁移非法/幂等冲突 }
+    ValidationError: { description: 请求体校验未通过 }
+    BadRequest: { description: 请求体不是合法JSON对象或分页参数非法 }
+    PayloadTooLarge: { description: 请求体或字段集合超过服务端允许的大小上限 }
+    DependencyUnavailable: { description: 依赖未装配、不可用或执行结果未确认；先回读当前业务状态 }
+    RoleProjectionPlan:
+      description: 角色联动清单与命令状态，HTTP成功不等于远端执行成功
+      content: { application/json: { schema: { $ref: '#/components/schemas/RoleProjectionPlanView' } } }
+    SigningOperation:
+      description: 当前签发任务元数据，不含冻结输入或签名文本
+      content: { application/json: { schema: { $ref: '#/components/schemas/SigningOperationView' } } }
+  schemas:
+    IssuerInput: { type: object, additionalProperties: false, required: [code, displayName], properties: { code: { type: string, maxLength: 64 }, displayName: { type: string, maxLength: 128 } } }
+    IssuerPatchInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties:
+        displayName: { type: string }
+        status: { type: integer, enum: [0, 1] }
+        expectedRowVersion: { type: integer, format: int64 }
+    CustomerInput: { type: object, additionalProperties: false, required: [code, displayName], properties: { code: { type: string, maxLength: 64 }, displayName: { type: string, maxLength: 128 } } }
+    ProductInput:
+      type: object
+      additionalProperties: false
+      required: [issuerId, code, displayName, declaredActions, supportedCapabilities]
+      properties:
+        issuerId: { type: string }
+        code: { type: string }
+        displayName: { type: string }
+        declaredActions:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7E]+$' }
+        supportedCapabilities:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7E]+$' }
+    ProductCapabilitiesPatchInput:
+      type: object
+      additionalProperties: false
+      required: [supportedCapabilities, expectedRowVersion]
+      properties:
+        supportedCapabilities:
+          type: array
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 128, pattern: '^[\x21-\x7E]+$' }
+          description: 新清单必须包含当前全部能力，只能追加能力。
+        expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+    ModelInput:
+      type: object
+      additionalProperties: false
+      required: [productId, snapshot]
+      properties:
+        productId: { type: string }
+        snapshot:
+          type: object
+          description: 条件模型快照——fields（rights/facts 声明）+actions（动作→条件树，节点恰一键 all/any/not/bool/compare/member）+可选 quota（[{metric,limitRight,kind,enforcement}]）
+    ModelPatchInput: { type: object, additionalProperties: false, required: [snapshot, expectedRowVersion], properties: { snapshot: { type: object }, expectedRowVersion: { type: integer, format: int64 } } }
+    PlanInput:
+      type: object
+      additionalProperties: false
+      required: [productId, modelVersionId]
+      properties:
+        productId: { type: string }
+        modelVersionId: { type: string, description: 只可引用同产品已发布模型版本 }
+        prefillRights:
+          allOf: [ { $ref: '#/components/schemas/TypedFieldValues' } ]
+          description: 键集须为模型 rights 声明子集，每个值匹配声明的类型与约束
+    PlanPatchInput: { type: object, additionalProperties: false, required: [prefillRights, expectedRowVersion], properties: { prefillRights: { $ref: '#/components/schemas/TypedFieldValues' }, expectedRowVersion: { type: integer, format: int64 } } }
+    RowVersionInput: { type: object, additionalProperties: false, required: [expectedRowVersion], properties: { expectedRowVersion: { type: integer, format: int64 } } }
+    RetireInput: { type: object, additionalProperties: false, required: [state, expectedRowVersion], properties: { state: { type: string, enum: [RETIRED] }, expectedRowVersion: { type: integer, format: int64 } } }
+    EvaluationInput:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties: { action: { type: string }, rights: { $ref: '#/components/schemas/TypedFieldValues' }, facts: { $ref: '#/components/schemas/TypedFieldValues' } }
+    TypedFieldValues:
+      type: object
+      description: 键和值须符合相应模型声明；支持INTEGER、BOOLEAN、STRING、STRING_SET，禁止将业务身份或期限混入权益
+      additionalProperties:
+        oneOf:
+          - { type: integer, format: int64 }
+          - { type: boolean }
+          - { type: string }
+          - { type: array, items: { type: string } }
+    GrantInput:
+      type: object
+      additionalProperties: false
+      required: [customerId, productId, modelVersionId, subjectKind, mode]
+      properties:
+        customerId: { type: string }
+        productId: { type: string }
+        subjectKind: { type: string, enum: [DEPLOYMENT, PERSON, SERVICE] }
+        eligibilityKind: { type: string, enum: [ALLOCATED_DEPLOYMENTS, CUSTOMER_MEMBERS, ASSIGNED_SUBJECTS] }
+        offlineProofProfile: { type: string }
+        mode: { type: string, enum: [OFFLINE, ONLINE, HYBRID] }
+        businessOrderRef: { type: string, description: 与 CRM 对账钩子 }
+        modelVersionId: { type: string, description: 只可引用同产品已发布模型版本 }
+        rights:
+          allOf: [ { $ref: '#/components/schemas/TypedFieldValues' } ]
+          description: 随模型提交；键集须为声明子集且通过模型范围校验
+        validity:
+          allOf: [ { $ref: '#/components/schemas/ValidityInput' } ]
+          nullable: true
+          description: 可省略或null，由创建时一次固化默认期限；读取、判定和签发不会顺延
+        limiterPolicies:
+          type: array
+          maxItems: 64
+          description: 客户 OpenAPI 限频授权；namespace 由 limiter Management 的服务声明返回，调用方不得提交
+          items: { $ref: '#/components/schemas/LimiterPolicyInput' }
+    LimiterPolicyInput:
+      type: object
+      additionalProperties: false
+      required: [serviceCode, resourceCode, limits]
+      properties:
+        serviceCode:
+          allOf: [{ $ref: '#/components/schemas/StableCode' }]
+          description: Management 服务编码
+        resourceCode:
+          allOf: [{ $ref: '#/components/schemas/StableCode' }]
+          description: Management 资源编码
+        limits:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: { $ref: '#/components/schemas/LimiterPolicyLimit' }
+    LimiterPolicyLimit:
+      type: object
+      additionalProperties: false
+      required: [count, window, unit]
+      properties:
+        count: { type: integer, format: int64, minimum: 1 }
+        window: { type: integer, format: int64, minimum: 1 }
+        unit: { type: string, enum: [SECONDS, MINUTES, HOURS, DAYS] }
+    StableCode:
+      type: string
+      pattern: '^[\x00-\x20]*[A-Za-z0-9][A-Za-z0-9._-]{0,127}[\x00-\x20]*$'
+      description: 与 Limiter Management 一致的稳定编码规则；服务端先去除首尾 U+0000..U+0020，再验证规范化值，长度为1..128
+    ValidityInput:
+      type: object
+      additionalProperties: false
+      required: [startsAt]
+      description: FIXED须提交全部三个时刻并满足startsAt<serviceUntil≤commercialGraceUntil；PERPETUAL截止须省略或null
+      properties:
+        kind: { type: string, enum: [FIXED, PERPETUAL], default: FIXED }
+        startsAt: { type: integer, format: int64, minimum: 1, description: UTC Epoch秒 }
+        serviceUntil: { type: integer, format: int64, nullable: true, description: UTC Epoch秒；FIXED必填 }
+        commercialGraceUntil: { type: integer, format: int64, nullable: true, description: UTC Epoch秒；FIXED必填 }
+    GrantStateInput: { type: object, additionalProperties: false, required: [state, expectedRowVersion], properties: { state: { type: string, enum: [ENABLED, SUSPENDED] }, expectedRowVersion: { type: integer, format: int64 } } }
+    SubjectStateInput:
+      type: object
+      additionalProperties: false
+      required: [state, expectedRowVersion]
+      description: 仅切换ACTIVE/SUSPENDED；已替换或已吊销终态不可恢复
+      properties: { state: { type: string, enum: [ACTIVE, SUSPENDED] }, expectedRowVersion: { type: integer, format: int64 } }
+    CredentialMetadataView:
+      type: object
+      required: [operationId, credentialId, grantId, state, rowVersion, status, executionGeneration]
+      properties:
+        operationId: { type: string }
+        credentialId: { type: string }
+        grantId: { type: string }
+        activationId: { type: string, nullable: true }
+        state: { type: string, enum: [PENDING_SIGN, SIGNING, READY, UNCERTAIN, REJECTED, ABANDONED] }
+        status: { type: string }
+        rowVersion: { type: integer, format: int64 }
+        executionGeneration: { type: integer, format: int64 }
+        reasonCategory: { type: string, nullable: true }
+        resultResource: { type: string, nullable: true, description: READY 时的独立 deliver 地址；此响应不携带 JWS }
+        lastKmsCallAt: { type: integer, format: int64, nullable: true }
+    CredentialContentView:
+      type: object
+      required: [credentialId, compactJws]
+      properties:
+        credentialId: { type: string }
+        compactJws: { type: string, description: 完整 compact JWS；仅在独立 deliver 响应返回 }
+    CredentialRequestInput:
+      type: object
+      additionalProperties: false
+      required: [subjectRef, kid]
+      properties:
+        subjectRef: { oneOf: [{ type: object }, { type: string }], description: 已登记的激活或资格引用；字符串形态为同一对象的 JSON 文本 }
+        kid: { type: string, description: 精确选择当前产品的 ACTIVE 签名档案 }
+    AssignmentInput:
+      type: object
+      additionalProperties: false
+      required: [subjectKind, sourceId, subjectId]
+      properties: { subjectKind: { type: string, enum: [PERSON, SERVICE] }, sourceId: { type: string }, subjectId: { type: string }, grantRevision: { type: integer, format: int64, minimum: 1, description: 缺省取当前授权修订；显式提交必须等于当前修订，过旧或未来修订返回409 }, requestedNamedMetrics: { type: array, items: { type: string } } }
+    NamedSeatInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion, requestedNamedMetrics]
+      properties:
+        expectedRowVersion: { type: integer, format: int64 }
+        grantRevision: { type: integer, format: int64, minimum: 1, description: 缺省取当前授权修订；显式提交须等于当前修订，否则409，非正整型422 }
+        requestedNamedMetrics: { type: array, minItems: 1, uniqueItems: true, items: { type: string }, description: 只能追加未登记指标；与既有集合重复返回409 }
+    ActivationInput:
+      type: object
+      additionalProperties: false
+      required: [deploymentCode]
+      properties:
+        deploymentCode: { type: string }
+        grantRevision: { type: integer, format: int64, minimum: 1, description: 缺省取当前授权修订；显式提交必须等于当前修订，否则409 }
+        callerBinding:
+          allOf: [ { $ref: '#/components/schemas/CallerBinding' } ]
+          nullable: true
+          description: ONLINE/HYBRID 必须登记；OFFLINE 可省略或为 null
+        componentDigests: { type: object, nullable: true, maxProperties: 0, description: 兼容字段；设备政策为NONE时必须省略、为空对象或null }
+        requestedAllocations:
+          type: array
+          maxItems: 128
+          description: >-
+            部署激活的LOCAL额度分配。服务端按已发布模型校验指标、数量与授权限额，
+            生成allocationId、grantRevision和固定窗口锚；调用方不得提交这些服务端事实。
+          items: { $ref: '#/components/schemas/ActivationQuotaAllocationInput' }
+    ActivationView:
+      type: object
+      required: [activationId, grantId, deploymentCode, activationGeneration, deviceBindingMode, state, requestedAllocations, rowVersion]
+      properties:
+        activationId: { type: string }
+        grantId: { type: string }
+        deploymentCode: { type: string }
+        activationGeneration: { type: integer, format: int64 }
+        callerBinding:
+          allOf: [ { $ref: '#/components/schemas/CallerBinding' } ]
+          nullable: true
+        deviceBindingMode: { type: string, enum: [NONE], readOnly: true, description: 服务端固定返回的设备政策 }
+        state: { type: string, enum: [ACTIVE, SUSPENDED, REPLACED, REVOKED] }
+        requestedAllocations: { type: array, items: { $ref: '#/components/schemas/ActivationQuotaAllocationView' }, description: 服务端持久化的LOCAL额度分配快照 }
+        rowVersion: { type: integer, format: int64 }
+    ActivationQuotaAllocationInput:
+      type: object
+      additionalProperties: false
+      required: [metric, quantity, retention]
+      properties:
+        metric: { type: string, minLength: 1, maxLength: 128 }
+        quantity: { type: integer, format: int64, minimum: 1 }
+        retention: { type: string, enum: [FIXED, PERPETUAL] }
+        retainUntil: { type: integer, format: int64, minimum: 1, nullable: true, description: FIXED时必填；PERPETUAL禁止提交 }
+    ActivationQuotaAllocationView:
+      type: object
+      required: [allocationId, metric, quantity, grantRevision, retention, windowAnchorAt]
+      properties:
+        allocationId: { type: string }
+        metric: { type: string }
+        quantity: { type: integer, format: int64, minimum: 1 }
+        grantRevision: { type: integer, format: int64, minimum: 1 }
+        retention: { type: string, enum: [FIXED, PERPETUAL] }
+        retainUntil: { type: integer, format: int64, minimum: 1, nullable: true }
+        windowAnchorAt: { type: integer, format: int64, minimum: 1, nullable: true, description: FIXED_WINDOW指标的授权级窗口锚 }
+    CallerBinding:
+      type: object
+      additionalProperties: false
+      required: [sourceId, subjectId]
+      properties: { sourceId: { type: string, minLength: 1, maxLength: 128 }, subjectId: { type: string, minLength: 1, maxLength: 128 } }
+    CallerBindingPatch:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion, callerBinding]
+      properties: { expectedRowVersion: { type: integer, format: int64 }, callerBinding: { $ref: '#/components/schemas/CallerBinding' } }
+    RevocationInput:
+      type: object
+      additionalProperties: false
+      required: [targetKind, targetId, reasonCategory]
+      properties:
+        targetKind: { type: string, enum: [CREDENTIAL, GRANT, ACTIVATION, ASSIGNMENT, SIGNING_KEY] }
+        targetId: { type: string }
+        reasonCategory: { type: string, description: 必填的治理原因分类 }
+    SigningProfileInput:
+      type: object
+      additionalProperties: false
+      required: [productId, purpose, kid, keyRef, keyVersion]
+      properties:
+        productId: { type: string }
+        purpose: { type: string, enum: [CREDENTIAL, REVOCATION, STATE_RECOVERY] }
+        kid: { type: string }
+        keyRef: { type: string, writeOnly: true, description: KMS钥引用，只用于登记，不在响应回传 }
+        keyVersion: { type: integer, minimum: 1, writeOnly: true }
+        expectedProfileId: { type: string, nullable: true, description: 轮换时必须与当前ACTIVE档案编号一致 }
+        expectedRowVersion: { type: integer, format: int64, nullable: true, description: 轮换时须同时与当前ACTIVE档案行版本一致 }
+    ProfileSelectionInput:
+      type: object
+      additionalProperties: false
+      required: [kid, keyRef, keyVersion]
+      properties:
+        kid: { type: string }
+        keyRef: { type: string, writeOnly: true }
+        keyVersion: { type: integer, minimum: 1, writeOnly: true }
+        expectedProfileId: { type: string, nullable: true }
+        expectedRowVersion: { type: integer, format: int64, nullable: true }
+    SigningProfileRetirementInput:
+      type: object
+      additionalProperties: false
+      required: [status, expectedRowVersion]
+      properties:
+        status: { type: string, enum: [RETIRED] }
+        expectedRowVersion: { type: integer, format: int32 }
+    SigningProfileView:
+      type: object
+      required: [profileId, productId, purpose, kid, status, rowVersion, publicKeyFingerprint, createdAt, retiredAt]
+      description: 公共视图不包含KMS钥引用、钥版本或公钥全文；rotatedFrom仅在登记或轮换响应出现
+      properties:
+        profileId: { type: string }
+        productId: { type: string }
+        purpose: { type: string, enum: [CREDENTIAL, REVOCATION, STATE_RECOVERY] }
+        kid: { type: string }
+        status: { type: string, enum: [ACTIVE, RETIRED] }
+        rowVersion: { type: integer, format: int64 }
+        publicKeyFingerprint: { type: string, description: SHA-256公钥指纹的前8字节十六进制摘要 }
+        createdAt: { type: string, format: date-time, nullable: true }
+        retiredAt: { type: string, format: date-time, nullable: true }
+        rotatedFrom: { type: string, nullable: true }
+    SigningProfilePage:
+      type: object
+      required: [data, total, page, size, totalPages]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/SigningProfileView' } }
+        total: { type: integer }
+        page: { type: integer, enum: [1] }
+        size: { type: integer, minimum: 1 }
+        totalPages: { type: integer, enum: [1] }
+    QuotaReservationInput:
+      type: object
+      additionalProperties: false
+      required: [productId, grantId, subjectKind, action, metric, quantity, kind, businessOperationId, expectedGrantRevision]
+      properties:
+        productId: { type: string, minLength: 1, maxLength: 128 }
+        grantId: { type: string, minLength: 1, maxLength: 128 }
+        subjectKind: { type: string, enum: [PERSON, SERVICE, DEPLOYMENT] }
+        action: { type: string, minLength: 1, maxLength: 128, description: 必须是模型quotaConstraints确实要求metric的动作 }
+        metric: { type: string, minLength: 1, maxLength: 128 }
+        quantity: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [CONCURRENT, CONSUMPTION], description: 须与ONLINE指标定义一致；NAMED_SEAT由固定资格治理 }
+        businessOperationId: { type: string, minLength: 1, maxLength: 160 }
+        expectedGrantRevision: { type: integer, format: int64, minimum: 1 }
+        assignmentId: { type: string, minLength: 1, maxLength: 128, description: 固定资格索引，仍核当前认证主体；部署禁止 }
+        activationId: { type: string, minLength: 1, maxLength: 128, description: DEPLOYMENT必填，PERSON/SERVICE禁止 }
+    QuotaRenewalInput:
+      type: object
+      additionalProperties: false
+      required: [expectedFence]
+      properties:
+        expectedFence: { type: integer, format: int64, minimum: 0 }
+    QuotaReservationView:
+      type: object
+      required: [reservationId, grantId, metric, quantity, kind, action, grantRevision, businessOperationId, fence, validUntil, state]
+      properties:
+        reservationId: { type: string }
+        grantId: { type: string }
+        metric: { type: string }
+        quantity: { type: integer, format: int64, minimum: 1 }
+        kind: { type: string, enum: [CONCURRENT, CONSUMPTION] }
+        action: { type: string }
+        grantRevision: { type: integer, format: int64, minimum: 1 }
+        businessOperationId: { type: string }
+        fence: { type: integer, format: int64, minimum: 0, description: 持久单调序号，续期必须携当前值 }
+        validUntil: { type: integer, format: int64, description: 服务器确定的UTC秒截止；不授权跨请求缓存，永久TOTAL用最大long值表示无期限界限 }
+        state: { type: string, enum: [ACTIVE, RELEASED, EXPIRED] }
+    QuotaReservationPage:
+      type: object
+      required: [data, total, page, size, totalPages]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/QuotaReservationView' } }
+        total: { type: integer, format: int64, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalPages: { type: integer, format: int64, minimum: 0 }
+    GrantSelectionInput:
+      type: object
+      additionalProperties: false
+      required: [productId, subjectKind, action]
+      properties:
+        productId: { type: string, minLength: 1 }
+        subjectKind: { type: string, enum: [DEPLOYMENT, PERSON, SERVICE] }
+        action: { type: string, minLength: 1 }
+        activationId: { type: string, description: 仅DEPLOYMENT必填，核当前服务与真实激活绑定 }
+        page: { type: integer, minimum: 1, maximum: 2147483647, default: 1 }
+        size: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    GrantSelectionPage:
+      type: object
+      required: [items, total, page, size, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [grantId, mode, modelVersion, commercialPhase]
+            properties:
+              grantId: { type: string }
+              mode: { type: string, enum: [ONLINE, OFFLINE, HYBRID] }
+              modelVersion: { type: integer, format: int64, minimum: 1 }
+              commercialPhase: { type: string, enum: [ACTIVE, COMMERCIAL_GRACE] }
+        total: { type: integer, format: int64, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalPages: { type: integer, format: int64, minimum: 0 }
+    DecisionInput:
+      type: object
+      additionalProperties: false
+      required: [productId, grantId, subjectKind, action]
+      description: >-
+        只能判定当前官方认证的本人或服务；部署还须匹配激活callerBinding。
+        subjectId/sourceId可省略，由认证结论解析；显式提供必须与当前调用者一致。
+        不支持服务仅凭裸subjectId代理人员，不包含额度消费成功证明。
+      properties:
+        productId: { type: string }
+        grantId: { type: string }
+        subjectKind: { type: string, enum: [DEPLOYMENT, PERSON, SERVICE] }
+        sourceId: { type: string }
+        subjectId: { type: string }
+        action: { type: string }
+        activationId: { type: string, description: DEPLOYMENT必填，PERSON/SERVICE禁止 }
+        assignmentId: { type: string, description: 固定资格索引；部署禁止，仍核当前实际主体 }
+        businessOperationId: { type: string, description: 本次业务操作编号；当前判定不执行额度扣减 }
+        reservationReferences: { type: array, maxItems: 256, uniqueItems: true, items: { type: string, minLength: 1, maxLength: 128 }, description: 模型动作所需的本人并发预占或累计消费编号；消费必须匹配本次businessOperationId }
+        facts:
+          allOf: [ { $ref: '#/components/schemas/TypedFieldValues' } ]
+          description: 与已声明模型类型一致的本次运行事实；不作为身份或资格证明
+    DecisionView:
+      type: object
+      description: >-
+        allowed=true 时 productId、grantId、subjectBinding、grantRevision、grantStateVersion
+        五项授权关联元数据必须成组出现，客户端必须将其与本次请求绑定后再执行；已识别授权的
+        DENY 也可带这五项，未知授权或尚未识别授权的 DENY 可全部省略，禁止只返回部分元数据。
+      required: [allowed, action, modelVersion, commercialPhase, evaluatedAt, recheckAt, reasonCategory, requestId, reservationFenceReferences]
+      oneOf:
+        - required: [productId, grantId, subjectBinding, grantRevision, grantStateVersion]
+        - not:
+            anyOf:
+              - required: [productId]
+              - required: [grantId]
+              - required: [subjectBinding]
+              - required: [grantRevision]
+              - required: [grantStateVersion]
+      properties:
+        allowed: { type: boolean }
+        action: { type: string }
+        modelVersion: { type: integer, format: int64, minimum: 0, description: 实际执行的模型版本；未执行模型或无模型为0，不是商业授权修订 }
+        commercialPhase: { type: string, nullable: true, enum: [NOT_STARTED, ACTIVE, COMMERCIAL_GRACE, ENDED], description: 无法确认授权阶段的DENY返回null }
+        connectivityPhase: { type: string, description: 当前在线判定按NOT_APPLICABLE返回；无适用值时可省略 }
+        evaluatedAt: { type: integer, format: int64, description: 判定时UTC Epoch秒 }
+        recheckAt: { type: integer, format: int64, nullable: true, description: 有界ALLOW的商业截止UTC秒；无界或拒绝为null，不是跨请求缓存或断网许可 }
+        reasonCategory: { type: string, description: ALLOW为ENTITLED；DENY为业务拒绝分类 }
+        requestId: { type: string }
+        reservationFenceReferences:
+          type: array
+          uniqueItems: true
+          maxItems: 256
+          items: { type: string, minLength: 1, maxLength: 128 }
+          description: 本次判定实际核验并回传的额度预占围栏引用；无引用时为空数组
+        productId: { type: string, description: 已识别授权时回显的产品编号；未知授权的通用DENY省略 }
+        grantId: { type: string, description: 已识别授权时回显的授权编号；未知授权的通用DENY省略 }
+        subjectBinding:
+          $ref: '#/components/schemas/DecisionSubjectBinding'
+        grantRevision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: 已识别授权的商业修订版本；必须为JSON安全整数 }
+        grantStateVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: 已识别授权的管理状态版本；必须为JSON安全整数 }
+    DecisionSubjectBinding:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind, activationId, activationGeneration]
+          properties:
+            kind: { type: string, enum: [DEPLOYMENT] }
+            activationId: { type: string, minLength: 1, maxLength: 128 }
+            activationGeneration: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        - type: object
+          additionalProperties: false
+          required: [kind, subjectRef]
+          properties:
+            kind: { type: string, enum: [PERSON, SERVICE] }
+            subjectRef:
+              type: object
+              additionalProperties: false
+              required: [kind, sourceId, subjectId]
+              properties:
+                kind: { type: string, enum: [PERSON, SERVICE] }
+                sourceId: { type: string, minLength: 1, maxLength: 128 }
+                subjectId: { type: string, minLength: 1, maxLength: 128 }
+            assignmentId: { type: string, minLength: 1, maxLength: 128 }
+            assignmentGeneration: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991, description: assignmentId存在时必须同时存在 }
+    OrganizationBindingInput:
+      type: object
+      additionalProperties: false
+      required: [organizationInstanceId, rootDepartmentId]
+      properties:
+        organizationInstanceId: { type: string, minLength: 1, maxLength: 128, description: 治理者确认的当前组织实例引用 }
+        rootDepartmentId: { type: integer, format: int64, minimum: 1 }
+    OrganizationBindingView:
+      type: object
+      required: [customerId, organizationInstanceId, rootDepartmentId, bindingGeneration]
+      properties:
+        customerId: { type: string }
+        organizationInstanceId: { type: string, nullable: true }
+        rootDepartmentId: { type: integer, format: int64, nullable: true }
+        bindingGeneration: { type: integer, nullable: true }
+        rowVersion: { type: integer, format: int64, description: 已登记绑定返回；未绑定视图不含此字段 }
+    ApplicationBindingItem:
+      type: object
+      required: [applicationId, basePermissionSnapshotVersion]
+      description: 绑定引用与已批准快照；未提供快照时，联动清单创建必须显式提交desiredRules。
+      properties:
+        applicationId: { type: integer, format: int64 }
+        basePermissionSnapshotVersion: { type: integer, format: int64 }
+        basePermissionSnapshot: { $ref: '#/components/schemas/ProjectionRules' }
+    ApplicationBindingsInput:
+      type: object
+      additionalProperties: false
+      required: [items, expectedRowVersion]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ApplicationBindingItem' } }
+        expectedRowVersion: { type: integer, format: int64 }
+    ApplicationBindingsView:
+      type: object
+      required: [items, rowVersion]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ApplicationBindingItem' } }
+        rowVersion: { type: integer, format: int64 }
+    ProjectionRules:
+      type: object
+      additionalProperties: false
+      required: [pagePermissions, apiPermissions]
+      properties:
+        pagePermissions: { type: array, items: { type: string }, description: 当前应用清单内精确PAGE码 }
+        apiPermissions: { type: array, items: { type: string }, description: 当前应用清单内精确API码 }
+        dataGrantTemplate:
+          type: object
+          nullable: true
+          description: 官方simple-data-permission/1.0格式的完整DATA文档；无DATA模板为null，空对象非法
+          required: [protocol, version, grants]
+          properties:
+            protocol: { type: string, enum: [simple-data-permission] }
+            version: { type: string, enum: ['1.0'] }
+            grants:
+              type: array
+              items:
+                type: object
+                required: [resource, actions, all, constraints]
+                properties:
+                  resource: { type: string }
+                  actions: { type: array, items: { type: string } }
+                  all: { type: boolean }
+                  constraints: { type: array, items: { type: object }, description: 由官方DATA契约校验的约束，不扩展为业务自定义表达式 }
+    RoleProjectionPlanInput:
+      type: object
+      additionalProperties: false
+      required: [customerId, applicationId]
+      properties:
+        customerId: { type: string }
+        applicationId: { type: string, pattern: '^[1-9][0-9]*$', description: 正整数编号的文本形态 }
+        desiredRules: { $ref: '#/components/schemas/ProjectionRules' }
+    ProjectionConfirmationInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, organizationInstanceId, bindingGeneration]
+      properties:
+        expectedRevision: { type: integer, format: int64 }
+        organizationInstanceId: { type: string }
+        bindingGeneration: { type: integer }
+        openRoleId: { type: string, description: 当前远端角色编号；已建立关联时须与回读目标一致 }
+    IntegrationAttemptInput:
+      type: object
+      additionalProperties: false
+      properties:
+        executionMode: { type: string, enum: [MANUAL, AUTO], default: MANUAL }
+    ProjectionReconciliationInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, organizationInstanceId, bindingGeneration, priorCallTerminated]
+      properties:
+        expectedRevision: { type: integer, format: int64 }
+        organizationInstanceId: { type: string }
+        bindingGeneration: { type: integer }
+        openRoleId: { type: string }
+        priorCallTerminated: { type: boolean, enum: [true], description: 治理者明确确认旧外部调用已终止 }
+    ProjectionEnvironmentInput:
+      type: object
+      additionalProperties: false
+      required: [customerId, applicationId, organizationInstanceId, bindingGeneration, priorCallTerminated]
+      properties:
+        customerId: { type: string }
+        applicationId: { type: string, pattern: '^[1-9][0-9]*$' }
+        organizationInstanceId: { type: string }
+        bindingGeneration: { type: integer }
+        desiredRules: { $ref: '#/components/schemas/ProjectionRules' }
+        priorCallTerminated: { type: boolean, enum: [true] }
+    RoleProjectionPlanView:
+      type: object
+      required: [planId, commandId, customerId, productId, applicationId, desiredRevision, state, executionMode, validUntil, planValidUntil, confirmedRevision, failureReason, desiredRules, departmentDiff, rowVersion]
+      properties:
+        planId: { type: string }
+        commandId: { type: string }
+        customerId: { type: string }
+        productId: { type: string }
+        applicationId: { type: string, description: 应用编号以文本形态回显 }
+        desiredRevision: { type: integer, format: int64 }
+        state: { type: string, enum: [PENDING_EXECUTION, MANUALLY_CONFIRMED, SUPERSEDED, VERIFIED, DRIFTED, UNCERTAIN, ENVIRONMENT_RECONFIRM_REQUIRED] }
+        executionMode: { type: string, enum: [MANUAL, AUTO] }
+        validUntil: { type: integer, format: int64, description: 清单有效截止UTC Epoch秒 }
+        planValidUntil: { type: integer, format: int64, description: 与validUntil相同 }
+        confirmedRevision: { type: integer, format: int64, nullable: true }
+        failureReason: { type: string, nullable: true, description: 固定错误分类或执行中提示，不返回外部调用令牌 }
+        rowVersion: { type: integer, format: int64 }
+        projectionId: { type: string }
+        externalId: { type: string, description: License维护的稳定外部关联标识，不是远端roleCode }
+        organizationInstanceId: { type: string }
+        bindingGeneration: { type: integer }
+        rootDepartmentId: { type: integer, format: int64 }
+        manifestVersion: { type: integer, format: int64, description: 当前应用权限清单版本 }
+        manifestDigest: { type: string, description: 当前应用权限清单摘要 }
+        contributionPresent: { type: boolean, description: 是否存在有效人员商业授权贡献 }
+        contributions:
+          type: array
+          items:
+            type: object
+            required: [grantId, grantRevision, grantStateVersion]
+            properties: { grantId: { type: string }, grantRevision: { type: integer, format: int64 }, grantStateVersion: { type: integer, format: int64 } }
+        approvedRules: { $ref: '#/components/schemas/ProjectionRules' }
+        desiredRules: { $ref: '#/components/schemas/ProjectionRules' }
+        targetDepartmentIds: { type: array, items: { type: integer, format: int64 } }
+        departmentDiff:
+          type: object
+          required: [toMount, toUnmount]
+          properties:
+            toMount: { type: array, items: { type: integer, format: int64 } }
+            toUnmount: { type: array, items: { type: integer, format: int64 } }
+        openRoleId: { type: string, description: 已存在远端关联时返回 }
+        remoteRevision: { type: integer, format: int64, description: 已回读远端角色时返回 }
+    IntegrationCommandPage:
+      type: object
+      required: [data, total, page, size, totalPages]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoleProjectionPlanView' } }
+        total: { type: integer, format: int64 }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1, maximum: 200 }
+        totalPages: { type: integer, format: int64 }
+    SigningOperationView:
+      type: object
+      required: [operationId, credentialId, grantId, state, executionGeneration, rowVersion, lastKmsCallAt, reasonCategory, resultResource]
+      properties:
+        operationId: { type: string }
+        credentialId: { type: string }
+        grantId: { type: string }
+        state: { type: string, enum: [PENDING_SIGN, SIGNING, READY, UNCERTAIN, REJECTED, ABANDONED] }
+        executionGeneration: { type: integer, format: int64, minimum: 1 }
+        rowVersion: { type: integer, format: int64, minimum: 0 }
+        lastKmsCallAt: { type: string, format: date-time, nullable: true, description: 最近一次签名调用时刻，ISO 8601 UTC文本 }
+        reasonCategory: { type: string, nullable: true }
+        resultResource: { type: string, nullable: true, description: READY时指向独立deliver接口；访问仍核当前权限与业务状态 }
+    SigningOperationPage:
+      type: object
+      required: [data, total, page, size, totalPages]
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/SigningOperationView' } }
+        total: { type: integer, format: int64 }
+        page: { type: integer, minimum: 1 }
+        size: { type: integer, minimum: 1, maximum: 100 }
+        totalPages: { type: integer, format: int64 }
+    SigningRecoveryInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties:
+        expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+        expectedExecutionGeneration: { type: integer, format: int64, minimum: 1, description: 接管SIGNING必填，UNCERTAIN可省略 }
+        reasonCategory: { type: string, minLength: 1, maxLength: 64, description: 接管SIGNING必填 }
+    SigningAbandonmentInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties:
+        expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+        reasonCategory: { type: string, minLength: 1, maxLength: 64 }
+    FulfillmentSynchronizationInput:
+      type: object
+      additionalProperties: false
+      properties:
+        batchSize: { type: integer, default: 50, minimum: 1, maximum: 100 }
+    FulfillmentSynchronizationView:
+      type: object
+      required: [pulled, created, skippedExisting, completed, awaitingConfiguration, reportPending, failed]
+      properties:
+        pulled: { type: integer, minimum: 0 }
+        created: { type: integer, minimum: 0, description: 新建自有授权草稿数，不等于完成履约数 }
+        skippedExisting: { type: integer, minimum: 0 }
+        completed: { type: integer, minimum: 0, description: 授权启用且完成回报已确认的项数 }
+        awaitingConfiguration: { type: integer, minimum: 0 }
+        reportPending: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        failures: { type: object, additionalProperties: { type: string }, description: 存在失败或未确认项时返回，键为履约编号 }
+    KeyDisposalAdviceView:
+      type: object
+      required: [profileId, kid, status, retiredAt, referencingLiveCredentials, retainIndefinitely, retainUntilEpoch, retainUntilIso, advice]
+      properties:
+        profileId: { type: string }
+        kid: { type: string }
+        status: { type: string, enum: [RETIRED] }
+        retiredAt: { type: string, format: date-time, nullable: true }
+        referencingLiveCredentials: { type: integer, minimum: 0 }
+        retainIndefinitely: { type: boolean, description: 永久或坏载荷无法确认截止时为true，不伪造日期 }
+        retainUntilEpoch: { type: integer, format: int64, nullable: true }
+        retainUntilIso: { type: string, format: date-time, nullable: true }
+        advice: { type: string, enum: [RETAIN_UNTIL_WINDOW_PASSED, SAFE_TO_SCHEDULE_DESTRUCTION] }
+    AssignmentReplacementInput:
+      type: object
+      additionalProperties: false
+      required: [sourceId, subjectId, expectedRowVersion]
+      properties:
+        sourceId: { type: string, minLength: 1, maxLength: 128 }
+        subjectId: { type: string, minLength: 1, maxLength: 128 }
+        expectedRowVersion: { type: integer, format: int64 }
+    AssignmentView:
+      type: object
+      required: [assignmentId, grantId, subjectRef, assignmentGeneration, state, metrics, rowVersion]
+      properties:
+        assignmentId: { type: string }
+        grantId: { type: string }
+        subjectRef:
+          type: object
+          required: [kind, sourceId, subjectId]
+          properties: { kind: { type: string, enum: [PERSON, SERVICE] }, sourceId: { type: string }, subjectId: { type: string } }
+        assignmentGeneration: { type: integer, format: int64, minimum: 1 }
+        state: { type: string, enum: [ACTIVE, SUSPENDED, REPLACED, REVOKED] }
+        metrics: { type: array, items: { type: string } }
+        rowVersion: { type: integer, format: int64 }
+    ActivationReplacementInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRowVersion]
+      properties:
+        expectedRowVersion: { type: integer, format: int64, minimum: 0 }
+        callerBinding:
+          allOf: [ { $ref: '#/components/schemas/CallerBinding' } ]
+          nullable: true
+          description: 省略继承旧绑定；OFFLINE显式null清除，其他模式须为完整对象
+        componentDigests: { type: object, nullable: true, maxProperties: 0, description: 当前NONE政策要求省略、null或空对象 }
+        reasonCategory: { type: string }
+    RevocationPackageView:
+      type: object
+      required: [packageId, operationId, productId, sequence, snapshotId, state, partCount, resultResource]
+      properties:
+        packageId: { type: string }
+        operationId: { type: string }
+        productId: { type: string }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        snapshotId: { type: string }
+        state: { type: string, enum: [PENDING, SIGNING, READY, FAILED, UNCERTAIN] }
+        partCount: { type: integer, minimum: 0, maximum: 256 }
+        resultResource: { type: string }
+    RevocationPackageContentView:
+      type: object
+      required: [packageId, productId, sequence, snapshotId, manifestJws, revocationPartJws]
+      properties:
+        packageId: { type: string }
+        productId: { type: string }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        snapshotId: { type: string }
+        manifestJws: { type: string }
+        revocationPartJws: { type: array, minItems: 1, maxItems: 256, items: { type: string } }
+    TrustMaterialView:
+      type: object
+      required: [issuerId, productId, sequence, issuedAt, snapshotId, manifestJws, revocationPartJws, trustedPublicKeysJson]
+      properties:
+        issuerId: { type: string }
+        productId: { type: string }
+        sequence: { type: integer, format: int64, minimum: 1 }
+        issuedAt: { type: integer, format: int64 }
+        snapshotId: { type: string }
+        manifestJws: { type: string }
+        revocationPartJws: { type: array, minItems: 1, maxItems: 256, items: { type: string } }
+        trustedPublicKeysJson: { type: array, items: { type: string } }

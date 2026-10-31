@@ -1,0 +1,46 @@
+version = project.file('version.properties').text.trim().split('=').last()
+
+dependencies {
+    // License Core 2 提供协议/规则/签名原语与自有类型。
+    api 'io.github.sure-zzzzzz:smart-license-core:2.0.0'
+    // 控制器公开访问计划并直接使用验证上下文；契约类型由 core 提供，MVC 装配由宿主负责。
+    api 'io.github.sure-zzzzzz:simple-data-permission-core:1.2.0'
+    implementation 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'
+    // 聚散原则（对齐 KMS server 先例）：主源码只编译依赖协议层 core（三权注解与模型）；
+    // 协作装配件（resource/iam/aksk 三 starter）由宿主按需自引——
+    // 引即全链协作，不引则业务自备主体解析（桥 @ConditionalOnClass 自动让位）。
+    implementation 'io.github.sure-zzzzzz:simple-application-authorization-core:1.0.1'
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework.boot:spring-boot-starter-web'
+    compileOnly 'org.springframework.boot:spring-boot-starter-security'
+    compileOnly 'org.springframework.boot:spring-boot-starter-jdbc'
+    // JPA 持久化宿主补齐（实体为公开编程面的一部分：宿主以 JPA 装配仓储）
+    compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa'
+    compileOnly 'org.springframework.boot:spring-boot-starter-validation'
+    compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
+
+    runtimeOnly 'mysql:mysql-connector-java:8.0.33'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
+    // 真实 Controller 响应进入官方客户端解析，避免服务端和客户端分别用自造 fixture 宣称契约一致。
+    testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
+    // 测试装配真实三权链（公共 Resource + IAM/AKSK 双 Provider，与宿主部署形态一致）
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.security:spring-security-oauth2-resource-server'
+    testImplementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
+    testImplementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
+    testRuntimeOnly 'mysql:mysql-connector-java:8.0.33'
+}
+
+// 日常 test 恒排除协作验收（外部多终端）；协作起服与验收任务由本地 init 脚本提供，故意不入库。
+tasks.test {
+    useJUnitPlatform {
+        excludeTags 'collaboration'
+    }
+}
