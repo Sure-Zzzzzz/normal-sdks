@@ -1,0 +1,16 @@
+dependencies {
+    // License 稳定领域事件契约是本模块实现细节，用 implementation 收紧；
+    // 事件源由宿主自行组装 smart-license-server-starter
+    // 正式发布固定为已发布的 License Server 坐标。
+    implementation 'io.github.sure-zzzzzz:smart-license-server-starter:2.0.0'
+
+    // Spring Boot（仅编译时依赖）
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-context'
+
+    // 测试依赖：与使用方组装形态一致，测试侧自行补齐 Spring 件
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // 事件源（license server starter）类面含 JPA 仓储签名——测试装配需 JPA 在类路径
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'org.springframework.boot:spring-boot-starter'
+}

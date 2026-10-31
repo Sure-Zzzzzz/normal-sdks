@@ -1,0 +1,8 @@
+# 审计监听器测试是无库装配：事件源 starter 的服务面不进本上下文（监听器只消费事件对象）
+spring:
+  autoconfigure:
+    exclude:
+      - io.github.surezzzzzz.sdk.license.server.configuration.LicenseServerHttpAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
