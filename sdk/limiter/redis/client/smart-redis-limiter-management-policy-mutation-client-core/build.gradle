@@ -1,0 +1,11 @@
+dependencies {
+    // 契约层依赖 Core 中立契约（错误码/异常/校验）
+    api 'io.github.sure-zzzzzz:smart-redis-limiter-core:2.3.0'
+    // jackson 仅 wire codec 内部使用；compileOnly 使 POM 零传递，消费者自带 jackson
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    // 编排层冲突重试 WARN 埋点（SLF4J 由宿主运行时提供）
+    compileOnly 'org.slf4j:slf4j-api'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
+}
