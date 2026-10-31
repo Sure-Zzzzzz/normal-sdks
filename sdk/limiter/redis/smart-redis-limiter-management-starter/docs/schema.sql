@@ -1,17 +1,21 @@
--- smart_redis_limiter 策略持久化 Schema
---
--- 表关系：smart_redis_limiter_policy （策略主表）
---              ↓ 一对多，policy_id 外键，CASCADE DELETE
---         smart_redis_limiter_policy_limit（窗口配置表）
---
---         smart_redis_limiter_policy_revision（服务级版本表，独立）
---
--- 设计要点：
---   - service_code / resource_code / subject 均使用 utf8mb4_bin（区分大小写，保证三元组精确匹配）
---   - row_version 乐观锁：所有写操作须通过 CAS 校验，防止并发修改静默覆盖
---   - revision 表由管理模块在每次策略变更后递增，运行端通过 HTTP 快照感知版本，不直接访问本表
---   - window_seconds 由服务层在写入前计算（limit_window × limit_unit），
---     用于同策略内多窗口唯一约束，不冗余存储任何业务逻辑
+-- =====================================================
+-- Smart Redis Limiter Management 2.2.0 数据库初始化脚本
+-- 依赖：simple-resource-server-starter 1.1.1 / simple-iam-resource-server-starter 1.0.0 / simple-aksk-resource-server-starter 3.1.0 / simple-data-permission-spring-mvc-starter 1.1.0（协作认证组件，无表结构依赖）
+-- 数据库：MySQL 5.7+ / MySQL 8.0+
+-- 说明：仅用于全新初始化，会删除同名既有 smart_redis_limiter_* 表及其数据；
+--       生产已有表禁止重复执行。
+-- =====================================================
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+DROP TABLE IF EXISTS `smart_redis_limiter_typed_rule_limit`;
+DROP TABLE IF EXISTS `smart_redis_limiter_typed_rule`;
+DROP TABLE IF EXISTS `smart_redis_limiter_policy_limit`;
+DROP TABLE IF EXISTS `smart_redis_limiter_policy`;
+DROP TABLE IF EXISTS `smart_redis_limiter_policy_revision`;
+
+
 
 CREATE TABLE IF NOT EXISTS `smart_redis_limiter_policy` (
     `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -150,3 +154,5 @@ CREATE TABLE IF NOT EXISTS `smart_redis_limiter_typed_rule_limit` (
         FOREIGN KEY (`rule_id`) REFERENCES `smart_redis_limiter_typed_rule` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin
   COMMENT='v2 类型化规则窗口配置表：一条规则对应一至十六个滑动窗口，单位规范化后不得重复';
+
+SET FOREIGN_KEY_CHECKS = 1;

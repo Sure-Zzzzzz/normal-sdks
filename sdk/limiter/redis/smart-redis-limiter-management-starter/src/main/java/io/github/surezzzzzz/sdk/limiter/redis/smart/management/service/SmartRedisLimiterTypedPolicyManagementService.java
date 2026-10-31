@@ -74,6 +74,13 @@ public interface SmartRedisLimiterTypedPolicyManagementService {
     TypedSnapshotView snapshot(String serviceCode);
 
     /**
+     * 当前快照 ETag（304 快路径）：只查 revision 单行拼装，不触发全量规则查询。
+     * 与 {@link #snapshot(String)} 的 ETag 同源同算法（serviceCode+revision）；
+     * 目录校验语义与 snapshot 一致（未声明或 LEGACY_V1 抛协议错配冲突）。
+     */
+    String currentEtag(String serviceCode);
+
+    /**
      * 快照视图：core 快照 + ETag
      */
     final class TypedSnapshotView {

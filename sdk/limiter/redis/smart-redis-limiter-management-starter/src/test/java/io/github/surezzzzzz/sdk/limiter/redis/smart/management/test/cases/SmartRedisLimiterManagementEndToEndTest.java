@@ -73,7 +73,7 @@ public class SmartRedisLimiterManagementEndToEndTest {
 
     private static final String MODULE_PATH =
             "sdk/limiter/redis/smart-redis-limiter-management-starter";
-    private static final String DDL_PATH = MODULE_PATH + "/docs/mysql-schema.sql";
+    private static final String DDL_PATH = MODULE_PATH + "/docs/schema.sql";
     private static final String SERVICE_CODE = "test-service";
     private static final String RESOURCE_CODE = "test-resource";
     private static final String SUBJECT = "test-subject";
@@ -1484,7 +1484,7 @@ public class SmartRedisLimiterManagementEndToEndTest {
         if (Files.exists(rootPath)) {
             return rootPath;
         }
-        return Paths.get(System.getProperty("user.dir"), "docs", "mysql-schema.sql");
+        return Paths.get(System.getProperty("user.dir"), "docs", "schema.sql");
     }
 
     /**

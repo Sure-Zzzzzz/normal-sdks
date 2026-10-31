@@ -96,9 +96,9 @@ public class SmartRedisLimiterManagementExceptionHandler {
     /**
      * 权限拒绝保持 403，不被兜底异常包装为 500。
      */
-    @ExceptionHandler(io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException.class)
+    @ExceptionHandler(io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException.class)
     public ResponseEntity<SmartRedisLimiterManagementErrorResponse> handleDataPermissionDenied(
-            io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.exception.DataPermissionAccessDeniedException exception) {
+            io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionAccessDeniedException exception) {
         // DATA 注解链拒绝（数据权限不足/评估失败）：与业务拒绝同为 403，不落入兜底 500
         return response(HttpStatus.FORBIDDEN, ErrorMessage.ACCESS_DENIED);
     }

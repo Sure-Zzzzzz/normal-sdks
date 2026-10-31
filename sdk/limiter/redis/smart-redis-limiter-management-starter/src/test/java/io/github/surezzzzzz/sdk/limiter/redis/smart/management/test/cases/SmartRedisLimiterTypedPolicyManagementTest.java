@@ -88,13 +88,13 @@ public class SmartRedisLimiterTypedPolicyManagementTest {
         jdbcTemplate.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy_revision");
         jdbcTemplate.execute("SET FOREIGN_KEY_CHECKS = 1");
         Path ddlPath = Paths.get(System.getProperty("user.dir"),
-                "sdk/limiter/redis/smart-redis-limiter-management-starter/docs/mysql-schema.sql");
+                "sdk/limiter/redis/smart-redis-limiter-management-starter/docs/schema.sql");
         if (!Files.exists(ddlPath)) {
-            ddlPath = Paths.get(System.getProperty("user.dir"), "docs", "mysql-schema.sql");
+            ddlPath = Paths.get(System.getProperty("user.dir"), "docs", "schema.sql");
         }
         String ddl = new String(Files.readAllBytes(ddlPath), java.nio.charset.StandardCharsets.UTF_8);
         for (String statement : ddl.split(";")) {
-            String stripped = statement.lines()
+            String stripped = java.util.Arrays.stream(statement.split("\\R"))
                     .filter(line -> !line.trim().startsWith("--"))
                     .map(String::trim)
                     .reduce((left, right) -> left + " " + right)

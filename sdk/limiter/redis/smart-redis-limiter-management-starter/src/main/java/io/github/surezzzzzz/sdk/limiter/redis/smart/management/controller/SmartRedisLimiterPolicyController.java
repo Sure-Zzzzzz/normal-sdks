@@ -60,7 +60,9 @@ public class SmartRedisLimiterPolicyController {
     }
 
     /**
-     * 获取服务完整已启用策略快照
+     * 获取服务完整已启用策略快照。
+     * 快路径：先以 revision 单行拼 ETag 比对，命中即 304，不触发全量策略查询；
+     * 比对与全量读取之间存在 revision 变更窗口，属良性竞态（下次拉取即取到新数据）。
      *
      * @param serviceCode 服务编码
      * @param ifNoneMatch 条件请求 ETag
@@ -74,14 +76,16 @@ public class SmartRedisLimiterPolicyController {
             @RequestHeader(value = SmartRedisLimiterManagementConstant.HEADER_IF_NONE_MATCH,
                     required = false)
             String ifNoneMatch) {
-        SmartRedisLimiterPolicySnapshotView view = snapshotService.getSnapshot(serviceCode);
         HttpHeaders headers = new HttpHeaders();
-        headers.set(SmartRedisLimiterManagementConstant.HEADER_ETAG, view.getEtag());
         headers.set(SmartRedisLimiterManagementConstant.HEADER_CACHE_CONTROL,
                 SmartRedisLimiterManagementConstant.CACHE_CONTROL_NO_CACHE);
-        if (SmartRedisLimiterEtagHelper.matches(ifNoneMatch, view.getEtag())) {
+        String currentEtag = snapshotService.getCurrentEtag(serviceCode);
+        if (SmartRedisLimiterEtagHelper.matches(ifNoneMatch, currentEtag)) {
+            headers.set(SmartRedisLimiterManagementConstant.HEADER_ETAG, currentEtag);
             return new ResponseEntity<>(headers, HttpStatus.NOT_MODIFIED);
         }
+        SmartRedisLimiterPolicySnapshotView view = snapshotService.getSnapshot(serviceCode);
+        headers.set(SmartRedisLimiterManagementConstant.HEADER_ETAG, view.getEtag());
         return new ResponseEntity<>(view.getSnapshot(), headers, HttpStatus.OK);
     }
 

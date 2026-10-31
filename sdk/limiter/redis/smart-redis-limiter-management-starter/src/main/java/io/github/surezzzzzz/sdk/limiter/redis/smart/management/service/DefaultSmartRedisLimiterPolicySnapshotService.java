@@ -57,6 +57,32 @@ public class DefaultSmartRedisLimiterPolicySnapshotService
 
     @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public String getCurrentEtag(String serviceCode) {
+        if (properties.isPortal()) {
+            throw new SmartRedisLimiterManagementAccessDeniedException();
+        }
+        return getCurrentEtag(serviceCode, SmartRedisLimiterPolicyDataScope.all());
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public String getCurrentEtag(String serviceCode, SmartRedisLimiterPolicyDataScope scope) {
+        String normalizedServiceCode = SmartRedisLimiterPolicyValidationHelper
+                .normalizeServiceCode(serviceCode);
+        if (scope == null) {
+            throw new SmartRedisLimiterManagementAccessDeniedException();
+        }
+        scope.requireService(normalizedServiceCode);
+        // 304 快路径：只查 revision 单行拼 ETag（与 getSnapshot 的 ETag 同源同算法），
+        // 不触发全量策略查询；revision 随每次写操作递增，不变即内容不变。
+        SmartRedisLimiterPolicyRevisionEntity revisionEntity =
+                repository.findRevision(normalizedServiceCode);
+        long revision = revisionEntity == null ? 0L : revisionEntity.getRevision();
+        return SmartRedisLimiterEtagHelper.build(normalizedServiceCode, revision);
+    }
+
+    @Override
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SmartRedisLimiterPolicySnapshotView getSnapshot(String serviceCode, SmartRedisLimiterPolicyDataScope scope) {
         String normalizedServiceCode = SmartRedisLimiterPolicyValidationHelper
                 .normalizeServiceCode(serviceCode);

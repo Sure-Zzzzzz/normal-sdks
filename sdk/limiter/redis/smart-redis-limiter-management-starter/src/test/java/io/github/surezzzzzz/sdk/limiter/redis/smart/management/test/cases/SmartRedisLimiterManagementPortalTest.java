@@ -65,12 +65,17 @@ import static org.mockito.Mockito.when;
         "io.github.surezzzzzz.sdk.limiter.redis.smart.management.rest.policy-token=",
         "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration",
         "io.github.surezzzzzz.sdk.auth.resource.server.enabled=true",
-        "io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[0]=/api/v1/policy/**"})
+        "io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[0]=/api/v1/policy/**",
+        "io.github.surezzzzzz.sdk.auth.resource.server.security.protected-paths[1]=/api/v2/policy/**",
+        "io.github.surezzzzzz.sdk.limiter.redis.smart.management.typed.services[0].service-code=mock-typed-service",
+        "io.github.surezzzzzz.sdk.limiter.redis.smart.management.typed.services[0].control-mode=TYPED_V2",
+        "io.github.surezzzzzz.sdk.limiter.redis.smart.management.typed.services[0].policy-epoch=1"})
 @Import(SmartRedisLimiterManagementPortalTest.PortalFixtureConfiguration.class)
 public class SmartRedisLimiterManagementPortalTest {
     private static final String BASE = "/api/v1/policy";
     private static final String SERVICE_A = "mock-service-a";
     private static final String SERVICE_B = "mock-service-b";
+    private static final String TYPED_SERVICE = "mock-typed-service";
     @Autowired
     private TestRestTemplate http;
     @Autowired
@@ -106,9 +111,9 @@ public class SmartRedisLimiterManagementPortalTest {
         jdbc.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy_limit");
         jdbc.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy");
         jdbc.execute("DROP TABLE IF EXISTS smart_redis_limiter_policy_revision");
-        Path ddl = Paths.get("docs/mysql-schema.sql");
+        Path ddl = Paths.get("docs/schema.sql");
         if (!Files.exists(ddl)) {
-            ddl = Paths.get("sdk/limiter/redis/smart-redis-limiter-management-starter/docs/mysql-schema.sql");
+            ddl = Paths.get("sdk/limiter/redis/smart-redis-limiter-management-starter/docs/schema.sql");
         }
         new ResourceDatabasePopulator(new FileSystemResource(ddl)).execute(jdbc.getDataSource());
         fixture.results.clear();
@@ -230,6 +235,28 @@ public class SmartRedisLimiterManagementPortalTest {
                 HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
         assertEquals(HttpStatus.FORBIDDEN, forbidden.getStatusCode());
         assertNull(forbidden.getHeaders().getETag());
+    }
+
+    @Test
+    void testTypedSnapshotReturnsCacheHeadersFor200And304() {
+        log.info("验收类型化快照 200 与 304 的缓存响应头");
+        String token = human(true, false, full());
+        String path = "/api/v2/policy/snapshot?serviceCode=" + TYPED_SERVICE;
+        ResponseEntity<JsonNode> snapshot = exchange(path, HttpMethod.GET, null, token);
+
+        assertEquals(HttpStatus.OK, snapshot.getStatusCode());
+        assertNotNull(snapshot.getHeaders().getETag());
+        assertEquals("no-cache", snapshot.getHeaders().getCacheControl());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(token);
+        headers.setIfNoneMatch(snapshot.getHeaders().getETag());
+        ResponseEntity<String> notModified = http.exchange(path, HttpMethod.GET,
+                new HttpEntity<>(headers), String.class);
+        assertEquals(HttpStatus.NOT_MODIFIED, notModified.getStatusCode());
+        assertEquals(snapshot.getHeaders().getETag(), notModified.getHeaders().getETag());
+        assertEquals("no-cache", notModified.getHeaders().getCacheControl());
+        assertNull(notModified.getBody());
     }
 
     @Test

@@ -1,9 +1,9 @@
 package io.github.surezzzzzz.sdk.limiter.redis.smart.management.controller;
 
 import io.github.surezzzzzz.sdk.auth.authorization.application.core.annotation.RequireApiPermission;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
-import io.github.surezzzzzz.sdk.auth.data.permission.spring.mvc.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.annotation.SmartRedisLimiterManagementComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.constant.SmartRedisLimiterManagementConstant;
@@ -48,6 +48,8 @@ public class SmartRedisLimiterPolicyPortalController {
 
     /**
      * 先鉴权再判断条件缓存，304 不绕过 DATA。
+     * 快路径：先以 revision 单行拼 ETag 比对，命中即 304，不触发全量策略查询；
+     * 比对与全量读取之间存在 revision 变更窗口，属良性竞态（下次拉取即取到新数据）。
      */
     @GetMapping("/v1/policy/snapshot")
     @RequireApiPermission(SmartRedisLimiterManagementConstant.API_SNAPSHOT_READ)
@@ -57,14 +59,17 @@ public class SmartRedisLimiterPolicyPortalController {
             @RequestParam String serviceCode,
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             @CurrentDataAccessPlan DataAccessPlan plan) {
-        SmartRedisLimiterPolicySnapshotView view = snapshotService.getSnapshot(serviceCode,
-                SmartRedisLimiterPolicyDataScope.from(plan));
+        SmartRedisLimiterPolicyDataScope scope = SmartRedisLimiterPolicyDataScope.from(plan);
         HttpHeaders headers = new HttpHeaders();
-        headers.setETag(view.getEtag());
         headers.setCacheControl(SmartRedisLimiterManagementConstant.CACHE_CONTROL_NO_CACHE);
-        return SmartRedisLimiterEtagHelper.matches(ifNoneMatch, view.getEtag())
-                ? new ResponseEntity<>(headers, HttpStatus.NOT_MODIFIED)
-                : new ResponseEntity<>(view.getSnapshot(), headers, HttpStatus.OK);
+        String currentEtag = snapshotService.getCurrentEtag(serviceCode, scope);
+        if (SmartRedisLimiterEtagHelper.matches(ifNoneMatch, currentEtag)) {
+            headers.setETag(currentEtag);
+            return new ResponseEntity<>(headers, HttpStatus.NOT_MODIFIED);
+        }
+        SmartRedisLimiterPolicySnapshotView view = snapshotService.getSnapshot(serviceCode, scope);
+        headers.setETag(view.getEtag());
+        return new ResponseEntity<>(view.getSnapshot(), headers, HttpStatus.OK);
     }
 
     /**

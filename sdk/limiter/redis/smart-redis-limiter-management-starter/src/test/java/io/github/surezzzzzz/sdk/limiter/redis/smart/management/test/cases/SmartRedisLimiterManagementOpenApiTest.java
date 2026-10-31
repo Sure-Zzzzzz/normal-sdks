@@ -72,7 +72,7 @@ public class SmartRedisLimiterManagementOpenApiTest {
             endpoints++;
         }
         assertEquals(8, endpoints);
-        assertEquals("2.0.0", document.path("info").path("version").asText());
+        assertEquals("2.2.0", document.path("info").path("version").asText());
     }
 
     @Test

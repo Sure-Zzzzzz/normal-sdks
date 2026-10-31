@@ -41,7 +41,7 @@
 
 ## 数据库与升级
 
-- 三元组策略表结构不变；新增类型化规则两表（`smart_redis_limiter_typed_rule`、`smart_redis_limiter_typed_rule_limit`），首次部署或从 1.0.0 升级均执行 `docs/mysql-schema.sql`（幂等建表）。无自动 DDL，无既有数据重写。
+- 三元组策略表结构不变；新增类型化规则两表（`smart_redis_limiter_typed_rule`、`smart_redis_limiter_typed_rule_limit`），首次部署或从 1.0.0 升级均执行 `docs/schema.sql`（幂等建表）。无自动 DDL，无既有数据重写。
 - Repository/Service 自定义实现需要实现 DATA 范围重载；目录 Provider 可整体替换。
 - 1.0.0 宿主升级须显式提供旧 Provider；切 Portal 须完成双来源、PAGE/API/DATA 配置。无 Jakarta Management。
 

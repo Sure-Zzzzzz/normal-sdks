@@ -237,6 +237,24 @@ public class DefaultSmartRedisLimiterTypedPolicyManagementService
 
     @Override
     @Transactional(readOnly = true)
+    public String currentEtag(String serviceCode) {
+        SmartRedisLimiterServiceDeclaration declaration = requireTypedDeclaration(serviceCode);
+        return currentEtagByDeclaration(declaration.getServiceCode());
+    }
+
+    /**
+     * 304 快路径：只查 revision 单行拼 ETag（与 snapshot 的 ETag 同源同算法），
+     * 不触发全量规则查询；revision 随每次写操作递增，不变即内容不变。
+     */
+    private String currentEtagByDeclaration(String normalizedServiceCode) {
+        SmartRedisLimiterPolicyRevisionEntity revisionEntity = policyRepository
+                .findRevision(normalizedServiceCode);
+        long revision = revisionEntity == null ? 0L : revisionEntity.getRevision();
+        return SmartRedisLimiterEtagHelper.build(normalizedServiceCode, revision);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public TypedSnapshotView snapshot(String serviceCode) {
         SmartRedisLimiterServiceDeclaration declaration = requireTypedDeclaration(serviceCode);
         String normalizedServiceCode = declaration.getServiceCode();

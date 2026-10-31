@@ -4,6 +4,7 @@
 
 | Management | Core | 管理宿主 | Java | Portal Web |
 | --- | --- | --- | --- | --- |
+| 2.2.0 | 2.3.0 | Spring Boot 2.7.9 | 8 | 1.0.3 |
 | 2.1.0 | 2.3.0 | Spring Boot 2.7.9 | 8 | 1.0.0 |
 | 2.0.0 | 2.2.0 | Spring Boot 2.7.9 | 8 | 1.0.0 |
 | 1.0.0 | 2.1.0 | Spring Boot 2.7.9 | 8 | 内嵌 Console |
@@ -16,10 +17,31 @@
 
 本模块不提供可执行应用、连接池或自动建表，不依赖限流运行端、Redis、IAM 或 AKSK 的实现。宿主提供 Spring Web、Security、JDBC、数据源与事务管理器；需要 Console 页面时提供 Thymeleaf。资源认证组件由宿主显式组合。
 
+## 数据源路由
+
+数据源由 mysql-route 接管（平台部署契约，同 KMS/feedback 形态）：模块已随附
+`simple-mysql-route-starter`（1.1.1），宿主按路由配置形态声明数据源，不再使用
+`spring.datasource` 标准段：
+
+```yaml
+io.github.surezzzzzz.sdk.mysql.route:
+  enable: true
+  primary-datasource: limiter
+  datasources:
+    limiter:
+      url: jdbc:mysql://.../test_limiter_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false
+      username: ${LIMITER_DB_USERNAME}
+      password: ${LIMITER_DB_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+```
+
+路由组件把路由版 `JdbcTemplate` / `NamedParameterJdbcTemplate` 注册为标准 Bean，
+模块内 Repository 按类型注入即经过路由，无需任何代码适配。
+
 ## 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:2.1.0'
+implementation 'io.github.sure-zzzzzz:smart-redis-limiter-management-starter:2.2.0'
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-security'
 implementation 'org.springframework.boot:spring-boot-starter-jdbc'
@@ -32,7 +54,7 @@ Portal 双来源宿主另外引入：
 implementation 'io.github.sure-zzzzzz:simple-resource-server-starter:1.1.1'
 implementation 'io.github.sure-zzzzzz:simple-iam-resource-server-starter:1.0.0'
 implementation 'io.github.sure-zzzzzz:simple-aksk-resource-server-starter:3.1.0'
-implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.0.1'
+implementation 'io.github.sure-zzzzzz:simple-data-permission-spring-mvc-starter:1.1.0'
 ```
 
 Provider（身份来源适配器）的验证客户端、目标应用和密钥按各自接入契约配置，不能把浏览器的公共 PKCE 客户端当成资源验证客户端。两来源必须在公共 Resource 中分别注册；本模块不识别来源品牌、不访问身份库。只引依赖不等于完成授权配置。
@@ -111,6 +133,7 @@ Portal 权限码与身份系统中申报、授予的码必须完全一致：
 | GET/POST/PUT/PATCH/DELETE `/v2/policy/rule(s)` | 类型化规则 CRUD（命名空间以目录声明为准；身份七字段唯一；冲突 409） |
 | GET `/v2/policy/snapshot?serviceCode=...` | 200 类型化快照（schemaVersion=2，policyEpoch+revision）或 304；LEGACY 服务 409 |
 
+快照条件请求携带 `If-None-Match`（上次响应 ETag）：命中返回 304 空体（服务端以 revision 单行预判，不执行全量查询），未命中返回 200 全量 + 新 ETag。所有授权与 DATA 校验在 304 判定前完成。
 能力接口仅对已准入且有查询 API 权限的 HUMAN 返回展示结论，SERVICE 返回 403。无 PAGE 时两个字段都为 false。无服务参数时 canWrite 表示至少可写一个合法服务；带参数时针对该服务判断，非法编码 400。它不能替代业务请求自身的授权。
 
 创建示例：
@@ -169,14 +192,14 @@ Console Session 管理 API 位于 `/api/admin/**`，保留 CSRF（跨站请求�
 
 ## 数据库与升级
 
-首次部署执行 `docs/mysql-schema.sql`，建立策略、窗口、服务 revision 三表与类型化规则两表（七字段身份唯一 + 窗口表）。从 1.0.0 升级到 2.0.0 的既有部署需补执行同一 DDL 增建类型化规则两表；既有三元组表结构不变。Starter 不执行 DDL。2.0.0 无结构迁移；既有三元组和快照索引以 service_code 开头，可执行 DATA 过滤。既有策略数据不被自动改写。2.1.0 无结构迁移，依赖 Core 升至 2.3.0；直接 import 目录三件旧包（`...management.directory`）的自定义代码把 import 改到 `...smart.directory` 即可，配置项与 HTTP 契约不变。
+首次部署执行 `docs/schema.sql`，建立策略、窗口、服务 revision 三表与类型化规则两表（七字段身份唯一 + 窗口表）。从 1.0.0 升级到 2.0.0 的既有部署需补执行同一 DDL 增建类型化规则两表；既有三元组表结构不变。Starter 不执行 DDL。2.0.0 无结构迁移；既有三元组和快照索引以 service_code 开头，可执行 DATA 过滤。既有策略数据不被自动改写。2.1.0 无结构迁移，依赖 Core 升至 2.3.0；直接 import 目录三件旧包（`...management.directory`）的自定义代码把 import 改到 `...smart.directory` 即可，配置项与 HTTP 契约不变。 2.2.0 无结构迁移：初始化脚本更名 `docs/schema.sql`（族式格式，内容语义不变）；快照条件请求新增 304 查询快路径（服务端先以 revision 单行预判，协议行为不变，客户端零改动）；数据源切换 mysql-route 接管（见数据源路由节）。
 
 从 1.0.0 升级先补齐宿主 Web/Security/Thymeleaf 与认证依赖，再选模式。切 Portal 前配置完整 PAGE/API/DATA 与双来源验证，停止旧入口后再启动新入口；不要让旧 Console 和新 Portal 两套独立部署并行写同一策略库。回滚时停止新入口，恢复 Console 配置和原认证依赖；数据库未发生版本结构变更。
 
 ## 扩展、事件与诊断
 
-Repository、管理服务、快照服务、操作人 Provider、事件发布器与目录 Provider（`SmartRedisLimiterDirectoryProvider`）可由宿主 Bean 替换。目录 SPI 自 2.1.0 起由 `smart-redis-limiter-core:2.3.0` 持有（包 `io.github.surezzzzzz.sdk.limiter.redis.smart.directory`），实现方只需依赖 core；本模块继续提供配置式默认实现（`management.typed.services` 部署声明：服务协议模式 TYPED_V2/LEGACY_V1、资源与维度、命名空间、自定义类型、静态对象目录与策略代次 policyEpoch），宿主自带动态目录（如客户事实或 IAM 用户目录适配件）时以自有 Bean 覆盖，无自动注册与心跳。2.0.0 的 Repository/Service 扩展必须实现显式 DATA 范围重载，不能把范围参数忽略。默认 Portal 服务拒绝无范围的 Console 方法。
+Repository、管理服务、快照服务、操作人 Provider、事件发布器与目录 Provider（`SmartRedisLimiterDirectoryProvider`）可由宿主 Bean 替换。2.2.0 起管理服务与快照服务接口新增快路径方法（`currentEtag` / `getCurrentEtag`，只查 revision 单行的轻量实现），自建实现的宿主升级需补实现。目录 SPI 自 2.1.0 起由 `smart-redis-limiter-core:2.3.0` 持有（包 `io.github.surezzzzzz.sdk.limiter.redis.smart.directory`），实现方只需依赖 core；本模块继续提供配置式默认实现（`management.typed.services` 部署声明：服务协议模式 TYPED_V2/LEGACY_V1、资源与维度、命名空间、自定义类型、静态对象目录与策略代次 policyEpoch），宿主自带动态目录（如客户事实或 IAM 用户目录适配件）时以自有 Bean 覆盖，无自动注册与心跳。2.0.0 的 Repository/Service 扩展必须实现显式 DATA 范围重载，不能把范围参数忽略。默认 Portal 服务拒绝无范围的 Console 方法。
 
-策略真实变更在事务提交后发布 Core 管理事件；失败、回滚和 no-op 不发布，监听异常不反写已提交事务。需要把策略变更写入审计日志或外部系统时，与 `smart-redis-limiter-audit-listener-starter`（2.2.0+）同进程部署即可，执行/类型化/三元组三条事件链的受控审计开箱即用。三元组规则沿用 Core 2.1.0 的策略事件载荷；类型化规则使用 Core 2.2.0 的类型化事件载荷（含计数对象摘要与操作人摘要）。两种载荷都应只交给受控消费者，不能未经脱敏转发到公开日志。普通 Spring Event 不承诺可靠持久投递。
+策略真实变更在事务提交后发布 Core 管理事件；失败、回滚和 no-op 不发布，监听异常不反写已提交事务。需要把策略变更写入审计日志或外部系统时，与 `smart-redis-limiter-management-audit-listener-starter:1.0.0` 同进程部署即可；执行结果审计另由运行端的 `smart-redis-limiter-audit-listener-starter:2.1.0` 提供，二者分别随各自宿主部署，不混装。三元组规则沿用 Core 2.1.0 的策略事件载荷；类型化规则使用 Core 2.3.0 的类型化事件载荷（含计数对象摘要与操作人摘要）。两种载荷都应只交给受控消费者，不能未经脱敏转发到公开日志。普通 Spring Event 不承诺可靠持久投递。
 
 按 `io.github.surezzzzzz.sdk.limiter.redis.smart.management` 开启 DEBUG 可定位 API 判定、DATA 编译、变更结果、快照生成和提交后发布阶段；不记录 Token、Cookie、完整授权文档或原始限流 subject。运行端读取失败时保留 last-known-good（上次有效策略），不因权限拒绝覆盖有效快照。

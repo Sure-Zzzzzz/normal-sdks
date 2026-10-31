@@ -21,4 +21,17 @@ public interface SmartRedisLimiterPolicySnapshotService {
      * @return 快照与 ETag
      */
     SmartRedisLimiterPolicySnapshotView getSnapshot(String serviceCode);
+
+    /**
+     * 当前快照 ETag（304 快路径）：只查 revision 单行拼装，不触发全量策略查询。
+     * 与 {@link #getSnapshot(String)} 的 ETag 同源同算法（serviceCode+revision）；
+     * portal 形态拒绝语义与 getSnapshot 一致。
+     */
+    String getCurrentEtag(String serviceCode);
+
+    /**
+     * 当前快照 ETag（304 快路径，先校验 DATA 服务范围）。
+     */
+    String getCurrentEtag(String serviceCode,
+                          io.github.surezzzzzz.sdk.limiter.redis.smart.management.model.view.SmartRedisLimiterPolicyDataScope scope);
 }

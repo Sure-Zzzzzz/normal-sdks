@@ -1,6 +1,6 @@
 # Management 1.0.0 升级 2.0.0
 
-1. 备份策略库与宿主配置。三张既有表结构不变；使用多维类型化规则（/v2/policy/**）的部署须补执行 docs/mysql-schema.sql 增建 smart_redis_limiter_typed_rule 与 smart_redis_limiter_typed_rule_limit 两表（幂等建表，既有数据不重写）；不使用类型化规则的部署可不执行。
+1. 备份策略库与宿主配置。三张既有表结构不变；使用多维类型化规则（/v2/policy/**）的部署须补执行 docs/schema.sql 增建 smart_redis_limiter_typed_rule 与 smart_redis_limiter_typed_rule_limit 两表（幂等建表，既有数据不重写）；不使用类型化规则的部署可不执行。
 2. 宿主显式提供 Web、Security、JDBC、数据源和事务管理。保留 Console 页面时补 Thymeleaf；旧 scope 对外 API 补旧 Provider 2.0.1、AOP 和 OAuth2 Resource Server/Jose，依赖示例见 README 的 Console 接入。2.0.0 不再代带这些可选运行件。
 3. Console 设 mode=console，旧 UI/Session、scope 及显式固定 token 配置不变。仅关闭 UI 不代表 Portal。
 4. Portal 设 mode=portal、api.enable=true、ui.enable=false，删除固定 token。显式提供公共 Resource 1.1.1 和人员/机器两个适配器，保护完整 API 路径并启用精确 API 的 MVC 校验；该资源链的 permit-all-paths 必须为空，公开入口用独立链。

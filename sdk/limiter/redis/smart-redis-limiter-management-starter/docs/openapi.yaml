@@ -1,12 +1,28 @@
 openapi: 3.0.3
 info:
   title: Smart Redis Limiter Management Portal API
-  version: 2.0.0
-  description: |
+  version: 2.2.0
+  description: >-
     Portal 形态的策略与服务级快照契约。Console 的 Session/scope/固定 token 入口不属于本契约。
     所有调用要求已准入的 Bearer、精确 API 权限与完整 serviceCode DATA 范围；API 不额外要求 PAGE。
     除 capabilities 外，HUMAN 与 SERVICE 使用相同业务 API。范围外主键返回 404。
     业务错误不返回 200。400/404/409/500 为 message/timestamp；资源链 401/403 的正文由宿主资源组件定义。
+
+    ## 鉴权与权限
+
+    运行端（机器）持 AKP 凭据以 client_credentials 换发 Bearer token 调用快照与业务 API；
+    页面（人员）经门户 PKCE 换发人员令牌。端点执行码 + DATA 双闸：先精确 API 码，
+    再数据范围评估（serviceCode 维度，受限范围运算 IN），任一不过返回 403。
+
+    | # | 配置点 | 归属侧 | 做什么 | 漏配症状 |
+    |---|---|---|---|---|
+    | 1 | 准入与三权登记 | 授权方 | applicationCode=limiter-management 的授权 admitted=true，勾 API 码与 DATA grants | 换不出 token / 403 |
+    | 2 | 受保护路径 | 宿主 | 资源层 protected-paths 覆盖 `/api/**`，注解链识别 `smartLimiterPolicy*` 码 | 请求落会话链被拒 |
+    | 3 | 目录声明 | 宿主 | typed.services 声明服务-资源-维度-命名空间（或引 IAM 目录适配件） | 页面无服务可配 |
+
+    快照条件请求（2.2.0 起）：携带 `If-None-Match`（上次响应 ETag），版本未变返回 304
+    （服务端以 revision 单行预判，不执行全量查询）；变更返回 200 + 全量 + 新 ETag。
+    运行端 `typed.expected-policy-epoch` 与快照代次不符或无快照时执行本地门禁兜底。
 servers:
   - url: /api
     description: 后端默认 API 根路径，可由宿主 api.base-path 配置
@@ -498,6 +514,9 @@ paths:
               schema: { $ref: '#/components/schemas/TypedSnapshot' }
         '304':
           description: 已鉴权且 ETag 匹配，无响应体
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string, enum: [no-cache] } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
