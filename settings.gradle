@@ -45,6 +45,8 @@ include(
         ':sdk:limiter:redis:smart-redis-limiter-management-iam-directory-starter',
         ':sdk:limiter:redis:client:smart-redis-limiter-management-client-core',
         ':sdk:limiter:redis:client:smart-redis-limiter-management-aksk-resttemplate-client-starter',
+        ':sdk:limiter:redis:client:smart-redis-limiter-management-policy-mutation-client-core',
+        ':sdk:limiter:redis:client:smart-redis-limiter-management-policy-mutation-aksk-resttemplate-client-starter',
         ':sdk:metrics:limiter:smart-redis-limiter-metrics-starter',
         ':sdk:metrics:aksk:simple-aksk-resource-server-metrics-starter',
         ':sdk:metrics:aksk:simple-aksk-server-metrics-starter',
@@ -99,6 +101,8 @@ include(
         ':sdk:auth:iam:client:simple-iam-aksk-feign-client-starter',
         ':sdk:auth:iam:client:jakarta:simple-iam-aksk-resttemplate-client-jakarta-starter',
         ':sdk:auth:iam:client:jakarta:simple-iam-aksk-feign-client-jakarta-starter',
+        ':sdk:auth:iam:gateway:envoy:adaptor:simple-iam-portal-gateway-adaptor-core',
+        ':sdk:auth:iam:gateway:envoy:adaptor:simple-iam-portal-gateway-adaptor-starter',
         ':sdk:auth:iam:adapter:login:simple-iam-ldap-adapter-starter',
         ':sdk:auth:iam:adapter:login:simple-iam-oidc-adapter-starter',
         ':sdk:auth:iam:adapter:sms:simple-iam-sms-b2m-adapter-starter',
@@ -118,6 +122,7 @@ include(
         ':sdk:kms:client:simple-kms-aksk-feign-client-starter',
         ':sdk:license:smart-license-core',
         ':sdk:license:server:smart-license-server-starter',
+        ':sdk:license:server:smart-license-limiter-policy-adaptor-starter',
         ':sdk:license:client:simple-license-client-core',
         ':sdk:license:client:simple-license-aksk-resttemplate-client-starter',
         ':sdk:license:client:simple-license-verifier-starter',
@@ -151,6 +156,9 @@ include(
         ':sdk:crm:client:simple-crm-client-core',
         ':sdk:crm:client:simple-crm-aksk-resttemplate-client-starter',
         ':sdk:crm:client:simple-crm-aksk-feign-client-starter',
+        ':sdk:ticket:simple-ticket-server-core',
+        ':sdk:ticket:simple-ticket-server-starter',
+        ':sdk:ticket:simple-ticket-iam-adaptor-starter',
 )
 
 // Spring Boot 3.x / Jakarta 线：toolchain=17，运行验证覆盖 Java 17 和 21。
@@ -161,6 +169,7 @@ include(
         ':sdk:lock:redis:jakarta:simple-redis-lock-jakarta-starter',
         ':sdk:limiter:redis:jakarta:smart-redis-limiter-jakarta-starter',
         ':sdk:limiter:redis:jakarta:smart-redis-limiter-management-aksk-resttemplate-client-jakarta-starter',
+        ':sdk:limiter:redis:jakarta:smart-redis-limiter-management-policy-mutation-aksk-resttemplate-client-jakarta-starter',
         ':sdk:route:redis:jakarta:simple-redis-route-jakarta-starter',
         ':sdk:route:mysql:jakarta:simple-mysql-route-jakarta-starter',
         ':sdk:route:kafka:jakarta:simple-kafka-route-jakarta-starter',
