@@ -1,6 +1,5 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -20,7 +19,6 @@ import lombok.Setter;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 public class TokenWithExpiry {
     /**
      * AccessToken 字符串
@@ -36,4 +34,38 @@ public class TokenWithExpiry {
      * 随 token 一起存 Redis，保证 preload reload() 时分布式各实例使用相同 securityContext。
      */
     private String securityContext;
+
+    /**
+     * Profile 名称；旧缓存值为 null 时只允许默认链路使用
+     */
+    private String profile;
+
+    /**
+     * 凭据身份哈希；与缓存 key 和 Profile Registry 使用同一算法
+     */
+    private String credentialHash;
+
+    public TokenWithExpiry(String token, long expiresAt, String securityContext) {
+        this.token = token;
+        this.expiresAt = expiresAt;
+        this.securityContext = securityContext;
+    }
+
+    /**
+     * 创建带Profile元数据的缓存值
+     *
+     * @param token           访问令牌
+     * @param expiresAt       过期时间（epoch秒）
+     * @param securityContext 安全上下文，可为null
+     * @param profile         Profile名称
+     * @param credentialHash  凭据身份哈希，不含secret与clientId明文
+     */
+    public TokenWithExpiry(String token, long expiresAt, String securityContext,
+                           String profile, String credentialHash) {
+        this.token = token;
+        this.expiresAt = expiresAt;
+        this.securityContext = securityContext;
+        this.profile = profile;
+        this.credentialHash = credentialHash;
+    }
 }

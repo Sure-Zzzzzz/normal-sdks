@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientC
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.DefaultSecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.SimpleAkskRedisTokenManagerPackage;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
@@ -63,6 +64,15 @@ public class SimpleAkskRedisTokenManagerAutoConfiguration {
     }
 
     /**
+     * AKP Profile 只读注册表
+     */
+    @Bean
+    public AkskClientProfileRegistry akskClientProfileRegistry(
+            SimpleAkskClientCoreProperties coreProperties) {
+        return AkskClientProfileRegistry.fromProperties(coreProperties);
+    }
+
+    /**
      * TokenRefreshExecutor — 供 RedisTokenManager 和 TokenCachePreloadHandler 共享
      */
     @Bean
@@ -73,4 +83,3 @@ public class SimpleAkskRedisTokenManagerAutoConfiguration {
         return new TokenRefreshExecutor(coreProperties, retryExecutor);
     }
 }
-

@@ -2,23 +2,30 @@ package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.ConfigurationException;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenFetchException;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.model.AkskClientProfile;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.SimpleAkskRedisTokenManagerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.ProfileCacheKeyHelper;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.TokenCacheTtlHelper;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheProperties;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import io.github.surezzzzzz.sdk.cache.support.KeyHelper;
 import io.github.surezzzzzz.sdk.lock.redis.SimpleRedisLock;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -26,36 +33,52 @@ import java.util.concurrent.TimeUnit;
 /**
  * Redis Token Manager
  *
- * <p>基于 {@link SmartCacheManager} 的分布式 Token 管理器。
+ * <p>基于 {@link SmartCacheManager} 的分布式 Token 管理器，支持默认 AKP 与命名 AKP Profile。
  *
- * <p>特性：
- * <ul>
- *   <li><b>L1 缓存</b>：JVM 本地缓存（Caffeine），TTL 短（默认 2s），减少 Redis IO</li>
- *   <li><b>L2 缓存</b>：Redis 分布式缓存，多实例共享 token</li>
- *   <li><b>分布式锁</b>：防止多实例并发打 OAuth2 Server</li>
- *   <li><b>多实例 L1 一致性</b>：clearToken() 通过 Pub/Sub 广播 L1 失效，各实例同步清除</li>
- *   <li><b>L2 预刷新</b>：由 smart-cache 内置 preload 机制触发，Redis TTL = beforeExpireSeconds 时异步刷新</li>
- * </ul>
- *
- * <p>缓存流程：L1 → L2 → 抢分布式锁（防止击穿） → fetch → 写回 L1 + L2
+ * <p>缓存流程：L1 → L2 → 抢分布式锁（防止击穿） → fetch → 写回 L1 + L2。
  *
  * @author surezzzzzz
  */
 @SimpleAkskRedisTokenManagerComponent
-@RequiredArgsConstructor
 @Slf4j
-public class RedisTokenManager implements TokenManager {
+public class RedisTokenManager implements TokenManager, ProfileTokenManager {
 
-    /**
-     * 固定分片本地锁：在请求分布式锁前先收敛同一 JVM 内的相同缓存键，避免高并发线程重复等待和刷新。
-     */
     private static final Object[] LOCAL_LOCKS = createLocalLocks();
+
     private final SecurityContextProvider securityContextProvider;
     private final SmartCacheManager cacheManager;
     private final SimpleAkskRedisTokenManagerProperties properties;
     private final SmartCacheProperties smartCacheProperties;
     private final TokenRefreshExecutor tokenRefreshExecutor;
     private final SimpleRedisLock redisLock;
+    private final AkskClientProfileRegistry profileRegistry;
+
+    public RedisTokenManager(SecurityContextProvider securityContextProvider,
+                             SmartCacheManager cacheManager,
+                             SimpleAkskRedisTokenManagerProperties properties,
+                             SmartCacheProperties smartCacheProperties,
+                             TokenRefreshExecutor tokenRefreshExecutor,
+                             SimpleRedisLock redisLock) {
+        this(securityContextProvider, cacheManager, properties, smartCacheProperties,
+                tokenRefreshExecutor, redisLock, null);
+    }
+
+    @Autowired
+    public RedisTokenManager(SecurityContextProvider securityContextProvider,
+                             SmartCacheManager cacheManager,
+                             SimpleAkskRedisTokenManagerProperties properties,
+                             SmartCacheProperties smartCacheProperties,
+                             TokenRefreshExecutor tokenRefreshExecutor,
+                             SimpleRedisLock redisLock,
+                             AkskClientProfileRegistry profileRegistry) {
+        this.securityContextProvider = securityContextProvider;
+        this.cacheManager = cacheManager;
+        this.properties = properties;
+        this.smartCacheProperties = smartCacheProperties;
+        this.tokenRefreshExecutor = tokenRefreshExecutor;
+        this.redisLock = redisLock;
+        this.profileRegistry = profileRegistry;
+    }
 
     private static Object[] createLocalLocks() {
         Object[] locks = new Object[SimpleAkskRedisTokenManagerConstant.LOCAL_LOCK_STRIPE_COUNT];
@@ -67,39 +90,121 @@ public class RedisTokenManager implements TokenManager {
 
     @Override
     public String getToken() {
-        String securityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = generateCacheKey(securityContext);
-        String cacheName = properties.getRedis().getToken().getCacheName();
+        return getToken(SimpleAkskClientCoreConstant.DEFAULT_PROFILE);
+    }
 
-        // 类型化读取：smart-cache 2.x 对 Object.class 读取做 trusted-packages 白名单校验，
-        // 内部模型必须显式指定类型，否则反序列化被拒、L2 恒 miss
+    /**
+     * 按Profile获取Token
+     *
+     * <p>命名Profile使用独立凭据与缓存key；{@code default}或空值等价于{@link #getToken()}。
+     * 未配置默认凭据时取默认Profile、或请求不存在的Profile，抛出配置异常，不回落到其他AKP。
+     *
+     * @param profile Profile名称，空值按default处理
+     * @return 访问令牌
+     */
+    @Override
+    public String getToken(String profile) {
+        String cacheName = properties.getRedis().getToken().getCacheName();
+        if (profileRegistry == null) {
+            String securityContext = securityContextProvider.getSecurityContext();
+            String cacheKey = CacheKeyHelper.generate(securityContext);
+            return getOrCreateToken(null, null, securityContext, cacheName, cacheKey, true);
+        }
+        AkskClientProfile target = profileRegistry.resolve(profile);
+        String credentialHash = profileRegistry.credentialHash(target);
+        String securityContext = securityContextProvider.getSecurityContext();
+        String cacheKey = ProfileCacheKeyHelper.generate(target.getProfile(), credentialHash, securityContext);
+        return getOrCreateToken(target, credentialHash, securityContext, cacheName, cacheKey, false);
+    }
+
+    @Override
+    public void clearToken() {
+        clearToken(SimpleAkskClientCoreConstant.DEFAULT_PROFILE);
+    }
+
+    /**
+     * 清理指定Profile的Token缓存，不影响其他Profile
+     *
+     * @param profile Profile名称，空值按default处理
+     */
+    @Override
+    public void clearToken(String profile) {
+        String cacheName = properties.getRedis().getToken().getCacheName();
+        String displayProfile = StringUtils.hasText(profile) ? profile : SimpleAkskClientCoreConstant.DEFAULT_PROFILE;
+        String cacheKey;
+        if (profileRegistry == null) {
+            cacheKey = CacheKeyHelper.generate(securityContextProvider.getSecurityContext());
+        } else {
+            AkskClientProfile target = profileRegistry.resolve(profile);
+            String credentialHash = profileRegistry.credentialHash(target);
+            cacheKey = ProfileCacheKeyHelper.generate(
+                    target.getProfile(), credentialHash, securityContextProvider.getSecurityContext());
+        }
+        try {
+            cacheManager.evict(cacheName, cacheKey);
+        } catch (RuntimeException exception) {
+            log.debug("Token 缓存清理失败，阶段: evict, profile: {}", displayProfile);
+            throw tokenFetchException();
+        }
+        log.debug("Token 缓存已清理, profile: {}", displayProfile);
+    }
+
+    /**
+     * 判断Profile是否已配置（含default）
+     *
+     * @param profile Profile名称
+     * @return 已配置返回true
+     */
+    @Override
+    public boolean containsProfile(String profile) {
+        return profileRegistry != null && profileRegistry.contains(profile);
+    }
+
+    private AkskClientProfileRegistry requireRegistry(String profile) {
+        if (profileRegistry == null) {
+            throw new ConfigurationException(
+                    ClientErrorCode.CONFIG_MISSING,
+                    String.format(ClientErrorMessage.CONFIG_MISSING, "AKP Profile Registry"));
+        }
+        return profileRegistry;
+    }
+
+    private String getOrCreateToken(AkskClientProfile profile, String credentialHash,
+                                    String securityContext, String cacheName, String cacheKey,
+                                    boolean legacyMetadata) {
         TokenWithExpiry cached = getCachedToken(cacheName, cacheKey);
-        if (cached != null) {
+        if (cached != null && isCacheValid(cached, profile, credentialHash, legacyMetadata)) {
             return cached.getToken();
         }
-
-        return fetchWithLocalLock(securityContext, cacheName, cacheKey);
+        return fetchWithLocalLock(profile, credentialHash, securityContext, cacheName, cacheKey, legacyMetadata);
     }
 
-    /**
-     * 在同一 JVM 内先收敛同一缓存键的刷新请求。
-     *
-     * <p>分布式锁用于实例间互斥，本地锁用于避免同一实例内所有竞争线程各自等待 L2 并在超时后重复刷新。
-     */
-    private String fetchWithLocalLock(String securityContext, String cacheName, String cacheKey) {
+    private boolean isCacheValid(TokenWithExpiry cached, AkskClientProfile profile,
+                                 String credentialHash, boolean legacyMetadata) {
+        if (legacyMetadata) {
+            return true;
+        }
+        String expectedProfile = profile == null ? SimpleAkskClientCoreConstant.DEFAULT_PROFILE : profile.getProfile();
+        return expectedProfile.equals(cached.getProfile())
+                && credentialHash != null && credentialHash.equals(cached.getCredentialHash());
+    }
+
+    private String fetchWithLocalLock(AkskClientProfile profile, String credentialHash,
+                                      String securityContext, String cacheName, String cacheKey,
+                                      boolean legacyMetadata) {
         synchronized (getLocalLock(cacheKey)) {
             TokenWithExpiry fromCache = getCachedToken(cacheName, cacheKey);
-            if (fromCache != null) {
+            if (fromCache != null && isCacheValid(fromCache, profile, credentialHash, legacyMetadata)) {
                 return fromCache.getToken();
             }
-            return fetchWithDistributedLock(securityContext, cacheName, cacheKey);
+            return fetchWithDistributedLock(profile, credentialHash, securityContext,
+                    cacheName, cacheKey, legacyMetadata);
         }
     }
 
-    /**
-     * 跨实例收敛 Token 刷新请求。
-     */
-    private String fetchWithDistributedLock(String securityContext, String cacheName, String cacheKey) {
+    private String fetchWithDistributedLock(AkskClientProfile profile, String credentialHash,
+                                            String securityContext, String cacheName, String cacheKey,
+                                            boolean legacyMetadata) {
         String lockKey = buildLockKey(cacheName, cacheKey);
         String requestId = UUID.randomUUID().toString();
         boolean locked = false;
@@ -110,109 +215,79 @@ public class RedisTokenManager implements TokenManager {
                     : SimpleAkskRedisTokenManagerConstant.DEFAULT_LOCK_TIMEOUT_SECONDS;
             try {
                 locked = redisLock.tryLock(lockKey, requestId, lockTimeout, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                // 对齐 SmartCacheManager.loadWithLock 的降级语义：锁不可用时固定本地锁已完成同 JVM 收敛。
-                log.warn("获取分布式锁失败，使用当前实例锁兜底");
-                return fetchAndCacheToken(securityContext, cacheName, cacheKey);
+            } catch (Exception exception) {
+                log.warn("获取分布式锁失败，使用当前实例锁兜底, profile: {}", profileName(profile));
+                return fetchAndCacheToken(profile, credentialHash, securityContext,
+                        cacheName, cacheKey, legacyMetadata);
             }
 
             if (locked) {
-                // 双重检查 L2
                 TokenWithExpiry fromL2 = getCachedToken(cacheName, cacheKey);
-                if (fromL2 != null) {
+                if (fromL2 != null && isCacheValid(fromL2, profile, credentialHash, legacyMetadata)) {
                     return fromL2.getToken();
                 }
-
-                // 抢到锁，真正从 server 拿 token
-                return fetchAndCacheToken(securityContext, cacheName, cacheKey);
-            } else {
-                // 没抢到锁，轮询 L2 等待其他实例写入
-                return waitForTokenFromL2(securityContext, cacheName, cacheKey, lockTimeout);
+                return fetchAndCacheToken(profile, credentialHash, securityContext,
+                        cacheName, cacheKey, legacyMetadata);
             }
+            return waitForTokenFromL2(profile, credentialHash, securityContext, cacheName, cacheKey,
+                    lockTimeout, legacyMetadata);
         } finally {
             if (locked) {
                 try {
                     redisLock.unlock(lockKey, requestId);
-                } catch (Exception e) {
-                    log.warn("解锁失败");
+                } catch (Exception exception) {
+                    log.warn("解锁失败, profile: {}", profileName(profile));
                 }
             }
         }
     }
 
-    /**
-     * 从 server 获取 token 并写入缓存
-     */
-    private String fetchAndCacheToken(String securityContext, String cacheName, String cacheKey) {
+    private String fetchAndCacheToken(AkskClientProfile profile, String credentialHash,
+                                      String securityContext, String cacheName, String cacheKey,
+                                      boolean legacyMetadata) {
         long fetchTime = System.currentTimeMillis() / 1000;
         TokenWithExpiry[] holder = new TokenWithExpiry[1];
-        tokenRefreshExecutor.fetchTokenFromServer(securityContext, (token, expiresIn) -> {
-            holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext);
-        });
-
-        if (holder[0] != null) {
-            int ttl = TokenCacheTtlHelper.calculate(holder[0].getExpiresAt(), System.currentTimeMillis() / 1000);
-            if (ttl <= 0) {
-                throw tokenFetchException();
-            }
-            putCachedToken(cacheName, cacheKey, holder[0], ttl);
-            return holder[0].getToken();
+        if (profile == null) {
+            tokenRefreshExecutor.fetchTokenFromServer(securityContext, (token, expiresIn) ->
+                    holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext));
+        } else {
+            tokenRefreshExecutor.fetchTokenFromServer(profile, securityContext, (token, expiresIn) ->
+                    holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext,
+                            profile.getProfile(), credentialHash));
         }
-        throw tokenFetchException();
+
+        if (holder[0] == null) {
+            throw tokenFetchException();
+        }
+        int ttl = TokenCacheTtlHelper.calculate(holder[0].getExpiresAt(), System.currentTimeMillis() / 1000);
+        if (ttl <= 0) {
+            throw tokenFetchException();
+        }
+        putCachedToken(cacheName, cacheKey, holder[0], ttl);
+        log.debug("Token 已刷新并缓存, profile: {}, expiresIn: {}s", profileName(profile), ttl);
+        return holder[0].getToken();
     }
 
-    /**
-     * 轮询 L2，等待其他实例写入 token
-     */
-    private String waitForTokenFromL2(String securityContext, String cacheName, String cacheKey, int lockTimeout) {
+    private String waitForTokenFromL2(AkskClientProfile profile, String credentialHash,
+                                      String securityContext, String cacheName, String cacheKey,
+                                      int lockTimeout, boolean legacyMetadata) {
         int retryCount = (int) (lockTimeout * 1000L / SimpleAkskRedisTokenManagerConstant.L2_POLL_INTERVAL_MS);
         for (int i = 0; i < retryCount; i++) {
             try {
                 Thread.sleep(SimpleAkskRedisTokenManagerConstant.L2_POLL_INTERVAL_MS);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
                 break;
             }
             TokenWithExpiry cached = getCachedToken(cacheName, cacheKey);
-            if (cached != null) {
+            if (cached != null && isCacheValid(cached, profile, credentialHash, legacyMetadata)) {
                 return cached.getToken();
             }
         }
-        log.warn("等待 L2 token 超时，使用当前实例锁刷新");
-        return fetchAndCacheToken(securityContext, cacheName, cacheKey);
+        log.warn("等待 L2 token 超时，使用当前实例锁刷新, profile: {}", profileName(profile));
+        return fetchAndCacheToken(profile, credentialHash, securityContext, cacheName, cacheKey, legacyMetadata);
     }
 
-    @Override
-    public void clearToken() {
-        String securityContext = securityContextProvider.getSecurityContext();
-        String cacheKey = generateCacheKey(securityContext);
-        String cacheName = properties.getRedis().getToken().getCacheName();
-        // strong 模式下 evict 会通过 Pub/Sub 广播，各实例同步清除 L1
-        try {
-            cacheManager.evict(cacheName, cacheKey);
-        } catch (RuntimeException exception) {
-            log.debug("Token 缓存清理失败，阶段: evict");
-            throw tokenFetchException();
-        }
-        log.debug("Token 缓存已清理");
-    }
-
-    /**
-     * 生成缓存 Key
-     *
-     * @param securityContext 安全上下文（JSON 字符串或 null）
-     * @return 缓存 Key
-     */
-    private String generateCacheKey(String securityContext) {
-        return CacheKeyHelper.generate(securityContext);
-    }
-
-    /**
-     * 生成分布式锁 Key
-     *
-     * <p>复用 smart-cache 的 {@link KeyHelper#buildLockKey}，与 SmartCacheManager 的锁键同源，
-     * 格式 {keyPrefix}-lock:{cacheName}:{me}:{cacheKey}（me 为应用组标识：同组互斥、跨组隔离）。
-     */
     private String buildLockKey(String cacheName, String cacheKey) {
         return KeyHelper.buildLockKey(
                 smartCacheProperties.getKeyPrefix(),
@@ -222,9 +297,6 @@ public class RedisTokenManager implements TokenManager {
         );
     }
 
-    /**
-     * 读取缓存并将基础设施异常收口为 Token 获取失败，避免调用方误发无凭据请求。
-     */
     private TokenWithExpiry getCachedToken(String cacheName, String cacheKey) {
         try {
             return cacheManager.get(cacheName, cacheKey, TokenWithExpiry.class);
@@ -234,9 +306,6 @@ public class RedisTokenManager implements TokenManager {
         }
     }
 
-    /**
-     * 写入缓存并将基础设施异常收口为 Token 获取失败，避免返回未被可靠缓存的 Token。
-     */
     private void putCachedToken(String cacheName, String cacheKey, TokenWithExpiry tokenWithExpiry, int ttl) {
         try {
             cacheManager.put(cacheName, cacheKey, tokenWithExpiry, ttl);
@@ -256,4 +325,7 @@ public class RedisTokenManager implements TokenManager {
         return LOCAL_LOCKS[Math.floorMod(cacheKey.hashCode(), LOCAL_LOCKS.length)];
     }
 
+    private String profileName(AkskClientProfile profile) {
+        return profile == null ? SimpleAkskClientCoreConstant.DEFAULT_PROFILE : profile.getProfile();
+    }
 }

@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.CacheKeyHelper;
@@ -50,6 +52,9 @@ class RedisTokenManagerEndToEndTest {
 
     @Autowired
     private RedisTokenManager tokenManager;
+
+    @Autowired
+    private AkskClientProfileRegistry profileRegistry;
 
     @Autowired
     private SecurityContextProvider securityContextProvider;
@@ -189,7 +194,9 @@ class RedisTokenManagerEndToEndTest {
         // 先手动往 L2 写入一个 token（模拟其他实例已获取）
         String expectedToken = "test-token-for-poll";
         long fakeExpiresAt = System.currentTimeMillis() / 1000 + 3600;
-        TokenWithExpiry tokenWithExpiry = new TokenWithExpiry(expectedToken, fakeExpiresAt, null);
+        TokenWithExpiry tokenWithExpiry = new TokenWithExpiry(expectedToken, fakeExpiresAt,
+                securityContextProvider.getSecurityContext(), SimpleAkskClientCoreConstant.DEFAULT_PROFILE,
+                profileRegistry.credentialHash(profileRegistry.resolve(SimpleAkskClientCoreConstant.DEFAULT_PROFILE)));
         l2Cache.put(cacheName, cacheKey, tokenWithExpiry, 3600);
         log.info("已向 L2 写入预置 Token");
 

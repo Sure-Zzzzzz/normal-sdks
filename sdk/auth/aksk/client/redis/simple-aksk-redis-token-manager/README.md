@@ -1,6 +1,6 @@
 # Simple AKSK Redis Token Manager
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.1.0**。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -12,6 +12,16 @@
 - **多实例 L1 一致性**：`clearToken()` 通过 Pub/Sub 广播 L1 失效，各实例同步清除
 - **L2 预刷新**：Redis TTL 进入配置的预刷新窗口时异步换 Token，当前请求不阻塞
 
+### AKP Profile 隔离
+
+AKP 是 AKSK 的服务机器凭据，一组 AKP 即一对 AccessKey / SecretKey；一个 Profile 对应一组 AKP。
+
+`RedisTokenManager` 同时实现默认 `TokenManager` 和 `ProfileTokenManager`。顶层凭据继续走 `getToken()`；命名 AKP 走 `getToken(profile)`。Redis key、L1/L2 缓存、分布式锁和预刷新任务按 Profile 与凭据身份隔离。
+
+- `clearToken(profile)` 只清当前安全上下文对应的命名 Profile 缓存。
+- 旧版本默认缓存没有 Profile 元数据时，默认链路会刷新并补写元数据；命名 Profile 不复用旧默认缓存。
+- 凭据身份由 AKSK Server origin 归一化结果和 `clientId` 组成；secret 不写入 Redis key 或缓存值。
+
 ---
 
 ## 快速开始
@@ -19,7 +29,7 @@
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.0.2'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.1.0'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
@@ -53,6 +63,13 @@ io:
               server-url: https://aksk.example.test
               client-id: ${AKSK_CLIENT_ID}
               client-secret: ${AKSK_CLIENT_SECRET}
+              # 命名 AKP Profile：每组独立凭据；default 是保留名，默认凭据仍写在顶层
+              profiles:
+                crm:
+                  server-url: https://aksk.example.test
+                  token-endpoint: /oauth2/token   # 缺省即 /oauth2/token
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
 
         cache:
           enabled: true
@@ -92,6 +109,22 @@ tokenManager.clearToken();
 ## 架构
 
 ```
+
+命名 AKP 需要注入 `ProfileTokenManager`，并用 Profile 名称显式选择凭据：
+
+```java
+@Autowired
+private ProfileTokenManager profileTokenManager;
+
+// 使用 crm 这组 AKP 凭据；缓存、锁和预刷新都与默认凭据隔离
+String crmToken = profileTokenManager.getToken("crm");
+
+// 只清理 crm 的缓存，不影响默认凭据和其他 Profile
+profileTokenManager.clearToken("crm");
+```
+
+- 未配置的 Profile 不会回落到默认凭据，直接抛出 `ConfigurationException`。
+- 只使用命名 Profile 时，顶层 `client-id` / `client-secret` 可以缺省；此时调用无参 `getToken()` 抛出 `ConfigurationException`。
 缓存流程：L1 → L2 → 抢分布式锁 → fetch → 写回 L1 + L2
 
 L1: Caffeine（2s），减少 Redis IO
@@ -144,8 +177,22 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 |------|---------|
 | 平台级（无 security_context） | `my-app:aksk-client-token:my-aksk-app::{default}` |
 | 用户级（有 security_context） | `my-app:aksk-client-token:my-aksk-app::{a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6}` |
+| 命名 AKP Profile（3.1.0 起） | `my-app:aksk-client-token:my-aksk-app::{crm:5f8c1b0d9a734e2f8b1c0d9a734e2f8b:default}` |
 
 > 用户级 cacheKey 自 2.0.1 起使用 SHA-256 截断 128-bit hex（32 字符），替换 2.0.0 的 `hashCode()` 32-bit 数字串，消除碰撞风险。Hash Tag 行为由 smart-cache 控制，本模块未做修改。
+
+> 命名 Profile 的 cacheKey 为三段：Profile 名称、凭据身份哈希（AKSK Server origin 与 `clientId` 组合后取 SHA-256 截断 128-bit hex）、安全上下文段（规则同默认链路）。secret 不参与计算；同一凭据的不同写法（默认端口、尾部斜杠、协议大小写）得到同一哈希。
+
+---
+
+## 兼容矩阵
+
+| 应用运行时 | 使用模块 | 版本 | Spring Boot | Java |
+| --- | --- | --- | --- | --- |
+| Spring Boot 2.x（javax） | `simple-aksk-redis-token-manager` | `3.1.0` | 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE | 8 |
+| Spring Boot 3.x（Jakarta） | `simple-aksk-redis-token-manager-jakarta-starter` | `1.1.0` | 3.4.2 | 17 / 21 |
+
+两条线不可同时引入。
 
 ---
 
@@ -164,6 +211,16 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 ---
 
 ## 版本历史
+
+### 3.1.0
+
+- 升级 `simple-aksk-client-core` 至 3.1.0，支持多 AKP Profile。
+- Token 缓存、锁、预刷新和清理按 Profile 隔离；默认单 AKP 的 key 与调用方式保持兼容。
+- 旧缓存默认链路刷新后补写 Profile 与凭据身份元数据；命名 Profile 拒绝旧默认缓存并刷新。
+- Token 获取、刷新与清理的诊断日志携带 Profile 维度，不记录 secret、原始 clientId、Token 或 Authorization。
+- `RedisTokenManager` 由自动配置创建并注入 `AkskClientProfileRegistry`；排除自动配置又扫描该组件的宿主会在启动期失败。
+
+详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.2
 
