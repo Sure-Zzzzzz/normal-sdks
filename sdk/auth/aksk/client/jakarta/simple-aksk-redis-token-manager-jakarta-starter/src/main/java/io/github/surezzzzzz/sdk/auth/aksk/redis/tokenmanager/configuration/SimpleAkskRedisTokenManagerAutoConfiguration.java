@@ -6,6 +6,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecu
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.DefaultSecurityContextProvider;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.provider.SecurityContextProvider;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.manager.RedisTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.preload.TokenCachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.configuration.SmartCacheConfiguration;
@@ -65,6 +66,16 @@ public class SimpleAkskRedisTokenManagerAutoConfiguration {
     }
 
     /**
+     * AKP Profile 只读注册表
+     */
+    @Bean
+    @ConditionalOnBean(SmartCacheManager.class)
+    public AkskClientProfileRegistry akskClientProfileRegistry(
+            SimpleAkskClientCoreProperties coreProperties) {
+        return AkskClientProfileRegistry.fromProperties(coreProperties);
+    }
+
+    /**
      * SB3 的 OnBean 条件处于 Bean 注册阶段，不能与 ComponentScan 放在同一配置类。
      * 因此显式注册内部组件，仍保留调用方覆盖 TokenManager 的扩展边界。
      */
@@ -78,9 +89,10 @@ public class SimpleAkskRedisTokenManagerAutoConfiguration {
             SimpleAkskRedisTokenManagerProperties properties,
             SmartCacheProperties smartCacheProperties,
             TokenRefreshExecutor tokenRefreshExecutor,
-            SimpleRedisLock redisLock) {
+            SimpleRedisLock redisLock,
+            AkskClientProfileRegistry profileRegistry) {
         return new RedisTokenManager(securityContextProvider, cacheManager, properties,
-                smartCacheProperties, tokenRefreshExecutor, redisLock);
+                smartCacheProperties, tokenRefreshExecutor, redisLock, profileRegistry);
     }
 
     @Bean
@@ -89,7 +101,8 @@ public class SimpleAkskRedisTokenManagerAutoConfiguration {
     public TokenCachePreloadHandler tokenCachePreloadHandler(
             TokenRefreshExecutor tokenRefreshExecutor,
             SimpleAkskRedisTokenManagerProperties properties,
-            @Lazy SmartCacheManager cacheManager) {
-        return new TokenCachePreloadHandler(tokenRefreshExecutor, properties, cacheManager);
+            @Lazy SmartCacheManager cacheManager,
+            AkskClientProfileRegistry profileRegistry) {
+        return new TokenCachePreloadHandler(tokenRefreshExecutor, properties, cacheManager, profileRegistry);
     }
 }

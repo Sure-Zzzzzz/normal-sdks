@@ -8,8 +8,8 @@
 
 | 应用运行时 | 使用模块 | 版本 |
 | --- | --- | --- |
-| Spring Boot 2.x（javax） | `simple-aksk-redis-token-manager` | `3.0.2` |
-| Spring Boot 3.x（Jakarta） | `simple-aksk-redis-token-manager-jakarta-starter` | `1.0.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-redis-token-manager` | `3.1.0` |
+| Spring Boot 3.x（Jakarta） | `simple-aksk-redis-token-manager-jakarta-starter` | `1.1.0` |
 
 两条线不可同时引入。Jakarta 线要求 Java 17 或更高版本、Spring Boot 3.x 与 Spring Framework 6.x。
 
@@ -17,7 +17,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager-jakarta-starter:1.1.0'
     implementation 'io.github.sure-zzzzzz:simple-redis-route-jakarta-starter:1.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -101,4 +101,46 @@ AKU 场景可由调用方注册 `SecurityContextProvider` 提供上下文；未�
 
 ## 验证范围
 
-首轮已在 JDK 17 下完成真实 Redis、AKSK Server、并发、L1/L2、预刷新、Pub/Sub 和多安全上下文 E2E，共 49 项测试全绿。Spring Boot 3.2、3.3、3.4 的 JDK 17 编译与 JDK 21 运行兼容矩阵尚未完成，因此不将首轮结果表述为完整 Boot 3.x 矩阵。
+Spring Boot 3.4.2 下支持 JDK 17 与 JDK 21：真实 Redis、AKSK Server、并发、L1/L2、预刷新、Pub/Sub、多安全上下文和多 AKP Profile 场景均有自动化用例。Spring Boot 3.2、3.3 不在本版本支持范围内。
+
+## AKP Profile
+
+AKP 是 AKSK 的服务机器凭据，一组 AKP 即一对 AccessKey / SecretKey；一个 Profile 对应一组 AKP。
+
+Redis Token Manager 同时实现默认 `TokenManager` 与 `ProfileTokenManager`。顶层凭据继续走 `getToken()`；命名 AKP 走 `getToken(profile)`。命名 Profile 的 L1/L2 缓存、分布式锁、预刷新和清理互相隔离；旧默认缓存只在默认链路刷新后补写元数据，命名 Profile 不复用旧默认缓存。Secret 不写入 Redis key、缓存值或日志。
+
+配置示例（`default` 为保留名，默认凭据仍写在顶层；`token-endpoint` 缺省为 `/oauth2/token`）：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              server-url: https://aksk.example.test
+              client-id: ${AKSK_CLIENT_ID}
+              client-secret: ${AKSK_CLIENT_SECRET}
+              profiles:
+                crm:
+                  server-url: https://aksk.example.test
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
+```
+
+使用命名 Profile：
+
+```java
+@Autowired
+private ProfileTokenManager profileTokenManager;
+
+String crmToken = profileTokenManager.getToken("crm");
+profileTokenManager.clearToken("crm");   // 只清理 crm，不影响默认凭据和其他 Profile
+```
+
+- 未配置的 Profile 不会回落到默认凭据，直接抛出 `ConfigurationException`。
+- 只使用命名 Profile 时顶层凭据可以缺省；此时调用无参 `getToken()` 抛出 `ConfigurationException`。
+- 命名 Profile 的 cacheKey 为三段：Profile 名称、凭据身份哈希（AKSK Server origin 与 `clientId` 组合后取 SHA-256 截断 128-bit hex）、安全上下文段。
+- `RedisTokenManager` 由自动配置创建并注入 `AkskClientProfileRegistry`；排除自动配置又扫描该组件时启动失败。

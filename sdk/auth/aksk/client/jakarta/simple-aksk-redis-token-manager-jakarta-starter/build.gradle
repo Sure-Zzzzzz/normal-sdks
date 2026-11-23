@@ -1,5 +1,5 @@
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
 
     implementation 'io.github.sure-zzzzzz:smart-cache-jakarta-starter:1.0.0'
     implementation 'io.github.sure-zzzzzz:simple-redis-lock-jakarta-starter:1.0.0'

@@ -12,6 +12,11 @@ public final class ErrorMessage {
      */
     public static final String CACHE_KEY_HASH_ALGORITHM_UNAVAILABLE = "缓存 Key 哈希算法不可用: %s";
 
+    /**
+     * Token 缓存处理失败
+     */
+    public static final String TOKEN_CACHE_PROCESSING_FAILED = "Token 缓存处理失败";
+
     // ==================== 缓存 Key 错误 ====================
 
     private ErrorMessage() {

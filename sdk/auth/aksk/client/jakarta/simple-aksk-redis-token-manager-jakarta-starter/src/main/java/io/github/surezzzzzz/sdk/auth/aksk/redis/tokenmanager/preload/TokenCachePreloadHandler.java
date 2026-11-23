@@ -1,14 +1,23 @@
 package io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.preload;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenFetchException;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.executor.TokenRefreshExecutor;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.model.AkskClientProfile;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.annotation.SimpleAkskRedisTokenManagerComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerProperties;
+import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.constant.ErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.model.TokenWithExpiry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.support.TokenCacheTtlHelper;
 import io.github.surezzzzzz.sdk.cache.CachePreloadHandler;
 import io.github.surezzzzzz.sdk.cache.manager.SmartCacheManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.util.StringUtils;
 
 import java.util.Optional;
 
@@ -37,16 +46,26 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
     private static final ThreadLocal<Long> RELOAD_EXPIRES_AT = new ThreadLocal<>();
     private final TokenRefreshExecutor tokenRefreshExecutor;
     private final SimpleAkskRedisTokenManagerProperties properties;
+    private final AkskClientProfileRegistry profileRegistry;
     private SmartCacheManager cacheManager;
+
+    public TokenCachePreloadHandler(
+            TokenRefreshExecutor tokenRefreshExecutor,
+            SimpleAkskRedisTokenManagerProperties properties,
+            @Lazy SmartCacheManager cacheManager) {
+        this(tokenRefreshExecutor, properties, cacheManager, null);
+    }
 
     @Autowired
     public TokenCachePreloadHandler(
             TokenRefreshExecutor tokenRefreshExecutor,
             SimpleAkskRedisTokenManagerProperties properties,
-            @Lazy SmartCacheManager cacheManager) {
+            @Lazy SmartCacheManager cacheManager,
+            AkskClientProfileRegistry profileRegistry) {
         this.tokenRefreshExecutor = tokenRefreshExecutor;
         this.properties = properties;
         this.cacheManager = cacheManager;
+        this.profileRegistry = profileRegistry;
     }
 
     /**
@@ -105,7 +124,7 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
      *
      * @param cacheName 缓存名称
      * @param key       缓存键
-     * @return 新 TokenWithExpiry，由缓存框架写入 L2
+     * @return 新 TokenWithExpiry，写入 L2；返回 null 时不更新缓存
      */
     @Override
     public Object reload(String cacheName, String key) {
@@ -114,12 +133,35 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
         // 内部模型必须显式指定类型，否则反序列化被拒、L2 恒 miss
         TokenWithExpiry current = cacheManager.get(cacheName, key, TokenWithExpiry.class);
         String securityContext = current != null ? current.getSecurityContext() : null;
+        AkskClientProfile profile = null;
+        String credentialHash = null;
+        if (profileRegistry != null) {
+            String profileName = current == null || !StringUtils.hasText(current.getProfile())
+                    ? SimpleAkskClientCoreConstant.DEFAULT_PROFILE : current.getProfile();
+            profile = profileRegistry.resolve(profileName);
+            credentialHash = profileRegistry.credentialHash(profile);
+            if (current != null && profile != null
+                    && !SimpleAkskClientCoreConstant.DEFAULT_PROFILE.equals(profile.getProfile())
+                    && (!profile.getProfile().equals(current.getProfile())
+                    || !credentialHash.equals(current.getCredentialHash()))) {
+                throw new ConfigurationException(
+                        ClientErrorCode.CONFIG_INVALID,
+                        String.format(ClientErrorMessage.CONFIG_INVALID, "AKP Profile 缓存元数据: " + profile.getProfile()));
+            }
+        }
 
         long fetchTime = System.currentTimeMillis() / 1000;
         TokenWithExpiry[] holder = new TokenWithExpiry[1];
-        tokenRefreshExecutor.fetchTokenFromServer(securityContext, (token, expiresIn) -> {
-            holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext);
-        });
+        if (profile == null) {
+            tokenRefreshExecutor.fetchTokenFromServer(securityContext, (token, expiresIn) ->
+                    holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext));
+        } else {
+            final AkskClientProfile selectedProfile = profile;
+            final String selectedCredentialHash = credentialHash;
+            tokenRefreshExecutor.fetchTokenFromServer(profile, securityContext, (token, expiresIn) ->
+                    holder[0] = new TokenWithExpiry(token, fetchTime + expiresIn, securityContext,
+                            selectedProfile.getProfile(), selectedCredentialHash));
+        }
 
         if (holder[0] != null) {
             // 只返回新值，写回交框架 asyncPreload 统一 put，TTL 经 ThreadLocal 传给 getReloadTtlSeconds()；
@@ -127,8 +169,9 @@ public class TokenCachePreloadHandler implements CachePreloadHandler {
             RELOAD_EXPIRES_AT.set(holder[0].getExpiresAt());
             return holder[0];
         }
-        throw new io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenFetchException(
-                io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode.TOKEN_FETCH_FAILED,
-                io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage.TOKEN_FETCH_FAILED);
+        throw new TokenFetchException(
+                ClientErrorCode.TOKEN_FETCH_FAILED,
+                String.format(ClientErrorMessage.TOKEN_FETCH_FAILED,
+                        ErrorMessage.TOKEN_CACHE_PROCESSING_FAILED));
     }
 }
