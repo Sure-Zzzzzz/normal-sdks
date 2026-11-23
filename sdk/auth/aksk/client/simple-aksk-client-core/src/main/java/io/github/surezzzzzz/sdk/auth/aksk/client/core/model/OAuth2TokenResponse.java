@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 /**
  * OAuth2 Token Response
@@ -19,6 +20,7 @@ public class OAuth2TokenResponse {
      * Access Token
      */
     @JsonProperty("access_token")
+    @ToString.Exclude
     private String accessToken;
 
     /**

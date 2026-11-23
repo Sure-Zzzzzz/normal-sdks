@@ -1,6 +1,6 @@
 # Simple AKSK Client Core
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > **2.x 封版文档**：如果你使用的是 2.x 版本，请查看 [README.2.x.md](README.2.x.md)。
@@ -53,6 +53,33 @@ AKSK 客户端的核心模块，提供 Token 管理的抽象接口、安全上�
   - `client-secret` - Client Secret（SK）
   - `server-url` - OAuth2 Server 地址
   - `token-endpoint` - Token 端点路径
+
+### 7. AKP Profile 契约
+
+- **ProfileTokenManager** - 多 AKP Token 管理器契约，提供 `getToken(profile)`、`clearToken(profile)` 和 `containsProfile(profile)`。
+- **AkskClientProfile** - 运行时 Profile 模型；`client-secret` 不参与 `toString()`。
+- **AkskClientProfileRegistry** - 启动期只读注册表，校验 Profile 名称、凭据完整性、保留名和重复凭据身份。
+
+顶层配置继续表示默认 AKP。命名 Profile 使用 `profiles` 映射；`default` 是保留名，不能写入 `profiles.default`。只使用命名 Profile 时，顶层 `client-id` / `client-secret` 可以缺省。
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              profiles:
+                crm:
+                  server-url: https://aksk.example.internal
+                  token-endpoint: /oauth2/token
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
+```
+
+Profile 名称必须匹配 `^[a-z][a-z0-9_-]{0,63}$`。每个 Profile 必须配置 `server-url`、`client-id` 和 `client-secret`；`token-endpoint` 缺省为 `/oauth2/token`。同一 AKSK Server 与同一 `clientId` 组成的凭据身份不能在多个 Profile 中重复。Profile 是静态配置，重启生效；Secret 不进入日志、缓存元数据或异常消息。
 
 ### 5. 异常体系
 
@@ -137,6 +164,10 @@ public class MySecurityContextProvider implements SecurityContextProvider {
 ```
 
 ## 版本历史
+
+### 3.1.0 (2026-11-22)
+
+新增 AKP Profile 契约和配置模型：默认 AKP 继续走 `TokenManager.getToken()`，命名 AKP 走 `ProfileTokenManager.getToken(profile)`。启动期校验 Profile 名称、凭据完整性、重复凭据身份和保留名；Secret 不进入 `toString()`、日志或异常。旧单 AKP 配置、接口和调用方式不变。详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.0 (2026-08-24)
 
