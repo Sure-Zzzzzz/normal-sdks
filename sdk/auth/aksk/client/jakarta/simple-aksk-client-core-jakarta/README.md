@@ -9,7 +9,7 @@
 | 应用运行时 | 使用模块 | 版本 | 是否可同时引入 |
 | --- | --- | --- |
 | Spring Boot 2.x（javax） | `simple-aksk-client-core` | `3.0.0` | 否 |
-| Spring Boot 3.x（Jakarta） | `simple-aksk-client-core-jakarta` | `1.0.0` | 否 |
+| Spring Boot 3.x（Jakarta） | `simple-aksk-client-core-jakarta` | `1.1.0` | 否 |
 
 两条线保留相同包名和公共类型，业务升级到 Spring Boot 3.x 时只替换依赖坐标。它们的 `TaskRetryExecutor` 来自不同代际的依赖，不能在同一个应用中并存。
 
@@ -17,7 +17,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
 }
 ```
 
@@ -79,3 +79,26 @@ io:
 - Java 17 或更高版本。
 - Spring Boot 3.x 与 Spring Framework 6.x。
 - 真实 AKSK Token、缓存并发与资源接口端到端验证由下游 Token Manager 和调用客户端模块负责。
+
+## AKP Profile
+
+Core 1.1.0 新增 `ProfileTokenManager`、`AkskClientProfile` 和 `AkskClientProfileRegistry`。顶层配置继续表示默认 AKP；命名 Profile 配置在 `profiles` 下，`default` 是保留名。Profile-only 场景允许顶层凭据缺省，但调用默认 `getToken()` 会抛出配置异常。Secret 不参与 `toString()`。
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              enable: true
+              profiles:
+                crm:
+                  server-url: https://aksk.example.internal
+                  token-endpoint: /oauth2/token
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
+```
+
+Profile 名称必须匹配 `^[a-z][a-z0-9_-]{0,63}$`。每个 Profile 必须配置 `server-url`、`client-id` 和 `client-secret`；`token-endpoint` 缺省为 `/oauth2/token`。同一 AKSK Server 与同一 `clientId` 组成的凭据身份不能在多个 Profile 中重复。Profile 是静态配置，重启生效。

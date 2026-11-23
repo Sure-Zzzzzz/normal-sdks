@@ -14,6 +14,16 @@ public final class SimpleAkskClientCoreConstant {
      */
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.auth.aksk.client";
 
+    /**
+     * 默认 Profile 名称，对应顶层 AKP 配置
+     */
+    public static final String DEFAULT_PROFILE = "default";
+
+    /**
+     * 命名 Profile 名称模式：小写字母开头，只允许小写字母、数字、连字符和下划线
+     */
+    public static final String PROFILE_NAME_PATTERN = "^[a-z][a-z0-9_-]{0,63}$";
+
     // ==================== 配置相关常量 ====================
     /**
      * 默认 Token 端点

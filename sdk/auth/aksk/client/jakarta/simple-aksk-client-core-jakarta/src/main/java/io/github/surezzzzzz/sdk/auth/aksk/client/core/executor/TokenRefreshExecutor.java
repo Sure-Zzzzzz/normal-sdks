@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.TokenFetchException;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.model.AkskClientProfile;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.model.OAuth2TokenResponse;
 import io.github.surezzzzzz.sdk.auth.aksk.core.constant.JwtClaimConstant;
 import io.github.surezzzzzz.sdk.retry.task.executor.TaskRetryExecutor;
@@ -28,7 +29,7 @@ import java.util.function.BiConsumer;
  *   <li>不作为 Spring Bean，由 {@link io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.AbstractTokenManager} 在构造时创建</li>
  *   <li>提供通用的 Token 刷新逻辑，由 RedisTokenManager 和 HttpSessionTokenManager 复用</li>
  *   <li>使用 TaskRetryExecutor 进行重试</li>
- *   <li>RestTemplate 为实例变量，超时参数从 properties 读取</li>
+ *   <li>按 Profile 的超时配置创建 Token 请求 RestTemplate</li>
  *   <li>Token 有效性由缓存 TTL 保证，不再解析 Token 内容（兼容 JWE 加密格式）</li>
  * </ul>
  *
@@ -39,15 +40,10 @@ public class TokenRefreshExecutor {
 
     private final SimpleAkskClientCoreProperties coreProperties;
     private final TaskRetryExecutor retryExecutor;
-    private final RestTemplate restTemplate;
 
     public TokenRefreshExecutor(SimpleAkskClientCoreProperties coreProperties, TaskRetryExecutor retryExecutor) {
         this.coreProperties = coreProperties;
         this.retryExecutor = retryExecutor;
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(coreProperties.getHttp().getConnectTimeoutMs());
-        factory.setReadTimeout(coreProperties.getHttp().getReadTimeoutMs());
-        this.restTemplate = new RestTemplate(factory);
     }
 
     /**
@@ -58,13 +54,26 @@ public class TokenRefreshExecutor {
      * @return Access Token
      */
     public String fetchTokenFromServer(String securityContext, BiConsumer<String, Long> cacheCallback) {
+        return fetchTokenFromServer(toDefaultProfile(), securityContext, cacheCallback);
+    }
+
+    /**
+     * 从指定 AKP Profile 对应的 OAuth2 Server 获取 Token（带重试）
+     *
+     * @param profile         已解析 Profile
+     * @param securityContext 安全上下文
+     * @param cacheCallback   缓存回调函数（参数: accessToken, expiresIn）
+     * @return Access Token
+     */
+    public String fetchTokenFromServer(AkskClientProfile profile, String securityContext,
+                                       BiConsumer<String, Long> cacheCallback) {
         try {
             return retryExecutor.executeWithRetry(() -> {
-                        String tokenUrl = coreProperties.getServerUrl() + coreProperties.getTokenEndpoint();
+                        String tokenUrl = profile.getServerUrl() + profile.getTokenEndpoint();
 
                         HttpHeaders headers = new HttpHeaders();
                         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-                        headers.setBasicAuth(coreProperties.getClientId(), coreProperties.getClientSecret());
+                        headers.setBasicAuth(profile.getClientId(), profile.getClientSecret());
 
                         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
                         body.add(SimpleAkskClientCoreConstant.PARAM_GRANT_TYPE,
@@ -75,7 +84,7 @@ public class TokenRefreshExecutor {
 
                         HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(body, headers);
 
-                        ResponseEntity<OAuth2TokenResponse> response = restTemplate.exchange(
+                        ResponseEntity<OAuth2TokenResponse> response = createRestTemplate(profile).exchange(
                                 tokenUrl, HttpMethod.POST, request, OAuth2TokenResponse.class);
 
                         OAuth2TokenResponse tokenResponse = response.getBody();
@@ -100,7 +109,7 @@ public class TokenRefreshExecutor {
                             cacheCallback.accept(accessToken, expiresIn);
                         }
 
-                        log.debug("AKSK Token 刷新成功，响应有效期（秒）: {}", expiresIn);
+                        log.info("Token fetched from server: expiresIn={}s", expiresIn);
                         return accessToken;
                     }, SimpleAkskClientCoreConstant.TOKEN_REFRESH_RETRY_TIMES,
                     SimpleAkskClientCoreConstant.TOKEN_REFRESH_INITIAL_DELAY_MS,
@@ -109,12 +118,29 @@ public class TokenRefreshExecutor {
         } catch (TokenFetchException e) {
             throw e;
         } catch (Exception e) {
-            log.debug("AKSK Token 刷新失败，异常类型: {}", e.getClass().getName());
             throw new TokenFetchException(
                     ClientErrorCode.TOKEN_FETCH_FAILED,
-                    ClientErrorMessage.TOKEN_FETCH_FAILED,
+                    String.format(ClientErrorMessage.TOKEN_FETCH_FAILED, e.getMessage()),
                     e);
         }
+    }
+
+    private AkskClientProfile toDefaultProfile() {
+        return new AkskClientProfile(
+                SimpleAkskClientCoreConstant.DEFAULT_PROFILE,
+                coreProperties.getServerUrl(),
+                coreProperties.getTokenEndpoint(),
+                coreProperties.getClientId(),
+                coreProperties.getClientSecret(),
+                coreProperties.getHttp().getConnectTimeoutMs(),
+                coreProperties.getHttp().getReadTimeoutMs());
+    }
+
+    private RestTemplate createRestTemplate(AkskClientProfile profile) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(profile.getConnectTimeoutMs());
+        factory.setReadTimeout(profile.getReadTimeoutMs());
+        return new RestTemplate(factory);
     }
 
 }
