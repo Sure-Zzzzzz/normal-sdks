@@ -1,7 +1,12 @@
 package io.github.surezzzzzz.sdk.iam.feign.client.configuration;
 
+import feign.FeignException;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
+import feign.codec.ErrorDecoder;
+import feign.Response;
+import feign.RetryableException;
+import feign.Retryer;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
@@ -50,6 +55,35 @@ public class IamAkskFeignConfiguration {
                 () -> tokenManager.getToken(akskProfile), Ordered.LOWEST_PRECEDENCE);
     }
 
+    /**
+     * IAM 401 表示已携带的 Token 被判定不可用；先清理当前 Profile 缓存，
+     * 再允许 Feign 重放一次。重放后仍 401 时还原 IAM 原始 401 响应。
+     */
+    @Bean
+    public ErrorDecoder iamProfileTokenErrorDecoder() {
+        return (methodKey, response) -> {
+            if (response.status() != 401) {
+                return new ErrorDecoder.Default().decode(methodKey, response);
+            }
+            clearRejectedToken();
+            return new IamUnauthorizedRetryableException(methodKey, response);
+        };
+    }
+
+    @Bean
+    public Retryer iamProfileTokenRetryer() {
+        return new IamUnauthorizedRetryer();
+    }
+
+    private void clearRejectedToken() {
+        if (!StringUtils.hasText(akskProfile)
+                || SimpleAkskClientCoreConstant.DEFAULT_PROFILE.equals(akskProfile)) {
+            defaultTokenManagerProvider.getObject().clearToken();
+            return;
+        }
+        profileTokenManagerProvider.getObject().clearToken(akskProfile);
+    }
+
     private static final class AuthorizationRequestInterceptor implements RequestInterceptor, Ordered {
 
         private final Supplier<String> tokenSupplier;
@@ -73,6 +107,36 @@ public class IamAkskFeignConfiguration {
                 template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION,
                         String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE, token));
             }
+        }
+    }
+
+    private static final class IamUnauthorizedRetryableException extends RetryableException {
+        private final Response response;
+
+        IamUnauthorizedRetryableException(String methodKey, Response response) {
+            super(401, "IAM token rejected; profile cache invalidated",
+                    response.request().httpMethod(), null, new java.util.Date(), response.request());
+            this.response = response;
+        }
+    }
+
+    private static final class IamUnauthorizedRetryer implements Retryer {
+        private int attempts;
+
+        @Override
+        public void continueOrPropagate(RetryableException exception) {
+            if (!(exception instanceof IamUnauthorizedRetryableException)) {
+                throw exception;
+            }
+            if (attempts++ > 0) {
+                throw FeignException.errorStatus(
+                        "IAM Profile Feign", ((IamUnauthorizedRetryableException) exception).response);
+            }
+        }
+
+        @Override
+        public Retryer clone() {
+            return new IamUnauthorizedRetryer();
         }
     }
 }
