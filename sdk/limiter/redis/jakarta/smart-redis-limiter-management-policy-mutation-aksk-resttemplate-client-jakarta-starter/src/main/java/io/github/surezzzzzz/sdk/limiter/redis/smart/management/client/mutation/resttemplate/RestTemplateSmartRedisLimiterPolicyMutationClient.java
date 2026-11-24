@@ -12,7 +12,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.mutation.r
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.mutation.resttemplate.configuration.SmartRedisLimiterPolicyMutationClientProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.mutation.support.PolicyMutationJsonCodec;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.mutation.support.TypedRuleWire;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -54,10 +54,10 @@ public class RestTemplateSmartRedisLimiterPolicyMutationClient implements SmartR
     public RestTemplateSmartRedisLimiterPolicyMutationClient(
             SmartRedisLimiterPolicyMutationClientProperties properties,
             PolicyMutationJsonCodec jsonCodec,
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate) {
+            AkskRestTemplateResolver restTemplateResolver) {
         this.properties = properties;
         this.jsonCodec = jsonCodec;
-        this.restTemplate = akskClientRestTemplate;
+        this.restTemplate = restTemplateResolver.resolve(properties.getAkskProfile());
         this.restTemplate.setErrorHandler(new PassthroughResponseErrorHandler());
     }
 

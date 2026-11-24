@@ -31,4 +31,9 @@ public class SmartRedisLimiterPolicyMutationClientProperties {
      * 单次响应最大字节数
      */
     private Long maxResponseBytes = 4194304L;
+
+    /**
+     * AKP Profile；空或 default 使用主 AKSK Client 默认凭据。
+     */
+    private String akskProfile;
 }
