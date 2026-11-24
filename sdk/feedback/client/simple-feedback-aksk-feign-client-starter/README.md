@@ -8,7 +8,7 @@
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-feedback-aksk-feign-client-starter:1.0.1'
     implementation 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }
@@ -53,3 +53,13 @@ io:
 ## 兼容性
 
 本模块属于 javax / Spring Boot 2.7.9 / Spring Cloud 2021.0.8 / OpenFeign 3.1.8 线，Java 8+。Spring Boot 3 / Jakarta 应用使用对应的 `simple-feedback-aksk-feign-client-jakarta-starter`，不可在同一应用同时引入两条线。服务端和 core 契约基线为 1.0.1。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.feedback.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
