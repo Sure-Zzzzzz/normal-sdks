@@ -10,8 +10,8 @@ UriHelper / HttpErrorMapper / JsonCodec 支撑件。
 
 | 应用运行时 | Feign 形态 | RestTemplate 形态 |
 | --- | --- | --- |
-| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter:1.0.0` | `simple-aksk-openapi-resttemplate-client-starter:1.0.0` |
-| Spring Boot 3.x（jakarta） | `simple-aksk-openapi-feign-client-jakarta-starter:1.0.0` | `simple-aksk-openapi-resttemplate-client-jakarta-starter:1.0.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter:1.1.0` | `simple-aksk-openapi-resttemplate-client-starter:1.1.0` |
+| Spring Boot 3.x（jakarta） | `simple-aksk-openapi-feign-client-jakarta-starter:1.1.0` | `simple-aksk-openapi-resttemplate-client-jakarta-starter:1.1.0` |
 
 对接 `simple-aksk-server-starter:3.2.2` 的管理面 `/api/**` 契约（3.1.0 起公共资源层鉴权，
 本身就是 AKSK 保护的 OpenAPI——客户端用 AKP 调 AKSK Server 自己的管理 API）。
@@ -20,8 +20,8 @@ UriHelper / HttpErrorMapper / JsonCodec 支撑件。
 
 | 应用运行时 | Feign 形态 | RestTemplate 形态 |
 | --- | --- | --- |
-| Spring Boot 3.x（jakarta） | `simple-aksk-openapi-feign-client-jakarta-starter:1.0.0` | `simple-aksk-openapi-resttemplate-client-jakarta-starter:1.0.0` |
-| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter:1.0.0` | `simple-aksk-openapi-resttemplate-client-starter:1.0.0` |
+| Spring Boot 3.x（jakarta） | `simple-aksk-openapi-feign-client-jakarta-starter:1.1.0` | `simple-aksk-openapi-resttemplate-client-jakarta-starter:1.1.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter:1.1.0` | `simple-aksk-openapi-resttemplate-client-starter:1.1.0` |
 
 core 模块由四形态 starter 传递引入，宿主不直接依赖；javax 与 jakarta 两条线同包名同类型，不可同时引入。
 
@@ -57,6 +57,12 @@ RestTemplate 形态经 `AkskOpenApiHttpErrorMapper` 映射；Feign 形态维持�
 本模块及各形态 starter 的日志与异常一律不输出 Secret、Authorization、Token、完整 URL query。
 
 ## 版本
+### 1.0.2（2026-11-24）
+
+新增管理 OpenAPI 配置键常量（`CONFIG_PREFIX` / `AKSK_PROFILE_CONFIG_KEY` / `DEFAULT_PROFILE`），
+配套传输件 starter 1.1.0 的 `aksk-profile` 选择；契约方法与 DTO 零变化。
+详见 [CHANGELOG.1.0.2.md](CHANGELOG.1.0.2.md)。
+
 ### 1.0.1（2026-10-09）
 
 契约补齐：`ApplicationAuthorizationResponse` 补 `dataGrantDocument`；`listClients` 批量形态独立为

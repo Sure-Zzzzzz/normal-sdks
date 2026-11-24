@@ -17,6 +17,21 @@ public final class SimpleAkskOpenApiClientConstant {
     public static final String BASE_CONFIG_PREFIX = "io.github.surezzzzzz.sdk.auth.aksk.client";
 
     /**
+     * 管理 OpenAPI 配置前缀。
+     */
+    public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.auth.aksk.openapi.client";
+
+    /**
+     * 管理 OpenAPI 的 AKP Profile 配置键。
+     */
+    public static final String AKSK_PROFILE_CONFIG_KEY = CONFIG_PREFIX + ".aksk-profile";
+
+    /**
+     * 默认 Profile 名称。
+     */
+    public static final String DEFAULT_PROFILE = "default";
+
+    /**
      * 底座 server-url 配置键完整占位（Feign 形态 url 引用；同时是换 Token 与管理 API 的目标）。
      */
     public static final String SERVER_URL_PLACEHOLDER = "${" + BASE_CONFIG_PREFIX + ".server-url}";
