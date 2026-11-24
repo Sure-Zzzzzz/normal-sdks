@@ -24,4 +24,9 @@ public class KmsClientRestTemplateProperties {
      * KMS 服务 origin，只允许 http/https 根地址，不能包含路径、查询、片段或用户信息。
      */
     private String baseUrl;
+
+    /**
+     * AKP Profile；空或 default 使用主 AKSK Client 默认凭据。
+     */
+    private String akskProfile;
 }

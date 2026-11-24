@@ -2,13 +2,13 @@
 
 为 Spring Boot 3 应用提供 `KmsClient`：用 Java 方法调用密钥管理服务（KMS）的密钥管理、精确授权策略、签名验签、信封加解密和公钥查询接口。请求通过访问密钥凭据（AKSK）底座创建的 `akskClientRestTemplate` 发送，由底座获取访问令牌并添加认证头。本模块不创建第二套 HTTP 连接池或管理 AKSK 凭据。
 
-适合已使用 RestTemplate、需要在服务端调用 KMS 的应用。当前版本为 `1.0.0`，对接 `smart-kms-server-starter:2.0.0` 的 `/api/kms` 接口，公开 Java 契约来自 `simple-kms-client-core:2.0.0`。
+适合已使用 RestTemplate、需要在服务端调用 KMS 的应用。当前版本为 `1simple-kms-aksk-resttemplate-client-jakarta-starter:1.1.0`，对接 `smart-kms-server-starter:2simple-kms-aksk-resttemplate-client-jakarta-starter:1.1.0` 的 `/api/kms` 接口，公开 Java 契约来自 `simple-kms-client-core:2simple-kms-aksk-resttemplate-client-jakarta-starter:1.1.0`。
 
 ## 接入
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kms-aksk-resttemplate-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-kms-aksk-resttemplate-client-jakarta-starter:1simple-kms-aksk-resttemplate-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -89,7 +89,7 @@ public class KeyReader {
 
 ## 兼容性
 
-以 Spring Boot `3.4.2`、JDK 17 完成编译，JDK 21 完成模块测试及应用级凭据（AKP）经 AKSK、Redis、KMS 的真实六步调用（创建、查询、自授 SIGN/VERIFY、签名、验签、安排销毁）。六步联调不代表全部 16 个方法都经过真实服务验证。自动配置通过 `AutoConfiguration.imports` 注册。Spring Boot 2 / Java 8 应用选用 `simple-kms-aksk-resttemplate-client-starter:2.0.0`。
+以 Spring Boot `3.4.2`、JDK 17 完成编译，JDK 21 完成模块测试及应用级凭据（AKP）经 AKSK、Redis、KMS 的真实六步调用（创建、查询、自授 SIGN/VERIFY、签名、验签、安排销毁）。六步联调不代表全部 16 个方法都经过真实服务验证。自动配置通过 `AutoConfiguration.imports` 注册。Spring Boot 2 / Java 8 应用选用 `simple-kms-aksk-resttemplate-client-starter:2simple-kms-aksk-resttemplate-client-jakarta-starter:1.1.0`。
 
 ## 兼容矩阵
 
@@ -98,3 +98,13 @@ public class KeyReader {
 | 3.4.2 | 17 / 21 | 全量测试（基线） |
 | 3.3.13 | 17 | 全量测试 |
 | 3.2.12 | 17 | 全量测试 |
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.kms.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

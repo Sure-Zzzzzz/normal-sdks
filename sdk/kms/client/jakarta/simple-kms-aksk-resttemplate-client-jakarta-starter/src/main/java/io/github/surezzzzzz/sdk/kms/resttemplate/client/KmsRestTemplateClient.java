@@ -10,7 +10,6 @@ import io.github.surezzzzzz.sdk.kms.client.support.KmsValidationHelper;
 import io.github.surezzzzzz.sdk.kms.resttemplate.client.annotation.SimpleKmsClientRestTemplateComponent;
 import io.github.surezzzzzz.sdk.kms.resttemplate.client.configuration.KmsClientRestTemplateProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -77,19 +76,20 @@ public class KmsRestTemplateClient implements KmsClient {
             SimpleKmsClientConstant.OPERATION_REVOKE_KEY_POLICY,
             SimpleKmsClientConstant.OPERATION_PROCESS_KEY_DESTRUCTION);
 
-    private final RestTemplate akskClientRestTemplate;
+    private final RestTemplate restTemplate;
     private final URI apiBase;
 
     /**
      * 创建客户端。
      *
-     * @param akskClientRestTemplate 底座预配置 RestTemplate（认证+连接池）
+     * @param restTemplateResolver AKP Profile RestTemplate 解析器
      * @param properties             KMS 服务配置
      */
     public KmsRestTemplateClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver restTemplateResolver,
             KmsClientRestTemplateProperties properties) {
-        this.akskClientRestTemplate = KmsValidationHelper.requireValue(akskClientRestTemplate);
+        this.restTemplate = KmsValidationHelper.requireValue(
+                restTemplateResolver.resolve(properties.getAkskProfile()));
         this.apiBase = KmsClientUriHelper.apiBaseUri(KmsValidationHelper.requireValue(properties).getBaseUrl());
     }
 
@@ -460,7 +460,7 @@ public class KmsRestTemplateClient implements KmsClient {
         try {
             HttpEntity<Object> entity = new HttpEntity<Object>(body, headers);
             ResponseEntity<JsonNode> response =
-                    akskClientRestTemplate.exchange(target, method, entity, JsonNode.class);
+                    restTemplate.exchange(target, method, entity, JsonNode.class);
             log.debug("KMS client request done: method={} path={} status={}",
                     method, target.getPath(), response.getStatusCodeValue());
             return response.getBody();
@@ -479,7 +479,7 @@ public class KmsRestTemplateClient implements KmsClient {
         try {
             HttpEntity<Object> entity = new HttpEntity<Object>(body, headers);
             org.springframework.http.ResponseEntity<Void> response =
-                    akskClientRestTemplate.exchange(target, method, entity, Void.class);
+                    restTemplate.exchange(target, method, entity, Void.class);
             log.debug("KMS client request done: method={} path={} status={}",
                     method, target.getPath(), response.getStatusCodeValue());
         } catch (HttpStatusCodeException exception) {
