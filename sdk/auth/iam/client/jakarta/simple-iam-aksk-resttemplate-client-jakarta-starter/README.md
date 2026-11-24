@@ -1,7 +1,7 @@
 # simple-iam-aksk-resttemplate-client-jakarta-starter
 
 RestTemplate 装配的 IAM openapi client（Spring Boot 3.x / Jakarta 宿主，Apache HttpClient 5 连接池）：
-直接引用 aksk 底座 jakarta 线 `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0`，
+直接引用 aksk 底座 jakarta 线 `simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0`，
 在底座 `akskClientRestTemplate`（hc5）之上装配 core 十一接口（含 Portal 可信应用路由投影）的默认实现——
 `IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，含 `IamApplicationRestTemplateClient`、六族新实现和 `IamPortalApplicationRestTemplateClient`。
 契约语义（十一接口 49 方法/双分页/If-Match/错误透传）与 SB2 形态完全同标。
@@ -34,7 +34,7 @@ users/departments 族返回 `IamSpringPage`（**页码 0 起**）；open-roles �
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
 | `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族（Java 8 字节码，双线共用） |
-| `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | aksk 底座 jakarta 线：akskClientRestTemplate（hc5）+ 令牌链 |
+| `simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0` | `implementation` 运行时传递 | aksk 底座 jakarta 线：akskClientRestTemplate（hc5）+ 令牌链 |
 | Spring Boot 3 Web / HttpClient 5 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
 
@@ -65,7 +65,7 @@ io:
             sources:
               default:
                 mode: standalone
-                host: 127.0.0.1
+                host: 127simple-iam-aksk-resttemplate-client-jakarta-starter:1.1.0.1
                 port: 6379
                 database: 0
         auth:
@@ -131,3 +131,13 @@ If-Match 乐观并发用法与 SB2 形态一致（revision 取自响应模型，
 - 本轮坐标验证：Spring Boot 3.4.2，Java 17；其他 Spring Boot 档位不在本版本验收范围内，jakarta 线独立走号
 - SB2 宿主用 `simple-iam-aksk-resttemplate-client-starter`；Feign 4.x 形态用
   `simple-iam-aksk-feign-client-jakarta-starter`
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

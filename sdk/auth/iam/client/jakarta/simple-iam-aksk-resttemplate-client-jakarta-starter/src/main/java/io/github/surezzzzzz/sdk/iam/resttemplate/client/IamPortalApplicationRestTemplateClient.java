@@ -9,8 +9,8 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamPortalApplicationRoute;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.annotation.SimpleIamClientRestTemplateComponent;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.configuration.SimpleIamClientRestTemplateProperties;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.support.IamClientHttpSupport;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * IAM Portal 机器路由目录 RestTemplate 实现（server 1.3.8，Jakarta 宿主）。
+ * IAM Portal 机器路由目录 RestTemplate 实现（server 1.3.8）。
  *
  * <p>只复用 AKSK 底座提供的认证与传输，不在 IAM client 内自行获取凭据或拼接认证头。</p>
  *
@@ -37,9 +37,9 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
      * @param properties             IAM client 配置
      */
     public IamPortalApplicationRestTemplateClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
             SimpleIamClientRestTemplateProperties properties) {
-        this.http = new IamClientHttpSupport(akskClientRestTemplate, properties.getBaseUrl());
+        this.http = new IamClientHttpSupport(restTemplateResolver.resolve(properties.getAkskProfile()), properties.getBaseUrl());
     }
 
     private static void requireObject(JsonNode node) {
@@ -74,7 +74,7 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
         if (!entry.startsWith("/") || entry.startsWith("//")) {
             throw new IamClientProtocolException();
         }
-        validateRelativePath(entry);
+        validateRelativePath(entry, SimpleIamClientConstant.FIELD_ENTRY);
         return entry;
     }
 
@@ -83,22 +83,22 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
         if (!apiBase.startsWith("/")) {
             throw new IamClientProtocolException();
         }
-        validateRelativePath(apiBase);
+        validateRelativePath(apiBase, SimpleIamClientConstant.FIELD_API_BASE);
         return apiBase;
     }
 
     private static String requiredTargetOrigin(JsonNode node) {
         String targetOrigin = requiredText(node, SimpleIamClientConstant.FIELD_TARGET_ORIGIN, 1, Integer.MAX_VALUE);
-        URI uri = parseUri(targetOrigin);
-        validateHttpOrigin(uri);
+        URI uri = parseUri(targetOrigin, SimpleIamClientConstant.FIELD_TARGET_ORIGIN);
+        validateHttpOrigin(uri, SimpleIamClientConstant.FIELD_TARGET_ORIGIN);
         return targetOrigin;
     }
 
-    private static void validateRelativePath(String path) {
+    private static void validateRelativePath(String path, String field) {
         if (path.startsWith("//") || containsWhitespaceOrControl(path) || path.indexOf('\\') >= 0) {
             throw new IamClientProtocolException();
         }
-        URI uri = parseUri(path);
+        URI uri = parseUri(path, field);
         if (uri.isAbsolute() || uri.getRawAuthority() != null
                 || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             throw new IamClientProtocolException();
@@ -106,7 +106,7 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
         validateRawPath(uri.getRawPath());
     }
 
-    private static void validateHttpOrigin(URI uri) {
+    private static void validateHttpOrigin(URI uri, String field) {
         String scheme = uri.getScheme();
         String authority = uri.getRawAuthority();
         int port = uri.getPort();
@@ -122,7 +122,7 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
         }
     }
 
-    private static URI parseUri(String value) {
+    private static URI parseUri(String value, String field) {
         try {
             return new URI(value);
         } catch (URISyntaxException exception) {
@@ -251,7 +251,7 @@ public class IamPortalApplicationRestTemplateClient implements IamPortalApplicat
             if (!routePrefix.startsWith("/") || routePrefix.startsWith("//") || routePrefix.endsWith("/")) {
                 throw new IamClientProtocolException();
             }
-            validateRelativePath(routePrefix);
+            validateRelativePath(routePrefix, SimpleIamClientConstant.FIELD_ROUTE_PREFIX);
             String targetOrigin = requiredTargetOrigin(item);
             String entry = requiredEntry(item);
             if (!entry.equals(routePrefix) && !entry.startsWith(routePrefix + "/")) {
