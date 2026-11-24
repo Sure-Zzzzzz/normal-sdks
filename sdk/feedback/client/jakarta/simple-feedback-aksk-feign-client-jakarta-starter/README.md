@@ -10,7 +10,7 @@ implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-sta
 implementation 'io.github.openfeign:feign-hc5'
 ```
 
-宿主配置 `io.github.surezzzzzz.sdk.feedback.client.base-url` 和 `enable`，并提供 AKSK 底座的 `akskFeignRequestInterceptor`。自动配置基线为 Spring Boot 3.4.2 / Spring Cloud 2024simple-feedback-aksk-feign-client-jakarta-starter:1.1.0 / OpenFeign 4.2.0，提交附件使用内存 multipart，下载结果保留 `Content-Type` 与 `Content-Disposition`。同一应用不要同时引入 javax 和 Jakarta 两条传输线。
+宿主配置 `io.github.surezzzzzz.sdk.feedback.client.base-url` 和 `enable`，并提供 AKSK 底座的 `akskFeignRequestInterceptor`。自动配置基线为 Spring Boot 3.4.2 / Spring Cloud 2024.0.0 / OpenFeign 4.2.0，提交附件使用内存 multipart，下载结果保留 `Content-Type` 与 `Content-Disposition`。同一应用不要同时引入 javax 和 Jakarta 两条传输线。
 
 ## AKP Profile
 
@@ -18,6 +18,6 @@ implementation 'io.github.openfeign:feign-hc5'
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.feedback.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 使用 `Ordered.LOWEST_PRECEDENCE` 的 Profile 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
