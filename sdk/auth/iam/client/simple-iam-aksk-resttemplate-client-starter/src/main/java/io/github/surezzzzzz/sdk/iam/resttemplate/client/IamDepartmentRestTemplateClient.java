@@ -7,8 +7,8 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamDepartment;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.annotation.SimpleIamClientRestTemplateComponent;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.configuration.SimpleIamClientRestTemplateProperties;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.support.IamClientHttpSupport;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -32,9 +32,9 @@ public class IamDepartmentRestTemplateClient implements IamDepartmentClient {
      * @param properties             IAM 服务配置
      */
     public IamDepartmentRestTemplateClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
             SimpleIamClientRestTemplateProperties properties) {
-        this.http = new IamClientHttpSupport(akskClientRestTemplate, properties.getBaseUrl());
+        this.http = new IamClientHttpSupport(restTemplateResolver.resolve(properties.getAkskProfile()), properties.getBaseUrl());
     }
 
     private static void putIfPresent(Map<String, Object> body, String name, Object value) {

@@ -1,7 +1,7 @@
 # simple-iam-aksk-resttemplate-client-starter
 
 RestTemplate 装配的 IAM openapi client（Spring Boot 2.x 宿主）：直接引用 aksk 底座
-`simple-aksk-resttemplate-redis-client-starter:3.0.2`，连接池、超时与 AKSK 认证头全部复用底座
+`simple-aksk-resttemplate-redis-client-starter:3.1.0`，连接池、超时与 AKSK 认证头全部复用底座
 `akskClientRestTemplate`，本模块在其上装配 core 十一接口（1.0.3 起含 Portal 可信应用路由投影）的默认实现——
 `IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现，1.0.3 起含 `IamPortalApplicationRestTemplateClient`。
 
@@ -34,7 +34,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
 | `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
-| `simple-aksk-resttemplate-redis-client-starter:3.0.2` | `implementation` 运行时传递 | aksk 底座：akskClientRestTemplate + 令牌链 |
+| `simple-aksk-resttemplate-redis-client-starter:3.1.0` | `implementation` 运行时传递 | aksk 底座：akskClientRestTemplate + 令牌链 |
 | Spring Boot Web / HttpClient 4 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
 
@@ -65,7 +65,7 @@ io:
             sources:
               default:
                 mode: standalone
-                host: 127.0.0.1
+                host: 127simple-iam-aksk-resttemplate-client-starter:1.1.0.1
                 port: 6379
                 database: 0
         auth:
@@ -143,3 +143,13 @@ public class UserSyncService {
 - Spring Boot 2.7.9 验证（server 部署基线），自动配置经 `spring.factories` 注册
 - Spring Boot 3.x 宿主用 `simple-iam-aksk-resttemplate-client-jakarta-starter`；
   Feign 形态用 `simple-iam-aksk-feign-client-starter`
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

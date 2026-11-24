@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.iam.resttemplate.client.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient;
 import io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
@@ -94,6 +95,11 @@ class IamClientRestTemplateAutoConfigurationTest {
         @Bean
         public RestTemplate akskClientRestTemplate() {
             return new RestTemplate();
+        }
+
+        @Bean
+        public AkskRestTemplateResolver akskRestTemplateResolver() {
+            return profile -> akskClientRestTemplate();
         }
     }
 }

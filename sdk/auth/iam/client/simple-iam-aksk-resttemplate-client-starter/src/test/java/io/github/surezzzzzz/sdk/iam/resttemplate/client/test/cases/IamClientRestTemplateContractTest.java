@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.iam.resttemplate.client.test.cases;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import io.github.surezzzzzz.sdk.iam.client.IamDepartmentClient;
 import io.github.surezzzzzz.sdk.iam.client.IamOpenRoleClient;
 import io.github.surezzzzzz.sdk.iam.client.IamUserClient;
@@ -113,13 +114,22 @@ class IamClientRestTemplateContractTest {
         server = MockRestServiceServer.bindTo(restTemplate).build();
         SimpleIamClientRestTemplateProperties properties = new SimpleIamClientRestTemplateProperties();
         properties.setBaseUrl(BASE);
-        users = new IamUserRestTemplateClient(restTemplate, properties);
-        departments = new IamDepartmentRestTemplateClient(restTemplate, properties);
-        openRoles = new IamOpenRoleRestTemplateClient(restTemplate, properties);
-        applicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient(restTemplate, properties);
-        portalApplicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPortalApplicationRestTemplateClient(restTemplate, properties);
+        users = new IamUserRestTemplateClient(resolver(), properties);
+        departments = new IamDepartmentRestTemplateClient(resolver(), properties);
+        openRoles = new IamOpenRoleRestTemplateClient(resolver(), properties);
+        applicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamApplicationRestTemplateClient(resolver(), properties);
+        portalApplicationsClient = new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPortalApplicationRestTemplateClient(resolver(), properties);
     }
 
+
+    private AkskRestTemplateResolver resolver() {
+        return new AkskRestTemplateResolver() {
+            @Override
+            public RestTemplate resolve(String profile) {
+                return restTemplate;
+            }
+        };
+    }
     @Test
     void shouldCallUserEndpointsWithContractFields() {
         server.expect(requestTo(API + "/users?status=1&departmentId=2&keyword=e2e&page=0&size=20"))
@@ -522,17 +532,17 @@ class IamClientRestTemplateContractTest {
     @Test
     void shouldCallSixClanEndpointsWithContractFields() {
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient messagesClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamMessageRestTemplateClient(resolver(), properties());
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamSessionRestTemplateClient sessionsClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamSessionRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamSessionRestTemplateClient(resolver(), properties());
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPermissionRestTemplateClient permissionsClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPermissionRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamPermissionRestTemplateClient(resolver(), properties());
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamRoleCatalogRestTemplateClient roleCatalogClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamRoleCatalogRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamRoleCatalogRestTemplateClient(resolver(), properties());
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamStatisticsRestTemplateClient statisticsClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamStatisticsRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamStatisticsRestTemplateClient(resolver(), properties());
         io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserGroupRestTemplateClient userGroupsClient =
-                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserGroupRestTemplateClient(restTemplate, properties());
+                new io.github.surezzzzzz.sdk.iam.resttemplate.client.IamUserGroupRestTemplateClient(resolver(), properties());
 
         // applications（Spring Page wire）
         server.expect(requestTo(API + "/applications?page=0&size=50"))

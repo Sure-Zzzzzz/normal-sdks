@@ -7,8 +7,8 @@ import io.github.surezzzzzz.sdk.iam.client.model.IamStatistics;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.annotation.SimpleIamClientRestTemplateComponent;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.configuration.SimpleIamClientRestTemplateProperties;
 import io.github.surezzzzzz.sdk.iam.resttemplate.client.support.IamClientHttpSupport;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.client.RestTemplate;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 
 /**
  * 统计聚合 RestTemplate 实现（1.3.7）：只读快照（wire 同源直读，与管理台同口径）。
@@ -21,9 +21,9 @@ public class IamStatisticsRestTemplateClient implements IamStatisticsClient {
     private final IamClientHttpSupport http;
 
     public IamStatisticsRestTemplateClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
             SimpleIamClientRestTemplateProperties properties) {
-        this.http = new IamClientHttpSupport(akskClientRestTemplate, properties.getBaseUrl());
+        this.http = new IamClientHttpSupport(restTemplateResolver.resolve(properties.getAkskProfile()), properties.getBaseUrl());
     }
 
     @Override
