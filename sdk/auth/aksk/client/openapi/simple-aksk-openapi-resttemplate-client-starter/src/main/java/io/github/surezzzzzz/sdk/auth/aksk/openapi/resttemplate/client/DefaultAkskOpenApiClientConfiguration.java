@@ -1,14 +1,14 @@
 package io.github.surezzzzzz.sdk.auth.aksk.openapi.resttemplate.client;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.AkskOpenApiClient;
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.resttemplate.client.annotation.SimpleAkskOpenApiRestTemplateComponent;
+import io.github.surezzzzzz.sdk.auth.aksk.openapi.resttemplate.client.configuration.SimpleAkskOpenApiRestTemplateProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.web.client.RestTemplate;
 
 /**
  * 默认客户端装配（经自动配置的组件扫描注册；底座 RestTemplate 缺失时启动即报缺 Bean，响亮失败不静默）。
@@ -30,10 +30,11 @@ public class DefaultAkskOpenApiClientConfiguration {
     @Bean
     @ConditionalOnMissingBean(AkskOpenApiClient.class)
     public DefaultAkskOpenApiClient akskOpenApiClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
+            SimpleAkskOpenApiRestTemplateProperties properties,
             @Value("${" + io.github.surezzzzzz.sdk.auth.aksk.openapi.client.constant
                     .SimpleAkskOpenApiClientConstant.BASE_CONFIG_PREFIX + ".server-url:}") String serverUrl) {
         log.info("AKSK OpenAPI RestTemplate 客户端装配：目标={}", serverUrl);
-        return new DefaultAkskOpenApiClient(akskClientRestTemplate, serverUrl);
+        return new DefaultAkskOpenApiClient(restTemplateResolver.resolve(properties.getAkskProfile()), serverUrl);
     }
 }
