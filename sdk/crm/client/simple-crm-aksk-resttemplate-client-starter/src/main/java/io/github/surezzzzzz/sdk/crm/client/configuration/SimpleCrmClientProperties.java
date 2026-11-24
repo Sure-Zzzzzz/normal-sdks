@@ -21,4 +21,9 @@ public class SimpleCrmClientProperties {
      * CRM Server 基地址（如 https://crm.example.com），由宿主显式配置。
      */
     private String baseUrl;
+
+    /**
+     * AKP Profile；空或 default 使用主 AKSK Client 默认凭据。
+     */
+    private String akskProfile;
 }
