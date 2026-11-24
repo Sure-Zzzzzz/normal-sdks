@@ -1,12 +1,12 @@
 # simple-crm-aksk-feign-client-jakarta-starter
 
-`simple-crm-aksk-feign-client-starter` 的 Jakarta 孪生：为 Spring Cloud 2024simple-crm-aksk-feign-client-jakarta-starter:1.2.0 / Java 17+ 应用提供同一份 CRM Feign 契约接口，标注 AKSK Jakarta 底座元注解后由底座自动注入认证头；本模块不做任何传输或认证装配。
+`simple-crm-aksk-feign-client-starter` 的 Jakarta 孪生：为 Spring Cloud 2024.0.0 / Java 17+ 应用提供同一份 CRM Feign 契约接口，标注 AKSK Jakarta 底座元注解后由底座自动注入认证头；本模块不做任何传输或认证装配。
 
 与 javax 线的 Java 包名完全相同，同一应用不得同时引入两条线。功能面、配置键、使用示例与响应模型见 javax 线 README；本文件只写差异。
 
 机器列表保持 `cursor/limit` 续读，结果为严格的 `items/nextCursor`；消费者方法返回 `CrmCompleteListResponse` 完整列表，只包含 `items`，不带游标。首批传空游标，后续原样使用响应游标，`nextCursor=null` 表示末页；条件或授权范围变化后从首批重查，每页条数为 1～100。管理台的 `page/pageSize/total` 通过 HTTP 接口消费，本模块不发送页码参数。
 
-响应直接解码为 wire（网络传输）模型；`CrmPageResponse` 拒绝页码响应、未知顶层字段、缺少包络字段以及非字符串或空白游标，`CrmCompleteListResponse` 拒绝分页游标、未知字段和缺少 `items`，非法封装在网络解码时失败。行内资源保持原始 Map，不自动执行 client-core 资源字段白名单校验；非 2xx 响应以 `FeignException` 透传，调用方按 HTTP 状态处理。
+响应直接解码为 wire（网络传输）模型；`CrmPageResponse` 拒绝页码响应、未知顶层字段、缺少包络字段以及非字符串或空白游标，`CrmCompleteListResponse` 拒绝分页游标、未知字段和缺少 `items`，非法封装在网络解码时失败。行内资源保持原始 Map，不自动执行 client-core 资源字段白名单校验；非 0xx 响应以 `FeignException` 透传，调用方按 HTTP 状态处理。
 
 商品业务引用与能力字段、客户合并的 `source/target/relocatedContacts`、归属转移的 `customer/transferredQuotations` 均完整保留。治理结果需要严格校验时，调用 `CrmResponseValidator.customerMerge(response.getFields())` 或 `customerTransfer(...)`，不按旧扁平字段读取。同商品多行报价原样传递，各行独立计算。
 
@@ -16,10 +16,9 @@
 
 | 项 | javax 线 | 本模块 |
 |---|---|---|
-| Spring Cloud | OpenFeign 3.x | OpenFeign 4.2.0（`spring-cloud-dependencies:2024simple-crm-aksk-feign-client-jakarta-starter:1.2.0`） |
+| Spring Cloud | OpenFeign 3.x | OpenFeign 4.2.0（`spring-cloud-dependencies:2024.0.0`） |
 | Java | 8+ | 17+ |
-| Spring Boot | 2.7（javax 线验证基线） | 3.4.2 基线 |
-| AKSK 底座 | `simple-aksk-feign-redis-client-starter:3.1.0` | `simple-aksk-feign-redis-client-jakarta-starter:1.1.0` |
+| Spring Boot | 2.7.9（javax 线验证基线） | 3.4.2 基线 |
 
 ## 接入
 
@@ -44,6 +43,6 @@ dependencies {
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.crm.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 使用 `Ordered.LOWEST_PRECEDENCE` 的 Profile 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
