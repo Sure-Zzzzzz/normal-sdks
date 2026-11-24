@@ -6,7 +6,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-feedback-aksk-feign-client-starter:1.0.1'
+    implementation 'io.github.sure-zzzzzz:simple-feedback-aksk-feign-client-starter:1.1.1'
     implementation 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
     implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
@@ -60,6 +60,6 @@ io:
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.feedback.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 使用 `Ordered.LOWEST_PRECEDENCE` 的 Profile 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
