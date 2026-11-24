@@ -1,8 +1,9 @@
 package io.github.surezzzzzz.sdk.kms.feign.client;
 
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
+import io.github.surezzzzzz.sdk.kms.feign.client.configuration.KmsAkskFeignConfiguration;
 import io.github.surezzzzzz.sdk.kms.client.constant.SimpleKmsClientConstant;
 import io.github.surezzzzzz.sdk.kms.feign.client.model.*;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.Map;
 /**
  * KMS 契约的 Feign 接口（认证由 aksk 底座元注解自动挂接）。
  *
- * <p>标注底座 {@code @AkskClientFeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
+ * <p>标注 Spring Cloud {@code @FeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
  * Authorization 头由底座令牌链自动注入。目标地址取
  * {@code io.github.surezzzzzz.sdk.kms.client.base-url}（仅 origin），API 基路径由 core 契约常量固定。</p>
  *
@@ -20,7 +21,8 @@ import java.util.Map;
  *
  * @author surezzzzzz
  */
-@AkskClientFeignClient(name = "kms", url = "${" + SimpleKmsClientConstant.CONFIG_PREFIX + ".base-url}",
+@FeignClient(name = "kms", url = "${" + SimpleKmsClientConstant.CONFIG_PREFIX + ".base-url}",
+        configuration = KmsAkskFeignConfiguration.class,
         path = SimpleKmsClientConstant.API_BASE_PATH)
 public interface KmsFeignClient {
 

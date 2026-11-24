@@ -1,12 +1,12 @@
 package io.github.surezzzzzz.sdk.kms.feign.client.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.configuration.AkskFeignConfiguration;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.configuration.SimpleAkskFeignRedisClientAutoConfiguration;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.interceptor.AkskFeignRequestInterceptor;
 import io.github.surezzzzzz.sdk.kms.client.constant.SimpleKmsClientConstant;
 import io.github.surezzzzzz.sdk.kms.feign.client.KmsFeignClient;
+import io.github.surezzzzzz.sdk.kms.feign.client.configuration.KmsAkskFeignConfiguration;
+import org.springframework.cloud.openfeign.FeignClient;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -63,14 +63,14 @@ class KmsFeignAssemblyTest {
 
     @Test
     void shouldCarryAkskAuthConfigurationOnContractInterface() {
-        AkskClientFeignClient annotation = KmsFeignClient.class.getAnnotation(AkskClientFeignClient.class);
-        assertNotNull(annotation, "契约接口必须标注底座 @AkskClientFeignClient 以自动挂认证");
+        FeignClient annotation = KmsFeignClient.class.getAnnotation(FeignClient.class);
+        assertNotNull(annotation, "契约接口必须标注 @FeignClient 以自动挂认证");
         assertEquals("kms", annotation.name(), "服务名固定为 kms");
         boolean carriesConfiguration = false;
         for (Class<?> configuration : annotation.configuration()) {
-            carriesConfiguration = carriesConfiguration || configuration == AkskFeignConfiguration.class;
+            carriesConfiguration = carriesConfiguration || configuration == KmsAkskFeignConfiguration.class;
         }
-        assertTrue(carriesConfiguration, "元注解必须携带底座 AkskFeignConfiguration（Feign 子上下文挂拦截器）");
+        assertTrue(carriesConfiguration, "配置类必须携带 KmsAkskFeignConfiguration（Feign 子上下文挂拦截器）");
         assertTrue(annotation.url().contains(SimpleKmsClientConstant.CONFIG_PREFIX),
                 "目标地址必须引用 base-url 配置键占位符");
         log.info("契约接口元注解校验通过: name={}, url={}", annotation.name(), annotation.url());

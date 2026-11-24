@@ -19,7 +19,8 @@ dependencies {
     api 'io.github.sure-zzzzzz:simple-kms-client-core:2.0.0'
 
     // aksk 底座（Feign jakarta 形态）：@AkskClientFeignClient 元注解与拦截器装配
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
 
     // Spring Cloud OpenFeign（compileOnly，版本由上方 BOM 纠偏管理）
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
@@ -39,7 +40,7 @@ dependencies {
     // jakarta 线上下文代理支持（对齐家族 jakarta 件测试链）
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
     // 底座自闭环原则：直接使用 TokenManager API 需自行引入（jakarta 线）
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     // Redis 连接池实现（jakarta 线 redis route 运行时需要）
     testRuntimeOnly 'org.apache.commons:commons-pool2'
 }
