@@ -16,7 +16,7 @@
 |---|---|---|
 | Spring Boot | 2.7（javax 线验证基线） | 3.4.2 基线 |
 | Java | 8+ | 17+ |
-| AKSK 底座 | `simple-aksk-resttemplate-redis-client-starter:3.0.2` | `simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0` |
+| AKSK 底座 | `simple-aksk-resttemplate-redis-client-starter:3.1.0` | `simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0` |
 | 自动配置注册 | `META-INF/spring.factories` | `META-INF/spring/...AutoConfiguration.imports`，注解形态 `@AutoConfiguration` |
 
 ## 接入
@@ -25,7 +25,7 @@
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-crm-aksk-resttemplate-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0'
     // AKSK 底座运行链的宿主义务件（底座 compileOnly 不传递；Jakarta 线 HTTP 池用 httpclient5）：
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -35,3 +35,13 @@ dependencies {
 ```
 
 配置键与 javax 线相同（`io.github.surezzzzzz.sdk.crm.client.enable` / `base-url`），使用示例、让位语义与错误处理见 javax 线 README，此处不重复。 方法面与错误分类的维护处在 `simple-crm-client-core` 的 README。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.crm.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

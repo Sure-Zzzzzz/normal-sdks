@@ -1,7 +1,8 @@
 dependencies {
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
     // AKSK 底座 jakarta 认证传输
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0'
 
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'

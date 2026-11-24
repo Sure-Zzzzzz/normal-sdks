@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.crm.client.configuration;
 
 import io.github.surezzzzzz.sdk.crm.client.CrmClient;
 import io.github.surezzzzzz.sdk.crm.client.resttemplate.CrmRestTemplateClient;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -36,8 +36,9 @@ public class SimpleCrmClientAutoConfiguration {
     @ConditionalOnClass(name = "io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client"
             + ".configuration.SimpleAkskRestTemplateRedisClientAutoConfiguration")
     public CrmClient crmClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
             SimpleCrmClientProperties properties) {
-        return new CrmRestTemplateClient(akskClientRestTemplate, properties.getBaseUrl());
+        return new CrmRestTemplateClient(
+                restTemplateResolver.resolve(properties.getAkskProfile()), properties.getBaseUrl());
     }
 }
