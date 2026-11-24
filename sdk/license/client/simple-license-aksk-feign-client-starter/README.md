@@ -10,7 +10,7 @@ License 客户端 Feign 传输装配（javax 线，Spring Boot 2.7.9 / Java 8）
 ## 依赖坐标
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-license-aksk-feign-client-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-license-aksk-feign-client-starter:2simple-license-aksk-feign-client-starter:2.1.0'
 implementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
 // 本件传递正式 AKSK Feign 底座，宿主仍需配置认证客户端
 ```
@@ -45,3 +45,13 @@ io:
 ## jakarta 变体
 
 Spring Boot 3.4.2 / Jakarta 线使用对应的 `simple-license-aksk-feign-client-jakarta-starter`（同包名同语义；版本以 Jakarta 传输件的正式发布记录为准）。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.license.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

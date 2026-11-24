@@ -23,7 +23,8 @@ import java.util.List;
 import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -54,11 +55,20 @@ public class LicenseFeignAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean({LicenseServerClient.class, LicenseContractFeign.class})
     public LicenseContractFeign licenseContractFeign(
-            @Qualifier("akskFeignRequestInterceptor") RequestInterceptor authentication,
+            ProfileTokenManager profileTokenManager,
+            @Value("${io.github.surezzzzzz.sdk.license.client.aksk-profile:default}") String akskProfile,
             ObjectFactory<HttpMessageConverters> converters,
             @Value("${io.github.surezzzzzz.sdk.license.client.base-url}") String baseUrl) {
         // 缺少宿主转换器或官方认证底座时启动失败，不能注册匿名或空接口的假客户端。
         converters.getObject();
+        RequestInterceptor authentication = template -> {
+            String token = profileTokenManager.getToken(akskProfile);
+            if (token != null && !token.isEmpty()) {
+                template.removeHeader(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
+                template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION,
+                        String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE, token));
+            }
+        };
         return Feign.builder().contract(new SpringMvcContract())
                 .encoder(new SpringEncoder(converters)).decoder(new SpringDecoder(converters))
                 .requestInterceptor(authentication).retryer(Retryer.NEVER_RETRY)
