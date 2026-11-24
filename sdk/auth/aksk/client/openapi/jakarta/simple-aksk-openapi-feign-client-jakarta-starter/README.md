@@ -27,7 +27,7 @@ OpenAPI（Client 管理 / 应用授权 / Token 管理三组共 20 端点）。�
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-jakarta-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-jakarta-starter:1.1.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'io.github.openfeign:feign-hc5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -87,7 +87,7 @@ public class AkskOpenApiFeignConfiguration {
 ## AKP Profile
 
 管理 OpenAPI 使用 `io.github.surezzzzzz.sdk.auth.aksk.openapi.client.aksk-profile` 选择 AKP。
-留空或 `default` 继续使用底座默认拦截器；命名 Profile 只挂一个 Profile 认证拦截器。
+留空或 `default` 时使用默认 AKP 拦截器；命名 Profile 使用 `Ordered.LOWEST_PRECEDENCE` 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 
 ## 版本历史
 

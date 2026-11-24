@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.env.MockEnvironment;
 
@@ -70,10 +71,21 @@ class AkskProfileOpenApiFeignTest {
         applicationContext.getAutowireCapableBeanFactory().autowireBean(named);
         RequestInterceptor namedInterceptor = named.akskRequestInterceptor();
 
-        assertSame(defaultInterceptor, blankInterceptor, "未选择 Profile 时应复用全局默认拦截器");
-        assertEquals("ProfileRequestInterceptor", namedInterceptor.getClass().getSimpleName(),
+        assertEquals(Ordered.HIGHEST_PRECEDENCE, ((Ordered) blankInterceptor).getOrder(),
+                "未选择 Profile 时默认认证拦截器应先执行");
+        assertEquals(Ordered.LOWEST_PRECEDENCE, ((Ordered) namedInterceptor).getOrder(),
+                "命名 Profile 认证拦截器应最后执行");
+        assertEquals("AuthorizationRequestInterceptor", blankInterceptor.getClass().getSimpleName(),
+                "未选择 Profile 时应创建默认 Token 包装拦截器");
+        assertEquals("AuthorizationRequestInterceptor", namedInterceptor.getClass().getSimpleName(),
                 "命名 Profile 应创建独立拦截器");
         assertNotSame(defaultInterceptor, namedInterceptor);
+
+        RequestTemplate blankTemplate = new RequestTemplate();
+        blankTemplate.header(HttpHeaders.AUTHORIZATION, "Bearer stale");
+        blankInterceptor.apply(blankTemplate);
+        assertEquals(String.format(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION_TEMPLATE,
+                profileTokenManager.getToken()), blankTemplate.headers().get(HttpHeaders.AUTHORIZATION).iterator().next());
 
         RequestTemplate template = new RequestTemplate();
         namedInterceptor.apply(template);
