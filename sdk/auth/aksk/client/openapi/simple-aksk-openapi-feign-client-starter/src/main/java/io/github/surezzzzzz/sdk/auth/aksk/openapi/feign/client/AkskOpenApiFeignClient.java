@@ -1,8 +1,9 @@
 package io.github.surezzzzzz.sdk.auth.aksk.openapi.feign.client;
 
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.constant.SimpleAkskOpenApiClientConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.*;
+import io.github.surezzzzzz.sdk.auth.aksk.openapi.feign.client.configuration.AkskOpenApiFeignConfiguration;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -10,7 +11,7 @@ import java.util.List;
 /**
  * AKSK Server 管理 OpenAPI 契约的 Feign 接口（认证由 AKSK 底座元注解自动挂接，20 端点）。
  *
- * <p>标注底座 {@code @AkskClientFeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
+ * <p>标注 Spring Cloud {@code @FeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
  * Authorization 头由底座令牌链自动注入。目标地址直接引用底座
  * {@code io.github.surezzzzzz.sdk.auth.aksk.client.server-url}（管理 API 与 Token 端点同进程，
  * 无分址场景），API 基路径由 core 契约常量固定为 /api。</p>
@@ -22,7 +23,8 @@ import java.util.List;
  *
  * @author surezzzzzz
  */
-@AkskClientFeignClient(name = "aksk-openapi",
+@FeignClient(name = "aksk-openapi",
+        configuration = AkskOpenApiFeignConfiguration.class,
         url = SimpleAkskOpenApiClientConstant.SERVER_URL_PLACEHOLDER,
         path = SimpleAkskOpenApiClientConstant.API_BASE_PATH)
 public interface AkskOpenApiFeignClient {

@@ -1,12 +1,6 @@
 package io.github.surezzzzzz.sdk.auth.aksk.openapi.feign.client;
 
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.ApplicationAuthorizationRequest;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.ApplicationAuthorizationResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.CreateClientRequest;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.CreateClientResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.ResetSecretResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.TokenExchangeResponse;
-import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.TokenStatisticsResponse;
+import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.model.*;
 import io.github.surezzzzzz.sdk.auth.aksk.openapi.client.support.AkskOpenApiJsonCodec;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -20,17 +14,9 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 管理 OpenAPI 端到端测试（Feign javax 形态六步闭环，Spring Boot 2.7 基线）。
