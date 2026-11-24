@@ -5,12 +5,12 @@ License 客户端 RestTemplate 传输装配（Jakarta 线，Spring Boot 3.4.2 / 
 ## 解决什么、谁该接
 
 - 你的 Spring Boot 3 应用需要消费 License Server `/api/license/v1` 公开契约（在线判定、额度占用、信任资料同步），且已在 AKSK RestTemplate 生态内。
-- javax 线（Spring Boot 2.7.9/Java 8）使用 `simple-license-aksk-resttemplate-client-starter:2.0.0`，两线语义完全同构。
+- javax 线（Spring Boot 2.7.9/Java 8）使用 `simple-license-aksk-resttemplate-client-starter:2simple-license-aksk-resttemplate-client-jakarta-starter:2.1.0`，两线语义完全同构。
 
 ## 依赖坐标
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-license-aksk-resttemplate-client-jakarta-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-license-aksk-resttemplate-client-jakarta-starter:2simple-license-aksk-resttemplate-client-jakarta-starter:2.1.0'
 implementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
 ```
 
@@ -39,3 +39,13 @@ io:
 - 信任资料先严格核对响应签发方、产品和整数类型，再交安装器验签与批准公钥。缺字段、小数、数字字符串、超安全整数或错误范围均拒绝；获取失败可保留最近有效快照。
 - 官方传输不提供 HYBRID 租约任务与签名下载；历史两参数 `leaseRenew` 直接抛出 `UnsupportedOperationException`。人员代理证明与设备证明也不在当前值对象中，需要这些证明的调用由宿主完整实现。
 - 认证、网络与协议错误传播为异常，不伪装业务拒绝。DEBUG 只记录调用阶段与固定操作名，默认关闭，不记录请求正文、凭据、认证头、密钥或完整 URL。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.license.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
