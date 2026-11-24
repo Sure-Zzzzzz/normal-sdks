@@ -5,6 +5,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.openapi.resttemplate.client.annotation
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.web.client.RestTemplate;
@@ -22,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 @ConditionalOnProperty(prefix = "io.github.surezzzzzz.sdk.auth.aksk.client",
         name = "enable", havingValue = "true")
 @ConditionalOnClass(RestTemplate.class)
+@EnableConfigurationProperties(SimpleAkskOpenApiRestTemplateProperties.class)
 @ComponentScan(
         basePackageClasses = SimpleAkskOpenApiRestTemplatePackage.class,
         includeFilters = @ComponentScan.Filter(

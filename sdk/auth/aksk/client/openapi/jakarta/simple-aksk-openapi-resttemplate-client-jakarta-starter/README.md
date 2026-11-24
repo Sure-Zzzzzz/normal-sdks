@@ -5,8 +5,8 @@
 端点。出站请求经 AKSK 底座的 `akskClientRestTemplate`（拦截器自动挂 Bearer 头 + HttpClient5
 连接池）；本模块不管理令牌、不接触凭据。
 
-适合低频管理操作与无 Spring Cloud 依赖栈的宿主。当前版本 `1.0.0`，对接
-`simple-aksk-server-starter:3.2.2`；契约与异常族来自 `simple-aksk-openapi-client-core:1.0.1`。
+适合低频管理操作与无 Spring Cloud 依赖栈的宿主。当前版本 `1.1.0`，对接
+`simple-aksk-server-starter:3.2.2`；契约与异常族来自 `simple-aksk-openapi-client-core:1.0.2`。
 
 ## 解决的问题
 
@@ -16,8 +16,8 @@
 
 | 应用运行时 | 使用模块 | 版本 |
 | --- | --- | --- |
-| Spring Boot 3.x（jakarta，本模块） | `simple-aksk-openapi-resttemplate-client-jakarta-starter` | `1.0.0` |
-| Spring Boot 2.x（javax） | `simple-aksk-openapi-resttemplate-client-starter` | `1.0.0` |
+| Spring Boot 3.x（jakarta，本模块） | `simple-aksk-openapi-resttemplate-client-jakarta-starter` | `1.1.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-openapi-resttemplate-client-starter` | `1.1.0` |
 
 两条线同包名同类型，**不可同时引入**。与 Feign 形态按宿主技术栈二选一；RestTemplate 形态无需
 `@EnableFeignClients`，装配见下。
@@ -26,7 +26,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-resttemplate-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-resttemplate-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
@@ -36,7 +36,7 @@ dependencies {
 }
 ```
 
-本家族**零新增配置键**：装配条件复用底座总开关，连接配置全部来自 AKSK 底座
+本家族新增唯一配置键 `io.github.surezzzzzz.sdk.auth.aksk.openapi.client.aksk-profile`；装配条件复用底座总开关，连接配置全部来自 AKSK 底座
 （管理 API 与 Token 端点同进程，`server-url` 同时是两者目标）：
 
 ```yaml
@@ -65,11 +65,24 @@ io:
               server-url: https://aksk.example.test
               client-id: ${AKSK_CLIENT_ID}
               client-secret: ${AKSK_CLIENT_SECRET}
+            openapi:
+              client:
+                aksk-profile: openapi-admin
 ```
 
 `enable=true` 且类路径存在 RestTemplate 时自动装配 `DefaultAkskOpenApiClient` Bean
 （jakarta 线经 `AutoConfiguration.imports` 注册）；底座 `akskClientRestTemplate` 缺失时启动即报
 缺 Bean（响亮失败，不静默）。
+
+`aksk-profile` 留空或 `default` 时继续使用顶层默认 AKP；`openapi-admin` 必须配置在
+`auth.aksk.client.profiles.openapi-admin`。命名 Profile 的模板、令牌缓存与授权范围由底座隔离。
+
+## 版本历史
+
+### 1.1.0
+
+- 对接 AKSK Client Jakarta 1.1.0 多 AKP Profile，新增 `aksk-profile` 配置键。
+- 默认 Profile 的装配行为、20 端点契约和异常映射不变；契约 core 保持 1.0.2。
 
 ## 调用
 
