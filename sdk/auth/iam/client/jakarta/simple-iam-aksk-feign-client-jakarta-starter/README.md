@@ -1,7 +1,7 @@
 # simple-iam-aksk-feign-client-jakarta-starter
 
 Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 4.x，Spring Boot 3.x / Jakarta 宿主）：
-直接引用 aksk 底座 `simple-aksk-feign-redis-client-jakarta-starter:1.0.0`，提供十一族契约接口、共 49 个方法——
+直接引用 aksk 底座 `simple-aksk-feign-redis-client-jakarta-starter:1.1.0`，提供十一族契约接口、共 49 个方法——
 `IamUserFeignClient` / `IamDepartmentFeignClient` / `IamOpenRoleFeignClient` / `IamApplicationFeignClient`、六族 openapi 接口（messages/sessions/permissions/user-groups/role-catalog/statistics）及 `IamPortalApplicationFeignClient`。
 与 OpenFeign 3.x 形态（`simple-iam-aksk-feign-client-starter`）同源代码、同一份 wire DTO；
 宿主 `@EnableFeignClients` 扫描后认证由底座令牌链注入，本模块为契约接口层，无自有装配面。
@@ -34,8 +34,8 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
 | `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约常量/异常族 |
-| `simple-aksk-feign-redis-client-jakarta-starter:1.0.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
-| Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024.0.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
+| `simple-aksk-feign-redis-client-jakarta-starter:1.1.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
+| Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024simple-iam-aksk-feign-client-jakarta-starter:1.1.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
 
 ## 快速开始
@@ -130,6 +130,16 @@ public class RoleHostService {
 ## 兼容性
 
 - 对应 server：`simple-iam-server-starter:1.3.8+`
-- 本轮坐标验证：Spring Boot 3.4.2 × Spring Cloud 2024.0.0 × OpenFeign 4.2.0，Java 17；其他 Spring Boot/Cloud 档位不在本版本验收范围内
+- 本轮坐标验证：Spring Boot 3.4.2 × Spring Cloud 2024simple-iam-aksk-feign-client-jakarta-starter:1.1.0 × OpenFeign 4.2.0，Java 17；其他 Spring Boot/Cloud 档位不在本版本验收范围内
 - SB2 宿主用 `simple-iam-aksk-feign-client-starter`；RestTemplate 栈（hc5）用
   `simple-iam-aksk-resttemplate-client-jakarta-starter`
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

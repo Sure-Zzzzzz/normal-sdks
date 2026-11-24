@@ -2,7 +2,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client.test.cases;
 
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.configuration.AkskFeignConfiguration;
+import io.github.surezzzzzz.sdk.iam.feign.client.configuration.IamAkskFeignConfiguration;
 import io.github.surezzzzzz.sdk.iam.client.exception.IamClientProtocolException;
 import io.github.surezzzzzz.sdk.iam.feign.client.IamDepartmentFeignClient;
 import io.github.surezzzzzz.sdk.iam.feign.client.IamOpenRoleFeignClient;
@@ -15,6 +15,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -444,16 +446,16 @@ class IamFeignClientContractTest {
 
     @Test
     void shouldCarryAkskAuthMetadataOnInterfaces() {
-        AkskClientFeignClient annotation = IamUserFeignClient.class.getAnnotation(AkskClientFeignClient.class);
+        FeignClient annotation = AnnotatedElementUtils.findMergedAnnotation(IamUserFeignClient.class, FeignClient.class);
         assertNotNull(annotation, "契约接口标注底座元注解");
         assertEquals("iam-users", annotation.name(), "服务名（族内唯一）");
         boolean carries = false;
         for (Class<?> configuration : annotation.configuration()) {
-            carries = carries || configuration == AkskFeignConfiguration.class;
+            carries = carries || configuration == IamAkskFeignConfiguration.class;
         }
         assertTrue(carries, "携带底座 Feign 配置");
-        assertEquals("iam-open-roles", IamOpenRoleFeignClient.class.getAnnotation(AkskClientFeignClient.class).name());
-        assertEquals("iam-departments", IamDepartmentFeignClient.class.getAnnotation(AkskClientFeignClient.class).name());
+        assertEquals("iam-open-roles", AnnotatedElementUtils.findMergedAnnotation(IamOpenRoleFeignClient.class, FeignClient.class).name());
+        assertEquals("iam-departments", AnnotatedElementUtils.findMergedAnnotation(IamDepartmentFeignClient.class, FeignClient.class).name());
     }
 
     private void serverVerify() {
