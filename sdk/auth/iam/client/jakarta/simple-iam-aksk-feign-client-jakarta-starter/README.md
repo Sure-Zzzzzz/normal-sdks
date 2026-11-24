@@ -143,5 +143,6 @@ public class RoleHostService {
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
 - 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器，
   并以 `Ordered.LOWEST_PRECEDENCE` 最后写入 Authorization。
+- IAM 响应 401 时，清理当前 Profile 的本实例和分布式缓存，并自动重放一次；重放仍 401 时保留原始 401。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
