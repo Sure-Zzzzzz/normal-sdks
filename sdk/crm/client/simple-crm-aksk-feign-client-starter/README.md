@@ -2,13 +2,13 @@
 
 CRM 契约的 Feign 接口层：声明式调用 CRM 商业事实服务（客户、目录、报价、订单、履约闭环），标注 AKSK 底座元注解 `@AkskClientFeignClient` 后由底座自动注入认证头，本模块不做任何传输或认证装配。
 
-适合已使用 Spring Cloud OpenFeign、需要在服务端调用 CRM 的应用。当前版本为 `1.1.0`，对接 `simple-crm-server-starter:1.1.0` 的 `/api/crm` 接口，Java 契约来自 `simple-crm-client-core:1.1.0`。Jakarta / Spring Cloud 2024simple-crm-aksk-feign-client-starter:1.2.0 应用使用 `simple-crm-aksk-feign-client-jakarta-starter`，同一应用不得同时引入两条线。
+适合已使用 Spring Cloud OpenFeign、需要在服务端调用 CRM 的应用。当前版本为 `1.2.1`，对接 `simple-crm-server-starter:1.1.0` 的 `/api/crm` 接口，Java 契约来自 `simple-crm-client-core:1.1.0`。Jakarta / Spring Cloud 2024.0.0 应用使用 `simple-crm-aksk-feign-client-jakarta-starter`，同一应用不得同时引入两条线。
 
 ## 接入
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-crm-aksk-feign-client-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-crm-aksk-feign-client-starter:1.2.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.1.0'
     // AKSK 底座运行链的宿主义务件（Feign 3.x 用 feign-httpclient）：
@@ -75,6 +75,6 @@ Java 8+，Spring Cloud OpenFeign 3.x，Spring Boot 2.7（验证基线 2.7.9）�
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.crm.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 使用 `Ordered.LOWEST_PRECEDENCE` 的 Profile 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
