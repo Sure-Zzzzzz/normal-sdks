@@ -15,7 +15,8 @@ configurations.configureEach {
 dependencies {
     api 'io.github.sure-zzzzzz:simple-crm-client-core:1.1.0'
     // aksk 底座 jakarta（Feign 形态，openfeign 4.x 链）
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
     // wire 模型注解仅编译期需要，运行时由宿主 Feign/Jackson 链提供
     compileOnly 'com.fasterxml.jackson.core:jackson-annotations'
@@ -31,7 +32,7 @@ dependencies {
     testImplementation 'io.github.openfeign:feign-hc5:13.5'
     testImplementation 'io.github.openfeign:feign-jackson:13.5'
     // 底座自闭环原则：契约测试桩直接实现 TokenManager 需自行引入
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
 }
 
 // Windows 默认编码可能是 GBK；客户端源码与发布文档统一按 UTF-8 编译。

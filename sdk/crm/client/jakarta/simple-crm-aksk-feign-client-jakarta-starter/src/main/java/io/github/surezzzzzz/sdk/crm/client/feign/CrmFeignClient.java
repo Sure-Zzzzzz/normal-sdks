@@ -1,9 +1,10 @@
 package io.github.surezzzzzz.sdk.crm.client.feign;
 
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
+import io.github.surezzzzzz.sdk.crm.client.feign.configuration.CrmAkskFeignConfiguration;
 import io.github.surezzzzzz.sdk.crm.client.feign.model.CrmPageResponse;
 import io.github.surezzzzzz.sdk.crm.client.feign.model.CrmCompleteListResponse;
 import io.github.surezzzzzz.sdk.crm.client.feign.model.CrmResourceResponse;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +19,7 @@ import java.util.Map;
 /**
  * CRM 契约的 Feign 接口（认证由 aksk 底座元注解自动挂接）。
  *
- * <p>标注底座 {@code @AkskClientFeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
+ * <p>标注底座 {@code @FeignClient}：宿主启用 {@code @EnableFeignClients} 扫描本包后，
  * Authorization 头由底座令牌链自动注入。目标地址取
  * {@code io.github.surezzzzzz.sdk.crm.client.base-url}（仅 origin），API 基路径 {@code /api/crm}。</p>
  *
@@ -30,7 +31,8 @@ import java.util.Map;
  *
  * @author surezzzzzz
  */
-@AkskClientFeignClient(name = "crm", url = "${io.github.surezzzzzz.sdk.crm.client.base-url}",
+@FeignClient(name = "crm", url = "${io.github.surezzzzzz.sdk.crm.client.base-url}",
+        configuration = CrmAkskFeignConfiguration.class,
         path = "/api/crm")
 public interface CrmFeignClient {
 

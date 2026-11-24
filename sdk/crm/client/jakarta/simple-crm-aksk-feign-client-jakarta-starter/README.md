@@ -1,6 +1,6 @@
 # simple-crm-aksk-feign-client-jakarta-starter
 
-`simple-crm-aksk-feign-client-starter` 的 Jakarta 孪生：为 Spring Cloud 2024.0.0 / Java 17+ 应用提供同一份 CRM Feign 契约接口，标注 AKSK Jakarta 底座元注解后由底座自动注入认证头；本模块不做任何传输或认证装配。
+`simple-crm-aksk-feign-client-starter` 的 Jakarta 孪生：为 Spring Cloud 2024simple-crm-aksk-feign-client-jakarta-starter:1.2.0 / Java 17+ 应用提供同一份 CRM Feign 契约接口，标注 AKSK Jakarta 底座元注解后由底座自动注入认证头；本模块不做任何传输或认证装配。
 
 与 javax 线的 Java 包名完全相同，同一应用不得同时引入两条线。功能面、配置键、使用示例与响应模型见 javax 线 README；本文件只写差异。
 
@@ -16,10 +16,10 @@
 
 | 项 | javax 线 | 本模块 |
 |---|---|---|
-| Spring Cloud | OpenFeign 3.x | OpenFeign 4.2.0（`spring-cloud-dependencies:2024.0.0`） |
+| Spring Cloud | OpenFeign 3.x | OpenFeign 4.2.0（`spring-cloud-dependencies:2024simple-crm-aksk-feign-client-jakarta-starter:1.2.0`） |
 | Java | 8+ | 17+ |
 | Spring Boot | 2.7（javax 线验证基线） | 3.4.2 基线 |
-| AKSK 底座 | `simple-aksk-feign-redis-client-starter:3.0.2` | `simple-aksk-feign-redis-client-jakarta-starter:1.0.0` |
+| AKSK 底座 | `simple-aksk-feign-redis-client-starter:3.1.0` | `simple-aksk-feign-redis-client-jakarta-starter:1.1.0` |
 
 ## 接入
 
@@ -27,7 +27,7 @@
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-crm-aksk-feign-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
     // AKSK 底座运行链的宿主义务件（Jakarta/Feign 4.x 线用 feign-hc5）：
     implementation 'io.github.openfeign:feign-hc5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -37,3 +37,13 @@ dependencies {
 ```
 
 配置键与 javax 线相同（`io.github.surezzzzzz.sdk.crm.client.base-url`），使用示例与错误处理见 javax 线 README，此处不重复。 方法面与错误分类的维护处在 `simple-crm-client-core` 的 README。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.crm.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
