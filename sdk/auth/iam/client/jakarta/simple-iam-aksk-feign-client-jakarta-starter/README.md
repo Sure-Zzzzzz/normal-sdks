@@ -35,7 +35,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 |------|---------|------|
 | `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-jakarta-starter:1.1.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
-| Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024simple-iam-aksk-feign-client-jakarta-starter:1.1.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
+| Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024.0.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
 
 ## 快速开始
@@ -117,7 +117,7 @@ public class RoleHostService {
 
 ## 安全边界
 
-- 本模块代码零认证/零传输装配（全在底座与 Feign 宿主）
+- 认证头由底座令牌链或 IAM Profile 拦截器生成；本模块不输出 Secret、clientId、Token 或 Authorization
 - Feign 自带重试必须显式关闭；消费方 AKP 按接口族申领 API 码与 DATA 范围
   （详见 core README 授权面表）
 
@@ -126,11 +126,12 @@ public class RoleHostService {
 - 契约测试 4：经 `@EnableFeignClients` 真链路逐族断言（路径/方法/If-Match 头/双分页 wire/
   428 透传/元注解挂接，OpenFeign 4.2.0 链路）
 - 装配测试 2：底座拦截器条件链两态
+- Profile 拦截器顺序测试 3：默认先执行、命名 Profile 后执行、同名 Bean 遮蔽底座默认拦截器
 
 ## 兼容性
 
 - 对应 server：`simple-iam-server-starter:1.3.8+`
-- 本轮坐标验证：Spring Boot 3.4.2 × Spring Cloud 2024simple-iam-aksk-feign-client-jakarta-starter:1.1.0 × OpenFeign 4.2.0，Java 17；其他 Spring Boot/Cloud 档位不在本版本验收范围内
+- 本轮坐标验证：Spring Boot 3.4.2 × Spring Cloud 2024.0.0 × OpenFeign 4.2.0，Java 17；其他 Spring Boot/Cloud 档位不在本版本验收范围内
 - SB2 宿主用 `simple-iam-aksk-feign-client-starter`；RestTemplate 栈（hc5）用
   `simple-iam-aksk-resttemplate-client-jakarta-starter`
 
@@ -140,6 +141,7 @@ public class RoleHostService {
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器，
+  并以 `Ordered.LOWEST_PRECEDENCE` 最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

@@ -4,12 +4,14 @@ import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
+import org.springframework.core.Ordered;
 import org.springframework.util.StringUtils;
+import java.util.function.Supplier;
 
 /**
  * IAM Feign AKP Profile 配置；default 保持旧 TokenManager 兼容。
@@ -21,8 +23,7 @@ public class IamAkskFeignConfiguration {
     private final String akskProfile;
 
     @Autowired
-    @Qualifier("akskFeignRequestInterceptor")
-    private RequestInterceptor defaultInterceptor;
+    private ObjectProvider<TokenManager> defaultTokenManagerProvider;
 
     @Autowired
     private ObjectProvider<ProfileTokenManager> profileTokenManagerProvider;
@@ -33,28 +34,39 @@ public class IamAkskFeignConfiguration {
                 SimpleAkskClientCoreConstant.DEFAULT_PROFILE);
     }
 
-    @Bean
+    /**
+     * Bean 名复用底座默认拦截器名，显式遮蔽父上下文中的默认拦截器；
+     * 避免默认与 Profile 拦截器同时进入 Feign 拦截器集合。
+     */
+    @Bean("akskFeignRequestInterceptor")
     public RequestInterceptor akskRequestInterceptor() {
         if (!StringUtils.hasText(akskProfile)
                 || SimpleAkskClientCoreConstant.DEFAULT_PROFILE.equals(akskProfile)) {
-            return defaultInterceptor;
+            TokenManager tokenManager = defaultTokenManagerProvider.getObject();
+            return new AuthorizationRequestInterceptor(tokenManager::getToken, Ordered.HIGHEST_PRECEDENCE);
         }
-        return new ProfileRequestInterceptor(profileTokenManagerProvider.getObject(), akskProfile);
+        ProfileTokenManager tokenManager = profileTokenManagerProvider.getObject();
+        return new AuthorizationRequestInterceptor(
+                () -> tokenManager.getToken(akskProfile), Ordered.LOWEST_PRECEDENCE);
     }
 
-    private static final class ProfileRequestInterceptor implements RequestInterceptor {
+    private static final class AuthorizationRequestInterceptor implements RequestInterceptor, Ordered {
+        private final Supplier<String> tokenSupplier;
+        private final int order;
 
-        private final ProfileTokenManager tokenManager;
-        private final String profile;
+        AuthorizationRequestInterceptor(Supplier<String> tokenSupplier, int order) {
+            this.tokenSupplier = tokenSupplier;
+            this.order = order;
+        }
 
-        ProfileRequestInterceptor(ProfileTokenManager tokenManager, String profile) {
-            this.tokenManager = tokenManager;
-            this.profile = profile;
+        @Override
+        public int getOrder() {
+            return order;
         }
 
         @Override
         public void apply(RequestTemplate template) {
-            String token = tokenManager.getToken(profile);
+            String token = tokenSupplier.get();
             if (token != null && !token.isEmpty()) {
                 template.removeHeader(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
                 template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION,
