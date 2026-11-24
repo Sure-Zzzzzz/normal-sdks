@@ -1,15 +1,26 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.SimpleAkskRestTemplateRedisClientPackage;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.annotation.SimpleAkskRestTemplateRedisClientComponent;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.interceptor.AkskRestTemplateInterceptor;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.AkskProfileRestTemplateFactory;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.AkskRestTemplateResolver;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.DefaultAkskProfileRestTemplateFactory;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.DefaultAkskRestTemplateResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -108,7 +119,14 @@ public class SimpleAkskRestTemplateRedisClientAutoConfiguration {
     @ConditionalOnMissingBean(name = "akskClientRestTemplate")
     public RestTemplate akskClientRestTemplate(
             AkskRestTemplateInterceptor interceptor,
-            SimpleAkskRestTemplateProperties properties) {
+            SimpleAkskRestTemplateProperties properties,
+            AkskClientProfileRegistry profileRegistry) {
+        if (!profileRegistry.contains(SimpleAkskClientCoreConstant.DEFAULT_PROFILE)) {
+            throw new ConfigurationException(
+                    ClientErrorCode.CONFIG_MISSING,
+                    String.format(ClientErrorMessage.CONFIG_MISSING,
+                            "default AKP Profile"));
+        }
 
         log.info("Creating akskClientRestTemplate with connection pool - maxTotal: {}, maxPerRoute: {}, connectTimeout: {}ms, readTimeout: {}ms",
                 properties.getMaxTotal(), properties.getMaxPerRoute(),
@@ -140,5 +158,29 @@ public class SimpleAkskRestTemplateRedisClientAutoConfiguration {
 
         log.info("akskClientRestTemplate created successfully with AkskRestTemplateInterceptor");
         return restTemplate;
+    }
+
+    /**
+     * 创建命名 Profile RestTemplate 工厂
+     */
+    @Bean
+    @ConditionalOnBean(ProfileTokenManager.class)
+    @ConditionalOnMissingBean(AkskProfileRestTemplateFactory.class)
+    public AkskProfileRestTemplateFactory akskProfileRestTemplateFactory(
+            ProfileTokenManager tokenManager,
+            SimpleAkskRestTemplateProperties properties) {
+        return new DefaultAkskProfileRestTemplateFactory(tokenManager, properties);
+    }
+
+    /**
+     * 创建领域传输 RestTemplate 解析器
+     */
+    @Bean
+    @ConditionalOnBean({ProfileTokenManager.class, AkskProfileRestTemplateFactory.class})
+    @ConditionalOnMissingBean(AkskRestTemplateResolver.class)
+    public AkskRestTemplateResolver akskRestTemplateResolver(
+            @Qualifier("akskClientRestTemplate") ObjectProvider<RestTemplate> defaultTemplate,
+            AkskProfileRestTemplateFactory profileFactory) {
+        return new DefaultAkskRestTemplateResolver(defaultTemplate, profileFactory);
     }
 }

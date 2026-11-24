@@ -1,8 +1,8 @@
 # Simple AKSK RestTemplate Redis Client Starter
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.1.0**。
 
-[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 RestTemplate 的 AKSK 客户端 Starter，集成 Redis Token Manager，提供开箱即用的 HTTP 客户端和灵活的组件选择。
@@ -32,6 +32,14 @@
   - 支持并发控制和自动刷新
   - 可独立使用，不依赖 RestTemplate
 
+### 4. AKP Profile RestTemplate
+
+- `AkskProfileRestTemplateFactory` 按命名 Profile 创建并复用受保护 RestTemplate。
+- `AkskRestTemplateResolver.resolve(profile)` 空值或 `default` 时返回顶层 `akskClientRestTemplate`，命名 Profile 返回隔离模板。
+- 同名 Profile 复用模板与 HTTP 连接工厂；每个模板只挂一个认证拦截器。
+- 未配置的 Profile 抛出 `ConfigurationException`，不回落到默认凭据；只使用命名 Profile 时顶层凭据可以缺省。
+- 显式开启 `resttemplate.enable=true` 但默认凭据缺失时启动失败。
+
 ### 4. 灵活的组件选择
 
 用户可以根据需要选择使用：
@@ -57,7 +65,7 @@
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-aksk-redis-token-manager:3.0.2` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
+| `simple-aksk-redis-token-manager:3.1.0` | `implementation` 运行时传递 | Token 管理（`TokenManager` / `ProfileTokenManager`），级联 `simple-aksk-client-core:3.1.0`；直接使用 client-core API 需自行引入 |
 | `smart-cache-starter:2.2.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
 | Spring Boot / Spring Web | `compileOnly`，**使用方必须自行引入** | RestTemplate 与自动配置 |
 | Spring Data Redis | `compileOnly`，**使用方必须自行引入** | Redis 操作 |
@@ -73,7 +81,7 @@ dependencies {
 }
 ```
 
-**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.2`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring 相关依赖使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.1.0`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；直接使用 `ProfileTokenManager` / client-core 类型的代码请自行引入对应坐标。Spring 相关依赖使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -155,6 +163,39 @@ io:
 ```
 
 ## 使用场景
+
+### 场景 0：使用命名 AKP Profile
+
+在 AKSK Client 底座声明命名 Profile 后，业务代码通过 Profile 工厂或 resolver 获取模板：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              profiles:
+                crm:
+                  server-url: https://aksk.example.test
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
+```
+
+```java
+@Service
+public class CrmService {
+
+    private final RestTemplate crmTemplate;
+
+    public CrmService(AkskRestTemplateResolver templateResolver) {
+        this.crmTemplate = templateResolver.resolve("crm");
+    }
+}
+```
+
+业务传输件可用 `io.github.surezzzzzz.sdk.<domain>.client.aksk-profile=crm` 选择同一 Profile；空值或 `default` 继续使用默认模板。Profile 不存在时启动或解析失败，不会静默降级到默认凭据。
 
 ### 场景 1：直接使用 akskClientRestTemplate（推荐）
 
@@ -395,6 +436,15 @@ io:
 ```
 
 ## 版本历史
+
+### 3.1.0
+
+- 升级 Token Manager 与 Client Core 至 3.1.0，支持多 AKP Profile。
+- 新增 `AkskProfileRestTemplateFactory` 和 `AkskRestTemplateResolver`；空 Profile 或 `default` 继续使用默认模板。
+- 同名 Profile 复用 RestTemplate 和共享 HTTP 连接工厂；每个模板只注入一个认证拦截器。
+- Profile-only 配置不创建默认模板；显式开启默认模板但默认凭据缺失时启动失败。
+
+详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.2
 
