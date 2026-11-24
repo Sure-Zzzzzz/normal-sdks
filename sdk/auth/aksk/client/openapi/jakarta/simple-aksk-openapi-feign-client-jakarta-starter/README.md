@@ -6,8 +6,8 @@ OpenAPI（Client 管理 / 应用授权 / Token 管理三组共 20 端点）。�
 保护的 OpenAPI，用自己的 AKP 调自己的管理 API。本模块不创建独立令牌链，也不接触凭据。
 
 适合已有 OpenFeign 的服务端应用做接入自动化（建 Client → 配应用授权 → 准入 → 换 Token 验证一条龙）
-与运维脚本化。当前版本 `1.0.0`，对接 `simple-aksk-server-starter:3.2.2`；契约常量与 wire DTO 引
-`simple-aksk-openapi-client-core:1.0.1`。
+与运维脚本化。当前版本 `1.1.0`，对接 `simple-aksk-server-starter:3.2.2`；契约常量与 wire DTO 引
+`simple-aksk-openapi-client-core:1.0.2`。
 
 ## 解决的问题
 
@@ -17,8 +17,8 @@ OpenAPI（Client 管理 / 应用授权 / Token 管理三组共 20 端点）。�
 
 | 应用运行时 | 使用模块 | 版本 |
 | --- | --- | --- |
-| Spring Boot 3.x（jakarta，本模块） | `simple-aksk-openapi-feign-client-jakarta-starter` | `1.0.0` |
-| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter` | `1.0.0` |
+| Spring Boot 3.x（jakarta，本模块） | `simple-aksk-openapi-feign-client-jakarta-starter` | `1.1.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-openapi-feign-client-starter` | `1.1.0` |
 
 两条线同包名同类型，**不可同时引入**（同功能 javax/jakarta starter 互斥）。与本家族 RestTemplate
 形态按宿主技术栈二选一。
@@ -27,7 +27,7 @@ OpenAPI（Client 管理 / 应用授权 / Token 管理三组共 20 端点）。�
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'io.github.openfeign:feign-hc5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -36,8 +36,9 @@ dependencies {
 ```
 
 由宿主的 Spring Cloud 版本管理 OpenFeign 与 `feign-hc5` 版本；`feign-hc5` 提供本接口 PATCH
-方法支持。AKSK 底座与 Redis 令牌缓存由本模块运行时传递。本家族**零新增配置键**——底座配置原样
-生效（管理 API 与 Token 端点同在 AKSK Server 一个进程，`server-url` 同时是两者目标）：
+方法支持。AKSK 底座与 Redis 令牌缓存由本模块运行时传递。本家族新增唯一配置键
+`io.github.surezzzzzz.sdk.auth.aksk.openapi.client.aksk-profile`——底座配置原样生效（管理 API 与
+Token 端点同在 AKSK Server 一个进程，`server-url` 同时是两者目标）：
 
 ```yaml
 io:
@@ -65,6 +66,9 @@ io:
               server-url: https://aksk.example.test
               client-id: ${AKSK_CLIENT_ID}
               client-secret: ${AKSK_CLIENT_SECRET}
+            openapi:
+              client:
+                aksk-profile: openapi-admin
 ```
 
 将以下配置类放在应用的组件扫描范围内，或由应用显式导入，以启用 Feign 扫描：
@@ -79,6 +83,18 @@ import org.springframework.context.annotation.Configuration;
 public class AkskOpenApiFeignConfiguration {
 }
 ```
+
+## AKP Profile
+
+管理 OpenAPI 使用 `io.github.surezzzzzz.sdk.auth.aksk.openapi.client.aksk-profile` 选择 AKP。
+留空或 `default` 继续使用底座默认拦截器；命名 Profile 只挂一个 Profile 认证拦截器。
+
+## 版本历史
+
+### 1.1.0
+
+- 对接 AKSK Feign Jakarta 底座 1.1.0，支持 AKP Profile。
+- 20 端点契约和默认 Feign 行为不变；契约 core 保持 1.0.2。
 
 ## 调用
 

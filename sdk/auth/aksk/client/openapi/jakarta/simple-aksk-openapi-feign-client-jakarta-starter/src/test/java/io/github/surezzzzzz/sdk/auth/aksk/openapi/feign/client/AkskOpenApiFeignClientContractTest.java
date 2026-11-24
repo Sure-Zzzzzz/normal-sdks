@@ -36,7 +36,7 @@ class AkskOpenApiFeignClientContractTest {
 
     @Test
     void clientAnnotationReferencesBaseServerUrl() {
-        // @AkskClientFeignClient 是 @FeignClient 的元注解组合——运行时经 Spring 注解工具取原注解属性
+        // @FeignClient 标注在契约接口上——运行时经 Spring 注解工具取原注解属性
         org.springframework.cloud.openfeign.FeignClient feignMeta =
                 org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
                         AkskOpenApiFeignClient.class,
@@ -45,15 +45,15 @@ class AkskOpenApiFeignClientContractTest {
         assertThat(feignMeta.url()).isEqualTo(SimpleAkskOpenApiClientConstant.SERVER_URL_PLACEHOLDER);
         assertThat(feignMeta.name()).isEqualTo("aksk-openapi");
 
-        io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient akskMeta =
+        org.springframework.cloud.openfeign.FeignClient akskMeta =
                 AkskOpenApiFeignClient.class.getAnnotation(
-                        io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient.class);
+                        org.springframework.cloud.openfeign.FeignClient.class);
         assertThat(akskMeta).isNotNull();
     }
 
     @Test
     void feignPathAttributeIsApiBase() {
-        // path 是 @FeignClient（经 @AkskClientFeignClient 组合）的属性，非类级 @RequestMapping
+        // path 是 @FeignClient的属性，非类级 @RequestMapping
         org.springframework.cloud.openfeign.FeignClient feignMeta =
                 org.springframework.core.annotation.AnnotatedElementUtils.findMergedAnnotation(
                         AkskOpenApiFeignClient.class,

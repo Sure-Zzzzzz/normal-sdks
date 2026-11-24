@@ -15,12 +15,14 @@ configurations.configureEach {
 }
 
 dependencies {
-    api 'io.github.sure-zzzzzz:simple-aksk-openapi-client-core:1.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
+    api 'io.github.sure-zzzzzz:simple-aksk-openapi-client-core:1.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
     // OpenFeign 由宿主自备（compileOnly，未使用 Feign 的应用不被强带入 Spring Cloud）
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
     testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
