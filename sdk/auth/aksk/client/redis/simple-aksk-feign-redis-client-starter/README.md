@@ -1,8 +1,8 @@
 # Simple AKSK Feign Redis Client Starter
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.0.2**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.1.0**。
 
-[![Version](https://img.shields.io/badge/version-3.0.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 基于 Spring Cloud OpenFeign 的 AKSK 客户端 Starter,集成 Redis Token Manager，提供开箱即用的声明式 HTTP 客户端和灵活的组件选择。
@@ -42,6 +42,14 @@
 | **@AkskClientFeignClient** | 需要自动添加认证头的 Feign 客户端（推荐） | `@AkskClientFeignClient(name = "my-service", url = "...")` |
 | **AkskFeignConfiguration** | 需要显式配置 Feign 客户端 | `@FeignClient(configuration = AkskFeignConfiguration.class)` |
 
+### 5. AKP Profile Feign 配置
+
+- `AkskProfileFeignConfiguration` 是 Feign 子上下文配置基类；领域子类覆写 `akskProfile()`。
+- 空 Profile 或 `default` 使用默认拦截器；命名 Profile 使用 Profile 拦截器工厂创建的唯一拦截器。
+- `ProfileTokenManager` 的缓存、锁和刷新按 Profile 隔离。
+- 未配置的 Profile 在工厂创建时抛出 `ConfigurationException`，不回落到默认凭据。
+- 只使用命名 Profile 时顶层凭据可以缺省；此时默认 Feign 链在首次请求时响亮失败。
+
 ### 5. 自动配置
 
 - **SimpleAkskFeignRedisClientAutoConfiguration** - 自动配置类
@@ -56,7 +64,7 @@
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-aksk-redis-token-manager:3.0.2` | `implementation` 运行时传递 | Token 管理（`TokenManager` Bean），级联 `simple-aksk-client-core:3.0.0`；直接使用 `TokenManager` / client-core API 需自行引入 |
+| `simple-aksk-redis-token-manager:3.1.0` | `implementation` 运行时传递 | Token 管理（`TokenManager` / `ProfileTokenManager`），级联 `simple-aksk-client-core:3.1.0`；直接使用 client-core API 需自行引入 |
 | `smart-cache-starter:2.2.0` | 经 token-manager 运行时传递 | L1+L2 缓存、分布式锁、Pub/Sub，开箱即用；直接使用 smart-cache API 需自行引入 |
 | Spring Cloud OpenFeign | `compileOnly`，**使用方必须自行引入** | 声明式 HTTP 客户端 |
 | Spring Boot / Spring Data Redis | `compileOnly`，**使用方必须自行引入** | 自动配置与 Redis 操作 |
@@ -68,11 +76,11 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.1.0'
 }
 ```
 
-**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.0.2`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；自 3.0.1 起其声明方式由 `api` 收为 `implementation`，不再向使用方编译期传递——直接使用 `TokenManager` / client-core 类型的代码请自行引入对应坐标。Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
+**重要说明**：核心依赖 `simple-aksk-redis-token-manager:3.1.0`（连带 smart-cache 运行时组件）运行时自动传递、开箱即用；直接使用 `ProfileTokenManager` / client-core 类型的代码请自行引入对应坐标。Spring Cloud OpenFeign 等使用 `compileOnly` 声明、不会传递，请根据您的 Spring Boot 版本自行引入以下依赖：
 
 **必需依赖：**
 
@@ -234,7 +242,39 @@ public interface MyServiceClient {
 - ✅ 可以添加其他配置类
 - ✅ 复用 AKSK 认证逻辑
 
-### 场景 3：只使用 TokenManager
+### 场景 3：使用命名 AKP Profile
+
+命名 Profile 写在 AKSK Client 底座配置中，Feign 子上下文只声明名称：
+
+```java
+public class CrmAkskFeignConfiguration extends AkskProfileFeignConfiguration {
+
+    @Override
+    protected String akskProfile() {
+        return "crm";
+    }
+}
+```
+
+```java
+@FeignClient(
+    name = "crm-service",
+    url = "https://crm.example.test",
+    configuration = CrmAkskFeignConfiguration.class
+)
+public interface CrmClient {
+
+    @GetMapping("/api/resource")
+    String getResource();
+}
+```
+
+**特点**：
+- 空 Profile 或 `default` 走默认 AKP。
+- 命名 Profile 只挂一个认证拦截器；Profile 未配置时启动失败。
+- 普通默认 Feign Client 不受影响。
+
+### 场景 4：只使用 TokenManager
 
 如果你想自己处理 HTTP 请求，只需要 Token 管理：
 
@@ -457,6 +497,14 @@ feign:
 - 两个版本可以同时使用，互不冲突
 
 ## 版本历史
+
+### 3.1.0
+
+- 升级 Token Manager 与 Client Core 至 3.1.0，支持多 AKP Profile。
+- 新增 `AkskProfileFeignConfiguration` 与 Profile 拦截器工厂；空 Profile 或 `default` 继续使用默认拦截器。
+- 注解 Feign 与手工 Feign Builder 链路只注入一个认证拦截器；Profile 缺失时启动失败。
+
+详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.2
 
