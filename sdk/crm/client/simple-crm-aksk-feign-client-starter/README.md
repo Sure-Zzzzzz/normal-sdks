@@ -2,7 +2,7 @@
 
 CRM 契约的 Feign 接口层：声明式调用 CRM 商业事实服务（客户、目录、报价、订单、履约闭环），标注 AKSK 底座元注解 `@AkskClientFeignClient` 后由底座自动注入认证头，本模块不做任何传输或认证装配。
 
-适合已使用 Spring Cloud OpenFeign、需要在服务端调用 CRM 的应用。当前版本为 `1.1.0`，对接 `simple-crm-server-starter:1.1.0` 的 `/api/crm` 接口，Java 契约来自 `simple-crm-client-core:1.1.0`。Jakarta / Spring Cloud 2024.0.0 应用使用 `simple-crm-aksk-feign-client-jakarta-starter`，同一应用不得同时引入两条线。
+适合已使用 Spring Cloud OpenFeign、需要在服务端调用 CRM 的应用。当前版本为 `1.1.0`，对接 `simple-crm-server-starter:1.1.0` 的 `/api/crm` 接口，Java 契约来自 `simple-crm-client-core:1.1.0`。Jakarta / Spring Cloud 2024simple-crm-aksk-feign-client-starter:1.2.0 应用使用 `simple-crm-aksk-feign-client-jakarta-starter`，同一应用不得同时引入两条线。
 
 ## 接入
 
@@ -10,7 +10,7 @@ CRM 契约的 Feign 接口层：声明式调用 CRM 商业事实服务（客户�
 dependencies {
     implementation 'io.github.sure-zzzzzz:simple-crm-aksk-feign-client-starter:1.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-starter:3.1.0'
     // AKSK 底座运行链的宿主义务件（Feign 3.x 用 feign-httpclient）：
     implementation 'io.github.openfeign:feign-httpclient'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -68,3 +68,13 @@ crm.patchFulfillmentItem("fulfillment-0001", "fulfillment-report-0001", report,
 ## 运行环境
 
 Java 8+，Spring Cloud OpenFeign 3.x，Spring Boot 2.7（验证基线 2.7.9）。首次接入前先读 `simple-crm-client-core` 的 README（方法面、命令元数据与错误分类在那里维护）。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.crm.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
