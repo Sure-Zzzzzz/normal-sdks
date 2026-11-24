@@ -1,7 +1,7 @@
 # simple-iam-aksk-feign-client-starter
 
 Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 3.x，Spring Boot 2.x 宿主）：直接引用
-aksk 底座 `simple-aksk-feign-redis-client-starter:3.0.2`，提供十一族契约接口、共 49 个方法——
+aksk 底座 `simple-aksk-feign-redis-client-starter:3.1.0`，提供十一族契约接口、共 49 个方法——
 `IamUserFeignClient` / `IamDepartmentFeignClient` / `IamOpenRoleFeignClient` / `IamApplicationFeignClient`、六族 openapi 接口（messages/sessions/permissions/user-groups/role-catalog/statistics）及 `IamPortalApplicationFeignClient`。
 宿主 `@EnableFeignClients` 扫描后 Authorization 头由底座令牌链自动注入，本模块为契约接口层，
 无自有装配面。
@@ -36,7 +36,7 @@ Feign 自带重试必须显式关闭（幂等语义由调用方负责）。
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
 | `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约常量/异常族 |
-| `simple-aksk-feign-redis-client-starter:3.0.2` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证拦截器装配 |
+| `simple-aksk-feign-redis-client-starter:3.1.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证拦截器装配 |
 | Spring Cloud OpenFeign 3.x | `compileOnly`，**宿主自行引入** | 版本随宿主 Spring Boot 线 |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
 
@@ -135,3 +135,13 @@ public class RoleHostService {
 - Spring Boot 2.7.9 验证（server 部署基线，OpenFeign 3.1.8 线）；OpenFeign 4.x（Spring Boot 3.x）宿主用
   `simple-iam-aksk-feign-client-jakarta-starter`；RestTemplate 栈用
   `simple-iam-aksk-resttemplate-client-starter`
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

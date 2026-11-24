@@ -6,6 +6,7 @@ package io.github.surezzzzzz.sdk.iam.feign.client;
  * @author surezzzzzz
  */
 @io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient(
+        configuration = io.github.surezzzzzz.sdk.iam.feign.client.configuration.IamAkskFeignConfiguration.class,
         name = "iam-portal-applications", url = "${io.github.surezzzzzz.sdk.iam.client.base-url}",
         path = io.github.surezzzzzz.sdk.iam.client.constant.SimpleIamClientConstant.API_BASE_PATH)
 public interface IamPortalApplicationFeignClient {
