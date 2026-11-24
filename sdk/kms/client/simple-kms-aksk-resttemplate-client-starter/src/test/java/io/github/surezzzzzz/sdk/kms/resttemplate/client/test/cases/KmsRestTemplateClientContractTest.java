@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -87,9 +88,18 @@ class KmsRestTemplateClientContractTest {
         server = MockRestServiceServer.bindTo(restTemplate).build();
         KmsClientRestTemplateProperties properties = new KmsClientRestTemplateProperties();
         properties.setBaseUrl("https://kms.example.internal");
-        client = new KmsRestTemplateClient(restTemplate, properties);
+        client = new KmsRestTemplateClient(resolver(), properties);
     }
 
+
+    private AkskRestTemplateResolver resolver() {
+        return new AkskRestTemplateResolver() {
+            @Override
+            public RestTemplate resolve(String profile) {
+                return restTemplate;
+            }
+        };
+    }
     @Test
     void shouldCallAllKeyManagementEndpointsWithContractFields() {
         server.expect(requestTo(API_BASE + "/keys"))
@@ -269,7 +279,7 @@ class KmsRestTemplateClientContractTest {
     void shouldRejectMalformedBaseUrl() {
         KmsClientRestTemplateProperties properties = new KmsClientRestTemplateProperties();
         properties.setBaseUrl("https://kms.example.internal/with-path");
-        assertThrows(RuntimeException.class, () -> new KmsRestTemplateClient(restTemplate, properties),
+        assertThrows(RuntimeException.class, () -> new KmsRestTemplateClient(resolver(), properties),
                 "base-url 带路径必须构造失败");
     }
 }

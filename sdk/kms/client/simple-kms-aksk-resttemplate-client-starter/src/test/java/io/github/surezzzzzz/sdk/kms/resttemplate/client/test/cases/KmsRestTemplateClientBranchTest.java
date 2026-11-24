@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -45,9 +46,18 @@ class KmsRestTemplateClientBranchTest {
         server = MockRestServiceServer.bindTo(restTemplate).build();
         KmsClientRestTemplateProperties properties = new KmsClientRestTemplateProperties();
         properties.setBaseUrl("https://kms.example.internal");
-        client = new KmsRestTemplateClient(restTemplate, properties);
+        client = new KmsRestTemplateClient(resolver(), properties);
     }
 
+
+    private AkskRestTemplateResolver resolver() {
+        return new AkskRestTemplateResolver() {
+            @Override
+            public RestTemplate resolve(String profile) {
+                return restTemplate;
+            }
+        };
+    }
     @Test
     void shouldCarryOptionalCryptoFieldsWhenProvided() {
         byte[] payload = "payload-1".getBytes(StandardCharsets.UTF_8);

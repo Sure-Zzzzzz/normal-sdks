@@ -1,5 +1,6 @@
 package io.github.surezzzzzz.sdk.kms.resttemplate.client.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import io.github.surezzzzzz.sdk.kms.client.KmsClient;
 import io.github.surezzzzzz.sdk.kms.client.exception.KmsClientConfigurationException;
 import io.github.surezzzzzz.sdk.kms.resttemplate.client.KmsRestTemplateClient;
@@ -39,7 +40,7 @@ class KmsClientRestTemplateAutoConfigurationTest {
 
     @Test
     void shouldStayDisabledByDefault() {
-        contextRunner.withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new)
+        contextRunner.withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new).withBean(AkskRestTemplateResolver.class, () -> profile -> new RestTemplate())
                 .run(context -> {
                     log.info("默认配置 Bean 数量: {}", context.getBeanDefinitionCount());
                     assertEquals(0, context.getBeanNamesForType(KmsClient.class).length,
@@ -52,7 +53,7 @@ class KmsClientRestTemplateAutoConfigurationTest {
         contextRunner.withPropertyValues(
                         "io.github.surezzzzzz.sdk.kms.client.enable=true",
                         "io.github.surezzzzzz.sdk.kms.client.base-url=https://kms.example.internal")
-                .withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new)
+                .withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new).withBean(AkskRestTemplateResolver.class, () -> profile -> new RestTemplate())
                 .run(context -> {
                     log.info("启用后 Bean 数量: {}", context.getBeanDefinitionCount());
                     assertNull(context.getStartupFailure(), "合法配置必须完成自动装配");
@@ -81,7 +82,7 @@ class KmsClientRestTemplateAutoConfigurationTest {
         contextRunner.withPropertyValues(
                         "io.github.surezzzzzz.sdk.kms.client.enable=true",
                         "io.github.surezzzzzz.sdk.kms.client.base-url=https://kms.example.internal/with-path")
-                .withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new)
+                .withBean("akskClientRestTemplate", RestTemplate.class, RestTemplate::new).withBean(AkskRestTemplateResolver.class, () -> profile -> new RestTemplate())
                 .run(context -> {
                     log.info("非法 origin 启动异常类型: {}",
                             context.getStartupFailure() == null ? "无" : context.getStartupFailure().getClass().getName());
