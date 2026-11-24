@@ -10,7 +10,7 @@ License 客户端 RestTemplate 传输装配（javax 线，Spring Boot 2.7.9 / Ja
 ## 依赖坐标
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-license-aksk-resttemplate-client-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:simple-license-aksk-resttemplate-client-starter:2simple-license-aksk-resttemplate-client-starter:2.1.0'
 implementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
 // AKSK RestTemplate 底座由你的 AKSK 接入提供（本件对底座零类型 import，仅运行时复用其 Bean）
 ```
@@ -44,3 +44,13 @@ io:
 ## jakarta 变体
 
 Spring Boot 3.4.2 / Jakarta 线使用对应的 `simple-license-aksk-resttemplate-client-jakarta-starter`（同包名同语义，`LicenseClientJakartaTransportAutoConfiguration` 注册）。
+
+## AKP Profile
+
+本模块支持 AKSK Client 多 AKP Profile。调用方在 AKSK Client 底座的 `auth.aksk.client.profiles.<name>`
+中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.license.client.aksk-profile` 选择 Profile。
+
+- 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
+- Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

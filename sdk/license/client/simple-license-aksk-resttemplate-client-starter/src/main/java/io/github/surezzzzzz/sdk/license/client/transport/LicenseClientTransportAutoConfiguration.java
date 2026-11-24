@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -45,9 +45,11 @@ public class LicenseClientTransportAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(LicenseServerClient.class)
     public LicenseServerClient licenseServerClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
+            @Value("${io.github.surezzzzzz.sdk.license.client.aksk-profile:default}") String akskProfile,
             @Value("${io.github.surezzzzzz.sdk.license.client.base-url}") String baseUrl) {
-        return new RestTemplateLicenseServerClient(akskClientRestTemplate, baseUrl);
+        return new RestTemplateLicenseServerClient(
+                restTemplateResolver.resolve(akskProfile), baseUrl);
     }
 
     /** 默认传输；失败传播给调用方，不把网络异常改写为业务拒绝。 */
