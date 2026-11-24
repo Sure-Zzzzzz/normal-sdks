@@ -119,7 +119,7 @@ public class RoleHostService {
 
 ## 安全边界
 
-- 本模块代码零认证/零传输装配（全在底座与 Feign 宿主）
+- 认证头由底座令牌链或 IAM Profile 拦截器生成；本模块不输出 Secret、clientId、Token 或 Authorization
 - Feign 自带重试必须显式关闭；凭据与令牌由底座管理
 - 消费方 AKP 按接口族申领 API 码与 DATA 范围（详见 core README 授权面表）
 
@@ -128,6 +128,7 @@ public class RoleHostService {
 - 契约测试 4：经 `@EnableFeignClients` 真链路对 JDK HttpServer 桩逐族断言
   （路径/方法/If-Match 头/双分页 wire/428 透传/元注解挂接）
 - 装配测试 2：底座拦截器条件链两态（TokenManager 在场/不在场）
+- Profile 拦截器顺序测试 3：默认先执行、命名 Profile 后执行、同名 Bean 遮蔽底座默认拦截器
 
 ## 兼容性
 
@@ -142,6 +143,7 @@ public class RoleHostService {
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.iam.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器，
+  并以 `Ordered.LOWEST_PRECEDENCE` 最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。
