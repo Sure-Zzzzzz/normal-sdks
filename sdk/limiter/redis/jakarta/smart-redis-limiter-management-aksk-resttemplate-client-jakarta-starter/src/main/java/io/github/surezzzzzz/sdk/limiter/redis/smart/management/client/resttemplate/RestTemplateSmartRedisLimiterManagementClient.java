@@ -9,7 +9,7 @@ import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.model.Smar
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.resttemplate.annotation.SmartRedisLimiterManagementClientRestTemplateComponent;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.resttemplate.configuration.SmartRedisLimiterManagementClientProperties;
 import io.github.surezzzzzz.sdk.limiter.redis.smart.management.client.support.SmartRedisLimiterManagementJsonCodec;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.ResponseErrorHandler;
@@ -63,15 +63,15 @@ public class RestTemplateSmartRedisLimiterManagementClient implements SmartRedis
      *
      * @param properties             客户端配置
      * @param jsonCodec              策略快照编解码器
-     * @param akskClientRestTemplate AKSK 底座预配置 RestTemplate（认证+连接池）
+     * @param restTemplateResolver AKP Profile RestTemplate 解析器
      */
     public RestTemplateSmartRedisLimiterManagementClient(
             SmartRedisLimiterManagementClientProperties properties,
             SmartRedisLimiterManagementJsonCodec jsonCodec,
-            @Qualifier("akskClientRestTemplate") RestTemplate akskClientRestTemplate) {
+            AkskRestTemplateResolver restTemplateResolver) {
         this.properties = properties;
         this.jsonCodec = jsonCodec;
-        this.restTemplate = akskClientRestTemplate;
+        this.restTemplate = restTemplateResolver.resolve(properties.getAkskProfile());
         this.restTemplate.setErrorHandler(new PassthroughResponseErrorHandler());
     }
 

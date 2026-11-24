@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.web.client.RestTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -38,9 +39,18 @@ public class RestTemplateSmartRedisLimiterManagementClientTest {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).build();
         client = new RestTemplateSmartRedisLimiterManagementClient(
-                properties, new JacksonSmartRedisLimiterManagementJsonCodec(), restTemplate);
+                properties, new JacksonSmartRedisLimiterManagementJsonCodec(), resolver());
     }
 
+
+    private AkskRestTemplateResolver resolver() {
+        return new AkskRestTemplateResolver() {
+            @Override
+            public RestTemplate resolve(String profile) {
+                return restTemplate;
+            }
+        };
+    }
     @Test
     public void testFetchPolicySendsIfNoneMatchAndParses200() {
         String body = "{\"schemaVersion\":\"1\",\"serviceCode\":\"test-service\","
