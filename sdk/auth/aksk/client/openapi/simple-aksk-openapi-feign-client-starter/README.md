@@ -4,7 +4,7 @@
 OpenAPI（20 端点）。接口标注 AKSK 底座（javax 线）的 `@AkskClientFeignClient`，底座获取访问令牌
 并添加认证头；本模块不创建独立令牌链，也不接触凭据。
 
-与 jakarta 线（`simple-aksk-openapi-feign-client-jakarta-starter:1.1.0`）同契约、同包名、同配置键——
+与 jakarta 线（`simple-aksk-openapi-feign-client-jakarta-starter:1.1.1`）同契约、同包名、同配置键——
 业务从 SB2 升 SB3 只换坐标。当前版本 `1.1.0`，对接 `simple-aksk-server-starter:3.2.2`。
 
 ## 版本选择
@@ -20,7 +20,7 @@ OpenAPI（20 端点）。接口标注 AKSK 底座（javax 线）的 `@AkskClient
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-openapi-feign-client-starter:1.1.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'io.github.openfeign:feign-hc5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -45,7 +45,7 @@ dependencies {
 ## AKP Profile
 
 管理 OpenAPI 使用 `io.github.surezzzzzz.sdk.auth.aksk.openapi.client.aksk-profile` 选择 AKP。
-留空或 `default` 继续使用底座默认拦截器；命名 Profile 只挂一个 Profile 认证拦截器。
+留空或 `default` 时使用默认 AKP 拦截器；命名 Profile 使用 `Ordered.LOWEST_PRECEDENCE` 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 
 ## 版本历史
 
