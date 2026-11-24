@@ -2,13 +2,13 @@
 
 为 Spring Boot 3 应用提供 `KmsFeignClient`：通过 Spring Cloud OpenFeign 接口调用密钥管理服务（KMS）的密钥管理、精确授权策略、签名验签、信封加解密和公钥查询接口。接口标注访问密钥凭据（AKSK）底座的 `@AkskClientFeignClient`，底座获取访问令牌并添加认证头。本模块不创建独立令牌链，也不接触凭据。
 
-适合已有 OpenFeign 的服务端应用。当前版本为 `1simple-kms-aksk-feign-client-jakarta-starter:1.1.0`，对接 `smart-kms-server-starter:2simple-kms-aksk-feign-client-jakarta-starter:1.1.0` 的 `/api/kms` 接口；接口路径和字段名引用 `simple-kms-client-core:2simple-kms-aksk-feign-client-jakarta-starter:1.1.0` 契约。
+适合已有 OpenFeign 的服务端应用。当前版本为 `1.1.1`，对接 `smart-kms-server-starter:2.0.2` 的 `/api/kms` 接口；接口路径和字段名引用 `simple-kms-client-core:2.0.0` 契约。
 
 ## 接入
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-kms-aksk-feign-client-jakarta-starter:1simple-kms-aksk-feign-client-jakarta-starter:1.1.0'
+    implementation 'io.github.sure-zzzzzz:simple-kms-aksk-feign-client-jakarta-starter:1.1.1'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'io.github.openfeign:feign-hc5'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -97,7 +97,7 @@ public class KeyReader {
 
 ## 兼容性
 
-以 Spring Boot `3.4.2`、Spring Cloud `2024simple-kms-aksk-feign-client-jakarta-starter:1.1.0`、OpenFeign `4.2.0` 和 JDK 17 完成编译，JDK 21 完成模块测试及应用级凭据（AKP）经 AKSK、Redis、KMS 的真实六步调用（创建、查询、自授 SIGN/VERIFY、签名、验签、安排销毁）。六步联调不代表全部 16 个方法都经过真实服务验证。Spring Boot 2 / Java 8 应用选用 `simple-kms-aksk-feign-client-starter:2simple-kms-aksk-feign-client-jakarta-starter:1.1.0`。
+以 Spring Boot `3.4.2`、Spring Cloud `2024.0.0`、OpenFeign `4.2.0` 和 JDK 17 完成编译，JDK 21 完成模块测试及应用级凭据（AKP）经 AKSK、Redis、KMS 的真实六步调用（创建、查询、自授 SIGN/VERIFY、签名、验签、安排销毁）。六步联调不代表全部 16 个方法都经过真实服务验证。Spring Boot 2 / Java 8 应用选用 `simple-kms-aksk-feign-client-starter:2.1.1`。
 
 ## 兼容矩阵
 
@@ -107,7 +107,7 @@ public class KeyReader {
 | 3.3.13 | 17 | 全量测试 |
 | 3.2.12 | 17 | 全量测试 |
 
-Boot 3.2.12 / 3.3.13 需配套 `jakartaCloudVersion=2023.0.4`（Spring Cloud 2023.0 线对应 Boot 3.2/3.3；默认 2024simple-kms-aksk-feign-client-jakarta-starter:1.1.0 对应 3.4）。
+Boot 3.2.12 / 3.3.13 需配套 `jakartaCloudVersion=2023.0.4`（Spring Cloud 2023.0 线对应 Boot 3.2/3.3；默认 2024.0.0 对应 3.4）。
 
 ## AKP Profile
 
@@ -115,6 +115,6 @@ Boot 3.2.12 / 3.3.13 需配套 `jakartaCloudVersion=2023.0.4`（Spring Cloud 202
 中声明 Profile，再通过本模块配置键 `io.github.surezzzzzz.sdk.kms.client.aksk-profile` 选择 Profile。
 
 - 配置留空或 `default` 时使用顶层默认 AKP，原有接入不变。
-- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 只挂一个 Profile 认证拦截器。
+- 配置命名 Profile 时，RestTemplate 走底座 Profile 模板；Feign 使用 `Ordered.LOWEST_PRECEDENCE` 的 Profile 拦截器，遮蔽底座默认拦截器并最后写入 Authorization。
 - Profile 不存在或凭据不完整时启动失败，不静默改用默认 AKP。
 - Secret 由 AKSK 底座管理；本模块不输出 Secret、clientId、Token 或 Authorization。

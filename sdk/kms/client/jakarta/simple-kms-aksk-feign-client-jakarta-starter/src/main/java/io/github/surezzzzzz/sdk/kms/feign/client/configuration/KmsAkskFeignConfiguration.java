@@ -4,29 +4,29 @@ import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 import org.springframework.util.StringUtils;
 
+import java.util.function.Supplier;
+
 /**
- * KMS Feign AKP Profile 配置（Jakarta 线）
+ * KMS（Jakarta 线） Feign AKP Profile 认证配置。
  *
- * <p>仅作为 Feign 子上下文配置使用，不加 {@code @Configuration}。
- * Profile 为空或 default 时复用底座默认拦截器；命名 Profile 时通过
- * client-core 契约 {@link ProfileTokenManager} 创建独立拦截器。</p>
- *
- * @author surezzzzzz
+ * <p>子上下文使用底座同名 Bean 遮蔽父上下文默认拦截器；默认拦截器顺序最高，
+ * named Profile 拦截器顺序最低，最终 Authorization 固定由当前选择的 AKP 写入。</p>
  */
 public class KmsAkskFeignConfiguration {
 
     private final String akskProfile;
 
     @Autowired
-    @Qualifier("akskFeignRequestInterceptor")
-    private RequestInterceptor defaultInterceptor;
+    private ObjectProvider<TokenManager> defaultTokenManagerProvider;
 
     @Autowired
     private ObjectProvider<ProfileTokenManager> profileTokenManagerProvider;
@@ -37,36 +37,35 @@ public class KmsAkskFeignConfiguration {
                 SimpleAkskClientCoreConstant.DEFAULT_PROFILE);
     }
 
-    /**
-     * 注册唯一 AKSK 认证拦截器
-     *
-     * @return RequestInterceptor
-     */
-    @Bean
+    @Bean("akskFeignRequestInterceptor")
     public RequestInterceptor akskRequestInterceptor() {
-        if (!StringUtils.hasText(akskProfile) || SimpleAkskClientCoreConstant.DEFAULT_PROFILE.equals(akskProfile)) {
-            return defaultInterceptor;
+        if (!StringUtils.hasText(akskProfile)
+                || SimpleAkskClientCoreConstant.DEFAULT_PROFILE.equals(akskProfile)) {
+            TokenManager tokenManager = defaultTokenManagerProvider.getObject();
+            return new AuthorizationRequestInterceptor(tokenManager::getToken, Ordered.HIGHEST_PRECEDENCE);
         }
         ProfileTokenManager tokenManager = profileTokenManagerProvider.getObject();
-        return new ProfileRequestInterceptor(tokenManager, akskProfile);
+        return new AuthorizationRequestInterceptor(
+                () -> tokenManager.getToken(akskProfile), Ordered.LOWEST_PRECEDENCE);
     }
 
-    /**
-     * 命名 Profile 拦截器
-     */
-    private static final class ProfileRequestInterceptor implements RequestInterceptor {
+    private static final class AuthorizationRequestInterceptor implements RequestInterceptor, Ordered {
+        private final Supplier<String> tokenSupplier;
+        private final int order;
 
-        private final ProfileTokenManager tokenManager;
-        private final String profile;
+        AuthorizationRequestInterceptor(Supplier<String> tokenSupplier, int order) {
+            this.tokenSupplier = tokenSupplier;
+            this.order = order;
+        }
 
-        ProfileRequestInterceptor(ProfileTokenManager tokenManager, String profile) {
-            this.tokenManager = tokenManager;
-            this.profile = profile;
+        @Override
+        public int getOrder() {
+            return order;
         }
 
         @Override
         public void apply(RequestTemplate template) {
-            String token = tokenManager.getToken(profile);
+            String token = tokenSupplier.get();
             if (token != null && !token.isEmpty()) {
                 template.removeHeader(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION);
                 template.header(SimpleAkskClientCoreConstant.HEADER_AUTHORIZATION,
