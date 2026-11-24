@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
@@ -65,9 +66,18 @@ class RestTemplateSmartRedisLimiterPolicyMutationClientTest {
         SmartRedisLimiterPolicyMutationClientProperties properties = new SmartRedisLimiterPolicyMutationClientProperties();
         properties.setBaseUrl(BASE);
         client = new RestTemplateSmartRedisLimiterPolicyMutationClient(
-                properties, new JacksonPolicyMutationJsonCodec(), restTemplate);
+                properties, new JacksonPolicyMutationJsonCodec(), resolver());
     }
 
+
+    private AkskRestTemplateResolver resolver() {
+        return new AkskRestTemplateResolver() {
+            @Override
+            public RestTemplate resolve(String profile) {
+                return restTemplate;
+            }
+        };
+    }
     @Test
     void findByKeyQueriesIdentityAndReturnsUniqueView() {
         server.expect(requestTo(BASE + "/v2/policy/rules?serviceCode=aksk&resourceCode=oauth2-token"
@@ -260,7 +270,7 @@ class RestTemplateSmartRedisLimiterPolicyMutationClientTest {
                 new SmartRedisLimiterPolicyMutationClientProperties();
         RestTemplateSmartRedisLimiterPolicyMutationClient bare =
                 new RestTemplateSmartRedisLimiterPolicyMutationClient(
-                        properties, new JacksonPolicyMutationJsonCodec(), new RestTemplate());
+                        properties, new JacksonPolicyMutationJsonCodec(), resolver());
         assertThrows(SmartRedisLimiterException.class, () -> bare.findByKey(command(true, limits(100))));
     }
 }

@@ -1,9 +1,10 @@
 dependencies {
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core:3.1.0'
     // 契约层：变更客户端接口/wire 模型/codec（api 传递），正式发布固定 Maven 坐标。
     api 'io.github.sure-zzzzzz:smart-redis-limiter-management-policy-mutation-client-core:1.0.0'
 
     // aksk 底座：提供 akskClientRestTemplate（认证+连接池+超时），本模块代码不 import 底座类型
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.0.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-starter:3.1.0'
 
     // Spring Boot（compileOnly，宿主自行引入）
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
@@ -18,4 +19,5 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.apache.httpcomponents:httpclient:4.5.13'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core:3.1.0'
 }
