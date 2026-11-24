@@ -8,8 +8,8 @@
 
 | 应用运行时 | 使用模块 | 版本 |
 | --- | --- | --- |
-| Spring Boot 2.x（javax） | `simple-aksk-resttemplate-redis-client-starter` | `3.0.2` |
-| Spring Boot 3.x（Jakarta） | `simple-aksk-resttemplate-redis-client-jakarta-starter` | `1.0.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-resttemplate-redis-client-starter` | `3.1.0` |
+| Spring Boot 3.x（Jakarta） | `simple-aksk-resttemplate-redis-client-jakarta-starter` | `1.1.0` |
 
 两条线不可同时引入。Jakarta 线要求 Java 17 或更高版本、Spring Boot 3.x 与 Spring Framework 6.x。
 
@@ -17,7 +17,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.apache.httpcomponents.client5:httpclient5'
@@ -66,3 +66,40 @@ io:
 - 联调边界：该验证覆盖 AKSK Token 获取和受保护接口调用；具体 OpenAPI、API 权限及数据权限由目标资源服务单独定义和校验。
 
 `1.0.0` 为首发版本，首发版本不单独维护 CHANGELOG。
+
+## AKP Profile
+
+底座提供 `AkskProfileRestTemplateFactory` 与 `AkskRestTemplateResolver`。空 Profile 或 `default` 使用默认 `akskClientRestTemplate`；命名 Profile 创建并复用受保护模板，每个模板只注入一个认证拦截器。
+
+命名 Profile 在顶层配置的 `profiles` 下声明（`default` 为保留名，默认凭据仍写在顶层；`token-endpoint` 缺省为 `/oauth2/token`）：
+
+```yaml
+io:
+  github:
+    surezzzzzz:
+      sdk:
+        auth:
+          aksk:
+            client:
+              profiles:
+                crm:
+                  server-url: https://aksk.example.test
+                  token-endpoint: /oauth2/token
+                  client-id: ${CRM_AKSK_CLIENT_ID}
+                  client-secret: ${CRM_AKSK_CLIENT_SECRET}
+```
+
+```java
+@Autowired
+private AkskProfileRestTemplateFactory profileFactory;
+@Autowired
+private AkskRestTemplateResolver resolver;
+
+RestTemplate crmTemplate = profileFactory.create("crm");
+RestTemplate resolved = resolver.resolve("crm");
+```
+
+- 未配置的 Profile 抛出 `ConfigurationException`，不回落到默认凭据。
+- 只使用命名 Profile 时顶层凭据可以缺省；此时解析 `default` 响亮失败。
+- 显式开启 `resttemplate.enable=true` 但默认凭据缺失时启动失败。
+- Secret 不写入日志、Redis key 或缓存值。

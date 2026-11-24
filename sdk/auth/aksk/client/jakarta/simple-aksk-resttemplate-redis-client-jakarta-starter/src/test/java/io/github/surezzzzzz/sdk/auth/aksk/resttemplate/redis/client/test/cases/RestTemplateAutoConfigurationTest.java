@@ -1,6 +1,8 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.test.cases;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.configuration.SimpleAkskClientCoreProperties;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.configuration.SimpleAkskRestTemplateRedisClientAutoConfiguration;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.interceptor.AkskRestTemplateInterceptor;
 import org.junit.jupiter.api.Test;
@@ -43,11 +45,23 @@ class RestTemplateAutoConfigurationTest {
                         "io.github.surezzzzzz.sdk.auth.aksk.client.enable=true",
                         "io.github.surezzzzzz.sdk.auth.aksk.client.resttemplate.enable=true")
                 .withBean(TokenManager.class, EmptyTokenManager::new)
+                .withBean(AkskClientProfileRegistry.class, this::registryWithDefaultProfile)
                 .run(context -> {
                     assertNotNull(context.getBean(AkskRestTemplateInterceptor.class), "应注册 AKSK RestTemplate 拦截器");
                     assertNotNull(context.getBean("akskClientRestTemplate", RestTemplate.class),
                             "启用时应注册命名 RestTemplate");
                 });
+    }
+
+    /**
+     * 构造含默认 Profile 的注册表，供默认模板 Bean 校验默认凭据
+     */
+    private AkskClientProfileRegistry registryWithDefaultProfile() {
+        SimpleAkskClientCoreProperties properties = new SimpleAkskClientCoreProperties();
+        properties.setServerUrl("https://aksk.example.test");
+        properties.setClientId("test-client");
+        properties.setClientSecret("test-secret");
+        return AkskClientProfileRegistry.fromProperties(properties);
     }
 
     @Test

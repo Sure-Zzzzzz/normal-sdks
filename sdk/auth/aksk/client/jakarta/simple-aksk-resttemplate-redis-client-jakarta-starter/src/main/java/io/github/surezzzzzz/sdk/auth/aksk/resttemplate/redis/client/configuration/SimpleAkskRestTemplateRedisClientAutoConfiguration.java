@@ -1,15 +1,26 @@
 package io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.configuration;
 
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorCode;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.ClientErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.exception.ConfigurationException;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.support.AkskClientProfileRegistry;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerAutoConfiguration;
 import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.interceptor.AkskRestTemplateInterceptor;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.AkskProfileRestTemplateFactory;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.AkskRestTemplateResolver;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.DefaultAkskProfileRestTemplateFactory;
+import io.github.surezzzzzz.sdk.auth.aksk.resttemplate.redis.client.support.DefaultAkskRestTemplateResolver;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.core5.util.Timeout;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -52,6 +63,30 @@ public class SimpleAkskRestTemplateRedisClientAutoConfiguration {
     @ConditionalOnMissingBean(AkskRestTemplateInterceptor.class)
     public AkskRestTemplateInterceptor akskRestTemplateInterceptor(TokenManager tokenManager) {
         return new AkskRestTemplateInterceptor(tokenManager);
+    }
+
+    /**
+     * 创建命名 Profile RestTemplate 工厂
+     */
+    @Bean
+    @ConditionalOnBean(ProfileTokenManager.class)
+    @ConditionalOnMissingBean(AkskProfileRestTemplateFactory.class)
+    public AkskProfileRestTemplateFactory akskProfileRestTemplateFactory(
+            ProfileTokenManager tokenManager,
+            SimpleAkskRestTemplateProperties properties) {
+        return new DefaultAkskProfileRestTemplateFactory(tokenManager, properties);
+    }
+
+    /**
+     * 创建领域传输 RestTemplate 解析器
+     */
+    @Bean
+    @ConditionalOnBean({ProfileTokenManager.class, AkskProfileRestTemplateFactory.class})
+    @ConditionalOnMissingBean(AkskRestTemplateResolver.class)
+    public AkskRestTemplateResolver akskRestTemplateResolver(
+            @Qualifier("akskClientRestTemplate") ObjectProvider<RestTemplate> defaultTemplate,
+            AkskProfileRestTemplateFactory profileFactory) {
+        return new DefaultAkskRestTemplateResolver(defaultTemplate, profileFactory);
     }
 
     /**
@@ -100,7 +135,14 @@ public class SimpleAkskRestTemplateRedisClientAutoConfiguration {
     @ConditionalOnMissingBean(name = "akskClientRestTemplate")
     public RestTemplate akskClientRestTemplate(
             AkskRestTemplateInterceptor interceptor,
-            SimpleAkskRestTemplateProperties properties) {
+            SimpleAkskRestTemplateProperties properties,
+            AkskClientProfileRegistry profileRegistry) {
+        if (!profileRegistry.contains(SimpleAkskClientCoreConstant.DEFAULT_PROFILE)) {
+            throw new ConfigurationException(
+                    ClientErrorCode.CONFIG_MISSING,
+                    String.format(ClientErrorMessage.CONFIG_MISSING,
+                            "default AKP Profile"));
+        }
 
         // 配置连接池
         PoolingHttpClientConnectionManager connectionManager = new PoolingHttpClientConnectionManager();
