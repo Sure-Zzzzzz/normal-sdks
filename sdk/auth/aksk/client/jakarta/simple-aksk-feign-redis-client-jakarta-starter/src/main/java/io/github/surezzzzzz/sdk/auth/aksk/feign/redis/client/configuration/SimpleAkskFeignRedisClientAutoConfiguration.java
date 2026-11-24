@@ -2,12 +2,16 @@ package io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.configuration;
 
 import feign.Feign;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.constant.SimpleAkskClientCoreConstant;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.TokenManager;
 import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.interceptor.AkskFeignRequestInterceptor;
+import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.interceptor.AkskProfileFeignRequestInterceptorFactory;
+import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.interceptor.DefaultAkskProfileFeignRequestInterceptorFactory;
 import io.github.surezzzzzz.sdk.auth.aksk.redis.tokenmanager.configuration.SimpleAkskRedisTokenManagerAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 
@@ -73,5 +77,16 @@ public class SimpleAkskFeignRedisClientAutoConfiguration {
     @Bean
     public AkskFeignRequestInterceptor akskFeignRequestInterceptor(TokenManager tokenManager) {
         return new AkskFeignRequestInterceptor(tokenManager);
+    }
+
+    /**
+     * 创建命名 Profile Feign 拦截器工厂
+     */
+    @Bean
+    @ConditionalOnBean(ProfileTokenManager.class)
+    @ConditionalOnMissingBean(AkskProfileFeignRequestInterceptorFactory.class)
+    public AkskProfileFeignRequestInterceptorFactory akskProfileFeignRequestInterceptorFactory(
+            ProfileTokenManager tokenManager) {
+        return new DefaultAkskProfileFeignRequestInterceptorFactory(tokenManager);
     }
 }

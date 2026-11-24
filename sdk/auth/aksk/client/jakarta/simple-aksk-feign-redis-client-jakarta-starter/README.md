@@ -8,8 +8,8 @@
 
 | 应用运行时 | 使用模块 | 版本 |
 | --- | --- | --- |
-| Spring Boot 2.x（javax） | `simple-aksk-feign-redis-client-starter` | `3.0.2` |
-| Spring Boot 3.x（Jakarta） | `simple-aksk-feign-redis-client-jakarta-starter` | `1.0.0` |
+| Spring Boot 2.x（javax） | `simple-aksk-feign-redis-client-starter` | `3.1.0` |
+| Spring Boot 3.x（Jakarta） | `simple-aksk-feign-redis-client-jakarta-starter` | `1.1.0` |
 
 两条线不可同时引入。Jakarta 线要求 Java 17 或更高版本、Spring Boot 3.x、Spring Framework 6.x 与调用方自行选择的 Spring Cloud OpenFeign。
 
@@ -17,7 +17,7 @@
 
 ```groovy
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 }
@@ -59,3 +59,38 @@ public interface ResourceClient {
 - 联调边界：该验证覆盖 AKSK Token 获取和受保护接口调用；具体 OpenAPI、API 权限及数据权限由目标资源服务单独定义和校验。
 
 `1.0.0` 为首发版本，首发版本不单独维护 CHANGELOG。
+
+## AKP Profile
+
+Feign 子上下文可继承 `AkskProfileFeignConfiguration` 并覆写 `akskProfile()`。空 Profile 或 `default` 使用默认拦截器；命名 Profile 只注入一个 Profile 拦截器，Profile 缺失时创建 Feign 客户端失败。
+
+领域 Profile 配置类示例（从领域配置键读取，未配置时走默认链）：
+
+```java
+public class CrmAkskFeignConfiguration extends AkskProfileFeignConfiguration {
+
+    private final String profile;
+
+    public CrmAkskFeignConfiguration(Environment environment) {
+        this.profile = environment.getProperty(
+                "io.github.surezzzzzz.sdk.crm.client.aksk-profile",
+                SimpleAkskClientCoreConstant.DEFAULT_PROFILE);
+    }
+
+    @Override
+    protected String akskProfile() {
+        return profile;
+    }
+}
+```
+
+```java
+@AkskClientFeignClient(name = "crm", url = "${io.github.surezzzzzz.sdk.crm.client.base-url}",
+        configuration = CrmAkskFeignConfiguration.class)
+public interface CrmClient {
+}
+```
+
+- 命名 Profile 的凭据来自底座 Token Manager 的 `profiles` 配置（见 `simple-aksk-redis-token-manager-jakarta-starter`）。
+- 未配置的 Profile 抛出 `ConfigurationException`，不回落到默认凭据。
+- Secret 不写入日志、Redis key 或缓存值。

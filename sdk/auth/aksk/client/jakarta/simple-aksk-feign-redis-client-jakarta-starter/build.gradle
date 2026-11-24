@@ -16,7 +16,7 @@ configurations.configureEach {
 
 dependencies {
     // Token Manager 已发布，使用精确坐标保证发布 POM 与本地解析一致。
-    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager-jakarta-starter:1.1.0'
 
     // Spring Cloud OpenFeign（compileOnly，用户自行引入）。
     compileOnly "org.springframework.cloud:spring-cloud-starter-openfeign:${jakartaOpenFeignVersion}"
