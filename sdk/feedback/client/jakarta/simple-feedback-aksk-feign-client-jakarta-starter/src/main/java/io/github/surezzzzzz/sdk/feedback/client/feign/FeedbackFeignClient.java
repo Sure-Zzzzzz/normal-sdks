@@ -1,6 +1,7 @@
 package io.github.surezzzzzz.sdk.feedback.client.feign;
 
-import io.github.surezzzzzz.sdk.auth.aksk.feign.redis.client.annotation.AkskClientFeignClient;
+import io.github.surezzzzzz.sdk.feedback.client.feign.configuration.FeedbackAkskFeignConfiguration;
+import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /** Feedback 公开 HTTP wire 契约；返回值保持 Map，避免 Feign 直接绑定 core 快照。 */
-@AkskClientFeignClient(name = "feedback",
+@FeignClient(name = "feedback",
+        configuration = FeedbackAkskFeignConfiguration.class,
         url = "${io.github.surezzzzzz.sdk.feedback.client.base-url}")
 public interface FeedbackFeignClient {
 

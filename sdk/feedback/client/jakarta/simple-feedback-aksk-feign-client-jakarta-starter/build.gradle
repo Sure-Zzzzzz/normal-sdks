@@ -13,7 +13,8 @@ configurations.configureEach {
 
 dependencies {
     api 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
@@ -27,7 +28,7 @@ dependencies {
     testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     testImplementation 'io.github.openfeign:feign-hc5:13.5'
     testImplementation 'io.github.openfeign:feign-jackson:13.5'
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     testRuntimeOnly 'org.apache.commons:commons-pool2'
 }
 
