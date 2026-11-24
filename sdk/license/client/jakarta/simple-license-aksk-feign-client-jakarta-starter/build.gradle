@@ -13,14 +13,16 @@ configurations.configureEach {
 }
 
 dependencies {
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     api 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
     // AKSK Bearer 注入复用 aksk feign jakarta 生态
-    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-feign-redis-client-jakarta-starter:1.1.0'
     compileOnly 'org.springframework.cloud:spring-cloud-starter-openfeign'
     compileOnly 'org.springframework:spring-web'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     testImplementation 'io.github.sure-zzzzzz:simple-license-client-core:2.0.1'
 }

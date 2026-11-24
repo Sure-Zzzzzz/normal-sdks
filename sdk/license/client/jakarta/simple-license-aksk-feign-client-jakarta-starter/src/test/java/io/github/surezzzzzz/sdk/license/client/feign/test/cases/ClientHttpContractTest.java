@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpServer;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.license.client.model.AuthorizationRequest;
 import io.github.surezzzzzz.sdk.license.client.model.ClientReservation;
 import io.github.surezzzzzz.sdk.license.client.model.GrantSelectionPage;
@@ -60,7 +61,8 @@ class ClientHttpContractTest {
                 method = exchange.getRequestMethod();
                 path = exchange.getRequestURI().getPath();
                 query = exchange.getRequestURI().getRawQuery();
-                authenticated = "present".equals(exchange.getRequestHeaders().getFirst("X-Test-Authentication"));
+        String authorization = exchange.getRequestHeaders().getFirst("Authorization");
+        authenticated = authorization != null && authorization.startsWith("Bearer ");
                 ByteArrayOutputStream received = new ByteArrayOutputStream();
                 try (InputStream input = exchange.getRequestBody()) {
                     byte[] buffer = new byte[1024];
@@ -99,8 +101,34 @@ class ClientHttpContractTest {
         server.start();
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         LicenseFeignJakartaAutoConfiguration configuration = new LicenseFeignJakartaAutoConfiguration();
+        ProfileTokenManager stubTokenManager = new ProfileTokenManager() {
+            @Override
+            public String getToken() {
+                return "test-token";
+            }
+
+            @Override
+            public void clearToken() {
+                // 桩实现无缓存可清
+            }
+
+            @Override
+            public String getToken(String profile) {
+                return "test-token";
+            }
+
+            @Override
+            public void clearToken(String profile) {
+                // 桩实现无缓存可清
+            }
+
+            @Override
+            public boolean containsProfile(String profile) {
+                return true;
+            }
+        };
         client = configuration.licenseFeignClient(configuration.licenseContractFeign(
-                template -> template.header("X-Test-Authentication", "present"),
+                stubTokenManager, "default",
                 () -> new HttpMessageConverters(), baseUrl));
     }
 

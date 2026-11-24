@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import feign.RequestInterceptor;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.manager.ProfileTokenManager;
 import io.github.surezzzzzz.sdk.license.client.feign.LicenseFeignJakartaAutoConfiguration;
 import io.github.surezzzzzz.sdk.license.client.spi.LicenseServerClient;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +29,8 @@ class FeignAssemblyTest {
     @Test
     void officialNamedInterceptorAndConvertersRegisterOneRealContract() {
         log.info("验证完整底座注册唯一客户端及真实Feign契约");
-        runner().withBean("akskFeignRequestInterceptor", RequestInterceptor.class, () -> template -> {
-        }).withBean(HttpMessageConverters.class, HttpMessageConverters::new).run(context -> {
+        runner().withBean(ProfileTokenManager.class, FeignAssemblyTest::stubProfileTokenManager)
+                .withBean(HttpMessageConverters.class, HttpMessageConverters::new).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(LicenseServerClient.class);
             assertThat(context).hasSingleBean(LicenseFeignJakartaAutoConfiguration.LicenseContractFeign.class);
@@ -41,8 +42,8 @@ class FeignAssemblyTest {
         log.info("验证缺认证或缺转换器在启动期失败");
         runner().withBean(HttpMessageConverters.class, HttpMessageConverters::new)
                 .run(context -> assertThat(context).hasFailed());
-        runner().withBean("akskFeignRequestInterceptor", RequestInterceptor.class, () -> template -> {
-        }).run(context -> assertThat(context).hasFailed());
+        runner().withBean(ProfileTokenManager.class, FeignAssemblyTest::stubProfileTokenManager)
+                .run(context -> assertThat(context).hasFailed());
     }
 
     @Test
@@ -53,5 +54,32 @@ class FeignAssemblyTest {
             assertThat(context).hasSingleBean(LicenseServerClient.class);
             assertThat(context).doesNotHaveBean(LicenseFeignJakartaAutoConfiguration.LicenseContractFeign.class);
         });
+    }
+
+    private static ProfileTokenManager stubProfileTokenManager() {
+        return new ProfileTokenManager() {
+            @Override
+            public String getToken() {
+                return "test-token";
+            }
+
+            @Override
+            public void clearToken() {
+            }
+
+            @Override
+            public String getToken(String profile) {
+                return "test-token";
+            }
+
+            @Override
+            public void clearToken(String profile) {
+            }
+
+            @Override
+            public boolean containsProfile(String profile) {
+                return true;
+            }
+        };
     }
 }
