@@ -11,4 +11,6 @@ public class SimpleFeedbackClientRestTemplateProperties {
     private boolean enable = true;
     /** Feedback Server 基地址。 */
     private String baseUrl;
+    /** AKP Profile；空或 default 使用主 AKSK Client 默认凭据。 */
+    private String akskProfile;
 }

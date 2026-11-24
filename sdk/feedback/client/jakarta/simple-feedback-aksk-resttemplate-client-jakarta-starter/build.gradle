@@ -1,6 +1,7 @@
 dependencies {
+    compileOnly 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     api 'io.github.sure-zzzzzz:simple-feedback-client-core:1.0.1'
-    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.0.0'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-resttemplate-redis-client-jakarta-starter:1.1.0'
     compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
     compileOnly 'org.springframework.boot:spring-boot-configuration-processor'
     compileOnly 'org.springframework.boot:spring-boot-starter-web'
@@ -12,7 +13,7 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-aop'
     testImplementation 'org.springframework.boot:spring-boot-starter-log4j2'
     testImplementation 'org.apache.httpcomponents.client5:httpclient5'
-    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.0.0'
+    testImplementation 'io.github.sure-zzzzzz:simple-aksk-client-core-jakarta:1.1.0'
     testRuntimeOnly 'org.apache.commons:commons-pool2'
 }
 

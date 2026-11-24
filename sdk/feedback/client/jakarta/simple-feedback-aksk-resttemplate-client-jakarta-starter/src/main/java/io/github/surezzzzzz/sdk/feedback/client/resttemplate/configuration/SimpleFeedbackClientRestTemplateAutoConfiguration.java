@@ -4,7 +4,7 @@ import io.github.surezzzzzz.sdk.feedback.client.FeedbackClient;
 import io.github.surezzzzzz.sdk.feedback.client.resttemplate.FeedbackRestTemplateClient;
 import io.github.surezzzzzz.sdk.feedback.client.resttemplate.SimpleFeedbackClientRestTemplatePackage;
 import io.github.surezzzzzz.sdk.feedback.client.resttemplate.annotation.SimpleFeedbackClientRestTemplateComponent;
-import org.springframework.beans.factory.annotation.Qualifier;
+import io.github.surezzzzzz.sdk.auth.aksk.client.core.transport.AkskRestTemplateResolver;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,8 +31,9 @@ public class SimpleFeedbackClientRestTemplateAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(FeedbackClient.class)
     public FeedbackClient feedbackClient(
-            @Qualifier("akskClientRestTemplate") RestTemplate restTemplate,
+            AkskRestTemplateResolver restTemplateResolver,
             SimpleFeedbackClientRestTemplateProperties properties) {
-        return new FeedbackRestTemplateClient(restTemplate, properties.getBaseUrl());
+        return new FeedbackRestTemplateClient(
+                restTemplateResolver.resolve(properties.getAkskProfile()), properties.getBaseUrl());
     }
 }
