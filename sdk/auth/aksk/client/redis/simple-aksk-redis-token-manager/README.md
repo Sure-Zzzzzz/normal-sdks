@@ -1,6 +1,6 @@
 # Simple AKSK Redis Token Manager
 
-> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.1.0**。
+> **2.x 已封版**：2.x 文档冻结快照见 [README.2.x.md](README.2.x.md)；本文档对应 **3.1.1**。
 
 基于 `smart-cache-starter` 的分布式 Token 管理器，提供 L1+L2 两级缓存、分布式锁防击穿、多实例 L1 一致性和 L2 预刷新能力。
 
@@ -29,7 +29,7 @@ AKP 是 AKSK 的服务机器凭据，一组 AKP 即一对 AccessKey / SecretKey�
 ### 1. 添加依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.1.0'
+implementation 'io.github.sure-zzzzzz:simple-aksk-redis-token-manager:3.1.1'
 
 // 必须自行引入（compileOnly，不会传递）
 implementation 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
@@ -89,7 +89,7 @@ io:
             mode: strong                    # Pub/Sub 多实例 L1 一致
 ```
 
-> **redis-route 接管是硬前提**（smart-cache 2.2.0 起）：`cache.l2.enabled=true` 或 `consistency.mode=strong` 时容器必须存在 `RedisRouteTemplate` bean（即启用 `io.github.surezzzzzz.sdk.redis.route` 接管），否则启动期 fail-fast 拒绝启动；`spring.redis.*` 直连形态不再受支持。lock 无需任何开关——容器存在 route 接管的标准 `stringRedisTemplate` 时 lock 1.2.2 自动让位复用。
+> **redis-route 接管是硬前提**（smart-cache 2.2.0 起；3.1.1 运行时收敛到 2.2.1）：`cache.l2.enabled=true` 或 `consistency.mode=strong` 时容器必须存在 `RedisRouteTemplate` bean（即启用 `io.github.surezzzzzz.sdk.redis.route` 接管），否则启动期 fail-fast 拒绝启动；`spring.redis.*` 直连形态不再受支持。lock 无需任何开关——容器存在 route 接管的标准 `stringRedisTemplate` 时 lock 1.2.2 自动让位复用。
 
 ### 3. 使用
 
@@ -189,7 +189,7 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 
 | 应用运行时 | 使用模块 | 版本 | Spring Boot | Java |
 | --- | --- | --- | --- | --- |
-| Spring Boot 2.x（javax） | `simple-aksk-redis-token-manager` | `3.1.0` | 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE | 8 |
+| Spring Boot 2.x（javax） | `simple-aksk-redis-token-manager` | `3.1.1` | 2.7.9 / 2.4.5 / 2.3.12.RELEASE / 2.2.13.RELEASE | 8 |
 | Spring Boot 3.x（Jakarta） | `simple-aksk-redis-token-manager-jakarta-starter` | `1.1.0` | 3.4.2 | 17 / 21 |
 
 两条线不可同时引入。
@@ -212,6 +212,13 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 
 ## 版本历史
 
+### 3.1.1
+
+- `smart-cache-starter` 运行时由 2.2.0 收敛到 2.2.1，消除与 AKSK/IAM Server 同进程双版本。
+- Token Manager 契约、Profile 隔离、锁、预刷新和日志安全边界不变。
+
+详见 [CHANGELOG.3.1.1.md](CHANGELOG.3.1.1.md)。
+
 ### 3.1.0
 
 - 升级 `simple-aksk-client-core` 至 3.1.0，支持多 AKP Profile。
@@ -220,7 +227,7 @@ public class UserSecurityContextProvider implements SecurityContextProvider {
 - Token 获取、刷新与清理的诊断日志携带 Profile 维度，不记录 secret、原始 clientId、Token 或 Authorization。
 - `RedisTokenManager` 由自动配置创建并注入 `AkskClientProfileRegistry`；排除自动配置又扫描该组件的宿主会在启动期失败。
 
-详见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
+3.1.0 见 [CHANGELOG.3.1.0.md](CHANGELOG.3.1.0.md)。
 
 ### 3.0.2
 
