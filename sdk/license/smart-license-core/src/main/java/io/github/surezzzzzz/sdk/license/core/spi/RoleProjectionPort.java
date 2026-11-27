@@ -45,6 +45,44 @@ public interface RoleProjectionPort {
         String digest;
         List<String> pagePermissions;
         List<String> apiPermissions;
+        List<DataResource> dataResources;
+
+        /** 声明 DATA 资源、动作和约束维度；集合由消费方保持不可变语义。 */
+        public Manifest(long applicationId, String applicationCode, long version, String digest,
+                        List<String> pagePermissions, List<String> apiPermissions,
+                        List<DataResource> dataResources) {
+            this.applicationId = applicationId;
+            this.applicationCode = applicationCode;
+            this.version = version;
+            this.digest = digest;
+            this.pagePermissions = pagePermissions;
+            this.apiPermissions = apiPermissions;
+            this.dataResources = dataResources;
+        }
+
+        /**
+         * 保留 2.0.0 三权限清单构造器；旧宿主按未申报 DATA 处理，由实现方决定是否失败关闭。
+         *
+         * @param applicationId    目标应用 ID
+         * @param applicationCode  目标应用编码
+         * @param version          清单版本
+         * @param digest           清单摘要
+         * @param pagePermissions  PAGE 权限码
+         * @param apiPermissions   API 权限码
+         */
+        public Manifest(long applicationId, String applicationCode, long version, String digest,
+                        List<String> pagePermissions, List<String> apiPermissions) {
+            this(applicationId, applicationCode, version, digest, pagePermissions,
+                    apiPermissions, null);
+        }
+    }
+
+    /** 应用申报的 DATA 资源、动作与约束维度；角色规则模板必须逐项落入申报范围。 */
+    @Value
+    class DataResource {
+        String resource;
+        List<String> actions;
+        List<String> dimensions;
     }
 
     /** 当前目录事实，不使用路径前缀推断归属。 */

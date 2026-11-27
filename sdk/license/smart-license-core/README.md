@@ -7,7 +7,7 @@ License 协议 2 的 Java 8 内核，提供签名文件编解码、类型化权�
 ## 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-license-core:2.0.0'
+implementation 'io.github.sure-zzzzzz:smart-license-core:2.1.0'
 ```
 
 公开编解码面使用 Jackson 2.18.6，并由 api 依赖传递。宿主的依赖管理不能将实际运行版本降至缺少严格深度约束的旧版；Core 使用自己维护的 ObjectMapper，不消费宿主的 JSON 配置。
@@ -119,6 +119,7 @@ SPI 是调用方可实现的业务接口。以下接口统一位于 `io.github.s
 | LicenseSigner | 按签名档案对不可变原文签名 | 返回64字节JOSE签名；使用精确钥版本并核回显，签名路径不现场换公钥 |
 | KeyMaterialPort | 登记时读取完整公钥资料 | 返回引用、版本、算法、逻辑钥/版本状态及SPKI；不能只验证字节长度 |
 | IamDirectoryPort | 核验主体在客户授权根内 | 核验完整启用祖先链；不可达或无法确定时拒绝，不共用IAM表 |
+| RoleProjectionPort | 回读目标应用manifest/目录，创建专用角色并按远端修订写规则和挂载 | manifest 携带 PAGE/API 及 DATA 申报；失败必须区分 REJECTED 与 UNCERTAIN，每次写后回读真实修订 |
 | CrmFulfillmentPort | 游标拉取、点查及履约认领/结果回写 | 使用License自有值类型；保留cursor与序号水位，不暴露CRM DTO |
 | LimiterPolicyPort | 将授权中的客户 OpenAPI 限频快照投影到 limiter Management，并在暂停、吊销或到期时停用 | 只依赖 limiter 的稳定管理契约；以 License 操作编号幂等；远端返回的资源键、namespace、版本和启用状态必须完整核验 |
 | OnlineDecisionClient | 消费在线判定 | 远端传输由客户端装配件提供，不在Core复写HTTP |
