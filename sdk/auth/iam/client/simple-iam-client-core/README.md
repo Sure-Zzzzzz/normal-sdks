@@ -19,7 +19,7 @@ IAM openapi 的契约层：定义与 IAM Server（`/iam/api/**`）交互的全�
 ## 依赖
 
 ```groovy
-implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.4'
+implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.5'
 ```
 
 - 发布 POM 零依赖；Java 8 字节码，SB2（Java 8+）与 jakarta（Java 17+）宿主均可消费
@@ -31,7 +31,7 @@ implementation 'io.github.sure-zzzzzz:simple-iam-client-core:1.0.4'
 | --- | --- |
 | 接口 | 十一族共 **49 方法**：在既有 48 方法上新增 `IamPortalApplicationClient`（1），对应 Server 1.3.8 的 Portal 可信应用路由投影；旧 `IamApplicationClient` 仍保持三字段全局目录 |
 | 分页模型 | `IamSpringPage<T>`（users/departments 族，Spring Page wire 形态：content/totalElements，页码 **0 起**）与 `IamOpenRolePage`/`IamOpenRoleDepartmentPage`（open-roles 族，server 自持形态：items/total，页码 **1 起**）——两种形态是 server 契约事实，不可混用 |
-| 领域模型 | `IamUser`（含 subjectId）/ `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest` / `PageAdmittedApplication` / `IamApplication` / `IamMessage` 族四件 / `IamSession` / `IamPermission` / `IamUserGroup` 族两件 / `IamRoleCatalogEntry` / `IamStatistics` 等 24 个 |
+| 领域模型 | `IamUser`（含 subjectId）/ `IamDepartment` / `IamOpenRole`（含 `revision`——乐观并发 If-Match 值来源）/ `IamOpenRoleRule` / `IamOrganizationDirectory` / `IamOrganizationMember` / `IamTargetApplication` / `IamPermissionManifest`（含 DATA 申报 `IamDataResourceDeclaration`）/ `PageAdmittedApplication` / `IamApplication` / `IamMessage` 族四件 / `IamSession` / `IamPermission` / `IamUserGroup` 族两件 / `IamRoleCatalogEntry` / `IamStatistics` 等 25 个 |
 | 常量 | `SimpleIamClientConstant`：路径段/协议头（`If-Match`/`ETag`）/wire 字段名/查询参数名，值逐字对位 server 契约 |
 | 异常族 | `SimpleIamClientException`（基类）+ `IamClientProtocolException`（2xx 形状不符）/ `IamClientConfigurationException`（配置不合法）。非 2xx 不进本族——由传输层透传 Spring/Feign 标准异常 |
 

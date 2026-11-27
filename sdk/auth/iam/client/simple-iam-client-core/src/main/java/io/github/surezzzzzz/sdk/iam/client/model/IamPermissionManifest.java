@@ -31,4 +31,9 @@ public class IamPermissionManifest {
      * API 权限码。
      */
     java.util.List<String> apiPermissions;
+
+    /**
+     * DATA 资源、动作与约束维度申报。
+     */
+    java.util.List<IamDataResourceDeclaration> dataResources;
 }
