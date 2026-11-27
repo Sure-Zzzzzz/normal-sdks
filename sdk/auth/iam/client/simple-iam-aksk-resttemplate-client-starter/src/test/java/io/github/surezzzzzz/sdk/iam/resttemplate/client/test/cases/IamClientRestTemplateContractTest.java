@@ -24,6 +24,7 @@ import java.net.URI;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
@@ -513,9 +514,27 @@ class IamClientRestTemplateContractTest {
 
         server.expect(requestTo(API + "/target-applications/3/permission-manifest"))
                 .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("{\"manifestVersion\":2,\"manifestDigest\":\"sha\",\"pagePermissions\":[\"kms.key:page\"],\"apiPermissions\":[\"kms.key:api\"]}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"manifestVersion\":2,\"manifestDigest\":\"sha\","
+                        + "\"pagePermissions\":[\"kms.key:page\"],\"apiPermissions\":[\"kms.key:api\"],"
+                        + "\"dataResources\":[{\"resource\":\"license-grant\",\"actions\":[\"read\"],"
+                        + "\"dimensions\":[\"grantId\",\"customerId\"]}]}", MediaType.APPLICATION_JSON));
         IamPermissionManifest manifest = openRoles.getTargetApplicationManifest(3L);
         assertEquals("kms.key:page", manifest.getPagePermissions().get(0), "清单解析");
+        assertEquals("license-grant", manifest.getDataResources().get(0).getResource(), "DATA资源申报");
+        assertEquals("read", manifest.getDataResources().get(0).getActions().get(0), "DATA动作申报");
+        assertEquals("customerId", manifest.getDataResources().get(0).getDimensions().get(1), "DATA维度申报");
+        server.verify();
+    }
+
+    @Test
+    void shouldPreserveMissingDataDeclarationAsNullForOldServerResponses() {
+        server.expect(requestTo(API + "/target-applications/3/permission-manifest"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("{\"manifestVersion\":2,\"manifestDigest\":\"sha\","
+                        + "\"pagePermissions\":[\"kms.key:page\"],\"apiPermissions\":[\"kms.key:api\"]}",
+                        MediaType.APPLICATION_JSON));
+        IamPermissionManifest manifest = openRoles.getTargetApplicationManifest(3L);
+        assertNull(manifest.getDataResources(), "旧Server缺失DATA申报不能伪装成空数组");
         server.verify();
     }
 

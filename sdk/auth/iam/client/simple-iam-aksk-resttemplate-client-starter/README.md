@@ -5,6 +5,8 @@ RestTemplate 装配的 IAM openapi client（Spring Boot 2.x 宿主）：直接�
 `akskClientRestTemplate`，本模块在其上装配 core 十一接口（1.0.3 起含 Portal 可信应用路由投影）的默认实现——
 `IamUserRestTemplateClient` / `IamDepartmentRestTemplateClient` / `IamOpenRoleRestTemplateClient` 等，1.0.2 起含 `IamApplicationRestTemplateClient` 与六族新实现，1.0.3 起含 `IamPortalApplicationRestTemplateClient`。
 
+> **1.1.1**：目标应用 manifest 解析 `dataResources`（DATA 资源、动作和约束维度）；依赖 `simple-iam-client-core:1.0.5`。旧 Server 响应缺该字段时保持 `null`，消费方必须失败关闭，不得当作空申报。
+
 > **1.0.3**：契约对齐 server 1.3.8，新增 Portal 可信应用路由投影分页（`catalogRevision` 一致性快照、路由来源和受控转发策略）；依赖 `simple-iam-client-core:1.0.4`，总计 49 方法。对应 server >= 1.3.8，旧 server 仅新增方法不可用。
 
 ## 核心能力
@@ -33,7 +35,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
+| `simple-iam-client-core:1.0.5` | `api` 编译期传递 | 契约层：接口/模型/常量/异常族 |
 | `simple-aksk-resttemplate-redis-client-starter:3.1.0` | `implementation` 运行时传递 | aksk 底座：akskClientRestTemplate + 令牌链 |
 | Spring Boot Web / HttpClient 4 | `compileOnly`，**宿主自行引入** | RestTemplate 与连接池 |
 | Spring Boot AutoConfiguration | `compileOnly` | 自动装配 |
@@ -44,7 +46,7 @@ open-roles 族返回 `IamOpenRolePage`（server 自持：items/total，**页码 
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-resttemplate-client-starter:1.1.1'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.httpcomponents:httpclient:4.5.13'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
@@ -65,7 +67,7 @@ io:
             sources:
               default:
                 mode: standalone
-                host: 127simple-iam-aksk-resttemplate-client-starter:1.1.0.1
+                host: 127.0.0.1
                 port: 6379
                 database: 0
         auth:
@@ -132,8 +134,8 @@ public class UserSyncService {
 
 ## 测试覆盖
 
-- 契约测试 4：49 方法逐端点断言，额外覆盖 Portal 路径、catalogRevision 查询和路由字段解析
-- 装配测试 4：默认关/正常装配三客户端/缺底座模板响亮失败/非法 origin 拒启
+- 1.1.1 全量测试 13：49 方法契约、装配、manifest DATA 声明、缺失 DATA 申报保持 `null`
+  以及 AKP Profile 链路均无失败/错误/跳过。
 - 端到端 6：AKP → aksk 底座真令牌链 → dual-identity 宿主 → 真 IAM openapi
   （users 分页/详情/角色/keyword/部门列表/详情/404 透传，2026-10-08 全绿）
 

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * 受委托角色族 RestTemplate 客户端（认证+传输=底座 akskClientRestTemplate；写操作走 If-Match
@@ -231,6 +232,25 @@ public class IamOpenRoleRestTemplateClient implements IamOpenRoleClient {
                 .manifestDigest(IamClientHttpSupport.optionalText(node, "manifestDigest"))
                 .pagePermissions(IamClientHttpSupport.stringList(node, "pagePermissions"))
                 .apiPermissions(IamClientHttpSupport.stringList(node, "apiPermissions"))
+                .dataResources(dataResources(node.path("dataResources")))
                 .build();
+    }
+
+    private static List<IamDataResourceDeclaration> dataResources(JsonNode items) {
+        if (items == null || items.isMissingNode() || items.isNull()) {
+            return null;
+        }
+        List<IamDataResourceDeclaration> result = new ArrayList<>();
+        if (!items.isArray()) {
+            return result;
+        }
+        for (com.fasterxml.jackson.databind.JsonNode item : items) {
+            result.add(IamDataResourceDeclaration.builder()
+                    .resource(IamClientHttpSupport.optionalText(item, "resource"))
+                    .actions(IamClientHttpSupport.stringList(item, "actions"))
+                    .dimensions(IamClientHttpSupport.stringList(item, "dimensions"))
+                    .build());
+        }
+        return Collections.unmodifiableList(result);
     }
 }
