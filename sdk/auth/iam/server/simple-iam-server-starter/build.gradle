@@ -16,9 +16,9 @@ dependencies {
     // 复用自有 SDK：二级缓存 / 拦截器限流 / Redis 锁 / Redis 与 MySQL 路由
     // （cache/limiter/lock/route 的类型进公开签名或 README 教使用方直接消费，保持 api；
     //   mysql-route 纯 yaml 配置驱动装配、caffeine 是 smart-cache L1 运行时补品，不进使用方编译类路径）
-    api 'io.github.sure-zzzzzz:smart-cache-starter:2.1.0'
+    api 'io.github.sure-zzzzzz:smart-cache-starter:2.2.1'
     api 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.1.0'
-    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.1'
+    api 'io.github.sure-zzzzzz:simple-redis-lock-starter:1.2.2'
     api 'io.github.sure-zzzzzz:simple-redis-route-starter:1.2.2'
     implementation 'io.github.sure-zzzzzz:simple-mysql-route-starter:1.1.1'
     implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'

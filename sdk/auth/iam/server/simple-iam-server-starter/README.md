@@ -2,7 +2,7 @@
 
 统一身份认证与授权服务（IAM Server）。一个可独立部署的 Spring Boot 应用模块：承载本地账号体系、浏览器登录会话、OAuth 2.1 / OIDC 授权协议、RBAC、可信应用、Portal 数据、站内信与审计事件，为业务系统提供"一次登录、处处可用"的身份底座。
 
-当前版本为 `1.3.8`，变更与升级要求见 [CHANGELOG.1.3.8.md](CHANGELOG.1.3.8.md)。
+当前版本为 `1.3.9`。`1.3.9` 是依赖收敛补丁：`smart-cache-starter` 升级到 `2.2.1`，`simple-redis-lock-starter` 升级到 `1.2.2`，无 HTTP、SQL 或配置变化。详见 [CHANGELOG.1.3.9.md](CHANGELOG.1.3.9.md)。`1.3.8` 功能与升级要求见 [CHANGELOG.1.3.8.md](CHANGELOG.1.3.8.md)。
 
 `1.3.8` 新增无用户会话的 `GET /iam/api/portal/applications` Portal 可信应用路由投影：已授权 AKP 按 API + DATA
 三权读取启用 Portal 的可信应用路由投影，并用 `catalogRevision` 保证分页快照一致性。目录变化返回
@@ -500,7 +500,7 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 
 本模块提供身份、角色、授权投影及 JSON API；浏览器页面和代理由 Web 与宿主承载，业务应用负责消费授权结果。受委托角色 API 不替代产品资格判断、商业有效期检查或离线授权验证，模块测试也不替代消费方的真实 AKSK 通信与部署联调。
 
-测试边界：默认 `gradle test` 只验证 IAM 自身契约和通用资源认证替身，不启动 AKSK、不读取 AKSK 凭据，也不依赖 AKSK 数据库。真实 AKSK token、introspect 和 API/DATA 组合链路只通过 `LOCAL_DUAL_IDENTITY_E2E.init.gradle` 的显式协作联调入口验收。
+测试边界：默认 `gradle test` 只验证 IAM 自身契约和通用资源认证替身，不启动 AKSK、不读取 AKSK 凭据，也不依赖 AKSK 数据库。真实 AKSK token、introspect 和 API/DATA 组合链路只通过显式协作联调入口验收。
 
 **预留骨架（开关或表结构在、实现未完全接线）**：
 
@@ -531,5 +531,6 @@ Portal 根节点顺序由平台管理员通过 `GET/PUT /iam/admin/portal/applic
 | [CHANGELOG.1.3.6.md](CHANGELOG.1.3.6.md) | 口令最长生存期（默认关闭）+ 须改密原因下传 + 假换密拦截 |
 | [CHANGELOG.1.3.7.md](CHANGELOG.1.3.7.md) | 特权保底并集 + JIT 冲突策略 + 页面准入详情 + 可信应用目录 + openapi 六族补全 |
 | [CHANGELOG.1.3.8.md](CHANGELOG.1.3.8.md) | Portal 可信应用路由投影、登录要求确认、投影重算屏障与升级要求 |
+| [CHANGELOG.1.3.9.md](CHANGELOG.1.3.9.md) | SmartCache 与 Redis Lock 依赖收敛补丁 |
 | [CHANGELOG.1.3.3.md](CHANGELOG.1.3.3.md) | admin 手机号三态语义修复、验证记录及存量空串清理要求 |
 | [CHANGELOG.1.3.2.md](CHANGELOG.1.3.2.md) | 受委托角色能力、审计兼容性及升级要求 |
