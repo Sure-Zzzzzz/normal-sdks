@@ -2,7 +2,7 @@ version = project.file('version.properties').text.trim().split('=').last()
 
 dependencies {
     // License Core 2 提供协议/规则/签名原语与自有类型。
-    api 'io.github.sure-zzzzzz:smart-license-core:2.0.0'
+    api 'io.github.sure-zzzzzz:smart-license-core:2.1.0'
     // 控制器公开访问计划并直接使用验证上下文；契约类型由 core 提供，MVC 装配由宿主负责。
     api 'io.github.sure-zzzzzz:simple-data-permission-core:1.2.0'
     implementation 'io.github.sure-zzzzzz:simple-resource-server-core:1.1.1'

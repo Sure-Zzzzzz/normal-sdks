@@ -70,8 +70,7 @@ class RoleProjectionServiceTest {
                 .filter(plan -> plan.getCommandId().equals(call.getArgument(0))).findFirst());
         when(plans.findByCustomerIdAndProductIdAndApplicationIdOrderByDesiredRevisionDesc("c1", "p1", "9"))
                 .thenAnswer(call -> new ArrayList<>(stored.values()));
-        when(port.manifest(9L)).thenReturn(new RoleProjectionPort.Manifest(9L, "example-app", 1L, "digest-1",
-                Collections.singletonList("app.page"), Collections.singletonList("app.read")));
+        when(port.manifest(9L)).thenReturn(manifest(1L));
         when(port.departments(10L)).thenReturn(Arrays.asList(new RoleProjectionPort.Department(10L, null, true),
                 new RoleProjectionPort.Department(11L, 10L, true)));
         when(grants.findByCustomerIdAndProductIdOrderByGrantId("c1", "p1")).thenReturn(Collections.singletonList(grant("g1", "PERSON")));
@@ -124,6 +123,59 @@ class RoleProjectionServiceTest {
     }
 
     @Test
+    void approvedDataTemplateIsKeptInDesiredRulesWithoutAnyRemoteWrite() {
+        IntegrationPlanEntity plan = service.create("c1", "p1", 9L, dataRules());
+        assertThat(plan.getState()).isEqualTo("PENDING_EXECUTION");
+        assertThat(plan.getDesiredRules()).contains("license-grant").contains("customerId");
+        assertThat(snapshot(plan).path("desiredRules").path("dataGrantTemplate").path("grants").size()).isEqualTo(1);
+        verify(port, never()).create(anyString(), anyLong(), anyLong(), anyString());
+        verify(port, never()).putRules(anyString(), anyLong(), anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void dataTemplateOutsideDeclaredManifestIsRejectedBeforePlanCreation() {
+        when(port.manifest(9L)).thenReturn(new RoleProjectionPort.Manifest(9L, "example-app", 1L, "digest-1",
+                Collections.singletonList("app.page"), Collections.singletonList("app.read"),
+                Collections.singletonList(new RoleProjectionPort.DataResource("license-grant", null, null))));
+        ObjectNode unknownResource = dataRules();
+        ((ObjectNode) unknownResource.withArray("/dataGrantTemplate/grants").get(0))
+                .put("resource", "iam-role");
+        ObjectNode unknownAction = dataRules();
+        unknownAction.withArray("/dataGrantTemplate/grants/0/actions").add("write");
+        ObjectNode unknownDimension = dataRules();
+        unknownDimension.withArray("/dataGrantTemplate/grants/0/constraints").addObject()
+                .put("dimension", "tenantId").put("operator", "IN").putArray("values").add("tenant-1");
+
+        assertThatThrownBy(() -> service.create("c1", "p1", 9L, unknownResource))
+                .isInstanceOf(LicenseHttpException.class)
+                .hasMessage("须提供目标应用批准的精确 PAGE/API/DATA 规则快照");
+        assertThatThrownBy(() -> service.create("c1", "p1", 9L, unknownAction))
+                .isInstanceOf(LicenseHttpException.class)
+                .hasMessage("须提供目标应用批准的精确 PAGE/API/DATA 规则快照");
+        assertThatThrownBy(() -> service.create("c1", "p1", 9L, unknownDimension))
+                .isInstanceOf(LicenseHttpException.class)
+                .hasMessage("须提供目标应用批准的精确 PAGE/API/DATA 规则快照");
+        assertThat(stored).isEmpty();
+        verify(port, never()).create(anyString(), anyLong(), anyLong(), anyString());
+        verify(port, never()).departments(anyLong());
+        verify(port, never()).putRules(anyString(), anyLong(), anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
+    void deterministicRejectedWriteRemainsPendingExecutionAndDoesNotLookUncertain() {
+        IntegrationPlanEntity plan = service.create("c1", "p1", 9L, rules());
+        when(port.create("projection-1", 9L, 10L, "lic_projection-1"))
+                .thenThrow(new RoleProjectionPort.Failure(RoleProjectionPort.FailureKind.REJECTED, null));
+
+        IntegrationPlanEntity result = service.attempt(plan.getCommandId(), "AUTO");
+
+        assertThat(result.getState()).isEqualTo("PENDING_EXECUTION");
+        assertThat(result.getFailureReason()).isEqualTo("REJECTED");
+        verify(port, times(1)).create(anyString(), anyLong(), anyLong(), anyString());
+        verify(port, never()).putRules(anyString(), anyLong(), anyLong(), anyLong(), anyString(), anyString());
+    }
+
+    @Test
     void changedEnvironmentCannotReuseOldRoleOrPlan() {
         IntegrationPlanEntity plan = service.create("c1", "p1", 9L, rules());
         binding.rebind("environment-2", 10L);
@@ -146,11 +198,9 @@ class RoleProjectionServiceTest {
     @Test
     void actualManifestRevisionChangeRemainsStaleWithoutLosingLargeIntegerPrecision() {
         long version = 9007199254740992L;
-        when(port.manifest(9L)).thenReturn(new RoleProjectionPort.Manifest(9L, "example-app", version, "digest-1",
-                Collections.singletonList("app.page"), Collections.singletonList("app.read")));
+        when(port.manifest(9L)).thenReturn(manifest(version));
         IntegrationPlanEntity plan = service.create("c1", "p1", 9L, rules());
-        when(port.manifest(9L)).thenReturn(new RoleProjectionPort.Manifest(9L, "example-app", version + 1, "digest-1",
-                Collections.singletonList("app.page"), Collections.singletonList("app.read")));
+        when(port.manifest(9L)).thenReturn(manifest(version + 1));
 
         assertThatThrownBy(() -> service.attempt(plan.getCommandId(), "AUTO"))
                 .isInstanceOf(LicenseHttpException.class);
@@ -259,7 +309,22 @@ class RoleProjectionServiceTest {
         GrantRevisionEntity grant = new GrantRevisionEntity(id, "c1", "p1", kind, "CUSTOMER_MEMBERS", null, "ONLINE", null);
         grant.setState("ENABLED"); return grant;
     }
+
+    private static RoleProjectionPort.Manifest manifest(long version) {
+        return new RoleProjectionPort.Manifest(9L, "example-app", version, "digest-1",
+                Collections.singletonList("app.page"), Collections.singletonList("app.read"),
+                Collections.singletonList(new RoleProjectionPort.DataResource("license-grant",
+                        Collections.singletonList("read"), Arrays.asList("grantId", "customerId"))));
+    }
+
     private static ObjectNode rules() { return StrictJson.parse("{\"pagePermissions\":[\"app.page\"],\"apiPermissions\":[\"app.read\"],\"dataGrantTemplate\":null}", ObjectNode.class); }
+
+    private static ObjectNode dataRules() {
+        return StrictJson.parse("{\"pagePermissions\":[\"app.page\"],\"apiPermissions\":[\"app.read\"],"
+                + "\"dataGrantTemplate\":{\"protocol\":\"simple-data-permission\",\"version\":\"1.0\",\"grants\":[{"
+                + "\"resource\":\"license-grant\",\"actions\":[\"read\"],\"all\":false,\"constraints\":[{"
+                + "\"dimension\":\"customerId\",\"operator\":\"IN\",\"values\":[\"cu-1\"]}] }]}}", ObjectNode.class);
+    }
     private static ObjectNode snapshot(IntegrationPlanEntity plan) { return StrictJson.parse(plan.getProjectionSnapshot(), ObjectNode.class); }
     private static RoleProjectionPort.Role role(long revision, String rules, List<Long> departments) {
         return new RoleProjectionPort.Role("role-1", "projection-1", "lic-role-1", 9L, 10L, revision, rules, departments);

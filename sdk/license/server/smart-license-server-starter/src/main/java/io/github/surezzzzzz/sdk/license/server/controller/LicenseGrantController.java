@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.license.server.controller;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.annotation.SimpleLicenseServerComponent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -90,6 +91,8 @@ public class LicenseGrantController {
     private final io.github.surezzzzzz.sdk.license.server.repository.ModelVersionRepository models;
     private final io.github.surezzzzzz.sdk.license.server.service.JpaQuotaLedgerService quotaLedger;
     private final LicenseRevocationGuard revocationGuard;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private io.github.surezzzzzz.sdk.license.server.service.NamedSeatSnapshotPort namedSeatSnapshotPort;
@@ -188,7 +191,7 @@ public class LicenseGrantController {
                                              @RequestParam(defaultValue = "20") int size,
                                              @RequestParam(value = "customerId", required = false) String customerId) {
         LicenseRequestContext context = require(request, LicenseApi.GRANT_READ);
-        LicenseAccessScope scope = LicenseAccessScope.from(plan, "grantId");
+        LicenseAccessScope scope = grantScope(plan);
         // 产品筛选与客户筛选必须和 DATA 同时生效，不能在受限分支丢弃页面输入。
         String productId = request.getParameter("productId");
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.min(size, 100),
@@ -589,7 +592,7 @@ public class LicenseGrantController {
                                                    DataAccessPlan plan,
                                            HttpServletRequest request) {
         require(request, LicenseApi.GRANT_READ);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(grantId);
+        grantScope(plan).requireVisible(grantId);
         return ResponseEntity.ok(grantView(find(grantId)).toString());
     }
 
@@ -603,7 +606,7 @@ public class LicenseGrantController {
                                                      DataAccessPlan plan,
                                              HttpServletRequest request) {
         LicenseRequestContext context = require(request, LicenseApi.GRANT_MANAGE);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(grantId);
+        grantScope(plan).requireVisible(grantId);
         ObjectNode input = support.object(body, "state", "expectedRowVersion");
         GrantRevisionEntity entity = find(grantId);
         // 事务内优先取得数据库行锁，避免到期扫描与人工状态变更交叉覆盖。
@@ -683,7 +686,7 @@ public class LicenseGrantController {
                                                             DataAccessPlan plan,
                                                     HttpServletRequest request) {
         LicenseRequestContext issueContext = require(request, LicenseApi.GRANT_ISSUE);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(grantId);
+        grantScope(plan).requireVisible(grantId);
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty()
                 || idempotencyKey.length() + grantId.length() + 1
                 > io.github.surezzzzzz.sdk.license.server.constant.SigningOperationConstant.IDEMPOTENCY_MAX_LENGTH) {
@@ -800,7 +803,7 @@ public class LicenseGrantController {
                                                   @RequestParam(value = "activationId", required = false) String activationId) {
         require(request, LicenseApi.GRANT_READ);
         // 凭据经 grantId 关联授权 DATA；授权与激活筛选必须同时进入 SQL，再执行分页和计数。
-        LicenseAccessScope scope = LicenseAccessScope.from(plan, "grantId");
+        LicenseAccessScope scope = grantScope(plan);
         Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.max(1, Math.min(size, 100)),
                 Sort.by(Sort.Direction.DESC, SigningOperationConstant.OPERATION_ID));
         Page<SigningOperationEntity> result = scope.resolve(
@@ -822,7 +825,7 @@ public class LicenseGrantController {
                                                 HttpServletRequest request) {
         require(request, LicenseApi.GRANT_READ);
         SigningOperationEntity entity = findCredential(credentialId);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         return ResponseEntity.ok(credentialMetaView(entity).toString());
     }
 
@@ -836,7 +839,7 @@ public class LicenseGrantController {
                                                  HttpServletRequest request) {
         require(request, LicenseApi.GRANT_DELIVER);
         SigningOperationEntity entity = findCredential(credentialId);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         if (!"READY".equals(entity.getState()) || entity.getCommittedSignature() == null) {
             throw LicenseHttpException.notFound();
         }
@@ -938,6 +941,11 @@ public class LicenseGrantController {
 
     private GrantRevisionEntity find(String grantId) {
         return grants.findById(grantId).orElseThrow(LicenseHttpException::notFound);
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private SigningOperationEntity findCredential(String credentialId) {

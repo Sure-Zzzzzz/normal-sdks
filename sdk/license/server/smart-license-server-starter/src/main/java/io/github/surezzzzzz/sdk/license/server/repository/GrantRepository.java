@@ -42,6 +42,9 @@ public interface GrantRepository extends JpaRepository<GrantRevisionEntity, Stri
     /** 受限 DATA 范围列表过滤（IN 集合内分页）。 */
     Page<GrantRevisionEntity> findByGrantIdIn(Iterable<String> grantIds, Pageable pageable);
 
+    /** customerId DATA 范围到当前授权主键集合的稳定投影；结果仍需按调用动作和商业状态复核。 */
+    java.util.List<GrantRevisionEntity> findByCustomerIdIn(java.util.Collection<String> customerIds);
+
     /** 管理列表的客户、产品与 DATA 条件在同一 SQL 内求交，count 不丢筛选条件。 */
     default Page<GrantRevisionEntity> findVisiblePage(String customerId, String productId,
                                                      java.util.Set<String> grantIds, Pageable pageable) {

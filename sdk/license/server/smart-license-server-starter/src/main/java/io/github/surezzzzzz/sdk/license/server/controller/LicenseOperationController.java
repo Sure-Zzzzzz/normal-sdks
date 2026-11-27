@@ -12,6 +12,7 @@ import io.github.surezzzzzz.sdk.license.server.service.CredentialIssuanceService
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.license.server.web.DefaultLicensePrincipalResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseApi;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpException;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpSupport;
@@ -48,6 +49,8 @@ public class LicenseOperationController {
     private final DefaultLicensePrincipalResolver resolver = new DefaultLicensePrincipalResolver();
     private final SigningOperationRepository operations;
     private final CredentialIssuanceService issuance;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
 
     public LicenseOperationController(SigningOperationRepository operations, CredentialIssuanceService issuance) {
         this.operations = operations;
@@ -66,7 +69,7 @@ public class LicenseOperationController {
         if (page < 1 || size < 1 || size > SigningOperationConstant.MAX_PAGE_SIZE) {
             throw LicenseHttpException.badRequest(SigningOperationConstant.INVALID_PAGE);
         }
-        LicenseAccessScope scope = LicenseAccessScope.from(plan, "grantId");
+        LicenseAccessScope scope = grantScope(plan);
         PageRequest pageable = PageRequest.of(page - 1, size,
                 Sort.by(Sort.Direction.DESC, SigningOperationConstant.OPERATION_ID));
         Page<SigningOperationEntity> result = operations.findCredentials(scope.restrictedIdsOrNull(),
@@ -89,7 +92,7 @@ public class LicenseOperationController {
                                       HttpServletRequest request) {
         require(request, LicenseApi.OPERATION_READ);
         SigningOperationEntity entity = find(operationId);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         return ResponseEntity.ok(view(entity).toString());
     }
 
@@ -103,7 +106,7 @@ public class LicenseOperationController {
         require(request, LicenseApi.OPERATION_RECOVER);
         ObjectNode input = support.object(body, "expectedRowVersion", "expectedExecutionGeneration", "reasonCategory");
         SigningOperationEntity entity = find(operationId);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         try {
             issuance.recoverAndCommit(operationId, expectedVersion(input), expectedGeneration(input),
                     support.text(input, "reasonCategory", false));
@@ -125,9 +128,14 @@ public class LicenseOperationController {
         require(request, LicenseApi.OPERATION_RECOVER);
         ObjectNode input = support.object(body, "expectedRowVersion", "reasonCategory");
         SigningOperationEntity entity = find(operationId);
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         issuance.abandon(operationId, expectedVersion(input), support.text(input, "reasonCategory", false));
         return ResponseEntity.ok(view(find(operationId)).toString());
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private long expectedVersion(ObjectNode input) {

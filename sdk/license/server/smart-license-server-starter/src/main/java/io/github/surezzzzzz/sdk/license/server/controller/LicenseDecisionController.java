@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.license.server.controller;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentDataAccessPlan;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.annotation.SimpleLicenseServerComponent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -49,6 +50,8 @@ public class LicenseDecisionController {
     private final DefaultLicensePrincipalResolver resolver = new DefaultLicensePrincipalResolver();
     private final OnlineDecisionService decisionService;
     private final ProductRepository products;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
 
     public LicenseDecisionController(OnlineDecisionService decisionService,
                                      ProductRepository products) {
@@ -71,7 +74,7 @@ public class LicenseDecisionController {
         String productId = support.text(input, "productId", true);
         String grantId = support.text(input, "grantId", true);
         // 运行时判定按授权范围收窄：受限调用者只能判定自己范围内的授权（fail-closed）
-        LicenseAccessScope.from(plan, "grantId")
+        grantScope(plan)
                 .requireAllowed(grantId);
         String subjectKind = support.text(input, "subjectKind", true);
         if (!SubjectKind.isValid(subjectKind)) {
@@ -182,6 +185,11 @@ public class LicenseDecisionController {
         LicenseRequestContext context = support.context(resolver, request);
         request.setAttribute("licenseRequestId", context.getRequestId());
         return support.requireApiPermission(context, LicenseApi.DECISION_EVALUATE);
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private static Map<String, Object> factsOf(ObjectNode input) {

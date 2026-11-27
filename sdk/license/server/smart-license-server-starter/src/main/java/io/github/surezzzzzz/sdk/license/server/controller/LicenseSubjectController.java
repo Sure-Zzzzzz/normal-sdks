@@ -4,6 +4,7 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.CurrentData
 import io.github.surezzzzzz.sdk.auth.data.permission.core.annotation.DataPermissionOperation;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataAccessPlan;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.annotation.SimpleLicenseServerComponent;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -72,6 +73,8 @@ public class LicenseSubjectController {
     private final GrantRepository grants;
     private final ActivationQuotaAllocationRepository quotaAllocations;
     private final ModelVersionRepository models;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
 
     public LicenseSubjectController(SubjectAssignmentRepository assignments,
                                     ActivationRepository activations, GrantRepository grants) {
@@ -704,13 +707,18 @@ public class LicenseSubjectController {
     /** 授权子资源（资格/激活）的 license-grant 维度 DATA 范围校验。 */
     private void grantInScope(DataAccessPlan plan,
                               String grantId) {
-        LicenseAccessScope.from(plan, "grantId")
+        grantScope(plan)
                 .requireVisible(grantId);
     }
 
     private void grantVisible(DataAccessPlan plan, String grantId) {
-        LicenseAccessScope.from(plan, "grantId")
+        grantScope(plan)
                 .requireVisible(grantId);
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private LicenseRequestContext require(HttpServletRequest request) {

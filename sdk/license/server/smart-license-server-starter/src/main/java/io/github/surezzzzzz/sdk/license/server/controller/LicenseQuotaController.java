@@ -17,6 +17,7 @@ import io.github.surezzzzzz.sdk.license.server.model.QuotaReservationCommand;
 import io.github.surezzzzzz.sdk.license.server.event.QuotaOperationCompleted;
 import io.github.surezzzzzz.sdk.license.server.web.DefaultLicensePrincipalResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseApi;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpException;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpSupport;
@@ -53,6 +54,8 @@ public class LicenseQuotaController {
 
     private final GrantRepository grants;
     private final JpaQuotaReservationService reservations;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
     private final LicenseHttpSupport support = new LicenseHttpSupport();
     private final DefaultLicensePrincipalResolver resolver = new DefaultLicensePrincipalResolver();
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -96,7 +99,7 @@ public class LicenseQuotaController {
         if (page < 1 || size < 1 || size > 100) {
             throw LicenseHttpException.unprocessable("page从1开始且size范围为1..100");
         }
-        LicenseAccessScope scope = LicenseAccessScope.from(plan, "grantId");
+        LicenseAccessScope scope = grantScope(plan);
         Pageable pageable = PageRequest.of(page - 1, size,
                 Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "reservationId")));
         Page<QuotaReservationEntity> result = scope.resolve(
@@ -127,7 +130,7 @@ public class LicenseQuotaController {
         } catch (IllegalArgumentException missing) {
             throw LicenseHttpException.notFound();
         }
-        LicenseAccessScope.from(plan, "grantId").requireVisible(entity.getGrantId());
+        grantScope(plan).requireVisible(entity.getGrantId());
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(view(entity).toString());
     }
 
@@ -169,7 +172,7 @@ public class LicenseQuotaController {
         if (quantity <= 0L) {
             throw LicenseHttpException.unprocessable("额度 quantity 必须为正整数");
         }
-        LicenseAccessScope.from(plan, "grantId").requireVisible(grantId);
+        grantScope(plan).requireVisible(grantId);
         grant(grantId);
         try {
             QuotaReservationCommand command = QuotaReservationCommand.builder()
@@ -222,7 +225,7 @@ public class LicenseQuotaController {
             // 先以同一 DATA 计划核验授权范围，再允许服务层修改余额和状态。
             QuotaReservationEntity current = reservations.find(reservationId)
                     .orElseThrow(LicenseHttpException::notFound);
-            LicenseAccessScope.from(plan, "grantId").requireVisible(current.getGrantId());
+            grantScope(plan).requireVisible(current.getGrantId());
             QuotaReservationEntity entity = reservations.release(reservationId, context.getPrincipalId(),
                     context.getAuthenticationSourceId());
             publishObserved(entity, context, QuotaOperationCompleted.Operation.RELEASE_OBSERVED);
@@ -256,7 +259,7 @@ public class LicenseQuotaController {
         try {
             QuotaReservationEntity current = reservations.find(reservationId)
                     .orElseThrow(LicenseHttpException::notFound);
-            LicenseAccessScope.from(plan, "grantId").requireVisible(current.getGrantId());
+            grantScope(plan).requireVisible(current.getGrantId());
             QuotaReservationEntity entity = reservations.renew(reservationId, expectedFence,
                     context.getPrincipalId(), context.getAuthenticationSourceId(), context.getSubjectType());
             publishObserved(entity, context, QuotaOperationCompleted.Operation.RENEWAL_OBSERVED);
@@ -295,6 +298,11 @@ public class LicenseQuotaController {
             log.warn("额度提交后审计发布失败：reservationId={}，异常类型={}",
                     entity.getReservationId(), failure.getClass().getSimpleName());
         }
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private GrantRevisionEntity grant(String grantId) {

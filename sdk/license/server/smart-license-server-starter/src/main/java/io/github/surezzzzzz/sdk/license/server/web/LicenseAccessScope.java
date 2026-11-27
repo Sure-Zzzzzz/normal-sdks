@@ -8,7 +8,9 @@ import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
 
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * 已评估 DataPlan 在 License 资源主键维度上的范围投影（KmsOwnerAccessScope 多资源对位）。
@@ -61,6 +63,86 @@ public final class LicenseAccessScope {
             }
         }
         return new LicenseAccessScope(false, allowed);
+    }
+
+    /**
+     * License Grant 专用范围：允许主键维度与客户维度组合。
+     *
+     * <p>IAM 规则中的 {@code customerId IN} 在本模块解析为当前事实库中的 grantId 集合；
+     * 两个维度同时存在时取交集。未知维度、非 IN 约束和无法解析的客户范围一律失败关闭。
+     * 不同 DataGrant 之间仍是 OR，不得把多项授权约束拼接成越权组合。</p>
+     *
+     * @param plan                  MVC 层已评估的访问计划
+     * @param customerToGrantIds    customerId 集合到当前有效 grantId 集合的解析函数
+     * @return 可用于列表过滤与单行校验的 grantId 范围
+     */
+    public static LicenseAccessScope fromGrantDimension(DataAccessPlan plan,
+                                                        java.util.function.Function<java.util.Set<String>,
+                                                                java.util.Set<String>> customerToGrantIds) {
+        if (plan == null || plan.getOutcome() == DataAccessOutcome.DENY) {
+            throw LicenseHttpException.forbidden();
+        }
+        if (plan.getOutcome() == DataAccessOutcome.ALLOW_ALL) {
+            return new LicenseAccessScope(true, Collections.<String>emptySet());
+        }
+        if (plan.getOutcome() != DataAccessOutcome.ALLOW_RESTRICTED) {
+            throw LicenseHttpException.forbidden();
+        }
+        Set<String> allowed = new LinkedHashSet<String>();
+        for (DataGrant grant : plan.getGrants()) {
+            if (grant == null || grant.isAll() || grant.getConstraints() == null
+                    || grant.getConstraints().isEmpty()) {
+                throw LicenseHttpException.forbidden();
+            }
+            Set<String> grantIds = null;
+            Set<String> customerIds = null;
+            for (DataConstraint constraint : grant.getConstraints()) {
+                if (constraint == null || constraint.getOperator() != DataConstraintOperator.IN
+                        || constraint.getValues() == null || constraint.getValues().isEmpty()) {
+                    throw LicenseHttpException.forbidden();
+                }
+                if ("grantId".equals(constraint.getDimension())) {
+                    grantIds = textValues(constraint.getValues());
+                } else if ("customerId".equals(constraint.getDimension())) {
+                    customerIds = textValues(constraint.getValues());
+                } else {
+                    throw LicenseHttpException.forbidden();
+                }
+            }
+            if (customerIds != null) {
+                if (customerToGrantIds == null) {
+                    throw LicenseHttpException.forbidden();
+                }
+                Set<String> resolved = customerToGrantIds.apply(customerIds);
+                grantIds = grantIds == null ? resolved : intersectSorted(grantIds, resolved);
+            }
+            if (grantIds == null) {
+                throw LicenseHttpException.forbidden();
+            }
+            allowed.addAll(grantIds);
+        }
+        return new LicenseAccessScope(false, allowed);
+    }
+
+    private static Set<String> textValues(List<String> values) {
+        Set<String> result = new LinkedHashSet<String>();
+        for (Object value : values) {
+            if (value == null || String.valueOf(value).trim().isEmpty()) {
+                throw LicenseHttpException.forbidden();
+            }
+            result.add(String.valueOf(value));
+        }
+        return result;
+    }
+
+    private static Set<String> intersectSorted(Set<String> left, Set<String> right) {
+        Set<String> result = new LinkedHashSet<String>();
+        for (String id : new TreeSet<String>(left)) {
+            if (right.contains(id)) {
+                result.add(id);
+            }
+        }
+        return result;
     }
 
     /** 单行治理动作校验：拒绝不匹配的主键。 */

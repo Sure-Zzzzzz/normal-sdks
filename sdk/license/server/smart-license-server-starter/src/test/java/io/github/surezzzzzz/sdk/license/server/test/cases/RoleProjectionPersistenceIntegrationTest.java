@@ -125,7 +125,9 @@ class RoleProjectionPersistenceIntegrationTest {
                 "PERSON", "CUSTOMER_MEMBERS", null, "ONLINE", null);
         grant.setState("ENABLED"); grants.saveAndFlush(grant);
         when(fixture.port.manifest(9L)).thenReturn(new RoleProjectionPort.Manifest(9L, "test-app", 1L, "digest-1",
-                Collections.singletonList("app.page"), Collections.singletonList("app.read")));
+                Collections.singletonList("app.page"), Collections.singletonList("app.read"),
+                Collections.singletonList(new RoleProjectionPort.DataResource("license-grant",
+                        Collections.singletonList("read"), Arrays.asList("grantId", "customerId")))));
         when(fixture.port.departments(10L)).thenReturn(Arrays.asList(new RoleProjectionPort.Department(10L, null, true),
                 new RoleProjectionPort.Department(11L, 10L, true)));
         return fixture;

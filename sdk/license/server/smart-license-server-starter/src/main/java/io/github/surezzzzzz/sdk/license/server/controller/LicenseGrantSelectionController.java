@@ -23,6 +23,7 @@ import io.github.surezzzzzz.sdk.license.core.model.OnlineAuthorizationRequest;
 import io.github.surezzzzzz.sdk.license.core.model.SubjectKind;
 import io.github.surezzzzzz.sdk.license.server.web.DefaultLicensePrincipalResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseAccessScope;
+import io.github.surezzzzzz.sdk.license.server.web.LicenseGrantAccessScopeResolver;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseApi;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpException;
 import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpSupport;
@@ -68,6 +69,8 @@ public class LicenseGrantSelectionController {
     private final LicenseRevocationGuard guard;
     private final LicenseHttpSupport support = new LicenseHttpSupport();
     private final DefaultLicensePrincipalResolver resolver = new DefaultLicensePrincipalResolver();
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private LicenseGrantAccessScopeResolver grantScopes;
 
     public LicenseGrantSelectionController(GrantRepository grants, ModelVersionRepository models,
                                            @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -102,7 +105,7 @@ public class LicenseGrantSelectionController {
         int size = positiveInt(input, "size", GrantSelectionConstant.DEFAULT_SIZE, 1, GrantSelectionConstant.MAX_SIZE);
         String activationId = support.text(input, "activationId", false);
         String subjectId = authenticatedSubject(context, subjectKind, activationId);
-        LicenseAccessScope scope = LicenseAccessScope.from(plan, "grantId");
+        LicenseAccessScope scope = grantScope(plan);
         if (input.has("subjectEvidence")) {
             // 本人通道不需要代理证明；尚无可信代理适配时不能忽略传入证明冒充已核验。
             throw LicenseHttpException.unprocessable(GrantSelectionConstant.PROXY_UNSUPPORTED);
@@ -290,6 +293,11 @@ public class LicenseGrantSelectionController {
             throw LicenseHttpException.dependencyUnavailable(GrantSelectionConstant.DEPENDENCY_UNAVAILABLE);
         }
         return guard.onlineRejection(candidate, sourceId, subjectId) == null;
+    }
+
+    /** 生产使用 customerId→grantId 投影器；旧测试未注入时保持原有主键维度行为。 */
+    private LicenseAccessScope grantScope(DataAccessPlan plan) {
+        return grantScopes == null ? LicenseAccessScope.from(plan, "grantId") : grantScopes.from(plan);
     }
 
     private ObjectNode candidate(GrantRevisionEntity grant, ModelVersionEntity model,

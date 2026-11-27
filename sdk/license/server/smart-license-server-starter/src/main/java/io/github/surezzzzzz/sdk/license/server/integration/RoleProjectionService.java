@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.claim.DataGrantDocumentClaimMapper;
 import io.github.surezzzzzz.sdk.auth.data.permission.core.exception.DataPermissionValidationException;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataConstraint;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrant;
+import io.github.surezzzzzz.sdk.auth.data.permission.core.model.DataGrantDocument;
 import io.github.surezzzzzz.sdk.license.core.codec.StrictJson;
 import io.github.surezzzzzz.sdk.license.core.model.Decision;
 import io.github.surezzzzzz.sdk.license.core.model.EligibilityPolicy;
@@ -38,7 +41,10 @@ import io.github.surezzzzzz.sdk.license.server.web.LicenseHttpException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -407,6 +413,7 @@ public class RoleProjectionService {
                 || !manifest.getApiPermissions().containsAll(strings(approved.path("apiPermissions")))) {
             throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
         }
+        validateDataGrantTemplate(manifest, approved);
         List<RoleProjectionDiffCalculator.DepartmentFact> departments = new ArrayList<>();
         for (RoleProjectionPort.Department item : port().departments(projection.getRootDepartmentId())) {
             departments.add(new RoleProjectionDiffCalculator.DepartmentFact(item.getId(), item.getParentId(), item.isActive()));
@@ -456,6 +463,49 @@ public class RoleProjectionService {
         result.put("validUntil", contributions.path("validUntil").longValue());
         if (role != null) { result.put("openRoleId", role.getOpenRoleId()); result.put("remoteRevision", role.getRevision()); }
         return result;
+    }
+
+    /**
+     * 创建/AUTO 前按目标应用申报制校验 DATA 模板；不得把非法模板留给 IAM 后置 400。
+     */
+    private static void validateDataGrantTemplate(RoleProjectionPort.Manifest manifest, ObjectNode approved) {
+        JsonNode template = approved.path("dataGrantTemplate");
+        if (template == null || template.isNull()) {
+            return;
+        }
+        DataGrantDocument document;
+        try {
+            Object claim = StrictJson.mapper().convertValue(template, Object.class);
+            document = DataGrantDocumentClaimMapper.fromClaim(claim);
+        } catch (DataPermissionValidationException | IllegalArgumentException invalidTemplate) {
+            throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+        }
+        if (manifest.getDataResources() == null) {
+            throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+        }
+        Map<String, RoleProjectionPort.DataResource> declared = new HashMap<>();
+        for (RoleProjectionPort.DataResource resource : manifest.getDataResources()) {
+            if (resource != null && resource.getResource() != null) {
+                declared.put(resource.getResource(), resource);
+            }
+        }
+        for (DataGrant grant : document.getGrants()) {
+            RoleProjectionPort.DataResource declaration = declared.get(grant.getResource());
+            if (declaration == null) {
+                throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+            }
+            if (declaration.getActions() == null || declaration.getDimensions() == null) {
+                throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+            }
+            if (!declaration.getActions().containsAll(grant.getActions())) {
+                throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+            }
+            for (DataConstraint constraint : grant.getConstraints()) {
+                if (!declaration.getDimensions().contains(constraint.getDimension())) {
+                    throw LicenseHttpException.unprocessable(RoleProjectionConstant.INVALID_RULES);
+                }
+            }
+        }
     }
 
     private ObjectNode contributions(RoleProjectionEntity projection, long now) {

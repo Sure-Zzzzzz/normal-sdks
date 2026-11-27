@@ -7,7 +7,7 @@ License 商业授权服务，固定 Spring Boot 2.7.9、Java 8。提供签发方
 ## 引入依赖
 
 ```gradle
-implementation 'io.github.sure-zzzzzz:smart-license-server-starter:2.0.0'
+implementation 'io.github.sure-zzzzzz:smart-license-server-starter:2.1.0'
 implementation 'org.springframework.boot:spring-boot-starter-web'
 implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -164,16 +164,16 @@ io:
 
 PAGE 是前端入口权限，API 是接口操作权限，DATA 是资源和动作的数据范围。PAGE 不代替后端授权，机器不要求 PAGE，但仍要求应用准入、API 和 DATA；通过资源授权后还要满足 License 商业规则。
 
-| DATA resource | actions | 唯一业务维度 |
-| --- | --- | --- |
-| license-issuer | read/manage | issuerId |
-| license-customer | read/manage | customerId |
-| license-product | read/manage/publish | productId |
-| license-grant | read/manage/issue/deliver/use | grantId |
-| license-signing-profile | read/manage | profileId |
-| license-integration | read/manage | customerId |
+| DATA resource | actions | 主键维度 | 额外可解析维度 |
+| --- | --- | --- | --- |
+| license-issuer | read/manage | issuerId | — |
+| license-customer | read/manage | customerId | — |
+| license-product | read/manage/publish | productId | — |
+| license-grant | read/manage/issue/deliver/use | grantId | customerId 解析为当前有效 grantId |
+| license-signing-profile | read/manage | profileId | — |
+| license-integration | read/manage | customerId | — |
 
-受限范围按对应维度 IN 约束执行，不支持的表达式不能悄悄放宽。凭据、资格、激活及任务经 grantId 归属授权；planId、commandId 不是联动 DATA 维度。创建需要全范围治理的对象时必须具备相应 manage/all，不凭“管理员”名称越过授权。
+受限范围按对应维度 IN 约束执行，不支持的表达式不能悄悄放宽。`license-grant` 的 `customerId` 与 `grantId` 可同授权项内 AND 求交；不同授权项仍按 OR 独立合并。凭据、资格、激活及任务经 grantId 归属授权；planId、commandId 不是联动 DATA 维度。创建需要全范围治理的对象时必须具备相应 manage/all，不凭“管理员”名称越过授权。
 
 ## 协作端口与聚散边界
 
@@ -186,7 +186,7 @@ PAGE 是前端入口权限，API 是接口操作权限，DATA 是资源和动作
 
 CRM履约由 License 保存自有履约号→授权去重台账。建立草稿不等于完成；只有启用授权后completed回报确认才算完成。认领、保存或回报未明时保留进度等待回读，不能用failed冒充已确认业务失败。
 
-IAM受委托角色适配消费官方客户端，If-Match原样使用双引号强ETag `"open-role:<id>:<revision>"`。角色投影创建请求中的 `name` 只是远端展示名（可使用 `lic_<externalId>` 这类中性值）；远端创建响应或回读返回的 `roleCode` 才是实际角色编码，必须保存并用于后续查询和确认。默认MANUAL只刷新清单并登记人工回执；显式AUTO通过宿主的`RoleProjectionPort`创建专用角色、更新规则与部门挂载，每次写入后回读修订，只有真实核验完成才标为VERIFIED。结果未明时保留UNCERTAIN停止写入，缺协作端口时相关入口明确失败；不启动隐式后台执行。
+IAM受委托角色适配消费官方客户端，If-Match原样使用双引号强ETag `"open-role:<id>:<revision>"`。角色投影创建请求中的 `name` 只是远端展示名（可使用 `lic_<externalId>` 这类中性值）；远端创建响应或回读返回的 `roleCode` 才是实际角色编码，必须保存并用于后续查询和确认。角色模板的资源、动作和约束维度先与目标应用 manifest 的 DATA 申报比对，越界模板返回422，不发送注定被IAM拒绝的写入。默认MANUAL只刷新清单并登记人工回执；显式AUTO通过宿主的`RoleProjectionPort`创建专用角色、更新规则与部门挂载，每次写入后回读修订，只有真实核验完成才标为VERIFIED。远端确定性拒绝保留 `PENDING_EXECUTION` 并记录 `REJECTED`；结果未明时保留UNCERTAIN停止写入，缺协作端口时相关入口明确失败；不启动隐式后台执行。
 
 ## 最佳实践
 
