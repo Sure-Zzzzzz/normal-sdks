@@ -6,7 +6,7 @@ Feign 装配的 IAM openapi client（Spring Cloud OpenFeign 4.x，Spring Boot 3.
 与 OpenFeign 3.x 形态（`simple-iam-aksk-feign-client-starter`）同源代码、同一份 wire DTO；
 宿主 `@EnableFeignClients` 扫描后认证由底座令牌链注入，本模块为契约接口层，无自有装配面。
 
-> **1.0.3**：契约对齐 server 1.3.8，新增 Portal 可信应用路由投影 Jakarta Feign 接口（`catalogRevision` 快照）；依赖 `simple-iam-client-core:1.0.4`，总计 49 方法。
+> **1.0.3**：契约对齐 server 1.3.8，新增 Portal 可信应用路由投影 Jakarta Feign 接口，总计 49 方法。**1.1.1**：支持 AKP Profile。**1.1.2**：401 清理当前 Profile 并一次重放。**1.1.3**：manifest wire 新增 `dataResources`，依赖 `simple-iam-client-core:1.0.5`。
 
 ## 核心能力
 
@@ -22,7 +22,8 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 ### 3. wire DTO 直配 Jackson
 
-`model` 包公开字段 DTO（11 个），字段名逐字对位 server 契约；分页双形态同契约
+`model` 包公开字段 DTO；1.1.3 起含 `IamPermissionManifestResponse.dataResources` 与
+`IamDataResourceDeclarationResponse`。字段名逐字对位 server 契约；分页双形态同契约
 （`IamUserPageResponse` 0 起 vs `IamOpenRolePageResponse` 1 起）。
 
 ### 4. 错误透传
@@ -33,7 +34,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 | 依赖 | 传递方式 | 说明 |
 |------|---------|------|
-| `simple-iam-client-core:1.0.4` | `api` 编译期传递 | 契约常量/异常族 |
+| `simple-iam-client-core:1.0.5` | `api` 编译期传递 | 契约常量/异常族 |
 | `simple-aksk-feign-redis-client-jakarta-starter:1.1.0` | `implementation` 运行时传递 | `@AkskClientFeignClient` 元注解 + 认证装配（jakarta 线） |
 | Spring Cloud OpenFeign 4.2.0 | `compileOnly`，**宿主自行引入** | 模块内 BOM `spring-cloud-dependencies:2024.0.0` + force 纠偏（形态同 aksk feign jakarta 底座） |
 | Spring Boot AutoConfiguration | `compileOnly` | — |
@@ -44,7 +45,7 @@ open-roles 族四个写方法带 `String ifMatch` 参数（null=首写不携带�
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.0.3'
+    implementation 'io.github.sure-zzzzzz:simple-iam-aksk-feign-client-jakarta-starter:1.1.3'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'org.springframework.boot:spring-boot-starter-web'
 }
@@ -123,10 +124,8 @@ public class RoleHostService {
 
 ## 测试覆盖
 
-- 契约测试 4：经 `@EnableFeignClients` 真链路逐族断言（路径/方法/If-Match 头/双分页 wire/
-  428 透传/元注解挂接，OpenFeign 4.2.0 链路）
-- 装配测试 2：底座拦截器条件链两态
-- Profile 拦截器顺序测试 3：默认先执行、命名 Profile 后执行、同名 Bean 遮蔽底座默认拦截器
+- 1.1.3 全量测试 17：真 Feign 契约、装配、Profile 拦截器顺序、401 清理重放、
+  manifest DATA 声明与缺失申报保持 `null` 均无失败/错误/跳过。
 
 ## 兼容性
 

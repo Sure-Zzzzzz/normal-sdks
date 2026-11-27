@@ -31,4 +31,9 @@ public class IamPermissionManifestResponse {
      * API 权限码。
      */
     public java.util.List<String> apiPermissions;
+
+    /**
+     * DATA 资源、动作与约束维度申报。
+     */
+    public java.util.List<IamDataResourceDeclarationResponse> dataResources;
 }
