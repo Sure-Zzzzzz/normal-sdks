@@ -11,7 +11,7 @@ dependencies {
     //（SmartCacheManager 与 limiter 算法/KeyProvider 仅由 server 自带组件消费，公开 API 零暴露），
     // 运行时随本模块传递（自动配置与 cache.* / limiter.* 配置键照常生效），
     // 编译期直接使用两者 API 的使用方需自行声明相应依赖
-    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.0'
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.1'
     implementation 'io.github.sure-zzzzzz:smart-redis-limiter-starter:2.1.0'
 
     // Spring Boot

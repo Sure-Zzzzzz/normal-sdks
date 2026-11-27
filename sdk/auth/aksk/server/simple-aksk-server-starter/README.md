@@ -1,10 +1,10 @@
 # Simple AKSK Server Starter
 
-> 当前发布候选版本 **3.2.2**。版本沿革见各 `CHANGELOG.*.md`。
+> 当前发布候选版本 **3.2.3**。版本沿革见各 `CHANGELOG.*.md`。
 > 2.x 冻结快照见 [README.2.x.md](README.2.x.md)。
 > 1.x 冻结快照见 [README.1.x.md](README.1.x.md)。
 
-[![Version](https://img.shields.io/badge/version-3.2.2-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
+[![Version](https://img.shields.io/badge/version-3.2.3-blue.svg)](https://github.com/Sure-Zzzzzz/normal-sdks)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
 [![Spring Authorization Server](https://img.shields.io/badge/Spring%20Authorization%20Server-0.4.1-brightgreen.svg)](https://spring.io/projects/spring-authorization-server)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -43,7 +43,7 @@ dependencies {
     // spring-boot-starter-data-redis 与 Spring Authorization Server 以 api 传递；
     // smart-cache、smart-redis-limiter、公共资源层、route 等实现细节以 implementation /
     // runtimeOnly 传递运行时，使用方无需重复声明
-    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.2'
+    implementation 'io.github.sure-zzzzzz:simple-aksk-server-starter:3.2.3'
 
     // 必需：宿主 Web / Security / JPA（starter 以 compileOnly 口径声明，使用方自备）
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -469,6 +469,10 @@ logging:
 ---
 
 ## 版本历史
+
+### 3.2.3
+
+修复 `OAuth2Authorization` L2 缓存命中后 Spring Security allowlist 拒绝顶层类型、导致授权缓存反复回源的问题。授权对象使用版本化专用载荷和反序列化白名单；Token 管理扫描复用同一解码器，历史裸 Java 序列化授权也收敛到同一白名单。其他 SmartCache 载荷格式不变，`smart-cache-starter` 升级到 `2.2.1`。详见 [CHANGELOG.3.2.3.md](CHANGELOG.3.2.3.md)。
 
 ### 3.2.2
 

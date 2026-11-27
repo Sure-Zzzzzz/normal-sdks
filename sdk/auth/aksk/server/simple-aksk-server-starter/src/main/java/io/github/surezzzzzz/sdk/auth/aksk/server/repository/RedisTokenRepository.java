@@ -8,6 +8,7 @@ import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.ServerErrorMessage;
 import io.github.surezzzzzz.sdk.auth.aksk.server.constant.SimpleAkskServerConstant;
 import io.github.surezzzzzz.sdk.auth.aksk.server.exception.SimpleAkskServerException;
+import io.github.surezzzzzz.sdk.auth.aksk.server.support.AuthorizationSmartCacheCodec;
 import io.github.surezzzzzz.sdk.auth.aksk.server.support.RedisKeyHelper;
 import io.github.surezzzzzz.sdk.redis.route.constant.SimpleRedisRouteConstant;
 import lombok.extern.slf4j.Slf4j;
@@ -18,8 +19,6 @@ import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 
-import java.io.ByteArrayInputStream;
-import java.io.ObjectInputStream;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -88,11 +87,12 @@ public class RedisTokenRepository {
 
     /**
      * 读取 Redis 中的 token 数据。
-     * 兼容三种格式：
-     * 1. Java 序列化（历史数据，0xAC 0xED 开头）→ 反序列化为 OAuth2Authorization
-     * 2. SmartCache 1.x DefaultTyping JSON → ["@class", {...}]，取数组第 2 位
-     * 3. SmartCache 2.x Jackson 序列化器 JSON → {"type":"...","data":{...}} 信封，取 data 字段
-     * 2/3 的内层字段名均由 OAuth2Authorization 的 getter 推导，剥壳后解析逻辑一致
+     * 兼容四种格式：
+     * 1. 3.2.3 专用外壳 → AuthorizationSmartCacheCodec 版本/类型/反序列化白名单校验
+     * 2. 历史裸 Java 序列化（0xAC 0xED 开头）→ 同一反序列化白名单
+     * 3. SmartCache 1.x DefaultTyping JSON → ["@class", {...}]，取数组第 2 位
+     * 4. SmartCache 2.x Jackson 序列化器 JSON → {"type":"...","data":{...}} 信封，取 data 字段
+     * 3/4 的内层字段名均由 OAuth2Authorization 的 getter 推导，剥壳后解析逻辑一致
      */
     private TokenInfo readTokenInfoFromRedis(String key) throws Exception {
         byte[] rawBytes = redisTemplate.execute((RedisCallback<byte[]>) connection ->
@@ -106,11 +106,11 @@ public class RedisTokenRepository {
                 && (rawBytes[0] & 0xFF) == 0xAC
                 && (rawBytes[1] & 0xFF) == 0xED;
 
-        if (isJavaSerialized) {
-            try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(rawBytes))) {
-                OAuth2Authorization auth = (OAuth2Authorization) ois.readObject();
-                return convertFromOAuth2Authorization(auth);
-            }
+        if (AuthorizationSmartCacheCodec.isEnvelope(rawBytes)) {
+            return convertFromOAuth2Authorization(AuthorizationSmartCacheCodec.decodeEnvelope(rawBytes));
+        } else if (isJavaSerialized) {
+            return convertFromOAuth2Authorization(
+                    AuthorizationSmartCacheCodec.decodeRawJavaSerialized(rawBytes));
         } else {
             JsonNode root = PLAIN_MAPPER.readTree(rawBytes);
             JsonNode obj = root;
