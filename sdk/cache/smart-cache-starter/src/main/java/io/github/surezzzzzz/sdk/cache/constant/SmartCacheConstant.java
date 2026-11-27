@@ -10,6 +10,11 @@ public final class SmartCacheConstant {
     // ==================== 配置相关常量 ====================
 
     /**
+     * 当前 L2 JSON 载荷协议版本；2.2.0 及更早载荷缺省视为 1。
+     */
+    public static final int PAYLOAD_SCHEMA_VERSION = 1;
+
+    /**
      * 配置前缀
      */
     public static final String CONFIG_PREFIX = "io.github.surezzzzzz.sdk.cache";

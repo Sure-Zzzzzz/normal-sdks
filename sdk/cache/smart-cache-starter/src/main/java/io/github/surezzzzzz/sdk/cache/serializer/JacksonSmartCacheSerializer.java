@@ -3,6 +3,7 @@ package io.github.surezzzzzz.sdk.cache.serializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.surezzzzzz.sdk.cache.constant.ErrorCode;
 import io.github.surezzzzzz.sdk.cache.constant.ErrorMessage;
+import io.github.surezzzzzz.sdk.cache.constant.SmartCacheConstant;
 import io.github.surezzzzzz.sdk.cache.exception.CacheSerializationException;
 
 /**
@@ -28,6 +29,7 @@ public class JacksonSmartCacheSerializer implements SmartCacheSerializer {
         try {
             SmartCachePayload payload = new SmartCachePayload();
             Class<?> valueType = declaredType == null || Object.class.equals(declaredType) ? value.getClass() : declaredType;
+            payload.setSchemaVersion(SmartCacheConstant.PAYLOAD_SCHEMA_VERSION);
             payload.setType(valueType.getName());
             payload.setData(value);
             return objectMapper.writeValueAsString(payload);
@@ -47,6 +49,7 @@ public class JacksonSmartCacheSerializer implements SmartCacheSerializer {
         }
         try {
             SmartCachePayload cachePayload = objectMapper.readValue(payload, SmartCachePayload.class);
+            validateSchemaVersion(cachePayload.getSchemaVersion());
             Class<?> targetType = resolveTargetType(cachePayload, expectedType);
             if (targetType == null) {
                 return cachePayload.getData();
@@ -59,6 +62,22 @@ public class JacksonSmartCacheSerializer implements SmartCacheSerializer {
                     ErrorCode.SMART_CACHE_SERIALIZATION_FAILED,
                     String.format(ErrorMessage.SMART_CACHE_SERIALIZATION_FAILED, expectedType),
                     e
+            );
+        }
+    }
+
+    /**
+     * 校验 L2 载荷协议版本；缺省值视为旧版 1，向后兼容 2.2.0 及更早缓存。
+     */
+    private void validateSchemaVersion(Integer schemaVersion) {
+        if (schemaVersion == null) {
+            return;
+        }
+        if (schemaVersion < 1 || schemaVersion > SmartCacheConstant.PAYLOAD_SCHEMA_VERSION) {
+            throw new CacheSerializationException(
+                    ErrorCode.SMART_CACHE_SERIALIZATION_FAILED,
+                    String.format(ErrorMessage.SMART_CACHE_PAYLOAD_SCHEMA_UNSUPPORTED,
+                            schemaVersion, SmartCacheConstant.PAYLOAD_SCHEMA_VERSION)
             );
         }
     }

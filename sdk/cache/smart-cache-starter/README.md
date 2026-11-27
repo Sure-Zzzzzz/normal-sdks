@@ -1,10 +1,10 @@
 # Smart Cache Starter
 
-基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。`2.2.0` 的 L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。
+基于 Spring Boot 的二级缓存组件，提供 L1（Caffeine）与 L2（Redis）协同缓存、缓存击穿防护、失效通知、批量读写、L2 异步续期和启动预热能力。L2、Pub/Sub、预热元数据和分布式锁全部通过 Redis Route 执行。`2.2.1` 起 L2 JSON 载荷显式携带 `schemaVersion`，可识别旧载荷并拒绝未知协议。
 
 ## 版本与兼容性
 
-当前版本：`2.2.0`
+当前版本：`2.2.1`
 
 | 项目 | 支持版本 |
 | --- | --- |
@@ -15,14 +15,14 @@
 
 ### 兼容性验证
 
-`2.2.0` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
+`2.2.1` 已使用真实 standalone、Redis 3.2.12 Cluster、Redis 5.0.14 Cluster 和 Redis 7.2.6 Cluster 完成全量测试验证：
 
 | Spring Boot | JUnit 结果 | Redis 7 Cluster 锁边界 |
 | --- | --- | --- |
-| 2.2.x | 196 tests，5 skipped，0 failures，0 errors | Spring Boot 2.2.x 的 Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 Cluster 节点 metadata；仅缓存击穿锁、显式 lease、预刷新锁与启动预热相关的 5 条 E2E 跳过。L2、批量、SCAN、Pub/Sub 及强一致性 `put` / `putAll` 仍在 Redis 3/5 Cluster 实际执行。 |
-| 2.3.12 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
-| 2.4.5 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
-| 2.7.9 | 196 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行，并完成最终干净回归。 |
+| 2.2.x | 199 tests，5 skipped，0 failures，0 errors | Spring Boot 2.2.x 的 Lettuce 5.2.2.RELEASE 无法解析 Redis 7.2.6 Cluster 节点 metadata；仅缓存击穿锁、显式 lease、预刷新锁与启动预热相关的 5 条 E2E 跳过。L2、批量、SCAN、Pub/Sub 及强一致性 `put` / `putAll` 仍在 Redis 3/5 Cluster 实际执行。 |
+| 2.3.12 | 199 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.4.5 | 199 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行。 |
+| 2.7.9 | 199 tests，0 skipped，0 failures，0 errors | Redis 3/5/7 Cluster 全部实际执行，并完成最终干净回归。 |
 
 `1.x` 已封版，历史使用说明见 [README.1.x.md](README.1.x.md)。
 
@@ -42,7 +42,7 @@
 
 ```gradle
 dependencies {
-    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.0'
+    implementation 'io.github.sure-zzzzzz:smart-cache-starter:2.2.1'
 
     // L1 与注解式 API 由使用方按需提供
     implementation 'com.github.ben-manes.caffeine:caffeine:2.9.3'
@@ -63,7 +63,7 @@ dependencies {
     <dependency>
         <groupId>io.github.sure-zzzzzz</groupId>
         <artifactId>smart-cache-starter</artifactId>
-        <version>2.2.0</version>
+        <version>2.2.1</version>
     </dependency>
 
     <!-- L1 与注解式 API 按需提供 -->
@@ -283,7 +283,7 @@ lease 不是 watchdog：组件不会创建后台线程、调度器或自动续�
 
 ## 从 1.x 升级
 
-1. 将依赖升级为 `smart-cache-starter:2.2.0`；Redis Route `1.2.2`、Redis Lock `1.2.2`、task-retry `2.0.0` 由本模块运行时传递，编译期直接使用其 API 时按依赖章节自行声明。
+1. 将依赖升级为 `smart-cache-starter:2.2.1`；Redis Route `1.2.2`、Redis Lock `1.2.2`、task-retry `2.0.0` 由本模块运行时传递，编译期直接使用其 API 时按依赖章节自行声明。
 2. 配置并启用 `io.github.surezzzzzz.sdk.redis.route.enable=true`，同时启用 `io.github.surezzzzzz.sdk.lock.redis.route.enable=true`；为 L2 key、锁 key、Pub/Sub 探测 key / channel 和预热元数据配置匹配的路由规则。
 3. 移除对 `smartCacheRedisTemplate`、应用主对象型 `RedisTemplate` 以及 1.x L2 直连路径的依赖；生产 L2 统一使用 Route 原生的 JSON 字符串路径。
 4. 将旧的 `l2.key-prefix` 配置迁移为根级 `key-prefix`，将 `consistency.pubsub-channel-prefix` 迁移为 `pubsub.channel-prefix`，并确认同一副本组的 `me` 一致。

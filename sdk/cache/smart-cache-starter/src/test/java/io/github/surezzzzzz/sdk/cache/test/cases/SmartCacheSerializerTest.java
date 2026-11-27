@@ -44,6 +44,40 @@ class SmartCacheSerializerTest {
     }
 
     @Test
+    @DisplayName("测试新载荷写入协议版本")
+    void shouldWriteCurrentSchemaVersion() {
+        SmartCacheSerializer serializer = createSerializer(Collections.singletonList("java.lang"));
+
+        String payload = serializer.serialize("hello", String.class);
+
+        assertTrue(payload.contains("\"schemaVersion\":1"), "新载荷必须显式写入 schemaVersion");
+        assertEquals("hello", serializer.deserialize(payload, Object.class));
+    }
+
+    @Test
+    @DisplayName("测试缺省协议版本的旧载荷兼容")
+    void shouldReadLegacyPayloadWithoutSchemaVersion() {
+        SmartCacheSerializer serializer = createSerializer(Collections.singletonList("java.lang"));
+        String legacyPayload = "{\"type\":\"java.lang.String\",\"data\":\"legacy\"}";
+
+        assertEquals("legacy", serializer.deserialize(legacyPayload, Object.class),
+                "2.2.0 缺省 schemaVersion 的旧载荷必须可读");
+    }
+
+    @Test
+    @DisplayName("测试未知协议版本拒绝")
+    void shouldRejectUnknownSchemaVersion() {
+        SmartCacheSerializer serializer = createSerializer(Collections.singletonList("java.lang"));
+        String futurePayload = "{\"schemaVersion\":2,\"type\":\"java.lang.String\",\"data\":\"future\"}";
+
+        CacheSerializationException exception = assertThrows(CacheSerializationException.class,
+                () -> serializer.deserialize(futurePayload, Object.class),
+                "未知 schemaVersion 必须失败关闭");
+
+        assertEquals(ErrorCode.SMART_CACHE_SERIALIZATION_FAILED, exception.getErrorCode());
+    }
+
+    @Test
     @DisplayName("测试按调用方传入类型反序列化")
     void shouldDeserializeByExpectedType() {
         SmartCacheSerializer serializer = createSerializer(Collections.singletonList("java.lang"));

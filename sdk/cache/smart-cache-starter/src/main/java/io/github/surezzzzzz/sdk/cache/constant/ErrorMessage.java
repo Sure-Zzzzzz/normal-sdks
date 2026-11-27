@@ -33,6 +33,12 @@ public final class ErrorMessage {
     public static final String SMART_CACHE_L2_OPERATION_FAILED = "L2 缓存操作失败：%s";
 
     /**
+     * 载荷协议版本不支持
+     */
+    public static final String SMART_CACHE_PAYLOAD_SCHEMA_UNSUPPORTED =
+            "缓存载荷 schemaVersion 不支持：%s，当前支持：%s";
+
+    /**
      * 序列化失败
      */
     public static final String SMART_CACHE_SERIALIZATION_FAILED = "缓存序列化失败：%s";
